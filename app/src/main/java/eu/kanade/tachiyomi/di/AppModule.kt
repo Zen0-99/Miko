@@ -276,6 +276,22 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { DelayedAnimeTrackingStore(app) }
         addSingletonFactory { DelayedMangaTrackingStore(app) }
 
+        // Achievements system
+        addSingletonFactory<eu.kanade.tachiyomi.data.achievement.AchievementEventBus> {
+            eu.kanade.tachiyomi.data.achievement.AchievementEventBus()
+        }
+        addSingletonFactory<eu.kanade.tachiyomi.data.achievement.AchievementRepository> {
+            eu.kanade.tachiyomi.data.achievement.InMemoryAchievementRepository()
+        }
+        addSingletonFactory { eu.kanade.tachiyomi.data.achievement.PointsManager() }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.data.achievement.AchievementHandler(
+                eventBus = get(),
+                repository = get(),
+                pointsManager = get(),
+            )
+        }
+
         addSingletonFactory { ImageSaver(app) }
 
         addSingletonFactory { AndroidStorageFolderProvider(app) }
