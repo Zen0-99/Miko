@@ -118,7 +118,6 @@ android {
                 "libmpv",
                 "libplayer",
                 "libpostproc",
-                "libquickjs",
                 "libsqlite3x",
                 "libswresample",
                 "libswscale",
@@ -235,6 +234,9 @@ dependencies {
 
     implementation(androidx.bundles.lifecycle)
 
+    // Palette for cover-based accent color extraction
+    implementation(androidx.palette)
+
     // Job scheduling
     implementation(androidx.workmanager)
 
@@ -252,6 +254,9 @@ dependencies {
     // HTML parser
     implementation(libs.jsoup)
 
+    // JavaScript engine (for JS novel plugins)
+    implementation(libs.bundles.js.engine)
+
     // Disk
     implementation(libs.disklrucache)
     implementation(libs.unifile)
@@ -268,7 +273,7 @@ dependencies {
     implementation(libs.subsamplingscaleimageview) {
         exclude(module = "image-decoder")
     }
-    implementation(libs.image.decoder)
+    implementation(files("../libs/image-decoder-16kb.aar"))
 
     // UI libraries
     implementation(libs.material)
@@ -307,9 +312,8 @@ dependencies {
     implementation(aniyomilibs.aniyomi.mpv)
     // FFmpeg-kit
     implementation(aniyomilibs.ffmpeg.kit)
-    implementation(aniyomilibs.arthenica.smartexceptions)
     // TorrServer
-    implementation(aniyomilibs.torrserver)
+    implementation(files("../libs/torrserver-0.1.0-16kb.aar"))
     // seeker seek bar
     implementation(aniyomilibs.seeker)
     // true type parser
