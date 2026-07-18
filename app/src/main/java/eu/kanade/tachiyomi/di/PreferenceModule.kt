@@ -56,6 +56,9 @@ class PreferenceModule(val app: Application) : InjektModule {
             NovelReaderPreferences(get())
         }
         addSingletonFactory {
+            eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences(get())
+        }
+        addSingletonFactory {
             PlayerPreferences(get())
         }
         addSingletonFactory {
