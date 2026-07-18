@@ -1,31 +1,37 @@
 package eu.kanade.presentation.novel.reader
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import cafe.adriel.voyager.core.model.ScreenModel
+import eu.kanade.tachiyomi.ui.reader.novel.NovelOrientation
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundColor
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReadingMode
 import eu.kanade.tachiyomi.ui.reader.novel.TextAlignment
@@ -34,10 +40,6 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.components.CheckboxItem
-import tachiyomi.presentation.core.components.HeadingItem
-import tachiyomi.presentation.core.components.SettingsChipRow
-import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
@@ -47,212 +49,322 @@ class NovelReaderSettingsScreenModel(
     val hasDisplayCutout: Boolean,
     val onReadingModeChange: (Int) -> Unit,
     val onBackgroundColorChange: (Int) -> Unit,
+    val onOrientationChange: (Int) -> Unit,
     val onTextSettingChange: () -> Unit,
     val preferences: NovelReaderPreferences = Injekt.get(),
     val readerPreferences: ReaderPreferences = Injekt.get(),
 ) : ScreenModel
 
-private data class BackgroundColorOption(
-    val labelRes: StringResource,
-    val themeValue: Int,
-)
-
-private val backgroundColorOptions = listOf(
-    BackgroundColorOption(MR.strings.white_background, 0),
-    BackgroundColorOption(MR.strings.black_background, 1),
-    BackgroundColorOption(MR.strings.gray_background, 2),
-)
-
-private val readingModeOptions = listOf(
-    "Default" to NovelReadingMode.DEFAULT,
-    "Infinite scroll" to NovelReadingMode.INFINITE_SCROLL,
-    "Overscroll" to NovelReadingMode.OVERSCROLL,
-)
-
+/**
+ * Bottom sheet settings — matches Miko's layout: ModalBottomSheet with
+ * TabRow + HorizontalPager, both tabs share the same height via
+ * weight(1f). Internal column scrolls.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NovelReaderSettingsDialog(
     onDismissRequest: () -> Unit,
     onShowMenus: () -> Unit,
     screenModel: NovelReaderSettingsScreenModel,
+    accentColor: Color? = null,
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val tabTitles = persistentListOf(
         stringResource(MR.strings.pref_category_general),
-        "Text",
+        stringResource(MR.strings.text_settings),
     )
     val pagerState = rememberPagerState { tabTitles.size }
     val scope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    // Fixed height — both tabs are the same size (55% of screen).
+    val sheetHeight = configuration.screenHeightDp.dp * 0.55f
 
-    Dialog(
+    ModalBottomSheet(
         onDismissRequest = {
             onDismissRequest()
             onShowMenus()
         },
-        properties = DialogProperties(
-            decorFitsSystemWindows = false,
-        ),
+        sheetState = sheetState,
+        // No drag handle — sheet still drags but no visual handle bar.
+        dragHandle = null,
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(
-                modifier = Modifier.heightIn(max = 600.dp),
-            ) {
-                TabRow(
-                    selectedTabIndex = pagerState.currentPage,
-                ) {
-                    tabTitles.forEachIndexed { index, title ->
-                        Tab(
-                            selected = pagerState.currentPage == index,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                            text = { Text(title) },
+        val accent = accentColor ?: MaterialTheme.colorScheme.primary
+        val accentedScheme = MaterialTheme.colorScheme.copy(primary = accent)
+        MaterialTheme(colorScheme = accentedScheme) {
+            TabRow(
+                selectedTabIndex = pagerState.currentPage,
+                indicator = { tabPositions ->
+                    val targetPos = tabPositions[pagerState.currentPage]
+                    val fraction = pagerState.currentPageOffsetFraction
+                    val leftDp = targetPos.left + targetPos.width * fraction
+                    val widthDp = targetPos.width
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .offset(x = leftDp)
+                                .width(widthDp)
+                                .height(2.dp)
+                                .align(Alignment.BottomStart)
+                                .background(MaterialTheme.colorScheme.primary),
                         )
                     }
+                },
+            ) {
+                tabTitles.forEachIndexed { index, title ->
+                    Tab(
+                        selected = pagerState.currentPage == index,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                        text = { Text(title) },
+                    )
                 }
+            }
+        }
 
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.weight(1f),
-                ) { page ->
-                    Column(
-                        modifier = Modifier
-                            .padding(vertical = 8.dp)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        when (page) {
-                            0 -> NovelGeneralSettingsPage(screenModel)
-                            1 -> NovelTextSettingsPage(screenModel)
-                        }
-                    }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+        ) { page ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(sheetHeight)
+                    .padding(top = 8.dp, bottom = 16.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                when (page) {
+                    0 -> NovelGeneralSettingsPage(screenModel, accentColor)
+                    1 -> NovelTextSettingsPage(screenModel, accentColor)
                 }
             }
         }
     }
 }
 
-@Composable
-private fun ColumnScope.NovelGeneralSettingsPage(screenModel: NovelReaderSettingsScreenModel) {
-    val readerTheme by screenModel.readerPreferences.readerTheme().collectAsState()
+// ---------------------------------------------------------------------
+// General page: Series + General sections
+// ---------------------------------------------------------------------
 
-    HeadingItem("Reading mode")
+@Composable
+private fun ColumnScope.NovelGeneralSettingsPage(
+    screenModel: NovelReaderSettingsScreenModel,
+    accentColor: Color? = null,
+) {
+    // ---- Series section (colored header) ----
+    SectionHeader("Series", accentColor)
 
     val novelReadingMode by screenModel.preferences.readingMode().collectAsState()
-
-    SettingsChipRow(MR.strings.pref_viewer_type) {
-        readingModeOptions.map { (label, mode) ->
-            FilterChip(
-                selected = novelReadingMode == mode,
-                onClick = {
-                    screenModel.preferences.readingMode().set(mode)
-                    screenModel.onReadingModeChange(mode.prefValue)
-                },
-                label = { Text(label) },
-            )
-        }
+    val readingModeLabels = listOf(
+        stringResource(MR.strings.reading_mode_default),
+        stringResource(MR.strings.reading_mode_infinite_scroll),
+        stringResource(MR.strings.reading_mode_overscroll),
+    )
+    val readingModeValues = NovelReadingMode.entries
+    SettingsDropdown(
+        label = stringResource(MR.strings.reading_mode_title),
+        selectedLabel = readingModeLabels[readingModeValues.indexOf(novelReadingMode)],
+        options = readingModeLabels,
+    ) { index ->
+        val mode = readingModeValues[index]
+        screenModel.preferences.readingMode().set(mode)
+        screenModel.onReadingModeChange(mode.prefValue)
     }
 
-    HeadingItem(MR.strings.pref_reader_theme)
-
-    SettingsChipRow(MR.strings.pref_reader_theme) {
-        backgroundColorOptions.map { option ->
-            FilterChip(
-                selected = readerTheme == option.themeValue,
-                onClick = {
-                    screenModel.readerPreferences.readerTheme().set(option.themeValue)
-                    screenModel.onBackgroundColorChange(option.themeValue)
-                },
-                label = { Text(stringResource(option.labelRes)) },
-            )
-        }
+    val orientation by screenModel.preferences.orientation().collectAsState()
+    val orientationLabels = listOf(
+        stringResource(MR.strings.orientation_free),
+        stringResource(MR.strings.orientation_portrait),
+        stringResource(MR.strings.orientation_landscape),
+        stringResource(MR.strings.orientation_locked_portrait),
+        stringResource(MR.strings.orientation_locked_landscape),
+    )
+    val orientationValues = NovelOrientation.entries
+    SettingsDropdown(
+        label = stringResource(MR.strings.novel_orientation),
+        selectedLabel = orientationLabels[orientationValues.indexOf(orientation)],
+        options = orientationLabels,
+    ) { index ->
+        val o = orientationValues[index]
+        screenModel.preferences.orientation().set(o)
+        screenModel.onOrientationChange(o.prefValue)
     }
+
+    // ---- General section (colored header) ----
+    SectionHeader("General", accentColor)
+
+    val bgColorMode by screenModel.preferences.backgroundColorMode().collectAsState()
+    val bgColorLabels = listOf(
+        stringResource(MR.strings.white_background),
+        stringResource(MR.strings.black_background),
+        stringResource(MR.strings.smart_by_theme),
+        stringResource(MR.strings.gray_background),
+    )
+    val bgColorValues = NovelReaderBackgroundColor.entries
+    SettingsDropdown(
+        label = stringResource(MR.strings.pref_reader_theme),
+        selectedLabel = bgColorLabels[bgColorValues.indexOf(bgColorMode)],
+        options = bgColorLabels,
+    ) { index ->
+        val mode = bgColorValues[index]
+        screenModel.preferences.backgroundColorMode().set(mode)
+        screenModel.onBackgroundColorChange(mode.prefValue)
+    }
+
+    // ---- Display sub-section ----
+    SubHeader("Display", accentColor)
+
+    CheckboxItem(
+        label = stringResource(MR.strings.pref_novel_show_reading_progress),
+        pref = screenModel.preferences.showReadingProgress(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Use cover accent color",
+        pref = screenModel.preferences.useCoverAccentColor(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "In-line phone info",
+        pref = screenModel.preferences.inlinePhoneInfo(),
+        accentColor = accentColor,
+    )
+
+    // ---- Reader tools sub-section ----
+    SubHeader("Reader tools", accentColor)
+
+    CheckboxItem(
+        label = "Estimated reading time",
+        pref = screenModel.preferences.showEstimatedReadingTime(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Smart-fit margins",
+        pref = screenModel.preferences.smartFitMargins(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Join chapters (no headers)",
+        pref = screenModel.preferences.joinChapters(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "E-Ink binarization",
+        pref = screenModel.preferences.eInkBinarization(),
+        accentColor = accentColor,
+    )
+
+    // ---- System sub-section ----
+    SubHeader("System", accentColor)
 
     CheckboxItem(
         label = stringResource(MR.strings.pref_fullscreen),
-        pref = screenModel.readerPreferences.fullscreen(),
+        pref = screenModel.preferences.fullscreen(),
+        accentColor = accentColor,
     )
 
-    if (screenModel.hasDisplayCutout && screenModel.readerPreferences.fullscreen().get()) {
+    if (screenModel.hasDisplayCutout && screenModel.preferences.fullscreen().get()) {
         CheckboxItem(
             label = stringResource(MR.strings.pref_cutout_short),
-            pref = screenModel.readerPreferences.cutoutShort(),
+            pref = screenModel.preferences.cutoutShort(),
+            accentColor = accentColor,
         )
     }
 
     CheckboxItem(
         label = stringResource(MR.strings.pref_keep_screen_on),
         pref = screenModel.readerPreferences.keepScreenOn(),
+        accentColor = accentColor,
     )
 }
 
+// ---------------------------------------------------------------------
+// Text page — single-line rows, no section headings (per user choice)
+// ---------------------------------------------------------------------
+
 @Composable
-private fun ColumnScope.NovelTextSettingsPage(screenModel: NovelReaderSettingsScreenModel) {
+private fun ColumnScope.NovelTextSettingsPage(
+    screenModel: NovelReaderSettingsScreenModel,
+    accentColor: Color? = null,
+) {
     val textSize by screenModel.preferences.textSize().collectAsState()
     val lineHeight by screenModel.preferences.lineHeight().collectAsState()
     val paragraphSpacing by screenModel.preferences.paragraphSpacing().collectAsState()
+    val sidePadding by screenModel.preferences.sidePadding().collectAsState()
     val textAlignment by screenModel.preferences.textAlignment().collectAsState()
+    val bionicReading by screenModel.preferences.bionicReading().collectAsState()
 
-    HeadingItem("Text size")
-
+    // No section headings — each row is a single line: label + value.
     SliderItem(
+        label = stringResource(MR.strings.text_size),
         value = textSize.toInt(),
         valueRange = 10..32,
-        label = "Text size",
         valueText = "${textSize.toInt()}sp",
-        onChange = { newValue ->
-            screenModel.preferences.textSize().set(newValue.toFloat())
-            screenModel.onTextSettingChange()
-        },
-    )
+        steps = 21, // 1sp increments: (32-10)-1 = 21
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.textSize().set(newValue.toFloat())
+        screenModel.onTextSettingChange()
+    }
 
-    HeadingItem("Line height")
-
-    val lineHeightInt = remember(lineHeight) { (lineHeight * 10).toInt() }
-    SliderItem(
-        value = lineHeightInt,
-        valueRange = 10..30,
-        label = "Line height",
+    FloatSliderItem(
+        label = stringResource(MR.strings.line_height),
+        value = lineHeight,
+        valueRange = 0.8f..5.0f,
         valueText = "%.1fx".format(lineHeight),
-        onChange = { newValue ->
-            screenModel.preferences.lineHeight().set(newValue / 10f)
-            screenModel.onTextSettingChange()
-        },
-    )
-
-    HeadingItem("Paragraph spacing")
+        steps = 20, // 0.2 increments: (5.0-0.8)/0.2 - 1 = 20
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.lineHeight().set(newValue)
+        screenModel.onTextSettingChange()
+    }
 
     SliderItem(
+        label = stringResource(MR.strings.paragraph_spacing),
         value = paragraphSpacing,
         valueRange = 0..48,
-        label = "Paragraph spacing",
         valueText = "${paragraphSpacing}dp",
-        onChange = { newValue ->
-            screenModel.preferences.paragraphSpacing().set(newValue)
-            screenModel.onTextSettingChange()
-        },
-    )
-
-    HeadingItem("Text alignment")
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        TextAlignment.entries.forEach { alignment ->
-            FilterChip(
-                selected = textAlignment == alignment,
-                onClick = {
-                    screenModel.preferences.textAlignment().set(alignment)
-                    screenModel.onTextSettingChange()
-                },
-                label = {
-                    Text(
-                        alignment.name.lowercase().replaceFirstChar { it.uppercase() },
-                    )
-                },
-            )
-        }
+        steps = 47, // 1dp increments
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.paragraphSpacing().set(newValue)
+        screenModel.onTextSettingChange()
     }
+
+    SliderItem(
+        label = stringResource(MR.strings.pref_webtoon_side_padding),
+        value = sidePadding,
+        valueRange = 0..64,
+        valueText = "${sidePadding}dp",
+        steps = 63, // 1dp increments
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.sidePadding().set(newValue)
+        screenModel.onTextSettingChange()
+    }
+
+    val alignmentLabels = listOf(
+        stringResource(MR.strings.alignment_left),
+        stringResource(MR.strings.alignment_center),
+        stringResource(MR.strings.alignment_justify),
+        stringResource(MR.strings.alignment_right),
+    )
+    val alignmentValues = TextAlignment.entries
+    SettingsDropdown(
+        label = stringResource(MR.strings.text_alignment),
+        selectedLabel = alignmentLabels[alignmentValues.indexOf(textAlignment)],
+        options = alignmentLabels,
+    ) { index ->
+        screenModel.preferences.textAlignment().set(alignmentValues[index])
+        screenModel.onTextSettingChange()
+    }
+
+    CheckboxItem(
+        label = stringResource(MR.strings.bionic_reading),
+        pref = screenModel.preferences.bionicReading(),
+        accentColor = accentColor,
+    )
 }
