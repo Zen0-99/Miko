@@ -262,6 +262,10 @@ import tachiyomi.domain.track.novel.interactor.DeleteNovelTrack
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
 import tachiyomi.domain.track.novel.repository.NovelTrackRepository
+import eu.kanade.domain.track.novel.interactor.AddNovelTracks
+import eu.kanade.domain.track.novel.interactor.RefreshNovelTracks
+import eu.kanade.domain.track.novel.interactor.SyncNovelChapterProgressWithTrack
+import eu.kanade.domain.track.novel.interactor.TrackNovelChapter
 import tachiyomi.domain.savedsearches.anime.interactor.DeleteAnimeSavedSearch
 import tachiyomi.domain.savedsearches.anime.interactor.GetAnimeSavedSearches
 import tachiyomi.domain.savedsearches.anime.interactor.InsertAnimeSavedSearch
@@ -549,6 +553,10 @@ class DomainModule : InjektModule {
         addFactory { GetNovelTracks(get()) }
         addFactory { InsertNovelTrack(get()) }
         addFactory { DeleteNovelTrack(get()) }
+        addFactory { AddNovelTracks(get(), get(), get(), get()) }
+        addFactory { TrackNovelChapter(get(), get(), get()) }
+        addFactory { SyncNovelChapterProgressWithTrack(get(), get(), get(), get()) }
+        addFactory { RefreshNovelTracks(get(), get(), get(), get()) }
 
         addSingletonFactory<CustomButtonRepository> { CustomButtonRepositoryImpl(get()) }
         addFactory { CreateCustomButton(get()) }
