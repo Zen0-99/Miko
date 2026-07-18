@@ -417,6 +417,7 @@
     <string name="label_watched_duration">Watched duration</string>
     <string name="label_watched_episodes">Watched</string>
     <string name="pref_start_screen">Start Screen</string>
+    <string name="pref_content_mode_theme">Theme for</string>
     <string name="pref_library_manga_columns">Manga items per row</string>
     <string name="pref_library_anime_columns">Anime items per row</string>
     <string name="pref_bottom_nav_no_history">Move History to the More tab</string>
@@ -424,6 +425,7 @@
     <string name="pref_bottom_nav_no_manga">Move Manga to the More tab</string>
     <string name="pref_bottom_nav_no_novel">Move Novels to the More tab</string>
     <string name="pref_bottom_nav_no_browse">Move Browse to the More tab</string>
+    <string name="pref_bottom_nav_no_home">Move Home to the More tab</string>
     <string name="action_filter_unseen">Unseen</string>
     <string name="action_global_manga_search">Global Manga Search</string>
     <string name="action_global_anime_search">Global Anime Search</string>
@@ -560,7 +562,9 @@
     <string name="label_migration_novel">Migrate Novel</string>
     <string name="pref_category_manga_reader">Manga Reader</string>
     <string name="pref_category_novel_reader">Novel Reader</string>
+    <string name="pref_novel_reader_summary">Reading mode, text layout, navigation</string>
     <string name="pref_category_anime_player">Anime Player</string>
+    <string name="highlights">Highlights</string>
     <string name="settings">Settings</string>
     <string name="copied_video_link_to_clipboard">Copied video quality link to clipboard</string>
     <string name="choose_video_quality">Choose video quality:</string>
@@ -621,4 +625,12 @@
     <string name="pref_download_fillermarked_items">Allow downloading of fillermarked episodes</string>
     <string name="show_episode_previews">Episode thumbnails</string>
     <string name="show_episode_summaries">Episode summaries</string>
+    <string name="label_home">Home</string>
+    <string name="label_recent_anime">Recently Watched</string>
+    <string name="label_recent_novels">Recently Read</string>
+    <string name="label_recently_added_anime">Recently Added Anime</string>
+    <string name="label_recently_added_manga">Recently Added Manga</string>
+    <string name="label_recently_added_novels">Recently Added Novels</string>
+    <string name="information_no_home_history">No recent activity yet</string>
+    <string name="pref_start_screen_home">Home Hub</string>
 </resources>
