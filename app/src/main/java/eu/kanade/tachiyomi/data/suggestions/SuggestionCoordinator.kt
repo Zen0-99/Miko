@@ -1,0 +1,95 @@
+package eu.kanade.tachiyomi.data.suggestions
+
+import eu.kanade.tachiyomi.data.suggestions.sources.AniListRecommendationSource
+import eu.kanade.tachiyomi.data.suggestions.sources.RecommendationPagingSource
+import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
+import eu.kanade.tachiyomi.data.suggestions.util.bestMatchScoreFor
+import eu.kanade.tachiyomi.data.suggestions.util.dedupeByCleanTitle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withTimeoutOrNull
+import tachiyomi.core.common.util.system.logcat
+
+/**
+ * Orchestrates external recommendation sources in parallel.
+ *
+ * Currently supports:
+ * - AniList (all media types)
+ *
+ * Future sources to add:
+ * - MyAnimeList/Jikan (anime only)
+ * - MangaUpdates (manga + novels)
+ * - NovelUpdates (novels only)
+ */
+class SuggestionCoordinator {
+
+    private companion object {
+        const val PROVIDER_TIMEOUT_MS = 10_000L
+    }
+
+    fun createSources(mediaType: SuggestionMediaType): List<RecommendationPagingSource> =
+        buildList {
+            add(AniListRecommendationSource(mediaType))
+            // TODO: Add MAL, MangaUpdates, NovelUpdates sources
+        }
+
+    suspend fun fetchSuggestions(
+        seed: SuggestionSeed,
+        limit: Int = 40,
+    ): SuggestionFetchResult = supervisorScope {
+        val boundedLimit = limit.coerceIn(1, 100)
+        val sources = createSources(seed.mediaType)
+        if (sources.isEmpty()) {
+            return@supervisorScope SuggestionFetchResult(emptyList(), 0, 0)
+        }
+
+        logcat {
+            "[Coordinator] Fetching '${seed.primaryTitle}' (${seed.mediaType}) via ${sources.map { it.name }}"
+        }
+
+        val jobs = sources.map { source ->
+            async(Dispatchers.IO) {
+                try {
+                    val result = withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
+                        source.fetchSuggestions(seed)
+                    }
+                    if (result == null) {
+                        logcat { "[Coordinator] ${source.name} TIMEOUT" }
+                        Pair(emptyList<SuggestionItem>(), true)
+                    } else {
+                        Pair(result, false)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logcat { "[Coordinator] ${source.name} FAILED: ${e.message}" }
+                    Pair(emptyList<SuggestionItem>(), true)
+                }
+            }
+        }
+
+        val results = jobs.map { it.await() }
+        val attemptedSources = sources.size
+        val failedSources = results.count { it.second }
+        val items = results.flatMap { it.first }
+            .dedupeByCleanTitle(seed)
+            .sortedByDescending { SuggestionSourceWeight.finalScore(it.reason, it.bestMatchScoreFor(seed)) }
+            .take(boundedLimit)
+
+        val matchedBase = sources.any { it.matchedBase } || results.any { it.first.isNotEmpty() }
+
+        logcat {
+            "[Coordinator] Done '${seed.primaryTitle}': ${items.size} items, " +
+                "attempted=$attemptedSources, failed=$failedSources"
+        }
+
+        SuggestionFetchResult(
+            items = items,
+            attemptedSources = attemptedSources,
+            failedSources = failedSources,
+            matchedBase = matchedBase,
+        )
+    }
+}
