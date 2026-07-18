@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupExtension
 import eu.kanade.tachiyomi.data.backup.models.BackupExtensionRepos
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupNovel
+import eu.kanade.tachiyomi.data.backup.models.BackupNovelLink
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeCategoriesRestorer
@@ -23,6 +24,7 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaExtensionRepoResto
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelCategoriesRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelRestorer
+import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelLinksRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +59,7 @@ class BackupRestorer(
     private val animeRestorer: AnimeRestorer = AnimeRestorer(),
     private val mangaRestorer: MangaRestorer = MangaRestorer(),
     private val novelRestorer: NovelRestorer = NovelRestorer(),
+    private val novelLinksRestorer: NovelLinksRestorer = NovelLinksRestorer(),
     private val extensionsRestorer: ExtensionsRestorer = ExtensionsRestorer(context),
 ) {
 
@@ -121,6 +124,7 @@ class BackupRestorer(
         mangaRestorer.sourceIdMap = mangaSourceIdMap
         animeRestorer.sourceIdMap = animeSourceIdMap
         novelRestorer.sourceIdMap = novelSourceIdMap
+        novelLinksRestorer.sourceIdMap = novelSourceIdMap
 
         if (options.libraryEntries) {
             restoreAmount += backup.backupManga.size + backup.backupAnime.size + backup.backupNovels.size
@@ -162,6 +166,8 @@ class BackupRestorer(
                 restoreAnime(backup.backupAnime, if (options.categories) backup.backupAnimeCategories else emptyList())
                 restoreManga(backup.backupManga, if (options.categories) backup.backupCategories else emptyList())
                 restoreNovel(backup.backupNovels, if (options.categories) backup.backupNovelCategory else emptyList())
+                // Restore novel source links after novels are inserted
+                restoreNovelLinks(backup.backupNovelLinks)
             }
             if (options.extensionRepoSettings) {
                 restoreExtensionRepos(backup.backupAnimeExtensionRepo, backup.backupMangaExtensionRepo)
@@ -255,6 +261,18 @@ class BackupRestorer(
                 restoreProgress += 1
                 notifier.showRestoreProgress(it.title, restoreProgress, restoreAmount, isSync)
             }
+    }
+
+    private fun CoroutineScope.restoreNovelLinks(
+        backupLinks: List<BackupNovelLink>,
+    ) = launch {
+        if (backupLinks.isEmpty()) return@launch
+        ensureActive()
+        try {
+            novelLinksRestorer.restore(backupLinks)
+        } catch (e: Exception) {
+            errors.add(Date() to "Novel links restore: ${e.message}")
+        }
     }
 
     private fun CoroutineScope.restoreAppPreferences(

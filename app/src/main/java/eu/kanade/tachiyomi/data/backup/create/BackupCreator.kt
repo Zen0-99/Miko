@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.data.backup.create.creators.MangaSourcesBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.NovelBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.NovelCategoriesBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.NovelSourcesBackupCreator
+import eu.kanade.tachiyomi.data.backup.create.creators.NovelLinksBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.PreferenceBackupCreator
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupAnime
@@ -29,6 +30,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupExtensionRepos
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelSource
+import eu.kanade.tachiyomi.data.backup.models.BackupNovelLink
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSource
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
@@ -84,6 +86,7 @@ class BackupCreator(
     private val animeSourcesBackupCreator: AnimeSourcesBackupCreator = AnimeSourcesBackupCreator(),
     private val mangaSourcesBackupCreator: MangaSourcesBackupCreator = MangaSourcesBackupCreator(),
     private val novelSourcesBackupCreator: NovelSourcesBackupCreator = NovelSourcesBackupCreator(),
+    private val novelLinksBackupCreator: NovelLinksBackupCreator = NovelLinksBackupCreator(),
     private val extensionsBackupCreator: ExtensionsBackupCreator = ExtensionsBackupCreator(context),
 ) {
 
@@ -143,6 +146,7 @@ class BackupCreator(
                 backupNovels = backupNovel,
                 backupNovelCategory = backupNovelCategories(options),
                 backupNovelSources = backupNovelSources(backupNovel),
+                backupNovelLinks = backupNovelLinks(),
             )
 
             val byteArray = parser.encodeToByteArray(Backup.serializer(), backup)
@@ -220,6 +224,10 @@ class BackupCreator(
 
     private fun backupNovelSources(novels: List<BackupNovel>): List<BackupNovelSource> {
         return novelSourcesBackupCreator(novels)
+    }
+
+    private suspend fun backupNovelLinks(): List<BackupNovelLink> {
+        return novelLinksBackupCreator()
     }
 
     private fun backupAppPreferences(options: BackupOptions): List<BackupPreference> {

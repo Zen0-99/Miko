@@ -1,0 +1,60 @@
+import kotlin.Boolean;
+import kotlin.Long;
+
+CREATE TABLE novel_links(
+    _id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    linked_id INTEGER NOT NULL,
+    novel_id INTEGER NOT NULL,
+    source_id INTEGER NOT NULL,
+    is_primary INTEGER AS Boolean NOT NULL DEFAULT 0,
+    extension_type TEXT NOT NULL DEFAULT 'apk',
+    FOREIGN KEY(novel_id) REFERENCES novels (_id) ON DELETE CASCADE
+);
+
+CREATE INDEX novel_links_linked_id_index ON novel_links(linked_id);
+CREATE INDEX novel_links_novel_id_index ON novel_links(novel_id);
+
+-- Get all novels in a linked cluster
+getLinkedNovelsByLinkedId:
+SELECT novel_links.* FROM novel_links WHERE linked_id = :linkedId ORDER BY is_primary DESC;
+
+-- Get the primary novel for a linked cluster
+getPrimaryByLinkedId:
+SELECT novel_links.* FROM novel_links WHERE linked_id = :linkedId AND is_primary = 1 LIMIT 1;
+
+-- Get all links for a specific novel
+getLinksByNovelId:
+SELECT novel_links.* FROM novel_links WHERE novel_id = :novelId;
+
+-- Get the linked_id for a specific novel
+getLinkedIdByNovelId:
+SELECT linked_id FROM novel_links WHERE novel_id = :novelId LIMIT 1;
+
+-- Insert a new link
+insertLink:
+INSERT INTO novel_links(linked_id, novel_id, source_id, is_primary, extension_type)
+VALUES (:linkedId, :novelId, :sourceId, :isPrimary, :extensionType);
+
+-- Delete a link
+deleteLink:
+DELETE FROM novel_links WHERE novel_id = :novelId;
+
+-- Delete all links in a cluster
+deleteLinksByLinkedId:
+DELETE FROM novel_links WHERE linked_id = :linkedId;
+
+-- Get the next available linked_id
+getNextLinkedId:
+SELECT COALESCE(MAX(linked_id), 0) + 1 FROM novel_links;
+
+-- Check if a novel is already linked
+isNovelLinked:
+SELECT EXISTS(SELECT 1 FROM novel_links WHERE novel_id = :novelId);
+
+-- Get all linked clusters (for backup)
+getAllLinks:
+SELECT novel_links.* FROM novel_links;
+
+-- Set primary status
+setPrimary:
+UPDATE novel_links SET is_primary = :isPrimary WHERE novel_id = :novelId;

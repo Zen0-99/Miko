@@ -35,6 +35,8 @@ import eu.kanade.domain.source.anime.interactor.ToggleAnimeSource
 import eu.kanade.domain.source.anime.interactor.ToggleAnimeSourcePin
 import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
+import eu.kanade.domain.items.chapter.interactor.SetNovelReadingPosition
+import eu.kanade.tachiyomi.ui.reader.novel.CharacterPositionTracker
 import tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter
 import eu.kanade.domain.source.novel.interactor.GetEnabledNovelSources
 import eu.kanade.domain.source.novel.interactor.GetNovelSourcesWithFavoriteCount
@@ -87,12 +89,14 @@ import mihon.domain.items.chapter.interactor.FilterChaptersForDownload
 import mihon.domain.items.episode.interactor.FilterEpisodesForDownload
 import mihon.domain.upcoming.anime.interactor.GetUpcomingAnime
 import mihon.domain.upcoming.manga.interactor.GetUpcomingManga
+import mihon.domain.upcoming.novel.interactor.GetUpcomingNovel
 import tachiyomi.data.category.anime.AnimeCategoryRepositoryImpl
 import tachiyomi.data.category.manga.MangaCategoryRepositoryImpl
 import tachiyomi.data.custombutton.CustomButtonRepositoryImpl
 import tachiyomi.data.entries.anime.AnimeRepositoryImpl
 import tachiyomi.data.entries.manga.MangaRepositoryImpl
 import tachiyomi.data.entries.novel.NovelRepositoryImpl
+import tachiyomi.data.entries.novel.NovelLinkRepositoryImpl
 import tachiyomi.data.category.novel.NovelCategoryRepositoryImpl
 import tachiyomi.data.history.anime.AnimeHistoryRepositoryImpl
 import tachiyomi.data.history.manga.MangaHistoryRepositoryImpl
@@ -176,6 +180,12 @@ import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
 import tachiyomi.domain.entries.novel.interactor.GetNovelByUrlAndSourceId
+import tachiyomi.domain.entries.novel.interactor.GetLinkedNovels
+import tachiyomi.domain.entries.novel.interactor.GetNovelLinks
+import tachiyomi.domain.entries.novel.interactor.GetNovelLinkedId
+import tachiyomi.domain.entries.novel.interactor.LinkNovels
+import tachiyomi.domain.entries.novel.interactor.UnlinkNovel
+import tachiyomi.domain.entries.novel.interactor.GetAllNovelLinks
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.interactor.GetDuplicateLibraryNovel
@@ -183,6 +193,7 @@ import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.interactor.SetNovelChapterFlags
 import tachiyomi.domain.entries.novel.interactor.SetNovelDefaultChapterFlags
 import tachiyomi.domain.entries.novel.repository.NovelRepository
+import tachiyomi.domain.entries.novel.repository.NovelLinkRepository
 import tachiyomi.domain.source.novel.interactor.GetRemoteNovel
 import tachiyomi.domain.source.novel.repository.NovelSourceRepository
 import tachiyomi.domain.category.novel.repository.NovelCategoryRepository
@@ -487,6 +498,7 @@ class DomainModule : InjektModule {
         addFactory { UpdateNovelExtensionRepo(get(), get()) }
 
         addSingletonFactory<NovelRepository> { NovelRepositoryImpl(get()) }
+        addSingletonFactory<NovelLinkRepository> { NovelLinkRepositoryImpl(get()) }
         addSingletonFactory<NovelChapterRepository> { NovelChapterRepositoryImpl(get()) }
         addSingletonFactory<NovelCategoryRepository> { NovelCategoryRepositoryImpl(get()) }
         addFactory { GetNovel(get()) }
@@ -495,6 +507,12 @@ class DomainModule : InjektModule {
         addFactory { GetNovelChapter(get()) }
         addFactory { GetNovelChaptersByNovelId(get()) }
         addFactory { GetNovelCategories(get()) }
+        addFactory { GetLinkedNovels(get()) }
+        addFactory { GetNovelLinks(get()) }
+        addFactory { GetNovelLinkedId(get()) }
+        addFactory { LinkNovels(get()) }
+        addFactory { UnlinkNovel(get()) }
+        addFactory { GetAllNovelLinks(get()) }
         addFactory { GetLibraryNovels(get()) }
         addFactory { GetVisibleNovelCategories(get()) }
         addFactory { SetNovelCategories(get()) }
@@ -512,6 +530,10 @@ class DomainModule : InjektModule {
         addFactory { UpdateNovel(get()) }
         addFactory { UpdateNovelChapter(get()) }
         addFactory { SetNovelReadStatus(get()) }
+        addFactory { SetNovelReadingPosition(get()) }
+        addFactory { CharacterPositionTracker(get()) }
+        addFactory { tachiyomi.domain.entries.novel.interactor.NovelFetchInterval() }
+        addFactory { GetUpcomingNovel(get()) }
 
         addSingletonFactory<NovelHistoryRepository> { NovelHistoryRepositoryImpl(get()) }
         addFactory { GetNovelHistory(get()) }

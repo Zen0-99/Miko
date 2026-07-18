@@ -45,6 +45,7 @@ data class LegacyBackup(
             backupNovels = backupNovels,
             backupNovelCategory = backupNovelCategories,
             backupNovelSources = backupNovelSources,
+            backupNovelLinks = emptyList(),
         )
     }
 }
@@ -72,4 +73,5 @@ data class Backup(
     @ProtoNumber(600) val backupNovels: List<BackupNovel> = emptyList(),
     @ProtoNumber(601) var backupNovelCategory: List<BackupCategory> = emptyList(),
     @ProtoNumber(602) var backupNovelSources: List<BackupNovelSource> = emptyList(),
+    @ProtoNumber(603) var backupNovelLinks: List<BackupNovelLink> = emptyList(),
 )
