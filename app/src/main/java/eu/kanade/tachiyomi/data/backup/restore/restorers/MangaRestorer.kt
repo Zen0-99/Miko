@@ -34,6 +34,14 @@ class MangaRestorer(
     fetchInterval: MangaFetchInterval = Injekt.get(),
 ) {
 
+    /**
+     * Mapping from backup source IDs to installed source IDs.
+     * Set by [BackupRestorer] before restore begins.
+     */
+    var sourceIdMap: Map<Long, Long> = emptyMap()
+
+    private fun remapSourceId(sourceId: Long): Long = sourceIdMap[sourceId] ?: sourceId
+
     private var now = ZonedDateTime.now()
     private var currentFetchWindow = fetchInterval.getWindow(now)
 
@@ -48,7 +56,7 @@ class MangaRestorer(
 
         return backupMangas
             .sortedWith(
-                compareBy<BackupManga> { it.url in urlsBySource[it.source].orEmpty() }
+                compareBy<BackupManga> { it.url in urlsBySource[remapSourceId(it.source)].orEmpty() }
                     .then(compareByDescending { it.lastModifiedAt }),
             )
     }
@@ -59,7 +67,7 @@ class MangaRestorer(
     ) {
         handler.await(inTransaction = true) {
             val dbManga = findExistingManga(backupManga)
-            val manga = backupManga.getMangaImpl()
+            val manga = backupManga.getMangaImpl().copy(source = remapSourceId(backupManga.source))
             val restoredManga = if (dbManga == null) {
                 restoreNewManga(manga)
             } else {
@@ -79,7 +87,8 @@ class MangaRestorer(
     }
 
     private suspend fun findExistingManga(backupManga: BackupManga): Manga? {
-        return getMangaByUrlAndSourceId.await(backupManga.url, backupManga.source)
+        val effectiveSourceId = remapSourceId(backupManga.source)
+        return getMangaByUrlAndSourceId.await(backupManga.url, effectiveSourceId)
     }
 
     private suspend fun restoreExistingManga(manga: Manga, dbManga: Manga): Manga {

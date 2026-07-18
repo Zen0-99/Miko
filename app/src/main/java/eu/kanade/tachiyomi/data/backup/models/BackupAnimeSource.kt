@@ -7,6 +7,7 @@ import kotlinx.serialization.protobuf.ProtoNumber
 data class BackupAnimeSource(
     @ProtoNumber(1) var name: String = "",
     @ProtoNumber(2) var sourceId: Long,
+    @ProtoNumber(3) var baseUrl: String = "",
 )
 
 @Serializable

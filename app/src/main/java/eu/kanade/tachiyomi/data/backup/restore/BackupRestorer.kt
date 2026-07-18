@@ -30,8 +30,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.domain.source.anime.service.AnimeSourceManager
+import tachiyomi.domain.source.manga.service.MangaSourceManager
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,6 +71,15 @@ class BackupRestorer(
     private var mangaSourceMapping: Map<Long, String> = emptyMap()
     private var novelSourceMapping: Map<Long, String> = emptyMap()
 
+    /**
+     * Mapping from backup source IDs to installed source IDs, built by [SourceIdMapper].
+     * Used to remap source IDs when the backup comes from a different app (e.g. Tadami/Hayai
+     * with JS-based source IDs) so that library entries link to the correct installed extensions.
+     */
+    private var animeSourceIdMap: Map<Long, Long> = emptyMap()
+    private var mangaSourceIdMap: Map<Long, Long> = emptyMap()
+    private var novelSourceIdMap: Map<Long, Long> = emptyMap()
+
     suspend fun restore(uri: Uri, options: RestoreOptions) {
         val startTime = System.currentTimeMillis()
 
@@ -89,11 +103,24 @@ class BackupRestorer(
 
         // Store source mapping for error messages
         val backupAnimeMaps = backup.backupAnimeSources
-        mangaSourceMapping = backupAnimeMaps.associate { it.sourceId to it.name }
+        animeSourceMapping = backupAnimeMaps.associate { it.sourceId to it.name }
         val backupMangaMaps = backup.backupSources
         mangaSourceMapping = backupMangaMaps.associate { it.sourceId to it.name }
         val backupNovelMaps = backup.backupNovelSources
         novelSourceMapping = backupNovelMaps.associate { it.sourceId to it.name }
+
+        // Build source ID mappings for cross-format backup compatibility.
+        // This remaps source IDs from the backup to match installed extension source IDs
+        // (e.g. Tadami/Hayai JS-based IDs → Miko APK-based IDs) by matching on baseUrl or name.
+        val sourceIdMapper = SourceIdMapper()
+        mangaSourceIdMap = sourceIdMapper.buildMangaMapping(backupMangaMaps, Injekt.get<MangaSourceManager>())
+        animeSourceIdMap = sourceIdMapper.buildAnimeMapping(backupAnimeMaps, Injekt.get<AnimeSourceManager>())
+        novelSourceIdMap = sourceIdMapper.buildNovelMapping(backupNovelMaps, Injekt.get<NovelSourceManager>())
+
+        // Pass mappings to restorers so they can remap source IDs during restore
+        mangaRestorer.sourceIdMap = mangaSourceIdMap
+        animeRestorer.sourceIdMap = animeSourceIdMap
+        novelRestorer.sourceIdMap = novelSourceIdMap
 
         if (options.libraryEntries) {
             restoreAmount += backup.backupManga.size + backup.backupAnime.size + backup.backupNovels.size

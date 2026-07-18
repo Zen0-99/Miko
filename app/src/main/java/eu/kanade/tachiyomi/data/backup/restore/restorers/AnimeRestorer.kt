@@ -35,6 +35,14 @@ class AnimeRestorer(
     fetchInterval: AnimeFetchInterval = Injekt.get(),
 ) {
 
+    /**
+     * Mapping from backup source IDs to installed source IDs.
+     * Set by [BackupRestorer] before restore begins.
+     */
+    var sourceIdMap: Map<Long, Long> = emptyMap()
+
+    private fun remapSourceId(sourceId: Long): Long = sourceIdMap[sourceId] ?: sourceId
+
     private var now = ZonedDateTime.now()
     private var currentFetchWindow = fetchInterval.getWindow(now)
 
@@ -49,7 +57,7 @@ class AnimeRestorer(
 
         return backupAnimes
             .sortedWith(
-                compareBy<BackupAnime> { it.url in urlsBySource[it.source].orEmpty() }
+                compareBy<BackupAnime> { it.url in urlsBySource[remapSourceId(it.source)].orEmpty() }
                     .then(compareByDescending { it.lastModifiedAt }),
             )
     }
@@ -61,7 +69,7 @@ class AnimeRestorer(
     ) {
         handler.await(inTransaction = true) {
             val dbAnime = findExistingAnime(backupAnime)
-            val anime = backupAnime.getAnimeImpl()
+            val anime = backupAnime.getAnimeImpl().copy(source = remapSourceId(backupAnime.source))
             val restoredAnime = if (dbAnime == null) {
                 restoreNewAnime(anime)
             } else {
@@ -71,6 +79,7 @@ class AnimeRestorer(
             backupSeasons.forEach { bs ->
                 val dbAnime = findExistingAnime(bs)
                 val anime = bs.getAnimeImpl().copy(
+                    source = remapSourceId(bs.source),
                     parentId = restoredAnime.id,
                 )
                 if (dbAnime == null) {
@@ -92,7 +101,8 @@ class AnimeRestorer(
     }
 
     private suspend fun findExistingAnime(backupAnime: BackupAnime): Anime? {
-        return getAnimeByUrlAndSourceId.await(backupAnime.url, backupAnime.source)
+        val effectiveSourceId = remapSourceId(backupAnime.source)
+        return getAnimeByUrlAndSourceId.await(backupAnime.url, effectiveSourceId)
     }
 
     private suspend fun restoreExistingAnime(anime: Anime, dbAnime: Anime): Anime {

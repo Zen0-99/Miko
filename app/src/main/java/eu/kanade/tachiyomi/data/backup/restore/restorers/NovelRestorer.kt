@@ -32,13 +32,25 @@ class NovelRestorer(
     private val insertTrack: InsertNovelTrack = Injekt.get(),
 ) {
 
+    /**
+     * Mapping from backup source IDs to installed source IDs.
+     * Set by [BackupRestorer] before restore begins.
+     * Used to remap source IDs so entries link to the correct installed extensions.
+     */
+    var sourceIdMap: Map<Long, Long> = emptyMap()
+
+    /**
+     * Remap a backup source ID to the installed source ID, if a mapping exists.
+     */
+    private fun remapSourceId(sourceId: Long): Long = sourceIdMap[sourceId] ?: sourceId
+
     suspend fun sortByNew(backupNovels: List<BackupNovel>): List<BackupNovel> {
         val urlsBySource = handler.awaitList { novelsQueries.getAllNovelSourceAndUrl() }
             .groupBy({ it.source }, { it.url })
 
         return backupNovels
             .sortedWith(
-                compareBy<BackupNovel> { it.url in urlsBySource[it.source].orEmpty() }
+                compareBy<BackupNovel> { it.url in urlsBySource[remapSourceId(it.source)].orEmpty() }
                     .then(compareByDescending { it.lastModifiedAt }),
             )
     }
@@ -49,7 +61,7 @@ class NovelRestorer(
     ) {
         handler.await(inTransaction = true) {
             val dbNovel = findExistingNovel(backupNovel)
-            val novel = backupNovel.getNovelImpl()
+            val novel = backupNovel.getNovelImpl().copy(source = remapSourceId(backupNovel.source))
             val restoredNovel = if (dbNovel == null) {
                 restoreNewNovel(novel)
             } else {
@@ -68,7 +80,8 @@ class NovelRestorer(
     }
 
     private suspend fun findExistingNovel(backupNovel: BackupNovel): Novel? {
-        return getNovelByUrlAndSourceId.await(backupNovel.url, backupNovel.source)
+        val effectiveSourceId = remapSourceId(backupNovel.source)
+        return getNovelByUrlAndSourceId.await(backupNovel.url, effectiveSourceId)
     }
 
     private suspend fun restoreExistingNovel(novel: Novel, dbNovel: Novel): Novel {
@@ -260,6 +273,7 @@ class NovelRestorer(
                     chapter.read,
                     chapter.bookmark,
                     chapter.lastCharRead,
+                    chapter.totalCharCount,
                     chapter.chapterNumber,
                     chapter.sourceOrder,
                     chapter.dateFetch,
@@ -281,6 +295,7 @@ class NovelRestorer(
                     read = chapter.read,
                     bookmark = chapter.bookmark,
                     lastCharRead = chapter.lastCharRead,
+                    totalCharCount = chapter.totalCharCount,
                     chapterNumber = null,
                     sourceOrder = null,
                     dateFetch = null,

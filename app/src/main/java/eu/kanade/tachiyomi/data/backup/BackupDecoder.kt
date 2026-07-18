@@ -73,7 +73,7 @@ class BackupDecoder(
                 backup.copy(
                     backupNovels = mikoBackup.backupNovels.map { it.toBackupNovel() },
                     backupNovelCategory = mikoBackup.backupNovelCategories.map { it.toBackupCategory() },
-                    backupNovelSources = mikoBackup.backupNovelSources.map { BackupNovelSource(it.name, it.sourceId) },
+                    backupNovelSources = mikoBackup.backupNovelSources.map { BackupNovelSource(it.name, it.sourceId, it.baseUrl) },
                 )
             }
         } catch (_: SerializationException) {

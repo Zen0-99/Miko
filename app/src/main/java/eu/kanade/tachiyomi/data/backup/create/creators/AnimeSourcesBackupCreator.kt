@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.backup.create.creators
 
 import eu.kanade.tachiyomi.animesource.AnimeSource
+import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.data.backup.models.BackupAnime
 import eu.kanade.tachiyomi.data.backup.models.BackupAnimeSource
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
@@ -26,4 +27,5 @@ private fun AnimeSource.toBackupSource() =
     BackupAnimeSource(
         name = this.name,
         sourceId = this.id,
+        baseUrl = (this as? AnimeHttpSource)?.baseUrl ?: "",
     )
