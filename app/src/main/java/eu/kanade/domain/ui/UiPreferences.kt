@@ -1,6 +1,7 @@
 package eu.kanade.domain.ui
 
 import eu.kanade.domain.ui.model.AppTheme
+import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.domain.ui.model.NavStyle
 import eu.kanade.domain.ui.model.StartScreen
 import eu.kanade.domain.ui.model.TabletUiMode
@@ -48,6 +49,64 @@ class UiPreferences(
 
     fun themeDarkAmoled() = preferenceStore.getBoolean("pref_theme_dark_amoled_key", false)
 
+    // --- Per-content-mode themes ---
+    // Manga uses lightTheme()/darkTheme()/themeDarkAmoled() above as the default.
+    // Anime and Novel have their own theme prefs so each content type can look distinct.
+    // By default they fall back to the same value as the manga (base) theme.
+
+    fun animeLightTheme() = preferenceStore.getEnum(
+        "pref_anime_light_theme",
+        if (DeviceUtil.isDynamicColorAvailable) AppTheme.MONET else AppTheme.DEFAULT,
+    )
+
+    fun animeDarkTheme() = preferenceStore.getEnum(
+        "pref_anime_dark_theme",
+        if (DeviceUtil.isDynamicColorAvailable) AppTheme.MONET else AppTheme.DEFAULT,
+    )
+
+    fun animeThemeDarkAmoled() = preferenceStore.getBoolean("pref_anime_theme_dark_amoled_key", false)
+
+    fun novelLightTheme() = preferenceStore.getEnum(
+        "pref_novel_light_theme",
+        if (DeviceUtil.isDynamicColorAvailable) AppTheme.MONET else AppTheme.DEFAULT,
+    )
+
+    fun novelDarkTheme() = preferenceStore.getEnum(
+        "pref_novel_dark_theme",
+        if (DeviceUtil.isDynamicColorAvailable) AppTheme.MONET else AppTheme.DEFAULT,
+    )
+
+    fun novelThemeDarkAmoled() = preferenceStore.getBoolean("pref_novel_theme_dark_amoled_key", false)
+
+    /**
+     * Resolve the light theme preference for the given [ContentMode].
+     * MANGA uses the base [lightTheme]; ANIME and NOVEL use their own.
+     */
+    fun lightThemeFor(mode: ContentMode) = when (mode) {
+        ContentMode.MANGA -> lightTheme()
+        ContentMode.ANIME -> animeLightTheme()
+        ContentMode.NOVEL -> novelLightTheme()
+    }
+
+    /**
+     * Resolve the dark theme preference for the given [ContentMode].
+     * MANGA uses the base [darkTheme]; ANIME and NOVEL use their own.
+     */
+    fun darkThemeFor(mode: ContentMode) = when (mode) {
+        ContentMode.MANGA -> darkTheme()
+        ContentMode.ANIME -> animeDarkTheme()
+        ContentMode.NOVEL -> novelDarkTheme()
+    }
+
+    /**
+     * Resolve the amoled preference for the given [ContentMode].
+     */
+    fun amoledFor(mode: ContentMode) = when (mode) {
+        ContentMode.MANGA -> themeDarkAmoled()
+        ContentMode.ANIME -> animeThemeDarkAmoled()
+        ContentMode.NOVEL -> novelThemeDarkAmoled()
+    }
+
     fun relativeTime() = preferenceStore.getBoolean("relative_time_v2", true)
 
     fun dateFormat() = preferenceStore.getString("app_date_format", "")
@@ -57,6 +116,44 @@ class UiPreferences(
     fun startScreen() = preferenceStore.getEnum("start_screen", StartScreen.ANIME)
 
     fun navStyle() = preferenceStore.getEnum("bottom_rail_nav_style", NavStyle.MOVE_HISTORY_TO_MORE)
+
+    /**
+     * The currently active content mode shown across mode-aware tabs (Library, Updates,
+     * History). One global mode is shared by all mode-aware tabs so the user sees a single
+     * content type at a time. Defaults to MANGA to match the historical Tachiyomi default.
+     */
+    fun contentMode() = preferenceStore.getEnum("pref_content_mode", ContentMode.MANGA)
+
+    // --- Media type visibility ---
+    // When false, the corresponding mode is hidden from the mode carousel and
+    // mode-aware tabs (Library, Updates, History, Browse). Extensions and settings
+    // for that type remain accessible.
+
+    fun showAnimeMode() = preferenceStore.getBoolean("pref_show_anime_mode", true)
+
+    fun showMangaMode() = preferenceStore.getBoolean("pref_show_manga_mode", true)
+
+    fun showNovelMode() = preferenceStore.getBoolean("pref_show_novel_mode", true)
+
+    /**
+     * When true, disables non-essential animations throughout the app:
+     * screen transitions, in-app fades, skeleton-loader pulses, image crossfades.
+     * Useful for accessibility (reduced motion preference) and low-end devices.
+     */
+    fun reduceMotion() = preferenceStore.getBoolean("pref_reduce_motion", false)
+
+    /**
+     * Returns the set of currently visible [ContentMode]s based on the visibility preferences.
+     * Always returns at least one mode (falls back to MANGA if all are disabled).
+     */
+    fun visibleContentModes(): Set<ContentMode> {
+        val modes = mutableSetOf<ContentMode>()
+        if (showMangaMode().get()) modes.add(ContentMode.MANGA)
+        if (showAnimeMode().get()) modes.add(ContentMode.ANIME)
+        if (showNovelMode().get()) modes.add(ContentMode.NOVEL)
+        if (modes.isEmpty()) modes.add(ContentMode.MANGA)
+        return modes
+    }
 
     companion object {
         fun dateFormat(format: String): DateTimeFormatter = when (format) {

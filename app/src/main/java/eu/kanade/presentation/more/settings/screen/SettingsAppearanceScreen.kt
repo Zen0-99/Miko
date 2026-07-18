@@ -1,15 +1,26 @@
 package eu.kanade.presentation.more.settings.screen
 
 import android.app.Activity
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.AppTheme
+import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.domain.ui.model.NavStyle
 import eu.kanade.domain.ui.model.StartScreen
 import eu.kanade.domain.ui.model.TabletUiMode
@@ -18,6 +29,7 @@ import eu.kanade.domain.ui.model.setAppCompatDelegateThemeMode
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.appearance.AppLanguageScreen
 import eu.kanade.presentation.more.settings.widget.AppThemePreferenceWidget
+import eu.kanade.presentation.more.settings.widget.PrefsHorizontalPadding
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableMap
@@ -35,6 +47,10 @@ object SettingsAppearanceScreen : SearchableSettings {
     @Composable
     override fun getTitleRes() = MR.strings.pref_category_appearance
 
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = MR.strings.pref_appearance_summary
+
     @Composable
     override fun getPreferences(): List<Preference> {
         val uiPreferences = remember { Injekt.get<UiPreferences>() }
@@ -51,20 +67,51 @@ object SettingsAppearanceScreen : SearchableSettings {
     ): Preference.PreferenceGroup {
         val context = LocalContext.current
 
-        val lightThemePref = uiPreferences.lightTheme()
+        // Local editing mode — which content mode's theme the user is editing.
+        // Defaults to the current global content mode so users edit what they see.
+        var editingMode by remember {
+            mutableStateOf(uiPreferences.contentMode().get())
+        }
+
+        // Resolve the per-mode theme preferences for the currently edited mode.
+        val lightThemePref = uiPreferences.lightThemeFor(editingMode)
         val lightTheme by lightThemePref.collectAsState()
 
-        val darkThemePref = uiPreferences.darkTheme()
+        val darkThemePref = uiPreferences.darkThemeFor(editingMode)
         val darkTheme by darkThemePref.collectAsState()
 
         val themeModePref = uiPreferences.themeMode()
 
-        val amoledPref = uiPreferences.themeDarkAmoled()
+        val amoledPref = uiPreferences.amoledFor(editingMode)
         val amoled by amoledPref.collectAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_theme),
             preferenceItems = persistentListOf(
+                // --- Content mode selector ---
+                Preference.PreferenceItem.CustomPreference(
+                    title = stringResource(AYMR.strings.pref_content_mode_theme),
+                ) {
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = PrefsHorizontalPadding),
+                    ) {
+                        ContentMode.entries.forEachIndexed { index, mode ->
+                            SegmentedButton(
+                                selected = mode == editingMode,
+                                onClick = { editingMode = mode },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index,
+                                    ContentMode.entries.size,
+                                ),
+                            ) {
+                                Text(stringResource(mode.titleRes))
+                            }
+                        }
+                    }
+                },
+                // --- Light theme for the selected mode ---
                 Preference.PreferenceItem.CustomPreference(
                     title = stringResource(MR.strings.pref_light_theme),
                 ) {
@@ -80,6 +127,7 @@ object SettingsAppearanceScreen : SearchableSettings {
                         },
                     )
                 },
+                // --- Dark theme for the selected mode ---
                 Preference.PreferenceItem.CustomPreference(
                     title = stringResource(MR.strings.pref_dark_theme),
                 ) {
@@ -157,6 +205,26 @@ object SettingsAppearanceScreen : SearchableSettings {
                         .toImmutableMap(),
                     title = "Navigation Style",
                     onValueChanged = { true },
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = uiPreferences.showAnimeMode(),
+                    title = "Show Anime",
+                    subtitle = "Display anime in the mode carousel and mode-aware tabs",
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = uiPreferences.showMangaMode(),
+                    title = "Show Manga",
+                    subtitle = "Display manga in the mode carousel and mode-aware tabs",
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = uiPreferences.showNovelMode(),
+                    title = "Show Novels",
+                    subtitle = "Display novels in the mode carousel and mode-aware tabs",
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = uiPreferences.reduceMotion(),
+                    title = "Reduce Motion",
+                    subtitle = "Disable non-essential animations for accessibility and performance",
                 ),
                 Preference.PreferenceItem.ListPreference(
                     preference = uiPreferences.dateFormat(),

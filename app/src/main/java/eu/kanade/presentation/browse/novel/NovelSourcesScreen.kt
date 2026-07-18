@@ -3,13 +3,22 @@ package eu.kanade.presentation.browse.novel
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.GetApp
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -20,17 +29,30 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.browse.novel.components.BaseNovelSourceItem
+import eu.kanade.presentation.browse.novel.components.NovelExtensionIcon
+import eu.kanade.tachiyomi.extension.InstallStep
+import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.ui.browse.novel.source.NovelSourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreenModel.Listing
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import tachiyomi.domain.source.novel.model.NovelSource
+import tachiyomi.domain.source.novel.model.LocalNovelSource
 import tachiyomi.domain.source.novel.model.Pin
 import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.components.ScrollbarLazyColumn
+import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
@@ -49,7 +71,22 @@ fun NovelSourcesScreen(
     onLongClickItem: (NovelSource) -> Unit,
     onSwipeHide: (NovelSource) -> Unit,
     swipeToHideEnabled: Boolean,
+    onClickExtension: (NovelSource) -> Unit = {},
+    onClickInstallExtension: (NovelExtension.Available) -> Unit = {},
+    onClickTrustExtension: (NovelExtension.Untrusted) -> Unit = {},
+    downloadStates: SnapshotStateMap<String, InstallStep> = mutableStateMapOf(),
 ) {
+    var notInstalledExpanded by remember { mutableStateOf(false) }
+
+    // Filter out available extensions when collapsed
+    val visibleItems = remember(state.items, notInstalledExpanded) {
+        if (notInstalledExpanded) {
+            state.items
+        } else {
+            state.items.filterNot { it is NovelSourceUiModel.AvailableExtension }
+        }
+    }
+
     when {
         state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
         state.isEmpty -> EmptyScreen(
@@ -57,30 +94,52 @@ fun NovelSourcesScreen(
             modifier = Modifier.padding(contentPadding),
         )
         else -> {
-            ScrollbarLazyColumn(
+            FastScrollLazyColumn(
                 contentPadding = contentPadding + topSmallPaddingValues,
             ) {
                 items(
-                    items = state.items,
+                    items = visibleItems,
                     contentType = {
                         when (it) {
                             is NovelSourceUiModel.Header -> "header"
                             is NovelSourceUiModel.Item -> "item"
+                            is NovelSourceUiModel.AvailableExtension -> "available-extension"
+                            is NovelSourceUiModel.UntrustedExtension -> "untrusted-extension"
                         }
                     },
                     key = {
                         when (it) {
                             is NovelSourceUiModel.Header -> it.hashCode()
                             is NovelSourceUiModel.Item -> "source-${it.source.key()}"
+                            is NovelSourceUiModel.AvailableExtension -> "available-${it.extension.pkgName}"
+                            is NovelSourceUiModel.UntrustedExtension -> "untrusted-${it.extension.pkgName}"
                         }
                     },
                 ) { model ->
                     when (model) {
                         is NovelSourceUiModel.Header -> {
-                            SourceHeader(
-                                modifier = Modifier.animateItem(),
-                                language = model.language,
-                            )
+                            when (model.language) {
+                                NovelSourcesScreenModel.NOT_INSTALLED_KEY -> {
+                                    NovelSourceSectionHeader(
+                                        modifier = Modifier.animateItem(),
+                                        text = stringResource(MR.strings.ext_not_installed),
+                                        expanded = notInstalledExpanded,
+                                        onClick = { notInstalledExpanded = !notInstalledExpanded },
+                                    )
+                                }
+                                NovelSourcesScreenModel.INSTALLED_KEY -> {
+                                    NovelSourceSectionHeader(
+                                        modifier = Modifier.animateItem(),
+                                        text = stringResource(MR.strings.ext_installed),
+                                    )
+                                }
+                                else -> {
+                                    SourceHeader(
+                                        modifier = Modifier.animateItem(),
+                                        language = model.language,
+                                    )
+                                }
+                            }
                         }
                         is NovelSourceUiModel.Item -> SourceItem(
                             modifier = Modifier.animateItem(),
@@ -90,7 +149,23 @@ fun NovelSourcesScreen(
                             onClickPin = onClickPin,
                             onSwipeHide = onSwipeHide,
                             swipeToHideEnabled = swipeToHideEnabled,
+                            onClickExtension = onClickExtension,
                         )
+                        is NovelSourceUiModel.AvailableExtension -> {
+                            NovelAvailableExtensionItem(
+                                modifier = Modifier.animateItem(),
+                                extension = model.extension,
+                                onClickInstall = onClickInstallExtension,
+                                installStep = downloadStates[model.extension.pkgName] ?: InstallStep.Idle,
+                            )
+                        }
+                        is NovelSourceUiModel.UntrustedExtension -> {
+                            NovelUntrustedExtensionItem(
+                                modifier = Modifier.animateItem(),
+                                extension = model.extension,
+                                onClickTrust = onClickTrustExtension,
+                            )
+                        }
                     }
                 }
             }
@@ -104,8 +179,13 @@ private fun SourceHeader(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val text = when (language) {
+        NovelSourcesScreenModel.NOT_INSTALLED_KEY -> stringResource(MR.strings.ext_not_installed)
+        NovelSourcesScreenModel.INSTALLED_KEY -> stringResource(MR.strings.ext_installed)
+        else -> LocaleHelper.getSourceDisplayName(language, context)
+    }
     Text(
-        text = LocaleHelper.getSourceDisplayName(language, context),
+        text = text,
         modifier = modifier
             .padding(
                 horizontal = MaterialTheme.padding.medium,
@@ -116,6 +196,148 @@ private fun SourceHeader(
 }
 
 @Composable
+private fun NovelSourceSectionHeader(
+    text: String,
+    expanded: Boolean? = null,
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(
+                horizontal = MaterialTheme.padding.medium,
+                vertical = MaterialTheme.padding.medium,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        if (expanded != null) {
+            Icon(
+                imageVector = if (expanded) {
+                    Icons.Outlined.KeyboardArrowDown
+                } else {
+                    Icons.AutoMirrored.Outlined.KeyboardArrowRight
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovelAvailableExtensionItem(
+    extension: NovelExtension.Available,
+    onClickInstall: (NovelExtension.Available) -> Unit,
+    installStep: InstallStep,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClickInstall(extension) }
+            .padding(
+                horizontal = MaterialTheme.padding.medium,
+                vertical = MaterialTheme.padding.small,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NovelExtensionIcon(
+            extension = extension,
+            modifier = Modifier.size(40.dp),
+        )
+        Column(
+            modifier = Modifier
+                .padding(start = MaterialTheme.padding.medium)
+                .weight(1f),
+        ) {
+            Text(
+                text = extension.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = LocaleHelper.getSourceDisplayName(extension.lang, context),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        when (installStep) {
+            InstallStep.Pending, InstallStep.Downloading, InstallStep.Installing -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+            InstallStep.Error -> {
+                Icon(
+                    imageVector = Icons.Outlined.Refresh,
+                    contentDescription = stringResource(MR.strings.action_retry),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+            else -> {
+                Icon(
+                    imageVector = Icons.Outlined.GetApp,
+                    contentDescription = stringResource(MR.strings.action_install),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovelUntrustedExtensionItem(
+    extension: NovelExtension.Untrusted,
+    onClickTrust: (NovelExtension.Untrusted) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClickTrust(extension) }
+            .padding(
+                horizontal = MaterialTheme.padding.medium,
+                vertical = MaterialTheme.padding.small,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = extension.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(MR.strings.ext_untrusted).uppercase(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 1,
+            )
+        }
+        Icon(
+            imageVector = Icons.Outlined.VerifiedUser,
+            contentDescription = stringResource(MR.strings.ext_trust),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
 private fun SourceItem(
     source: NovelSource,
     onClickItem: (NovelSource, Listing) -> Unit,
@@ -123,6 +345,7 @@ private fun SourceItem(
     onClickPin: (NovelSource) -> Unit,
     onSwipeHide: (NovelSource) -> Unit,
     swipeToHideEnabled: Boolean,
+    onClickExtension: (NovelSource) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
@@ -144,20 +367,18 @@ private fun SourceItem(
             onClickItem = { onClickItem(source, Listing.Popular) },
             onLongClickItem = { onLongClickItem(source) },
             action = {
-                if (source.supportsLatest) {
-                    TextButton(onClick = { onClickItem(source, Listing.Latest) }) {
-                        Text(
-                            text = stringResource(MR.strings.latest),
-                            style = LocalTextStyle.current.copy(
-                                color = MaterialTheme.colorScheme.primary,
+                // Cog icon — opens extension details
+                if (source.id != LocalNovelSource.ID) {
+                    IconButton(onClick = { onClickExtension(source) }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = stringResource(MR.strings.label_extension_info),
+                            tint = MaterialTheme.colorScheme.onBackground.copy(
+                                alpha = SECONDARY_ALPHA,
                             ),
                         )
                     }
                 }
-                SourcePinButton(
-                    isPinned = Pin.Pinned in source.pin,
-                    onClick = { onClickPin(source) },
-                )
             },
         )
     }
@@ -203,6 +424,8 @@ fun NovelSourceOptionsDialog(
     onClickPin: () -> Unit,
     onClickDisable: () -> Unit,
     onDismiss: () -> Unit,
+    onClickMigrate: () -> Unit = {},
+    onClickUninstall: () -> Unit = {},
 ) {
     AlertDialog(
         title = {
@@ -210,7 +433,7 @@ fun NovelSourceOptionsDialog(
         },
         text = {
             Column {
-                val textId = if (Pin.Pinned in source.pin) MR.strings.action_unpin else MR.strings.action_pin
+                val textId = if (Pin.Pinned in source.pin) MR.strings.action_unfavorite else MR.strings.action_favorite
                 Text(
                     text = stringResource(textId),
                     modifier = Modifier
@@ -218,13 +441,29 @@ fun NovelSourceOptionsDialog(
                         .fillMaxWidth()
                         .padding(vertical = 16.dp),
                 )
-                Text(
-                    text = stringResource(MR.strings.action_disable),
-                    modifier = Modifier
-                        .clickable(onClick = onClickDisable)
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                )
+                if (source.id != LocalNovelSource.ID) {
+                    Text(
+                        text = stringResource(MR.strings.action_migrate),
+                        modifier = Modifier
+                            .clickable(onClick = onClickMigrate)
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                    )
+                    Text(
+                        text = stringResource(MR.strings.action_disable),
+                        modifier = Modifier
+                            .clickable(onClick = onClickDisable)
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                    )
+                    Text(
+                        text = stringResource(MR.strings.action_uninstall),
+                        modifier = Modifier
+                            .clickable(onClick = onClickUninstall)
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                    )
+                }
             }
         },
         onDismissRequest = onDismiss,
@@ -235,4 +474,6 @@ fun NovelSourceOptionsDialog(
 sealed interface NovelSourceUiModel {
     data class Item(val source: NovelSource) : NovelSourceUiModel
     data class Header(val language: String) : NovelSourceUiModel
+    data class AvailableExtension(val extension: NovelExtension.Available) : NovelSourceUiModel
+    data class UntrustedExtension(val extension: NovelExtension.Untrusted) : NovelSourceUiModel
 }

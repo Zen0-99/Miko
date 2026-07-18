@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -61,12 +62,14 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.source.anime.interactor.GetAnimeIncognitoState
 import eu.kanade.domain.source.manga.interactor.GetMangaIncognitoState
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.presentation.theme.TachiyomiTheme
 import eu.kanade.presentation.components.AppStateBanners
 import eu.kanade.presentation.components.DownloadedOnlyBannerBackgroundColor
 import eu.kanade.presentation.components.IncognitoModeBannerBackgroundColor
 import eu.kanade.presentation.components.IndexingBannerBackgroundColor
-import eu.kanade.presentation.more.settings.screen.browse.AnimeExtensionReposScreen
-import eu.kanade.presentation.more.settings.screen.browse.MangaExtensionReposScreen
+import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.DefaultNavigatorScreenTransition
@@ -122,6 +125,7 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
+import tachiyomi.presentation.core.util.LocalReduceMotion
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -131,6 +135,7 @@ class MainActivity : BaseActivity() {
 
     private val libraryPreferences: LibraryPreferences by injectLazy()
     private val preferences: BasePreferences by injectLazy()
+    private val uiPreferences: UiPreferences by injectLazy()
 
     private val animeDownloadCache: AnimeDownloadCache by injectLazy()
     private val downloadCache: MangaDownloadCache by injectLazy()
@@ -167,8 +172,13 @@ class MainActivity : BaseActivity() {
         setComposeContent {
             val context = LocalContext.current
 
-            var incognito by remember { mutableStateOf(getMangaIncognitoState.await(null)) }
-            var incognitoAnime by remember { mutableStateOf(getAnimeIncognitoState.await(null)) }
+            // Defer incognito state loading past first frame to speed up cold launch
+            var incognito by remember { mutableStateOf(false) }
+            var incognitoAnime by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                incognito = getMangaIncognitoState.await(null)
+                incognitoAnime = getAnimeIncognitoState.await(null)
+            }
             val downloadOnly by preferences.downloadedOnly().collectAsState()
             val indexing by downloadCache.isInitializing.collectAsState()
             val indexingAnime by animeDownloadCache.isInitializing.collectAsState()
@@ -190,12 +200,18 @@ class MainActivity : BaseActivity() {
                 )
             }
 
-            Navigator(
-                screen = HomeScreen,
-                disposeBehavior = NavigatorDisposeBehavior(
-                    disposeNestedNavigators = false,
-                    disposeSteps = true,
-                ),
+            // Wrap the entire app in mode-aware theme so all screens (including Settings,
+            // Data Storage, etc.) get the per-content-mode color scheme.
+            val contentMode by uiPreferences.contentMode().collectAsState()
+            val reduceMotion by uiPreferences.reduceMotion().collectAsState()
+            CompositionLocalProvider(LocalReduceMotion provides reduceMotion) {
+            TachiyomiTheme(contentMode = contentMode) {
+                Navigator(
+                    screen = HomeScreen,
+                    disposeBehavior = NavigatorDisposeBehavior(
+                        disposeNestedNavigators = false,
+                        disposeSteps = true,
+                    ),
             ) { navigator ->
 
                 LaunchedEffect(navigator) {
@@ -304,6 +320,8 @@ class MainActivity : BaseActivity() {
                         }
                     },
                 )
+            }
+            }
             }
         }
 
@@ -462,17 +480,17 @@ class MainActivity : BaseActivity() {
         }
 
         val tabToOpen = when (intent.action) {
-            Constants.SHORTCUT_ANIMELIB -> HomeScreen.Tab.AnimeLib()
-            Constants.SHORTCUT_LIBRARY -> HomeScreen.Tab.Library()
+            Constants.SHORTCUT_ANIMELIB -> HomeScreen.Tab.Library(mode = ContentMode.ANIME)
+            Constants.SHORTCUT_LIBRARY -> HomeScreen.Tab.Library(mode = ContentMode.MANGA)
             Constants.SHORTCUT_MANGA -> {
                 val idToOpen = intent.extras?.getLong(Constants.MANGA_EXTRA) ?: return false
                 navigator.popUntilRoot()
-                HomeScreen.Tab.Library(idToOpen)
+                HomeScreen.Tab.Library(mode = ContentMode.MANGA, entryIdToOpen = idToOpen)
             }
             Constants.SHORTCUT_ANIME -> {
                 val idToOpen = intent.extras?.getLong(Constants.ANIME_EXTRA) ?: return false
                 navigator.popUntilRoot()
-                HomeScreen.Tab.AnimeLib(idToOpen)
+                HomeScreen.Tab.Library(mode = ContentMode.ANIME, entryIdToOpen = idToOpen)
             }
             Constants.SHORTCUT_UPDATES -> HomeScreen.Tab.Updates
             Constants.SHORTCUT_HISTORY -> HomeScreen.Tab.History
@@ -543,13 +561,13 @@ class MainActivity : BaseActivity() {
                 else if (intent.scheme == "aniyomi" && intent.data?.host == "add-repo") {
                     intent.data?.getQueryParameter("url")?.let { repoUrl ->
                         navigator.popUntilRoot()
-                        navigator.push(AnimeExtensionReposScreen(repoUrl))
+                        navigator.push(ConsolidatedExtensionReposScreen(repoUrl))
                     }
                 } // Deep link to add extension repo
                 else if (intent.scheme == "tachiyomi" && intent.data?.host == "add-repo") {
                     intent.data?.getQueryParameter("url")?.let { repoUrl ->
                         navigator.popUntilRoot()
-                        navigator.push(MangaExtensionReposScreen(repoUrl))
+                        navigator.push(ConsolidatedExtensionReposScreen(repoUrl))
                     }
                 }
                 null

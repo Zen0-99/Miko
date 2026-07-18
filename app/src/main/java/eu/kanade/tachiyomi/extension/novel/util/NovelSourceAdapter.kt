@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.novel.util
 
+import eu.kanade.tachiyomi.novelsource.model.NovelChapterPage
+import eu.kanade.tachiyomi.novelsource.model.NovelComment
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.NovelsPage
 import eu.kanade.tachiyomi.novelsource.model.SNovel
@@ -93,6 +95,28 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
     override val supportsLatest: Boolean
         get() = hasMainPage
 
+    /**
+     * Check if the wrapped extension source supports chapter comments.
+     * Reads `supportsComments` from the extension's capabilities, or falls back
+     * to checking if `getChapterComments` is overridden (not the default emptyList).
+     */
+    override val supportsComments: Boolean
+        get() {
+            // Try reading the capabilities object's supportsComments field
+            val caps = getProp(source, "capabilities") ?: return false
+            return getProp(caps, "supportsComments") as? Boolean ?: false
+        }
+
+    /**
+     * Minimum delay between requests in milliseconds, read from the extension's
+     * `rateLimitMs` property. Returns 0 if the extension doesn't define one.
+     */
+    val rateLimitMs: Long
+        get() = (getProp(source, "rateLimitMs") as? Number)?.toLong() ?: 0L
+
+    override val isRateLimited: Boolean
+        get() = rateLimitMs > 0L
+
     init {
         logcat(LogPriority.DEBUG) { "$tag Created adapter for ${source.javaClass.name}" }
         logcat(LogPriority.DEBUG) { "$tag Source name=$name lang=$lang baseUrl=$baseUrl hasMainPage=$hasMainPage" }
@@ -126,6 +150,35 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
         }
     }
 
+    /**
+     * Inject a WebView resolver proxy into the wrapped source's `webViewResolver` field
+     * (declared as a `var` on the library's base `NovelSource`). Creates a dynamic proxy
+     * that implements the extension library's `WebViewResolver` interface via reflection,
+     * since that interface is not on the app's compile classpath.
+     */
+    fun injectWebViewResolver(resolver: NovelWebViewResolver) {
+        try {
+            var resolverField: Field? = null
+            var currentClass: Class<*>? = source.javaClass
+            while (currentClass != null && resolverField == null) {
+                resolverField = try {
+                    currentClass.getDeclaredField("webViewResolver")
+                } catch (e: NoSuchFieldException) {
+                    currentClass = currentClass.superclass
+                    null
+                }
+            }
+            if (resolverField != null) {
+                resolverField.isAccessible = true
+                val proxy = NovelWebViewResolver.createProxy(resolver, source.javaClass.classLoader)
+                resolverField.set(source, proxy)
+                logcat(LogPriority.DEBUG) { "$tag Injected WebViewResolver into ${source.javaClass.name}" }
+            }
+        } catch (e: Throwable) {
+            logcat(LogPriority.WARN, e) { "$tag Failed to inject WebViewResolver into ${source.javaClass.name}" }
+        }
+    }
+
     override suspend fun getNovelDetails(novel: SNovel): SNovel = withContext(Dispatchers.IO) {
         logcat(LogPriority.DEBUG) { "$tag getNovelDetails url=${novel.url}" }
         try {
@@ -155,6 +208,68 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
         }
     }
 
+    override suspend fun getChapterListPage(novel: SNovel, page: Int): NovelChapterPage = withContext(Dispatchers.IO) {
+        logcat(LogPriority.DEBUG) { "$tag getChapterListPage url=${novel.url} page=$page" }
+        try {
+            // Check if the extension has a getChapterListPage method
+            val hasMethod = source.javaClass.methods.any { m ->
+                m.name == "getChapterListPage" &&
+                    m.parameterCount == 3 &&
+                    m.parameterTypes[0] == String::class.java &&
+                    (m.parameterTypes[1] == Int::class.javaPrimitiveType || m.parameterTypes[1] == Int::class.java)
+            }
+            if (hasMethod) {
+                val result = invokeSuspendMethodWithStringInt("getChapterListPage", novel.url, page)
+                if (result != null) {
+                    val chapters = (getProp(result, "chapters") as? List<*>)?.filterNotNull()?.map { toSNovelChapter(it) } ?: emptyList()
+                    val totalPages = (getProp(result, "totalPages") as? Number)?.toInt() ?: 1
+                    val currentPage = (getProp(result, "currentPage") as? Number)?.toInt() ?: page
+                    logcat(LogPriority.DEBUG) { "$tag getChapterListPage got ${chapters.size} chapters, totalPages=$totalPages" }
+                    NovelChapterPage(chapters, totalPages, currentPage)
+                } else {
+                    logcat(LogPriority.DEBUG) { "$tag getChapterListPage returned null, falling back" }
+                    super.getChapterListPage(novel, page)
+                }
+            } else {
+                logcat(LogPriority.DEBUG) { "$tag getChapterListPage not supported, falling back to getChapterList" }
+                super.getChapterListPage(novel, page)
+            }
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "$tag getChapterListPage failed, falling back to getChapterList" }
+            super.getChapterListPage(novel, page)
+        }
+    }
+
+    override suspend fun getLatestChapters(novel: SNovel, existingCount: Int): List<SNovelChapter> = withContext(Dispatchers.IO) {
+        logcat(LogPriority.DEBUG) { "$tag getLatestChapters url=${novel.url} existingCount=$existingCount" }
+        try {
+            // Log all methods with this name for debugging
+            source.javaClass.methods.filter { it.name == "getLatestChapters" }.forEach { m ->
+                logcat(LogPriority.DEBUG) {
+                    "$tag   Found: ${m.name}(${m.parameterTypes.joinToString(", ") { it.simpleName }}) paramCount=${m.parameterCount}"
+                }
+            }
+
+            // Check if the extension has a getLatestChapters method
+            val hasMethod = source.javaClass.methods.any { m ->
+                m.name == "getLatestChapters" &&
+                    (m.parameterCount == 3 || m.parameterCount == 2)
+            }
+            if (hasMethod) {
+                val result = invokeSuspendListMethodWithStringInt("getLatestChapters", novel.url, existingCount)
+                logcat(LogPriority.DEBUG) { "$tag getLatestChapters got ${result.size} chapters" }
+                result.filterNotNull().map { toSNovelChapter(it) }
+            } else {
+                // Fall back to full chapter list
+                logcat(LogPriority.DEBUG) { "$tag getLatestChapters not supported, falling back to getChapterList" }
+                getChapterList(novel)
+            }
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "$tag getLatestChapters failed for ${novel.url}, falling back to getChapterList" }
+            getChapterList(novel)
+        }
+    }
+
     override suspend fun getChapterText(chapter: SNovelChapter): String = withContext(Dispatchers.IO) {
         logcat(LogPriority.DEBUG) { "$tag getChapterText url=${chapter.url}" }
         try {
@@ -166,6 +281,17 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "$tag getChapterText failed for ${chapter.url}" }
             ""
+        }
+    }
+
+    override suspend fun getChapterComments(chapter: SNovelChapter): List<NovelComment> = withContext(Dispatchers.IO) {
+        logcat(LogPriority.DEBUG) { "$tag getChapterComments url=${chapter.url}" }
+        try {
+            val result = invokeSuspendListMethodWithString("getChapterComments", chapter.url)
+            result.filterNotNull().map { toNovelComment(it) }
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "$tag getChapterComments failed for ${chapter.url}" }
+            emptyList()
         }
     }
 
@@ -267,9 +393,65 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
     private fun toSNovelChapter(obj: Any): SNovelChapter = SNovelChapter.create().apply {
         url = getProp(obj, "url") as? String ?: ""
         name = getProp(obj, "name") as? String ?: ""
-        date_upload = getProp(obj, "dateUpload") as? Long ?: 0L
+        date_upload = readDateUpload(obj)
         chapter_number = getProp(obj, "chapterNumber") as? Float ?: -1f
         scanlator = getProp(obj, "scanlator") as? String
+    }
+
+    /**
+     * Convert an extension NovelComment object to the fork's [NovelComment] model.
+     * Handles nested replies recursively.
+     */
+    private fun toNovelComment(obj: Any): NovelComment {
+        val repliesList = (getProp(obj, "replies") as? List<*>)?.filterNotNull()?.map { toNovelComment(it) } ?: emptyList()
+        val dateLong = (getProp(obj, "date") as? Number)?.toLong() ?: 0L
+        return NovelComment(
+            id = getProp(obj, "id")?.toString() ?: "",
+            userName = getProp(obj, "userName") as? String ?: "Unknown",
+            avatarUrl = getProp(obj, "avatarUrl") as? String,
+            content = getProp(obj, "content") as? String ?: "",
+            likes = (getProp(obj, "likes") as? Number)?.toInt() ?: 0,
+            replyCount = (getProp(obj, "replyCount") as? Number)?.toInt() ?: repliesList.size,
+            date = dateLong,
+            replies = repliesList,
+        )
+    }
+
+    private fun readDateUpload(obj: Any): Long {
+        val asLong = getProp(obj, "dateUpload") as? Long
+            ?: getProp(obj, "date_upload") as? Long
+        if (asLong != null) return asLong
+
+        val asNumber = getProp(obj, "dateUpload") as? Number
+            ?: getProp(obj, "date_upload") as? Number
+        if (asNumber != null) return asNumber.toLong()
+
+        val asString = getProp(obj, "dateUpload") as? String
+            ?: getProp(obj, "date_upload") as? String
+        if (!asString.isNullOrBlank()) {
+            return parseDateString(asString)
+        }
+
+        val asDate = getProp(obj, "dateUpload") as? java.util.Date
+            ?: getProp(obj, "date_upload") as? java.util.Date
+        return asDate?.time ?: 0L
+    }
+
+    private fun parseDateString(dateStr: String): Long {
+        val formats = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd",
+            "MMM dd, yyyy",
+            "dd MMM yyyy",
+        )
+        for (format in formats) {
+            runCatching {
+                java.text.SimpleDateFormat(format, java.util.Locale.US).parse(dateStr)?.time
+            }.getOrNull()?.let { return it }
+        }
+        return 0L
     }
 
     private fun mapStatus(statusObj: Any?): Int {
@@ -486,6 +668,75 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
             } catch (e: Exception) {
                 logcat(LogPriority.ERROR, e) { "$tag Error invoking $methodName: ${e.message}" }
                 if (!cont.isCompleted) cont.resume(emptyList())
+            }
+        }
+    }
+
+    /**
+     * Invokes a suspend function with a String and Int param that returns Any? (not a List).
+     * Used for getChapterListPage(url: String, page: Int).
+     */
+    private suspend fun invokeSuspendMethodWithStringInt(methodName: String, arg1: String, arg2: Int): Any? {
+        return suspendCancellableCoroutine { cont ->
+            try {
+                val method = source.javaClass.methods.find { m ->
+                    m.name == methodName &&
+                        m.parameterCount == 3 &&
+                        m.parameterTypes[0] == String::class.java &&
+                        (m.parameterTypes[1] == Int::class.javaPrimitiveType || m.parameterTypes[1] == Int::class.java) &&
+                        m.parameterTypes[2].name.contains("Continuation")
+                }
+
+                if (method == null) {
+                    val regularMethod = try {
+                        source.javaClass.getMethod(methodName, String::class.java, Int::class.javaPrimitiveType)
+                    } catch (e: NoSuchMethodException) {
+                        try {
+                            source.javaClass.getMethod(methodName, String::class.java, Int::class.java)
+                        } catch (e2: NoSuchMethodException) {
+                            logcat(LogPriority.WARN) { "$tag Could not find method $methodName(String, Int)" }
+                            cont.resume(null)
+                            return@suspendCancellableCoroutine
+                        }
+                    }
+                    logcat(LogPriority.DEBUG) { "$tag Invoking regular method $methodName(String, Int)" }
+                    val result = regularMethod.invoke(source, arg1, arg2)
+                    cont.resume(result)
+                    return@suspendCancellableCoroutine
+                }
+
+                logcat(LogPriority.DEBUG) { "$tag Invoking suspend method $methodName(String, Int, Continuation)" }
+
+                val continuation = object : Continuation<Any?> {
+                    override val context: CoroutineContext = cont.context
+                    override fun resumeWith(result: Result<Any?>) {
+                        result.fold(
+                            onSuccess = { value ->
+                                logcat(LogPriority.DEBUG) {
+                                    "$tag $methodName success, value type: ${value?.javaClass?.name}"
+                                }
+                                if (!cont.isCompleted) cont.resume(value)
+                            },
+                            onFailure = { e ->
+                                logcat(LogPriority.ERROR, e) { "$tag $methodName failed in continuation" }
+                                if (!cont.isCompleted) cont.resume(null)
+                            },
+                        )
+                    }
+                }
+
+                val result = method.invoke(source, arg1, arg2, continuation)
+                if (result === extensionCoroutineSuspended) {
+                    logcat(LogPriority.DEBUG) { "$tag $methodName suspended, waiting for continuation" }
+                } else {
+                    logcat(LogPriority.DEBUG) {
+                        "$tag $methodName returned immediately, type=${result?.javaClass?.name}"
+                    }
+                    if (!cont.isCompleted) cont.resume(result)
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "$tag Error invoking $methodName: ${e.message}" }
+                if (!cont.isCompleted) cont.resume(null)
             }
         }
     }

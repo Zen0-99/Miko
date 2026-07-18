@@ -30,8 +30,42 @@ class CloudflareInterceptor(
     private val executor = ContextCompat.getMainExecutor(context)
 
     override fun shouldIntercept(response: Response): Boolean {
-        // Check if Cloudflare anti-bot is on
-        return response.code in ERROR_CODES && response.header("Server") in SERVER_CHECK
+        val server = response.header("Server")
+        val isCloudflareServer = server in SERVER_CHECK
+
+        // Case 1: Classic CF challenge — error status + cloudflare server header
+        if (response.code in ERROR_CODES && isCloudflareServer) {
+            return true
+        }
+
+        // Case 2: cf-mitigated header — modern CF indicator (challenge/block/managed-challenge)
+        val cfMitigated = response.header("cf-mitigated")
+        if (cfMitigated != null && cfMitigated.lowercase() in CF_MITIGATED_VALUES) {
+            return true
+        }
+
+        // Case 3: 200 OK with CF challenge page (Turnstile / managed challenge / "Just a moment")
+        // Only peek body for 200 responses from CF server to avoid performance impact
+        if (response.code == 200 && isCloudflareServer) {
+            return isChallengePage(response)
+        }
+
+        return false
+    }
+
+    /**
+     * Peek at the response body (without consuming it) to detect CF challenge pages.
+     * Modern CF challenges (Turnstile, managed challenges) can return 200 with an
+     * interstitial page containing challenge markers.
+     */
+    private fun isChallengePage(response: Response): Boolean {
+        return try {
+            // peekBody returns a buffered copy; original body remains readable
+            val body = response.peekBody(CHALLENGE_PEEK_BYTES).string()
+            CHALLENGE_MARKERS.any { marker -> body.contains(marker, ignoreCase = true) }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     override fun intercept(chain: Interceptor.Chain, request: Request, response: Response): Response {
@@ -131,8 +165,24 @@ class CloudflareInterceptor(
     }
 }
 
-private val ERROR_CODES = listOf(403, 503)
+private val ERROR_CODES = listOf(403, 503, 429)
 private val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
 private val COOKIE_NAMES = listOf("cf_clearance")
+
+// cf-mitigated header values that indicate a challenge/block
+private val CF_MITIGATED_VALUES = listOf("challenge", "block", "managed-challenge")
+
+// Body markers for CF challenge pages (Turnstile, "Just a moment", managed challenges)
+private val CHALLENGE_MARKERS = listOf(
+    "__cf_chl__",
+    "cf_chl_managed",
+    "challenge-platform",
+    "Just a moment...",
+    "cf-turnstile",
+    "cdn-cgi/challenge-platform",
+)
+
+// Max bytes to peek for challenge detection (challenge pages are small)
+private const val CHALLENGE_PEEK_BYTES = 64_000L
 
 private class CloudflareBypassException : Exception()

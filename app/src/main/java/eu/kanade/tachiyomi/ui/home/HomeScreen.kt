@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -23,8 +25,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -36,16 +42,17 @@ import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.presentation.home.ModePill
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.download.DownloadsTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
 import eu.kanade.tachiyomi.ui.history.HistoriesTab
-import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
-import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
-import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryTab
+import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.more.MoreTab
 import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import kotlinx.coroutines.channels.Channel
@@ -75,6 +82,10 @@ object HomeScreen : Screen() {
     private const val TAB_FADE_DURATION = 200
     private const val TAB_NAVIGATOR_KEY = "HomeTabs"
 
+    @Composable
+    private fun tabFadeDuration(): Int =
+        if (tachiyomi.presentation.core.util.LocalReduceMotion.current) 0 else TAB_FADE_DURATION
+
     private val uiPreferences: UiPreferences by injectLazy()
     private val defaultTab = uiPreferences.startScreen().get().tab
     private val moreTab = uiPreferences.navStyle().get().moreTab
@@ -82,7 +93,31 @@ object HomeScreen : Screen() {
     @Composable
     override fun Content() {
         val navStyle by uiPreferences.navStyle().collectAsState()
+        val contentMode by uiPreferences.contentMode().collectAsState()
+        val showManga by uiPreferences.showMangaMode().collectAsState()
+        val showAnime by uiPreferences.showAnimeMode().collectAsState()
+        val showNovel by uiPreferences.showNovelMode().collectAsState()
         val navigator = LocalNavigator.currentOrThrow
+        val scope = rememberCoroutineScope()
+
+        // If the current content mode is disabled, switch to the first visible mode
+        LaunchedEffect(showManga, showAnime, showNovel) {
+            val isVisible = when (contentMode) {
+                ContentMode.MANGA -> showManga
+                ContentMode.ANIME -> showAnime
+                ContentMode.NOVEL -> showNovel
+            }
+            if (!isVisible) {
+                val fallback = when {
+                    showManga -> ContentMode.MANGA
+                    showAnime -> ContentMode.ANIME
+                    showNovel -> ContentMode.NOVEL
+                    else -> ContentMode.MANGA
+                }
+                uiPreferences.contentMode().set(fallback)
+            }
+        }
+
         TabNavigator(
             tab = defaultTab,
             key = TAB_NAVIGATOR_KEY,
@@ -101,58 +136,70 @@ object HomeScreen : Screen() {
                     },
                     bottomBar = {
                         if (!isTabletUi()) {
-                            val bottomNavVisible by produceState(initialValue = true) {
-                                showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
-                            }
-                            AnimatedVisibility(
-                                visible = bottomNavVisible && tabNavigator.current != navStyle.moreTab,
-                                enter = expandVertically(),
-                                exit = shrinkVertically(),
-                            ) {
-                                NavigationBar {
-                                    navStyle.tabs.fastForEach {
-                                        NavigationBarItem(it)
+                                val bottomNavVisible by produceState(initialValue = true) {
+                                    showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
+                                }
+                                AnimatedVisibility(
+                                    visible = bottomNavVisible && tabNavigator.current != navStyle.moreTab,
+                                    enter = expandVertically(),
+                                    exit = shrinkVertically(),
+                                ) {
+                                    NavigationBar {
+                                        navStyle.tabs.fastForEach {
+                                            NavigationBarItem(it)
+                                        }
                                     }
                                 }
                             }
-                        }
-                    },
-                    contentWindowInsets = WindowInsets(0),
-                ) { contentPadding ->
-                    Box(
-                        modifier = Modifier
-                            .padding(contentPadding)
-                            .consumeWindowInsets(contentPadding),
-                    ) {
-                        AnimatedContent(
-                            targetState = tabNavigator.current,
-                            transitionSpec = {
-                                materialFadeThroughIn(
-                                    initialScale = 1f,
-                                    durationMillis = TAB_FADE_DURATION,
-                                ) togetherWith
-                                    materialFadeThroughOut(durationMillis = TAB_FADE_DURATION)
-                            },
-                            label = "tabContent",
+                        },
+                        contentWindowInsets = WindowInsets(0),
+                    ) { contentPadding ->
+                        val fadeDuration = tabFadeDuration()
+                        Box(
+                            modifier = Modifier
+                                .padding(contentPadding)
+                                .consumeWindowInsets(contentPadding),
                         ) {
-                            tabNavigator.saveableState(key = "currentTab", it) {
-                                it.Content()
+                            AnimatedContent(
+                                targetState = tabNavigator.current,
+                                transitionSpec = {
+                                    materialFadeThroughIn(
+                                        initialScale = 1f,
+                                        durationMillis = fadeDuration,
+                                    ) togetherWith
+                                        materialFadeThroughOut(durationMillis = fadeDuration)
+                                },
+                                label = "tabContent",
+                            ) {
+                                tabNavigator.saveableState(key = "currentTab", it) {
+                                    it.Content()
+                                }
+                            }
+
+                            // Floating mode pill above the nav bar — only on content tabs
+                            val isContentTab = tabNavigator.current != navStyle.moreTab
+                            if (isContentTab && !isTabletUi()) {
+                                ModePill(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 12.dp)
+                                        .navigationBarsPadding(),
+                                )
                             }
                         }
                     }
                 }
-            }
 
             val goToStartScreen = {
                 if (defaultTab != moreTab) {
                     tabNavigator.current = defaultTab
                 } else {
-                    tabNavigator.current = AnimeLibraryTab
+                    tabNavigator.current = LibraryTab
                 }
             }
             BackHandler(
                 enabled = (tabNavigator.current == moreTab || tabNavigator.current != defaultTab) &&
-                    (tabNavigator.current != AnimeLibraryTab || defaultTab != moreTab),
+                    (tabNavigator.current != LibraryTab || defaultTab != moreTab),
                 onBack = goToStartScreen,
             )
 
@@ -160,43 +207,30 @@ object HomeScreen : Screen() {
                 launch {
                     librarySearchEvent.receiveAsFlow().collectLatest {
                         goToStartScreen()
-                        when (defaultTab) {
-                            AnimeLibraryTab -> AnimeLibraryTab.search(it)
-                            MangaLibraryTab -> MangaLibraryTab.search(it)
-                            NovelLibraryTab -> NovelLibraryTab.search(it)
-                            else -> {}
-                        }
+                        LibraryTab.search(it)
                     }
                 }
                 launch {
                     openTabEvent.receiveAsFlow().collectLatest {
+                        // Set content mode if specified (e.g. from a deep link).
+                        if (it is Tab.Library && it.mode != null) {
+                            uiPreferences.contentMode().set(it.mode)
+                        }
+
                         tabNavigator.current = when (it) {
-                            is Tab.AnimeLib -> AnimeLibraryTab
-                            is Tab.Library -> MangaLibraryTab
-                            is Tab.NovelLib -> NovelLibraryTab
+                            is Tab.Library -> LibraryTab
                             is Tab.Updates -> UpdatesTab
                             is Tab.History -> HistoriesTab
-                            is Tab.Browse -> {
-                                if (it.toExtensions) {
-                                    if (!it.anime) {
-                                        BrowseTab.showExtension()
-                                    } else {
-                                        BrowseTab.showAnimeExtension()
-                                    }
-                                }
-                                BrowseTab
-                            }
+                            is Tab.Browse -> BrowseTab
                             is Tab.More -> MoreTab
                         }
 
-                        if (it is Tab.AnimeLib && it.animeIdToOpen != null) {
-                            navigator.push(AnimeScreen(it.animeIdToOpen))
-                        }
-                        if (it is Tab.Library && it.mangaIdToOpen != null) {
-                            navigator.push(MangaScreen(it.mangaIdToOpen))
-                        }
-                        if (it is Tab.NovelLib && it.novelIdToOpen != null) {
-                            navigator.push(eu.kanade.tachiyomi.ui.entries.novel.NovelScreen(it.novelIdToOpen))
+                        if (it is Tab.Library && it.entryIdToOpen != null) {
+                            when (it.mode ?: uiPreferences.contentMode().get()) {
+                                ContentMode.ANIME -> navigator.push(AnimeScreen(it.entryIdToOpen))
+                                ContentMode.MANGA -> navigator.push(MangaScreen(it.entryIdToOpen))
+                                ContentMode.NOVEL -> navigator.push(NovelScreen(it.entryIdToOpen))
+                            }
                         }
                         if (it is Tab.More && it.toDownloads) {
                             navigator.push(DownloadsTab)
@@ -269,13 +303,15 @@ object HomeScreen : Screen() {
             badge = {
                 when {
                     UpdatesTab::class.isInstance(tab) -> {
-                        val count by produceState(initialValue = 0) {
+                        val contentMode by uiPreferences.contentMode().collectAsState()
+                        val count by produceState(initialValue = 0, contentMode) {
                             val pref = Injekt.get<LibraryPreferences>()
-                            combine(
-                                pref.newAnimeUpdatesCount().changes(),
-                                pref.newMangaUpdatesCount().changes(),
-                            ) { countAnime, countManga -> countAnime + countManga }
-                                .collectLatest { value = if (pref.newShowUpdatesCount().get()) it else 0 }
+                            val countFlow = when (contentMode) {
+                                ContentMode.ANIME -> pref.newAnimeUpdatesCount().changes()
+                                ContentMode.MANGA -> pref.newMangaUpdatesCount().changes()
+                                ContentMode.NOVEL -> pref.newNovelUpdatesCount().changes()
+                            }
+                            countFlow.collectLatest { value = if (pref.newShowUpdatesCount().get()) it else 0 }
                         }
                         if (count > 0) {
                             Badge {
@@ -339,9 +375,10 @@ object HomeScreen : Screen() {
     }
 
     sealed interface Tab {
-        data class AnimeLib(val animeIdToOpen: Long? = null) : Tab
-        data class Library(val mangaIdToOpen: Long? = null) : Tab
-        data class NovelLib(val novelIdToOpen: Long? = null) : Tab
+        data class Library(
+            val mode: ContentMode? = null,
+            val entryIdToOpen: Long? = null,
+        ) : Tab
         data object Updates : Tab
         data object History : Tab
         data class Browse(val toExtensions: Boolean = false, val anime: Boolean = false) : Tab

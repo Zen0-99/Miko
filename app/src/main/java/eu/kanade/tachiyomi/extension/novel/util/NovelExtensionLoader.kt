@@ -317,6 +317,17 @@ internal object NovelExtensionLoader {
             sources.filterIsInstance<NovelSourceAdapter>().forEach { it.injectHttpClient(okHttpClient) }
         }
 
+        // Inject the WebViewResolver for sources that need WebView interaction (countdowns, non-CF CAPTCHAs).
+        val webViewResolver = try {
+            NovelWebViewResolver(context)
+        } catch (e: Throwable) {
+            logcat(LogPriority.WARN, e) { "Could not create WebViewResolver for novel sources" }
+            null
+        }
+        if (webViewResolver != null) {
+            sources.filterIsInstance<NovelSourceAdapter>().forEach { it.injectWebViewResolver(webViewResolver) }
+        }
+
         val langs = sources.filterIsInstance<NovelCatalogueSource>()
             .map { it.lang }
             .toSet()
