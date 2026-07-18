@@ -101,6 +101,20 @@ class AnimeExtensionManager(
         }
     }
 
+    fun isNsfwForSource(sourceId: Long): Boolean {
+        return installedExtensionsFlow.value.find { extension ->
+            extension.sources.any { it.id == sourceId }
+        }?.isNsfw ?: false
+    }
+
+    fun isNsfwForSourceAsFlow(sourceId: Long): Flow<Boolean> {
+        return installedExtensionsFlow.map { extensions ->
+            extensions.find { extension ->
+                extension.sources.any { it.id == sourceId }
+            }?.isNsfw ?: false
+        }
+    }
+
     fun getAppIconForSource(sourceId: Long): Drawable? {
         val pkgName = installedExtensionsMapFlow.value.values
             .find { ext ->

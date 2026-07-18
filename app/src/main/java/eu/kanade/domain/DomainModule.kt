@@ -490,6 +490,7 @@ class DomainModule : InjektModule {
         addFactory { UpdateMangaExtensionRepo(get(), get()) }
         addFactory { ToggleMangaIncognito(get()) }
         addFactory { GetMangaIncognitoState(get(), get(), get()) }
+        addFactory { eu.kanade.domain.source.novel.interactor.GetNovelIncognitoState(get(), get(), get()) }
 
         addSingletonFactory<NovelStubSourceRepository> { NovelStubSourceRepositoryImpl(get()) }
         addSingletonFactory<NovelSourceRepository> { NovelSourceRepositoryImpl(get()) }

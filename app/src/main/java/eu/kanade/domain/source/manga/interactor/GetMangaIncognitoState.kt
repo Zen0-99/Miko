@@ -1,6 +1,7 @@
 package eu.kanade.domain.source.manga.interactor
 
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.domain.source.interactor.IncognitoStateLogic
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import kotlinx.coroutines.flow.Flow
@@ -16,17 +17,29 @@ class GetMangaIncognitoState(
         if (basePreferences.incognitoMode().get()) return true
         if (sourceId == null) return false
         val extensionPackage = extensionManager.getExtensionPackage(sourceId) ?: return false
-        return extensionPackage in sourcePreferences.incognitoMangaExtensions().get()
+        return IncognitoStateLogic.resolve(
+            globalIncognito = false,
+            policy = sourcePreferences.incognitoPolicy().get(),
+            isNsfw = extensionManager.isNsfwForSource(sourceId),
+            inExtensionSet = extensionPackage in sourcePreferences.incognitoMangaExtensions().get(),
+        )
     }
 
     fun subscribe(sourceId: Long?): Flow<Boolean> {
         if (sourceId == null) return basePreferences.incognitoMode().changes()
         return combine(
             basePreferences.incognitoMode().changes(),
+            sourcePreferences.incognitoPolicy().changes(),
             sourcePreferences.incognitoMangaExtensions().changes(),
             extensionManager.getExtensionPackageAsFlow(sourceId),
-        ) { incognito, incognitoExtensions, extensionPackage ->
-            incognito || (extensionPackage in incognitoExtensions)
+            extensionManager.isNsfwForSourceAsFlow(sourceId),
+        ) { globalIncognito, policy, incognitoExtensions, extensionPackage, isNsfw ->
+            IncognitoStateLogic.resolve(
+                globalIncognito = globalIncognito,
+                policy = policy,
+                isNsfw = isNsfw,
+                inExtensionSet = extensionPackage != null && extensionPackage in incognitoExtensions,
+            )
         }
             .distinctUntilChanged()
     }

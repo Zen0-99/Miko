@@ -11,11 +11,10 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.more.settings.Preference
-import eu.kanade.presentation.more.settings.screen.browse.AnimeExtensionReposScreen
-import eu.kanade.presentation.more.settings.screen.browse.MangaExtensionReposScreen
-import eu.kanade.presentation.more.settings.screen.browse.NovelExtensionReposScreen
+import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.authenticate
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableMap
 import mihon.domain.extensionrepo.anime.interactor.GetAnimeExtensionRepoCount
 import mihon.domain.extensionrepo.manga.interactor.GetMangaExtensionRepoCount
 import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepoCount
@@ -32,6 +31,10 @@ object SettingsBrowseScreen : SearchableSettings {
     @ReadOnlyComposable
     @Composable
     override fun getTitleRes() = MR.strings.browse
+
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = MR.strings.pref_browse_summary
 
     @Composable
     override fun getPreferences(): List<Preference> {
@@ -64,36 +67,14 @@ object SettingsBrowseScreen : SearchableSettings {
                         title = stringResource(AYMR.strings.pref_swipe_to_hide_source),
                     ),
                     Preference.PreferenceItem.TextPreference(
-                        title = stringResource(AYMR.strings.label_anime_extension_repos),
+                        title = stringResource(MR.strings.label_extension_repos),
                         subtitle = pluralStringResource(
                             MR.plurals.num_repos,
-                            animeReposCount,
-                            animeReposCount,
+                            animeReposCount + mangaReposCount + novelReposCount,
+                            animeReposCount + mangaReposCount + novelReposCount,
                         ),
                         onClick = {
-                            navigator.push(AnimeExtensionReposScreen())
-                        },
-                    ),
-                    Preference.PreferenceItem.TextPreference(
-                        title = stringResource(AYMR.strings.label_manga_extension_repos),
-                        subtitle = pluralStringResource(
-                            MR.plurals.num_repos,
-                            mangaReposCount,
-                            mangaReposCount,
-                        ),
-                        onClick = {
-                            navigator.push(MangaExtensionReposScreen())
-                        },
-                    ),
-                    Preference.PreferenceItem.TextPreference(
-                        title = "Novel extension repos",
-                        subtitle = pluralStringResource(
-                            MR.plurals.num_repos,
-                            novelReposCount,
-                            novelReposCount,
-                        ),
-                        onClick = {
-                            navigator.push(NovelExtensionReposScreen())
+                            navigator.push(ConsolidatedExtensionReposScreen())
                         },
                     ),
                 ),
@@ -113,6 +94,25 @@ object SettingsBrowseScreen : SearchableSettings {
                     ),
                     Preference.PreferenceItem.InfoPreference(
                         stringResource(MR.strings.parental_controls_info),
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
+                title = "Incognito",
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.ListPreference(
+                        preference = sourcePreferences.incognitoPolicy(),
+                        entries = eu.kanade.domain.source.model.IncognitoPolicy.entries
+                            .associateWith { it.displayName }
+                            .toImmutableMap(),
+                        title = "Automatic incognito policy",
+                        subtitle = "Auto-enable incognito for NSFW-flagged extensions",
+                        onValueChanged = { true },
+                    ),
+                    Preference.PreferenceItem.InfoPreference(
+                        "When set to \"Automatic (NSFW)\", extensions flagged as NSFW will " +
+                            "automatically use incognito mode (no history saved, no tracking). " +
+                            "Per-extension toggles still work alongside this policy.",
                     ),
                 ),
             ),
