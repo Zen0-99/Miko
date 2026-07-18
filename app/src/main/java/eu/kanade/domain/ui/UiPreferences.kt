@@ -2,6 +2,7 @@ package eu.kanade.domain.ui
 
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.domain.ui.model.NavBarAppearance
 import eu.kanade.domain.ui.model.NavStyle
 import eu.kanade.domain.ui.model.StartScreen
 import eu.kanade.domain.ui.model.TabletUiMode
@@ -116,6 +117,8 @@ class UiPreferences(
     fun startScreen() = preferenceStore.getEnum("start_screen", StartScreen.ANIME)
 
     fun navStyle() = preferenceStore.getEnum("bottom_rail_nav_style", NavStyle.MOVE_HISTORY_TO_MORE)
+
+    fun navBarAppearance() = preferenceStore.getEnum("nav_bar_appearance", NavBarAppearance.STANDARD)
 
     /**
      * The currently active content mode shown across mode-aware tabs (Library, Updates,

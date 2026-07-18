@@ -21,6 +21,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.domain.ui.model.NavBarAppearance
 import eu.kanade.domain.ui.model.NavStyle
 import eu.kanade.domain.ui.model.StartScreen
 import eu.kanade.domain.ui.model.TabletUiMode
@@ -204,6 +205,14 @@ object SettingsAppearanceScreen : SearchableSettings {
                         .associateWith { stringResource(it.titleRes) }
                         .toImmutableMap(),
                     title = "Navigation Style",
+                    onValueChanged = { true },
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = uiPreferences.navBarAppearance(),
+                    entries = NavBarAppearance.entries
+                        .associateWith { it.displayName }
+                        .toImmutableMap(),
+                    title = "Bottom navigation appearance",
                     onValueChanged = { true },
                 ),
                 Preference.PreferenceItem.SwitchPreference(

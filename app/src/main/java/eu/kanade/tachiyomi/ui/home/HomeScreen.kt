@@ -64,6 +64,7 @@ import soup.compose.material.motion.animation.materialFadeThroughIn
 import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.material.FloatingGlassNavigationBar
 import tachiyomi.presentation.core.components.material.NavigationBar
 import tachiyomi.presentation.core.components.material.NavigationRail
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -139,14 +140,23 @@ object HomeScreen : Screen() {
                                 val bottomNavVisible by produceState(initialValue = true) {
                                     showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
                                 }
+                                val navBarAppearance by uiPreferences.navBarAppearance().collectAsState()
                                 AnimatedVisibility(
                                     visible = bottomNavVisible && tabNavigator.current != navStyle.moreTab,
                                     enter = expandVertically(),
                                     exit = shrinkVertically(),
                                 ) {
-                                    NavigationBar {
-                                        navStyle.tabs.fastForEach {
-                                            NavigationBarItem(it)
+                                    if (navBarAppearance == eu.kanade.domain.ui.model.NavBarAppearance.FLOATING_GLASS) {
+                                        FloatingGlassNavigationBar {
+                                            navStyle.tabs.fastForEach {
+                                                NavigationBarItem(it)
+                                            }
+                                        }
+                                    } else {
+                                        NavigationBar {
+                                            navStyle.tabs.fastForEach {
+                                                NavigationBarItem(it)
+                                            }
                                         }
                                     }
                                 }
