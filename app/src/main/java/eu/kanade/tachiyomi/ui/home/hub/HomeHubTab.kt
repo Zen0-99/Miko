@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.home.hub
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,7 +55,14 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
+import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.util.Tab
+import eu.kanade.tachiyomi.ui.browse.BrowseTab
+import eu.kanade.tachiyomi.ui.history.HistoriesTab
+import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
+import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
+import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
@@ -98,6 +106,7 @@ private fun HomeHubContent(
     screenModel: HomeHubScreenModel,
 ) {
     val listState = rememberLazyListState()
+    val tabNavigator = LocalTabNavigator.current
 
     // --- Scroll-based header collapse ---
     // As the user scrolls down, the greeting header collapses (fades/shrinks).
@@ -113,15 +122,25 @@ private fun HomeHubContent(
     }
 
     if (state.isEmpty) {
-        Box(
+        Column(
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = stringResource(AYMR.strings.information_no_home_history),
+                text = stringResource(AYMR.strings.home_welcome),
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(AYMR.strings.home_welcome_message),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = { tabNavigator.current = BrowseTab }) {
+                Text(stringResource(AYMR.strings.home_browse_sources))
+            }
         }
         return
     }
@@ -153,58 +172,89 @@ private fun HomeHubContent(
             }
         }
 
-        // --- Existing: Recent sections ---
-        if (state.recentAnime.isNotEmpty()) {
+        // --- Recommendations section ---
+        if (state.recommendations.isNotEmpty()) {
             item {
-                SectionHeader(title = stringResource(AYMR.strings.label_recent_anime))
+                SectionHeader(title = stringResource(AYMR.strings.home_recommendations))
             }
             item {
-                HistoryRow(items = state.recentAnime.map { it.title })
-            }
-        }
-
-        if (state.recentManga.isNotEmpty()) {
-            item {
-                SectionHeader(title = stringResource(MR.strings.label_recent_manga))
-            }
-            item {
-                HistoryRow(items = state.recentManga.map { it.title })
+                HistoryRow(items = state.recommendations, onItemClick = { })
             }
         }
 
-        if (state.recentNovels.isNotEmpty()) {
-            item {
-                SectionHeader(title = stringResource(AYMR.strings.label_recent_novels))
+        // --- Mode-aware section filtering ---
+        when (state.currentMode) {
+            ContentMode.ANIME -> {
+                if (state.recentAnime.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = stringResource(AYMR.strings.label_recent_anime),
+                            onViewAll = { tabNavigator.current = HistoriesTab },
+                        )
+                    }
+                    item {
+                        HistoryRow(items = state.recentAnimeCards, onItemClick = { })
+                    }
+                }
+                if (state.recentlyAddedAnime.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = stringResource(AYMR.strings.label_recently_added_anime),
+                            onViewAll = { tabNavigator.current = AnimeLibraryTab },
+                        )
+                    }
+                    item {
+                        HistoryRow(items = state.recentlyAddedAnimeCards, onItemClick = { })
+                    }
+                }
             }
-            item {
-                HistoryRow(items = state.recentNovels.map { it.title })
+            ContentMode.MANGA -> {
+                if (state.recentManga.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = stringResource(MR.strings.label_recent_manga),
+                            onViewAll = { tabNavigator.current = HistoriesTab },
+                        )
+                    }
+                    item {
+                        HistoryRow(items = state.recentMangaCards, onItemClick = { })
+                    }
+                }
+                if (state.recentlyAddedManga.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = stringResource(AYMR.strings.label_recently_added_manga),
+                            onViewAll = { tabNavigator.current = MangaLibraryTab },
+                        )
+                    }
+                    item {
+                        HistoryRow(items = state.recentlyAddedMangaCards, onItemClick = { })
+                    }
+                }
             }
-        }
-
-        if (state.recentlyAddedAnime.isNotEmpty()) {
-            item {
-                SectionHeader(title = stringResource(AYMR.strings.label_recently_added_anime))
-            }
-            item {
-                HistoryRow(items = state.recentlyAddedAnime.map { it.title })
-            }
-        }
-
-        if (state.recentlyAddedManga.isNotEmpty()) {
-            item {
-                SectionHeader(title = stringResource(AYMR.strings.label_recently_added_manga))
-            }
-            item {
-                HistoryRow(items = state.recentlyAddedManga.map { it.title })
-            }
-        }
-
-        if (state.recentlyAddedNovels.isNotEmpty()) {
-            item {
-                SectionHeader(title = stringResource(AYMR.strings.label_recently_added_novels))
-            }
-            item {
-                HistoryRow(items = state.recentlyAddedNovels.map { it.title })
+            ContentMode.NOVEL -> {
+                if (state.recentNovels.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = stringResource(AYMR.strings.label_recent_novels),
+                            onViewAll = { tabNavigator.current = HistoriesTab },
+                        )
+                    }
+                    item {
+                        HistoryRow(items = state.recentNovelCards, onItemClick = { })
+                    }
+                }
+                if (state.recentlyAddedNovels.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = stringResource(AYMR.strings.label_recently_added_novels),
+                            onViewAll = { tabNavigator.current = NovelLibraryTab },
+                        )
+                    }
+                    item {
+                        HistoryRow(items = state.recentlyAddedNovelCards, onItemClick = { })
+                    }
+                }
             }
         }
     }
@@ -483,43 +533,63 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
     }
 }
 
-// --- Existing helpers (preserved) ---
+// --- Section helpers ---
 
 @Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-    )
+private fun SectionHeader(
+    title: String,
+    onViewAll: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        if (onViewAll != null) {
+            Text(
+                text = stringResource(AYMR.strings.action_view_all),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { onViewAll() },
+            )
+        }
+    }
 }
 
 @Composable
-private fun HistoryRow(items: List<String>) {
+private fun HistoryRow(items: List<HomeHubCardItem>, onItemClick: (HomeHubCardItem) -> Unit) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(items) { title ->
+        items(items) { item ->
             Card(
                 modifier = Modifier
-                    .size(width = 120.dp, height = 160.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .size(width = 100.dp, height = 160.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onItemClick(item) },
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 ),
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    ItemCover.Book(
+                        data = item.coverData,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentDescription = item.title,
+                    )
                     Text(
-                        text = title,
+                        text = item.title,
                         style = MaterialTheme.typography.bodySmall,
-                        maxLines = 3,
-                        modifier = Modifier.padding(8.dp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(4.dp),
                     )
                 }
             }

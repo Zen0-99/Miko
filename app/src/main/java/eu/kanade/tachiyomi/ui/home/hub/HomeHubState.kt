@@ -2,15 +2,25 @@ package eu.kanade.tachiyomi.ui.home.hub
 
 import androidx.compose.runtime.Immutable
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.domain.ui.model.ContentMode
 import tachiyomi.domain.achievement.model.MonthStats
 import tachiyomi.domain.history.anime.model.AnimeHistoryWithRelations
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
 import tachiyomi.i18n.aniyomi.AYMR
 
+@Immutable
+data class HomeHubCardItem(
+    val id: Long,
+    val title: String,
+    val coverData: Any?,
+    val mediaType: HomeHubMediaType,
+    val progressText: String? = null,
+)
+
 /**
  * Home Hub state — recently viewed + recently added + greeting + hero card +
- * streak counter + month stats + achievement count.
+ * streak counter + month stats + achievement count + recommendations.
  *
  * Enhanced from the minimal Phase 2.3 implementation with features ported
  * from Tadami's Home Hub.
@@ -38,6 +48,14 @@ data class HomeHubState(
     // --- Achievement display ---
     val achievementCount: Int = 0,
     val achievementTotal: Int = 0,
+    // --- Recommendations ---
+    val recommendations: List<HomeHubCardItem> = emptyList(),
+    // --- Mode-aware filtering ---
+    val currentMode: ContentMode = ContentMode.MANGA,
+    // --- Hidden categories (set of category IDs hidden from home) ---
+    val hiddenAnimeCategories: Set<Long> = emptySet(),
+    val hiddenMangaCategories: Set<Long> = emptySet(),
+    val hiddenNovelCategories: Set<Long> = emptySet(),
 ) {
     val hasAnyRecent: Boolean
         get() = recentAnime.isNotEmpty() || recentManga.isNotEmpty() || recentNovels.isNotEmpty()
@@ -47,7 +65,39 @@ data class HomeHubState(
             recentlyAddedNovels.isNotEmpty()
 
     val isEmpty: Boolean
-        get() = !isLoading && !hasAnyRecent && !hasAnyRecentlyAdded && hero == null
+        get() = !isLoading && !hasAnyRecent && !hasAnyRecentlyAdded && hero == null && recommendations.isEmpty()
+
+    // --- Card helpers for unified rendering ---
+
+    val recentAnimeCards: List<HomeHubCardItem>
+        get() = recentAnime.map {
+            HomeHubCardItem(it.animeId, it.title, it.coverData, HomeHubMediaType.ANIME, "Ep. ${it.episodeNumber}")
+        }
+
+    val recentMangaCards: List<HomeHubCardItem>
+        get() = recentManga.map {
+            HomeHubCardItem(it.mangaId, it.title, it.coverData, HomeHubMediaType.MANGA, "Ch. ${it.chapterNumber}")
+        }
+
+    val recentNovelCards: List<HomeHubCardItem>
+        get() = recentNovels.map {
+            HomeHubCardItem(it.novelId, it.title, it.coverData, HomeHubMediaType.NOVEL, "Ch. ${it.chapterNumber}")
+        }
+
+    val recentlyAddedAnimeCards: List<HomeHubCardItem>
+        get() = recentlyAddedAnime.map {
+            HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.ANIME)
+        }
+
+    val recentlyAddedMangaCards: List<HomeHubCardItem>
+        get() = recentlyAddedManga.map {
+            HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.MANGA)
+        }
+
+    val recentlyAddedNovelCards: List<HomeHubCardItem>
+        get() = recentlyAddedNovels.map {
+            HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.NOVEL)
+        }
 }
 
 @Immutable

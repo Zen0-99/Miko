@@ -5,8 +5,15 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.tachiyomi.data.suggestions.SuggestionCoordinator
+import eu.kanade.tachiyomi.data.suggestions.SuggestionSeed
+import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.achievement.model.DayActivity
@@ -52,6 +59,7 @@ class HomeHubScreenModel(
     private val getLibraryNovels: GetLibraryNovels = Injekt.get(),
     private val activityDataRepository: ActivityDataRepository = Injekt.get(),
     private val achievementRepository: AchievementRepository = Injekt.get(),
+    private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
 ) : StateScreenModel<HomeHubState>(HomeHubState()) {
 
     private val fastCache = HomeHubFastCache(context)
@@ -131,7 +139,7 @@ class HomeHubScreenModel(
                 val streak = calculateCurrentStreak(data.activityData)
 
                 mutableState.update {
-                    HomeHubState(
+                    it.copy(
                         isLoading = false,
                         recentAnime = data.animeHistory.take(10),
                         recentManga = data.mangaHistory.take(10),
@@ -164,12 +172,97 @@ class HomeHubScreenModel(
                 saveCache(hero, data)
             }
         }
+
+        // --- Observe contentMode for mode-aware filtering ---
+        screenModelScope.launchIO {
+            uiPreferences.contentMode().changes().collect { mode ->
+                mutableState.update { it.copy(currentMode = mode) }
+            }
+        }
+
+        // --- Load recommendations (once, based on most recent library item) ---
+        screenModelScope.launchIO {
+            // Wait until we have library data loaded, then fetch recommendations once
+            state
+                .map { Triple(it.recentAnime, it.recentManga, it.recentNovels) }
+                .filter { it.first.isNotEmpty() || it.second.isNotEmpty() || it.third.isNotEmpty() }
+                .distinctUntilChanged { _, _ -> false } // Only emit once
+                .collect { (animeHistory, mangaHistory, novelHistory) ->
+                    loadRecommendations(animeHistory, mangaHistory, novelHistory)
+                }
+        }
     }
 
     fun updateUserName(name: String) {
         uiPreferences.userName().set(name)
         fastCache.updateUserName(name)
         mutableState.update { it.copy(userName = name) }
+    }
+
+    // --- Recommendations ---
+
+    private suspend fun loadRecommendations(
+        animeHistory: List<AnimeHistoryWithRelations>,
+        mangaHistory: List<MangaHistoryWithRelations>,
+        novelHistory: List<NovelHistoryWithRelations>,
+    ) {
+        // Find most recent history item across all types and build a seed
+        val animeFirst = animeHistory.firstOrNull()
+        val mangaFirst = mangaHistory.firstOrNull()
+        val novelFirst = novelHistory.firstOrNull()
+
+        val animeTime = animeFirst?.seenAt?.time ?: 0L
+        val mangaTime = mangaFirst?.readAt?.time ?: 0L
+        val novelTime = novelFirst?.readAt?.time ?: 0L
+
+        val seed: SuggestionSeed? = when {
+            animeFirst != null && animeTime >= mangaTime && animeTime >= novelTime -> SuggestionSeed(
+                mediaType = SuggestionMediaType.ANIME,
+                primaryTitle = animeFirst.title,
+                candidateTitles = listOf(animeFirst.title),
+                description = null,
+                author = null,
+                genres = null,
+            )
+            mangaFirst != null && mangaTime >= novelTime -> SuggestionSeed(
+                mediaType = SuggestionMediaType.MANGA,
+                primaryTitle = mangaFirst.title,
+                candidateTitles = listOf(mangaFirst.title),
+                description = null,
+                author = null,
+                genres = null,
+            )
+            novelFirst != null -> SuggestionSeed(
+                mediaType = SuggestionMediaType.NOVEL,
+                primaryTitle = novelFirst.title,
+                candidateTitles = listOf(novelFirst.title),
+                description = null,
+                author = null,
+                genres = null,
+            )
+            else -> null
+        }
+
+        if (seed == null) return
+
+        try {
+            val result = suggestionCoordinator.fetchSuggestions(seed, limit = 10)
+            val recItems = result.items.take(10).map { item ->
+                HomeHubCardItem(
+                    id = item.providerUrl.hashCode().toLong(),
+                    title = item.title,
+                    coverData = item.thumbnailUrl,
+                    mediaType = when (item.mediaType) {
+                        SuggestionMediaType.ANIME -> HomeHubMediaType.ANIME
+                        SuggestionMediaType.MANGA -> HomeHubMediaType.MANGA
+                        SuggestionMediaType.NOVEL -> HomeHubMediaType.NOVEL
+                    },
+                )
+            }
+            mutableState.update { it.copy(recommendations = recItems) }
+        } catch (e: Exception) {
+            // Silently fail — recommendations are optional
+        }
     }
 
     // --- Greeting system ---

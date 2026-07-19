@@ -1300,4 +1300,11 @@
     <string name="achievement_secret_jojo_hint">A bizarre journey with a menacing aura.</string>
     <string name="achievement_secret_shadow_monarch_hint">Command the shadows. Collect enough dark fantasy.</string>
 
+    <!-- Home Hub enhancements -->
+    <string name="action_view_all">View All</string>
+    <string name="home_welcome">Welcome!</string>
+    <string name="home_welcome_message">Start by browsing sources and adding to your library.</string>
+    <string name="home_browse_sources">Browse Sources</string>
+    <string name="home_recommendations">Recommendations</string>
+
 </resources>

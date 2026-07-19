@@ -7,12 +7,12 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -30,7 +30,6 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -65,6 +64,7 @@ import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.FloatingGlassNavigationBar
+import tachiyomi.presentation.core.components.material.FloatingGlassNavigationBarWithModes
 import tachiyomi.presentation.core.components.material.NavigationBar
 import tachiyomi.presentation.core.components.material.NavigationRail
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -141,21 +141,43 @@ object HomeScreen : Screen() {
                                     showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
                                 }
                                 val navBarAppearance by uiPreferences.navBarAppearance().collectAsState()
+                                val modeCount = listOf(showManga, showAnime, showNovel).count { it }
                                 AnimatedVisibility(
                                     visible = bottomNavVisible && tabNavigator.current != navStyle.moreTab,
                                     enter = expandVertically(),
                                     exit = shrinkVertically(),
                                 ) {
                                     if (navBarAppearance == eu.kanade.domain.ui.model.NavBarAppearance.FLOATING_GLASS) {
-                                        FloatingGlassNavigationBar {
-                                            navStyle.tabs.fastForEach {
-                                                NavigationBarItem(it)
+                                        if (modeCount > 1) {
+                                            FloatingGlassNavigationBarWithModes(
+                                                modeRow = {
+                                                    ModePill(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                    )
+                                                },
+                                            ) {
+                                                navStyle.tabs.fastForEach {
+                                                    NavigationBarItem(it)
+                                                }
+                                            }
+                                        } else {
+                                            FloatingGlassNavigationBar {
+                                                navStyle.tabs.fastForEach {
+                                                    NavigationBarItem(it)
+                                                }
                                             }
                                         }
                                     } else {
-                                        NavigationBar {
-                                            navStyle.tabs.fastForEach {
-                                                NavigationBarItem(it)
+                                        Column {
+                                            if (modeCount > 1) {
+                                                ModePill(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                )
+                                            }
+                                            NavigationBar {
+                                                navStyle.tabs.fastForEach {
+                                                    NavigationBarItem(it)
+                                                }
                                             }
                                         }
                                     }
@@ -184,17 +206,6 @@ object HomeScreen : Screen() {
                                 tabNavigator.saveableState(key = "currentTab", it) {
                                     it.Content()
                                 }
-                            }
-
-                            // Floating mode pill above the nav bar — only on content tabs
-                            val isContentTab = tabNavigator.current != navStyle.moreTab
-                            if (isContentTab && !isTabletUi()) {
-                                ModePill(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(bottom = 12.dp)
-                                        .navigationBarsPadding(),
-                                )
                             }
                         }
                     }

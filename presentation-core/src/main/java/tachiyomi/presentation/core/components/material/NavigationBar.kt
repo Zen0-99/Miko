@@ -1,5 +1,6 @@
 package tachiyomi.presentation.core.components.material
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.contentColorFor
@@ -93,5 +95,67 @@ fun FloatingGlassNavigationBar(
                 .selectableGroup(),
             content = content,
         )
+    }
+}
+
+/**
+ * Floating glassmorphism navigation bar with an attached mode-selector row on top.
+ *
+ * The [modeRow] composable is rendered above the nav row inside the same glass
+ * container, separated by a thin divider. Pass an empty composable (or omit the
+ * call site check) to fall back to [FloatingGlassNavigationBar].
+ *
+ * @param modeRow Composable rendered in the top row (e.g. the mode selector).
+ * @param showDivider Whether to render a divider between the mode row and nav row.
+ */
+@Composable
+fun FloatingGlassNavigationBarWithModes(
+    modeRow: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = NavigationBarDefaults.containerColor,
+    contentColor: Color = MaterialTheme.colorScheme.contentColorFor(containerColor),
+    tonalElevation: Dp = 3.dp,
+    windowInsets: WindowInsets = NavigationBarDefaults.windowInsets,
+    blurRadius: Dp = 20.dp,
+    cornerRadius: Dp = 28.dp,
+    horizontalPadding: Dp = 16.dp,
+    bottomPadding: Dp = 8.dp,
+    containerAlpha: Float = 0.7f,
+    showDivider: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    androidx.compose.material3.Surface(
+        color = containerColor.copy(alpha = containerAlpha),
+        contentColor = contentColor,
+        tonalElevation = tonalElevation,
+        shadowElevation = 8.dp,
+        shape = RoundedCornerShape(cornerRadius),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding, vertical = bottomPadding)
+            .blur(blurRadius),
+    ) {
+        Column {
+            // Mode row
+            modeRow()
+
+            // Divider between mode row and nav row
+            if (showDivider) {
+                HorizontalDivider(
+                    color = contentColor.copy(alpha = 0.1f),
+                    thickness = 0.5.dp,
+                )
+            }
+
+            // Nav row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(windowInsets)
+                    .height(72.dp)
+                    .selectableGroup(),
+                content = content,
+            )
+        }
     }
 }

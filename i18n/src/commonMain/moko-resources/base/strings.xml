@@ -1043,4 +1043,11 @@
     <string name="linked_sources_make_primary_confirm">Make %1$s the primary entry for this cluster? Its title, cover, and description will replace the current ones.</string>
     <string name="linked_sources_primary_changed">Primary entry updated.</string>
     <string name="linked_sources_make_primary_failed">Could not promote linked entry.</string>
+
+    <!-- Home Hub -->
+    <string name="action_view_all">View All</string>
+    <string name="home_welcome">Welcome!</string>
+    <string name="home_welcome_message">Start by browsing sources and adding to your library.</string>
+    <string name="home_browse_sources">Browse Sources</string>
+    <string name="home_recommendations">Recommendations</string>
 </resources>
