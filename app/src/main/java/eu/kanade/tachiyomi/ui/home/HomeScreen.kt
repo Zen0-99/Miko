@@ -6,13 +6,21 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -30,15 +38,23 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
@@ -125,6 +141,7 @@ object HomeScreen : Screen() {
         ) { tabNavigator ->
             // Provide usable navigator to content screen
             CompositionLocalProvider(LocalNavigator provides navigator) {
+                val hazeState = remember { HazeState() }
                 Scaffold(
                     startBar = {
                         if (isTabletUi()) {
@@ -150,6 +167,7 @@ object HomeScreen : Screen() {
                                     if (navBarAppearance == eu.kanade.domain.ui.model.NavBarAppearance.FLOATING_GLASS) {
                                         if (modeCount > 1) {
                                             FloatingGlassNavigationBarWithModes(
+                                                hazeState = hazeState,
                                                 modeRow = {
                                                     ModePill(
                                                         modifier = Modifier.fillMaxWidth(),
@@ -157,13 +175,15 @@ object HomeScreen : Screen() {
                                                 },
                                             ) {
                                                 navStyle.tabs.fastForEach {
-                                                    NavigationBarItem(it)
+                                                    AuroraNavigationBarItem(it)
                                                 }
                                             }
                                         } else {
-                                            FloatingGlassNavigationBar {
+                                            FloatingGlassNavigationBar(
+                                                hazeState = hazeState,
+                                            ) {
                                                 navStyle.tabs.fastForEach {
-                                                    NavigationBarItem(it)
+                                                    AuroraNavigationBarItem(it)
                                                 }
                                             }
                                         }
@@ -190,7 +210,8 @@ object HomeScreen : Screen() {
                         Box(
                             modifier = Modifier
                                 .padding(contentPadding)
-                                .consumeWindowInsets(contentPadding),
+                                .consumeWindowInsets(contentPadding)
+                                .hazeSource(hazeState),
                         ) {
                             AnimatedContent(
                                 targetState = tabNavigator.current,
@@ -288,6 +309,106 @@ object HomeScreen : Screen() {
             },
             alwaysShowLabel = true,
         )
+    }
+
+    /**
+     * Aurora-styled nav bar item with a gradient pill behind the selected icon.
+     * Ported from Tadami's AuroraNavigationBarItem.
+     */
+    @Composable
+    private fun RowScope.AuroraNavigationBarItem(tab: eu.kanade.presentation.util.Tab) {
+        val tabNavigator = LocalTabNavigator.current
+        val navigator = LocalNavigator.currentOrThrow
+        val scope = rememberCoroutineScope()
+        val selected = tabNavigator.current::class == tab::class
+        val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+        val accent = MaterialTheme.colorScheme.primary
+        val iconColor = if (selected) {
+            accent
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDark) 0.72f else 0.78f)
+        }
+        val labelColor = if (selected) {
+            accent
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDark) 0.82f else 0.88f)
+        }
+        val iconBackgroundBrush = if (selected) {
+            Brush.verticalGradient(
+                listOf(
+                    if (isDark) accent.copy(alpha = 0.28f) else accent.copy(alpha = 0.18f),
+                    if (isDark) accent.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.78f),
+                ),
+            )
+        } else {
+            null
+        }
+        val iconShape = RoundedCornerShape(999.dp)
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 1.dp)
+                .padding(top = 8.dp, bottom = 0.dp)
+                .selectable(
+                    selected = selected,
+                    role = Role.Tab,
+                    onClick = {
+                        if (!selected) {
+                            tabNavigator.current = tab
+                        } else {
+                            scope.launch { tab.onReselect(navigator) }
+                        }
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .then(
+                            if (selected && iconBackgroundBrush != null) {
+                                Modifier
+                                    .background(iconBackgroundBrush, iconShape)
+                                    .border(
+                                        BorderStroke(
+                                            1.dp,
+                                            if (isDark) {
+                                                Color.White.copy(alpha = 0.12f)
+                                            } else {
+                                                accent.copy(alpha = 0.16f)
+                                            },
+                                        ),
+                                        iconShape,
+                                    )
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CompositionLocalProvider(LocalContentColor provides iconColor) {
+                        NavigationIconItem(tab)
+                    }
+                }
+
+                Text(
+                    text = tab.options.title,
+                    color = labelColor,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = MaterialTheme.typography.labelLarge.fontSize * 0.92f,
+                    ),
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 
     @Composable
@@ -405,4 +526,11 @@ object HomeScreen : Screen() {
         data class Browse(val toExtensions: Boolean = false, val anime: Boolean = false) : Tab
         data class More(val toDownloads: Boolean) : Tab
     }
+}
+
+private fun Color.luminance(): Float {
+    val r = red * 0.299f
+    val g = green * 0.587f
+    val b = blue * 0.114f
+    return r + g + b
 }
