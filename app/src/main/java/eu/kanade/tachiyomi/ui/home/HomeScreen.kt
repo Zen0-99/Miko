@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -348,6 +349,7 @@ object HomeScreen : Screen() {
         }
         val iconShape = RoundedCornerShape(999.dp)
 
+        val interactionSource = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -356,6 +358,8 @@ object HomeScreen : Screen() {
                 .selectable(
                     selected = selected,
                     role = Role.Tab,
+                    interactionSource = interactionSource,
+                    indication = null,
                     onClick = {
                         if (!selected) {
                             tabNavigator.current = tab
