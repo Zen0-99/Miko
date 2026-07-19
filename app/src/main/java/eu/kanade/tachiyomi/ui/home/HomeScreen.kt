@@ -158,6 +158,7 @@ object HomeScreen : Screen() {
                                     showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
                                 }
                                 val navBarAppearance by uiPreferences.navBarAppearance().collectAsState()
+                                val navBarIconsOnly by uiPreferences.navBarIconsOnly().collectAsState()
                                 val modeCount = listOf(showManga, showAnime, showNovel).count { it }
                                 AnimatedVisibility(
                                     visible = bottomNavVisible && tabNavigator.current != navStyle.moreTab,
@@ -175,7 +176,7 @@ object HomeScreen : Screen() {
                                                 },
                                             ) {
                                                 navStyle.tabs.fastForEach {
-                                                    AuroraNavigationBarItem(it)
+                                                    AuroraNavigationBarItem(it, showLabel = !navBarIconsOnly)
                                                 }
                                             }
                                         } else {
@@ -183,7 +184,7 @@ object HomeScreen : Screen() {
                                                 hazeState = hazeState,
                                             ) {
                                                 navStyle.tabs.fastForEach {
-                                                    AuroraNavigationBarItem(it)
+                                                    AuroraNavigationBarItem(it, showLabel = !navBarIconsOnly)
                                                 }
                                             }
                                         }
@@ -196,7 +197,7 @@ object HomeScreen : Screen() {
                                             }
                                             NavigationBar {
                                                 navStyle.tabs.fastForEach {
-                                                    NavigationBarItem(it)
+                                                    NavigationBarItem(it, showLabel = !navBarIconsOnly)
                                                 }
                                             }
                                         }
@@ -288,7 +289,10 @@ object HomeScreen : Screen() {
     }
 
     @Composable
-    private fun RowScope.NavigationBarItem(tab: eu.kanade.presentation.util.Tab) {
+    private fun RowScope.NavigationBarItem(
+        tab: eu.kanade.presentation.util.Tab,
+        showLabel: Boolean = true,
+    ) {
         val tabNavigator = LocalTabNavigator.current
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
@@ -311,7 +315,7 @@ object HomeScreen : Screen() {
                     overflow = TextOverflow.Ellipsis,
                 )
             },
-            alwaysShowLabel = true,
+            alwaysShowLabel = showLabel,
         )
     }
 
@@ -320,7 +324,10 @@ object HomeScreen : Screen() {
      * Ported from Tadami's AuroraNavigationBarItem.
      */
     @Composable
-    private fun RowScope.AuroraNavigationBarItem(tab: eu.kanade.presentation.util.Tab) {
+    private fun RowScope.AuroraNavigationBarItem(
+        tab: eu.kanade.presentation.util.Tab,
+        showLabel: Boolean = true,
+    ) {
         val tabNavigator = LocalTabNavigator.current
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
@@ -373,7 +380,7 @@ object HomeScreen : Screen() {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Box(
                     modifier = Modifier
@@ -393,16 +400,18 @@ object HomeScreen : Screen() {
                     }
                 }
 
-                Text(
-                    text = tab.options.title,
-                    color = labelColor,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontSize = MaterialTheme.typography.labelLarge.fontSize * 0.92f,
-                    ),
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (showLabel) {
+                    Text(
+                        text = tab.options.title,
+                        color = labelColor,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontSize = MaterialTheme.typography.labelLarge.fontSize * 0.92f,
+                        ),
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

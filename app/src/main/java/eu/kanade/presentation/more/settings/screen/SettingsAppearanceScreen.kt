@@ -19,6 +19,7 @@ import androidx.core.app.ActivityCompat
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.asBooleanPreference
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.domain.ui.model.NavBarAppearance
@@ -207,13 +208,18 @@ object SettingsAppearanceScreen : SearchableSettings {
                     title = "Navigation Style",
                     onValueChanged = { true },
                 ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = uiPreferences.navBarAppearance(),
-                    entries = NavBarAppearance.entries
-                        .associateWith { it.displayName }
-                        .toImmutableMap(),
-                    title = "Bottom navigation appearance",
-                    onValueChanged = { true },
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = remember { uiPreferences.navBarAppearance().asBooleanPreference(
+                        targetValue = NavBarAppearance.FLOATING_GLASS,
+                        defaultValue = NavBarAppearance.STANDARD,
+                    ) },
+                    title = "Floating glass navigation bar",
+                    subtitle = "Pill-shaped bar with glassmorphism blur, inset from screen edges",
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = uiPreferences.navBarIconsOnly(),
+                    title = "Icons only",
+                    subtitle = "Hide text labels on navigation items (modes still show text)",
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = uiPreferences.showAnimeMode(),

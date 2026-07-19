@@ -126,6 +126,8 @@ class UiPreferences(
 
     fun navBarAppearance() = preferenceStore.getEnum("nav_bar_appearance", NavBarAppearance.STANDARD)
 
+    fun navBarIconsOnly() = preferenceStore.getBoolean("nav_bar_icons_only", false)
+
     /**
      * The currently active content mode shown across mode-aware tabs (Library, Updates,
      * History). One global mode is shared by all mode-aware tabs so the user sees a single

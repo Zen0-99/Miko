@@ -78,7 +78,7 @@ fun FloatingGlassNavigationBar(
     tint: Color = Color.Unspecified,
     blurRadius: Dp = 24.dp,
     horizontalPadding: Dp = 12.dp,
-    bottomPadding: Dp = 10.dp,
+    bottomPadding: Dp = 14.dp,
     content: @Composable RowScope.() -> Unit,
 ) {
     val isDark = isSystemInDarkTheme()
@@ -87,9 +87,9 @@ fun FloatingGlassNavigationBar(
     } else {
         // Lighter fill in dark mode for better contrast against the dark background
         if (isDark) {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
         }
     }
     val shape: Shape = GlassShape
@@ -145,7 +145,7 @@ fun FloatingGlassNavigationBarWithModes(
     tint: Color = Color.Unspecified,
     blurRadius: Dp = 24.dp,
     horizontalPadding: Dp = 12.dp,
-    bottomPadding: Dp = 10.dp,
+    bottomPadding: Dp = 14.dp,
     showDivider: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
@@ -154,9 +154,9 @@ fun FloatingGlassNavigationBarWithModes(
         tint
     } else {
         if (isDark) {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
         }
     }
     val shape: Shape = GlassShape
