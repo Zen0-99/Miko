@@ -54,6 +54,7 @@ import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryChapterHeader
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.MissingItemCountListItem
+import eu.kanade.presentation.entries.components.aurora.AuroraSuggestionsRow
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.entries.manga.components.ExpandableMangaDescription
 import eu.kanade.presentation.entries.manga.components.MangaActionRow
@@ -62,6 +63,8 @@ import eu.kanade.presentation.entries.manga.components.MangaContinueButton
 import eu.kanade.presentation.entries.manga.components.MangaInfoBox
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
+import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.data.suggestions.SuggestionState
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.manga.getNameForMangaInfo
 import eu.kanade.tachiyomi.ui.browse.manga.extension.details.MangaSourcePreferencesScreen
@@ -138,6 +141,9 @@ fun MangaScreen(
     onRemoveAllDownloadsClicked: (() -> Unit)? = null,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)? = null,
     onRemoveReadDownloadsClicked: (() -> Unit)? = null,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -192,6 +198,9 @@ fun MangaScreen(
             onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
             onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
             onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+            onSuggestionClick = onSuggestionClick,
+            onOpenSuggestions = onOpenSuggestions,
+            onRetrySuggestions = onRetrySuggestions,
         )
     } else {
         MangaScreenLargeImpl(
@@ -234,6 +243,9 @@ fun MangaScreen(
             onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
             onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
             onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+            onSuggestionClick = onSuggestionClick,
+            onOpenSuggestions = onOpenSuggestions,
+            onRetrySuggestions = onRetrySuggestions,
         )
     }
 }
@@ -294,6 +306,9 @@ private fun MangaScreenSmallImpl(
     onRemoveAllDownloadsClicked: (() -> Unit)? = null,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)? = null,
     onRemoveReadDownloadsClicked: (() -> Unit)? = null,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     val chapterListState = rememberLazyListState()
 
@@ -468,6 +483,16 @@ private fun MangaScreenSmallImpl(
                         )
                     }
 
+                    item(key = "SUGGESTIONS", contentType = "SUGGESTIONS") {
+                        AuroraSuggestionsRow(
+                            state = state.suggestions,
+                            onSuggestionClick = onSuggestionClick,
+                            onOpenSuggestions = onOpenSuggestions,
+                            onRetryClick = onRetrySuggestions,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
                     item(
                         key = EntryScreenItem.ITEM_HEADER,
                         contentType = EntryScreenItem.ITEM_HEADER,
@@ -561,6 +586,9 @@ fun MangaScreenLargeImpl(
     onRemoveAllDownloadsClicked: (() -> Unit)? = null,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)? = null,
     onRemoveReadDownloadsClicked: (() -> Unit)? = null,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
@@ -694,6 +722,13 @@ fun MangaScreenLargeImpl(
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
                             accentColor = state.accentColor,
+                        )
+                        AuroraSuggestionsRow(
+                            state = state.suggestions,
+                            onSuggestionClick = onSuggestionClick,
+                            onOpenSuggestions = onOpenSuggestions,
+                            onRetryClick = onRetrySuggestions,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 },

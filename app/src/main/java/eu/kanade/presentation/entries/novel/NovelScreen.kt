@@ -39,6 +39,7 @@ import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryToolbar
+import eu.kanade.presentation.entries.components.aurora.AuroraSuggestionsRow
 import eu.kanade.presentation.entries.novel.components.ExpandableNovelDescription
 import eu.kanade.presentation.entries.novel.components.NovelEditDialog
 import tachiyomi.i18n.MR
@@ -50,6 +51,8 @@ import eu.kanade.presentation.entries.novel.components.NovelChapterListItem
 import eu.kanade.presentation.entries.novel.components.NovelContinueButton
 import eu.kanade.presentation.entries.novel.components.NovelInfoBox
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
+import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.data.suggestions.SuggestionState
 import eu.kanade.tachiyomi.ui.entries.novel.NovelChapterList
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreenModel
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
@@ -88,6 +91,7 @@ fun NovelScreen(
     onRemoveAllDownloadsClicked: (() -> Unit)?,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
     onRemoveReadDownloadsClicked: (() -> Unit)?,
+    onClickLinkedSources: (() -> Unit)? = null,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter) -> Unit,
@@ -98,6 +102,9 @@ fun NovelScreen(
     onInvertSelection: () -> Unit,
     onFetchNewChapters: (() -> Unit)? = null,
     onFetchAllChapters: (() -> Unit)? = null,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     if (isTabletUi) {
         NovelScreenLargeImpl(
@@ -130,6 +137,7 @@ fun NovelScreen(
             onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
             onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
             onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+            onClickLinkedSources = onClickLinkedSources,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -140,6 +148,9 @@ fun NovelScreen(
             onInvertSelection = onInvertSelection,
             onFetchNewChapters = onFetchNewChapters,
             onFetchAllChapters = onFetchAllChapters,
+            onSuggestionClick = onSuggestionClick,
+            onOpenSuggestions = onOpenSuggestions,
+            onRetrySuggestions = onRetrySuggestions,
         )
     } else {
         NovelScreenSmallImpl(
@@ -172,6 +183,7 @@ fun NovelScreen(
             onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
             onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
             onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+            onClickLinkedSources = onClickLinkedSources,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -182,6 +194,9 @@ fun NovelScreen(
             onInvertSelection = onInvertSelection,
             onFetchNewChapters = onFetchNewChapters,
             onFetchAllChapters = onFetchAllChapters,
+            onSuggestionClick = onSuggestionClick,
+            onOpenSuggestions = onOpenSuggestions,
+            onRetrySuggestions = onRetrySuggestions,
         )
     }
 }
@@ -217,6 +232,7 @@ private fun NovelScreenSmallImpl(
     onRemoveAllDownloadsClicked: (() -> Unit)?,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
     onRemoveReadDownloadsClicked: (() -> Unit)?,
+    onClickLinkedSources: (() -> Unit)? = null,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter) -> Unit,
@@ -227,6 +243,9 @@ private fun NovelScreenSmallImpl(
     onInvertSelection: () -> Unit,
     onFetchNewChapters: (() -> Unit)? = null,
     onFetchAllChapters: (() -> Unit)? = null,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     val chapterListState = rememberLazyListState()
 
@@ -304,6 +323,7 @@ private fun NovelScreenSmallImpl(
                 onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
                 onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
                 onClickRemoveReadDownloads = onRemoveReadDownloadsClicked,
+                onClickLinkedSources = onClickLinkedSources,
                 changeAnimeSkipIntro = null,
                 actionModeCounter = selectedChapterCount,
                 onCancelActionMode = { onAllChapterSelected(false) },
@@ -385,6 +405,16 @@ private fun NovelScreenSmallImpl(
                         },
                         accentColor = state.accentColor,
                         onClick = onContinueReading,
+                    )
+                }
+
+                item(key = "SUGGESTIONS", contentType = "SUGGESTIONS") {
+                    AuroraSuggestionsRow(
+                        state = state.suggestions,
+                        onSuggestionClick = onSuggestionClick,
+                        onOpenSuggestions = onOpenSuggestions,
+                        onRetryClick = onRetrySuggestions,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
 
@@ -508,6 +538,7 @@ private fun NovelScreenLargeImpl(
     onRemoveAllDownloadsClicked: (() -> Unit)?,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
     onRemoveReadDownloadsClicked: (() -> Unit)?,
+    onClickLinkedSources: (() -> Unit)? = null,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter) -> Unit,
@@ -518,6 +549,9 @@ private fun NovelScreenLargeImpl(
     onInvertSelection: () -> Unit,
     onFetchNewChapters: (() -> Unit)? = null,
     onFetchAllChapters: (() -> Unit)? = null,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     NovelScreenSmallImpl(
         state = state,
@@ -548,6 +582,7 @@ private fun NovelScreenLargeImpl(
         onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
         onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
         onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+        onClickLinkedSources = onClickLinkedSources,
         onMultiBookmarkClicked = onMultiBookmarkClicked,
         onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
         onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -558,5 +593,8 @@ private fun NovelScreenLargeImpl(
         onInvertSelection = onInvertSelection,
         onFetchNewChapters = onFetchNewChapters,
         onFetchAllChapters = onFetchAllChapters,
+        onSuggestionClick = onSuggestionClick,
+        onOpenSuggestions = onOpenSuggestions,
+        onRetrySuggestions = onRetrySuggestions,
     )
 }

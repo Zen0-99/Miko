@@ -74,11 +74,14 @@ import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryChapterHeader
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.MissingItemCountListItem
+import eu.kanade.presentation.entries.components.aurora.AuroraSuggestionsRow
 import eu.kanade.presentation.util.formatEpisodeNumber
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.data.download.anime.model.AnimeDownload
+import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.data.suggestions.SuggestionState
 import eu.kanade.tachiyomi.source.anime.getNameForAnimeInfo
 import eu.kanade.tachiyomi.ui.browse.anime.extension.details.AnimeSourcePreferencesScreen
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreenModel
@@ -166,6 +169,9 @@ fun AnimeScreen(
     // Season clicked
     onSeasonClicked: (SeasonAnime) -> Unit,
     onContinueWatchingClicked: ((SeasonAnime) -> Unit)?,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -226,6 +232,9 @@ fun AnimeScreen(
             onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
             onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
             onRemoveSeenDownloadsClicked = onRemoveSeenDownloadsClicked,
+            onSuggestionClick = onSuggestionClick,
+            onOpenSuggestions = onOpenSuggestions,
+            onRetrySuggestions = onRetrySuggestions,
         )
     } else {
         AnimeScreenLargeImpl(
@@ -274,6 +283,9 @@ fun AnimeScreen(
             onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
             onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
             onRemoveSeenDownloadsClicked = onRemoveSeenDownloadsClicked,
+            onSuggestionClick = onSuggestionClick,
+            onOpenSuggestions = onOpenSuggestions,
+            onRetrySuggestions = onRetrySuggestions,
         )
     }
 }
@@ -343,6 +355,9 @@ private fun AnimeScreenSmallImpl(
     // Season clicked
     onSeasonClicked: (SeasonAnime) -> Unit,
     onClickContinueWatching: ((SeasonAnime) -> Unit)?,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     val density = LocalDensity.current
     val offsetGridPaddingPx = with(density) { GRID_PADDING.roundToPx() }
@@ -543,6 +558,20 @@ private fun AnimeScreenSmallImpl(
                     }
 
                     item(
+                        key = "SUGGESTIONS",
+                        contentType = "SUGGESTIONS",
+                        span = { GridItemSpan(maxLineSpan) },
+                    ) {
+                        AuroraSuggestionsRow(
+                            state = state.suggestions,
+                            onSuggestionClick = onSuggestionClick,
+                            onOpenSuggestions = onOpenSuggestions,
+                            onRetryClick = onRetrySuggestions,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    item(
                         key = EntryScreenItem.ITEM_HEADER,
                         contentType = EntryScreenItem.ITEM_HEADER,
                         span = { GridItemSpan(maxLineSpan) },
@@ -709,6 +738,9 @@ fun AnimeScreenLargeImpl(
     // Season clicked
     onSeasonClicked: (SeasonAnime) -> Unit,
     onClickContinueWatching: ((SeasonAnime) -> Unit)?,
+    onSuggestionClick: (SuggestionItem) -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
+    onRetrySuggestions: () -> Unit = {},
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
@@ -858,6 +890,13 @@ fun AnimeScreenLargeImpl(
                                 onTagSearch = onTagSearch,
                                 onCopyTagToClipboard = onCopyTagToClipboard,
                                 accentColor = state.accentColor,
+                            )
+                            AuroraSuggestionsRow(
+                                state = state.suggestions,
+                                onSuggestionClick = onSuggestionClick,
+                                onOpenSuggestions = onOpenSuggestions,
+                                onRetryClick = onRetrySuggestions,
+                                modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     },

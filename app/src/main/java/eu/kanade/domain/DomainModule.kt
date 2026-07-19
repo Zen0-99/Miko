@@ -195,6 +195,7 @@ import tachiyomi.domain.entries.novel.interactor.UnlinkNovel
 import tachiyomi.domain.entries.novel.interactor.GetAllNovelLinks
 import tachiyomi.domain.entries.novel.interactor.SetNovelSourcePriority
 import tachiyomi.domain.entries.novel.interactor.MergeLinkedNovelChapters
+import tachiyomi.domain.entries.novel.interactor.MakeLinkedPrimary
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.interactor.GetDuplicateLibraryNovel
@@ -539,6 +540,7 @@ class DomainModule : InjektModule {
         addFactory { GetAllNovelLinks(get()) }
         addFactory { SetNovelSourcePriority(get()) }
         addFactory { MergeLinkedNovelChapters() }
+        addFactory { MakeLinkedPrimary(get()) }
         addFactory { GetLibraryNovels(get()) }
         addFactory { GetVisibleNovelCategories(get()) }
         addFactory { SetNovelCategories(get()) }

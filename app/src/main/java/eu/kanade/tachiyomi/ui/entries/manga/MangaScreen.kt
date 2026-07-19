@@ -45,6 +45,10 @@ import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.manga.isLocalOrStub
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialog
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaSearchScreen
@@ -198,6 +202,25 @@ class MangaScreen(
                 .takeIf { !successState.source.isLocalOrStub() },
             onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
                 .takeIf { !successState.source.isLocalOrStub() },
+            onSuggestionClick = { item ->
+                scope.launch {
+                    val screen = item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen()
+                    navigator.push(screen)
+                }
+            },
+            onOpenSuggestions = {
+                val seed = screenModel.getSuggestionSeed()
+                if (seed != null) {
+                    navigator.push(
+                        EntrySuggestionsScreen(
+                            seed = seed,
+                            sourceId = successState.source.id,
+                            entryUrl = successState.manga.url,
+                        ),
+                    )
+                }
+            },
+            onRetrySuggestions = { screenModel.retrySuggestions() },
         )
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }

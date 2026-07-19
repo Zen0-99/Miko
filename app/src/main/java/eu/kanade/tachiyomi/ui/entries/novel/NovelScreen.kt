@@ -28,6 +28,11 @@ import eu.kanade.domain.entries.novel.model.toSNovel
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import eu.kanade.presentation.entries.novel.NovelScreen
+import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
+import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
@@ -170,6 +175,7 @@ class NovelScreen(
                 .takeIf { !successState.source.isLocalOrStub() },
             onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
                 .takeIf { !successState.source.isLocalOrStub() },
+            onClickLinkedSources = { screenModel.showLinkedSourcesDialog() },
             onMultiBookmarkClicked = screenModel::bookmarkChapters,
             onMultiMarkAsReadClicked = screenModel::markChaptersRead,
             onMarkPreviousAsReadClicked = screenModel::markPreviousChapterRead,
@@ -182,6 +188,25 @@ class NovelScreen(
                 .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
             onFetchAllChapters = { screenModel.fetchAllChaptersWithProgress() }
                 .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
+            onSuggestionClick = { item ->
+                scope.launch {
+                    val screen = item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen()
+                    navigator.push(screen)
+                }
+            },
+            onOpenSuggestions = {
+                val seed = screenModel.getSuggestionSeed()
+                if (seed != null) {
+                    navigator.push(
+                        EntrySuggestionsScreen(
+                            seed = seed,
+                            sourceId = successState.source.id,
+                            entryUrl = successState.novel.url,
+                        ),
+                    )
+                }
+            },
+            onRetrySuggestions = { screenModel.retrySuggestions() },
         )
 
         val onDismissRequest = {
@@ -277,6 +302,18 @@ class NovelScreen(
                 } else {
                     LoadingScreen(Modifier.systemBarsPadding())
                 }
+            }
+            NovelScreenModel.Dialog.LinkedSources -> {
+                eu.kanade.presentation.entries.novel.LinkedSourcesDialog(
+                    loadLinked = { screenModel.loadLinkedNovelsForDialog() },
+                    loadCandidates = { screenModel.loadFavoritesForLinking() },
+                    onLink = screenModel::linkNovelSource,
+                    onUnlink = screenModel::unlinkNovelSource,
+                    onMakePrimary = screenModel::makeLinkedPrimary,
+                    onOpenNovel = { navigator.push(NovelScreen(it)) },
+                    onRefreshAll = screenModel::refreshLinkedSources,
+                    onDismissRequest = onDismissRequest,
+                )
             }
         }
     }

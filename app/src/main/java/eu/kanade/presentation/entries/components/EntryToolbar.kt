@@ -57,6 +57,7 @@ fun EntryToolbar(
     onClickRemoveAllDownloads: (() -> Unit)? = null,
     onClickRemoveNonBookmarkedDownloads: (() -> Unit)? = null,
     onClickRemoveReadDownloads: (() -> Unit)? = null,
+    onClickLinkedSources: (() -> Unit)? = null,
     // Anime only
     changeAnimeSkipIntro: (() -> Unit)?,
     // For action mode
@@ -226,6 +227,14 @@ fun EntryToolbar(
                             AppBar.OverflowAction(
                                 title = stringResource(MR.strings.action_migrate),
                                 onClick = onClickMigrate,
+                            ),
+                        )
+                    }
+                    if (onClickLinkedSources != null) {
+                        add(
+                            AppBar.OverflowAction(
+                                title = stringResource(MR.strings.action_linked_sources),
+                                onClick = onClickLinkedSources,
                             ),
                         )
                     }

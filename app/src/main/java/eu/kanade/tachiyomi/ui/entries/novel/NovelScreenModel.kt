@@ -35,6 +35,7 @@ import eu.kanade.tachiyomi.data.suggestions.SuggestionSourceWeight
 import eu.kanade.tachiyomi.data.suggestions.SuggestionState
 import eu.kanade.tachiyomi.data.suggestions.SuggestionTitleResolver
 import eu.kanade.tachiyomi.data.suggestions.novel.NovelFallbackOutcome
+import eu.kanade.tachiyomi.data.suggestions.novel.NovelRelatedSuggestionCoordinator
 import eu.kanade.tachiyomi.data.suggestions.novel.NovelSearchFallbackEngine
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import eu.kanade.tachiyomi.data.suggestions.util.bestMatchScoreFor
@@ -74,6 +75,10 @@ import tachiyomi.domain.category.novel.interactor.SetNovelCategories
 import tachiyomi.domain.entries.novel.interactor.GetDuplicateLibraryNovel
 import tachiyomi.domain.entries.novel.interactor.GetLinkedNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovelLinkedId
+import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
+import tachiyomi.domain.entries.novel.interactor.LinkNovels
+import tachiyomi.domain.entries.novel.interactor.UnlinkNovel
+import tachiyomi.domain.entries.novel.interactor.MakeLinkedPrimary
 import tachiyomi.domain.entries.novel.interactor.MergeLinkedNovelChapters
 import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.interactor.SetNovelChapterFlags
@@ -117,11 +122,16 @@ class NovelScreenModel(
     private val fetchInterval: tachiyomi.domain.entries.novel.interactor.NovelFetchInterval = Injekt.get(),
     private val getLinkedNovels: GetLinkedNovels = Injekt.get(),
     private val getNovelLinkedId: GetNovelLinkedId = Injekt.get(),
+    private val getNovelFavorites: GetNovelFavorites = Injekt.get(),
+    private val linkNovelsInteractor: LinkNovels = Injekt.get(),
+    private val unlinkNovelInteractor: UnlinkNovel = Injekt.get(),
+    private val makeLinkedPrimary: MakeLinkedPrimary = Injekt.get(),
     private val mergeLinkedNovelChapters: MergeLinkedNovelChapters = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
     private val searchFallbackEngine: NovelSearchFallbackEngine = Injekt.get(),
+    private val relatedSuggestionCoordinator: NovelRelatedSuggestionCoordinator = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
 
@@ -306,6 +316,32 @@ class NovelScreenModel(
                                 throw e
                             } catch (e: Exception) {
                                 logcat(LogPriority.DEBUG) { "[NovelScreenModel] Native search fallback failed: ${e.message}" }
+                            }
+                        }
+                    }
+
+                    // Task 3: Related novels from source (if supported)
+                    if (currentNovel != null && currentSource != null) {
+                        launch {
+                            try {
+                                val relatedOutcome = relatedSuggestionCoordinator.fetchRelatedSuggestions(
+                                    novel = currentNovel,
+                                    source = currentSource,
+                                    seed = seed,
+                                    maxResults = 20,
+                                )
+                                if (relatedOutcome is NovelFallbackOutcome.Success && relatedOutcome.items.isNotEmpty()) {
+                                    synchronized(suggestionsList) {
+                                        val existingUrls = suggestionsList.map { it.providerUrl }.toSet()
+                                        val newItems = relatedOutcome.items.filter { it.providerUrl !in existingUrls }
+                                        suggestionsList.addAll(newItems)
+                                    }
+                                    emitProgressiveSuggestions(suggestionsList, currentNovel)
+                                }
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                logcat(LogPriority.DEBUG) { "[NovelScreenModel] Related novels fetch failed: ${e.message}" }
                             }
                         }
                     }
@@ -1427,6 +1463,69 @@ class NovelScreenModel(
         updateSuccessState { it.copy(dialog = Dialog.Migrate(newNovel = novel, oldNovel = duplicate)) }
     }
 
+    fun showLinkedSourcesDialog() {
+        updateSuccessState { it.copy(dialog = Dialog.LinkedSources) }
+    }
+
+    suspend fun loadLinkedNovelsForDialog(): List<Novel> {
+        val id = novel?.id ?: return emptyList()
+        val linkedId = getNovelLinkedId.await(id) ?: return emptyList()
+        val links = getLinkedNovels.await(linkedId).filter { !it.isPrimary }
+        return links.mapNotNull { link ->
+            runCatching { novelRepository.getNovelById(link.novelId) }.getOrNull()
+        }
+    }
+
+    suspend fun loadFavoritesForLinking(): List<Novel> {
+        val current = novel ?: return emptyList()
+        val linkedId = getNovelLinkedId.await(current.id)
+        val linkedIds = if (linkedId != null) {
+            getLinkedNovels.await(linkedId).map { it.novelId }.toSet()
+        } else {
+            emptySet()
+        }
+        // Get all favorite novels, filter out current and already-linked
+        return getNovelFavorites.await()
+            .filter { it.id != current.id && it.id !in linkedIds }
+    }
+
+    fun linkNovelSource(targetId: Long) {
+        val currentNovel = novel ?: return
+        val currentSourceId = source?.id ?: return
+        screenModelScope.launchNonCancellable {
+            // Get target novel to find its source ID
+            val target = novelRepository.getNovelById(targetId)
+            linkNovelsInteractor.await(
+                primaryNovelId = currentNovel.id,
+                primarySourceId = currentSourceId,
+                primaryExtensionType = "apk",
+                linkedNovelId = targetId,
+                linkedSourceId = target.source,
+                linkedExtensionType = "apk",
+            )
+        }
+    }
+
+    fun unlinkNovelSource(targetId: Long) {
+        screenModelScope.launchNonCancellable {
+            unlinkNovelInteractor.await(targetId)
+        }
+    }
+
+    fun makeLinkedPrimary(targetId: Long) {
+        val currentPrimary = novel ?: return
+        if (targetId == currentPrimary.id) return
+        screenModelScope.launchNonCancellable {
+            makeLinkedPrimary.await(currentPrimary.id, targetId)
+        }
+    }
+
+    fun refreshLinkedSources() {
+        screenModelScope.launchNonCancellable {
+            refreshLinkedSourceChapters(manualFetch = true)
+        }
+    }
+
     sealed interface Dialog {
         data class ChangeCategory(
             val novel: Novel,
@@ -1437,6 +1536,7 @@ class NovelScreenModel(
         data class Migrate(val newNovel: Novel, val oldNovel: Novel) : Dialog
         data object SettingsSheet : Dialog
         data object FullCover : Dialog
+        data object LinkedSources : Dialog
     }
 
     sealed interface State {

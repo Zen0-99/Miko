@@ -50,6 +50,10 @@ import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.data.torrent.service.TorrentServerService
 import eu.kanade.tachiyomi.source.anime.isLocalOrStub
 import eu.kanade.tachiyomi.source.anime.isSourceForTorrents
+import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.browse.anime.migration.anime.season.MigrateSeasonSelectScreen
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeDialog
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeDialogScreenModel
@@ -246,6 +250,25 @@ class AnimeScreen(
                     }
                 }
             },
+            onSuggestionClick = { item ->
+                scope.launch {
+                    val screen = item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen()
+                    navigator.push(screen)
+                }
+            },
+            onOpenSuggestions = {
+                val seed = screenModel.getSuggestionSeed()
+                if (seed != null) {
+                    navigator.push(
+                        EntrySuggestionsScreen(
+                            seed = seed,
+                            sourceId = successState.source.id,
+                            entryUrl = successState.anime.url,
+                        ),
+                    )
+                }
+            },
+            onRetrySuggestions = { screenModel.retrySuggestions() },
         )
 
         val onDismissRequest = {
