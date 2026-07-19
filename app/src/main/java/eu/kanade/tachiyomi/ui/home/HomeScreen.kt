@@ -165,10 +165,12 @@ object HomeScreen : Screen() {
                                     enter = expandVertically(),
                                     exit = shrinkVertically(),
                                 ) {
+                                    val navBottomPadding = if (navBarIconsOnly) 8.dp else 14.dp
                                     if (navBarAppearance == eu.kanade.domain.ui.model.NavBarAppearance.FLOATING_GLASS) {
                                         if (modeCount > 1) {
                                             FloatingGlassNavigationBarWithModes(
                                                 hazeState = hazeState,
+                                                bottomPadding = navBottomPadding,
                                                 modeRow = {
                                                     ModePill(
                                                         modifier = Modifier.fillMaxWidth(),
@@ -182,6 +184,7 @@ object HomeScreen : Screen() {
                                         } else {
                                             FloatingGlassNavigationBar(
                                                 hazeState = hazeState,
+                                                bottomPadding = navBottomPadding,
                                             ) {
                                                 navStyle.tabs.fastForEach {
                                                     AuroraNavigationBarItem(it, showLabel = !navBarIconsOnly)

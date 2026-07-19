@@ -85,9 +85,10 @@ fun FloatingGlassNavigationBar(
     val resolvedTint = if (tint != Color.Unspecified) {
         tint
     } else {
-        // Lighter fill in dark mode for better contrast against the dark background
+        // In dark mode, surface == background (both black in AMOLED), so using
+        // surface as tint is invisible. Use a lighter color instead.
         if (isDark) {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            Color.White.copy(alpha = 0.18f)
         } else {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
         }
@@ -154,7 +155,7 @@ fun FloatingGlassNavigationBarWithModes(
         tint
     } else {
         if (isDark) {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            Color.White.copy(alpha = 0.18f)
         } else {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
         }
