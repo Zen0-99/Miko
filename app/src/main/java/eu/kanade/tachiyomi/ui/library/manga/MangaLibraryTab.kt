@@ -169,13 +169,19 @@ data object MangaLibraryTab : Tab {
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         ) { contentPadding ->
+            val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+                ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            val resolvedContentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding() + hostBottom,
+            )
             when {
-                state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
+                state.isLoading -> LoadingScreen(Modifier.padding(resolvedContentPadding))
                 state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
                     val handler = LocalUriHandler.current
                     EmptyScreen(
                         stringRes = MR.strings.information_empty_library,
-                        modifier = Modifier.padding(contentPadding),
+                        modifier = Modifier.padding(resolvedContentPadding),
                         actions = persistentListOf(
                             EmptyScreenAction(
                                 stringRes = MR.strings.getting_started_guide,
@@ -190,7 +196,7 @@ data object MangaLibraryTab : Tab {
                         categories = state.categories,
                         searchQuery = state.searchQuery,
                         selection = state.selection,
-                        contentPadding = contentPadding,
+                        contentPadding = resolvedContentPadding,
                         currentPage = { screenModel.activeCategoryIndex },
                         hasActiveFilters = state.hasActiveFilters,
                         showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),

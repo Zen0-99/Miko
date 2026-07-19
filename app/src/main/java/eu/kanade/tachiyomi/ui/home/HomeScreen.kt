@@ -212,19 +212,23 @@ object HomeScreen : Screen() {
                                 .consumeWindowInsets(contentPadding)
                                 .hazeSource(hazeState),
                         ) {
-                            AnimatedContent(
-                                targetState = tabNavigator.current,
-                                transitionSpec = {
-                                    materialFadeThroughIn(
-                                        initialScale = 1f,
-                                        durationMillis = fadeDuration,
-                                    ) togetherWith
-                                        materialFadeThroughOut(durationMillis = fadeDuration)
-                                },
-                                label = "tabContent",
+                            androidx.compose.runtime.CompositionLocalProvider(
+                                eu.kanade.presentation.components.LocalHostScaffoldContentPadding provides contentPadding,
                             ) {
-                                tabNavigator.saveableState(key = "currentTab", it) {
-                                    it.Content()
+                                AnimatedContent(
+                                    targetState = tabNavigator.current,
+                                    transitionSpec = {
+                                        materialFadeThroughIn(
+                                            initialScale = 1f,
+                                            durationMillis = fadeDuration,
+                                        ) togetherWith
+                                            materialFadeThroughOut(durationMillis = fadeDuration)
+                                    },
+                                    label = "tabContent",
+                                ) {
+                                    tabNavigator.saveableState(key = "currentTab", it) {
+                                        it.Content()
+                                    }
                                 }
                             }
                         }

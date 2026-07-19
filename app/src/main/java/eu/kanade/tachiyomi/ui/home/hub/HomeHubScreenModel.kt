@@ -69,14 +69,24 @@ class HomeHubScreenModel(
         // --- Fast cache: apply cached snapshot synchronously for instant render ---
         val cached = fastCache.load()
         val hadCache = !cached.isEmpty || cached.isInitialized
+        val currentMode = uiPreferences.contentMode().get()
         if (hadCache) {
+            // Only use cached hero if its media type matches the current mode
+            val modeAwareHero = cached.hero?.toHomeHubHero()?.takeIf {
+                it.mediaType == when (currentMode) {
+                    ContentMode.ANIME -> HomeHubMediaType.ANIME
+                    ContentMode.MANGA -> HomeHubMediaType.MANGA
+                    ContentMode.NOVEL -> HomeHubMediaType.NOVEL
+                }
+            }
             mutableState.update {
                 it.copy(
                     isLoading = false,
                     userName = cached.userName.ifEmpty { uiPreferences.userName().get() },
                     greeting = resolveGreeting(),
                     greetingReady = true,
-                    hero = cached.hero?.toHomeHubHero(),
+                    hero = modeAwareHero,
+                    currentMode = currentMode,
                 )
             }
         } else {
@@ -85,6 +95,7 @@ class HomeHubScreenModel(
                     userName = uiPreferences.userName().get(),
                     greeting = resolveGreeting(),
                     greetingReady = true,
+                    currentMode = currentMode,
                 )
             }
         }
@@ -181,7 +192,8 @@ class HomeHubScreenModel(
                 mutableState.update {
                     it.copy(
                         currentMode = mode,
-                        hero = it.hero?.let { _ -> lastCombinedData?.let { data -> resolveHero(data) } },
+                        // Re-resolve hero for the new mode; null if no history for it
+                        hero = lastCombinedData?.let { data -> resolveHero(data) },
                     )
                 }
             }

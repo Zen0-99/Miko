@@ -163,12 +163,14 @@ private fun HomeHubContent(
             )
         },
     ) { padding ->
+        val hostBottomPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+            ?.calculateBottomPadding() ?: 0.dp
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
             contentPadding = PaddingValues(
                 top = padding.calculateTopPadding(),
-                bottom = padding.calculateBottomPadding() + 24.dp,
+                bottom = padding.calculateBottomPadding() + hostBottomPadding + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
@@ -469,16 +471,64 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
 
 @Composable
 private fun HomeHubHeroPlaceholder() {
+    val tabNavigator = LocalTabNavigator.current
     val placeholderShape = RoundedCornerShape(24.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(440.dp)
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
             .clip(placeholderShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, placeholderShape),
-    )
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, placeholderShape)
+            .padding(32.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Home,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(64.dp),
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = stringResource(AYMR.strings.home_welcome),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(AYMR.strings.home_welcome_message),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Spacer(Modifier.height(28.dp))
+            Button(
+                onClick = { tabNavigator.current = BrowseTab },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(AYMR.strings.home_browse_sources),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
 }
 
 // --- Section Header ---

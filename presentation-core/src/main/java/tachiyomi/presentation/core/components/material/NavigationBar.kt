@@ -1,5 +1,6 @@
 package tachiyomi.presentation.core.components.material
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -74,12 +75,23 @@ fun FloatingGlassNavigationBar(
     modifier: Modifier = Modifier,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     windowInsets: WindowInsets = NavigationBarDefaults.windowInsets,
-    tint: Color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+    tint: Color = Color.Unspecified,
     blurRadius: Dp = 24.dp,
     horizontalPadding: Dp = 12.dp,
     bottomPadding: Dp = 10.dp,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val resolvedTint = if (tint != Color.Unspecified) {
+        tint
+    } else {
+        // Lighter fill in dark mode for better contrast against the dark background
+        if (isDark) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+        }
+    }
     val shape: Shape = GlassShape
     val baseModifier = Modifier
         .fillMaxWidth()
@@ -93,7 +105,7 @@ fun FloatingGlassNavigationBar(
             state = hazeState,
             style = HazeStyle(
                 backgroundColor = MaterialTheme.colorScheme.background,
-                tint = HazeTint(tint),
+                tint = HazeTint(resolvedTint),
                 blurRadius = blurRadius,
                 noiseFactor = 0.12f,
             ),
@@ -130,13 +142,23 @@ fun FloatingGlassNavigationBarWithModes(
     modifier: Modifier = Modifier,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     windowInsets: WindowInsets = NavigationBarDefaults.windowInsets,
-    tint: Color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+    tint: Color = Color.Unspecified,
     blurRadius: Dp = 24.dp,
     horizontalPadding: Dp = 12.dp,
     bottomPadding: Dp = 10.dp,
     showDivider: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val isDark = isSystemInDarkTheme()
+    val resolvedTint = if (tint != Color.Unspecified) {
+        tint
+    } else {
+        if (isDark) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+        }
+    }
     val shape: Shape = GlassShape
     val baseModifier = Modifier
         .fillMaxWidth()
@@ -150,7 +172,7 @@ fun FloatingGlassNavigationBarWithModes(
             state = hazeState,
             style = HazeStyle(
                 backgroundColor = MaterialTheme.colorScheme.background,
-                tint = HazeTint(tint),
+                tint = HazeTint(resolvedTint),
                 blurRadius = blurRadius,
                 noiseFactor = 0.12f,
             ),
