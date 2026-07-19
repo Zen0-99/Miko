@@ -6,9 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -374,17 +372,6 @@ object HomeScreen : Screen() {
                             if (selected && iconBackgroundBrush != null) {
                                 Modifier
                                     .background(iconBackgroundBrush, iconShape)
-                                    .border(
-                                        BorderStroke(
-                                            1.dp,
-                                            if (isDark) {
-                                                Color.White.copy(alpha = 0.12f)
-                                            } else {
-                                                accent.copy(alpha = 0.16f)
-                                            },
-                                        ),
-                                        iconShape,
-                                    )
                             } else {
                                 Modifier
                             },

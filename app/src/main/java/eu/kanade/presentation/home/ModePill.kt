@@ -1,6 +1,5 @@
 package eu.kanade.presentation.home
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -56,8 +55,7 @@ fun ModePill(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .background(NavigationBarDefaults.containerColor),
+            .height(44.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {

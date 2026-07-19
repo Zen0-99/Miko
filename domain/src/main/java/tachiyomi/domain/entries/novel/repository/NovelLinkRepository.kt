@@ -12,7 +12,7 @@ interface NovelLinkRepository {
 
     suspend fun getLinkedIdByNovelId(novelId: Long): Long?
 
-    suspend fun insertLink(linkedId: Long, novelId: Long, sourceId: Long, isPrimary: Boolean, extensionType: String)
+    suspend fun insertLink(linkedId: Long, novelId: Long, sourceId: Long, isPrimary: Boolean, extensionType: String, priority: Long = 0)
 
     suspend fun deleteLink(novelId: Long)
 

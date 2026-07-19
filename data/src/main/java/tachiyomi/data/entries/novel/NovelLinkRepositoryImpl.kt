@@ -38,9 +38,10 @@ class NovelLinkRepositoryImpl(
         sourceId: Long,
         isPrimary: Boolean,
         extensionType: String,
+        priority: Long,
     ) {
         handler.await(inTransaction = true) {
-            novellinksQueries.insertLink(linkedId, novelId, sourceId, isPrimary, extensionType)
+            novellinksQueries.insertLink(linkedId, novelId, sourceId, isPrimary, extensionType, priority)
         }
     }
 

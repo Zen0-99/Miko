@@ -33,8 +33,8 @@ SELECT linked_id FROM novel_links WHERE novel_id = :novelId LIMIT 1;
 
 -- Insert a new link
 insertLink:
-INSERT INTO novel_links(linked_id, novel_id, source_id, is_primary, extension_type)
-VALUES (:linkedId, :novelId, :sourceId, :isPrimary, :extensionType);
+INSERT INTO novel_links(linked_id, novel_id, source_id, is_primary, extension_type, priority)
+VALUES (:linkedId, :novelId, :sourceId, :isPrimary, :extensionType, :priority);
 
 -- Delete a link
 deleteLink:

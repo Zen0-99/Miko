@@ -426,6 +426,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.anime.AnimeSearchFallbackEngine() }
         addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.manga.MangaSearchFallbackEngine() }
         addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.novel.NovelSearchFallbackEngine() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.novel.NovelRelatedSuggestionCoordinator() }
 
         // Asynchronously init expensive components for a faster cold start
         ContextCompat.getMainExecutor(app).execute {
