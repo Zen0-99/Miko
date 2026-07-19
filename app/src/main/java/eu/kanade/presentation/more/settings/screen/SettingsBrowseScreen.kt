@@ -23,6 +23,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -45,6 +46,12 @@ object SettingsBrowseScreen : SearchableSettings {
         val getMangaExtensionRepoCount = remember { Injekt.get<GetMangaExtensionRepoCount>() }
         val getAnimeExtensionRepoCount = remember { Injekt.get<GetAnimeExtensionRepoCount>() }
         val getNovelExtensionRepoCount = remember { Injekt.get<GetNovelExtensionRepoCount>() }
+
+        val suggestionsEnabledPref = sourcePreferences.entrySuggestionsEnabled()
+        val suggestionsEnabled by suggestionsEnabledPref.collectAsState()
+
+        val suggestionsInlinePref = sourcePreferences.entrySuggestionsExpandInline()
+        val suggestionsInline by suggestionsInlinePref.collectAsState()
 
         val mangaReposCount by getMangaExtensionRepoCount.subscribe().collectAsState(0)
         val animeReposCount by getAnimeExtensionRepoCount.subscribe().collectAsState(0)
@@ -76,6 +83,28 @@ object SettingsBrowseScreen : SearchableSettings {
                         onClick = {
                             navigator.push(ConsolidatedExtensionReposScreen())
                         },
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
+                title = stringResource(AYMR.strings.pref_entry_suggestions),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = suggestionsEnabledPref,
+                        title = stringResource(AYMR.strings.pref_entry_suggestions),
+                        subtitle = stringResource(AYMR.strings.pref_entry_suggestions_summary),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = suggestionsInlinePref,
+                        title = stringResource(AYMR.strings.pref_entry_suggestions_inline),
+                        subtitle = stringResource(AYMR.strings.pref_entry_suggestions_inline_summary),
+                        enabled = suggestionsEnabled,
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = sourcePreferences.entrySuggestionsShowInOverflow(),
+                        title = stringResource(AYMR.strings.pref_entry_suggestions_overflow),
+                        subtitle = stringResource(AYMR.strings.pref_entry_suggestions_overflow_summary),
+                        enabled = suggestionsEnabled && !suggestionsInline,
                     ),
                 ),
             ),

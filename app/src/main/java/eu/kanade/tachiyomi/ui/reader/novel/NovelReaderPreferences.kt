@@ -178,4 +178,53 @@ class NovelReaderPreferences(
 
     /** Custom JS injected into the reader WebView. */
     fun customJS() = preferenceStore.getString("pref_novel_custom_js", "")
+
+    // --- TTS (text-to-speech) ---
+
+    /** Enable text-to-speech for novel chapters. */
+    fun ttsEnabled() = preferenceStore.getBoolean("novel_reader_tts_enabled", false)
+
+    /** TTS speech rate (0.5–2.0, where 1.0 is normal speed). */
+    fun ttsSpeechRate() = preferenceStore.getFloat("novel_reader_tts_speech_rate", 1f)
+
+    /** TTS pitch (0.5–2.0, where 1.0 is normal pitch). */
+    fun ttsPitch() = preferenceStore.getFloat("novel_reader_tts_pitch", 1f)
+
+    /** Word highlight mode during TTS playback. */
+    fun ttsHighlightMode() =
+        preferenceStore.getEnum("novel_reader_tts_highlight_mode", NovelTtsHighlightMode.AUTO)
+
+    /** Highlight individual spoken words during playback. */
+    fun ttsWordHighlightEnabled() =
+        preferenceStore.getBoolean("novel_reader_tts_word_highlight_enabled", true)
+
+    /** Automatically advance to the next chapter when current one finishes. */
+    fun ttsAutoAdvanceChapter() =
+        preferenceStore.getBoolean("novel_reader_tts_auto_advance_chapter", false)
+
+    /** Follow spoken position: keep scroll/page aligned with speech progress. */
+    fun ttsFollowAlong() = preferenceStore.getBoolean("novel_reader_tts_follow_along", true)
+
+    /** Pause TTS when the user manually navigates. */
+    fun ttsPauseOnManualNavigation() =
+        preferenceStore.getBoolean("novel_reader_tts_pause_on_manual_navigation", true)
+
+    /** Keep screen on during TTS playback. */
+    fun ttsKeepScreenOnDuringPlayback() =
+        preferenceStore.getBoolean("novel_reader_tts_keep_screen_on_during_playback", false)
+
+    /** Prefer translated chapter text for TTS when available. */
+    fun ttsPreferTranslatedText() =
+        preferenceStore.getBoolean("novel_reader_tts_prefer_translated_text", false)
+
+    /** Read the chapter title aloud before the chapter content. */
+    fun ttsReadChapterTitle() =
+        preferenceStore.getBoolean("novel_reader_tts_read_chapter_title", true)
+}
+
+enum class NovelTtsHighlightMode {
+    AUTO,
+    EXACT,
+    ESTIMATED,
+    OFF,
 }

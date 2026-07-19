@@ -1307,4 +1307,31 @@
     <string name="home_browse_sources">Browse Sources</string>
     <string name="home_recommendations">Recommendations</string>
 
+    <!-- Achievement notifications -->
+    <string name="pref_show_achievement_notifications">Achievement notifications</string>
+    <string name="pref_show_achievement_notifications_summary">Show popup when unlocking achievements</string>
+
+    <!-- Novel reader TTS -->
+    <string name="novel_reader_tts_section">Text-to-speech</string>
+    <string name="novel_reader_tts_enabled">Enable text-to-speech</string>
+    <string name="novel_reader_tts_enabled_summary">Prepare spoken reading, background playback, and follow-along behavior for novel chapters.</string>
+    <string name="novel_reader_tts_speech_rate">Speech rate</string>
+    <string name="novel_reader_tts_pitch">Pitch</string>
+    <string name="novel_reader_tts_highlight_mode">Word highlight mode</string>
+    <string name="novel_reader_tts_highlight_mode_summary">Auto uses exact highlighting when supported and estimated timing otherwise.</string>
+    <string name="novel_reader_tts_highlight_mode_auto">Auto</string>
+    <string name="novel_reader_tts_highlight_mode_exact">Exact when available</string>
+    <string name="novel_reader_tts_highlight_mode_estimated">Estimated</string>
+    <string name="novel_reader_tts_highlight_mode_off">Off</string>
+    <string name="novel_reader_tts_word_highlight_enabled">Highlight spoken words</string>
+    <string name="novel_reader_tts_word_highlight_enabled_summary">Shows the current word or phrase while playback is active.</string>
+    <string name="novel_reader_tts_auto_advance_chapter">Auto-advance to next chapter</string>
+    <string name="novel_reader_tts_follow_along">Follow spoken position</string>
+    <string name="novel_reader_tts_follow_along_summary">Keeps page, native scroll, or WebView position aligned with speech progress.</string>
+    <string name="novel_reader_tts_pause_on_manual_navigation">Pause on manual navigation</string>
+    <string name="novel_reader_tts_keep_screen_on_during_playback">Keep screen on during playback</string>
+    <string name="novel_reader_tts_prefer_translated_text">Prefer translated text</string>
+    <string name="novel_reader_tts_prefer_translated_text_summary">Uses translated chapter text when it is available, otherwise falls back to the original text.</string>
+    <string name="novel_reader_tts_read_chapter_title">Read chapter title first</string>
+
 </resources>

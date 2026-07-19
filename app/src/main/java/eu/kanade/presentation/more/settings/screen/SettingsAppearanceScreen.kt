@@ -235,6 +235,11 @@ object SettingsAppearanceScreen : SearchableSettings {
                     title = "Reduce Motion",
                     subtitle = "Disable non-essential animations for accessibility and performance",
                 ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = uiPreferences.showAchievementNotifications(),
+                    title = stringResource(AYMR.strings.pref_show_achievement_notifications),
+                    subtitle = stringResource(AYMR.strings.pref_show_achievement_notifications_summary),
+                ),
                 Preference.PreferenceItem.ListPreference(
                     preference = uiPreferences.dateFormat(),
                     entries = DateFormats

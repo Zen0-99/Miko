@@ -151,6 +151,9 @@ class UiPreferences(
      */
     fun reduceMotion() = preferenceStore.getBoolean("pref_reduce_motion", false)
 
+    /** Show popup notifications when achievements are unlocked. */
+    fun showAchievementNotifications() = preferenceStore.getBoolean("show_achievement_notifications", true)
+
     /**
      * Returns the set of currently visible [ContentMode]s based on the visibility preferences.
      * Always returns at least one mode (falls back to MANGA if all are disabled).
