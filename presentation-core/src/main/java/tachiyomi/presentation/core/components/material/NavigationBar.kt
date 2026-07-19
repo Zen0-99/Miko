@@ -79,6 +79,7 @@ fun FloatingGlassNavigationBar(
     blurRadius: Dp = 24.dp,
     horizontalPadding: Dp = 12.dp,
     bottomPadding: Dp = 14.dp,
+    navRowHeight: Dp = 72.dp,
     content: @Composable RowScope.() -> Unit,
 ) {
     val isDark = isSystemInDarkTheme()
@@ -88,7 +89,7 @@ fun FloatingGlassNavigationBar(
         // In dark mode, surface == background (both black in AMOLED), so using
         // surface as tint is invisible. Use a lighter color instead.
         if (isDark) {
-            Color.White.copy(alpha = 0.18f)
+            Color.White.copy(alpha = 0.12f)
         } else {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
         }
@@ -123,7 +124,7 @@ fun FloatingGlassNavigationBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(72.dp)
+                .height(navRowHeight)
                 .selectableGroup(),
             content = content,
         )
@@ -147,6 +148,7 @@ fun FloatingGlassNavigationBarWithModes(
     blurRadius: Dp = 24.dp,
     horizontalPadding: Dp = 12.dp,
     bottomPadding: Dp = 14.dp,
+    navRowHeight: Dp = 72.dp,
     showDivider: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
@@ -155,7 +157,7 @@ fun FloatingGlassNavigationBarWithModes(
         tint
     } else {
         if (isDark) {
-            Color.White.copy(alpha = 0.18f)
+            Color.White.copy(alpha = 0.12f)
         } else {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
         }
@@ -203,7 +205,7 @@ fun FloatingGlassNavigationBarWithModes(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(72.dp)
+                    .height(navRowHeight)
                     .selectableGroup(),
                 content = content,
             )

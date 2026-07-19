@@ -166,11 +166,13 @@ object HomeScreen : Screen() {
                                     exit = shrinkVertically(),
                                 ) {
                                     val navBottomPadding = if (navBarIconsOnly) 8.dp else 14.dp
+                                    val navRowHeight = if (navBarIconsOnly) 52.dp else 72.dp
                                     if (navBarAppearance == eu.kanade.domain.ui.model.NavBarAppearance.FLOATING_GLASS) {
                                         if (modeCount > 1) {
                                             FloatingGlassNavigationBarWithModes(
                                                 hazeState = hazeState,
                                                 bottomPadding = navBottomPadding,
+                                                navRowHeight = navRowHeight,
                                                 modeRow = {
                                                     ModePill(
                                                         modifier = Modifier.fillMaxWidth(),
@@ -185,6 +187,7 @@ object HomeScreen : Screen() {
                                             FloatingGlassNavigationBar(
                                                 hazeState = hazeState,
                                                 bottomPadding = navBottomPadding,
+                                                navRowHeight = navRowHeight,
                                             ) {
                                                 navStyle.tabs.fastForEach {
                                                     AuroraNavigationBarItem(it, showLabel = !navBarIconsOnly)
@@ -364,7 +367,7 @@ object HomeScreen : Screen() {
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 1.dp)
-                .padding(top = 8.dp, bottom = 4.dp)
+                .padding(top = if (showLabel) 8.dp else 4.dp, bottom = if (showLabel) 4.dp else 4.dp)
                 .selectable(
                     selected = selected,
                     role = Role.Tab,
