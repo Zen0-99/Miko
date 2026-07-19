@@ -319,7 +319,7 @@ class DomainModule : InjektModule {
         addFactory { HideMangaCategory(get()) }
         addFactory { DeleteMangaCategory(get(), get(), get()) }
 
-        addSingletonFactory<AnimeRepository> { AnimeRepositoryImpl(get()) }
+        addSingletonFactory<AnimeRepository> { AnimeRepositoryImpl(get(), get()) }
         addFactory { GetDuplicateLibraryAnime(get()) }
         addFactory { GetAnimeFavorites(get()) }
         addFactory { GetLibraryAnime(get()) }
@@ -342,7 +342,7 @@ class DomainModule : InjektModule {
         addFactory { ShouldUpdateDbSeason() }
         addFactory { SyncSeasonsWithSource(get(), get(), get(), get(), get()) }
 
-        addSingletonFactory<MangaRepository> { MangaRepositoryImpl(get()) }
+        addSingletonFactory<MangaRepository> { MangaRepositoryImpl(get(), get()) }
         addFactory { GetDuplicateLibraryManga(get()) }
         addFactory { GetMangaFavorites(get()) }
         addFactory { GetLibraryManga(get()) }
@@ -502,7 +502,7 @@ class DomainModule : InjektModule {
         addFactory { ReplaceNovelExtensionRepo(get()) }
         addFactory { UpdateNovelExtensionRepo(get(), get()) }
 
-        addSingletonFactory<NovelRepository> { NovelRepositoryImpl(get()) }
+        addSingletonFactory<NovelRepository> { NovelRepositoryImpl(get(), get()) }
         addSingletonFactory<NovelLinkRepository> { NovelLinkRepositoryImpl(get()) }
         addSingletonFactory<NovelChapterRepository> { NovelChapterRepositoryImpl(get()) }
         addSingletonFactory<NovelCategoryRepository> { NovelCategoryRepositoryImpl(get()) }

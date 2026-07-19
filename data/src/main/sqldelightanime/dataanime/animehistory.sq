@@ -63,3 +63,7 @@ DO UPDATE
 SET
     last_seen = :seenAt
 WHERE episode_id = :episodeId;
+
+getTotalEpisodesWatched:
+SELECT COUNT(*)
+FROM animehistory;

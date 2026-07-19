@@ -59,6 +59,16 @@ class SetSeenStatus(
                     ),
                 )
             }
+
+            // Check for anime completion (all episodes watched)
+            episodesToUpdate.map { it.animeId }.distinct().forEach { animeId ->
+                val allEpisodes = episodeRepository.getEpisodeByAnimeId(animeId)
+                if (allEpisodes.isNotEmpty() && allEpisodes.all { it.seen }) {
+                    achievementEventBus?.tryEmit(
+                        AchievementEvent.AnimeCompleted(animeId = animeId),
+                    )
+                }
+            }
         }
 
         if (seen && downloadPreferences.removeAfterMarkedAsRead().get()) {

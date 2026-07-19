@@ -32,13 +32,23 @@ class RuleContextImpl(
 ) : RuleContext {
 
     override suspend fun getChaptersRead(category: AchievementCategory): Int {
-        // TODO: Port to aniyomi-fork repository API
-        // Tadami used chaptersQueries.getTotalReadChapterCount(),
-        // episodesQueries.getTotalSeenEpisodeCount(), and
-        // novel_chaptersQueries.getTotalReadChapterCount(). The aniyomi-fork
-        // repositories do not expose aggregate read counts, so this is stubbed
-        // to 0 until a suitable query/repository method is added.
-        return 0
+        return when (category) {
+            AchievementCategory.MANGA -> {
+                mangaHandler.awaitOneOrNull { chaptersQueries.getTotalReadChapterCount() }?.toInt() ?: 0
+            }
+            AchievementCategory.ANIME -> {
+                animeHandler.awaitOneOrNull { episodesQueries.getTotalSeenEpisodeCount() }?.toInt() ?: 0
+            }
+            AchievementCategory.NOVEL -> {
+                novelHandler.awaitOneOrNull { novelchaptersQueries.getTotalReadNovelChapterCount() }?.toInt() ?: 0
+            }
+            AchievementCategory.BOTH, AchievementCategory.SECRET -> {
+                val manga = mangaHandler.awaitOneOrNull { chaptersQueries.getTotalReadChapterCount() }?.toInt() ?: 0
+                val anime = animeHandler.awaitOneOrNull { episodesQueries.getTotalSeenEpisodeCount() }?.toInt() ?: 0
+                val novel = novelHandler.awaitOneOrNull { novelchaptersQueries.getTotalReadNovelChapterCount() }?.toInt() ?: 0
+                manga + anime + novel
+            }
+        }
     }
 
     override suspend fun getLibraryCount(category: AchievementCategory): Int {
@@ -101,12 +111,23 @@ class RuleContextImpl(
     }
 
     override suspend fun hasCompletedWithMinChapters(category: AchievementCategory, minChapters: Int): Boolean {
-        // TODO: Port to aniyomi-fork repository API
-        // Tadami used hasCompletedLibraryMangaWithMinReadChapters /
-        // hasCompletedLibraryNovelWithMinReadChapters queries. The aniyomi-fork
-        // repositories do not expose per-title read chapter counts in aggregate,
-        // so this is stubbed to false until a suitable query is added.
-        return false
+        return when (category) {
+            AchievementCategory.MANGA -> {
+                mangaHandler.awaitOneOrNull { mangasQueries.hasCompletedLibraryMangaWithMinReadChapters(minChapters.toLong()) } ?: false
+            }
+            AchievementCategory.ANIME -> {
+                // No anime equivalent query — anime don't have "chapters"
+                false
+            }
+            AchievementCategory.NOVEL -> {
+                novelHandler.awaitOneOrNull { novelsQueries.hasCompletedLibraryNovelWithMinReadChapters(minChapters.toLong()) } ?: false
+            }
+            AchievementCategory.BOTH, AchievementCategory.SECRET -> {
+                val manga = mangaHandler.awaitOneOrNull { mangasQueries.hasCompletedLibraryMangaWithMinReadChapters(minChapters.toLong()) } ?: false
+                val novel = novelHandler.awaitOneOrNull { novelsQueries.hasCompletedLibraryNovelWithMinReadChapters(minChapters.toLong()) } ?: false
+                manga || novel
+            }
+        }
     }
 
     override suspend fun hasLibraryGenre(genre: String): Int {

@@ -180,3 +180,16 @@ WHERE _id = :mangaId;
 
 selectLastInsertedRowId:
 SELECT last_insert_rowid();
+
+hasCompletedLibraryMangaWithMinReadChapters:
+SELECT EXISTS(
+    SELECT 1
+    FROM mangas M
+    INNER JOIN chapters C ON C.manga_id = M._id
+    WHERE M.favorite = 1
+    AND M.status = 2
+    AND C.read = 1
+    GROUP BY M._id
+    HAVING COUNT(*) >= :chapterCount
+    LIMIT 1
+);

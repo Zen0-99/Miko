@@ -8,8 +8,12 @@ import kotlinx.coroutines.flow.first
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.achievement.UserProfileManager
 import tachiyomi.data.achievement.database.AchievementsDatabase
+import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
+import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
+import tachiyomi.domain.entries.anime.repository.AnimeRepository
+import tachiyomi.domain.entries.manga.repository.MangaRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -18,6 +22,10 @@ class AchievementBackupCreator(
     private val activityDataRepository: ActivityDataRepository = Injekt.get(),
     private val achievementsDatabase: AchievementsDatabase = Injekt.get(),
     private val userProfileManager: UserProfileManager = Injekt.get(),
+    private val mangaRepository: MangaRepository = Injekt.get(),
+    private val animeRepository: AnimeRepository = Injekt.get(),
+    private val mangaHandler: MangaDatabaseHandler = Injekt.get(),
+    private val animeHandler: AnimeDatabaseHandler = Injekt.get(),
 ) {
 
     /**
@@ -118,14 +126,35 @@ class AchievementBackupCreator(
     }
 
     /**
-     * Backup full statistics from database
-     * TODO: Port from Tadami - requires StatsCalculations, WatchProgress, and customStatus
-     * which don't exist in the aniyomi-fork yet. Returns null for now.
+     * Backup full statistics from database.
+     * Simplified version using repository APIs and direct query access.
      */
     private suspend fun backupStats(): BackupStats? {
-        // TODO: Port from Tadami - implement full stats backup when StatsCalculations,
-        // WatchProgress, and customStatus models are available.
-        return null
+        return try {
+            val libraryManga = mangaRepository.getLibraryManga()
+            val libraryAnime = animeRepository.getLibraryAnime()
+
+            val mangaCompleted = libraryManga.count { it.manga.status == 2L }
+            val animeCompleted = libraryAnime.count { it.anime.status == 2L }
+
+            val chaptersRead = mangaHandler.awaitOneOrNull { chaptersQueries.getTotalReadChapterCount() }?.toInt() ?: 0
+            val episodesWatched = animeHandler.awaitOneOrNull { episodesQueries.getTotalSeenEpisodeCount() }?.toInt() ?: 0
+
+            val mangaReadDuration = mangaHandler.awaitOneOrNull { historyQueries.getReadDuration() } ?: 0L
+
+            BackupStats(
+                mangaLibraryCount = libraryManga.size,
+                mangaCompletedCount = mangaCompleted,
+                mangaTotalReadDuration = mangaReadDuration,
+                chaptersReadCount = chaptersRead,
+                animeLibraryCount = libraryAnime.size,
+                animeCompletedCount = animeCompleted,
+                episodesWatchedCount = episodesWatched,
+            )
+        } catch (e: Exception) {
+            logcat(throwable = e) { "[BACKUP] Error backing up stats" }
+            null
+        }
     }
 }
 

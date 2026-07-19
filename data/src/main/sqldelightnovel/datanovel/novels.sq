@@ -184,3 +184,16 @@ WHERE _id = :novelId;
 
 selectLastInsertedRowId:
 SELECT last_insert_rowid();
+
+hasCompletedLibraryNovelWithMinReadChapters:
+SELECT EXISTS(
+    SELECT 1
+    FROM novels N
+    INNER JOIN novelchapters C ON C.novel_id = N._id
+    WHERE N.favorite = 1
+    AND N.status = 2
+    AND C.read = 1
+    GROUP BY N._id
+    HAVING COUNT(*) >= :chapterCount
+    LIMIT 1
+);

@@ -3,9 +3,12 @@ package tachiyomi.data.entries.novel
 import kotlinx.coroutines.flow.Flow
 import tachiyomi.data.NovelUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
+import tachiyomi.data.achievement.handler.AchievementEventBus
 import java.time.LocalDate
 import java.time.ZoneId
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
+import tachiyomi.domain.achievement.model.AchievementCategory
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.entries.novel.repository.NovelRepository
@@ -13,6 +16,7 @@ import tachiyomi.domain.library.novel.LibraryNovel
 
 class NovelRepositoryImpl(
     private val handler: NovelDatabaseHandler,
+    private val achievementEventBus: AchievementEventBus? = null,
 ) : NovelRepository {
 
     override suspend fun getNovelById(id: Long): Novel {
@@ -107,6 +111,13 @@ class NovelRepositoryImpl(
                     novelId = novelId,
                 )
             }
+            // Emit library add/remove achievement event
+            val event = if (favorite) {
+                AchievementEvent.LibraryAdded(novelId, AchievementCategory.NOVEL)
+            } else {
+                AchievementEvent.LibraryRemoved(novelId, AchievementCategory.NOVEL)
+            }
+            achievementEventBus?.tryEmit(event)
             true
         } catch (e: Exception) {
             false
@@ -140,6 +151,15 @@ class NovelRepositoryImpl(
                     isSyncing = null,
                     novelId = update.id,
                 )
+            }
+            // Emit library add/remove achievement event
+            update.favorite?.let { isFavorite ->
+                val event = if (isFavorite) {
+                    AchievementEvent.LibraryAdded(update.id, AchievementCategory.NOVEL)
+                } else {
+                    AchievementEvent.LibraryRemoved(update.id, AchievementCategory.NOVEL)
+                }
+                achievementEventBus?.tryEmit(event)
             }
             true
         } catch (e: Exception) {
@@ -175,6 +195,15 @@ class NovelRepositoryImpl(
                         isSyncing = null,
                         novelId = update.id,
                     )
+                    // Emit library add/remove achievement event
+                    update.favorite?.let { isFavorite ->
+                        val event = if (isFavorite) {
+                            AchievementEvent.LibraryAdded(update.id, AchievementCategory.NOVEL)
+                        } else {
+                            AchievementEvent.LibraryRemoved(update.id, AchievementCategory.NOVEL)
+                        }
+                        achievementEventBus?.tryEmit(event)
+                    }
                 }
             }
             true

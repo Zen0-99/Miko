@@ -52,6 +52,16 @@ class SetNovelReadStatus(
                     ),
                 )
             }
+
+            // Check for novel completion (all chapters read)
+            chaptersToUpdate.map { it.novelId }.distinct().forEach { novelId ->
+                val allChapters = novelChapterRepository.getNovelChaptersByNovelId(novelId)
+                if (allChapters.isNotEmpty() && allChapters.all { it.read }) {
+                    achievementEventBus?.tryEmit(
+                        AchievementEvent.NovelCompleted(novelId = novelId),
+                    )
+                }
+            }
         }
 
         Result.Success

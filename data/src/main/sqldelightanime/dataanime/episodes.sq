@@ -116,3 +116,8 @@ WHERE _id = :episodeId;
 
 selectLastInsertedRowId:
 SELECT last_insert_rowid();
+
+getTotalSeenEpisodeCount:
+SELECT COUNT(*)
+FROM episodes
+WHERE seen = 1;

@@ -60,6 +60,16 @@ class SetReadStatus(
                     ),
                 )
             }
+
+            // Check for manga completion (all chapters read)
+            chaptersToUpdate.map { it.mangaId }.distinct().forEach { mangaId ->
+                val allChapters = chapterRepository.getChapterByMangaId(mangaId)
+                if (allChapters.isNotEmpty() && allChapters.all { it.read }) {
+                    achievementEventBus?.tryEmit(
+                        AchievementEvent.MangaCompleted(mangaId = mangaId),
+                    )
+                }
+            }
         }
 
         if (read && downloadPreferences.removeAfterMarkedAsRead().get()) {

@@ -170,16 +170,9 @@ class AchievementHandler(
     }
 
     private suspend fun sanitizeCrossCategoryFirstAchievements() {
-        // TODO: Port to aniyomi-fork repository API
-        // Tadami used historyQueries.getTotalChaptersRead(),
-        // animehistoryQueries.getTotalEpisodesWatched(), and
-        // novel_historyQueries.getTotalChaptersRead(). The aniyomi-fork
-        // history repositories do not expose aggregate read/watch counts,
-        // so these are stubbed to false (no sanitization) until a suitable
-        // query/repository method is added.
-        val mangaRead = false
-        val animeWatched = false
-        val novelRead = false
+        val mangaRead = (mangaHandler.awaitOneOrNull { historyQueries.getTotalChaptersRead() } ?: 0L) > 0L
+        val animeWatched = (animeHandler.awaitOneOrNull { animehistoryQueries.getTotalEpisodesWatched() } ?: 0L) > 0L
+        val novelRead = (novelHandler.awaitOneOrNull { novelhistoryQueries.getTotalNovelChaptersRead() } ?: 0L) > 0L
 
         var corrected = false
         corrected = sanitizeFirstAchievement("first_chapter", mangaRead) || corrected
