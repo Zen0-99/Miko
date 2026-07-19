@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -71,8 +72,8 @@ fun NovelLibrarySettingsDialog(
 private fun ColumnScope.FilterPage(
     screenModel: NovelLibrarySettingsScreenModel,
 ) {
-    val filterDownloaded by screenModel.libraryPreferences.filterDownloadedNovel().collectAsState()
-    val downloadedOnly by screenModel.preferences.downloadedOnly().collectAsState()
+    val filterDownloaded by screenModel.libraryPreferences.filterDownloadedNovel().collectAsStateWithLifecycle()
+    val downloadedOnly by screenModel.preferences.downloadedOnly().collectAsStateWithLifecycle()
 
     TriStateItem(
         label = stringResource(MR.strings.label_downloaded),
@@ -84,25 +85,25 @@ private fun ColumnScope.FilterPage(
         enabled = !downloadedOnly,
         onClick = { screenModel.toggleFilter(LibraryPreferences::filterDownloadedNovel) },
     )
-    val filterUnread by screenModel.libraryPreferences.filterUnreadNovel().collectAsState()
+    val filterUnread by screenModel.libraryPreferences.filterUnreadNovel().collectAsStateWithLifecycle()
     TriStateItem(
         label = stringResource(MR.strings.action_filter_unread),
         state = filterUnread,
         onClick = { screenModel.toggleFilter(LibraryPreferences::filterUnreadNovel) },
     )
-    val filterStarted by screenModel.libraryPreferences.filterStartedNovel().collectAsState()
+    val filterStarted by screenModel.libraryPreferences.filterStartedNovel().collectAsStateWithLifecycle()
     TriStateItem(
         label = stringResource(MR.strings.label_started),
         state = filterStarted,
         onClick = { screenModel.toggleFilter(LibraryPreferences::filterStartedNovel) },
     )
-    val filterBookmarked by screenModel.libraryPreferences.filterBookmarkedNovel().collectAsState()
+    val filterBookmarked by screenModel.libraryPreferences.filterBookmarkedNovel().collectAsStateWithLifecycle()
     TriStateItem(
         label = stringResource(MR.strings.action_filter_bookmarked),
         state = filterBookmarked,
         onClick = { screenModel.toggleFilter(LibraryPreferences::filterBookmarkedNovel) },
     )
-    val filterCompleted by screenModel.libraryPreferences.filterCompletedNovel().collectAsState()
+    val filterCompleted by screenModel.libraryPreferences.filterCompletedNovel().collectAsStateWithLifecycle()
     TriStateItem(
         label = stringResource(MR.strings.completed),
         state = filterCompleted,
@@ -178,7 +179,7 @@ private val displayModes = listOf(
 private fun ColumnScope.DisplayPage(
     screenModel: NovelLibrarySettingsScreenModel,
 ) {
-    val displayMode by screenModel.libraryPreferences.displayMode().collectAsState()
+    val displayMode by screenModel.libraryPreferences.displayMode().collectAsStateWithLifecycle()
     SettingsChipRow(MR.strings.action_display_mode) {
         displayModes.map { (titleRes, mode) ->
             FilterChip(
@@ -198,7 +199,7 @@ private fun ColumnScope.DisplayPage(
         }
     }
 
-    val columns by columnPreference.collectAsState()
+    val columns by columnPreference.collectAsStateWithLifecycle()
     if (displayMode == LibraryDisplayMode.List) {
         SliderItem(
             value = columns,

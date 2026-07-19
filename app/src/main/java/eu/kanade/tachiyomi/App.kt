@@ -58,6 +58,7 @@ import kotlinx.coroutines.flow.onEach
 import logcat.AndroidLogcatLogger
 import logcat.LogPriority
 import logcat.LogcatLogger
+import okio.Path.Companion.toOkioPath
 import mihon.core.migration.Migrator
 import mihon.core.migration.migrations.migrations
 import org.conscrypt.Conscrypt
@@ -102,6 +103,16 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val process = getProcessName()
             if (packageName != process) WebView.setDataDirectorySuffix(process)
+        }
+
+        // Warm up the WebView default user agent on the main thread before any source loads.
+        // Some sources call WebSettings.getDefaultUserAgent() while being constructed on a
+        // background thread. If Chromium needs the main thread at the same time, startup can
+        // stall behind the splash.
+        try {
+            android.webkit.WebSettings.getDefaultUserAgent(this)
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR) { "Failed to warm up WebView user agent: ${e.message}" }
         }
 
         Injekt.importModule(PreferenceModule(this))
@@ -179,9 +190,11 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
         initializeMigrator()
 
-        // Emit AppStart event for achievements system
-        val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        achievementEventBus.tryEmit(AchievementEvent.AppStart(hourOfDay = hourOfDay))
+        // Defer achievement AppStart event past the first frame so it doesn't block startup
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            achievementEventBus.tryEmit(AchievementEvent.AppStart(hourOfDay = hourOfDay))
+        }
     }
 
     private fun initializeMigrator() {
@@ -226,11 +239,23 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
             crossfade((300 * this@App.animatorDurationScale).toInt())
             allowRgb565(DeviceUtil.isLowRamDevice(this@App))
+            memoryCache {
+                coil3.memory.MemoryCache.Builder()
+                    .maxSizePercent(this@App, 0.25)
+                    .build()
+            }
+            diskCache {
+                coil3.disk.DiskCache.Builder()
+                    .directory(this@App.cacheDir.resolve("coil_cache").toOkioPath())
+                    .maxSizeBytes(128L * 1024 * 1024)
+                    .build()
+            }
             if (networkPreferences.verboseLogging().get()) logger(DebugLogger())
 
             // Coil spawns a new thread for every image load by default
-            fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))
-            decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))
+            val isLowRam = DeviceUtil.isLowRamDevice(this@App)
+            fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(if (isLowRam) 8 else 16))
+            decoderCoroutineContext(Dispatchers.IO.limitedParallelism(if (isLowRam) 3 else 4))
         }
             .build()
     }

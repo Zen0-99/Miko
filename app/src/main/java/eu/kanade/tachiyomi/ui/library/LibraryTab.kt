@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryTab
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -57,7 +58,7 @@ data object LibraryTab : Tab {
 
     @Composable
     override fun Content() {
-        val contentMode by uiPreferences.contentMode().collectAsState()
+        val contentMode by uiPreferences.contentMode().collectAsStateWithLifecycle()
         when (contentMode) {
             ContentMode.ANIME -> AnimeLibraryTab.Content()
             ContentMode.MANGA -> MangaLibraryTab.Content()

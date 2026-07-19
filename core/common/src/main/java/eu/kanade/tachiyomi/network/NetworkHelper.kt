@@ -26,10 +26,23 @@ class NetworkHelper(
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .callTimeout(2, TimeUnit.MINUTES)
+            .dispatcher(
+                okhttp3.Dispatcher().apply {
+                    maxRequests = 64
+                    maxRequestsPerHost = 8
+                },
+            )
+            .connectionPool(
+                okhttp3.ConnectionPool(
+                    maxIdleConnections = 15,
+                    keepAliveDuration = 5,
+                    timeUnit = TimeUnit.MINUTES,
+                ),
+            )
             .cache(
                 Cache(
                     directory = File(context.cacheDir, "network_cache"),
-                    maxSize = 5L * 1024 * 1024, // 5 MiB
+                    maxSize = 50L * 1024 * 1024, // 50 MiB
                 ),
             )
             .addInterceptor(UncaughtExceptionInterceptor())

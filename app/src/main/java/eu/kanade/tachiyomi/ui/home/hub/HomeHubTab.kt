@@ -38,6 +38,7 @@ import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -99,7 +100,7 @@ data object HomeHubTab : Tab {
     override fun Content() {
         val context = LocalContext.current
         val screenModel = rememberScreenModel { HomeHubScreenModel() }
-        val state by screenModel.state.collectAsState()
+        val state by screenModel.state.collectAsStateWithLifecycle()
 
         HomeHubContent(state = state, screenModel = screenModel)
 
@@ -175,7 +176,7 @@ private fun HomeHubContent(
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             // --- Hero Card ---
-            item {
+            item(key = "hero") {
                 state.hero?.let { hero ->
                     HomeHubHeroCard(hero = hero)
                 } ?: HomeHubHeroPlaceholder()
@@ -183,13 +184,13 @@ private fun HomeHubContent(
 
             // --- Recommendations section ---
             if (state.recommendations.isNotEmpty()) {
-                item {
+                item(key = "recommendations_header") {
                     SectionHeader(
                         title = stringResource(AYMR.strings.home_recommendations),
                         topPadding = 32.dp,
                     )
                 }
-                item {
+                item(key = "recommendations_row") {
                     HistoryRow(items = state.recommendations, onItemClick = { })
                 }
             }
@@ -198,72 +199,72 @@ private fun HomeHubContent(
             when (state.currentMode) {
                 ContentMode.ANIME -> {
                     if (state.recentAnime.isNotEmpty()) {
-                        item {
+                        item(key = "recent_anime_header") {
                             SectionHeader(
                                 title = stringResource(AYMR.strings.label_recent_anime),
                                 onViewAll = { tabNavigator.current = HistoriesTab },
                             )
                         }
-                        item {
+                        item(key = "recent_anime_row") {
                             HistoryRow(items = state.recentAnimeCards, onItemClick = { })
                         }
                     }
                     if (state.recentlyAddedAnime.isNotEmpty()) {
-                        item {
+                        item(key = "recently_added_anime_header") {
                             SectionHeader(
                                 title = stringResource(AYMR.strings.label_recently_added_anime),
                                 onViewAll = { tabNavigator.current = AnimeLibraryTab },
                             )
                         }
-                        item {
+                        item(key = "recently_added_anime_row") {
                             HistoryRow(items = state.recentlyAddedAnimeCards, onItemClick = { })
                         }
                     }
                 }
                 ContentMode.MANGA -> {
                     if (state.recentManga.isNotEmpty()) {
-                        item {
+                        item(key = "recent_manga_header") {
                             SectionHeader(
                                 title = stringResource(MR.strings.label_recent_manga),
                                 onViewAll = { tabNavigator.current = HistoriesTab },
                             )
                         }
-                        item {
+                        item(key = "recent_manga_row") {
                             HistoryRow(items = state.recentMangaCards, onItemClick = { })
                         }
                     }
                     if (state.recentlyAddedManga.isNotEmpty()) {
-                        item {
+                        item(key = "recently_added_manga_header") {
                             SectionHeader(
                                 title = stringResource(AYMR.strings.label_recently_added_manga),
                                 onViewAll = { tabNavigator.current = MangaLibraryTab },
                             )
                         }
-                        item {
+                        item(key = "recently_added_manga_row") {
                             HistoryRow(items = state.recentlyAddedMangaCards, onItemClick = { })
                         }
                     }
                 }
                 ContentMode.NOVEL -> {
                     if (state.recentNovels.isNotEmpty()) {
-                        item {
+                        item(key = "recent_novels_header") {
                             SectionHeader(
                                 title = stringResource(AYMR.strings.label_recent_novels),
                                 onViewAll = { tabNavigator.current = HistoriesTab },
                             )
                         }
-                        item {
+                        item(key = "recent_novels_row") {
                             HistoryRow(items = state.recentNovelCards, onItemClick = { })
                         }
                     }
                     if (state.recentlyAddedNovels.isNotEmpty()) {
-                        item {
+                        item(key = "recently_added_novels_header") {
                             SectionHeader(
                                 title = stringResource(AYMR.strings.label_recently_added_novels),
                                 onViewAll = { tabNavigator.current = NovelLibraryTab },
                             )
                         }
-                        item {
+                        item(key = "recently_added_novels_row") {
                             HistoryRow(items = state.recentlyAddedNovelCards, onItemClick = { })
                         }
                     }
@@ -293,33 +294,39 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
         stringResource(MR.strings.action_start)
     }
 
-    val heroCardShape = RoundedCornerShape(20.dp)
-    val heroTextShadow = Shadow(
-        color = Color.Black.copy(alpha = 0.86f),
-        offset = androidx.compose.ui.geometry.Offset(0f, 2.5f),
-        blurRadius = 10f,
-    )
+    val heroCardShape = remember { RoundedCornerShape(20.dp) }
+    val heroTextShadow = remember {
+        Shadow(
+            color = Color.Black.copy(alpha = 0.86f),
+            offset = androidx.compose.ui.geometry.Offset(0f, 2.5f),
+            blurRadius = 10f,
+        )
+    }
 
     // Overlay gradient
-    val overlayGradient = Brush.verticalGradient(
-        colorStops = arrayOf(
-            0.00f to Color.Transparent,
-            0.40f to Color.Transparent,
-            0.72f to Color.Black.copy(alpha = 0.12f),
-            0.88f to Color.Black.copy(alpha = 0.38f),
-            1.00f to Color.Black.copy(alpha = 0.58f),
-        ),
-    )
+    val overlayGradient = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.Transparent,
+                0.40f to Color.Transparent,
+                0.72f to Color.Black.copy(alpha = 0.12f),
+                0.88f to Color.Black.copy(alpha = 0.38f),
+                1.00f to Color.Black.copy(alpha = 0.58f),
+            ),
+        )
+    }
 
     // Readability scrim
-    val readabilityScrim = Brush.verticalGradient(
-        colorStops = arrayOf(
-            0.00f to Color.Transparent,
-            0.58f to Color.Transparent,
-            0.78f to Color.Black.copy(alpha = 0.46f),
-            1.00f to Color.Black.copy(alpha = 0.88f),
-        ),
-    )
+    val readabilityScrim = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.Transparent,
+                0.58f to Color.Transparent,
+                0.78f to Color.Black.copy(alpha = 0.46f),
+                1.00f to Color.Black.copy(alpha = 0.88f),
+            ),
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -572,14 +579,23 @@ private fun SectionHeader(
 
 @Composable
 private fun HistoryRow(items: List<HomeHubCardItem>, onItemClick: (HomeHubCardItem) -> Unit) {
-    val cardShape = RoundedCornerShape(16.dp)
+    val cardShape = remember { RoundedCornerShape(16.dp) }
+    val gradientScrim = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.Transparent,
+                0.35f to Color.Black.copy(alpha = 0.35f),
+                1.00f to Color.Black.copy(alpha = 0.82f),
+            ),
+        )
+    }
 
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(items) { item ->
+        items(items, key = { it.id }, contentType = { "home_hub_card" }) { item ->
             Box(
                 modifier = Modifier
                     .width(120.dp)
@@ -602,15 +618,7 @@ private fun HistoryRow(items: List<HomeHubCardItem>, onItemClick: (HomeHubCardIt
                         .fillMaxWidth()
                         .height(80.dp)
                         .align(Alignment.BottomCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                colorStops = arrayOf(
-                                    0.00f to Color.Transparent,
-                                    0.35f to Color.Black.copy(alpha = 0.35f),
-                                    1.00f to Color.Black.copy(alpha = 0.82f),
-                                ),
-                            ),
-                        ),
+                        .background(gradientScrim),
                 )
 
                 // Title + subtitle overlaid at bottom

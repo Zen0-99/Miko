@@ -37,6 +37,7 @@ internal fun NovelLibraryComfortableGrid(
 
         items(
             items = items,
+            key = { it.libraryNovel.novel.id },
             contentType = { "novel_library_comfortable_grid_item" },
         ) { libraryItem ->
             val novel = libraryItem.libraryNovel.novel

@@ -85,6 +85,7 @@ import tachiyomi.presentation.core.components.material.NavigationRail
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -108,11 +109,11 @@ object HomeScreen : Screen() {
 
     @Composable
     override fun Content() {
-        val navStyle by uiPreferences.navStyle().collectAsState()
-        val contentMode by uiPreferences.contentMode().collectAsState()
-        val showManga by uiPreferences.showMangaMode().collectAsState()
-        val showAnime by uiPreferences.showAnimeMode().collectAsState()
-        val showNovel by uiPreferences.showNovelMode().collectAsState()
+        val navStyle by uiPreferences.navStyle().collectAsStateWithLifecycle()
+        val contentMode by uiPreferences.contentMode().collectAsStateWithLifecycle()
+        val showManga by uiPreferences.showMangaMode().collectAsStateWithLifecycle()
+        val showAnime by uiPreferences.showAnimeMode().collectAsStateWithLifecycle()
+        val showNovel by uiPreferences.showNovelMode().collectAsStateWithLifecycle()
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
 
@@ -157,8 +158,8 @@ object HomeScreen : Screen() {
                                 val bottomNavVisible by produceState(initialValue = true) {
                                     showBottomNavEvent.receiveAsFlow().collectLatest { value = it }
                                 }
-                                val navBarAppearance by uiPreferences.navBarAppearance().collectAsState()
-                                val navBarIconsOnly by uiPreferences.navBarIconsOnly().collectAsState()
+                                val navBarAppearance by uiPreferences.navBarAppearance().collectAsStateWithLifecycle()
+                                val navBarIconsOnly by uiPreferences.navBarIconsOnly().collectAsStateWithLifecycle()
                                 val modeCount = listOf(showManga, showAnime, showNovel).count { it }
                                 AnimatedVisibility(
                                     visible = bottomNavVisible && tabNavigator.current != navStyle.moreTab,
@@ -456,7 +457,7 @@ object HomeScreen : Screen() {
             badge = {
                 when {
                     UpdatesTab::class.isInstance(tab) -> {
-                        val contentMode by uiPreferences.contentMode().collectAsState()
+                        val contentMode by uiPreferences.contentMode().collectAsStateWithLifecycle()
                         val count by produceState(initialValue = 0, contentMode) {
                             val pref = Injekt.get<LibraryPreferences>()
                             val countFlow = when (contentMode) {

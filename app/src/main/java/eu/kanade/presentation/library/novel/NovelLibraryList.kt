@@ -36,7 +36,7 @@ internal fun NovelLibraryList(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding + PaddingValues(vertical = 8.dp),
     ) {
-        item {
+        item(key = "global_search") {
             if (!searchQuery.isNullOrEmpty()) {
                 GlobalSearchItem(
                     modifier = Modifier.fillMaxWidth(),
@@ -48,6 +48,7 @@ internal fun NovelLibraryList(
 
         items(
             items = items,
+            key = { it.libraryNovel.novel.id },
             contentType = { "novel_library_list_item" },
         ) { libraryItem ->
             val novel = libraryItem.libraryNovel.novel

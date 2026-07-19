@@ -38,6 +38,7 @@ internal fun NovelLibraryCompactGrid(
 
         items(
             items = items,
+            key = { it.libraryNovel.novel.id },
             contentType = { "novel_library_compact_grid_item" },
         ) { libraryItem ->
             val novel = libraryItem.libraryNovel.novel

@@ -36,7 +36,7 @@ internal fun AnimeLibraryList(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding + PaddingValues(vertical = 8.dp),
     ) {
-        item {
+        item(key = "global_search") {
             if (!searchQuery.isNullOrEmpty()) {
                 GlobalSearchItem(
                     modifier = Modifier.fillMaxWidth(),
@@ -48,6 +48,7 @@ internal fun AnimeLibraryList(
 
         items(
             items = items,
+            key = { it.libraryAnime.anime.id },
             contentType = { "anime_library_list_item" },
         ) { libraryItem ->
             val anime = libraryItem.libraryAnime.anime

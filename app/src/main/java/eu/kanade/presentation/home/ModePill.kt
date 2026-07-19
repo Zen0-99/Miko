@@ -22,6 +22,7 @@ import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.domain.ui.model.ContentMode.Companion.carouselOrderFor
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -36,10 +37,10 @@ fun ModePill(
     modifier: Modifier = Modifier,
 ) {
     val uiPreferences = remember { Injekt.get<UiPreferences>() }
-    val contentMode by uiPreferences.contentMode().collectAsState()
-    val showManga by uiPreferences.showMangaMode().collectAsState()
-    val showAnime by uiPreferences.showAnimeMode().collectAsState()
-    val showNovel by uiPreferences.showNovelMode().collectAsState()
+    val contentMode by uiPreferences.contentMode().collectAsStateWithLifecycle()
+    val showManga by uiPreferences.showMangaMode().collectAsStateWithLifecycle()
+    val showAnime by uiPreferences.showAnimeMode().collectAsStateWithLifecycle()
+    val showNovel by uiPreferences.showNovelMode().collectAsStateWithLifecycle()
 
     val visibleModes = remember(showManga, showAnime, showNovel) {
         val modes = mutableSetOf<ContentMode>()

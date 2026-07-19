@@ -13,6 +13,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -81,9 +83,9 @@ fun MangaLibrarySettingsDialog(
 private fun ColumnScope.FilterPage(
     screenModel: MangaLibrarySettingsScreenModel,
 ) {
-    val filterDownloaded by screenModel.libraryPreferences.filterDownloadedManga().collectAsState()
-    val downloadedOnly by screenModel.preferences.downloadedOnly().collectAsState()
-    val autoUpdateMangaRestrictions by screenModel.libraryPreferences.autoUpdateItemRestrictions().collectAsState()
+    val filterDownloaded by screenModel.libraryPreferences.filterDownloadedManga().collectAsStateWithLifecycle()
+    val downloadedOnly by screenModel.preferences.downloadedOnly().collectAsStateWithLifecycle()
+    val autoUpdateMangaRestrictions by screenModel.libraryPreferences.autoUpdateItemRestrictions().collectAsStateWithLifecycle()
 
     TriStateItem(
         label = stringResource(MR.strings.label_downloaded),
@@ -95,25 +97,25 @@ private fun ColumnScope.FilterPage(
         enabled = !downloadedOnly,
         onClick = { screenModel.toggleFilter(LibraryPreferences::filterDownloadedManga) },
     )
-    val filterUnread by screenModel.libraryPreferences.filterUnread().collectAsState()
+    val filterUnread by screenModel.libraryPreferences.filterUnread().collectAsStateWithLifecycle()
     TriStateItem(
         label = stringResource(MR.strings.action_filter_unread),
         state = filterUnread,
         onClick = { screenModel.toggleFilter(LibraryPreferences::filterUnread) },
     )
-    val filterStarted by screenModel.libraryPreferences.filterStartedManga().collectAsState()
+    val filterStarted by screenModel.libraryPreferences.filterStartedManga().collectAsStateWithLifecycle()
     TriStateItem(
         label = stringResource(MR.strings.label_started),
         state = filterStarted,
         onClick = { screenModel.toggleFilter(LibraryPreferences::filterStartedManga) },
     )
-    val filterBookmarked by screenModel.libraryPreferences.filterBookmarkedManga().collectAsState()
+    val filterBookmarked by screenModel.libraryPreferences.filterBookmarkedManga().collectAsStateWithLifecycle()
     TriStateItem(
         label = stringResource(MR.strings.action_filter_bookmarked),
         state = filterBookmarked,
         onClick = { screenModel.toggleFilter(LibraryPreferences::filterBookmarkedManga) },
     )
-    val filterCompleted by screenModel.libraryPreferences.filterCompletedManga().collectAsState()
+    val filterCompleted by screenModel.libraryPreferences.filterCompletedManga().collectAsStateWithLifecycle()
     TriStateItem(
         label = stringResource(MR.strings.completed),
         state = filterCompleted,
@@ -122,7 +124,7 @@ private fun ColumnScope.FilterPage(
 
     // TODO: re-enable when custom intervals are ready for stable
     if ((!isReleaseBuildType) && LibraryPreferences.ENTRY_OUTSIDE_RELEASE_PERIOD in autoUpdateMangaRestrictions) {
-        val filterIntervalCustom by screenModel.libraryPreferences.filterIntervalCustom().collectAsState()
+        val filterIntervalCustom by screenModel.libraryPreferences.filterIntervalCustom().collectAsStateWithLifecycle()
         TriStateItem(
             label = stringResource(MR.strings.action_filter_interval_custom),
             state = filterIntervalCustom,
@@ -130,7 +132,7 @@ private fun ColumnScope.FilterPage(
         )
     }
 
-    val trackers by screenModel.trackersFlow.collectAsState()
+    val trackers by screenModel.trackersFlow.collectAsStateWithLifecycle()
     when (trackers.size) {
         0 -> {
             // No trackers
@@ -139,7 +141,7 @@ private fun ColumnScope.FilterPage(
             val service = trackers[0]
             val filterTracker by screenModel.libraryPreferences.filterTrackedManga(
                 service.id.toInt(),
-            ).collectAsState()
+            ).collectAsStateWithLifecycle()
             TriStateItem(
                 label = stringResource(MR.strings.action_filter_tracked),
                 state = filterTracker,
@@ -151,7 +153,7 @@ private fun ColumnScope.FilterPage(
             trackers.map { service ->
                 val filterTracker by screenModel.libraryPreferences.filterTrackedManga(
                     service.id.toInt(),
-                ).collectAsState()
+                ).collectAsStateWithLifecycle()
                 TriStateItem(
                     label = service.name,
                     state = filterTracker,
@@ -167,7 +169,7 @@ private fun ColumnScope.SortPage(
     category: Category?,
     screenModel: MangaLibrarySettingsScreenModel,
 ) {
-    val trackers by screenModel.trackersFlow.collectAsState()
+    val trackers by screenModel.trackersFlow.collectAsStateWithLifecycle()
     val sortingMode = category.sort.type
     val sortDescending = !category.sort.isAscending
 
@@ -237,7 +239,7 @@ private val displayModes = listOf(
 private fun ColumnScope.DisplayPage(
     screenModel: MangaLibrarySettingsScreenModel,
 ) {
-    val displayMode by screenModel.libraryPreferences.displayMode().collectAsState()
+    val displayMode by screenModel.libraryPreferences.displayMode().collectAsStateWithLifecycle()
     SettingsChipRow(MR.strings.action_display_mode) {
         displayModes.map { (titleRes, mode) ->
             FilterChip(
@@ -257,7 +259,7 @@ private fun ColumnScope.DisplayPage(
         }
     }
 
-    val columns by columnPreference.collectAsState()
+    val columns by columnPreference.collectAsStateWithLifecycle()
     if (displayMode == LibraryDisplayMode.List) {
         SliderItem(
             value = columns,
@@ -317,7 +319,7 @@ private fun ColumnScope.DisplayPage(
         label = stringResource(MR.strings.action_display_show_number_of_items),
         pref = screenModel.libraryPreferences.categoryNumberOfItems(),
     )
-    val categoryDisplayMode by screenModel.libraryPreferences.categoryDisplayMode().collectAsState()
+    val categoryDisplayMode by screenModel.libraryPreferences.categoryDisplayMode().collectAsStateWithLifecycle()
     RadioItem(
         label = "Tabbed pages (swipeable)",
         selected = categoryDisplayMode == tachiyomi.domain.library.model.LibraryCategoryDisplay.TABBED,
