@@ -39,7 +39,18 @@ class TtsController(
         val engineImpl: TtsEngine = if (engineType == "neural") {
             val modelPath = preferences.neuralModelPath().get()
             val modelType = preferences.neuralModelType().get()
-            NeuralTtsEngine(context, modelPath, modelType)
+            NeuralTtsEngine(
+                context = context,
+                modelPath = modelPath,
+                modelType = modelType,
+                useNnapi = preferences.neuralUseNnapi().get(),
+                numThreads = preferences.neuralNumThreads().get(),
+                maxNumSentences = preferences.neuralMaxSentences().get(),
+                speakerId = preferences.neuralSpeakerId().get(),
+                lengthScale = preferences.neuralLengthScale().get(),
+                noiseScale = preferences.neuralNoiseScale().get(),
+                noiseScaleW = preferences.neuralNoiseScaleW().get(),
+            )
         } else {
             AndroidTtsEngine(context)
         }

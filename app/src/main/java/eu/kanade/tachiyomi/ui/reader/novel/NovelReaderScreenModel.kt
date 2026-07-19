@@ -200,6 +200,68 @@ class NovelReaderScreenModel(
     val isTtsActive: Boolean
         get() = _ttsPlaybackState.value.isInitialized || _ttsPlaybackState.value.isPlaying
 
+    // ===== Neural TTS voice management =====
+    private val neuralVoiceManager by lazy {
+        eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralVoiceManager(
+            context ?: Injekt.get<Context>(),
+            ttsPreferences,
+        )
+    }
+    private val _installedNeuralVoices = MutableStateFlow<List<eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice>>(emptyList())
+    val installedNeuralVoices = _installedNeuralVoices.asStateFlow()
+
+    private val _downloadingVoiceId = MutableStateFlow<String?>(null)
+    val downloadingVoiceId = _downloadingVoiceId.asStateFlow()
+
+    private val _voiceDownloadProgress = MutableStateFlow(0f)
+    val voiceDownloadProgress = _voiceDownloadProgress.asStateFlow()
+
+    /** Refresh the list of installed neural voices from disk. */
+    fun refreshInstalledNeuralVoices() {
+        screenModelScope.launchIO {
+            _installedNeuralVoices.value = neuralVoiceManager.getInstalledVoices()
+        }
+    }
+
+    /** Download a neural TTS voice bundle. */
+    fun downloadNeuralVoice(entry: eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralVoiceEntry) {
+        if (_downloadingVoiceId.value != null) return // don't allow concurrent downloads
+        screenModelScope.launchIO {
+            _downloadingVoiceId.value = entry.id
+            _voiceDownloadProgress.value = 0f
+            val result = neuralVoiceManager.downloadVoice(entry) { progress ->
+                _voiceDownloadProgress.value = progress
+            }
+            _downloadingVoiceId.value = null
+            _voiceDownloadProgress.value = 0f
+            result.onSuccess {
+                _installedNeuralVoices.value = neuralVoiceManager.getInstalledVoices()
+            }.onFailure { error ->
+                _events.tryEmit(NovelReaderEvent.ShowError(error.message ?: "Download failed"))
+            }
+        }
+    }
+
+    /** Uninstall a neural TTS voice. */
+    fun uninstallNeuralVoice(voiceId: String) {
+        screenModelScope.launchIO {
+            neuralVoiceManager.uninstallVoice(voiceId)
+            _installedNeuralVoices.value = neuralVoiceManager.getInstalledVoices()
+            // If the uninstalled voice was selected, clear the selection
+            if (ttsPreferences.voiceName().get() == voiceId) {
+                ttsPreferences.voiceName().set("")
+                ttsPreferences.neuralModelPath().set("")
+            }
+        }
+    }
+
+    /** Select an installed neural voice as the active voice. */
+    fun selectNeuralVoice(voice: eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice) {
+        ttsPreferences.voiceName().set(voice.voiceId)
+        ttsPreferences.neuralModelPath().set(voice.path.absolutePath)
+        ttsPreferences.neuralModelType().set(voice.family)
+    }
+
     fun initContext(context: Context) {
         this.context = context.applicationContext
     }
@@ -966,6 +1028,7 @@ class NovelReaderScreenModel(
     fun showSettings() {
         _isControlsVisible.value = false
         _isSettingsVisible.value = true
+        refreshInstalledNeuralVoices()
     }
 
     fun dismissSettings() {

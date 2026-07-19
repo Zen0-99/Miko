@@ -8,6 +8,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
+import eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralTtsVoiceCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralVoiceEntry
 import tachiyomi.presentation.core.util.collectAsState
 
 /**
@@ -17,7 +20,8 @@ import tachiyomi.presentation.core.util.collectAsState
  * - Engine selection (Android TTS / Neural TTS)
  * - Speech rate slider
  * - Pitch slider
- * - Voice selection dropdown
+ * - Voice selection dropdown (Android TTS) or voice browser (Neural TTS)
+ * - Neural TTS advanced settings (NNAPI, threads, etc.)
  * - Auto-continue toggle
  * - Background playback toggle
  */
@@ -27,6 +31,12 @@ fun ColumnScope.NovelTtsSettingsPage(
     accentColor: Color? = null,
     availableVoices: List<eu.kanade.tachiyomi.ui.reader.novel.tts.TtsVoice> = emptyList(),
     onRefreshVoices: () -> Unit = {},
+    installedNeuralVoices: List<InstalledNeuralVoice> = emptyList(),
+    downloadingVoiceId: String? = null,
+    downloadProgress: Float = 0f,
+    onDownloadVoice: (NeuralVoiceEntry) -> Unit = {},
+    onUninstallVoice: (String) -> Unit = {},
+    onSelectNeuralVoice: (InstalledNeuralVoice) -> Unit = {},
 ) {
     // ---- Engine section ----
     SectionHeader("Text-to-Speech", accentColor)
@@ -70,26 +80,74 @@ fun ColumnScope.NovelTtsSettingsPage(
     }
 
     // ---- Voice selection ----
-    SubHeader("Voice", accentColor)
+    if (engineType == "neural") {
+        // Neural TTS: show voice browser with download/manage UI
+        val selectedVoiceId by preferences.voiceName().collectAsState()
+        NeuralVoiceBrowser(
+            installedVoices = installedNeuralVoices,
+            downloadingVoiceId = downloadingVoiceId,
+            downloadProgress = downloadProgress,
+            accentColor = accentColor,
+            onDownloadVoice = onDownloadVoice,
+            onUninstallVoice = onUninstallVoice,
+            onSelectVoice = onSelectNeuralVoice,
+            selectedVoiceId = selectedVoiceId,
+        )
 
-    if (availableVoices.isNotEmpty()) {
-        val voiceName by preferences.voiceName().collectAsState()
-        val voiceLabels = listOf("System default") + availableVoices.map { it.displayName }
-        val voiceValues = listOf("") + availableVoices.map { it.name }
-        val selectedIndex = voiceValues.indexOf(voiceName).coerceAtLeast(0)
-        SettingsDropdown(
-            label = "Voice",
-            selectedLabel = voiceLabels[selectedIndex],
-            options = voiceLabels,
-        ) { index ->
-            preferences.voiceName().set(voiceValues[index])
+        // Neural advanced settings
+        SubHeader("Neural Settings", accentColor)
+
+        val useNnapi by preferences.neuralUseNnapi().collectAsState()
+        CheckboxItem(
+            label = "NNAPI hardware acceleration",
+            pref = preferences.neuralUseNnapi(),
+            accentColor = accentColor,
+        )
+
+        val numThreads by preferences.neuralNumThreads().collectAsState()
+        SliderItem(
+            label = "Synthesis threads",
+            value = numThreads,
+            valueRange = 1..8,
+            valueText = "$numThreads",
+            accentColor = accentColor,
+        ) { threads ->
+            preferences.neuralNumThreads().set(threads)
+        }
+
+        val maxSentences by preferences.neuralMaxSentences().collectAsState()
+        SliderItem(
+            label = "Max sentences per call",
+            value = maxSentences,
+            valueRange = 1..4,
+            valueText = "$maxSentences",
+            accentColor = accentColor,
+        ) { max ->
+            preferences.neuralMaxSentences().set(max)
         }
     } else {
-        SettingsDropdown(
-            label = "Voice",
-            selectedLabel = "Not available",
-            options = listOf("Not available"),
-        ) { }
+        // Android TTS: show system voice dropdown
+        SubHeader("Voice", accentColor)
+
+        if (availableVoices.isNotEmpty()) {
+            val voiceName by preferences.voiceName().collectAsState()
+            val voiceLabels = listOf("System default") + availableVoices.map { it.displayName }
+            val voiceValues = listOf("") + availableVoices.map { it.name }
+            val selectedIndex = voiceValues.indexOf(voiceName).coerceAtLeast(0)
+            SettingsDropdown(
+                label = "Voice",
+                selectedLabel = voiceLabels[selectedIndex],
+                options = voiceLabels,
+            ) { index ->
+                preferences.voiceName().set(voiceValues[index])
+            }
+        } else {
+            SettingsDropdown(
+                label = "Voice",
+                selectedLabel = "Not available",
+                options = listOf("Not available"),
+            ) { }
+        }
     }
 
     // ---- Playback behavior ----

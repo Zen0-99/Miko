@@ -46,6 +46,7 @@ import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -58,6 +59,13 @@ class NovelReaderSettingsScreenModel(
     val preferences: NovelReaderPreferences = Injekt.get(),
     val readerPreferences: ReaderPreferences = Injekt.get(),
     val ttsPreferences: eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences = Injekt.get(),
+    // Neural TTS voice management
+    val installedNeuralVoices: kotlinx.coroutines.flow.StateFlow<List<eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList()),
+    val downloadingVoiceId: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null),
+    val voiceDownloadProgress: kotlinx.coroutines.flow.StateFlow<Float> = kotlinx.coroutines.flow.MutableStateFlow(0f),
+    val onDownloadVoice: (eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralVoiceEntry) -> Unit = {},
+    val onUninstallVoice: (String) -> Unit = {},
+    val onSelectNeuralVoice: (eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice) -> Unit = {},
 ) : ScreenModel
 
 /**
@@ -143,6 +151,12 @@ fun NovelReaderSettingsDialog(
                     2 -> NovelTtsSettingsPage(
                         preferences = screenModel.ttsPreferences,
                         accentColor = accentColor,
+                        installedNeuralVoices = screenModel.installedNeuralVoices.collectAsStateWithLifecycle().value,
+                        downloadingVoiceId = screenModel.downloadingVoiceId.collectAsStateWithLifecycle().value,
+                        downloadProgress = screenModel.voiceDownloadProgress.collectAsStateWithLifecycle().value,
+                        onDownloadVoice = screenModel.onDownloadVoice,
+                        onUninstallVoice = screenModel.onUninstallVoice,
+                        onSelectNeuralVoice = screenModel.onSelectNeuralVoice,
                     )
                 }
             }

@@ -90,6 +90,11 @@ android {
         getByName("benchmark").res.srcDirs("src/debug/res")
     }
 
+    // Keep .onnx weights uncompressed so sherpa-onnx can mmap them directly.
+    androidResources {
+        noCompress += "onnx"
+    }
+
     splits {
         abi {
             isEnable = true
@@ -256,6 +261,12 @@ dependencies {
 
     // JavaScript engine (for JS novel plugins)
     implementation(libs.bundles.js.engine)
+
+    // Neural TTS (sherpa-onnx) — vendored AAR for on-device speech synthesis.
+    // Upstream only distributes via GitHub releases, not Maven Central.
+    implementation(files("../libs/sherpa-onnx-1.13.2.aar"))
+    // tar.bz2 extraction for sherpa-onnx voice bundles.
+    implementation(libs.commons.compress)
 
     // Disk
     implementation(libs.disklrucache)

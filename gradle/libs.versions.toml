@@ -28,6 +28,9 @@ conscrypt-android = "org.conscrypt:conscrypt-android:2.5.3"
 quickjs-android = "com.github.zhanghai.quickjs-java:quickjs-android:547f5b1597"
 j2v8-android = "com.eclipsesource.j2v8:j2v8:6.3.4"
 
+# tar.bz2 extraction for sherpa-onnx voice bundles.
+commons-compress = "org.apache.commons:commons-compress:1.27.1"
+
 jsoup = "org.jsoup:jsoup:1.19.1"
 
 disklrucache = "com.jakewharton:disklrucache:2.0.2"

@@ -44,4 +44,25 @@ class NovelTtsPreferences(
 
     /** Whether neural TTS background playback is enabled */
     fun backgroundPlayback() = preferenceStore.getBoolean("pref_novel_tts_bg_playback", true)
+
+    /** Use NNAPI hardware acceleration for neural TTS (default false) */
+    fun neuralUseNnapi() = preferenceStore.getBoolean("pref_novel_tts_neural_nnapi", false)
+
+    /** Number of threads for neural TTS synthesis (default 2) */
+    fun neuralNumThreads() = preferenceStore.getInt("pref_novel_tts_neural_threads", 2)
+
+    /** Max sentences per synthesis call (default 2) */
+    fun neuralMaxSentences() = preferenceStore.getInt("pref_novel_tts_neural_max_sentences", 2)
+
+    /** Speaker ID for multi-speaker models (default 0) */
+    fun neuralSpeakerId() = preferenceStore.getInt("pref_novel_tts_neural_speaker_id", 0)
+
+    /** Length scale for VITS/Piper models (default 1.0) */
+    fun neuralLengthScale() = preferenceStore.getFloat("pref_novel_tts_neural_length_scale", 1.0f)
+
+    /** Noise scale for VITS/Piper models (default 0.667) */
+    fun neuralNoiseScale() = preferenceStore.getFloat("pref_novel_tts_neural_noise_scale", 0.667f)
+
+    /** Noise scale W for VITS/Piper models (default 0.8) */
+    fun neuralNoiseScaleW() = preferenceStore.getFloat("pref_novel_tts_neural_noise_scale_w", 0.8f)
 }
