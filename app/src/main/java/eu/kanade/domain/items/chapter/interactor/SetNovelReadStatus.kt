@@ -3,12 +3,15 @@ package eu.kanade.domain.items.chapter.interactor
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 
 class SetNovelReadStatus(
     private val novelChapterRepository: NovelChapterRepository,
+    private val achievementEventBus: AchievementEventBus? = null,
 ) {
 
     private val mapper = { chapter: NovelChapter, read: Boolean ->
@@ -37,6 +40,18 @@ class SetNovelReadStatus(
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)
             return@withNonCancellableContext Result.InternalError(e)
+        }
+
+        // Emit achievement events for novel chapters marked as read
+        if (read) {
+            chaptersToUpdate.forEach { chapter ->
+                achievementEventBus?.tryEmit(
+                    AchievementEvent.NovelChapterRead(
+                        novelId = chapter.novelId,
+                        chapterNumber = chapter.chapterNumber.toInt(),
+                    ),
+                )
+            }
         }
 
         Result.Success

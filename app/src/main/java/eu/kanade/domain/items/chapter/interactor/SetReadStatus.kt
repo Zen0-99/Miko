@@ -4,6 +4,9 @@ import eu.kanade.domain.download.manga.interactor.DeleteChapterDownload
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.domain.achievement.model.AchievementEvent
+import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.repository.MangaRepository
@@ -16,6 +19,7 @@ class SetReadStatus(
     private val deleteDownload: DeleteChapterDownload,
     private val mangaRepository: MangaRepository,
     private val chapterRepository: ChapterRepository,
+    private val achievementEventBus: AchievementEventBus? = null,
 ) {
 
     private val mapper = { chapter: Chapter, read: Boolean ->
@@ -44,6 +48,18 @@ class SetReadStatus(
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)
             return@withNonCancellableContext Result.InternalError(e)
+        }
+
+        // Emit achievement events for chapters marked as read
+        if (read) {
+            chaptersToUpdate.forEach { chapter ->
+                achievementEventBus?.tryEmit(
+                    AchievementEvent.ChapterRead(
+                        mangaId = chapter.mangaId,
+                        chapterNumber = chapter.chapterNumber.toInt(),
+                    ),
+                )
+            }
         }
 
         if (read && downloadPreferences.removeAfterMarkedAsRead().get()) {

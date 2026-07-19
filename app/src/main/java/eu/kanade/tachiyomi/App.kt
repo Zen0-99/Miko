@@ -66,6 +66,8 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.widget.entries.anime.AnimeWidgetManager
 import tachiyomi.presentation.widget.entries.manga.MangaWidgetManager
@@ -73,13 +75,16 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.security.Security
+import java.util.Calendar
 
 class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factory {
 
     private val basePreferences: BasePreferences by injectLazy()
     private val networkPreferences: NetworkPreferences by injectLazy()
+    private val achievementEventBus: AchievementEventBus by injectLazy()
 
     private val disableIncognitoReceiver = DisableIncognitoReceiver()
+    private var sessionStartMs: Long = 0L
 
     @SuppressLint("LaunchActivityFromNotification")
     override fun onCreate() {
@@ -173,6 +178,10 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         }
 
         initializeMigrator()
+
+        // Emit AppStart event for achievements system
+        val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        achievementEventBus.tryEmit(AchievementEvent.AppStart(hourOfDay = hourOfDay))
     }
 
     private fun initializeMigrator() {
@@ -228,10 +237,17 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
     override fun onStart(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStart()
+        sessionStartMs = System.currentTimeMillis()
     }
 
     override fun onStop(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStopped()
+        // Emit SessionEnd event for achievements system
+        if (sessionStartMs > 0L) {
+            val durationMs = System.currentTimeMillis() - sessionStartMs
+            achievementEventBus.tryEmit(AchievementEvent.SessionEnd(durationMs = durationMs))
+            sessionStartMs = 0L
+        }
     }
 
     override fun getPackageName(): String {

@@ -4,6 +4,8 @@ import eu.kanade.domain.download.anime.interactor.DeleteEpisodeDownload
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
@@ -16,6 +18,7 @@ class SetSeenStatus(
     private val deleteDownload: DeleteEpisodeDownload,
     private val animeRepository: AnimeRepository,
     private val episodeRepository: EpisodeRepository,
+    private val achievementEventBus: AchievementEventBus? = null,
 ) {
 
     private val mapper = { episode: Episode, read: Boolean ->
@@ -44,6 +47,18 @@ class SetSeenStatus(
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)
             return@withNonCancellableContext Result.InternalError(e)
+        }
+
+        // Emit achievement events for episodes marked as watched
+        if (seen) {
+            episodesToUpdate.forEach { episode ->
+                achievementEventBus?.tryEmit(
+                    AchievementEvent.EpisodeWatched(
+                        animeId = episode.animeId,
+                        episodeNumber = episode.episodeNumber.toInt(),
+                    ),
+                )
+            }
         }
 
         if (seen && downloadPreferences.removeAfterMarkedAsRead().get()) {

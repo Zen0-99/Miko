@@ -32,6 +32,12 @@ android {
                 schemaOutputDirectory.set(project.file("./src/main/sqldelightnovel"))
                 srcDirs.from(project.file("./src/main/sqldelightnovel"))
             }
+            create("AchievementsDatabase") {
+                packageName.set("tachiyomi.db.achievement")
+                dialect(libs.sqldelight.dialects.sql)
+                schemaOutputDirectory.set(project.file("./src/main/sqldelightachievements"))
+                srcDirs.from(project.file("./src/main/sqldelightachievements"))
+            }
         }
     }
 }
@@ -46,6 +52,7 @@ dependencies {
     implementation(projects.sourceApi)
     implementation(projects.domain)
     implementation(projects.core.common)
+    implementation(projects.i18n)
 
     api(libs.bundles.sqldelight)
 }

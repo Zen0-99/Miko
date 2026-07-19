@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.di
 
 import android.app.Application
+import android.content.Context
 import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -221,6 +222,36 @@ class AppModule(val app: Application) : InjektModule {
             )
         }
 
+        val sqlDriverAchievements = AndroidSqliteDriver(
+            schema = tachiyomi.db.achievement.AchievementsDatabase.Schema,
+            context = app,
+            name = "tachiyomi.achievementsdb",
+            factory = if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                FrameworkSQLiteOpenHelperFactory()
+            } else {
+                RequerySQLiteOpenHelperFactory()
+            },
+            callback = object : AndroidSqliteDriver.Callback(tachiyomi.db.achievement.AchievementsDatabase.Schema) {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    setPragma(db, "foreign_keys = ON")
+                    setPragma(db, "journal_mode = WAL")
+                    setPragma(db, "synchronous = NORMAL")
+                }
+                private fun setPragma(db: SupportSQLiteDatabase, pragma: String) {
+                    val cursor = db.query("PRAGMA $pragma")
+                    cursor.moveToFirst()
+                    cursor.close()
+                }
+            },
+        )
+
+        addSingletonFactory {
+            tachiyomi.data.achievement.database.AchievementsDatabase(
+                driver = sqlDriverAchievements,
+            )
+        }
+
         addSingletonFactory {
             Json {
                 ignoreUnknownKeys = true
@@ -276,21 +307,95 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { DelayedAnimeTrackingStore(app) }
         addSingletonFactory { DelayedMangaTrackingStore(app) }
 
-        // Achievements system
-        addSingletonFactory<eu.kanade.tachiyomi.data.achievement.AchievementEventBus> {
-            eu.kanade.tachiyomi.data.achievement.AchievementEventBus()
+        // Achievement system repositories
+        addSingletonFactory<tachiyomi.domain.achievement.repository.AchievementRepository> {
+            tachiyomi.data.achievement.repository.AchievementRepositoryImpl(get())
         }
-        addSingletonFactory<eu.kanade.tachiyomi.data.achievement.AchievementRepository> {
-            eu.kanade.tachiyomi.data.achievement.InMemoryAchievementRepository()
+        addSingletonFactory<tachiyomi.domain.achievement.repository.ActivityDataRepository> {
+            tachiyomi.data.achievement.ActivityDataRepositoryImpl(get())
         }
-        addSingletonFactory { eu.kanade.tachiyomi.data.achievement.PointsManager() }
+        addSingletonFactory<tachiyomi.domain.achievement.repository.UserProfileRepository> {
+            tachiyomi.data.achievement.UserProfileRepositoryImpl(get())
+        }
+        // Entry repositories (needed by achievement handlers)
+        addSingletonFactory<tachiyomi.domain.entries.manga.repository.MangaRepository> {
+            tachiyomi.data.entries.manga.MangaRepositoryImpl(get())
+        }
+        addSingletonFactory<tachiyomi.domain.entries.anime.repository.AnimeRepository> {
+            tachiyomi.data.entries.anime.AnimeRepositoryImpl(get())
+        }
+        addSingletonFactory<tachiyomi.domain.entries.novel.repository.NovelRepository> {
+            tachiyomi.data.entries.novel.NovelRepositoryImpl(get())
+        }
+
+        // Achievement system managers and handlers
+        addSingletonFactory<tachiyomi.data.achievement.localization.AchievementTextResolver> {
+            eu.kanade.tachiyomi.data.achievement.localization.AchievementTextResolverImpl(app)
+        }
+        addSingletonFactory { tachiyomi.data.achievement.loader.AchievementLoader(app, get(), get(), get()) }
+        addSingletonFactory { tachiyomi.data.achievement.handler.PointsManager(get()) }
+        addSingletonFactory { tachiyomi.data.achievement.UserProfileManager(get()) }
         addSingletonFactory {
-            eu.kanade.tachiyomi.data.achievement.AchievementHandler(
-                eventBus = get(),
-                repository = get(),
-                pointsManager = get(),
+            tachiyomi.data.achievement.UnlockableManager(
+                app.getSharedPreferences("achievement_unlockables", Context.MODE_PRIVATE),
+                get(),
             )
         }
+        addSingletonFactory { tachiyomi.data.achievement.handler.AchievementEventBus() }
+        addSingletonFactory { tachiyomi.data.achievement.handler.FeatureUsageCollector(get()) }
+        addSingletonFactory { tachiyomi.data.achievement.handler.SessionManager(get(), get()) }
+        addSingletonFactory { tachiyomi.data.achievement.handler.checkers.DiversityAchievementChecker(get(), get(), get()) }
+        addSingletonFactory { tachiyomi.data.achievement.handler.checkers.StreakAchievementChecker(get()) }
+        addSingletonFactory { tachiyomi.data.achievement.handler.checkers.TimeBasedAchievementChecker(get(), get()) }
+        addSingletonFactory { tachiyomi.data.achievement.handler.checkers.FeatureBasedAchievementChecker(get(), get()) }
+        addSingletonFactory { tachiyomi.data.achievement.handler.AchievementRuleRegistry(get(), get(), get()) }
+        // RuleContextImpl is not registered as a singleton because it requires
+        // runtime data (allProgress, allAchievementsMap) that is not available at DI time.
+        // It is created on-demand by AchievementHandler.
+        addSingletonFactory {
+            tachiyomi.data.achievement.handler.AchievementCalculator(
+                repository = get(),
+                mangaHandler = get(),
+                animeHandler = get(),
+                novelHandler = get(),
+                diversityChecker = get(),
+                streakChecker = get(),
+                achievementsDatabase = get(),
+                ruleRegistry = get(),
+                featureCollector = get(),
+                pointsManager = get(),
+                mangaRepository = get(),
+                animeRepository = get(),
+                novelRepository = get(),
+                unlockableManager = get(),
+                userProfileManager = get(),
+                activityDataRepository = get(),
+            )
+        }
+        addSingletonFactory {
+            tachiyomi.data.achievement.handler.AchievementHandler(
+                eventBus = get(),
+                repository = get(),
+                diversityChecker = get(),
+                streakChecker = get(),
+                timeBasedChecker = get(),
+                featureBasedChecker = get(),
+                featureCollector = get(),
+                pointsManager = get(),
+                unlockableManager = get(),
+                mangaHandler = get(),
+                animeHandler = get(),
+                novelHandler = get(),
+                mangaRepository = get(),
+                animeRepository = get(),
+                novelRepository = get(),
+                userProfileManager = get(),
+                activityDataRepository = get(),
+                ruleRegistry = get(),
+            )
+        }
+        // Force eager init of AchievementsDatabase
+        get<tachiyomi.data.achievement.database.AchievementsDatabase>()
 
         addSingletonFactory { ImageSaver(app) }
 
