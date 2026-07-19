@@ -22,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.manga.LibraryManga
+import tachiyomi.domain.library.model.LibraryCategoryDisplay
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.presentation.core.components.material.PullRefresh
 import kotlin.time.Duration.Companion.seconds
@@ -45,8 +46,30 @@ fun MangaLibraryContent(
     getNumberOfMangaForCategory: (Category) -> Int?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
+    categoryDisplayMode: LibraryCategoryDisplay = LibraryCategoryDisplay.TABBED,
     getLibraryForPage: (Int) -> List<MangaLibraryItem>,
 ) {
+    if (categoryDisplayMode == LibraryCategoryDisplay.CONTINUOUS && categories.size > 1) {
+        MangaLibraryContinuousContent(
+            categories = categories,
+            searchQuery = searchQuery,
+            selection = selection,
+            contentPadding = contentPadding,
+            hasActiveFilters = hasActiveFilters,
+            onMangaClicked = onMangaClicked,
+            onContinueReadingClicked = onContinueReadingClicked,
+            onToggleSelection = onToggleSelection,
+            onToggleRangeSelection = onToggleRangeSelection,
+            onRefresh = onRefresh,
+            onGlobalSearchClicked = onGlobalSearchClicked,
+            getNumberOfMangaForCategory = getNumberOfMangaForCategory,
+            getDisplayMode = getDisplayMode,
+            getColumnsForOrientation = getColumnsForOrientation,
+            getLibraryForPage = getLibraryForPage,
+        )
+        return
+    }
+
     Column(
         modifier = Modifier.padding(
             top = contentPadding.calculateTopPadding(),

@@ -135,7 +135,7 @@ class MangaLibraryScreenModel(
             libraryPreferences.categoryTabs().changes(),
             libraryPreferences.categoryNumberOfItems().changes(),
             libraryPreferences.showContinueViewingButton().changes(),
-        ) { a, b, c -> arrayOf(a, b, c) }
+        ) { a, b, c -> Triple(a, b, c) }
             .onEach { (showCategoryTabs, showMangaCount, showMangaContinueButton) ->
                 mutableState.update { state ->
                     state.copy(
@@ -143,6 +143,13 @@ class MangaLibraryScreenModel(
                         showMangaCount = showMangaCount,
                         showMangaContinueButton = showMangaContinueButton,
                     )
+                }
+            }
+
+        libraryPreferences.categoryDisplayMode().changes()
+            .onEach { mode ->
+                mutableState.update { state ->
+                    state.copy(categoryDisplayMode = mode)
                 }
             }
             .launchIn(screenModelScope)
@@ -746,6 +753,8 @@ class MangaLibraryScreenModel(
         val showCategoryTabs: Boolean = false,
         val showMangaCount: Boolean = false,
         val showMangaContinueButton: Boolean = false,
+        val categoryDisplayMode: tachiyomi.domain.library.model.LibraryCategoryDisplay =
+            tachiyomi.domain.library.model.LibraryCategoryDisplay.TABBED,
         val dialog: Dialog? = null,
     ) {
         private val libraryCount by lazy {

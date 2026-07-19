@@ -33,6 +33,8 @@ import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.BaseSortItem
 import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.HeadingItem
+import tachiyomi.presentation.core.components.RadioItem
+import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.components.SortItem
@@ -314,5 +316,24 @@ private fun ColumnScope.DisplayPage(
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_number_of_items),
         pref = screenModel.libraryPreferences.categoryNumberOfItems(),
+    )
+    val categoryDisplayMode by screenModel.libraryPreferences.categoryDisplayMode().collectAsState()
+    RadioItem(
+        label = "Tabbed pages (swipeable)",
+        selected = categoryDisplayMode == tachiyomi.domain.library.model.LibraryCategoryDisplay.TABBED,
+        onClick = {
+            screenModel.libraryPreferences.categoryDisplayMode().set(
+                tachiyomi.domain.library.model.LibraryCategoryDisplay.TABBED,
+            )
+        },
+    )
+    RadioItem(
+        label = "Continuous scroll (section headers)",
+        selected = categoryDisplayMode == tachiyomi.domain.library.model.LibraryCategoryDisplay.CONTINUOUS,
+        onClick = {
+            screenModel.libraryPreferences.categoryDisplayMode().set(
+                tachiyomi.domain.library.model.LibraryCategoryDisplay.CONTINUOUS,
+            )
+        },
     )
 }

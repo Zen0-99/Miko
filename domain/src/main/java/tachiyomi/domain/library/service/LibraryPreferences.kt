@@ -74,6 +74,11 @@ class LibraryPreferences(
 
     fun categoryTabs() = preferenceStore.getBoolean("display_category_tabs", true)
 
+    fun categoryDisplayMode() = preferenceStore.getEnum(
+        "pref_library_category_display",
+        tachiyomi.domain.library.model.LibraryCategoryDisplay.TABBED,
+    )
+
     fun categoryNumberOfItems() = preferenceStore.getBoolean("display_number_of_items", false)
 
     fun categorizedDisplaySettings() = preferenceStore.getBoolean("categorized_display", false)
