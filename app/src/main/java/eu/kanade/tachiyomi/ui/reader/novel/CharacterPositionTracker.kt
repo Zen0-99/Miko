@@ -106,6 +106,22 @@ class CharacterPositionTracker(
         return (estimatedWords / averageWordsPerMinute).coerceAtLeast(0)
     }
 
+    /**
+     * Total word count in the current chapter (approximate: characters / 5).
+     */
+    fun getTotalWordCount(): Int {
+        val position = _currentPosition.value
+        return (position.totalCharacters / 5).coerceAtLeast(0)
+    }
+
+    /**
+     * Estimated minutes to end of chapter at [averageWordsPerMinute].
+     * Alias for [getEstimatedReadingTime] — kept for clarity in the info display.
+     */
+    fun getTimeToEnd(averageWordsPerMinute: Int = 200): Int {
+        return getEstimatedReadingTime(averageWordsPerMinute)
+    }
+
     fun navigateToPreviousPosition(): CharacterPosition? {
         if (historyIndex > 0) {
             historyIndex--

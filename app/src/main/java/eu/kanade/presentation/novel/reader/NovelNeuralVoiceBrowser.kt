@@ -16,6 +16,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material3.CircularProgressIndicator
@@ -229,30 +234,57 @@ private fun VoiceRow(
                     )
                 }
                 isInstalled -> {
-                    Row {
-                        if (!isSelected) {
-                            IconButton(onClick = onSelect, modifier = Modifier.size(36.dp)) {
-                                Icon(
-                                    imageVector = Icons.Filled.CheckCircle,
-                                    contentDescription = "Select",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Show a "downloaded" icon (like chapters) that opens a context menu
+                    var isMenuExpanded by remember { mutableStateOf(false) }
+                    val indicatorSize = 26.dp
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clickable { isMenuExpanded = true },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.DownloadDone,
+                            contentDescription = "Installed",
+                            modifier = Modifier.size(indicatorSize),
+                            tint = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        DropdownMenu(
+                            expanded = isMenuExpanded,
+                            onDismissRequest = { isMenuExpanded = false },
+                        ) {
+                            if (!isSelected) {
+                                DropdownMenuItem(
+                                    text = { Text("Select voice") },
+                                    onClick = {
+                                        onSelect()
+                                        isMenuExpanded = false
+                                    },
                                 )
                             }
-                        }
-                        IconButton(onClick = onUninstall, modifier = Modifier.size(36.dp)) {
-                            Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = "Uninstall",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            DropdownMenuItem(
+                                text = { Text("Delete voice") },
+                                onClick = {
+                                    onUninstall()
+                                    isMenuExpanded = false
+                                },
                             )
                         }
                     }
                 }
                 else -> {
-                    IconButton(onClick = onDownload, modifier = Modifier.size(36.dp)) {
+                    // Download button — chapter-style circle with arrow
+                    val indicatorSize = 26.dp
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clickable { onDownload() },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Icon(
-                            imageVector = Icons.Filled.CloudDownload,
+                            imageVector = Icons.Outlined.Download,
                             contentDescription = "Download",
+                            modifier = Modifier.size(indicatorSize),
                             tint = accentColor,
                         )
                     }

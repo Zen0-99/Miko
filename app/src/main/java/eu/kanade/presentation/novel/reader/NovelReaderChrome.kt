@@ -50,6 +50,8 @@ fun NovelReaderTopBar(
     accentColor: Color? = null,
     progressPercent: Int = -1,
     estimatedReadingTime: Int = -1,
+    wordCount: Int = -1,
+    timeToEnd: Int = -1,
     fullscreen: Boolean = false,
 ) {
     Surface(
@@ -114,6 +116,32 @@ fun NovelReaderTopBar(
                     }
                     Text(
                         text = timeText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = (accentColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.5f),
+                        modifier = Modifier.padding(end = if (wordCount >= 0 || timeToEnd >= 0) 4.dp else 12.dp),
+                    )
+                }
+                if (wordCount >= 0) {
+                    val wordText = if (wordCount >= 1000) {
+                        "%.1fk".format(wordCount / 1000f)
+                    } else {
+                        "$wordCount"
+                    }
+                    Text(
+                        text = wordText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = (accentColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.5f),
+                        modifier = Modifier.padding(end = if (timeToEnd >= 0) 4.dp else 12.dp),
+                    )
+                }
+                if (timeToEnd >= 0) {
+                    val endText = if (timeToEnd == 0) {
+                        "<1m left"
+                    } else {
+                        "${timeToEnd}m left"
+                    }
+                    Text(
+                        text = endText,
                         style = MaterialTheme.typography.labelMedium,
                         color = (accentColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.5f),
                         modifier = Modifier.padding(end = 12.dp),
@@ -209,6 +237,8 @@ fun NovelReaderChrome(
     accentColor: Color? = null,
     progressPercent: Int = -1,
     estimatedReadingTime: Int = -1,
+    wordCount: Int = -1,
+    timeToEnd: Int = -1,
     fullscreen: Boolean = false,
     showPhoneInfo: Boolean = false,
     readerBackgroundColor: Color = MaterialTheme.colorScheme.background,
@@ -236,6 +266,8 @@ fun NovelReaderChrome(
                 accentColor = accentColor,
                 progressPercent = progressPercent,
                 estimatedReadingTime = estimatedReadingTime,
+                wordCount = wordCount,
+                timeToEnd = timeToEnd,
                 fullscreen = fullscreen,
             )
         }

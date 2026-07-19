@@ -18,4 +18,10 @@ data class TextConfig(
     val forceBold: Boolean = false,
     val forceItalic: Boolean = false,
     val forceParagraphIndent: Boolean = false,
+    val preserveSourceTextAlign: Boolean = false,
+    val textShadowEnabled: Boolean = false,
+    val textShadowColor: String = "#80000000",
+    val textShadowBlur: Float = 0f,
+    val textShadowX: Float = 0f,
+    val textShadowY: Float = 0f,
 )

@@ -207,6 +207,11 @@ class NovelScreen(
                 }
             },
             onRetrySuggestions = { screenModel.retrySuggestions() },
+            onOpenChapterInWebView = { chapter: tachiyomi.domain.items.chapter.model.NovelChapter ->
+                openChapterInWebView(navigator, chapter, screenModel.source)
+            }.takeIf { isHttpSource },
+            onMarkPreviousChaptersAsRead = screenModel::markPreviousChaptersAsRead,
+            onMarkChapterRangeAsRead = screenModel::markChapterRangeAsRead,
         )
 
         val onDismissRequest = {
@@ -337,6 +342,30 @@ class NovelScreen(
                     sourceId = (source_ as? NovelHttpSource)?.id,
                 ),
             )
+        }
+    }
+
+    private fun openChapterInWebView(
+        navigator: Navigator,
+        chapter: tachiyomi.domain.items.chapter.model.NovelChapter,
+        source_: Any?,
+    ) {
+        val source = source_ as? NovelHttpSource ?: return
+        try {
+            val sChapter = eu.kanade.tachiyomi.novelsource.model.SNovelChapter.create().apply {
+                url = chapter.url
+                name = chapter.name
+            }
+            val url = source.getChapterUrl(sChapter)
+            navigator.push(
+                WebViewScreen(
+                    url = url,
+                    initialTitle = chapter.name,
+                    sourceId = source.id,
+                ),
+            )
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to get novel chapter URL" }
         }
     }
 

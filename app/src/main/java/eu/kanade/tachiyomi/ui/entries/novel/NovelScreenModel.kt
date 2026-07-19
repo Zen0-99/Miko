@@ -1165,6 +1165,31 @@ class NovelScreenModel(
         }
     }
 
+    fun markPreviousChaptersAsRead(chapter: NovelChapter, read: Boolean) {
+        val state = successState ?: return
+        val chapters = state.processedChapters
+        val chapterIndex = chapters.indexOfFirst { it.chapter.id == chapter.id }
+        if (chapterIndex == -1) return
+        val prevChapters = chapters.take(chapterIndex).map { it.chapter }
+        if (prevChapters.isNotEmpty()) {
+            markChaptersRead(prevChapters, read)
+        }
+    }
+
+    fun markChapterRangeAsRead(startChapter: NovelChapter, endChapter: NovelChapter, read: Boolean) {
+        val state = successState ?: return
+        val chapters = state.processedChapters
+        val startIndex = chapters.indexOfFirst { it.chapter.id == startChapter.id }
+        val endIndex = chapters.indexOfFirst { it.chapter.id == endChapter.id }
+        if (startIndex == -1 || endIndex == -1) return
+        val from = minOf(startIndex, endIndex)
+        val to = maxOf(startIndex, endIndex)
+        val rangeChapters = chapters.subList(from, to + 1).map { it.chapter }
+        if (rangeChapters.isNotEmpty()) {
+            markChaptersRead(rangeChapters, read)
+        }
+    }
+
     fun chapterSwipe(item: NovelChapterList.Item, action: LibraryPreferences.ChapterSwipeAction) {
         val chapter = item.chapter
         when (action) {

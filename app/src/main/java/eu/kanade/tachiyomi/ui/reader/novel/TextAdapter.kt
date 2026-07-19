@@ -167,16 +167,19 @@ class TextAdapter(
                     onCallbackActivated?.invoke(callback)
                 }
 
-                when (config.textAlignment) {
-                    TextAlignment.LEFT -> textView.gravity = Gravity.START
-                    TextAlignment.CENTER -> textView.gravity = Gravity.CENTER
-                    TextAlignment.JUSTIFY -> {
-                        textView.gravity = Gravity.START
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                            textView.justificationMode = 1
+                // Apply text alignment only if not preserving source alignment
+                if (!config.preserveSourceTextAlign) {
+                    when (config.textAlignment) {
+                        TextAlignment.LEFT -> textView.gravity = Gravity.START
+                        TextAlignment.CENTER -> textView.gravity = Gravity.CENTER
+                        TextAlignment.JUSTIFY -> {
+                            textView.gravity = Gravity.START
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                textView.justificationMode = 1
+                            }
                         }
+                        TextAlignment.RIGHT -> textView.gravity = Gravity.END
                     }
-                    TextAlignment.RIGHT -> textView.gravity = Gravity.END
                 }
 
                 config.textFont?.let { font ->
@@ -203,6 +206,18 @@ class TextAdapter(
                 if (config.forceParagraphIndent && item is TextItem.Paragraph) {
                     val indentPx = (config.textSize * 2).toInt()
                     textView.setPadding(indentPx, textView.paddingTop, textView.paddingRight, textView.paddingBottom)
+                }
+
+                // Apply text shadow if enabled
+                if (config.textShadowEnabled) {
+                    val shadowColor = try {
+                        android.graphics.Color.parseColor(config.textShadowColor)
+                    } catch (_: Exception) {
+                        0x80000000.toInt()
+                    }
+                    textView.setShadowLayer(config.textShadowBlur, config.textShadowX, config.textShadowY, shadowColor)
+                } else {
+                    textView.setShadowLayer(0f, 0f, 0f, 0)
                 }
 
                 // Setup tap detection for highlighted text.

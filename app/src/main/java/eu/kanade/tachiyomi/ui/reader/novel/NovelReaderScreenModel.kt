@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.graphics.Typeface
 import android.os.IBinder
 import android.text.Spanned
 import android.text.Html
@@ -455,18 +456,64 @@ class NovelReaderScreenModel(
             preferences.sidePadding().get()
         }
 
+        // Typography preset: override lineSpacing with mathematical ratios
+        // lineSpacing is the extra spacing in sp added via setLineSpacing(spacing, 1f)
+        val baseTextSize = preferences.textSize().get()
+        val baseLineHeight = preferences.lineHeight().get()
+        val (effectiveTextSize, effectiveLineSpacing) = when (preferences.typographyPreset().get()) {
+            NovelReaderTypographyPreset.SUPERGOLDEN -> {
+                // Super Golden ratio: line height = text size × 1.618
+                // lineSpacing (extra sp) = textSize × (1.618 - 1) ≈ textSize × 0.618
+                baseTextSize to (baseTextSize * 0.618f)
+            }
+            NovelReaderTypographyPreset.GOLDEN -> {
+                // Golden ratio: line height = text size × 1.33
+                // lineSpacing (extra sp) = textSize × (1.33 - 1) ≈ textSize × 0.33
+                baseTextSize to (baseTextSize * 0.33f)
+            }
+            NovelReaderTypographyPreset.CUSTOM -> {
+                baseTextSize to baseLineHeight
+            }
+        }
+
+        // Custom font family: load Typeface from assets/fonts/ if specified
+        val customFontFamily = preferences.customFontFamily().get()
+        val customTypeface: Typeface? = if (customFontFamily.isNotBlank()) {
+            runCatching {
+                context?.assets?.let { assets ->
+                    val possiblePaths = listOf(
+                        "fonts/$customFontFamily.ttf",
+                        "fonts/$customFontFamily.otf",
+                        "fonts/$customFontFamily",
+                    )
+                    val path = possiblePaths.firstOrNull { runCatching { assets.open(it) }.isSuccess }
+                    if (path != null) Typeface.createFromAsset(assets, path) else null
+                }
+            }.getOrNull()
+        } else {
+            null
+        }
+
         return TextConfig(
-            textSize = preferences.textSize().get(),
+            textSize = effectiveTextSize,
             textColor = effectiveTextColor,
             backgroundColor = effectiveBackgroundColor,
-            lineSpacing = preferences.lineHeight().get(),
+            textFont = customTypeface,
+            lineSpacing = effectiveLineSpacing,
             paragraphSpacing = preferences.paragraphSpacing().get(),
             horizontalPadding = effectivePadding,
+            isTextSelectable = preferences.textSelectionEnabled().get(),
             textAlignment = preferences.textAlignment().get(),
             bionicReading = preferences.bionicReading().get(),
             forceBold = preferences.forceBoldText().get(),
             forceItalic = preferences.forceItalicText().get(),
             forceParagraphIndent = preferences.forceParagraphIndent().get(),
+            preserveSourceTextAlign = preferences.preserveSourceTextAlignInNative().get(),
+            textShadowEnabled = preferences.textShadowEnabled().get(),
+            textShadowColor = preferences.textShadowColor().get(),
+            textShadowBlur = preferences.textShadowBlur().get(),
+            textShadowX = preferences.textShadowX().get(),
+            textShadowY = preferences.textShadowY().get(),
         )
     }
 

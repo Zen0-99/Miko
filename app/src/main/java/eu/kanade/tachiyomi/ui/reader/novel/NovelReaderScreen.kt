@@ -96,6 +96,21 @@ class NovelReaderScreen(
         val progressPercent by screenModel.progressPercent.collectAsStateWithLifecycle()
         val ttsPlaybackState by screenModel.ttsPlaybackState.collectAsStateWithLifecycle()
 
+        // Settings dialog scroll states — persist across open/close within the same
+        // chapter session, but reset when the chapter changes.
+        val generalScrollState = remember { androidx.compose.foundation.ScrollState(0) }
+        val textScrollState = remember { androidx.compose.foundation.ScrollState(0) }
+        val ttsScrollState = remember { androidx.compose.foundation.ScrollState(0) }
+        val savedSettingsPage = remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        val currentChapterId = currentChapter?.id
+        androidx.compose.runtime.LaunchedEffect(currentChapterId) {
+            // Reset scroll states and page when chapter changes
+            generalScrollState.scrollTo(0)
+            textScrollState.scrollTo(0)
+            ttsScrollState.scrollTo(0)
+            savedSettingsPage.intValue = 0
+        }
+
         // Accent color: use cover-derived color if the preference is enabled
         val useCoverAccent by screenModel.preferences.useCoverAccentColor().collectAsState()
         val rawAccentColor by screenModel.accentColor.collectAsStateWithLifecycle()
@@ -235,9 +250,15 @@ class NovelReaderScreen(
                 isMenuVisible = isControlsVisible,
                 title = currentChapter?.name ?: "Loading...",
                 subtitle = novel?.title ?: "",
-                progressPercent = if (screenModel.preferences.showReadingProgress().get()) progressPercent else -1,
+                progressPercent = if (screenModel.preferences.showScrollPercentage().get()) progressPercent else -1,
                 estimatedReadingTime = if (screenModel.preferences.showEstimatedReadingTime().get()) {
                     screenModel.positionTracker.getEstimatedReadingTime()
+                } else -1,
+                wordCount = if (screenModel.preferences.showWordCount().get()) {
+                    screenModel.positionTracker.getTotalWordCount()
+                } else -1,
+                timeToEnd = if (screenModel.preferences.showTimeToEnd().get()) {
+                    screenModel.positionTracker.getTimeToEnd()
                 } else -1,
                 fullscreen = screenModel.preferences.fullscreen().get(),
                 showPhoneInfo = screenModel.preferences.showBatteryAndTime().get(),
@@ -283,9 +304,16 @@ class NovelReaderScreen(
         if (isSettingsVisible) {
             val hasDisplayCutout = remember { activity?.hasDisplayCutout() == true }
             NovelReaderSettingsDialog(
-                onDismissRequest = { screenModel.dismissSettings() },
+                onDismissRequest = {
+                    screenModel.dismissSettings()
+                },
                 onShowMenus = { screenModel.setMenuVisible(true) },
                 accentColor = accentColor,
+                generalScrollState = generalScrollState,
+                textScrollState = textScrollState,
+                ttsScrollState = ttsScrollState,
+                savedPage = savedSettingsPage.intValue,
+                onPageSaved = { page -> savedSettingsPage.intValue = page },
                 screenModel = remember {
                     NovelReaderSettingsScreenModel(
                         hasDisplayCutout = hasDisplayCutout,

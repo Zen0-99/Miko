@@ -80,6 +80,13 @@ fun NovelReaderSettingsDialog(
     onShowMenus: () -> Unit,
     screenModel: NovelReaderSettingsScreenModel,
     accentColor: Color? = null,
+    // Scroll states hoisted to caller so they persist across open/close
+    // within the same chapter session, but reset when the chapter changes.
+    generalScrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
+    textScrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
+    ttsScrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
+    savedPage: Int = 0,
+    onPageSaved: (Int) -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val tabTitles = persistentListOf(
@@ -87,7 +94,7 @@ fun NovelReaderSettingsDialog(
         stringResource(MR.strings.text_settings),
         "TTS",
     )
-    val pagerState = rememberPagerState { tabTitles.size }
+    val pagerState = rememberPagerState(initialPage = savedPage.coerceIn(0, tabTitles.size - 1)) { tabTitles.size }
     val scope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
     // Fixed height — both tabs are the same size (55% of screen).
@@ -95,6 +102,7 @@ fun NovelReaderSettingsDialog(
 
     ModalBottomSheet(
         onDismissRequest = {
+            onPageSaved(pagerState.currentPage)
             onDismissRequest()
             onShowMenus()
         },
@@ -138,12 +146,17 @@ fun NovelReaderSettingsDialog(
             state = pagerState,
             modifier = Modifier.fillMaxWidth(),
         ) { page ->
+            val scrollState = when (page) {
+                0 -> generalScrollState
+                1 -> textScrollState
+                else -> ttsScrollState
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(sheetHeight)
                     .padding(top = 8.dp, bottom = 16.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
             ) {
                 when (page) {
                     0 -> NovelGeneralSettingsPage(screenModel, accentColor)
@@ -237,12 +250,6 @@ private fun ColumnScope.NovelGeneralSettingsPage(
     SubHeader("Display", accentColor)
 
     CheckboxItem(
-        label = stringResource(MR.strings.pref_novel_show_reading_progress),
-        pref = screenModel.preferences.showReadingProgress(),
-        accentColor = accentColor,
-    )
-
-    CheckboxItem(
         label = "Use cover accent color",
         pref = screenModel.preferences.useCoverAccentColor(),
         accentColor = accentColor,
@@ -250,12 +257,6 @@ private fun ColumnScope.NovelGeneralSettingsPage(
 
     // ---- Reader tools sub-section ----
     SubHeader("Reader tools", accentColor)
-
-    CheckboxItem(
-        label = "Estimated reading time",
-        pref = screenModel.preferences.showEstimatedReadingTime(),
-        accentColor = accentColor,
-    )
 
     CheckboxItem(
         label = "Smart-fit margins",
@@ -274,74 +275,6 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         pref = screenModel.preferences.eInkBinarization(),
         accentColor = accentColor,
     )
-
-    // ---- Typography sub-section (Tier 3) ----
-    SubHeader("Typography", accentColor)
-
-    val typographyPreset by screenModel.preferences.typographyPreset().collectAsState()
-    val typographyLabels = listOf("Custom", "Super Golden", "Golden")
-    val typographyValues = NovelReaderTypographyPreset.entries
-    SettingsDropdown(
-        label = "Typography preset",
-        selectedLabel = typographyLabels[typographyValues.indexOf(typographyPreset)],
-        options = typographyLabels,
-    ) { index ->
-        screenModel.preferences.typographyPreset().set(typographyValues[index])
-        screenModel.onTextSettingChange()
-    }
-
-    CheckboxItem(
-        label = "Force paragraph indent",
-        pref = screenModel.preferences.forceParagraphIndent(),
-        accentColor = accentColor,
-    )
-
-    CheckboxItem(
-        label = "Force bold text",
-        pref = screenModel.preferences.forceBoldText(),
-        accentColor = accentColor,
-    )
-
-    CheckboxItem(
-        label = "Force italic text",
-        pref = screenModel.preferences.forceItalicText(),
-        accentColor = accentColor,
-    )
-
-    // ---- Text shadow sub-section (Tier 3) ----
-    SubHeader("Text shadow", accentColor)
-
-    CheckboxItem(
-        label = "Enable text shadow",
-        pref = screenModel.preferences.textShadowEnabled(),
-        accentColor = accentColor,
-    )
-
-    val textShadowBlur by screenModel.preferences.textShadowBlur().collectAsState()
-    FloatSliderItem(
-        label = "Shadow blur",
-        value = textShadowBlur,
-        valueRange = 0f..20f,
-        valueText = "%.1f".format(textShadowBlur),
-        steps = 19,
-        accentColor = accentColor,
-    ) { newValue ->
-        screenModel.preferences.textShadowBlur().set(newValue)
-        screenModel.onTextSettingChange()
-    }
-
-    val textShadowY by screenModel.preferences.textShadowY().collectAsState()
-    FloatSliderItem(
-        label = "Shadow Y offset",
-        value = textShadowY,
-        valueRange = -10f..10f,
-        valueText = "%.1f".format(textShadowY),
-        steps = 19,
-        accentColor = accentColor,
-    ) { newValue ->
-        screenModel.preferences.textShadowY().set(newValue)
-        screenModel.onTextSettingChange()
-    }
 
     // ---- Background texture sub-section (Tier 3) ----
     SubHeader("Background texture", accentColor)
@@ -493,6 +426,12 @@ private fun ColumnScope.NovelGeneralSettingsPage(
     )
 
     CheckboxItem(
+        label = "Estimated reading time",
+        pref = screenModel.preferences.showEstimatedReadingTime(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
         label = "Time to end",
         pref = screenModel.preferences.showTimeToEnd(),
         accentColor = accentColor,
@@ -635,4 +574,84 @@ private fun ColumnScope.NovelTextSettingsPage(
         pref = screenModel.preferences.bionicReading(),
         accentColor = accentColor,
     )
+
+    // ---- Typography sub-section ----
+    SubHeader("Typography", accentColor)
+
+    val typographyPreset by screenModel.preferences.typographyPreset().collectAsState()
+    val typographyLabels = listOf("Custom", "Super Golden", "Golden")
+    val typographyValues = NovelReaderTypographyPreset.entries
+    SettingsDropdown(
+        label = "Typography preset",
+        selectedLabel = typographyLabels[typographyValues.indexOf(typographyPreset)],
+        options = typographyLabels,
+    ) { index ->
+        screenModel.preferences.typographyPreset().set(typographyValues[index])
+        screenModel.onTextSettingChange()
+    }
+
+    CheckboxItem(
+        label = "Force paragraph indent",
+        pref = screenModel.preferences.forceParagraphIndent(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Force bold text",
+        pref = screenModel.preferences.forceBoldText(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Force italic text",
+        pref = screenModel.preferences.forceItalicText(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Preserve source text alignment",
+        pref = screenModel.preferences.preserveSourceTextAlignInNative(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Enable text selection",
+        pref = screenModel.preferences.textSelectionEnabled(),
+        accentColor = accentColor,
+    )
+
+    // ---- Text shadow sub-section ----
+    SubHeader("Text shadow", accentColor)
+
+    CheckboxItem(
+        label = "Enable text shadow",
+        pref = screenModel.preferences.textShadowEnabled(),
+        accentColor = accentColor,
+    )
+
+    val textShadowBlur by screenModel.preferences.textShadowBlur().collectAsState()
+    FloatSliderItem(
+        label = "Shadow blur",
+        value = textShadowBlur,
+        valueRange = 0f..20f,
+        valueText = "%.1f".format(textShadowBlur),
+        steps = 19,
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.textShadowBlur().set(newValue)
+        screenModel.onTextSettingChange()
+    }
+
+    val textShadowY by screenModel.preferences.textShadowY().collectAsState()
+    FloatSliderItem(
+        label = "Shadow Y offset",
+        value = textShadowY,
+        valueRange = -10f..10f,
+        valueText = "%.1f".format(textShadowY),
+        steps = 19,
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.textShadowY().set(newValue)
+        screenModel.onTextSettingChange()
+    }
 }

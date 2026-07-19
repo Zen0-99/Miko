@@ -59,6 +59,8 @@ import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.library.service.LibraryPreferences
 
+enum class RangeMode { Read, Unread }
+
 @Composable
 fun NovelScreen(
     state: NovelScreenModel.State.Success,
@@ -105,6 +107,9 @@ fun NovelScreen(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    onOpenChapterInWebView: ((NovelChapter) -> Unit)? = null,
+    onMarkPreviousChaptersAsRead: (NovelChapter, Boolean) -> Unit = { _, _ -> },
+    onMarkChapterRangeAsRead: (NovelChapter, NovelChapter, Boolean) -> Unit = { _, _, _ -> },
 ) {
     if (isTabletUi) {
         NovelScreenLargeImpl(
@@ -151,6 +156,9 @@ fun NovelScreen(
             onSuggestionClick = onSuggestionClick,
             onOpenSuggestions = onOpenSuggestions,
             onRetrySuggestions = onRetrySuggestions,
+            onOpenChapterInWebView = onOpenChapterInWebView,
+            onMarkPreviousChaptersAsRead = onMarkPreviousChaptersAsRead,
+            onMarkChapterRangeAsRead = onMarkChapterRangeAsRead,
         )
     } else {
         NovelScreenSmallImpl(
@@ -197,6 +205,9 @@ fun NovelScreen(
             onSuggestionClick = onSuggestionClick,
             onOpenSuggestions = onOpenSuggestions,
             onRetrySuggestions = onRetrySuggestions,
+            onOpenChapterInWebView = onOpenChapterInWebView,
+            onMarkPreviousChaptersAsRead = onMarkPreviousChaptersAsRead,
+            onMarkChapterRangeAsRead = onMarkChapterRangeAsRead,
         )
     }
 }
@@ -246,12 +257,17 @@ private fun NovelScreenSmallImpl(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    onOpenChapterInWebView: ((NovelChapter) -> Unit)? = null,
+    onMarkPreviousChaptersAsRead: (NovelChapter, Boolean) -> Unit = { _, _ -> },
+    onMarkChapterRangeAsRead: (NovelChapter, NovelChapter, Boolean) -> Unit = { _, _, _ -> },
 ) {
     val chapterListState = rememberLazyListState()
 
     val chapters = remember(state) { state.processedChapters }
     val isAnySelected = remember(state) { state.isAnySelected }
     var showEditDialog by remember { mutableStateOf(false) }
+    var longPressChapter by remember { mutableStateOf<NovelChapter?>(null) }
+    var rangeMarkStart by remember { mutableStateOf<Pair<NovelChapter, RangeMode>?>(null) }
 
     if (showEditDialog) {
         NovelEditDialog(
@@ -265,10 +281,11 @@ private fun NovelScreenSmallImpl(
     }
 
     BackHandler(onBack = {
-        if (isAnySelected) {
-            onAllChapterSelected(false)
-        } else {
-            navigateUp()
+        when {
+            rangeMarkStart != null -> rangeMarkStart = null
+            longPressChapter != null -> longPressChapter = null
+            isAnySelected -> onAllChapterSelected(false)
+            else -> navigateUp()
         }
     })
 
@@ -445,8 +462,24 @@ private fun NovelScreenSmallImpl(
                             stringResource(MR.strings.novel_chapter_progress, it)
                         },
                         scanlator = chapterItem.chapter.scanlator,
-                        onClick = { onChapterClicked(chapterItem.chapter) },
-                        onLongClick = { onChapterSelected(chapterItem, !chapterItem.selected, true, true) },
+                        onClick = {
+                            val rangeStart = rangeMarkStart
+                            if (rangeStart != null) {
+                                onMarkChapterRangeAsRead(rangeStart.first, chapterItem.chapter, rangeStart.second == RangeMode.Read)
+                                rangeMarkStart = null
+                            } else {
+                                onChapterClicked(chapterItem.chapter)
+                            }
+                        },
+                        onLongClick = {
+                            val rangeStart = rangeMarkStart
+                            if (rangeStart != null) {
+                                onMarkChapterRangeAsRead(rangeStart.first, chapterItem.chapter, rangeStart.second == RangeMode.Read)
+                                rangeMarkStart = null
+                            } else {
+                                longPressChapter = chapterItem.chapter
+                            }
+                        },
                         onDownloadClick = if (onDownloadChapter != null) {
                             { onDownloadChapter(listOf(chapterItem), it) }
                         } else {
@@ -505,6 +538,29 @@ private fun NovelScreenSmallImpl(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+
+    val longPressChapterVal = longPressChapter
+    if (longPressChapterVal != null) {
+        NovelChapterLongPressSheet(
+            chapterTitle = longPressChapterVal.name,
+            onDismiss = { longPressChapter = null },
+            onOpenInWebView = {
+                onOpenChapterInWebView?.invoke(longPressChapterVal)
+            },
+            onMarkPreviousAsRead = {
+                onMarkPreviousChaptersAsRead(longPressChapterVal, true)
+            },
+            onMarkPreviousAsUnread = {
+                onMarkPreviousChaptersAsRead(longPressChapterVal, false)
+            },
+            onMarkRangeAsRead = {
+                rangeMarkStart = longPressChapterVal to RangeMode.Read
+            },
+            onMarkRangeAsUnread = {
+                rangeMarkStart = longPressChapterVal to RangeMode.Unread
+            },
+        )
+    }
 }
 
 @Composable
@@ -552,6 +608,9 @@ private fun NovelScreenLargeImpl(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    onOpenChapterInWebView: ((NovelChapter) -> Unit)? = null,
+    onMarkPreviousChaptersAsRead: (NovelChapter, Boolean) -> Unit = { _, _ -> },
+    onMarkChapterRangeAsRead: (NovelChapter, NovelChapter, Boolean) -> Unit = { _, _, _ -> },
 ) {
     NovelScreenSmallImpl(
         state = state,
@@ -596,5 +655,8 @@ private fun NovelScreenLargeImpl(
         onSuggestionClick = onSuggestionClick,
         onOpenSuggestions = onOpenSuggestions,
         onRetrySuggestions = onRetrySuggestions,
+        onOpenChapterInWebView = onOpenChapterInWebView,
+        onMarkPreviousChaptersAsRead = onMarkPreviousChaptersAsRead,
+        onMarkChapterRangeAsRead = onMarkChapterRangeAsRead,
     )
 }

@@ -49,7 +49,7 @@ class NovelReaderPreferences(
     fun inlinePhoneInfo() = preferenceStore.getBoolean("pref_novel_inline_phone_info", false)
 
     /** Show estimated reading time for the current chapter in the reader chrome. */
-    fun showEstimatedReadingTime() = preferenceStore.getBoolean("pref_novel_show_reading_time", true)
+    fun showEstimatedReadingTime() = preferenceStore.getBoolean("pref_novel_show_reading_time", false)
 
     /** Smart-fit margins: automatically adjust side padding based on screen width. */
     fun smartFitMargins() = preferenceStore.getBoolean("pref_novel_smart_fit_margins", false)
