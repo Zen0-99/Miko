@@ -12,6 +12,10 @@ sealed class NovelFilter<T>(val name: String, var state: T) {
         name,
         state,
     )
+    abstract class Switch(name: String, state: Boolean = false) : NovelFilter<Boolean>(
+        name,
+        state,
+    )
     abstract class TriState(name: String, state: Int = STATE_IGNORE) : NovelFilter<Int>(name, state) {
         fun isIgnored() = state == STATE_IGNORE
         fun isIncluded() = state == STATE_INCLUDE
@@ -25,6 +29,17 @@ sealed class NovelFilter<T>(val name: String, var state: T) {
     }
 
     abstract class Group<V>(name: String, state: List<V>) : NovelFilter<List<V>>(name, state)
+
+    abstract class Picker<V>(name: String, values: Array<V>, state: Int = 0) :
+        Select<V>(name, values, state)
+
+    abstract class XCheckBox(name: String, state: Int = STATE_IGNORE) : TriState(name, state) {
+        companion object {
+            const val STATE_IGNORE = TriState.STATE_IGNORE
+            const val STATE_INCLUDE = TriState.STATE_INCLUDE
+            const val STATE_EXCLUDE = TriState.STATE_EXCLUDE
+        }
+    }
 
     abstract class Sort(name: String, val values: Array<String>, state: Selection? = null) :
         NovelFilter<Sort.Selection?>(name, state) {

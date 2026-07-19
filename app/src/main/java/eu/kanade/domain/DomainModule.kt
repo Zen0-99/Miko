@@ -59,6 +59,12 @@ import eu.kanade.domain.track.manga.interactor.AddMangaTracks
 import eu.kanade.domain.track.manga.interactor.RefreshMangaTracks
 import eu.kanade.domain.track.manga.interactor.SyncChapterProgressWithTrack
 import eu.kanade.domain.track.manga.interactor.TrackChapter
+import eu.kanade.tachiyomi.extension.novel.NovelExtensionUpdateChecker
+import eu.kanade.tachiyomi.extension.novel.repo.NovelExtensionListingInteractor
+import eu.kanade.tachiyomi.extension.novel.repo.NovelPluginRepoParser
+import eu.kanade.tachiyomi.extension.novel.repo.NovelPluginRepoService
+import eu.kanade.tachiyomi.extension.novel.repo.NovelPluginRepoServiceContract
+import eu.kanade.tachiyomi.extension.novel.repo.NovelPluginRepoUpdateInteractor
 import eu.kanade.tachiyomi.ui.player.utils.TrackSelect
 import mihon.data.repository.anime.AnimeExtensionRepoRepositoryImpl
 import mihon.data.repository.manga.MangaExtensionRepoRepositoryImpl
@@ -98,6 +104,7 @@ import tachiyomi.data.entries.manga.MangaRepositoryImpl
 import tachiyomi.data.entries.novel.NovelRepositoryImpl
 import tachiyomi.data.entries.novel.NovelLinkRepositoryImpl
 import tachiyomi.data.category.novel.NovelCategoryRepositoryImpl
+import tachiyomi.data.extension.novel.NovelPluginRepositoryImpl
 import tachiyomi.data.history.anime.AnimeHistoryRepositoryImpl
 import tachiyomi.data.history.manga.MangaHistoryRepositoryImpl
 import tachiyomi.data.history.novel.NovelHistoryRepositoryImpl
@@ -229,6 +236,7 @@ import tachiyomi.domain.items.chapter.repository.ChapterRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
+import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
 import tachiyomi.domain.items.episode.interactor.GetEpisode
 import tachiyomi.domain.items.episode.interactor.GetEpisodeByUrlAndAnimeId
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
@@ -504,6 +512,14 @@ class DomainModule : InjektModule {
         addFactory { DeleteNovelExtensionRepo(get()) }
         addFactory { ReplaceNovelExtensionRepo(get()) }
         addFactory { UpdateNovelExtensionRepo(get(), get()) }
+
+        addSingletonFactory<NovelPluginRepository> { NovelPluginRepositoryImpl(get()) }
+        addSingletonFactory<NovelPluginRepoServiceContract> {
+            NovelPluginRepoService(get(), NovelPluginRepoParser(get()))
+        }
+        addFactory { NovelExtensionUpdateChecker() }
+        addFactory { NovelPluginRepoUpdateInteractor(get(), get(), get()) }
+        addFactory { NovelExtensionListingInteractor() }
 
         addSingletonFactory<NovelRepository> { NovelRepositoryImpl(get(), get()) }
         addSingletonFactory<NovelLinkRepository> { NovelLinkRepositoryImpl(get()) }

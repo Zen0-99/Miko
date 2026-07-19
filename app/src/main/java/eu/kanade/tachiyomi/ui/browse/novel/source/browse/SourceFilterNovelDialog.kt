@@ -94,6 +94,15 @@ private fun NovelFilterItem(filter: NovelFilter<*>, onUpdate: () -> Unit) {
                 onUpdate()
             }
         }
+        is NovelFilter.Switch -> {
+            CheckboxItem(
+                label = filter.name,
+                checked = filter.state,
+            ) {
+                filter.state = !filter.state
+                onUpdate()
+            }
+        }
         is NovelFilter.TriState -> {
             TriStateItem(
                 label = filter.name,

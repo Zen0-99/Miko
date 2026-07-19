@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.novel.js
+package eu.kanade.tachiyomi.extension.novel.runtime
 
 import java.nio.ByteBuffer
 import java.security.MessageDigest

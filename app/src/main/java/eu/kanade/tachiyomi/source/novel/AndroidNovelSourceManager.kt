@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -25,12 +27,21 @@ class AndroidNovelSourceManager(
     private val context: Context,
     private val extensionManager: NovelExtensionManager,
     private val sourceRepository: NovelStubSourceRepository,
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * Optional flow of JS plugin sources. When provided, JS plugin sources
+     * are merged alongside APK extension sources in the source manager.
+     *
+     * This is additive — APK extension sources continue to work exactly as
+     * before. JS sources are simply added to the same map.
+     */
+    private val jsSourcesFlow: Flow<List<NovelSource>> = emptyFlow(),
 ) : NovelSourceManager {
 
     private val _isInitialized = MutableStateFlow(false)
     override val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
-    private val scope = CoroutineScope(Job() + Dispatchers.IO)
+    private val scope = CoroutineScope(Job() + dispatcher)
 
     private val sourcesMapFlow = MutableStateFlow(ConcurrentHashMap<Long, NovelSource>())
 
@@ -50,6 +61,28 @@ class AndroidNovelSourceManager(
                             mutableMap[it.id] = it
                             registerStubSource(StubNovelSource.from(it))
                         }
+                    }
+                    // Merge JS plugin sources alongside APK extension sources
+                    val existingIds = mutableMap.keys.toSet()
+                    sourcesMapFlow.value.forEach { (id, source) ->
+                        if (id !in existingIds) {
+                            mutableMap[id] = source
+                        }
+                    }
+                    sourcesMapFlow.value = mutableMap
+                    _isInitialized.value = true
+                }
+        }
+
+        scope.launch {
+            jsSourcesFlow
+                .collectLatest { jsSources ->
+                    val mutableMap = ConcurrentHashMap(sourcesMapFlow.value)
+                    jsSources.forEach { source ->
+                        mutableMap[source.id] = source
+                        registerStubSource(
+                            StubNovelSource(id = source.id, lang = source.lang, name = source.name),
+                        )
                     }
                     sourcesMapFlow.value = mutableMap
                     _isInitialized.value = true

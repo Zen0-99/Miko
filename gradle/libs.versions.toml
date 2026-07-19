@@ -26,6 +26,7 @@ okio = "com.squareup.okio:okio:3.10.2"
 conscrypt-android = "org.conscrypt:conscrypt-android:2.5.3"
 
 quickjs-android = "com.github.zhanghai.quickjs-java:quickjs-android:547f5b1597"
+j2v8-android = "com.eclipsesource.j2v8:j2v8:6.3.4"
 
 jsoup = "org.jsoup:jsoup:1.19.1"
 
@@ -104,7 +105,7 @@ moko = { id = "dev.icerock.mobile.multiplatform-resources", version.ref = "moko"
 
 [bundles]
 okhttp = ["okhttp-core", "okhttp-logging", "okhttp-brotli", "okhttp-dnsoverhttps"]
-js-engine = ["quickjs-android"]
+js-engine = ["quickjs-android", "j2v8-android"]
 sqlite = ["sqlite-framework", "sqlite-ktx", "sqlite-android"]
 coil = ["coil-core", "coil-gif", "coil-compose", "coil-network-okhttp"]
 shizuku = ["shizuku-api", "shizuku-provider"]
