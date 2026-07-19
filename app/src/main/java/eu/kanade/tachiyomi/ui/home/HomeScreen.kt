@@ -7,6 +7,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -141,6 +142,7 @@ object HomeScreen : Screen() {
             CompositionLocalProvider(LocalNavigator provides navigator) {
                 val hazeState = remember { HazeState() }
                 Scaffold(
+                    containerColor = Color.Transparent,
                     startBar = {
                         if (isTabletUi()) {
                             NavigationRail {
@@ -209,6 +211,7 @@ object HomeScreen : Screen() {
                             modifier = Modifier
                                 .padding(contentPadding)
                                 .consumeWindowInsets(contentPadding)
+                                .background(MaterialTheme.colorScheme.background)
                                 .hazeSource(hazeState),
                         ) {
                             AnimatedContent(

@@ -1,6 +1,7 @@
 package eu.kanade.presentation.library.components
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FilterList
@@ -14,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.components.AppBar
@@ -79,12 +81,30 @@ private fun LibraryRegularToolbar(
     SearchToolbar(
         titleContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = title.text,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f, false),
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (title.subtitle != null) {
+                    Column(modifier = Modifier.weight(1f, false)) {
+                        Text(
+                            text = title.text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = title.subtitle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = title.text,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, false),
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (title.numberOfEntries != null) {
                     Pill(
                         text = "${title.numberOfEntries}",
@@ -159,5 +179,6 @@ private fun LibrarySelectionToolbar(
 @Immutable
 data class LibraryToolbarTitle(
     val text: String,
+    val subtitle: String? = null,
     val numberOfEntries: Int? = null,
 )

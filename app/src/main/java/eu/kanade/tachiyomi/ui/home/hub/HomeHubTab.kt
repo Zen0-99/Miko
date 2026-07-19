@@ -519,81 +519,79 @@ private fun SectionHeader(
     }
 }
 
-// --- History Row (AuroraPoster style cards) ---
+// --- History Row (full-height cover art cards) ---
 
 @Composable
 private fun HistoryRow(items: List<HomeHubCardItem>, onItemClick: (HomeHubCardItem) -> Unit) {
-    val cardShape = RoundedCornerShape(18.dp)
-    val posterShape = RoundedCornerShape(16.dp)
+    val cardShape = RoundedCornerShape(16.dp)
 
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(items) { item ->
-            Card(
+            Box(
                 modifier = Modifier
-                    .width(128.dp)
+                    .width(120.dp)
+                    .height(200.dp)
                     .clip(cardShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .clickable { onItemClick(item) },
-                shape = cardShape,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             ) {
-                Column(modifier = Modifier.padding(6.dp)) {
-                    // Poster image: aspect ratio 0.9, RoundedCornerShape(16.dp)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(0.9f)
-                            .clip(posterShape)
-                            .background(MaterialTheme.colorScheme.surface),
-                    ) {
-                        AsyncImage(
-                            model = item.coverData,
-                            contentDescription = item.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
+                // Full-height cover image
+                AsyncImage(
+                    model = item.coverData,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
-                    Spacer(Modifier.height(8.dp))
+                // Bottom gradient overlay for text readability
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0.00f to Color.Transparent,
+                                    0.35f to Color.Black.copy(alpha = 0.35f),
+                                    1.00f to Color.Black.copy(alpha = 0.82f),
+                                ),
+                            ),
+                        ),
+                )
 
-                    // Text block: min height 58.dp
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 58.dp)
-                            .padding(horizontal = 2.dp),
-                        verticalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        // Title: 14sp, SemiBold, lineHeight=17sp, maxLines=2
+                // Title + subtitle overlaid at bottom
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = item.title,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 16.sp,
+                    )
+                    if (!item.progressText.isNullOrEmpty()) {
                         Text(
-                            text = item.title,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
+                            text = item.progressText,
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            lineHeight = 17.sp,
                         )
-
-                        // Subtitle: 11sp, onSurfaceVariant, maxLines=1
-                        if (!item.progressText.isNullOrEmpty()) {
-                            Text(
-                                text = item.progressText,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
                     }
                 }
             }
         }
     }
 }
+

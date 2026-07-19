@@ -28,7 +28,6 @@ class BrowserHeadersInterceptor : Interceptor {
 
         addIfMissing(requestBuilder, "Accept", DEFAULT_ACCEPT)
         addIfMissing(requestBuilder, "Accept-Language", DEFAULT_ACCEPT_LANGUAGE)
-        addIfMissing(requestBuilder, "Accept-Encoding", DEFAULT_ACCEPT_ENCODING)
         addIfMissing(requestBuilder, "Sec-Fetch-Dest", "document")
         addIfMissing(requestBuilder, "Sec-Fetch-Mode", "navigate")
         addIfMissing(requestBuilder, "Sec-Fetch-Site", "none")
@@ -48,6 +47,5 @@ class BrowserHeadersInterceptor : Interceptor {
         private const val DEFAULT_ACCEPT =
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
         private const val DEFAULT_ACCEPT_LANGUAGE = "en-US,en;q=0.9"
-        private const val DEFAULT_ACCEPT_ENCODING = "gzip, deflate, br"
     }
 }

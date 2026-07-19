@@ -797,7 +797,9 @@ class AnimeLibraryScreenModel(
             val categoryName = category.let {
                 if (it.isSystemCategory) defaultCategoryTitle else it.name
             }
-            val title = if (showCategoryTabs) defaultTitle else categoryName
+            // Title is always "Library"; subtitle is the current category name
+            // only shown when there is more than one category.
+            val subtitle = if (categories.size > 1) categoryName else null
             val count = when {
                 !showAnimeCount -> null
                 !showCategoryTabs -> getAnimeCountForCategory(category)
@@ -805,7 +807,7 @@ class AnimeLibraryScreenModel(
                 else -> libraryCount
             }
 
-            return LibraryToolbarTitle(title, count)
+            return LibraryToolbarTitle(defaultTitle, subtitle, count)
         }
     }
 }
