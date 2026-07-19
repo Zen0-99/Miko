@@ -12,6 +12,7 @@ class MangaLibraryItem(
     var unreadCount: Long = -1,
     var isLocal: Boolean = false,
     var sourceLanguage: String = "",
+    var pinned: Boolean = false,
     private val sourceManager: MangaSourceManager = Injekt.get(),
 ) {
     /**

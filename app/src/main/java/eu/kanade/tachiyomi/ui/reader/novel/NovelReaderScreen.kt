@@ -41,6 +41,7 @@ import eu.kanade.presentation.novel.reader.NovelChaptersSheet
 import eu.kanade.presentation.novel.reader.NovelCommentsDialog
 import eu.kanade.presentation.novel.reader.NovelReaderChrome
 import eu.kanade.presentation.novel.reader.NovelReaderSettingsDialog
+import eu.kanade.presentation.novel.reader.NovelTtsControlsBar
 import eu.kanade.presentation.novel.reader.NovelReaderSettingsScreenModel
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.reader.novel.dictionary.DictionaryBottomSheet
@@ -71,6 +72,8 @@ class NovelReaderScreen(
         DisposableEffect(Unit) {
             onDispose {
                 screenModel.saveCurrentPosition()
+                screenModel.stopTtsPlayback()
+                screenModel.unbindTtsService()
                 screenModel.shutdownTts()
             }
         }
@@ -91,6 +94,7 @@ class NovelReaderScreen(
         val textConfig by screenModel.textConfig.collectAsStateWithLifecycle()
         val dictionaryQuery by screenModel.dictionaryQuery.collectAsStateWithLifecycle()
         val progressPercent by screenModel.progressPercent.collectAsStateWithLifecycle()
+        val ttsPlaybackState by screenModel.ttsPlaybackState.collectAsStateWithLifecycle()
 
         // Accent color: use cover-derived color if the preference is enabled
         val useCoverAccent by screenModel.preferences.useCoverAccentColor().collectAsState()
@@ -238,6 +242,7 @@ class NovelReaderScreen(
                 showPhoneInfo = screenModel.preferences.inlinePhoneInfo().get(),
                 readerBackgroundColor = bgColor,
                 showCommentsButton = screenModel.supportsComments,
+                isTtsActive = screenModel.isTtsActive,
                 onBackClick = { navigator.pop() },
                 onChaptersClick = { screenModel.showChapters() },
                 onWebviewClick = { screenModel.openChapterInWebView() },
@@ -248,7 +253,30 @@ class NovelReaderScreen(
                 },
                 onSettingsClick = { screenModel.showSettings() },
                 onCommentsClick = { screenModel.showComments() },
+                onTtsClick = {
+                    if (screenModel.isTtsActive) {
+                        screenModel.stopTtsPlayback()
+                    } else {
+                        screenModel.startTtsPlayback()
+                    }
+                },
             )
+
+            // TTS playback controls bar — shown above the bottom bar when TTS is active
+            if (screenModel.ttsPreferences.showTtsControls().get()) {
+                NovelTtsControlsBar(
+                    state = ttsPlaybackState,
+                    onPlay = { screenModel.resumeTtsPlayback() },
+                    onPause = { screenModel.pauseTtsPlayback() },
+                    onNext = { screenModel.nextTtsParagraph() },
+                    onPrevious = { screenModel.previousTtsParagraph() },
+                    onStop = { screenModel.stopTtsPlayback() },
+                    accentColor = accentColor,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = if (isControlsVisible) 56.dp else 0.dp),
+                )
+            }
         }
 
         if (isSettingsVisible) {

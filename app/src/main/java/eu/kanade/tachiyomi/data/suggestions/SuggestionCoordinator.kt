@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.data.suggestions
 
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.suggestions.sources.AniListRecommendationSource
+import eu.kanade.tachiyomi.data.suggestions.sources.MangaUpdatesSimilarSource
+import eu.kanade.tachiyomi.data.suggestions.sources.MyAnimeListRecommendationSource
+import eu.kanade.tachiyomi.data.suggestions.sources.NovelUpdatesSimilarSource
 import eu.kanade.tachiyomi.data.suggestions.sources.RecommendationPagingSource
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import eu.kanade.tachiyomi.data.suggestions.util.bestMatchScoreFor
@@ -11,28 +15,52 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withTimeoutOrNull
 import tachiyomi.core.common.util.system.logcat
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * Orchestrates external recommendation sources in parallel.
  *
  * Currently supports:
  * - AniList (all media types)
- *
- * Future sources to add:
  * - MyAnimeList/Jikan (anime only)
  * - MangaUpdates (manga + novels)
  * - NovelUpdates (novels only)
  */
-class SuggestionCoordinator {
+class SuggestionCoordinator(
+    private val sourcePreferences: SourcePreferences = Injekt.get(),
+) {
 
     private companion object {
         const val PROVIDER_TIMEOUT_MS = 10_000L
     }
 
+    /**
+     * Build the set of external recommendation sources for [mediaType].
+     *
+     * - AniList is always included (covers MANGA, ANIME, and NOVEL).
+     * - MAL is only added for ANIME.
+     * - MangaUpdates is added for both MANGA and NOVEL — gated by the
+     *   [SourcePreferences.suggestionsUseMangaUpdatesNovel] flag.
+     * - NovelUpdates is added for NOVEL only — gated by
+     *   [SourcePreferences.suggestionsUseNovelUpdates].
+     */
     fun createSources(mediaType: SuggestionMediaType): List<RecommendationPagingSource> =
         buildList {
             add(AniListRecommendationSource(mediaType))
-            // TODO: Add MAL, MangaUpdates, NovelUpdates sources
+            if (mediaType == SuggestionMediaType.ANIME) {
+                add(MyAnimeListRecommendationSource(mediaType))
+            }
+            if (mediaType == SuggestionMediaType.MANGA || mediaType == SuggestionMediaType.NOVEL) {
+                if (sourcePreferences.suggestionsUseMangaUpdatesNovel().get()) {
+                    add(MangaUpdatesSimilarSource(mediaType))
+                }
+            }
+            if (mediaType == SuggestionMediaType.NOVEL) {
+                if (sourcePreferences.suggestionsUseNovelUpdates().get()) {
+                    add(NovelUpdatesSimilarSource(mediaType))
+                }
+            }
         }
 
     suspend fun fetchSuggestions(
@@ -45,15 +73,26 @@ class SuggestionCoordinator {
             return@supervisorScope SuggestionFetchResult(emptyList(), 0, 0)
         }
 
+        // Enrich candidates with translated title if available
+        val translatedTitle = MultilingualQueryHelper.translate(seed.primaryTitle)
+        val enrichedCandidates = buildList {
+            addAll(seed.candidateTitles)
+            if (translatedTitle != null) {
+                add(translatedTitle)
+            }
+        }.distinct()
+        val enrichedSeed = seed.copy(candidateTitles = enrichedCandidates)
+
         logcat {
-            "[Coordinator] Fetching '${seed.primaryTitle}' (${seed.mediaType}) via ${sources.map { it.name }}"
+            "[Coordinator] Fetching '${enrichedSeed.primaryTitle}' (${enrichedSeed.mediaType}) via ${sources.map { it.name }}" +
+                " | candidates=${enrichedSeed.candidateTitles}"
         }
 
         val jobs = sources.map { source ->
             async(Dispatchers.IO) {
                 try {
                     val result = withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
-                        source.fetchSuggestions(seed)
+                        source.fetchSuggestions(enrichedSeed)
                     }
                     if (result == null) {
                         logcat { "[Coordinator] ${source.name} TIMEOUT" }
@@ -74,15 +113,15 @@ class SuggestionCoordinator {
         val attemptedSources = sources.size
         val failedSources = results.count { it.second }
         val items = results.flatMap { it.first }
-            .dedupeByCleanTitle(seed)
-            .sortedByDescending { SuggestionSourceWeight.finalScore(it.reason, it.bestMatchScoreFor(seed)) }
+            .dedupeByCleanTitle(enrichedSeed)
+            .sortedByDescending { SuggestionSourceWeight.finalScore(it.reason, it.bestMatchScoreFor(enrichedSeed)) }
             .take(boundedLimit)
 
         val matchedBase = sources.any { it.matchedBase } || results.any { it.first.isNotEmpty() }
 
         logcat {
-            "[Coordinator] Done '${seed.primaryTitle}': ${items.size} items, " +
-                "attempted=$attemptedSources, failed=$failedSources"
+            "[Coordinator] Done '${enrichedSeed.primaryTitle}': ${items.size} items, " +
+                "attempted=$attemptedSources, failed=$failedSources, matchedBase=$matchedBase"
         }
 
         SuggestionFetchResult(

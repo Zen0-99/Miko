@@ -34,6 +34,10 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelOrientation
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundColor
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReadingMode
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderTypographyPreset
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture
+import eu.kanade.tachiyomi.ui.reader.novel.NovelAutoScrollChapterEndBehavior
+import eu.kanade.tachiyomi.ui.reader.novel.NovelPageTransitionStyle
 import eu.kanade.tachiyomi.ui.reader.novel.TextAlignment
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import kotlinx.collections.immutable.persistentListOf
@@ -53,6 +57,7 @@ class NovelReaderSettingsScreenModel(
     val onTextSettingChange: () -> Unit,
     val preferences: NovelReaderPreferences = Injekt.get(),
     val readerPreferences: ReaderPreferences = Injekt.get(),
+    val ttsPreferences: eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences = Injekt.get(),
 ) : ScreenModel
 
 /**
@@ -72,6 +77,7 @@ fun NovelReaderSettingsDialog(
     val tabTitles = persistentListOf(
         stringResource(MR.strings.pref_category_general),
         stringResource(MR.strings.text_settings),
+        "TTS",
     )
     val pagerState = rememberPagerState { tabTitles.size }
     val scope = rememberCoroutineScope()
@@ -134,6 +140,10 @@ fun NovelReaderSettingsDialog(
                 when (page) {
                     0 -> NovelGeneralSettingsPage(screenModel, accentColor)
                     1 -> NovelTextSettingsPage(screenModel, accentColor)
+                    2 -> NovelTtsSettingsPage(
+                        preferences = screenModel.ttsPreferences,
+                        accentColor = accentColor,
+                    )
                 }
             }
         }
@@ -254,6 +264,256 @@ private fun ColumnScope.NovelGeneralSettingsPage(
     CheckboxItem(
         label = "E-Ink binarization",
         pref = screenModel.preferences.eInkBinarization(),
+        accentColor = accentColor,
+    )
+
+    // ---- Typography sub-section (Tier 3) ----
+    SubHeader("Typography", accentColor)
+
+    val typographyPreset by screenModel.preferences.typographyPreset().collectAsState()
+    val typographyLabels = listOf("Custom", "Super Golden", "Golden")
+    val typographyValues = NovelReaderTypographyPreset.entries
+    SettingsDropdown(
+        label = "Typography preset",
+        selectedLabel = typographyLabels[typographyValues.indexOf(typographyPreset)],
+        options = typographyLabels,
+    ) { index ->
+        screenModel.preferences.typographyPreset().set(typographyValues[index])
+        screenModel.onTextSettingChange()
+    }
+
+    CheckboxItem(
+        label = "Force paragraph indent",
+        pref = screenModel.preferences.forceParagraphIndent(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Force bold text",
+        pref = screenModel.preferences.forceBoldText(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Force italic text",
+        pref = screenModel.preferences.forceItalicText(),
+        accentColor = accentColor,
+    )
+
+    // ---- Text shadow sub-section (Tier 3) ----
+    SubHeader("Text shadow", accentColor)
+
+    CheckboxItem(
+        label = "Enable text shadow",
+        pref = screenModel.preferences.textShadowEnabled(),
+        accentColor = accentColor,
+    )
+
+    val textShadowBlur by screenModel.preferences.textShadowBlur().collectAsState()
+    FloatSliderItem(
+        label = "Shadow blur",
+        value = textShadowBlur,
+        valueRange = 0f..20f,
+        valueText = "%.1f".format(textShadowBlur),
+        steps = 19,
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.textShadowBlur().set(newValue)
+        screenModel.onTextSettingChange()
+    }
+
+    val textShadowY by screenModel.preferences.textShadowY().collectAsState()
+    FloatSliderItem(
+        label = "Shadow Y offset",
+        value = textShadowY,
+        valueRange = -10f..10f,
+        valueText = "%.1f".format(textShadowY),
+        steps = 19,
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.textShadowY().set(newValue)
+        screenModel.onTextSettingChange()
+    }
+
+    // ---- Background texture sub-section (Tier 3) ----
+    SubHeader("Background texture", accentColor)
+
+    val bgTexture by screenModel.preferences.backgroundTexture().collectAsState()
+    val textureLabels = listOf("None", "Paper grain", "Linen", "Parchment")
+    val textureValues = NovelReaderBackgroundTexture.entries
+    SettingsDropdown(
+        label = "Texture",
+        selectedLabel = textureLabels[textureValues.indexOf(bgTexture)],
+        options = textureLabels,
+    ) { index ->
+        screenModel.preferences.backgroundTexture().set(textureValues[index])
+        screenModel.onTextSettingChange()
+    }
+
+    val textureStrength by screenModel.preferences.nativeTextureStrength().collectAsState()
+    SliderItem(
+        label = "Texture strength",
+        value = textureStrength,
+        valueRange = 0..100,
+        valueText = "${textureStrength}%",
+        steps = 99,
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.nativeTextureStrength().set(newValue)
+        screenModel.onTextSettingChange()
+    }
+
+    CheckboxItem(
+        label = "OLED edge gradient",
+        pref = screenModel.preferences.oledEdgeGradient(),
+        accentColor = accentColor,
+    )
+
+    // ---- Auto-scroll sub-section (Tier 3) ----
+    SubHeader("Auto-scroll", accentColor)
+
+    CheckboxItem(
+        label = "Enable auto-scroll",
+        pref = screenModel.preferences.autoScroll(),
+        accentColor = accentColor,
+    )
+
+    val autoScrollInterval by screenModel.preferences.autoScrollInterval().collectAsState()
+    SliderItem(
+        label = "Scroll interval",
+        value = autoScrollInterval,
+        valueRange = 500..10000,
+        valueText = "${autoScrollInterval}ms",
+        steps = 94,
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.autoScrollInterval().set(newValue)
+    }
+
+    val autoScrollOffset by screenModel.preferences.autoScrollOffset().collectAsState()
+    SliderItem(
+        label = "Scroll step (px)",
+        value = autoScrollOffset,
+        valueRange = 10..500,
+        valueText = "${autoScrollOffset}px",
+        steps = 489,
+        accentColor = accentColor,
+    ) { newValue ->
+        screenModel.preferences.autoScrollOffset().set(newValue)
+    }
+
+    CheckboxItem(
+        label = "Adaptive delay",
+        pref = screenModel.preferences.autoScrollAdaptiveDelay(),
+        accentColor = accentColor,
+    )
+
+    val autoScrollEndBehavior by screenModel.preferences.autoScrollChapterEndBehavior().collectAsState()
+    val endBehaviorLabels = listOf("Stop at end", "Advance and stop", "Continuous reading")
+    val endBehaviorValues = NovelAutoScrollChapterEndBehavior.entries
+    SettingsDropdown(
+        label = "Chapter end behavior",
+        selectedLabel = endBehaviorLabels[endBehaviorValues.indexOf(autoScrollEndBehavior)],
+        options = endBehaviorLabels,
+    ) { index ->
+        screenModel.preferences.autoScrollChapterEndBehavior().set(endBehaviorValues[index])
+    }
+
+    CheckboxItem(
+        label = "Show floating button",
+        pref = screenModel.preferences.showAutoScrollFloatingButton(),
+        accentColor = accentColor,
+    )
+
+    // ---- Navigation sub-section (Tier 3) ----
+    SubHeader("Navigation", accentColor)
+
+    val pageTransition by screenModel.preferences.pageTransitionStyle().collectAsState()
+    val transitionLabels = listOf("Instant", "Slide", "Depth", "Book", "Curl", "Book flip")
+    val transitionValues = NovelPageTransitionStyle.entries
+    SettingsDropdown(
+        label = "Page transition",
+        selectedLabel = transitionLabels[transitionValues.indexOf(pageTransition)],
+        options = transitionLabels,
+    ) { index ->
+        screenModel.preferences.pageTransitionStyle().set(transitionValues[index])
+    }
+
+    CheckboxItem(
+        label = "Swipe to next chapter",
+        pref = screenModel.preferences.swipeToNextChapter(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Swipe to previous chapter",
+        pref = screenModel.preferences.swipeToPrevChapter(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Tap to scroll",
+        pref = screenModel.preferences.tapToScroll(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Vertical seekbar",
+        pref = screenModel.preferences.verticalSeekbar(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Prefetch next chapter",
+        pref = screenModel.preferences.prefetchNextChapter(),
+        accentColor = accentColor,
+    )
+
+    // ---- Info display sub-section (Tier 3) ----
+    SubHeader("Info display", accentColor)
+
+    CheckboxItem(
+        label = "Scroll percentage",
+        pref = screenModel.preferences.showScrollPercentage(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Battery and time",
+        pref = screenModel.preferences.showBatteryAndTime(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Time to end",
+        pref = screenModel.preferences.showTimeToEnd(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Word count",
+        pref = screenModel.preferences.showWordCount(),
+        accentColor = accentColor,
+    )
+
+    // ---- Text selection sub-section (Tier 3) ----
+    SubHeader("Text selection", accentColor)
+
+    CheckboxItem(
+        label = "Enable text selection",
+        pref = screenModel.preferences.textSelectionEnabled(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Selected text translation",
+        pref = screenModel.preferences.selectedTextTranslationEnabled(),
+        accentColor = accentColor,
+    )
+
+    CheckboxItem(
+        label = "Novel dictionary (Wiktionary)",
+        pref = screenModel.preferences.novelDictionaryEnabled(),
         accentColor = accentColor,
     )
 

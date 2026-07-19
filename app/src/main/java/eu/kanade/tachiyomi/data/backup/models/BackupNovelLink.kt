@@ -23,4 +23,5 @@ data class BackupNovelLink(
     @ProtoNumber(5) var extensionType: String = "apk",
     @ProtoNumber(6) var novelUrl: String = "",
     @ProtoNumber(7) var novelTitle: String = "",
+    @ProtoNumber(8) var priority: Long = 0,
 )

@@ -25,4 +25,6 @@ interface NovelLinkRepository {
     suspend fun getAllLinks(): List<NovelLink>
 
     suspend fun setPrimary(novelId: Long, isPrimary: Boolean)
+
+    suspend fun setPriority(novelId: Long, priority: Long)
 }

@@ -11,6 +11,10 @@ package tachiyomi.domain.entries.novel.model
  * [extensionType] indicates whether the source is an APK extension ("apk")
  * or a JS plugin ("js"). This affects comments routing — only APK sources
  * support comments.
+ *
+ * [priority] controls quality-based source ordering within a cluster.
+ * Lower values = higher priority. When multiple linked sources have the
+ * same chapter number, the source with the lowest priority wins.
  */
 data class NovelLink(
     val id: Long,
@@ -19,4 +23,5 @@ data class NovelLink(
     val sourceId: Long,
     val isPrimary: Boolean,
     val extensionType: String,
+    val priority: Long = 0,
 )

@@ -1,0 +1,243 @@
+package eu.kanade.tachiyomi.data.suggestions.anime
+
+import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
+import eu.kanade.tachiyomi.data.suggestions.MultilingualQueryHelper
+import eu.kanade.tachiyomi.data.suggestions.SuggestionCache
+import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.data.suggestions.SuggestionReason
+import eu.kanade.tachiyomi.data.suggestions.SuggestionSeed
+import eu.kanade.tachiyomi.data.suggestions.SuggestionTitleResolver
+import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.entries.anime.model.Anime
+
+/**
+ * Tiered search fallback engine for anime.
+ *
+ * Searches the active source using title, author, and genre queries in
+ * priority tiers, then scores and deduplicates the results.
+ */
+class AnimeSearchFallbackEngine {
+
+    suspend fun fetchSearchFallback(
+        anime: Anime,
+        source: AnimeCatalogueSource,
+        seed: SuggestionSeed,
+        maxResults: Int = 40,
+        onProgress: ((List<SuggestionItem>) -> Unit)? = null,
+    ): AnimeFallbackOutcome {
+        val boundedMaxResults = maxResults.coerceIn(1, 100)
+        val cacheKey = SuggestionCache.makeKey(
+            "search:${source.id}:limit:$boundedMaxResults",
+            anime.url,
+            "ANIME",
+            seed.candidateTitles,
+        )
+        val cached = SuggestionCache.get(cacheKey)
+        if (cached != null) {
+            logcat { "[AnimeSearchFallbackEngine] Cache HIT for key $cacheKey, count=${cached.size}" }
+            return if (cached.isEmpty()) {
+                AnimeFallbackOutcome.Empty(AnimeFallbackReason.SEARCH_EMPTY)
+            } else {
+                AnimeFallbackOutcome.Success(cached)
+            }
+        }
+
+        logcat { "[AnimeSearchFallbackEngine] Cache MISS. Running tiered search fallback for '${anime.title}'" }
+
+        val authorParts = buildList {
+            val author = anime.author
+            val garbage = setOf(
+                "null", "undefined", "unknown", "none", "no author", "n/a",
+                "нет", "неизвестен", "неизвестный", "неизвестно",
+            )
+            if (!author.isNullOrBlank()) {
+                addAll(
+                    author.split(Regex("[,;/&]"))
+                        .map { it.trim() }
+                        .filter { it.length >= 2 && it.lowercase() !in garbage },
+                )
+            }
+            val artist = anime.artist
+            if (!artist.isNullOrBlank() && artist != author) {
+                addAll(
+                    artist.split(Regex("[,;/&]"))
+                        .map { it.trim() }
+                        .filter { it.length >= 2 && it.lowercase() !in garbage },
+                )
+            }
+        }.distinct()
+
+        val genreParts = buildList {
+            val genres = anime.genre
+            if (!genres.isNullOrEmpty()) {
+                genres.take(3).forEach { genre ->
+                    add(genre)
+                    addAll(MultilingualQueryHelper.getGenreTranslations(genre))
+                }
+            }
+        }.distinct()
+
+        val mainTitle = seed.primaryTitle
+        val titlesToProcess = listOf(mainTitle)
+        val isCyrillicEntry = MultilingualQueryHelper.containsCyrillic(mainTitle)
+
+        // Tier 1: Exact titles
+        val tier1Queries = buildList {
+            addAll(titlesToProcess)
+            SuggestionTitleResolver.parseOriginalTitle(anime.description)?.let { add(it) }
+            addAll(seed.candidateTitles)
+        }.map { it.trim() }
+            .filter { it.length >= 2 }
+            .filter { !isCyrillicEntry || MultilingualQueryHelper.containsCyrillic(it) }
+            .distinct()
+
+        // Tier 2: Relaxed title queries
+        val tier2Queries = buildList {
+            titlesToProcess.forEach { title ->
+                val separators = listOf(":", "-", "(", "[", ",", ";")
+                separators.forEach { sep ->
+                    val part = title.substringBefore(sep).trim()
+                    if (part.isNotEmpty() && part != title && part.length >= 3) {
+                        add(part)
+                    }
+                }
+                val cleaned = SuggestionTitleResolver.cleanTitle(title)
+                if (cleaned.isNotEmpty() && cleaned != title && cleaned.length >= 3) {
+                    add(cleaned)
+                }
+                val words = cleaned.split(Regex("\\s+")).filter { it.isNotBlank() }
+                if (words.size > 4) {
+                    add(words.take(4).joinToString(" "))
+                    add(words.take(3).joinToString(" "))
+                    add(words.take(5).joinToString(" "))
+                }
+            }
+        }.map { it.trim() }
+            .filter { it.length >= 2 }
+            .filter { !isCyrillicEntry || MultilingualQueryHelper.containsCyrillic(it) }
+            .distinct()
+
+        val tier3Queries = authorParts.map { it.trim() }.filter { it.length >= 2 }.distinct()
+        val tier4Queries = genreParts.map { it.trim() }.filter { it.length >= 2 }.distinct()
+
+        val queryTiers = listOf(
+            Pair("Tier 1 (Exact Title)", tier1Queries),
+            Pair("Tier 2 (Relaxed Title)", tier2Queries),
+            Pair("Tier 3 (Author)", tier3Queries),
+            Pair("Tier 4 (Genre)", tier4Queries),
+        )
+
+        val candidatesToScore = seed.candidateTitles.distinct()
+        val uniqueResults = LinkedHashMap<String, SuggestionItem>()
+        val filterList = source.getFilterList()
+        var authorAdded = 0
+        var genreAdded = 0
+        val maxAuthor = 8
+        val maxGenre = 8
+
+        logcat {
+            "[AnimeSearchFallbackEngine] Starting suggestions search for '${anime.title}' (url: ${anime.url}). Candidates: ${seed.candidateTitles}, author: '${anime.author}', genres: ${anime.genre}"
+        }
+
+        for ((tierName, tierQueries) in queryTiers) {
+            if (synchronized(uniqueResults) { uniqueResults.size >= boundedMaxResults }) break
+            if (tierQueries.isEmpty()) continue
+            logcat { "[AnimeSearchFallbackEngine] Processing $tierName with queries: $tierQueries" }
+
+            coroutineScope {
+                tierQueries.forEach { query ->
+                    launch {
+                        if (synchronized(uniqueResults) { uniqueResults.size >= boundedMaxResults }) return@launch
+                        try {
+                            val page = source.getSearchAnime(1, query, filterList)
+                            if (page.animes.isEmpty()) return@launch
+
+                            val isAuthorQuery = authorParts.any { it.equals(query, ignoreCase = true) }
+                            val isGenreQuery = genreParts.any { it.equals(query, ignoreCase = true) }
+                            val isTitleQuery = !isAuthorQuery && !isGenreQuery
+
+                            val scoredItems = page.animes.mapNotNull { sAnime ->
+                                if (sAnime.url == anime.url) return@mapNotNull null
+                                if (SuggestionTitleResolver.isFranchiseDuplicate(sAnime.title, anime.title)) return@mapNotNull null
+                                if (synchronized(uniqueResults) { uniqueResults.containsKey(sAnime.url) }) return@mapNotNull null
+
+                                val bestScore = candidatesToScore.maxOfOrNull { candidate ->
+                                    SuggestionTitleResolver.scoreMatch(candidate, sAnime.title)
+                                } ?: 0
+
+                                val finalScore = when {
+                                    bestScore >= 30 -> bestScore
+                                    isTitleQuery -> 0
+                                    isAuthorQuery -> 40 + minOf(bestScore / 10, 10)
+                                    isGenreQuery -> 30
+                                    else -> 0
+                                }
+
+                                if (finalScore >= 30) {
+                                    val itemReason = when {
+                                        isAuthorQuery -> SuggestionReason.SEARCH_AUTHOR
+                                        isGenreQuery -> SuggestionReason.SEARCH_GENRE
+                                        else -> SuggestionReason.SEARCH_TITLE
+                                    }
+                                    SuggestionItem(
+                                        title = sAnime.title,
+                                        searchQueries = listOf(sAnime.title),
+                                        thumbnailUrl = resolveThumbnail(source, sAnime),
+                                        providerName = source.name,
+                                        reason = itemReason,
+                                        providerUrl = sAnime.url,
+                                        providerId = "${source.id}:${sAnime.url}",
+                                        mediaType = SuggestionMediaType.ANIME,
+                                    ) to finalScore
+                                } else {
+                                    null
+                                }
+                            }
+
+                            val currentProgress = synchronized(uniqueResults) {
+                                if (isGenreQuery && genreAdded >= maxGenre) return@launch
+                                if (isAuthorQuery && authorAdded >= maxAuthor) return@launch
+                                var addedAny = false
+                                scoredItems.sortedByDescending { it.second }.forEach { (item, _) ->
+                                    if (!uniqueResults.containsKey(item.providerUrl) && uniqueResults.size < boundedMaxResults) {
+                                        if ((isGenreQuery && genreAdded >= maxGenre) || (isAuthorQuery && authorAdded >= maxAuthor)) return@forEach
+                                        uniqueResults[item.providerUrl] = item
+                                        addedAny = true
+                                        if (isGenreQuery) genreAdded++
+                                        if (isAuthorQuery) authorAdded++
+                                    }
+                                }
+                                if (addedAny) uniqueResults.values.toList() else null
+                            }
+                            if (currentProgress != null) onProgress?.invoke(currentProgress)
+                        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logcat { "[AnimeSearchFallbackEngine] Search failed for query '$query': ${e.message}" }
+                        }
+                    }
+                }
+            }
+        }
+
+        val items = uniqueResults.values.toList()
+        SuggestionCache.put(cacheKey, items)
+        return if (items.isEmpty()) {
+            AnimeFallbackOutcome.Empty(AnimeFallbackReason.SEARCH_EMPTY)
+        } else {
+            AnimeFallbackOutcome.Success(items)
+        }
+    }
+
+    private suspend fun resolveThumbnail(
+        source: AnimeCatalogueSource,
+        anime: eu.kanade.tachiyomi.animesource.model.SAnime,
+    ): String? {
+        return anime.thumbnail_url?.takeIf { it.isNotBlank() }
+            ?: runCatching { source.getAnimeDetails(anime.copy()).thumbnail_url?.takeIf { it.isNotBlank() } }
+                .getOrNull()
+    }
+}

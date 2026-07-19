@@ -186,6 +186,8 @@ import tachiyomi.domain.entries.novel.interactor.GetNovelLinkedId
 import tachiyomi.domain.entries.novel.interactor.LinkNovels
 import tachiyomi.domain.entries.novel.interactor.UnlinkNovel
 import tachiyomi.domain.entries.novel.interactor.GetAllNovelLinks
+import tachiyomi.domain.entries.novel.interactor.SetNovelSourcePriority
+import tachiyomi.domain.entries.novel.interactor.MergeLinkedNovelChapters
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.interactor.GetDuplicateLibraryNovel
@@ -264,6 +266,7 @@ import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
 import tachiyomi.domain.track.novel.repository.NovelTrackRepository
 import eu.kanade.domain.track.novel.interactor.AddNovelTracks
 import eu.kanade.domain.track.novel.interactor.RefreshNovelTracks
+import eu.kanade.domain.track.service.ResolveTrackProgressSync
 import eu.kanade.domain.track.novel.interactor.SyncNovelChapterProgressWithTrack
 import eu.kanade.domain.track.novel.interactor.TrackNovelChapter
 import tachiyomi.domain.savedsearches.anime.interactor.DeleteAnimeSavedSearch
@@ -518,6 +521,8 @@ class DomainModule : InjektModule {
         addFactory { LinkNovels(get()) }
         addFactory { UnlinkNovel(get()) }
         addFactory { GetAllNovelLinks(get()) }
+        addFactory { SetNovelSourcePriority(get()) }
+        addFactory { MergeLinkedNovelChapters() }
         addFactory { GetLibraryNovels(get()) }
         addFactory { GetVisibleNovelCategories(get()) }
         addFactory { SetNovelCategories(get()) }
@@ -556,7 +561,8 @@ class DomainModule : InjektModule {
         addFactory { DeleteNovelTrack(get()) }
         addFactory { AddNovelTracks(get(), get(), get(), get()) }
         addFactory { TrackNovelChapter(get(), get(), get()) }
-        addFactory { SyncNovelChapterProgressWithTrack(get(), get(), get(), get()) }
+        addFactory { ResolveTrackProgressSync() }
+        addFactory { SyncNovelChapterProgressWithTrack(get(), get(), get(), get(), get()) }
         addFactory { RefreshNovelTracks(get(), get(), get(), get()) }
 
         addSingletonFactory<CustomButtonRepository> { CustomButtonRepositoryImpl(get()) }

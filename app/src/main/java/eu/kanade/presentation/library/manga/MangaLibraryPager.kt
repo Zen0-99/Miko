@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.PreferenceMutableState
+import eu.kanade.presentation.library.AURORA_LARGE_GRID_PERFORMANCE_THRESHOLD
 import eu.kanade.presentation.library.components.GlobalSearchItem
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryItem
 import tachiyomi.domain.library.manga.LibraryManga
@@ -42,6 +43,8 @@ fun MangaLibraryPager(
     onClickManga: (LibraryManga) -> Unit,
     onLongClickManga: (LibraryManga) -> Unit,
     onClickContinueReading: ((LibraryManga) -> Unit)?,
+    onTogglePinned: ((MangaLibraryItem) -> Unit)? = null,
+    onSeriesClicked: ((Long) -> Unit)? = null,
 ) {
     BoxWithConstraints {
         val density = LocalDensity.current
@@ -73,6 +76,9 @@ fun MangaLibraryPager(
             val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val columns by remember(isLandscape) { getColumnsForOrientation(isLandscape) }
 
+            // Performance mode: reduce visual effects when the grid is very large
+            val performanceMode = library.size > AURORA_LARGE_GRID_PERFORMANCE_THRESHOLD
+
             when (displayMode) {
                 LibraryDisplayMode.List -> {
                     MangaLibraryList(
@@ -86,6 +92,7 @@ fun MangaLibraryPager(
                         onClickContinueReading = onClickContinueReading,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        onSeriesClicked = onSeriesClicked,
                     )
                 }
 
@@ -101,6 +108,9 @@ fun MangaLibraryPager(
                         onClickContinueReading = onClickContinueReading,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        onTogglePinned = onTogglePinned,
+                        onSeriesClicked = onSeriesClicked,
+                        performanceMode = performanceMode,
                     )
                 }
 
@@ -115,6 +125,9 @@ fun MangaLibraryPager(
                         onClickContinueReading = onClickContinueReading,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        onTogglePinned = onTogglePinned,
+                        onSeriesClicked = onSeriesClicked,
+                        performanceMode = performanceMode,
                     )
                 }
             }

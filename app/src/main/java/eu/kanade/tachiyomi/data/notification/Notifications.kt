@@ -82,6 +82,12 @@ object Notifications {
     const val ID_NOVEL_CHAPTER_FETCH = -901
 
     /**
+     * Notification channel used for novel TTS playback (background reading)
+     */
+    const val CHANNEL_NOVEL_TTS = "novel_tts_channel"
+    const val ID_NOVEL_TTS = 20260408
+
+    /**
      * Notification channel and ids used for app and extension updates.
      */
     private const val GROUP_APK_UPDATES = "group_apk_updates"
@@ -182,6 +188,10 @@ object Notifications {
                 },
                 buildNotificationChannel(CHANNEL_NOVEL_CHAPTER_FETCH, IMPORTANCE_LOW) {
                     setName("Novel chapter fetching")
+                    setShowBadge(false)
+                },
+                buildNotificationChannel(CHANNEL_NOVEL_TTS, IMPORTANCE_LOW) {
+                    setName("Novel TTS playback")
                     setShowBadge(false)
                 },
                 buildNotificationChannel(CHANNEL_APP_UPDATE, IMPORTANCE_DEFAULT) {

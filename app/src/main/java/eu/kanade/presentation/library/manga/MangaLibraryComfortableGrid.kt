@@ -10,8 +10,10 @@ import eu.kanade.presentation.library.components.DownloadsBadge
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.LazyLibraryGrid
+import eu.kanade.presentation.library.components.PinnedBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.components.globalSearchItem
+import eu.kanade.presentation.library.components.shouldShowContinueViewingAction
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryItem
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.library.manga.LibraryManga
@@ -27,6 +29,9 @@ internal fun MangaLibraryComfortableGrid(
     onClickContinueReading: ((LibraryManga) -> Unit)?,
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
+    onTogglePinned: ((MangaLibraryItem) -> Unit)? = null,
+    onSeriesClicked: ((Long) -> Unit)? = null,
+    performanceMode: Boolean = false,
 ) {
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -60,10 +65,20 @@ internal fun MangaLibraryComfortableGrid(
                         sourceLanguage = libraryItem.sourceLanguage,
                     )
                 },
+                topEndBadge = if (libraryItem.pinned) {
+                    { PinnedBadge() }
+                } else {
+                    null
+                },
                 onLongClick = { onLongClick(libraryItem.libraryManga) },
                 onClick = { onClick(libraryItem.libraryManga) },
-                onClickContinueViewing = if (onClickContinueReading != null && libraryItem.unreadCount > 0) {
-                    { onClickContinueReading(libraryItem.libraryManga) }
+                onClickContinueViewing = if (
+                    shouldShowContinueViewingAction(
+                        hasContinueAction = onClickContinueReading != null,
+                        remainingCount = libraryItem.unreadCount,
+                    )
+                ) {
+                    { onClickContinueReading?.invoke(libraryItem.libraryManga) }
                 } else {
                     null
                 },

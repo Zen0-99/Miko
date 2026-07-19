@@ -80,6 +80,12 @@ class NovelLinkRepositoryImpl(
         }
     }
 
+    override suspend fun setPriority(novelId: Long, priority: Long) {
+        handler.await(inTransaction = true) {
+            novellinksQueries.updatePriority(priority, novelId)
+        }
+    }
+
     private fun mapNovelLink(
         id: Long,
         linkedId: Long,
@@ -87,6 +93,7 @@ class NovelLinkRepositoryImpl(
         sourceId: Long,
         isPrimary: Boolean,
         extensionType: String,
+        priority: Long,
     ): NovelLink {
         return NovelLink(
             id = id,
@@ -95,6 +102,7 @@ class NovelLinkRepositoryImpl(
             sourceId = sourceId,
             isPrimary = isPrimary,
             extensionType = extensionType,
+            priority = priority,
         )
     }
 }

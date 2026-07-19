@@ -32,6 +32,7 @@
         tools:ignore="ProtectedPermissions" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
         android:name=".App"
@@ -288,6 +289,11 @@
         <service
             android:name=".data.torrent.service.TorrentServerService"
             android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name=".ui.reader.novel.tts.NovelTtsPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

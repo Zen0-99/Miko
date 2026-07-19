@@ -421,6 +421,12 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { TorrentServerApi(get(), get()) }
         addSingletonFactory { TorrentServerUtils(get(), get()) }
 
+        // Suggestions pipeline
+        addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.SuggestionCoordinator(get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.anime.AnimeSearchFallbackEngine() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.manga.MangaSearchFallbackEngine() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.novel.NovelSearchFallbackEngine() }
+
         // Asynchronously init expensive components for a faster cold start
         ContextCompat.getMainExecutor(app).execute {
             get<NetworkHelper>()

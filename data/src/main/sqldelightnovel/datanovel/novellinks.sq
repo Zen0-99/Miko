@@ -8,15 +8,16 @@ CREATE TABLE novel_links(
     source_id INTEGER NOT NULL,
     is_primary INTEGER AS Boolean NOT NULL DEFAULT 0,
     extension_type TEXT NOT NULL DEFAULT 'apk',
+    priority INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(novel_id) REFERENCES novels (_id) ON DELETE CASCADE
 );
 
 CREATE INDEX novel_links_linked_id_index ON novel_links(linked_id);
 CREATE INDEX novel_links_novel_id_index ON novel_links(novel_id);
 
--- Get all novels in a linked cluster
+-- Get all novels in a linked cluster, ordered by priority then primary first
 getLinkedNovelsByLinkedId:
-SELECT novel_links.* FROM novel_links WHERE linked_id = :linkedId ORDER BY is_primary DESC;
+SELECT novel_links.* FROM novel_links WHERE linked_id = :linkedId ORDER BY priority ASC, is_primary DESC;
 
 -- Get the primary novel for a linked cluster
 getPrimaryByLinkedId:
@@ -58,3 +59,7 @@ SELECT novel_links.* FROM novel_links;
 -- Set primary status
 setPrimary:
 UPDATE novel_links SET is_primary = :isPrimary WHERE novel_id = :novelId;
+
+-- Set source priority (lower = higher priority for chapter dedup)
+updatePriority:
+UPDATE novel_links SET priority = :priority WHERE novel_id = :novelId;

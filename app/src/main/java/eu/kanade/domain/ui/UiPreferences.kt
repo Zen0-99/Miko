@@ -108,6 +108,12 @@ class UiPreferences(
         ContentMode.NOVEL -> novelThemeDarkAmoled()
     }
 
+    /**
+     * User display name shown in the Home Hub greeting.
+     * Empty string means the default placeholder is used.
+     */
+    fun userName() = preferenceStore.getString("pref_user_name", "")
+
     fun relativeTime() = preferenceStore.getBoolean("relative_time_v2", true)
 
     fun dateFormat() = preferenceStore.getString("app_date_format", "")

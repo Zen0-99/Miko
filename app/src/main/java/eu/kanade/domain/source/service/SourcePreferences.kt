@@ -136,4 +136,33 @@ class SourcePreferences(
         RESMUSH_IT,
     }
     // SY <--
+
+    // Suggestions
+
+    fun entrySuggestionsEnabled() = preferenceStore.getBoolean("entry_suggestions_enabled", true)
+
+    fun entrySuggestionsExpandInline() = preferenceStore.getBoolean("entry_suggestions_expand_inline", true)
+
+    fun entrySuggestionsShowInOverflow() = preferenceStore.getBoolean("entry_suggestions_show_in_overflow", true)
+
+    /**
+     * Suggestion source toggles for NOVEL catalogues.
+     *
+     * Each flag independently controls whether the corresponding source
+     * participates in the "Similar works" pipeline for novels.
+     */
+    fun suggestionsUseMangaUpdatesNovel() = preferenceStore.getBoolean(
+        "suggestions_use_mangaupdates_novel",
+        true,
+    )
+
+    fun suggestionsUseNovelUpdates() = preferenceStore.getBoolean(
+        "suggestions_use_novelupdates",
+        true,
+    )
+
+    fun suggestionsPopularBackfillEnabled() = preferenceStore.getBoolean(
+        "suggestions_popular_backfill_enabled",
+        true,
+    )
 }

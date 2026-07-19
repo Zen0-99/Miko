@@ -391,6 +391,7 @@ class MangaLibraryScreenModel(
                         } else {
                             ""
                         },
+                        pinned = false,
                     )
                 }
                 .groupBy { it.libraryManga.category }

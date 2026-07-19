@@ -1,8 +1,11 @@
 package eu.kanade.tachiyomi.ui.reader.novel
 
 import android.app.Activity
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import android.text.Spanned
 import android.text.Html
 import android.speech.tts.TextToSpeech
@@ -25,6 +28,9 @@ import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.asNovelCover
 import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackService
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackState
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsServiceConnection
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.history.novel.interactor.UpsertNovelHistory
@@ -46,6 +52,7 @@ class NovelReaderScreenModel(
     private val updateNovelChapter: tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter = Injekt.get(),
     val preferences: NovelReaderPreferences = Injekt.get(),
     val readerPreferences: ReaderPreferences = Injekt.get(),
+    val ttsPreferences: NovelTtsPreferences = Injekt.get(),
     val positionTracker: CharacterPositionTracker = Injekt.get(),
 ) : StateScreenModel<NovelReaderScreenModel.State>(State()) {
 
@@ -180,6 +187,19 @@ class NovelReaderScreenModel(
     private var context: Context? = null
     private var tts: TextToSpeech? = null
 
+    // ===== TTS playback service (background reading) =====
+    private var ttsService: NovelTtsPlaybackService? = null
+    private var ttsServiceConnection: NovelTtsServiceConnection? = null
+    private var ttsStateCollectionJob: kotlinx.coroutines.Job? = null
+    private var pendingTtsStart: Triple<List<String>, Int, String>? = null
+
+    private val _ttsPlaybackState = MutableStateFlow(NovelTtsPlaybackState())
+    val ttsPlaybackState = _ttsPlaybackState.asStateFlow()
+
+    /** Whether TTS playback is currently active (initialized or playing). */
+    val isTtsActive: Boolean
+        get() = _ttsPlaybackState.value.isInitialized || _ttsPlaybackState.value.isPlaying
+
     fun initContext(context: Context) {
         this.context = context.applicationContext
     }
@@ -229,6 +249,101 @@ class NovelReaderScreenModel(
         tts?.stop()
         tts?.shutdown()
         tts = null
+    }
+
+    // ===== TTS playback service methods =====
+
+    /**
+     * Start TTS playback of the full chapter via the foreground service.
+     * Extracts paragraph texts from the current content items.
+     */
+    fun startTtsPlayback(startIndex: Int = 0) {
+        val ctx = context ?: return
+        val items = _contentItems.value
+        val paragraphs = items
+            .filterIsInstance<TextItem.Paragraph>()
+            .map { it.text.toString() }
+            .filter { it.isNotBlank() }
+        if (paragraphs.isEmpty()) return
+
+        val title = currentChapter.value?.name ?: novel.value?.title ?: "Novel"
+
+        // Start the foreground service
+        NovelTtsPlaybackService.start(ctx)
+
+        // Bind to the service if not already bound
+        if (ttsServiceConnection == null) {
+            pendingTtsStart = Triple(paragraphs, startIndex, title)
+            ttsServiceConnection = NovelTtsServiceConnection(
+                onConnected = { service ->
+                    ttsService = service
+                    // Start collecting playback state
+                    ttsStateCollectionJob?.cancel()
+                    ttsStateCollectionJob = screenModelScope.launchIO {
+                        service.playbackState.collect { state ->
+                            _ttsPlaybackState.value = state
+                        }
+                    }
+                    // If there's a pending start request, execute it now
+                    pendingTtsStart?.let { (paras, idx, ttl) ->
+                        service.startReading(paras, idx, ttl)
+                        pendingTtsStart = null
+                    }
+                },
+                onDisconnected = {
+                    ttsService = null
+                    ttsStateCollectionJob?.cancel()
+                    ttsStateCollectionJob = null
+                },
+            )
+            ctx.bindService(
+                Intent(ctx, NovelTtsPlaybackService::class.java),
+                ttsServiceConnection!!,
+                Context.BIND_AUTO_CREATE,
+            )
+        } else {
+            // Already bound — start reading directly
+            ttsService?.startReading(paragraphs, startIndex, title)
+        }
+    }
+
+    fun pauseTtsPlayback() {
+        ttsService?.pause()
+    }
+
+    fun resumeTtsPlayback() {
+        ttsService?.play()
+    }
+
+    fun nextTtsParagraph() {
+        ttsService?.next()
+    }
+
+    fun previousTtsParagraph() {
+        ttsService?.previous()
+    }
+
+    fun stopTtsPlayback() {
+        ttsService?.stop()
+        _ttsPlaybackState.value = NovelTtsPlaybackState()
+    }
+
+    /**
+     * Unbind from the TTS service and clean up.
+     * Called when the reader is closed.
+     */
+    fun unbindTtsService() {
+        val ctx = context
+        ttsStateCollectionJob?.cancel()
+        ttsStateCollectionJob = null
+        ttsServiceConnection?.let { conn ->
+            if (ctx != null) {
+                runCatching { ctx.unbindService(conn) }
+            }
+        }
+        ttsServiceConnection = null
+        ttsService = null
+        _ttsPlaybackState.value = NovelTtsPlaybackState()
     }
 
     private fun buildTextConfig(themeBackgroundColor: Int? = null, themeTextColor: Int? = null): TextConfig {

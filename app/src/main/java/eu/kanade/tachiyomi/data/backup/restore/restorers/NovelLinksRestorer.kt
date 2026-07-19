@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelLink
 import tachiyomi.domain.entries.novel.interactor.LinkNovels
+import tachiyomi.domain.entries.novel.interactor.SetNovelSourcePriority
 import tachiyomi.domain.entries.novel.repository.NovelLinkRepository
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 import uy.kohesive.injekt.Injekt
@@ -21,6 +22,7 @@ class NovelLinksRestorer(
     private val novelRepository: NovelRepository = Injekt.get(),
     private val novelLinkRepository: NovelLinkRepository = Injekt.get(),
     private val linkNovels: LinkNovels = Injekt.get(),
+    private val setNovelSourcePriority: SetNovelSourcePriority = Injekt.get(),
 ) {
 
     /**
@@ -35,7 +37,7 @@ class NovelLinksRestorer(
         val clusters = backupLinks.groupBy { it.linkedId }
 
         for ((_, clusterLinks) in clusters) {
-            val resolvedLinks = mutableListOf<Triple<Long, Long, String>>() // (novelId, sourceId, extensionType)
+            val resolvedLinks = mutableListOf<ResolvedLink>()
             var primaryNovelId: Long? = null
             var primarySourceId: Long? = null
             var primaryExtensionType = "apk"
@@ -46,7 +48,14 @@ class NovelLinksRestorer(
                     novelRepository.getNovelByUrlAndSourceId(backupLink.novelUrl, effectiveSourceId)
                 }.getOrNull() ?: continue
 
-                resolvedLinks.add(Triple(novel.id, effectiveSourceId, backupLink.extensionType))
+                resolvedLinks.add(
+                    ResolvedLink(
+                        novelId = novel.id,
+                        sourceId = effectiveSourceId,
+                        extensionType = backupLink.extensionType,
+                        priority = backupLink.priority,
+                    ),
+                )
 
                 if (backupLink.isPrimary) {
                     primaryNovelId = novel.id
@@ -59,23 +68,34 @@ class NovelLinksRestorer(
 
             // If no primary was found, use the first
             if (primaryNovelId == null) {
-                primaryNovelId = resolvedLinks.first().first
-                primarySourceId = resolvedLinks.first().second
-                primaryExtensionType = resolvedLinks.first().third
+                primaryNovelId = resolvedLinks.first().novelId
+                primarySourceId = resolvedLinks.first().sourceId
+                primaryExtensionType = resolvedLinks.first().extensionType
             }
 
             // Link all non-primary novels to the primary
-            for ((novelId, sourceId, extType) in resolvedLinks) {
-                if (novelId == primaryNovelId) continue
+            for (resolved in resolvedLinks) {
+                if (resolved.novelId == primaryNovelId) continue
                 linkNovels.await(
                     primaryNovelId = primaryNovelId,
                     primarySourceId = primarySourceId!!,
                     primaryExtensionType = primaryExtensionType,
-                    linkedNovelId = novelId,
-                    linkedSourceId = sourceId,
-                    linkedExtensionType = extType,
+                    linkedNovelId = resolved.novelId,
+                    linkedSourceId = resolved.sourceId,
+                    linkedExtensionType = resolved.extensionType,
                 )
+                // Restore quality-based priority
+                if (resolved.priority != 0L) {
+                    setNovelSourcePriority.await(resolved.novelId, resolved.priority)
+                }
             }
         }
     }
+
+    private data class ResolvedLink(
+        val novelId: Long,
+        val sourceId: Long,
+        val extensionType: String,
+        val priority: Long,
+    )
 }

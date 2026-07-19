@@ -36,6 +36,7 @@ object SuggestionTitleResolver {
         url: String? = null,
     ): List<String> = buildList {
         add(title)
+        parseOriginalTitle(description)?.let { add(it) }
         url?.let { parseSlugTitle(it)?.let { add(it) } }
     }
         .map { it.trim() }
@@ -59,6 +60,22 @@ object SuggestionTitleResolver {
         val intersection = cTokens.intersect(tTokens)
         val ratio = intersection.size.toDouble() / maxOf(cTokens.size, tTokens.size).toDouble()
         return (ratio * 50).toInt()
+    }
+
+    /**
+     * Select the best query string from candidates to use as the primary search query
+     * for a given provider. Prefers the Latin-script variant if available; otherwise
+     * keeps the original.
+     *
+     * External providers (AniList, MAL, MangaUpdates) tend to search better with
+     * Latin-script titles when available.
+     */
+    fun selectBestQueryForProvider(candidates: List<String>, rawTitle: String): String {
+        if (candidates.isEmpty()) return rawTitle
+        val latinFirst = candidates.firstOrNull { c ->
+            c.any { it.isLetter() && (it.code < 0x400 || it.code > 0x4FF) }
+        }
+        return latinFirst ?: candidates.first()
     }
 
     private val volumeChapterRegex =
@@ -89,19 +106,89 @@ object SuggestionTitleResolver {
         }
     }
 
+    /**
+     * Calculate a similarity score between two strings using a combination of
+     * Levenshtein distance and token Jaccard similarity. Returns a value in
+     * the range [0.0, 1.0] where 1.0 means identical.
+     */
+    fun calculateSimilarity(s1: String, s2: String): Double {
+        if (s1 == s2) return 1.0
+        val len1 = s1.length
+        val len2 = s2.length
+        if (len1 == 0) return 0.0
+        if (len2 == 0) return 0.0
+
+        val maxLen = maxOf(len1, len2)
+
+        // Calculate Levenshtein Distance
+        val dp = IntArray(len2 + 1) { it }
+        for (i in 1..len1) {
+            var prev = dp[0]
+            dp[0] = i
+            for (j in 1..len2) {
+                val temp = dp[j]
+                if (s1[i - 1] == s2[j - 1]) {
+                    dp[j] = prev
+                } else {
+                    dp[j] = minOf(prev + 1, minOf(dp[j] + 1, dp[j - 1] + 1))
+                }
+                prev = temp
+            }
+        }
+        val distance = dp[len2]
+        val charSim = 1.0 - (distance.toDouble() / maxLen.toDouble())
+
+        // Calculate Token Jaccard Similarity
+        val tokens1 = s1.split(Regex("\\s+")).filter { it.length > 1 }.toSet()
+        val tokens2 = s2.split(Regex("\\s+")).filter { it.length > 1 }.toSet()
+        val jaccardSim = if (tokens1.isEmpty() || tokens2.isEmpty()) {
+            0.0
+        } else {
+            val intersection = tokens1.intersect(tokens2).size
+            val union = tokens1.union(tokens2).size
+            intersection.toDouble() / union.toDouble()
+        }
+
+        return maxOf(charSim, jaccardSim)
+    }
+
+    fun normalizeEntryUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return url.trim()
+            .substringBefore('#')
+            .substringBefore('?')
+            .trimEnd('/')
+            .lowercase()
+            .ifBlank { null }
+    }
+
+    fun isSameProviderEntry(item: SuggestionItem, entryUrl: String?): Boolean {
+        val normalizedEntry = normalizeEntryUrl(entryUrl) ?: return false
+        val normalizedProviderUrl = normalizeEntryUrl(item.providerUrl)
+        if (normalizedProviderUrl == normalizedEntry) return true
+        val providerSuffix = item.providerId?.substringAfter(':', missingDelimiterValue = item.providerId.orEmpty())
+        return normalizeEntryUrl(providerSuffix) == normalizedEntry
+    }
+
     fun isFranchiseDuplicate(titleA: String, titleB: String): Boolean {
         val cleanA = cleanTitle(titleA)
         val cleanB = cleanTitle(titleB)
+        if (cleanA.isBlank() || cleanB.isBlank()) return false
         if (cleanA == cleanB) return true
-        // Check if one is a sequel/spin-off of the other
-        val shorter = if (cleanA.length < cleanB.length) cleanA else cleanB
-        val longer = if (cleanA.length < cleanB.length) cleanB else cleanA
-        if (longer.startsWith("$shorter ") && longer.drop(shorter.length + 1).let { suffix ->
-            suffix.matches(Regex("""(?i)(ragnarok|sequel|prequel|spin.?off|side.?story|continuation|\d+|ii|iii|iv|v|final|last|next|new|the \w+)"""))
-            }
-        ) {
-            return true
-        }
-        return false
+        val similarity = calculateSimilarity(cleanA, cleanB)
+        return similarity > 0.95
+    }
+
+    /**
+     * Parse an "Original: <title>" or "Оригинал: <title>" line from a description
+     * to extract the original-language title. Returns null if not found.
+     */
+    fun parseOriginalTitle(description: String?): String? {
+        if (description.isNullOrBlank()) return null
+        val regex = Regex("""(?i)(?:Original|Оригинал|Оригинальное название)\s*[:：]\s*(.+)""")
+        val match = regex.find(description) ?: return null
+        val title = match.groupValues[1].trim()
+        // Take only the first line / sentence to avoid capturing too much
+        return title.substringBefore("\n").substringBefore(". ").trim().ifBlank { null }
     }
 }

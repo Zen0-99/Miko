@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.Public
@@ -134,6 +135,8 @@ fun NovelReaderBottomBar(
     fullscreen: Boolean = false,
     showCommentsButton: Boolean = false,
     onCommentsClick: () -> Unit = {},
+    onTtsClick: () -> Unit = {},
+    isTtsActive: Boolean = false,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -183,6 +186,17 @@ fun NovelReaderBottomBar(
                     )
                 }
             }
+            IconButton(onClick = onTtsClick) {
+                Icon(
+                    imageVector = Icons.Filled.RecordVoiceOver,
+                    contentDescription = "Read aloud",
+                    tint = if (isTtsActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        accentColor ?: MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
             IconButton(onClick = onSettingsClick) {
                 Icon(
                     imageVector = Icons.Outlined.Settings,
@@ -206,12 +220,14 @@ fun NovelReaderChrome(
     showPhoneInfo: Boolean = false,
     readerBackgroundColor: Color = MaterialTheme.colorScheme.background,
     showCommentsButton: Boolean = false,
+    isTtsActive: Boolean = false,
     onBackClick: () -> Unit,
     onChaptersClick: () -> Unit,
     onWebviewClick: () -> Unit,
     onHighlightsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onCommentsClick: () -> Unit = {},
+    onTtsClick: () -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedVisibility(
@@ -253,6 +269,8 @@ fun NovelReaderChrome(
                 fullscreen = fullscreen,
                 showCommentsButton = showCommentsButton,
                 onCommentsClick = onCommentsClick,
+                onTtsClick = onTtsClick,
+                isTtsActive = isTtsActive,
             )
         }
     }

@@ -23,6 +23,7 @@ class NovelLinksBackupCreator(
                 extensionType = link.extensionType,
                 novelUrl = novel?.url ?: "",
                 novelTitle = novel?.title ?: "",
+                priority = link.priority,
             )
         }
     }

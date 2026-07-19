@@ -2,6 +2,7 @@ package eu.kanade.presentation.library.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -80,8 +81,10 @@ fun EntryCompactGridItem(
     title: String? = null,
     onClickContinueViewing: (() -> Unit)? = null,
     coverAlpha: Float = 1f,
+    customCover: (@Composable BoxScope.() -> Unit)? = null,
     coverBadgeStart: @Composable (RowScope.() -> Unit)? = null,
     coverBadgeEnd: @Composable (RowScope.() -> Unit)? = null,
+    topEndBadge: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     GridItemSelectable(
         isSelected = isSelected,
@@ -90,18 +93,23 @@ fun EntryCompactGridItem(
     ) {
         EntryGridCover(
             cover = {
-                ItemCover.Book(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
-                    data = coverData,
-                )
-                if (coverData is NovelCover) {
-                    PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+                if (customCover != null) {
+                    customCover()
+                } else {
+                    ItemCover.Book(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
+                        data = coverData,
+                    )
+                    if (coverData is NovelCover) {
+                        PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+                    }
                 }
             },
             badgesStart = coverBadgeStart,
             badgesEnd = coverBadgeEnd,
+            topEndBadge = topEndBadge,
             content = {
                 if (title != null) {
                     CoverTextOverlay(
@@ -188,8 +196,10 @@ fun EntryComfortableGridItem(
     titleMaxLines: Int = 2,
     coverData: EntryCoverModel,
     coverAlpha: Float = 1f,
+    customCover: (@Composable BoxScope.() -> Unit)? = null,
     coverBadgeStart: (@Composable RowScope.() -> Unit)? = null,
     coverBadgeEnd: (@Composable RowScope.() -> Unit)? = null,
+    topEndBadge: (@Composable BoxScope.() -> Unit)? = null,
     onClickContinueViewing: (() -> Unit)? = null,
 ) {
     GridItemSelectable(
@@ -200,18 +210,23 @@ fun EntryComfortableGridItem(
         Column {
             EntryGridCover(
                 cover = {
-                    ItemCover.Book(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
-                        data = coverData,
-                    )
-                    if (coverData is NovelCover) {
-                        PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+                    if (customCover != null) {
+                        customCover()
+                    } else {
+                        ItemCover.Book(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
+                            data = coverData,
+                        )
+                        if (coverData is NovelCover) {
+                            PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+                        }
                     }
                 },
                 badgesStart = coverBadgeStart,
                 badgesEnd = coverBadgeEnd,
+                topEndBadge = topEndBadge,
                 content = {
                     if (onClickContinueViewing != null) {
                         ContinueViewingButton(
@@ -245,6 +260,7 @@ private fun EntryGridCover(
     cover: @Composable BoxScope.() -> Unit = {},
     badgesStart: (@Composable RowScope.() -> Unit)? = null,
     badgesEnd: (@Composable RowScope.() -> Unit)? = null,
+    topEndBadge: (@Composable BoxScope.() -> Unit)? = null,
     content: @Composable (BoxScope.() -> Unit)? = null,
 ) {
     Box(
@@ -270,6 +286,18 @@ private fun EntryGridCover(
                     .align(Alignment.TopEnd),
                 content = badgesEnd,
             )
+        }
+
+        if (topEndBadge != null) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                topEndBadge.invoke(this@Box)
+            }
         }
     }
 }
@@ -343,6 +371,7 @@ fun EntryListItem(
     title: String,
     coverData: EntryCoverModel,
     coverAlpha: Float = 1f,
+    customCover: (@Composable BoxScope.() -> Unit)? = null,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
     badge: @Composable (RowScope.() -> Unit),
@@ -370,14 +399,24 @@ fun EntryListItem(
             .padding(horizontal = 16.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ItemCover.Book(
+        Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .alpha(coverAlpha),
-            data = coverData,
-        )
-        if (coverData is NovelCover) {
-            PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+                .aspectRatio(ItemCover.Book.ratio),
+        ) {
+            if (customCover != null) {
+                customCover()
+            } else {
+                ItemCover.Book(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .alpha(coverAlpha),
+                    data = coverData,
+                )
+                if (coverData is NovelCover) {
+                    PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+                }
+            }
         }
         Text(
             text = title,

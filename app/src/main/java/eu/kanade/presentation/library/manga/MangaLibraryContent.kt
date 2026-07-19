@@ -48,6 +48,8 @@ fun MangaLibraryContent(
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
     categoryDisplayMode: LibraryCategoryDisplay = LibraryCategoryDisplay.TABBED,
     getLibraryForPage: (Int) -> List<MangaLibraryItem>,
+    onTogglePinned: ((MangaLibraryItem) -> Unit)? = null,
+    onSeriesClicked: ((Long) -> Unit)? = null,
 ) {
     if (categoryDisplayMode == LibraryCategoryDisplay.CONTINUOUS && categories.size > 1) {
         MangaLibraryContinuousContent(
@@ -132,6 +134,8 @@ fun MangaLibraryContent(
                 onClickManga = onClickManga,
                 onLongClickManga = onToggleRangeSelection,
                 onClickContinueReading = onContinueReadingClicked,
+                onTogglePinned = onTogglePinned,
+                onSeriesClicked = onSeriesClicked,
             )
         }
 
