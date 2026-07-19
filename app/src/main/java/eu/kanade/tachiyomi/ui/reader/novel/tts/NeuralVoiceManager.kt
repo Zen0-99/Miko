@@ -162,43 +162,59 @@ class NeuralVoiceManager(
         onProgress: (Float) -> Unit,
     ): File {
         val partFile = File(downloadsDir, "${entry.id}.tar.bz2.part")
-        partFile.delete()
-        val request = Request.Builder().url(entry.bundleUrl).get().build()
+        val finalFile = File(downloadsDir, "${entry.id}.tar.bz2")
 
-        logcat(LogPriority.INFO) { "Downloading voice ${entry.id} from ${entry.bundleUrl}" }
+        val maxRetries = 3
+        var lastError: Exception? = null
 
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("HTTP ${response.code} downloading ${entry.bundleUrl}")
-            }
-            val body = response.body ?: throw IOException("Empty response body for ${entry.bundleUrl}")
-            val totalBytes = body.contentLength()
-            body.byteStream().use { input ->
-                FileOutputStream(partFile).use { out ->
-                    val buffer = ByteArray(BUFFER_BYTES)
-                    var bytesRead = 0L
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        out.write(buffer, 0, read)
-                        bytesRead += read
-                        if (totalBytes > 0) {
-                            onProgress((bytesRead.toFloat() / totalBytes).coerceIn(0f, 1f))
+        for (attempt in 0 until maxRetries) {
+            try {
+                partFile.delete()
+                val request = Request.Builder().url(entry.bundleUrl).get().build()
+
+                logcat(LogPriority.INFO) { "Downloading voice ${entry.id} from ${entry.bundleUrl} (attempt ${attempt + 1}/$maxRetries)" }
+
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IOException("HTTP ${response.code} downloading ${entry.bundleUrl}")
+                    }
+                    val body = response.body ?: throw IOException("Empty response body for ${entry.bundleUrl}")
+                    val totalBytes = body.contentLength()
+                    body.byteStream().use { input ->
+                        FileOutputStream(partFile).use { out ->
+                            val buffer = ByteArray(BUFFER_BYTES)
+                            var bytesRead = 0L
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read == -1) break
+                                out.write(buffer, 0, read)
+                                bytesRead += read
+                                if (totalBytes > 0) {
+                                    onProgress((bytesRead.toFloat() / totalBytes).coerceIn(0f, 1f))
+                                }
+                            }
                         }
                     }
+                }
+
+                // Rename .part -> .tar.bz2
+                if (!partFile.renameTo(finalFile)) {
+                    partFile.copyTo(finalFile, overwrite = true)
+                    partFile.delete()
+                }
+                onProgress(1f)
+                return finalFile
+            } catch (e: Exception) {
+                lastError = e
+                partFile.delete()
+                logcat(LogPriority.WARN, e) { "Download attempt ${attempt + 1} failed for ${entry.id}" }
+                if (attempt < maxRetries - 1) {
+                    Thread.sleep(2000L * (attempt + 1)) // 2s, 4s backoff
                 }
             }
         }
 
-        // Rename .part -> .tar.bz2 (kept as .part to allow resumable semantics later).
-        val finalFile = File(downloadsDir, "${entry.id}.tar.bz2")
-        if (!partFile.renameTo(finalFile)) {
-            // Fallback: copy if rename fails (e.g. cross-device).
-            partFile.copyTo(finalFile, overwrite = true)
-            partFile.delete()
-        }
-        onProgress(1f)
-        return finalFile
+        throw lastError ?: IOException("Failed to download ${entry.id} after $maxRetries attempts")
     }
 
     /**

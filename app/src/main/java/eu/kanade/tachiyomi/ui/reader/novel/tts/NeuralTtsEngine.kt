@@ -256,7 +256,9 @@ class NeuralTtsEngine(
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
-        val bufSize = maxOf(minBuf, pcmBytes.size)
+        // Use a streaming buffer — MODE_STATIC glitches on longer utterances
+        // because it tries to load the entire PCM into the audio HAL at once.
+        val bufSize = maxOf(minBuf, 8192)
 
         val track = AudioTrack.Builder()
             .setAudioAttributes(
@@ -273,31 +275,40 @@ class NeuralTtsEngine(
                     .build(),
             )
             .setBufferSizeInBytes(bufSize)
-            .setTransferMode(AudioTrack.MODE_STATIC)
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
             .build()
-
-        track.write(pcmBytes, 0, pcmBytes.size)
-        track.setNotificationMarkerPosition(pcmBytes.size / 2) // 16-bit mono → samples = bytes/2
-        track.setPlaybackPositionUpdateListener(object : AudioTrack.OnPlaybackPositionUpdateListener {
-            override fun onMarkerReached(track: AudioTrack?) {
-                stopPlayback()
-            }
-
-            override fun onPeriodicNotification(track: AudioTrack?) {}
-        })
 
         audioTrack = track
         isPlaying = true
         isPaused = false
         track.play()
 
-        // Block until playback finishes or is stopped, so speak() thread knows when done.
-        while (isPlaying && !stopRequested) {
+        // Write in chunks to avoid blocking the HAL on large buffers
+        val chunkSize = bufSize
+        var offset = 0
+        while (offset < pcmBytes.size && !stopRequested) {
+            val toWrite = minOf(chunkSize, pcmBytes.size - offset)
+            track.write(pcmBytes, offset, toWrite)
+            offset += toWrite
+        }
+
+        // Wait for playback to drain
+        while (isPlaying && !stopRequested && track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+            val headPos = track.playbackHeadPosition
+            val totalSamples = pcmBytes.size / 2 // 16-bit mono
+            if (headPos >= totalSamples) {
+                break
+            }
             try {
-                Thread.sleep(20)
+                Thread.sleep(10)
             } catch (e: InterruptedException) {
                 break
             }
+        }
+
+        if (!stopRequested) {
+            stopPlayback()
         }
     }
 

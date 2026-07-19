@@ -12,15 +12,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice
@@ -176,12 +180,52 @@ private fun VoiceRow(
             }
         }
 
-        Box {
+        Box(
+            contentAlignment = Alignment.Center,
+        ) {
             when {
                 isDownloading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
+                    val indicatorSize = 26.dp
+                    val indicatorPadding = 2.dp
+                    val arrowColor = if (downloadProgress >= 0.5f) {
+                        MaterialTheme.colorScheme.background
+                    } else {
+                        accentColor
+                    }
+                    if (downloadProgress <= 0f) {
+                        // Indeterminate (queueing/starting)
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(indicatorSize)
+                                .padding(indicatorPadding),
+                            color = accentColor,
+                            strokeWidth = indicatorPadding,
+                            trackColor = Color.Transparent,
+                            strokeCap = StrokeCap.Butt,
+                        )
+                    } else {
+                        val animatedProgress by animateFloatAsState(
+                            targetValue = downloadProgress,
+                            animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
+                            label = "voice_download_progress",
+                        )
+                        CircularProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier = Modifier
+                                .size(indicatorSize)
+                                .padding(indicatorPadding),
+                            color = accentColor,
+                            strokeWidth = indicatorSize / 2,
+                            trackColor = Color.Transparent,
+                            strokeCap = StrokeCap.Butt,
+                            gapSize = 0.dp,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ArrowDownward,
+                        contentDescription = "Downloading",
+                        modifier = Modifier.size(indicatorSize - 7.dp),
+                        tint = arrowColor,
                     )
                 }
                 isInstalled -> {
