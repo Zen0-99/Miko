@@ -348,7 +348,7 @@ object HomeScreen : Screen() {
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 1.dp)
-                .padding(top = 8.dp, bottom = 0.dp)
+                .padding(top = 8.dp, bottom = 4.dp)
                 .selectable(
                     selected = selected,
                     role = Role.Tab,

@@ -365,57 +365,56 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
         // Readability scrim
         Box(Modifier.fillMaxSize().background(readabilityScrim))
 
-        // Content at bottom
-        Column(
+        // Content at bottom — title + chapter on left, resume button on right
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Hero title: 28sp, bold, white, centered, with shadow
-            Text(
-                text = hero.title,
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = Color.White,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 34.sp,
-                style = TextStyle(shadow = heroTextShadow),
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            Spacer(Modifier.height(14.dp))
-
-            // Progress label with accent dot
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
+            // Left: title (top) + chapter/episode number (below)
+            Column(
+                modifier = Modifier.weight(1f),
             ) {
-                Box(
-                    Modifier
-                        .size(6.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape),
-                )
-                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = progressLabel,
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    text = hero.title,
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 27.sp,
                     style = TextStyle(shadow = heroTextShadow),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = progressLabel,
+                        color = Color.White.copy(alpha = 0.92f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = TextStyle(shadow = heroTextShadow),
+                    )
+                }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.width(16.dp))
 
-            // CTA button: pill-shaped, accent-colored
+            // Right: resume button
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .height(52.dp)
+                    .height(48.dp)
                     .clickable {
                         when (hero.mediaType) {
                             HomeHubMediaType.ANIME -> {
@@ -442,8 +441,8 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
             ) {
                 Row(
                     modifier = Modifier.padding(
-                        start = 22.dp,
-                        end = 24.dp,
+                        start = 20.dp,
+                        end = 22.dp,
                         top = 8.dp,
                         bottom = 8.dp,
                     ),
@@ -453,13 +452,13 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(21.dp),
+                        modifier = Modifier.size(20.dp),
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = ctaLabel,
                         color = MaterialTheme.colorScheme.onPrimary,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                     )
                 }

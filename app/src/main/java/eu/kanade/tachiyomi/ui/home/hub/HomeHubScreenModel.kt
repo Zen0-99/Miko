@@ -63,6 +63,7 @@ class HomeHubScreenModel(
 ) : StateScreenModel<HomeHubState>(HomeHubState()) {
 
     private val fastCache = HomeHubFastCache(context)
+    private var lastCombinedData: HomeHubCombinedData? = null
 
     init {
         // --- Fast cache: apply cached snapshot synchronously for instant render ---
@@ -133,6 +134,7 @@ class HomeHubScreenModel(
                     achievementUnlocked = unlockedCount,
                 )
             }.collectLatest { data ->
+                lastCombinedData = data
                 val hero = resolveHero(data)
                 val monthStats = runCatching { activityDataRepository.getCurrentMonthStats() }.getOrNull()
                 val totalLibrarySize = data.animeLib.size + data.mangaLib.size + data.novelLib.size
@@ -176,7 +178,12 @@ class HomeHubScreenModel(
         // --- Observe contentMode for mode-aware filtering ---
         screenModelScope.launchIO {
             uiPreferences.contentMode().changes().collect { mode ->
-                mutableState.update { it.copy(currentMode = mode) }
+                mutableState.update {
+                    it.copy(
+                        currentMode = mode,
+                        hero = it.hero?.let { _ -> lastCombinedData?.let { data -> resolveHero(data) } },
+                    )
+                }
             }
         }
 
@@ -280,42 +287,41 @@ class HomeHubScreenModel(
     // --- Hero card ---
 
     private fun resolveHero(data: HomeHubCombinedData): HomeHubHero? {
-        // Pick the most recent history item across all media types.
-        val animeHero = data.animeHistory.firstOrNull()
-        val mangaHero = data.mangaHistory.firstOrNull()
-        val novelHero = data.novelHistory.firstOrNull()
-
-        // Compare by seenAt/readAt timestamps to find the truly most recent
-        val animeTime = animeHero?.seenAt?.time ?: 0L
-        val mangaTime = mangaHero?.readAt?.time ?: 0L
-        val novelTime = novelHero?.readAt?.time ?: 0L
-
-        return when {
-            animeHero != null && animeTime >= mangaTime && animeTime >= novelTime -> HomeHubHero(
-                entryId = animeHero.animeId,
-                title = animeHero.title,
-                progressNumber = animeHero.episodeNumber,
-                coverData = animeHero.coverData,
-                subId = animeHero.episodeId,
-                mediaType = HomeHubMediaType.ANIME,
-            )
-            mangaHero != null && mangaTime >= novelTime -> HomeHubHero(
-                entryId = mangaHero.mangaId,
-                title = mangaHero.title,
-                progressNumber = mangaHero.chapterNumber,
-                coverData = mangaHero.coverData,
-                subId = mangaHero.chapterId,
-                mediaType = HomeHubMediaType.MANGA,
-            )
-            novelHero != null -> HomeHubHero(
-                entryId = novelHero.novelId,
-                title = novelHero.title,
-                progressNumber = novelHero.chapterNumber,
-                coverData = novelHero.coverData,
-                subId = novelHero.chapterId,
-                mediaType = HomeHubMediaType.NOVEL,
-            )
-            else -> null
+        // Mode-aware: only pick from the current content mode's history.
+        // If there is no history for the current mode, return null so the
+        // placeholder is shown instead of a hero from a different mode.
+        val currentMode = uiPreferences.contentMode().get()
+        return when (currentMode) {
+            ContentMode.ANIME -> data.animeHistory.firstOrNull()?.let {
+                HomeHubHero(
+                    entryId = it.animeId,
+                    title = it.title,
+                    progressNumber = it.episodeNumber,
+                    coverData = it.coverData,
+                    subId = it.episodeId,
+                    mediaType = HomeHubMediaType.ANIME,
+                )
+            }
+            ContentMode.MANGA -> data.mangaHistory.firstOrNull()?.let {
+                HomeHubHero(
+                    entryId = it.mangaId,
+                    title = it.title,
+                    progressNumber = it.chapterNumber,
+                    coverData = it.coverData,
+                    subId = it.chapterId,
+                    mediaType = HomeHubMediaType.MANGA,
+                )
+            }
+            ContentMode.NOVEL -> data.novelHistory.firstOrNull()?.let {
+                HomeHubHero(
+                    entryId = it.novelId,
+                    title = it.title,
+                    progressNumber = it.chapterNumber,
+                    coverData = it.coverData,
+                    subId = it.chapterId,
+                    mediaType = HomeHubMediaType.NOVEL,
+                )
+            }
         }
     }
 
