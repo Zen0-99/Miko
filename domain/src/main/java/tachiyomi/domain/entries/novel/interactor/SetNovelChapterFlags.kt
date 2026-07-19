@@ -68,13 +68,26 @@ class SetNovelChapterFlags(
     suspend fun awaitSetSortingModeOrFlipOrder(novel: Novel, flag: Long): Boolean {
         val newFlags = novel.chapterFlags.let {
             if (novel.sorting == flag) {
-                it xor Novel.CHAPTER_SORT_DIR_MASK
+                // Just flip the order
+                val orderFlag = if (novel.sortDescending()) {
+                    Novel.CHAPTER_SORT_ASC
+                } else {
+                    Novel.CHAPTER_SORT_DESC
+                }
+                it.setFlag(orderFlag, Novel.CHAPTER_SORT_DIR_MASK)
             } else {
-                it and Novel.CHAPTER_SORTING_MASK.inv() or flag
+                // Set new flag with ascending order
+                it
+                    .setFlag(flag, Novel.CHAPTER_SORTING_MASK)
+                    .setFlag(Novel.CHAPTER_SORT_ASC, Novel.CHAPTER_SORT_DIR_MASK)
             }
         }
         return novelRepository.updateNovel(
             NovelUpdate(id = novel.id, chapterFlags = newFlags),
         )
+    }
+
+    private fun Long.setFlag(flag: Long, mask: Long): Long {
+        return this and mask.inv() or (flag and mask)
     }
 }

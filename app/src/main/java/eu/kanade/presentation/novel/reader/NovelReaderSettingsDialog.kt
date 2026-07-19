@@ -189,23 +189,6 @@ private fun ColumnScope.NovelGeneralSettingsPage(
     // ---- Series section (colored header) ----
     SectionHeader("Series", accentColor)
 
-    val novelReadingMode by screenModel.preferences.readingMode().collectAsState()
-    val readingModeLabels = listOf(
-        stringResource(MR.strings.reading_mode_default),
-        stringResource(MR.strings.reading_mode_infinite_scroll),
-        stringResource(MR.strings.reading_mode_overscroll),
-    )
-    val readingModeValues = NovelReadingMode.entries
-    SettingsDropdown(
-        label = stringResource(MR.strings.reading_mode_title),
-        selectedLabel = readingModeLabels[readingModeValues.indexOf(novelReadingMode)],
-        options = readingModeLabels,
-    ) { index ->
-        val mode = readingModeValues[index]
-        screenModel.preferences.readingMode().set(mode)
-        screenModel.onReadingModeChange(mode.prefValue)
-    }
-
     val orientation by screenModel.preferences.orientation().collectAsState()
     val orientationLabels = listOf(
         stringResource(MR.strings.orientation_free),
@@ -227,24 +210,6 @@ private fun ColumnScope.NovelGeneralSettingsPage(
 
     // ---- General section (colored header) ----
     SectionHeader("General", accentColor)
-
-    val bgColorMode by screenModel.preferences.backgroundColorMode().collectAsState()
-    val bgColorLabels = listOf(
-        stringResource(MR.strings.white_background),
-        stringResource(MR.strings.black_background),
-        stringResource(MR.strings.smart_by_theme),
-        stringResource(MR.strings.gray_background),
-    )
-    val bgColorValues = NovelReaderBackgroundColor.entries
-    SettingsDropdown(
-        label = stringResource(MR.strings.pref_reader_theme),
-        selectedLabel = bgColorLabels[bgColorValues.indexOf(bgColorMode)],
-        options = bgColorLabels,
-    ) { index ->
-        val mode = bgColorValues[index]
-        screenModel.preferences.backgroundColorMode().set(mode)
-        screenModel.onBackgroundColorChange(mode.prefValue)
-    }
 
     // ---- Display sub-section ----
     SubHeader("Display", accentColor)
@@ -276,8 +241,26 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         accentColor = accentColor,
     )
 
-    // ---- Background texture sub-section (Tier 3) ----
-    SubHeader("Background texture", accentColor)
+    // ---- Background sub-section ----
+    SubHeader("Background", accentColor)
+
+    val bgColorMode by screenModel.preferences.backgroundColorMode().collectAsState()
+    val bgColorLabels = listOf(
+        stringResource(MR.strings.white_background),
+        stringResource(MR.strings.black_background),
+        stringResource(MR.strings.smart_by_theme),
+        stringResource(MR.strings.gray_background),
+    )
+    val bgColorValues = NovelReaderBackgroundColor.entries
+    SettingsDropdown(
+        label = stringResource(MR.strings.pref_reader_theme),
+        selectedLabel = bgColorLabels[bgColorValues.indexOf(bgColorMode)],
+        options = bgColorLabels,
+    ) { index ->
+        val mode = bgColorValues[index]
+        screenModel.preferences.backgroundColorMode().set(mode)
+        screenModel.onBackgroundColorChange(mode.prefValue)
+    }
 
     val bgTexture by screenModel.preferences.backgroundTexture().collectAsState()
     val textureLabels = listOf("None", "Paper grain", "Linen", "Parchment")
@@ -366,8 +349,25 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         accentColor = accentColor,
     )
 
-    // ---- Navigation sub-section (Tier 3) ----
+    // ---- Navigation sub-section ----
     SubHeader("Navigation", accentColor)
+
+    val novelReadingMode by screenModel.preferences.readingMode().collectAsState()
+    val readingModeLabels = listOf(
+        stringResource(MR.strings.reading_mode_default),
+        stringResource(MR.strings.reading_mode_infinite_scroll),
+        stringResource(MR.strings.reading_mode_overscroll),
+    )
+    val readingModeValues = NovelReadingMode.entries
+    SettingsDropdown(
+        label = stringResource(MR.strings.reading_mode_title),
+        selectedLabel = readingModeLabels[readingModeValues.indexOf(novelReadingMode)],
+        options = readingModeLabels,
+    ) { index ->
+        val mode = readingModeValues[index]
+        screenModel.preferences.readingMode().set(mode)
+        screenModel.onReadingModeChange(mode.prefValue)
+    }
 
     val pageTransition by screenModel.preferences.pageTransitionStyle().collectAsState()
     val transitionLabels = listOf("Instant", "Slide", "Depth", "Book", "Curl", "Book flip")
@@ -379,18 +379,6 @@ private fun ColumnScope.NovelGeneralSettingsPage(
     ) { index ->
         screenModel.preferences.pageTransitionStyle().set(transitionValues[index])
     }
-
-    CheckboxItem(
-        label = "Swipe to next chapter",
-        pref = screenModel.preferences.swipeToNextChapter(),
-        accentColor = accentColor,
-    )
-
-    CheckboxItem(
-        label = "Swipe to previous chapter",
-        pref = screenModel.preferences.swipeToPrevChapter(),
-        accentColor = accentColor,
-    )
 
     CheckboxItem(
         label = "Tap to scroll",

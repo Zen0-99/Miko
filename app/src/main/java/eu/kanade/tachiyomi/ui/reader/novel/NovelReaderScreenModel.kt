@@ -576,7 +576,9 @@ class NovelReaderScreenModel(
                 }
 
                 val chapterList = getNovelWithChapters.awaitChapters(novelId)
-                _chapters.value = chapterList.sortedBy { it.sourceOrder }
+                // Sort by chapter number ascending to ensure story order (Chapter 1, 2, 3...)
+                // regardless of how the source returns chapters.
+                _chapters.value = chapterList.sortedBy { it.chapterNumber }
 
                 val targetChapter = if (chapterId != null) {
                     chapterList.find { it.id == chapterId }

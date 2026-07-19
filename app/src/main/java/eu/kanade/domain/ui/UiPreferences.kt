@@ -120,7 +120,7 @@ class UiPreferences(
 
     fun tabletUiMode() = preferenceStore.getEnum("tablet_ui_mode", TabletUiMode.AUTOMATIC)
 
-    fun startScreen() = preferenceStore.getEnum("start_screen", StartScreen.ANIME)
+    fun startScreen() = preferenceStore.getEnum("start_screen", StartScreen.HOME)
 
     fun navStyle() = preferenceStore.getEnum("bottom_rail_nav_style", NavStyle.MOVE_HISTORY_TO_MORE)
 
