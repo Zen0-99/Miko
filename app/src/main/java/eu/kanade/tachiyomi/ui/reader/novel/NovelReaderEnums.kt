@@ -36,3 +36,46 @@ enum class NovelOrientation(val prefValue: Int) {
     LOCKED_PORTRAIT(3),
     LOCKED_LANDSCAPE(4),
 }
+
+/**
+ * Typography presets based on mathematical text-size/line-height ratios.
+ * - SUPERGOLDEN: 1.618 ratio (golden ratio) — very airy
+ * - GOLDEN: 1.33 ratio — balanced
+ * - CUSTOM: user-defined values
+ */
+enum class NovelReaderTypographyPreset {
+    CUSTOM,
+    SUPERGOLDEN,
+    GOLDEN,
+}
+
+/**
+ * Background texture overlays for the novel reader.
+ */
+enum class NovelReaderBackgroundTexture {
+    NONE,
+    PAPER_GRAIN,
+    LINEN,
+    PARCHMENT,
+}
+
+/**
+ * Auto-scroll behavior when reaching the end of a chapter.
+ */
+enum class NovelAutoScrollChapterEndBehavior {
+    StopAtEnd,
+    AdvanceAndStop,
+    ContinuousReading,
+}
+
+/**
+ * Page transition styles for page-mode reader.
+ */
+enum class NovelPageTransitionStyle {
+    INSTANT,
+    SLIDE,
+    DEPTH,
+    BOOK,
+    CURL,
+    BOOK_FLIP,
+}

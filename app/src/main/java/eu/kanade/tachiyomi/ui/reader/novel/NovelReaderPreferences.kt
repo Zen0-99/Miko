@@ -59,4 +59,123 @@ class NovelReaderPreferences(
 
     /** E-Ink binarization: force pure black text on white background for E-Ink displays. */
     fun eInkBinarization() = preferenceStore.getBoolean("pref_novel_eink_binarization", false)
+
+    // --- Tier 3: Additive preferences ported from Tadami (typography, textures, auto-scroll, etc.) ---
+
+    /** Typography preset: applies mathematical text-size/line-height ratios. */
+    fun typographyPreset() = preferenceStore.getEnum("pref_novel_typography_preset", NovelReaderTypographyPreset.CUSTOM)
+
+    /** Force paragraph indent at the start of each paragraph. */
+    fun forceParagraphIndent() = preferenceStore.getBoolean("pref_novel_force_paragraph_indent", false)
+
+    /** Preserve source text alignment in native renderer. */
+    fun preserveSourceTextAlignInNative() = preferenceStore.getBoolean("pref_novel_preserve_source_align", true)
+
+    /** Custom font family for the reader (empty = system default). */
+    fun customFontFamily() = preferenceStore.getString("pref_novel_font_family", "")
+
+    /** Force bold text rendering. */
+    fun forceBoldText() = preferenceStore.getBoolean("pref_novel_force_bold", false)
+
+    /** Force italic text rendering. */
+    fun forceItalicText() = preferenceStore.getBoolean("pref_novel_force_italic", false)
+
+    /** Text shadow: enables drop shadow behind text for readability in bright environments. */
+    fun textShadowEnabled() = preferenceStore.getBoolean("pref_novel_text_shadow", false)
+
+    /** Text shadow color (ARGB hex string, empty = auto from theme). */
+    fun textShadowColor() = preferenceStore.getString("pref_novel_text_shadow_color", "")
+
+    /** Text shadow blur radius. */
+    fun textShadowBlur() = preferenceStore.getFloat("pref_novel_text_shadow_blur", 4f)
+
+    /** Text shadow X offset. */
+    fun textShadowX() = preferenceStore.getFloat("pref_novel_text_shadow_x", 0f)
+
+    /** Text shadow Y offset. */
+    fun textShadowY() = preferenceStore.getFloat("pref_novel_text_shadow_y", 1f)
+
+    /** Page edge shadow: adds a subtle shadow at page edges for depth. */
+    fun pageEdgeShadowEnabled() = preferenceStore.getBoolean("pref_novel_page_edge_shadow", false)
+
+    /** Page edge shadow alpha (0.0–1.0). */
+    fun pageEdgeShadowAlpha() = preferenceStore.getFloat("pref_novel_page_edge_shadow_alpha", 0.25f)
+
+    /** Background texture overlay (paper grain, linen, parchment). */
+    fun backgroundTexture() = preferenceStore.getEnum("pref_novel_bg_texture", NovelReaderBackgroundTexture.NONE)
+
+    /** Native texture strength (0–100 percent). */
+    fun nativeTextureStrength() = preferenceStore.getInt("pref_novel_texture_strength", 50)
+
+    /** OLED edge gradient: adds a subtle dark gradient at screen edges for OLED displays. */
+    fun oledEdgeGradient() = preferenceStore.getBoolean("pref_novel_oled_edge_gradient", false)
+
+    /** Auto-scroll: enables automatic scrolling of the reader content. */
+    fun autoScroll() = preferenceStore.getBoolean("pref_novel_auto_scroll", false)
+
+    /** Auto-scroll interval (milliseconds between scroll steps). */
+    fun autoScrollInterval() = preferenceStore.getInt("pref_novel_auto_scroll_interval", 3000)
+
+    /** Auto-scroll offset (pixels per scroll step). */
+    fun autoScrollOffset() = preferenceStore.getInt("pref_novel_auto_scroll_offset", 60)
+
+    /** Auto-scroll adaptive delay: adjusts scroll speed based on content density. */
+    fun autoScrollAdaptiveDelay() = preferenceStore.getBoolean("pref_novel_auto_scroll_adaptive", true)
+
+    /** Auto-scroll chapter end behavior. */
+    fun autoScrollChapterEndBehavior() = preferenceStore.getEnum("pref_novel_auto_scroll_end_behavior", NovelAutoScrollChapterEndBehavior.StopAtEnd)
+
+    /** Show auto-scroll floating button for quick toggle. */
+    fun showAutoScrollFloatingButton() = preferenceStore.getBoolean("pref_novel_auto_scroll_fab", false)
+
+    /** Prefetch next chapter content for smoother reading. */
+    fun prefetchNextChapter() = preferenceStore.getBoolean("pref_novel_prefetch_next", false)
+
+    /** Show scroll percentage in the reader chrome. */
+    fun showScrollPercentage() = preferenceStore.getBoolean("pref_novel_show_scroll_pct", true)
+
+    /** Show battery and time in the reader chrome. */
+    fun showBatteryAndTime() = preferenceStore.getBoolean("pref_novel_show_battery_time", false)
+
+    /** Show time-to-end estimate (based on reading speed). */
+    fun showTimeToEnd() = preferenceStore.getBoolean("pref_novel_show_time_to_end", false)
+
+    /** Show word count for the current chapter. */
+    fun showWordCount() = preferenceStore.getBoolean("pref_novel_show_word_count", false)
+
+    /** Text selection enabled in the reader. */
+    fun textSelectionEnabled() = preferenceStore.getBoolean("pref_novel_text_selection", false)
+
+    /** Selected text translation: enables translation of highlighted text. */
+    fun selectedTextTranslationEnabled() = preferenceStore.getBoolean("pref_novel_sel_text_translation", false)
+
+    /** Selected text translation target language code. */
+    fun selectedTextTranslationTargetLang() = preferenceStore.getString("pref_novel_sel_text_translation_lang", "en")
+
+    /** Novel dictionary: enables Wiktionary lookup for highlighted words. */
+    fun novelDictionaryEnabled() = preferenceStore.getBoolean("pref_novel_dictionary", false)
+
+    /** Novel dictionary target language. */
+    fun novelDictionaryTargetLang() = preferenceStore.getString("pref_novel_dictionary_lang", "en")
+
+    /** Page transition style for page-mode reader. */
+    fun pageTransitionStyle() = preferenceStore.getEnum("pref_novel_page_transition", NovelPageTransitionStyle.SLIDE)
+
+    /** Swipe to next chapter gesture. */
+    fun swipeToNextChapter() = preferenceStore.getBoolean("pref_novel_swipe_next_chapter", false)
+
+    /** Swipe to previous chapter gesture. */
+    fun swipeToPrevChapter() = preferenceStore.getBoolean("pref_novel_swipe_prev_chapter", false)
+
+    /** Tap to scroll: tap left/right half of screen to scroll. */
+    fun tapToScroll() = preferenceStore.getBoolean("pref_novel_tap_scroll", false)
+
+    /** Vertical seekbar: display the seekbar vertically on the side. */
+    fun verticalSeekbar() = preferenceStore.getBoolean("pref_novel_vertical_seekbar", false)
+
+    /** Custom CSS injected into the reader WebView. */
+    fun customCSS() = preferenceStore.getString("pref_novel_custom_css", "")
+
+    /** Custom JS injected into the reader WebView. */
+    fun customJS() = preferenceStore.getString("pref_novel_custom_js", "")
 }

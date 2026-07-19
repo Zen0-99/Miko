@@ -43,4 +43,14 @@ class GetNovelIncognitoState(
         }
             .distinctUntilChanged()
     }
+
+    /**
+     * Whether reading history and progress should be paused.
+     * Library entries are always tracked unless global incognito is on.
+     */
+    fun shouldPauseHistory(sourceId: Long?, inLibrary: Boolean): Boolean {
+        if (basePreferences.incognitoMode().get()) return true
+        if (inLibrary) return false
+        return await(sourceId)
+    }
 }
