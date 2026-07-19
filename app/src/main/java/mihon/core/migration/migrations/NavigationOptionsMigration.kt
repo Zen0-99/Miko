@@ -30,7 +30,7 @@ class NavigationOptionsMigration : Migration {
             val navStyle = when (bottomNavStyle.get()) {
                 0 -> NavStyle.MOVE_HISTORY_TO_MORE
                 1 -> NavStyle.MOVE_UPDATES_TO_MORE
-                else -> NavStyle.MOVE_MANGA_TO_MORE
+                else -> NavStyle.MOVE_BROWSE_TO_MORE
             }
 
             preferenceStore.getEnum("start_screen", StartScreen.ANIME).set(startScreen)

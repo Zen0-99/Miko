@@ -17,12 +17,17 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
+import tachiyomi.domain.entries.novel.model.Novel
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -32,6 +37,7 @@ class NovelExtensionDetailsScreenModel(
     private val extensionManager: NovelExtensionManager = Injekt.get(),
     private val getExtensionSources: GetNovelExtensionSources = Injekt.get(),
     private val toggleSource: ToggleNovelSource = Injekt.get(),
+    private val getFavorites: GetNovelFavorites = Injekt.get(),
 ) : StateScreenModel<NovelExtensionDetailsScreenModel.State>(State()) {
 
     private val _events: Channel<NovelExtensionDetailsEvent> = Channel()
@@ -79,6 +85,43 @@ class NovelExtensionDetailsScreenModel(
                         }
                 }
             }
+            // Load favorites (migrate items) for all sources in this extension
+            launch {
+                state
+                    .map { it.sources }
+                    .distinctUntilChanged()
+                    .flatMapLatest { sources ->
+                        if (sources.isEmpty()) {
+                            kotlinx.coroutines.flow.flowOf(persistentListOf<MigrateNovelItem>())
+                        } else {
+                            combine(
+                                sources.map { source ->
+                                    getFavorites.subscribe(source.source.id)
+                                        .catch { throwable ->
+                                            logcat(LogPriority.ERROR, throwable)
+                                            emit(persistentListOf())
+                                        }
+                                        .map { novels ->
+                                            novels.map {
+                                                MigrateNovelItem(
+                                                    sourceId = source.source.id,
+                                                    sourceName = source.source.name,
+                                                    novel = it,
+                                                )
+                                            }
+                                        }
+                                },
+                            ) { lists ->
+                                lists.flatMap { it }.sortedWith(
+                                    compareBy(String.CASE_INSENSITIVE_ORDER) { it.novel.title },
+                                ).toImmutableList()
+                            }
+                        }
+                    }
+                    .collectLatest { items ->
+                        mutableState.update { it.copy(_migrateItems = items) }
+                    }
+            }
         }
     }
 
@@ -98,13 +141,24 @@ class NovelExtensionDetailsScreenModel(
     }
 
     @Immutable
+    data class MigrateNovelItem(
+        val sourceId: Long,
+        val sourceName: String,
+        val novel: Novel,
+    )
+
+    @Immutable
     data class State(
         val extension: NovelExtension.Installed? = null,
         private val _sources: ImmutableList<NovelExtensionSourceItem>? = null,
+        private val _migrateItems: ImmutableList<MigrateNovelItem>? = null,
     ) {
 
         val sources: ImmutableList<NovelExtensionSourceItem>
             get() = _sources ?: persistentListOf()
+
+        val migrateItems: ImmutableList<MigrateNovelItem>
+            get() = _migrateItems ?: persistentListOf()
 
         val isLoading: Boolean
             get() = extension == null || _sources == null

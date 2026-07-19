@@ -35,6 +35,12 @@ class UpdateNovel(
         manualFetch: Boolean,
     ): Boolean {
         val title = if (remoteTitle.isEmpty() || localNovel.favorite) null else remoteTitle
+        // Protect user edits for favorited novels — don't overwrite with source data
+        val author = if (localNovel.favorite) null else remoteAuthor
+        val artist = if (localNovel.favorite) null else remoteArtist
+        val description = if (localNovel.favorite) null else remoteDescription
+        val genre = if (localNovel.favorite) null else remoteGenre
+        val status = if (localNovel.favorite) null else remoteStatus
 
         val coverLastModified = when {
             remoteThumbnailUrl.isNullOrEmpty() -> null
@@ -56,12 +62,12 @@ class UpdateNovel(
                 id = localNovel.id,
                 title = title,
                 coverLastModified = coverLastModified,
-                author = remoteAuthor,
-                artist = remoteArtist,
-                description = remoteDescription,
-                genre = remoteGenre,
+                author = author,
+                artist = artist,
+                description = description,
+                genre = genre,
                 thumbnailUrl = thumbnailUrl,
-                status = remoteStatus,
+                status = status,
                 updateStrategy = remoteUpdateStrategy,
                 initialized = true,
             ),

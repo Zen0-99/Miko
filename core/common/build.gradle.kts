@@ -30,7 +30,7 @@ dependencies {
     api(libs.okhttp.dnsoverhttps)
     api(libs.okio)
 
-    implementation(libs.image.decoder)
+    implementation(files("../../libs/image-decoder-16kb.aar"))
 
     implementation(libs.unifile)
     implementation(libs.libarchive)
@@ -53,7 +53,7 @@ dependencies {
     implementation(aniyomilibs.ffmpeg.kit)
 
     // TorrServer
-    implementation(aniyomilibs.torrserver)
+    implementation(files("../../libs/torrserver-0.1.0-16kb.aar"))
 
     // Tests
     testImplementation(libs.bundles.test)

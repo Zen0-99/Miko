@@ -1,5 +1,6 @@
 package tachiyomi.domain.source.novel.interactor
 
+import android.util.Log
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import tachiyomi.domain.source.novel.repository.NovelSourcePagingSourceType
 import tachiyomi.domain.source.novel.repository.NovelSourceRepository
@@ -9,10 +10,20 @@ class GetRemoteNovel(
 ) {
 
     fun subscribe(sourceId: Long, query: String, filterList: NovelFilterList): NovelSourcePagingSourceType {
+        Log.d("NovelSearch", "[GetRemoteNovel] subscribe - sourceId=$sourceId, query='$query', filters=${filterList.size}")
         return when (query) {
-            QUERY_POPULAR -> repository.getPopularNovels(sourceId)
-            QUERY_LATEST -> repository.getLatestNovels(sourceId)
-            else -> repository.searchNovels(sourceId, query, filterList)
+            QUERY_POPULAR -> {
+                Log.d("NovelSearch", "[GetRemoteNovel] subscribe - fetching POPULAR novels for sourceId=$sourceId")
+                repository.getPopularNovels(sourceId)
+            }
+            QUERY_LATEST -> {
+                Log.d("NovelSearch", "[GetRemoteNovel] subscribe - fetching LATEST novels for sourceId=$sourceId")
+                repository.getLatestNovels(sourceId)
+            }
+            else -> {
+                Log.d("NovelSearch", "[GetRemoteNovel] subscribe - SEARCHING novels for sourceId=$sourceId, query='$query'")
+                repository.searchNovels(sourceId, query, filterList)
+            }
         }
     }
 

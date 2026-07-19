@@ -1,10 +1,7 @@
 package eu.kanade.presentation.entries.anime
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -27,9 +24,9 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -42,6 +39,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.layout
@@ -65,6 +63,7 @@ import eu.kanade.presentation.components.relativeDateTimeText
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.anime.components.AnimeActionRow
+import eu.kanade.presentation.entries.anime.components.AnimeContinueButton
 import eu.kanade.presentation.entries.anime.components.AnimeEpisodeListItem
 import eu.kanade.presentation.entries.anime.components.AnimeInfoBox
 import eu.kanade.presentation.entries.anime.components.AnimeSeasonListItem
@@ -72,8 +71,8 @@ import eu.kanade.presentation.entries.anime.components.EpisodeDownloadAction
 import eu.kanade.presentation.entries.anime.components.ExpandableAnimeDescription
 import eu.kanade.presentation.entries.anime.components.NextEpisodeAiringListItem
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
+import eu.kanade.presentation.entries.components.EntryChapterHeader
 import eu.kanade.presentation.entries.components.EntryToolbar
-import eu.kanade.presentation.entries.components.ItemHeader
 import eu.kanade.presentation.entries.components.MissingItemCountListItem
 import eu.kanade.presentation.util.formatEpisodeNumber
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
@@ -96,11 +95,10 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.FastScrollLazyVerticalGrid
 import tachiyomi.presentation.core.components.TwoPanelBox
-import tachiyomi.presentation.core.components.material.ExtendedFloatingActionButton
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold
+import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.shouldExpandFAB
 import tachiyomi.source.local.entries.anime.isLocal
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -156,6 +154,14 @@ fun AnimeScreen(
     onEpisodeSelected: (EpisodeList.Item, Boolean, Boolean, Boolean) -> Unit,
     onAllEpisodeSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+
+    // For overflow menu
+    onMarkAllSeenClicked: (() -> Unit)? = null,
+    onMarkAllUnseenClicked: (() -> Unit)? = null,
+    onRefreshTrackingClicked: (() -> Unit)? = null,
+    onRemoveAllDownloadsClicked: (() -> Unit)? = null,
+    onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)? = null,
+    onRemoveSeenDownloadsClicked: (() -> Unit)? = null,
 
     // Season clicked
     onSeasonClicked: (SeasonAnime) -> Unit,
@@ -214,6 +220,12 @@ fun AnimeScreen(
             onSettingsClicked = onSettingsClicked,
             onSeasonClicked = onSeasonClicked,
             onClickContinueWatching = onContinueWatchingClicked,
+            onMarkAllSeenClicked = onMarkAllSeenClicked,
+            onMarkAllUnseenClicked = onMarkAllUnseenClicked,
+            onRefreshTrackingClicked = onRefreshTrackingClicked,
+            onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+            onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+            onRemoveSeenDownloadsClicked = onRemoveSeenDownloadsClicked,
         )
     } else {
         AnimeScreenLargeImpl(
@@ -256,6 +268,12 @@ fun AnimeScreen(
             onSettingsClicked = onSettingsClicked,
             onSeasonClicked = onSeasonClicked,
             onClickContinueWatching = onContinueWatchingClicked,
+            onMarkAllSeenClicked = onMarkAllSeenClicked,
+            onMarkAllUnseenClicked = onMarkAllUnseenClicked,
+            onRefreshTrackingClicked = onRefreshTrackingClicked,
+            onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+            onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+            onRemoveSeenDownloadsClicked = onRemoveSeenDownloadsClicked,
         )
     }
 }
@@ -313,6 +331,14 @@ private fun AnimeScreenSmallImpl(
     onEpisodeSelected: (EpisodeList.Item, Boolean, Boolean, Boolean) -> Unit,
     onAllEpisodeSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+
+    // For overflow menu
+    onMarkAllSeenClicked: (() -> Unit)? = null,
+    onMarkAllUnseenClicked: (() -> Unit)? = null,
+    onRefreshTrackingClicked: (() -> Unit)? = null,
+    onRemoveAllDownloadsClicked: (() -> Unit)? = null,
+    onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)? = null,
+    onRemoveSeenDownloadsClicked: (() -> Unit)? = null,
 
     // Season clicked
     onSeasonClicked: (SeasonAnime) -> Unit,
@@ -376,7 +402,7 @@ private fun AnimeScreenSmallImpl(
                     title = state.anime.title,
                     hasFilters = hasFilters,
                     navigateUp = navigateUp,
-                    onClickFilter = onFilterClicked,
+                    onClickFilter = null,
                     onClickShare = onShareClicked,
                     onClickDownload = onDownloadActionClicked,
                     onClickEditCategory = onEditCategoryClicked,
@@ -392,6 +418,15 @@ private fun AnimeScreenSmallImpl(
                     backgroundAlphaProvider = { backgroundAlpha },
                     isManga = false,
                     modifier = Modifier.onSizeChanged { toolbarHeight = it.height },
+                    toolbarBackgroundColor = MaterialTheme.colorScheme.background,
+                    intervalDays = state.intervalDays,
+                    showIntervalBadge = true,
+                    onClickMarkAllRead = onMarkAllSeenClicked,
+                    onClickMarkAllUnread = onMarkAllUnseenClicked,
+                    onClickRefreshTracking = onRefreshTrackingClicked,
+                    onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
+                    onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
+                    onClickRemoveReadDownloads = onRemoveSeenDownloadsClicked,
                 )
             },
             bottomBar = {
@@ -412,37 +447,6 @@ private fun AnimeScreenSmallImpl(
                 )
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-            floatingActionButton = {
-                val isFABVisible = remember(episodes) {
-                    episodes.fastAny { !it.episode.seen } && !isAnySelected
-                }
-                AnimatedVisibility(
-                    visible = isFABVisible,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                ) {
-                    ExtendedFloatingActionButton(
-                        text = {
-                            val isWatching = remember(state.episodes) {
-                                state.episodes.fastAny { it.episode.seen }
-                            }
-                            Text(
-                                text = stringResource(
-                                    if (isWatching) MR.strings.action_resume else MR.strings.action_start,
-                                ),
-                            )
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                            )
-                        },
-                        onClick = onContinueWatching,
-                        expanded = itemListState.shouldExpandFAB(),
-                    )
-                }
-            },
         ) { contentPadding ->
             val topPadding = contentPadding.calculateTopPadding()
 
@@ -477,6 +481,7 @@ private fun AnimeScreenSmallImpl(
                             onCoverClick = onCoverClicked,
                             doSearch = onSearch,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                            accentColor = state.accentColor,
                         )
                     }
 
@@ -497,6 +502,7 @@ private fun AnimeScreenSmallImpl(
                             onEditIntervalClicked = onEditIntervalClicked,
                             onEditCategory = onEditCategoryClicked,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                            accentColor = state.accentColor,
                         )
                     }
 
@@ -506,11 +512,32 @@ private fun AnimeScreenSmallImpl(
                         span = { GridItemSpan(maxLineSpan) },
                     ) {
                         ExpandableAnimeDescription(
-                            defaultExpandState = state.isFromSource,
+                            defaultExpandState = false,
                             description = state.anime.description,
                             tagsProvider = { state.anime.genre },
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
+                            modifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                            accentColor = state.accentColor,
+                        )
+                    }
+
+                    item(
+                        key = EntryScreenItem.CONTINUE_BUTTON,
+                        contentType = EntryScreenItem.CONTINUE_BUTTON,
+                        span = { GridItemSpan(maxLineSpan) },
+                    ) {
+                        val nextEpisode = remember(episodes) {
+                            episodes.firstOrNull { !it.episode.seen }?.episode
+                        }
+                        val hasSeenEpisodes = remember(state.episodes) {
+                            state.episodes.fastAny { it.episode.seen }
+                        }
+                        AnimeContinueButton(
+                            nextEpisode = nextEpisode,
+                            hasSeenEpisodes = hasSeenEpisodes,
+                            accentColor = state.accentColor,
+                            onClick = onContinueWatching,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                         )
                     }
@@ -526,18 +553,29 @@ private fun AnimeScreenSmallImpl(
                         val missingSeasonsCount = remember(seasons) {
                             seasons.map { it.seasonAnime.anime.seasonNumber }.missingEntriesCount()
                         }
-                        ItemHeader(
-                            enabled = !isAnySelected,
-                            itemCount = when (state.anime.fetchType) {
-                                FetchType.Seasons -> seasons.size
-                                FetchType.Episodes -> episodes.size
-                            },
-                            missingItemsCount = maxOf(missingEpisodesCount, missingSeasonsCount),
+                        val itemCount = when (state.anime.fetchType) {
+                            FetchType.Seasons -> seasons.size
+                            FetchType.Episodes -> episodes.size
+                        }
+                        val headerText = when (state.anime.fetchType) {
+                            FetchType.Seasons -> pluralStringResource(
+                                AYMR.plurals.anime_num_seasons,
+                                count = itemCount,
+                                itemCount,
+                            )
+                            FetchType.Episodes -> pluralStringResource(
+                                AYMR.plurals.anime_num_episodes,
+                                count = itemCount,
+                                itemCount,
+                            )
+                        }
+                        EntryChapterHeader(
+                            itemCountText = headerText,
                             onClick = onFilterClicked,
-                            isManga = false,
-                            fetchType = state.anime.fetchType,
+                            accentColor = state.accentColor,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                         )
+                        MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
                     }
 
                     when (state.anime.fetchType) {
@@ -596,6 +634,7 @@ private fun AnimeScreenSmallImpl(
                                 onEpisodeSelected = onEpisodeSelected,
                                 onEpisodeSwipe = onEpisodeSwipe,
                                 itemModifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                                accentColor = state.accentColor,
                             )
                         }
                     }
@@ -659,6 +698,14 @@ fun AnimeScreenLargeImpl(
     onAllEpisodeSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
 
+    // For overflow menu
+    onMarkAllSeenClicked: (() -> Unit)? = null,
+    onMarkAllUnseenClicked: (() -> Unit)? = null,
+    onRefreshTrackingClicked: (() -> Unit)? = null,
+    onRemoveAllDownloadsClicked: (() -> Unit)? = null,
+    onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)? = null,
+    onRemoveSeenDownloadsClicked: (() -> Unit)? = null,
+
     // Season clicked
     onSeasonClicked: (SeasonAnime) -> Unit,
     onClickContinueWatching: ((SeasonAnime) -> Unit)?,
@@ -710,7 +757,7 @@ fun AnimeScreenLargeImpl(
                     title = state.anime.title,
                     hasFilters = hasFilters,
                     navigateUp = navigateUp,
-                    onClickFilter = onFilterButtonClicked,
+                    onClickFilter = null,
                     onClickShare = onShareClicked,
                     onClickDownload = onDownloadActionClicked,
                     onClickEditCategory = onEditCategoryClicked,
@@ -725,6 +772,15 @@ fun AnimeScreenLargeImpl(
                     titleAlphaProvider = { 1f },
                     backgroundAlphaProvider = { 1f },
                     isManga = false,
+                    toolbarBackgroundColor = MaterialTheme.colorScheme.background,
+                    intervalDays = state.intervalDays,
+                    showIntervalBadge = true,
+                    onClickMarkAllRead = onMarkAllSeenClicked,
+                    onClickMarkAllUnread = onMarkAllUnseenClicked,
+                    onClickRefreshTracking = onRefreshTrackingClicked,
+                    onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
+                    onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
+                    onClickRemoveReadDownloads = onRemoveSeenDownloadsClicked,
                 )
             },
             bottomBar = {
@@ -750,32 +806,6 @@ fun AnimeScreenLargeImpl(
                 }
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-            floatingActionButton = {
-                val isFABVisible = remember(episodes) {
-                    episodes.fastAny { !it.episode.seen } && !isAnySelected
-                }
-                AnimatedVisibility(
-                    visible = isFABVisible,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                ) {
-                    ExtendedFloatingActionButton(
-                        text = {
-                            val isWatching = remember(state.episodes) {
-                                state.episodes.fastAny { it.episode.seen }
-                            }
-                            Text(
-                                text = stringResource(
-                                    if (isWatching) MR.strings.action_resume else MR.strings.action_start,
-                                ),
-                            )
-                        },
-                        icon = { Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null) },
-                        onClick = onContinueWatching,
-                        expanded = itemListState.shouldExpandFAB(),
-                    )
-                }
-            },
         ) { contentPadding ->
             PullRefresh(
                 refreshing = state.isRefreshingData,
@@ -806,6 +836,7 @@ fun AnimeScreenLargeImpl(
                                 isStubSource = remember { state.source is StubAnimeSource },
                                 onCoverClick = onCoverClicked,
                                 doSearch = onSearch,
+                                accentColor = state.accentColor,
                             )
                             AnimeActionRow(
                                 favorite = state.anime.favorite,
@@ -818,13 +849,15 @@ fun AnimeScreenLargeImpl(
                                 onTrackingClicked = onTrackingClicked,
                                 onEditIntervalClicked = onEditIntervalClicked,
                                 onEditCategory = onEditCategoryClicked,
+                                accentColor = state.accentColor,
                             )
                             ExpandableAnimeDescription(
-                                defaultExpandState = true,
+                                defaultExpandState = false,
                                 description = state.anime.description,
                                 tagsProvider = { state.anime.genre },
                                 onTagSearch = onTagSearch,
                                 onCopyTagToClipboard = onCopyTagToClipboard,
+                                accentColor = state.accentColor,
                             )
                         }
                     },
@@ -851,18 +884,29 @@ fun AnimeScreenLargeImpl(
                                 val missingSeasonsCount = remember(seasons) {
                                     seasons.map { it.seasonAnime.anime.seasonNumber }.missingEntriesCount()
                                 }
-                                ItemHeader(
-                                    enabled = !isAnySelected,
-                                    itemCount = when (state.anime.fetchType) {
-                                        FetchType.Seasons -> seasons.size
-                                        FetchType.Episodes -> episodes.size
-                                    },
-                                    missingItemsCount = maxOf(missingEpisodesCount, missingSeasonsCount),
+                                val itemCount = when (state.anime.fetchType) {
+                                    FetchType.Seasons -> seasons.size
+                                    FetchType.Episodes -> episodes.size
+                                }
+                                val headerText = when (state.anime.fetchType) {
+                                    FetchType.Seasons -> pluralStringResource(
+                                        AYMR.plurals.anime_num_seasons,
+                                        count = itemCount,
+                                        itemCount,
+                                    )
+                                    FetchType.Episodes -> pluralStringResource(
+                                        AYMR.plurals.anime_num_episodes,
+                                        count = itemCount,
+                                        itemCount,
+                                    )
+                                }
+                                EntryChapterHeader(
+                                    itemCountText = headerText,
                                     onClick = onFilterButtonClicked,
-                                    isManga = false,
-                                    fetchType = state.anime.fetchType,
+                                    accentColor = state.accentColor,
                                     modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                                 )
+                                MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
                             }
 
                             when (state.anime.fetchType) {
@@ -920,6 +964,7 @@ fun AnimeScreenLargeImpl(
                                         onEpisodeSelected = onEpisodeSelected,
                                         onEpisodeSwipe = onEpisodeSwipe,
                                         itemModifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                                        accentColor = state.accentColor,
                                     )
                                 }
                             }
@@ -1026,6 +1071,7 @@ private fun LazyGridScope.sharedEpisodeItems(
     onEpisodeSelected: (EpisodeList.Item, Boolean, Boolean, Boolean) -> Unit,
     onEpisodeSwipe: (EpisodeList.Item, LibraryPreferences.EpisodeSwipeAction) -> Unit,
     itemModifier: Modifier = Modifier,
+    accentColor: Color? = null,
 ) {
     items(
         items = episodes,
@@ -1101,6 +1147,7 @@ private fun LazyGridScope.sharedEpisodeItems(
                         onEpisodeSwipe(episodeItem, it)
                     },
                     modifier = itemModifier,
+                    accentColor = accentColor,
                 )
             }
         }

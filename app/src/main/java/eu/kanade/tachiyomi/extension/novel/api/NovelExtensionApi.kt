@@ -157,6 +157,7 @@ private data class ExtensionSourceJsonObject(
     val lang: String,
     val name: String,
     val baseUrl: String,
+    val supportsComments: Boolean? = null,
 )
 
 private val extensionSourceMapper: (ExtensionSourceJsonObject) -> NovelExtension.Available.NovelSource = {
@@ -165,5 +166,6 @@ private val extensionSourceMapper: (ExtensionSourceJsonObject) -> NovelExtension
         lang = it.lang,
         name = it.name,
         baseUrl = it.baseUrl,
+        supportsComments = it.supportsComments ?: false,
     )
 }

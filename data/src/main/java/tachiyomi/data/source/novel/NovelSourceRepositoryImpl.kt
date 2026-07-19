@@ -26,6 +26,7 @@ class NovelSourceRepositoryImpl(
             sources.map {
                 mapSourceToDomainSource(it).copy(
                     supportsLatest = it.supportsLatest,
+                    supportsComments = it.supportsComments,
                 )
             }
         }

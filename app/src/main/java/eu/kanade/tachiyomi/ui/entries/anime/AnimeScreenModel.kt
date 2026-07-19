@@ -5,6 +5,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import aniyomi.core.common.torrent.TorrentPreferences
@@ -85,6 +86,7 @@ import tachiyomi.domain.entries.anime.interactor.GetAnimeWithEpisodesAndSeasons
 import tachiyomi.domain.entries.anime.interactor.GetDuplicateLibraryAnime
 import tachiyomi.domain.entries.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.entries.anime.interactor.SetAnimeSeasonFlags
+import tachiyomi.domain.entries.anime.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.NoSeasonsException
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
@@ -145,6 +147,7 @@ class AnimeScreenModel(
     private val animeRepository: AnimeRepository = Injekt.get(),
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
     private val filterEpisodesForDownload: FilterEpisodesForDownload = Injekt.get(),
+    private val fetchInterval: AnimeFetchInterval = Injekt.get(),
     private val torrentServerUtils: TorrentServerUtils = Injekt.get(),
     internal val setAnimeViewerFlags: SetAnimeViewerFlags = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
@@ -196,6 +199,10 @@ class AnimeScreenModel(
         }
     }
 
+    fun setAccentColor(color: Color?) {
+        updateSuccessState { it.copy(accentColor = color) }
+    }
+
     init {
         screenModelScope.launchIO {
             combine(
@@ -245,6 +252,10 @@ class AnimeScreenModel(
             val needRefreshSeason = seasons.isEmpty() && anime.fetchType == FetchType.Seasons
 
             // Show what we have earlier
+            val intervalDays = fetchInterval.calculateInterval(
+                episodes.map { it.episode },
+                java.time.ZoneId.systemDefault(),
+            )
             mutableState.update {
                 State.Success(
                     anime = anime,
@@ -254,6 +265,7 @@ class AnimeScreenModel(
                     seasons = seasons,
                     isRefreshingData = needRefreshInfo || needRefreshEpisode || needRefreshSeason,
                     dialog = null,
+                    intervalDays = intervalDays,
                 )
             }
             // Start observe tracking since it only needs animeId
@@ -931,6 +943,47 @@ class AnimeScreenModel(
             if (result == SnackbarResult.ActionPerformed) {
                 trackEpisode.await(context, animeId, maxEpisodeNumber)
             }
+        }
+    }
+
+    fun markAllSeen() {
+        val episodes = successState?.episodes?.map { it.episode } ?: return
+        markEpisodesSeen(episodes, true)
+    }
+
+    fun markAllUnseen() {
+        val episodes = successState?.episodes?.map { it.episode } ?: return
+        markEpisodesSeen(episodes, false)
+    }
+
+    fun deleteAllDownloads() {
+        val state = successState ?: return
+        downloadManager.deleteAnime(state.anime, state.source)
+    }
+
+    fun deleteNonBookmarkedDownloads() {
+        val state = successState ?: return
+        val episodes = state.episodes.filter { !it.episode.bookmark }.map { it.episode }
+        if (episodes.isNotEmpty()) {
+            screenModelScope.launchNonCancellable {
+                downloadManager.deleteEpisodes(episodes, state.anime, state.source)
+            }
+        }
+    }
+
+    fun deleteSeenDownloads() {
+        val state = successState ?: return
+        val episodes = state.episodes.filter { it.episode.seen }.map { it.episode }
+        if (episodes.isNotEmpty()) {
+            screenModelScope.launchNonCancellable {
+                downloadManager.deleteEpisodes(episodes, state.anime, state.source)
+            }
+        }
+    }
+
+    fun refreshTracking() {
+        screenModelScope.launchIO {
+            refreshTrackers()
         }
     }
 
@@ -1614,6 +1667,8 @@ class AnimeScreenModel(
                 anime.nextEpisodeToAir,
                 anime.nextEpisodeAiringAt,
             ),
+            val accentColor: Color? = null,
+            val intervalDays: Int? = null,
         ) : State {
 
             val processedSeasons by lazy {

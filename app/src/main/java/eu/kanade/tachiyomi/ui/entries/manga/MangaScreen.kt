@@ -32,6 +32,8 @@ import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
 import eu.kanade.presentation.entries.components.SetIntervalDialog
+import eu.kanade.presentation.entries.components.rememberEntryAccentColor
+import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.presentation.entries.manga.ChapterSettingsDialog
 import eu.kanade.presentation.entries.manga.DuplicateMangaDialog
 import eu.kanade.presentation.entries.manga.MangaScreen
@@ -51,7 +53,9 @@ import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearch
 import eu.kanade.tachiyomi.ui.category.CategoriesTab
 import eu.kanade.tachiyomi.ui.entries.manga.track.MangaTrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
-import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
@@ -67,6 +71,8 @@ import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class MangaScreen(
     private val mangaId: Long,
@@ -101,6 +107,17 @@ class MangaScreen(
 
         val successState = state as MangaScreenModel.State.Success
         val isHttpSource = remember { successState.source is HttpSource }
+
+        val extractedAccent = rememberEntryAccentColor(
+            entryId = successState.manga.id,
+            cover = successState.manga,
+            type = EntryCoverMetadata.EntryType.MANGA,
+        )
+        LaunchedEffect(extractedAccent) {
+            if (extractedAccent != successState.accentColor) {
+                screenModel.setAccentColor(extractedAccent)
+            }
+        }
 
         LaunchedEffect(successState.manga, screenModel.source) {
             if (isHttpSource) {
@@ -172,6 +189,15 @@ class MangaScreen(
             onChapterSelected = screenModel::toggleSelection,
             onAllChapterSelected = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
+            onMarkAllReadClicked = { screenModel.markAllRead() },
+            onMarkAllUnreadClicked = { screenModel.markAllUnread() },
+            onRefreshTrackingClicked = { screenModel.refreshTracking() },
+            onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
+            onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
+            onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
         )
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
@@ -368,8 +394,10 @@ class MangaScreen(
 
         when (val previousController = navigator.items[navigator.size - 2]) {
             is HomeScreen -> {
+                // Set mode to MANGA so the library search targets manga content.
+                Injekt.get<UiPreferences>().contentMode().set(ContentMode.MANGA)
                 navigator.pop()
-                MangaLibraryTab.search(query)
+                LibraryTab.search(query)
             }
             is BrowseMangaSourceScreen -> {
                 navigator.pop()

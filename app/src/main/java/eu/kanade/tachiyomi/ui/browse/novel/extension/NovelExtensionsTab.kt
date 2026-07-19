@@ -15,7 +15,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.browse.novel.NovelExtensionScreen
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
-import eu.kanade.presentation.more.settings.screen.browse.NovelExtensionReposScreen
+import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelExtensionDetailsScreen
 import eu.kanade.tachiyomi.util.system.isPackageInstalled
@@ -45,7 +45,7 @@ fun novelExtensionsTab(
             ),
             AppBar.OverflowAction(
                 title = stringResource(MR.strings.label_extension_repos),
-                onClick = { navigator.push(NovelExtensionReposScreen()) },
+                onClick = { navigator.push(ConsolidatedExtensionReposScreen()) },
             ),
         ),
         content = { contentPadding, _ ->

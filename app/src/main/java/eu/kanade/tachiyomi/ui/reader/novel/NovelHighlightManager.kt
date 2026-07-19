@@ -167,18 +167,17 @@ class NovelHighlightManager(context: Context) {
         newColor: String,
         newNote: String?,
     ): Pair<List<HighlightEntry>, Boolean> {
+        // Only merge if the new text actually contains or is contained by
+        // an existing highlight (physical text overlap, not just shared words).
+        // This ensures separate highlights remain separate unless one truly
+        // overlaps the other.
         val overlapping = existing.find { existingHl ->
-            val existingWords = existingHl.text.split(Regex("\\s+")).toSet()
-            val newWords = newText.split(Regex("\\s+")).toSet()
-            existingWords.intersect(newWords).isNotEmpty()
+            existingHl.text.contains(newText) || newText.contains(existingHl.text)
         }
 
         return if (overlapping != null) {
-            val mergedText = if (overlapping.text.contains(newText) || newText.contains(overlapping.text)) {
-                if (overlapping.text.length >= newText.length) overlapping.text else newText
-            } else {
-                "$newText ${overlapping.text}".trim()
-            }
+            // Keep the longer text (the broader selection consumes the narrower).
+            val mergedText = if (overlapping.text.length >= newText.length) overlapping.text else newText
             val merged = overlapping.copy(
                 text = mergedText,
                 color = newColor,

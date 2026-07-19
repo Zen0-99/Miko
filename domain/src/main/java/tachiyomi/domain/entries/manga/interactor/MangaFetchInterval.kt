@@ -40,7 +40,7 @@ class MangaFetchInterval(
         return Pair(lowerBound.toEpochSecond() * 1000, upperBound.toEpochSecond() * 1000 - 1)
     }
 
-    internal fun calculateInterval(chapters: List<Chapter>, zone: ZoneId): Int {
+    fun calculateInterval(chapters: List<Chapter>, zone: ZoneId): Int {
         val chapterWindow = if (chapters.size <= 8) 3 else 10
 
         val uploadDates = chapters.asSequence()

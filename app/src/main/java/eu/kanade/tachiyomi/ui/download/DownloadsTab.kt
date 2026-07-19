@@ -6,13 +6,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -266,6 +269,28 @@ data object DownloadsTab : Tab {
                 PrimaryTabRow(
                     selectedTabIndex = state.currentPage,
                     modifier = Modifier.zIndex(1f),
+                    indicator = {
+                        Box(
+                            Modifier
+                                .tabIndicatorLayout { measurable, constraints, tabPositions ->
+                                    val targetPos = tabPositions.getOrElse(state.currentPage) { tabPositions.first() }
+                                    val fraction = state.currentPageOffsetFraction
+                                    val left = targetPos.left + targetPos.width * fraction
+                                    val width = targetPos.width
+                                    val placeable = measurable.measure(
+                                        constraints.copy(
+                                            minWidth = width.roundToPx(),
+                                            maxWidth = width.roundToPx(),
+                                        ),
+                                    )
+                                    layout(constraints.maxWidth, constraints.maxHeight) {
+                                        placeable.place(left.roundToPx(), constraints.maxHeight - placeable.height)
+                                    }
+                                }
+                                .height(2.dp)
+                                .background(MaterialTheme.colorScheme.primary),
+                        )
+                    },
                 ) {
                     listOf(
                         Tab(

@@ -57,6 +57,10 @@ object SettingsLibraryScreen : SearchableSettings {
     override fun getTitleRes() = MR.strings.pref_category_library
 
     @Composable
+    @ReadOnlyComposable
+    override fun getSubtitleRes() = AYMR.strings.pref_library_summary
+
+    @Composable
     override fun getPreferences(): List<Preference> {
         val getCategories = remember { Injekt.get<GetMangaCategories>() }
         val allCategories by getCategories.subscribe().collectAsState(initial = emptyList())

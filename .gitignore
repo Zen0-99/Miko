@@ -14,3 +14,20 @@ local.properties
 
 # macOS specific files
 .DS_Store
+
+# Temp/build logs and debug artifacts
+build_*.txt
+build_output*.txt
+logcat*.txt
+logcat*.txtcd
+emulator_*.png
+screen*.png
+page_size_dialog*.png
+ui*.xml
+
+# Extracted libs (not source)
+libs/
+
+# Devin/GSD tooling
+.devin/
+.planning/

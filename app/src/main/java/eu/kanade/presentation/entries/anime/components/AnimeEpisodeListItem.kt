@@ -85,6 +85,7 @@ fun AnimeEpisodeListItem(
     onDownloadClick: ((EpisodeDownloadAction) -> Unit)?,
     onEpisodeSwipe: (LibraryPreferences.EpisodeSwipeAction) -> Unit,
     modifier: Modifier = Modifier,
+    accentColor: Color? = null,
 ) {
     val start = getSwipeAction(
         action = episodeSwipeStartAction,
@@ -135,6 +136,7 @@ fun AnimeEpisodeListItem(
                     downloadStateProvider = downloadStateProvider,
                     downloadProgressProvider = downloadProgressProvider,
                     onDownloadClick = onDownloadClick,
+                    accentColor = accentColor,
                 )
                 return@Row
             }
@@ -170,6 +172,7 @@ fun AnimeEpisodeListItem(
                                     downloadStateProvider = downloadStateProvider,
                                     downloadProgressProvider = downloadProgressProvider,
                                     onDownloadClick = onDownloadClick,
+                                    accentColor = accentColor,
                                 )
                             }
                         }
@@ -202,6 +205,7 @@ fun AnimeEpisodeListItem(
                             downloadStateProvider = downloadStateProvider,
                             downloadProgressProvider = downloadProgressProvider,
                             onDownloadClick = onDownloadClick,
+                            accentColor = accentColor,
                         )
                     }
                 }
@@ -223,6 +227,7 @@ private fun RowScope.SimpleEpisodeListItemImpl(
     downloadStateProvider: () -> AnimeDownload.State,
     downloadProgressProvider: () -> Int,
     onDownloadClick: ((EpisodeDownloadAction) -> Unit)?,
+    accentColor: Color? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -252,6 +257,7 @@ private fun RowScope.SimpleEpisodeListItemImpl(
         downloadStateProvider = downloadStateProvider,
         downloadProgressProvider = downloadProgressProvider,
         onDownloadClick = onDownloadClick,
+        accentColor = accentColor,
     )
 }
 
@@ -467,6 +473,7 @@ private fun BookmarkDownloadIcons(
     downloadStateProvider: () -> AnimeDownload.State,
     downloadProgressProvider: () -> Int,
     onDownloadClick: ((EpisodeDownloadAction) -> Unit)?,
+    accentColor: Color? = null,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (bookmark) {
@@ -487,6 +494,7 @@ private fun BookmarkDownloadIcons(
             downloadStateProvider = downloadStateProvider,
             downloadProgressProvider = downloadProgressProvider,
             onClick = { onDownloadClick?.invoke(it) },
+            accentColor = accentColor,
         )
     }
 }

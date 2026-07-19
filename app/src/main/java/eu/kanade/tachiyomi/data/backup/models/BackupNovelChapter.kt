@@ -18,6 +18,7 @@ data class BackupNovelChapter(
     @ProtoNumber(10) var sourceOrder: Long = 0,
     @ProtoNumber(11) var lastModifiedAt: Long = 0,
     @ProtoNumber(12) var version: Long = 0,
+    @ProtoNumber(13) var totalCharCount: Long = 0,
 ) {
     fun toNovelChapterImpl(): NovelChapter {
         return NovelChapter.create().copy(
@@ -28,6 +29,7 @@ data class BackupNovelChapter(
             read = this@BackupNovelChapter.read,
             bookmark = this@BackupNovelChapter.bookmark,
             lastCharRead = this@BackupNovelChapter.lastCharRead,
+            totalCharCount = this@BackupNovelChapter.totalCharCount,
             dateFetch = this@BackupNovelChapter.dateFetch,
             dateUpload = this@BackupNovelChapter.dateUpload,
             sourceOrder = this@BackupNovelChapter.sourceOrder,
@@ -46,6 +48,7 @@ val backupNovelChapterMapper = {
         read: Boolean,
         bookmark: Boolean,
         lastCharRead: Long,
+        totalCharCount: Long,
         chapterNumber: Double,
         sourceOrder: Long,
         dateFetch: Long,
@@ -62,6 +65,7 @@ val backupNovelChapterMapper = {
         read = read,
         bookmark = bookmark,
         lastCharRead = lastCharRead,
+        totalCharCount = totalCharCount,
         dateFetch = dateFetch,
         dateUpload = dateUpload,
         sourceOrder = sourceOrder,

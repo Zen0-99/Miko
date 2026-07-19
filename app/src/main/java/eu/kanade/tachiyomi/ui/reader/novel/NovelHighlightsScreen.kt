@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
@@ -42,18 +43,28 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import eu.kanade.presentation.util.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tachiyomi.domain.entries.novel.interactor.GetNovel
+import tachiyomi.domain.entries.novel.model.asNovelCover
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,72 +86,135 @@ class NovelHighlightsScreen(
 
         var highlightsData by remember { mutableStateOf<NovelHighlightManager.NovelHighlightsData?>(null) }
         var showActionsFor by remember { mutableStateOf<Pair<NovelHighlightManager.HighlightEntry, Double>?>(null) }
+        var coverData by remember { mutableStateOf<tachiyomi.domain.entries.novel.model.NovelCover?>(null) }
 
         LaunchedEffect(novelKey) {
             withContext(Dispatchers.IO) {
                 highlightsData = highlightManager.getAllHighlights(novelKey)
+                // Load novel cover for background
+                val novel = Injekt.get<GetNovel>().await(novelId)
+                if (novel != null) {
+                    coverData = novel.asNovelCover()
+                }
             }
         }
 
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Highlights: $novelTitle") },
+                    title = { Text(novelTitle) },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
+                    colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = Color.White,
+                        navigationIconContentColor = Color.White,
+                    ),
                 )
             },
         ) { paddingValues ->
-            val data = highlightsData
-            if (data == null) {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("Loading...")
-                }
-                return@Scaffold
-            }
-
-            val items = buildHighlightItems(data)
-
-            if (items.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "No highlights yet",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // Full-height background — extends behind the transparent top bar
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (coverData != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(coverData)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .blur(10.dp)
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f)),
+                    )
+                    // Darker gradient overlay — darker at top for app bar, fading to solid bg
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0f to Color.Black.copy(alpha = 0.6f),
+                                    0.15f to MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                    0.4f to MaterialTheme.colorScheme.background.copy(alpha = 0.8f),
+                                    0.7f to MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                                    1f to MaterialTheme.colorScheme.background,
+                                ),
+                            ),
                     )
                 }
-                return@Scaffold
-            }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            ) {
-                items(items) { item ->
-                    when (item) {
-                        is HighlightListItem.ChapterHeader -> {
-                            Text(
-                                text = item.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
-                            )
+                // Content with padding applied here so background is full-height
+                Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+                    val data = highlightsData
+                    if (data == null) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("Loading...")
                         }
-                        is HighlightListItem.Highlight -> {
-                            HighlightCard(
-                                entry = item.entry,
-                                chapterNumber = item.chapterNumber,
-                                onClick = { showActionsFor = item.entry to item.chapterNumber },
-                            )
+                        return@Box
+                    }
+
+                    val items = buildHighlightItems(data)
+
+                    if (items.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.MenuBook,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "No highlights yet",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Highlight text while reading to see it here",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
+                            }
+                        }
+                        return@Box
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                    ) {
+                        items(items) { item ->
+                            when (item) {
+                                is HighlightListItem.ChapterHeader -> {
+                                    Text(
+                                        text = item.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+                                    )
+                                }
+                                is HighlightListItem.Highlight -> {
+                                    HighlightCard(
+                                        entry = item.entry,
+                                        chapterNumber = item.chapterNumber,
+                                        onClick = { showActionsFor = item.entry to item.chapterNumber },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -199,7 +273,9 @@ class NovelHighlightsScreen(
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
             onClick = onClick,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            ),
         ) {
             Row(
                 modifier = Modifier.padding(12.dp),

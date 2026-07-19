@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.updates.novel
 
 import android.content.Context
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SelectAll
@@ -21,6 +22,7 @@ import eu.kanade.presentation.updates.UpdatesDeleteConfirmationDialog
 import eu.kanade.presentation.updates.novel.NovelUpdateScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
+import mihon.feature.upcoming.novel.UpcomingNovelScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import kotlinx.collections.immutable.persistentListOf
@@ -44,7 +46,7 @@ fun Screen.novelUpdatesTab(
     val navigateUp: (() -> Unit)? = if (fromMore) {
         {
             if (navigator.lastItem == HomeScreen) {
-                scope.launch { HomeScreen.openTab(HomeScreen.Tab.NovelLib()) }
+                scope.launch { HomeScreen.openTab(HomeScreen.Tab.Library()) }
             } else {
                 navigator.pop()
             }
@@ -140,6 +142,11 @@ fun Screen.novelUpdatesTab(
             )
         } else {
             persistentListOf(
+                AppBar.Action(
+                    title = stringResource(MR.strings.action_view_upcoming),
+                    icon = Icons.Outlined.CalendarMonth,
+                    onClick = { navigator.push(UpcomingNovelScreen()) },
+                ),
                 AppBar.Action(
                     title = stringResource(MR.strings.action_update_library),
                     icon = Icons.Outlined.Refresh,

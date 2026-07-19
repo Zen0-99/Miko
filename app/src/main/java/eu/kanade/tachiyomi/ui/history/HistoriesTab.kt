@@ -12,7 +12,8 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
-import eu.kanade.domain.ui.model.NavStyle
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
@@ -28,21 +29,21 @@ import eu.kanade.tachiyomi.ui.main.MainActivity
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 data object HistoriesTab : Tab {
+
+    private val uiPreferences: UiPreferences = Injekt.get()
 
     override val options: TabOptions
         @Composable
         get() {
             val isSelected = LocalTabNavigator.current.current.key == key
             val image = AnimatedImageVector.animatedVectorResource(R.drawable.anim_history_enter)
-            val index: UShort = when (currentNavigationStyle()) {
-                NavStyle.MOVE_HISTORY_TO_MORE -> 5u
-                NavStyle.MOVE_BROWSE_TO_MORE -> 3u
-                else -> 2u
-            }
             return TabOptions(
-                index = index,
+                index = 2u,
                 title = stringResource(MR.strings.history),
                 icon = rememberAnimatedVectorPainter(image, isSelected),
             )
@@ -56,30 +57,33 @@ data object HistoriesTab : Tab {
     @Composable
     override fun Content() {
         val context = LocalContext.current
-        val fromMore = currentNavigationStyle() == NavStyle.MOVE_HISTORY_TO_MORE
-        // Hoisted for history tab's search bar
-        val mangaHistoryScreenModel = rememberScreenModel { MangaHistoryScreenModel() }
-        val mangaSearchQuery by mangaHistoryScreenModel.query.collectAsState()
+        val contentMode by uiPreferences.contentMode().collectAsState()
 
-        val animeHistoryScreenModel = rememberScreenModel { AnimeHistoryScreenModel() }
-        val animeSearchQuery by animeHistoryScreenModel.query.collectAsState()
-
-        val novelHistoryScreenModel = rememberScreenModel { NovelHistoryScreenModel() }
-        val novelSearchQuery by novelHistoryScreenModel.query.collectAsState()
+        // Hoist only the current mode's screen model for search-bar sharing.
+        val (tab, searchQuery, onChangeSearchQuery) = when (contentMode) {
+            ContentMode.ANIME -> {
+                val screenModel = rememberScreenModel { AnimeHistoryScreenModel() }
+                val query by screenModel.query.collectAsState()
+                Triple(animeHistoryTab(context, fromMore = false), query, screenModel::search)
+            }
+            ContentMode.MANGA -> {
+                val screenModel = rememberScreenModel { MangaHistoryScreenModel() }
+                val query by screenModel.query.collectAsState()
+                Triple(mangaHistoryTab(context, fromMore = false), query, screenModel::search)
+            }
+            ContentMode.NOVEL -> {
+                val screenModel = rememberScreenModel { NovelHistoryScreenModel() }
+                val query by screenModel.query.collectAsState()
+                Triple(novelHistoryTab(context, fromMore = false), query, screenModel::search)
+            }
+        }
 
         TabbedScreen(
             titleRes = MR.strings.label_recent_manga,
-            tabs = persistentListOf(
-                animeHistoryTab(context, fromMore),
-                mangaHistoryTab(context, fromMore),
-                novelHistoryTab(context, fromMore),
-            ),
-            mangaSearchQuery = mangaSearchQuery,
-            onChangeMangaSearchQuery = mangaHistoryScreenModel::search,
-            animeSearchQuery = animeSearchQuery,
-            onChangeAnimeSearchQuery = animeHistoryScreenModel::search,
-            novelSearchQuery = novelSearchQuery,
-            onChangeNovelSearchQuery = novelHistoryScreenModel::search,
+            tabs = persistentListOf(tab),
+            // Single-tab mode: TabbedScreen picks the first non-null query.
+            animeSearchQuery = searchQuery,
+            onChangeAnimeSearchQuery = onChangeSearchQuery,
         )
 
         LaunchedEffect(Unit) {
@@ -87,7 +91,3 @@ data object HistoriesTab : Tab {
         }
     }
 }
-
-private const val TAB_ANIME = 0
-private const val TAB_MANGA = 1
-private const val TAB_NOVEL = 2

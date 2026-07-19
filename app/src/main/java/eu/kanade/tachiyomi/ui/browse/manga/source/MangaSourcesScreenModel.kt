@@ -13,6 +13,8 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.source.service.SourcePreferences.DataSaver
 import eu.kanade.core.preference.asState
 import eu.kanade.presentation.browse.manga.MangaSourceUiModel
+import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
+import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.util.system.LAST_USED_KEY
 import eu.kanade.tachiyomi.util.system.PINNED_KEY
 import kotlinx.collections.immutable.ImmutableList
@@ -21,6 +23,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -40,6 +43,7 @@ class MangaSourcesScreenModel(
     private val getEnabledSources: GetEnabledMangaSources = Injekt.get(),
     private val toggleSource: ToggleMangaSource = Injekt.get(),
     private val toggleSourcePin: ToggleMangaSourcePin = Injekt.get(),
+    private val extensionManager: MangaExtensionManager = Injekt.get(),
     // SY -->
     private val toggleExcludeFromMangaDataSaver: ToggleExcludeFromMangaDataSaver = Injekt.get(),
     // SY <--
@@ -52,12 +56,25 @@ class MangaSourcesScreenModel(
 
     init {
         screenModelScope.launchIO {
-            getEnabledSources.subscribe()
-                .catch {
-                    logcat(LogPriority.ERROR, it)
-                    _events.send(Event.FailedFetchingSources)
+            // Fetch available extensions from repos so the "Not Installed" section has data
+            extensionManager.findAvailableExtensions()
+
+            combine(
+                getEnabledSources.subscribe()
+                    .catch {
+                        logcat(LogPriority.ERROR, it)
+                        _events.send(Event.FailedFetchingSources)
+                        emit(emptyList<Source>())
+                    },
+                extensionManager.availableExtensionsFlow,
+                extensionManager.installedExtensionsFlow,
+                extensionManager.untrustedExtensionsFlow,
+            ) { sources, available, installed, untrusted ->
+                buildItems(sources, available, installed, untrusted)
+            }
+                .collectLatest { items ->
+                    mutableState.update { it.copy(isLoading = false, items = items) }
                 }
-                .collectLatest(::collectLatestSources)
         }
         // SY -->
         sourcePreferences.dataSaver().changes()
@@ -72,42 +89,58 @@ class MangaSourcesScreenModel(
         // SY <--
     }
 
-    private fun collectLatestSources(sources: List<Source>) {
-        mutableState.update { state ->
-            val map = TreeMap<String, MutableList<Source>> { d1, d2 ->
-                // Sources without a lang defined will be placed at the end
-                when {
-                    d1 == LAST_USED_KEY && d2 != LAST_USED_KEY -> -1
-                    d2 == LAST_USED_KEY && d1 != LAST_USED_KEY -> 1
-                    d1 == PINNED_KEY && d2 != PINNED_KEY -> -1
-                    d2 == PINNED_KEY && d1 != PINNED_KEY -> 1
-                    d1 == "" && d2 != "" -> 1
-                    d2 == "" && d1 != "" -> -1
-                    else -> d1.compareTo(d2)
-                }
+    private fun buildItems(
+        sources: List<Source>,
+        available: List<MangaExtension.Available>,
+        installed: List<MangaExtension.Installed>,
+        untrusted: List<MangaExtension.Untrusted>,
+    ): ImmutableList<MangaSourceUiModel> {
+        val installedPkgNames = installed.map { it.pkgName }.toSet()
+
+        // Build the "Installed" section (sources grouped by language)
+        val map = TreeMap<String, MutableList<Source>> { d1, d2 ->
+            // Sources without a lang defined will be placed at the end
+            when {
+                d1 == LAST_USED_KEY && d2 != LAST_USED_KEY -> -1
+                d2 == LAST_USED_KEY && d1 != LAST_USED_KEY -> 1
+                d1 == PINNED_KEY && d2 != PINNED_KEY -> -1
+                d2 == PINNED_KEY && d1 != PINNED_KEY -> 1
+                d1 == "" && d2 != "" -> 1
+                d2 == "" && d1 != "" -> -1
+                else -> d1.compareTo(d2)
             }
-            val byLang = sources.groupByTo(map) {
-                when {
-                    it.isUsedLast -> LAST_USED_KEY
-                    Pin.Actual in it.pin -> PINNED_KEY
-                    else -> it.lang
-                }
+        }
+        val byLang = sources.groupByTo(map) {
+            when {
+                it.isUsedLast -> LAST_USED_KEY
+                Pin.Actual in it.pin -> PINNED_KEY
+                else -> it.lang
+            }
+        }
+
+        val installedItems = listOf(MangaSourceUiModel.Header(INSTALLED_KEY)) +
+            byLang.flatMap {
+                listOf(
+                    MangaSourceUiModel.Header(it.key),
+                    *it.value.map { source ->
+                        MangaSourceUiModel.Item(source)
+                    }.toTypedArray(),
+                )
             }
 
-            state.copy(
-                isLoading = false,
-                items = byLang
-                    .flatMap {
-                        listOf(
-                            MangaSourceUiModel.Header(it.key),
-                            *it.value.map { source ->
-                                MangaSourceUiModel.Item(source)
-                            }.toTypedArray(),
-                        )
-                    }
-                    .toImmutableList(),
-            )
+        // Build the "Not Installed" section (available extensions not yet installed)
+        val notInstalled = available.filter { it.pkgName !in installedPkgNames }
+        val notInstalledItems = if (notInstalled.isEmpty()) {
+            emptyList()
+        } else {
+            listOf(MangaSourceUiModel.Header(NOT_INSTALLED_KEY)) +
+                notInstalled.map { MangaSourceUiModel.AvailableExtension(it) }
         }
+
+        // Untrusted extensions (installed but not trusted — show with trust icon)
+        val untrustedItems = untrusted.map { MangaSourceUiModel.UntrustedExtension(it) }
+
+        return (installedItems + untrustedItems + notInstalledItems).toImmutableList()
     }
 
     fun toggleSource(source: Source) {
@@ -148,5 +181,10 @@ class MangaSourcesScreenModel(
         // SY <--
     ) {
         val isEmpty = items.isEmpty()
+    }
+
+    companion object {
+        const val NOT_INSTALLED_KEY = "not_installed"
+        const val INSTALLED_KEY = "installed"
     }
 }

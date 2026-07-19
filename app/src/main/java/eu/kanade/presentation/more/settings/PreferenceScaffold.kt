@@ -12,6 +12,7 @@ fun PreferenceScaffold(
     titleRes: StringResource,
     actions: @Composable RowScope.() -> Unit = {},
     onBackPressed: (() -> Unit)? = null,
+    subtitleRes: StringResource? = null,
     itemsProvider: @Composable () -> List<Preference>,
 ) {
     Scaffold(
@@ -27,6 +28,7 @@ fun PreferenceScaffold(
             PreferenceScreen(
                 items = itemsProvider(),
                 contentPadding = contentPadding,
+                subtitle = subtitleRes?.let { stringResource(it) },
             )
         },
     )

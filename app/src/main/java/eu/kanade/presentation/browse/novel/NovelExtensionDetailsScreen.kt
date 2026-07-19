@@ -9,10 +9,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Launch
@@ -36,19 +39,23 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.extension.novel.interactor.NovelExtensionSourceItem
 import eu.kanade.presentation.browse.novel.components.NovelExtensionIcon
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.WarningBanner
+import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TrailingWidgetBuffer
 import eu.kanade.tachiyomi.novelsource.ConfigurableNovelSource
+import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelExtensionDetailsScreenModel
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.copyToClipboard
+import tachiyomi.domain.entries.novel.model.NovelCover
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
@@ -66,6 +73,7 @@ fun NovelExtensionDetailsScreen(
     onClickDisableAll: () -> Unit,
     onClickUninstall: () -> Unit,
     onClickSource: (sourceId: Long) -> Unit,
+    onClickMigrate: (novelId: Long) -> Unit = {},
 ) {
     val uriHandler = LocalUriHandler.current
     val url = remember(state.extension) {
@@ -130,8 +138,10 @@ fun NovelExtensionDetailsScreen(
             contentPadding = paddingValues,
             extension = state.extension,
             sources = state.sources,
+            migrateItems = state.migrateItems,
             onClickUninstall = onClickUninstall,
             onClickSource = onClickSource,
+            onClickMigrate = onClickMigrate,
         )
     }
 }
@@ -141,8 +151,10 @@ private fun NovelExtensionDetails(
     contentPadding: PaddingValues,
     extension: NovelExtension.Installed,
     sources: ImmutableList<NovelExtensionSourceItem>,
+    migrateItems: ImmutableList<NovelExtensionDetailsScreenModel.MigrateNovelItem>,
     onClickUninstall: () -> Unit,
     onClickSource: (sourceId: Long) -> Unit,
+    onClickMigrate: (novelId: Long) -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -169,6 +181,16 @@ private fun NovelExtensionDetails(
             )
         }
 
+        item {
+            Text(
+                text = stringResource(MR.strings.label_languages),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+            )
+        }
+
         items(
             items = sources,
             key = { it.source.id },
@@ -178,6 +200,48 @@ private fun NovelExtensionDetails(
                 source = source,
                 onClickSource = onClickSource,
             )
+        }
+
+        // Migration section — show actual favorite titles from this extension's sources
+        item {
+            Text(
+                text = stringResource(MR.strings.label_migration),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+            )
+        }
+        if (migrateItems.isEmpty()) {
+            item {
+                Text(
+                    text = stringResource(MR.strings.information_no_entries_found),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+                )
+            }
+        } else {
+            items(
+                items = migrateItems,
+                key = { "migrate-${it.novel.id}" },
+            ) { item ->
+                MigrateListItem(
+                    title = item.novel.title,
+                    author = item.novel.author,
+                    coverData = NovelCover(
+                        novelId = item.novel.id,
+                        sourceId = item.novel.source,
+                        isNovelFavorite = item.novel.favorite,
+                        url = item.novel.thumbnailUrl,
+                        lastModified = item.novel.coverLastModified,
+                    ),
+                    onClick = { onClickMigrate(item.novel.id) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
         }
     }
 }
@@ -191,7 +255,7 @@ private fun DetailsHeader(
     val context = LocalContext.current
 
     Column {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = MaterialTheme.padding.medium)
@@ -223,67 +287,80 @@ private fun DetailsHeader(
                     }
                     context.copyToClipboard("Extension Debug information", extDebugInfo)
                 },
-            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             NovelExtensionIcon(
                 modifier = Modifier
-                    .size(112.dp),
+                    .size(72.dp),
                 extension = extension,
                 density = DisplayMetrics.DENSITY_XXXHIGH,
             )
 
-            Text(
-                text = extension.name,
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center,
-            )
+            Spacer(modifier = Modifier.width(MaterialTheme.padding.medium))
 
-            val strippedPkgName = extension.pkgName.substringAfter(
-                "eu.kanade.tachiyomi.novelextension.",
-            )
-
-            Text(
-                text = strippedPkgName,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = MaterialTheme.padding.extraLarge,
-                    vertical = MaterialTheme.padding.small,
-                ),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            InfoText(
+            Column(
                 modifier = Modifier.weight(1f),
-                primaryText = extension.versionName,
-                secondaryText = stringResource(MR.strings.ext_info_version),
-            )
-
-            InfoDivider()
-
-            InfoText(
-                modifier = Modifier.weight(if (extension.isNsfw) 1.5f else 1f),
-                primaryText = LocaleHelper.getSourceDisplayName(extension.lang, context),
-                secondaryText = stringResource(MR.strings.ext_info_language),
-            )
-
-            if (extension.isNsfw) {
-                InfoDivider()
-
-                InfoText(
-                    modifier = Modifier.weight(1f),
-                    primaryText = stringResource(MR.strings.ext_nsfw_short),
-                    primaryTextStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Medium,
-                    ),
-                    secondaryText = stringResource(MR.strings.ext_info_age_rating),
+            ) {
+                Text(
+                    text = extension.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+
+                val displayUrl = when (extension) {
+                    is NovelExtension.Installed -> {
+                        extension.repoUrl
+                            ?: extension.sources.firstNotNullOfOrNull { (it as? NovelHttpSource)?.baseUrl }
+                    }
+                    is NovelExtension.Available -> extension.repoUrl
+                    else -> null
+                }
+                if (!displayUrl.isNullOrBlank()) {
+                    Text(
+                        text = displayUrl,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Version and language inline, separated by a dot
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = extension.versionName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = " • ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = LocaleHelper.getSourceDisplayName(extension.lang, context),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (extension.isNsfw) {
+                        Text(
+                            text = " • ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = stringResource(MR.strings.ext_nsfw_short),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
             }
         }
 
@@ -314,6 +391,50 @@ private fun DetailsHeader(
         }
 
         HorizontalDivider()
+    }
+}
+
+@Composable
+private fun MigrateListItem(
+    title: String,
+    author: String?,
+    coverData: NovelCover,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val displayTitle = if (title.isBlank()) stringResource(MR.strings.unknown) else title
+    val displayAuthor = if (author.isNullOrBlank()) stringResource(MR.strings.unknown) else author
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(72.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ItemCover.Book(
+            modifier = Modifier.fillMaxHeight(),
+            data = coverData,
+        )
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .weight(1f),
+        ) {
+            Text(
+                text = displayTitle,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = displayAuthor,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

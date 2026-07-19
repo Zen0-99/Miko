@@ -5,6 +5,9 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
+import eu.kanade.presentation.entries.components.adjustForTheme
+import eu.kanade.tachiyomi.util.novel.NovelCoverMetadata
 import androidx.compose.ui.util.fastAny
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
@@ -22,8 +25,13 @@ import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadCache
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
+import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.util.system.cancelNotification
+import eu.kanade.tachiyomi.util.system.notificationBuilder
+import eu.kanade.tachiyomi.util.system.notify
+import eu.kanade.tachiyomi.util.lang.chop
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.async
@@ -89,6 +97,7 @@ class NovelScreenModel(
     private val getNovelChapter: GetNovelChapter = Injekt.get(),
     private val downloadManager: NovelDownloadManager = Injekt.get(),
     private val downloadCache: NovelDownloadCache = Injekt.get(),
+    private val fetchInterval: tachiyomi.domain.entries.novel.interactor.NovelFetchInterval = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
 
@@ -127,6 +136,10 @@ class NovelScreenModel(
         }
     }
 
+    fun setAccentColor(color: Color?) {
+        updateSuccessState { it.copy(accentColor = color) }
+    }
+
     init {
         screenModelScope.launchIO {
             combine(
@@ -159,6 +172,17 @@ class NovelScreenModel(
                 setNovelDefaultChapterFlags.await(novel)
             }
 
+            // Load cached accent color synchronously to avoid flash on open
+            val isDark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+            val cachedAccentColor = NovelCoverMetadata.getBaseColor(novel.id)?.let {
+                Color(adjustForTheme(it, isDark))
+            }
+
+            val intervalDays = fetchInterval.calculateInterval(
+                chapters.map { it.chapter },
+            )
+
             mutableState.update {
                 State.Success(
                     novel = novel,
@@ -167,6 +191,8 @@ class NovelScreenModel(
                     chapters = chapters,
                     isRefreshingData = needRefreshInfo || needRefreshChapter,
                     dialog = null,
+                    accentColor = cachedAccentColor,
+                    intervalDays = intervalDays,
                 )
             }
 
@@ -291,21 +317,224 @@ class NovelScreenModel(
         }
     }
 
-    fun toggleFavorite() {
-        toggleFavorite(
-            onRemoved = {
-                screenModelScope.launch {
-                    if (!hasDownloads()) return@launch
-                    val result = snackbarHostState.showSnackbar(
-                        message = context.stringResource(MR.strings.delete_downloads_for_manga),
-                        actionLabel = context.stringResource(MR.strings.action_delete),
-                        withDismissAction = true,
-                    )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        deleteDownloads()
+    /**
+     * Fetch only new chapters beyond what the user already has.
+     * Uses the source's getLatestChapters for incremental fetching if supported.
+     */
+    fun fetchNewChapters() {
+        screenModelScope.launch {
+            updateSuccessState { it.copy(isRefreshingData = true) }
+            try {
+                withIOContext {
+                    val state = successState ?: return@withIOContext
+                    val source = state.source as? NovelCatalogueSource ?: return@withIOContext
+                    val existingCount = state.chapters.size
+
+                    logcat(LogPriority.DEBUG) { "NovelScreenModel: fetchNewChapters source=${source.name} existingCount=$existingCount" }
+                    val remoteChapters = source.getLatestChapters(state.novel.toSNovel(), existingCount)
+                    logcat(LogPriority.DEBUG) { "NovelScreenModel: fetchNewChapters got ${remoteChapters.size} remote chapters" }
+
+                    if (remoteChapters.isNotEmpty()) {
+                        val localChapters = state.chapters.map { it.chapter }
+                        val newChapters = remoteChapters.mapIndexed { i, sNovelChapter ->
+                            tachiyomi.domain.items.chapter.model.NovelChapter.create().copy(
+                                novelId = state.novel.id,
+                                url = sNovelChapter.url,
+                                name = sNovelChapter.name,
+                                chapterNumber = sNovelChapter.chapter_number.toDouble(),
+                                sourceOrder = i.toLong(),
+                                dateFetch = sNovelChapter.date_upload,
+                                dateUpload = sNovelChapter.date_upload,
+                            )
+                        }
+
+                        val mergedChapters = mergeChapters(localChapters, newChapters)
+                        val toAdd = mergedChapters.filter { it.id == -1L }
+                        val toUpdate = mergedChapters.filter { it.id != -1L }
+                            .filter { mc -> localChapters.any { it.id == mc.id && it != mc } }
+
+                        if (toAdd.isNotEmpty()) {
+                            novelChapterRepository.addAllNovelChapters(toAdd)
+                        }
+                        if (toUpdate.isNotEmpty()) {
+                            updateNovelChapter.awaitAll(toUpdate.map {
+                                NovelChapterUpdate(
+                                    id = it.id,
+                                    name = it.name,
+                                    url = it.url,
+                                    chapterNumber = it.chapterNumber,
+                                    dateFetch = it.dateFetch,
+                                    dateUpload = it.dateUpload,
+                                    sourceOrder = it.sourceOrder,
+                                )
+                            })
+                        }
+
+                        screenModelScope.launch {
+                            snackbarHostState.showSnackbar(
+                                "Added ${toAdd.size} new chapter(s)",
+                            )
+                        }
+                    } else {
+                        screenModelScope.launch {
+                            snackbarHostState.showSnackbar(
+                                "No new chapters found (site may be blocking requests)",
+                            )
+                        }
                     }
                 }
-            },
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR) { "NovelScreenModel: fetchNewChapters error: ${e::class.simpleName}: ${e.message}" }
+                logcat(LogPriority.ERROR, e)
+                screenModelScope.launch {
+                    snackbarHostState.showSnackbar(message = with(context) { e.formattedMessage })
+                }
+            } finally {
+                updateSuccessState { it.copy(isRefreshingData = false) }
+            }
+        }
+    }
+
+    /**
+     * Fetch all chapters from the source with a progress notification.
+     * Fetches page-by-page and saves each batch to the database immediately,
+     * so chapters appear in the UI as they're fetched.
+     */
+    fun fetchAllChaptersWithProgress() {
+        screenModelScope.launch {
+            updateSuccessState { it.copy(isRefreshingData = true) }
+            val notificationBuilder = context.notificationBuilder(Notifications.CHANNEL_NOVEL_CHAPTER_FETCH) {
+                setAutoCancel(false)
+                setOnlyAlertOnce(true)
+                setOngoing(true)
+                setSmallIcon(android.R.drawable.stat_sys_download)
+            }
+            try {
+                withIOContext {
+                    val state = successState ?: return@withIOContext
+                    val source = state.source as? NovelCatalogueSource ?: return@withIOContext
+                    val novelTitle = state.novel.title
+                    val novelId = state.novel.id
+
+                    notificationBuilder
+                        .setContentTitle(novelTitle.chop(30))
+                        .setContentText("Fetching chapters...")
+                        .setProgress(0, 0, true)
+                    context.notify(Notifications.ID_NOVEL_CHAPTER_FETCH, notificationBuilder.build())
+
+                    var totalPages = 1
+                    var totalAdded = 0
+                    var totalUpdated = 0
+                    var totalFetched = 0
+                    var sourceOrder = 0L
+
+                    for (page in 1..125) { // hard cap of 125 pages
+                        val pageResult = source.getChapterListPage(state.novel.toSNovel(), page)
+
+                        if (page == 1) {
+                            totalPages = pageResult.totalPages
+                            if (totalPages <= 0) totalPages = 1
+                            logcat(LogPriority.DEBUG) { "NovelScreenModel: fetchAllChaptersWithProgress totalPages=$totalPages" }
+                        }
+
+                        if (pageResult.chapters.isEmpty()) {
+                            logcat(LogPriority.DEBUG) { "NovelScreenModel: page $page/${totalPages} returned 0 chapters, skipping" }
+                            if (page >= totalPages) break
+                            continue
+                        }
+
+                        // Convert and merge with current local chapters
+                        val localChapters = novelChapterRepository.getNovelChaptersByNovelId(novelId)
+                        val newChapters = pageResult.chapters.map { sNovelChapter ->
+                            tachiyomi.domain.items.chapter.model.NovelChapter.create().copy(
+                                novelId = novelId,
+                                url = sNovelChapter.url,
+                                name = sNovelChapter.name,
+                                chapterNumber = sNovelChapter.chapter_number.toDouble(),
+                                sourceOrder = sourceOrder++,
+                                dateFetch = sNovelChapter.date_upload,
+                                dateUpload = sNovelChapter.date_upload,
+                            )
+                        }
+
+                        val mergedChapters = mergeChapters(localChapters, newChapters)
+                        val toAdd = mergedChapters.filter { it.id == -1L }
+                        val toUpdate = mergedChapters.filter { it.id != -1L }
+                            .filter { mc -> localChapters.any { it.id == mc.id && it != mc } }
+
+                        if (toAdd.isNotEmpty()) {
+                            novelChapterRepository.addAllNovelChapters(toAdd)
+                        }
+                        if (toUpdate.isNotEmpty()) {
+                            updateNovelChapter.awaitAll(toUpdate.map {
+                                NovelChapterUpdate(
+                                    id = it.id,
+                                    name = it.name,
+                                    url = it.url,
+                                    chapterNumber = it.chapterNumber,
+                                    dateFetch = it.dateFetch,
+                                    dateUpload = it.dateUpload,
+                                    sourceOrder = it.sourceOrder,
+                                )
+                            })
+                        }
+
+                        totalAdded += toAdd.size
+                        totalUpdated += toUpdate.size
+                        totalFetched += pageResult.chapters.size
+
+                        // Update notification with progress
+                        notificationBuilder
+                            .setContentText("Page $page/$totalPages — ${totalFetched} chapters fetched")
+                            .setProgress(totalPages, page, false)
+                        context.notify(Notifications.ID_NOVEL_CHAPTER_FETCH, notificationBuilder.build())
+
+                        logcat(LogPriority.DEBUG) { "NovelScreenModel: page $page/$totalPages done, +${toAdd.size} new, +${toUpdate.size} updated" }
+
+                        if (page >= totalPages) break
+                    }
+
+                    notificationBuilder
+                        .setContentText("Done: $totalFetched chapters ($totalAdded new, $totalUpdated updated)")
+                        .setProgress(0, 0, false)
+                        .setOngoing(false)
+                        .setAutoCancel(true)
+                    context.notify(Notifications.ID_NOVEL_CHAPTER_FETCH, notificationBuilder.build())
+
+                    screenModelScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "Fetched $totalFetched chapters ($totalAdded new)",
+                        )
+                    }
+                }
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR) { "NovelScreenModel: fetchAllChaptersWithProgress error: ${e::class.simpleName}: ${e.message}" }
+                logcat(LogPriority.ERROR, e)
+                val errorText = when (e) {
+                    is tachiyomi.domain.items.chapter.model.NoChaptersException -> "No chapters found (site may be blocking requests)"
+                    else -> "Error: ${e.message ?: e::class.simpleName}"
+                }
+                notificationBuilder
+                    .setContentText(errorText)
+                    .setProgress(0, 0, false)
+                    .setOngoing(false)
+                    .setAutoCancel(true)
+                context.notify(Notifications.ID_NOVEL_CHAPTER_FETCH, notificationBuilder.build())
+                screenModelScope.launch {
+                    snackbarHostState.showSnackbar(message = with(context) { e.formattedMessage })
+                }
+            } finally {
+                updateSuccessState { it.copy(isRefreshingData = false) }
+                // Auto-dismiss after 3 seconds
+                kotlinx.coroutines.delay(3000)
+                context.cancelNotification(Notifications.ID_NOVEL_CHAPTER_FETCH)
+            }
+        }
+    }
+
+    fun toggleFavorite() {
+        toggleFavorite(
+            onRemoved = {},
         )
     }
 
@@ -469,6 +698,67 @@ class NovelScreenModel(
     fun markChaptersRead(chapters: List<NovelChapter>, read: Boolean) {
         screenModelScope.launchNonCancellable {
             setReadStatus.await(read, *chapters.toTypedArray())
+        }
+    }
+
+    fun markAllRead() {
+        val chapters = successState?.chapters?.map { it.chapter } ?: return
+        markChaptersRead(chapters, true)
+    }
+
+    fun markAllUnread() {
+        val chapters = successState?.chapters?.map { it.chapter } ?: return
+        markChaptersRead(chapters, false)
+    }
+
+    fun deleteAllDownloads() {
+        val state = successState ?: return
+        downloadManager.deleteNovel(state.novel, state.source)
+    }
+
+    fun deleteNonBookmarkedDownloads() {
+        val state = successState ?: return
+        val chapters = state.chapters.filter { !it.chapter.bookmark }.map { it.chapter }
+        if (chapters.isNotEmpty()) {
+            screenModelScope.launchNonCancellable {
+                downloadManager.deleteChapters(chapters, state.novel, state.source)
+            }
+        }
+    }
+
+    fun deleteReadDownloads() {
+        val state = successState ?: return
+        val chapters = state.chapters.filter { it.chapter.read }.map { it.chapter }
+        if (chapters.isNotEmpty()) {
+            screenModelScope.launchNonCancellable {
+                downloadManager.deleteChapters(chapters, state.novel, state.source)
+            }
+        }
+    }
+
+    fun refreshTracking() {
+        // Tracking refresh - placeholder for now
+    }
+
+    fun updateNovelMetadata(
+        title: String,
+        author: String,
+        description: String,
+        status: Long,
+        tags: List<String>,
+    ) {
+        val novel = successState?.novel ?: return
+        screenModelScope.launchNonCancellable {
+            updateNovel.await(
+                tachiyomi.domain.entries.novel.model.NovelUpdate(
+                    id = novel.id,
+                    title = title.takeIf { it.isNotBlank() },
+                    author = author.takeIf { it.isNotBlank() },
+                    description = description.takeIf { it.isNotBlank() },
+                    status = status,
+                    genre = tags.takeIf { it.isNotEmpty() },
+                ),
+            )
         }
     }
 
@@ -646,8 +936,10 @@ class NovelScreenModel(
 
     private fun getUnreadChaptersSorted(): List<NovelChapter> {
         val novel = successState?.novel ?: return emptyList()
-        val chaptersSorted = getUnreadChapters().sortedWith(getNovelChapterSort(novel))
-        return if (novel.sortDescending()) chaptersSorted.reversed() else chaptersSorted
+        // Always sort ascending for downloads so "next chapter" means
+        // the first unread chapter after the user's current position,
+        // regardless of the user's display sort/descending preference.
+        return getUnreadChapters().sortedWith(getNovelChapterSort(novel, sortDescending = false))
     }
 
     private fun startDownload(
@@ -761,11 +1053,20 @@ class NovelScreenModel(
                 else -> NovelDownload.State.NOT_DOWNLOADED
             }
 
+            val readProgress = if (!chapter.read && chapter.lastCharRead > 0 && chapter.totalCharCount > 0) {
+                ((chapter.lastCharRead.toFloat() / chapter.totalCharCount) * 100)
+                    .toInt()
+                    .coerceIn(1, 99)
+            } else {
+                null
+            }
+
             NovelChapterList.Item(
                 chapter = chapter,
                 downloadState = downloadState,
                 downloadProgress = activeDownload?.progress ?: 0,
                 selected = chapter.id in selectedChapterIds,
+                readProgress = readProgress,
             )
         }
     }
@@ -776,6 +1077,10 @@ class NovelScreenModel(
 
     fun showSettingsDialog() {
         updateSuccessState { it.copy(dialog = Dialog.SettingsSheet) }
+    }
+
+    fun showFullCoverDialog() {
+        updateSuccessState { it.copy(dialog = Dialog.FullCover) }
     }
 
     fun dismissDialog() {
@@ -796,6 +1101,7 @@ class NovelScreenModel(
         data class DuplicateNovel(val novel: Novel, val duplicate: Novel) : Dialog
         data class Migrate(val newNovel: Novel, val oldNovel: Novel) : Dialog
         data object SettingsSheet : Dialog
+        data object FullCover : Dialog
     }
 
     sealed interface State {
@@ -811,6 +1117,8 @@ class NovelScreenModel(
             val isRefreshingData: Boolean = false,
             val dialog: Dialog? = null,
             val hasPromptedToAddBefore: Boolean = false,
+            val accentColor: Color? = null,
+            val intervalDays: Int? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(novel).toList()
@@ -822,6 +1130,9 @@ class NovelScreenModel(
 
             val filterActive: Boolean
                 get() = novel.chaptersFiltered()
+
+            val nextContinueChapter: NovelChapterList.Item?
+                get() = chapters.firstOrNull { !it.chapter.read } ?: chapters.firstOrNull()
 
             private fun List<NovelChapterList.Item>.applyFilters(novel: Novel): Sequence<NovelChapterList.Item> {
                 val unreadFilter = novel.unreadFilter
@@ -845,6 +1156,7 @@ sealed class NovelChapterList {
         val selected: Boolean = false,
         val downloadState: NovelDownload.State = NovelDownload.State.NOT_DOWNLOADED,
         val downloadProgress: Int = 0,
+        val readProgress: Int? = null,
     ) : NovelChapterList() {
         val id = chapter.id
     }

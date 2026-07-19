@@ -106,6 +106,14 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         Injekt.importModule(SYDomainModule())
         // SY <--
 
+        // Set initial content mode based on start screen preference (only on app launch)
+        val uiPreferences = Injekt.get<UiPreferences>()
+        uiPreferences.startScreen().get().contentMode?.let { mode ->
+            if (uiPreferences.contentMode().get() != mode) {
+                uiPreferences.contentMode().set(mode)
+            }
+        }
+
         setupNotificationChannels()
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)

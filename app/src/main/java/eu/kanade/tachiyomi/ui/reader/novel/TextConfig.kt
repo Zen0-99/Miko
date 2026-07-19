@@ -14,4 +14,5 @@ data class TextConfig(
     val verticalPadding: Int = 24,
     val isTextSelectable: Boolean = true,
     val textAlignment: TextAlignment = TextAlignment.LEFT,
+    val bionicReading: Boolean = false,
 )

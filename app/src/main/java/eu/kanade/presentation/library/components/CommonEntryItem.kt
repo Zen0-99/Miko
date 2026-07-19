@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.entries.components.ItemCover
+import eu.kanade.presentation.entries.novel.components.PreExtractNovelCoverColor
+import tachiyomi.domain.entries.novel.model.NovelCover
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.BadgeGroup
 import tachiyomi.presentation.core.i18n.stringResource
@@ -94,6 +96,9 @@ fun EntryCompactGridItem(
                         .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
                     data = coverData,
                 )
+                if (coverData is NovelCover) {
+                    PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+                }
             },
             badgesStart = coverBadgeStart,
             badgesEnd = coverBadgeEnd,
@@ -201,6 +206,9 @@ fun EntryComfortableGridItem(
                             .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
                         data = coverData,
                     )
+                    if (coverData is NovelCover) {
+                        PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+                    }
                 },
                 badgesStart = coverBadgeStart,
                 badgesEnd = coverBadgeEnd,
@@ -368,6 +376,9 @@ fun EntryListItem(
                 .alpha(coverAlpha),
             data = coverData,
         )
+        if (coverData is NovelCover) {
+            PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
+        }
         Text(
             text = title,
             modifier = Modifier

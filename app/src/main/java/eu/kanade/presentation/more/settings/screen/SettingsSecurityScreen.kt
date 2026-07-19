@@ -26,6 +26,10 @@ object SettingsSecurityScreen : SearchableSettings {
     @Composable
     override fun getTitleRes() = MR.strings.pref_category_security
 
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = MR.strings.pref_security_summary
+
     @Composable
     override fun getPreferences(): List<Preference> {
         val context = LocalContext.current

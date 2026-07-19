@@ -21,7 +21,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -29,6 +31,8 @@ import kotlinx.coroutines.launch
 import logcat.LogPriority
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.entries.manga.interactor.GetMangaFavorites
+import tachiyomi.domain.entries.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -41,6 +45,7 @@ class MangaExtensionDetailsScreenModel(
     private val toggleSource: ToggleMangaSource = Injekt.get(),
     private val toggleIncognito: ToggleMangaIncognito = Injekt.get(),
     private val preferences: SourcePreferences = Injekt.get(),
+    private val getFavorites: GetMangaFavorites = Injekt.get(),
 ) : StateScreenModel<MangaExtensionDetailsScreenModel.State>(State()) {
 
     private val _events: Channel<MangaExtensionDetailsEvent> = Channel()
@@ -97,6 +102,43 @@ class MangaExtensionDetailsScreenModel(
                         mutableState.update { it.copy(isIncognito = isIncognito) }
                     }
             }
+            // Load favorites (migrate items) for all sources in this extension
+            launch {
+                state
+                    .map { it.sources }
+                    .distinctUntilChanged()
+                    .flatMapLatest { sources ->
+                        if (sources.isEmpty()) {
+                            kotlinx.coroutines.flow.flowOf(persistentListOf<MigrateMangaItem>())
+                        } else {
+                            combine(
+                                sources.map { source ->
+                                    getFavorites.subscribe(source.source.id)
+                                        .catch { throwable ->
+                                            logcat(LogPriority.ERROR, throwable)
+                                            emit(persistentListOf())
+                                        }
+                                        .map { manga ->
+                                            manga.map {
+                                                MigrateMangaItem(
+                                                    sourceId = source.source.id,
+                                                    sourceName = source.source.name,
+                                                    manga = it,
+                                                )
+                                            }
+                                        }
+                                },
+                            ) { lists ->
+                                lists.flatMap { it }.sortedWith(
+                                    compareBy(String.CASE_INSENSITIVE_ORDER) { it.manga.title },
+                                ).toImmutableList()
+                            }
+                        }
+                    }
+                    .collectLatest { items ->
+                        mutableState.update { it.copy(_migrateItems = items) }
+                    }
+            }
         }
     }
 
@@ -142,14 +184,25 @@ class MangaExtensionDetailsScreenModel(
     }
 
     @Immutable
+    data class MigrateMangaItem(
+        val sourceId: Long,
+        val sourceName: String,
+        val manga: Manga,
+    )
+
+    @Immutable
     data class State(
         val extension: MangaExtension.Installed? = null,
         val isIncognito: Boolean = false,
         private val _sources: ImmutableList<MangaExtensionSourceItem>? = null,
+        private val _migrateItems: ImmutableList<MigrateMangaItem>? = null,
     ) {
 
         val sources: ImmutableList<MangaExtensionSourceItem>
             get() = _sources ?: persistentListOf()
+
+        val migrateItems: ImmutableList<MigrateMangaItem>
+            get() = _migrateItems ?: persistentListOf()
 
         val isLoading: Boolean
             get() = extension == null || _sources == null

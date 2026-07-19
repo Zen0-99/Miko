@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.AppTheme
+import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.theme.colorscheme.BaseColorScheme
 import eu.kanade.presentation.theme.colorscheme.CloudflareColorScheme
 import eu.kanade.presentation.theme.colorscheme.CottoncandyColorScheme
@@ -51,6 +52,32 @@ fun TachiyomiTheme(
     BaseTachiyomiTheme(
         appTheme = resolvedTheme,
         isAmoled = amoled ?: uiPreferences.themeDarkAmoled().get(),
+        isDark = isDark,
+        content = content,
+    )
+}
+
+/**
+ * Mode-aware theme: resolves the light/dark theme and amoled setting for the given
+ * [ContentMode] from [UiPreferences.lightThemeFor] / [UiPreferences.darkThemeFor].
+ * Colors animate smoothly via [animateColors] when the mode changes — no Activity recreate
+ * or screenshot-wipe needed since Compose recomposes natively.
+ */
+@Composable
+fun TachiyomiTheme(
+    contentMode: ContentMode,
+    content: @Composable () -> Unit,
+) {
+    val uiPreferences = Injekt.get<UiPreferences>()
+    val isDark = isSystemInDarkTheme()
+    val resolvedTheme = if (isDark) {
+        uiPreferences.darkThemeFor(contentMode).get()
+    } else {
+        uiPreferences.lightThemeFor(contentMode).get()
+    }
+    BaseTachiyomiTheme(
+        appTheme = resolvedTheme,
+        isAmoled = uiPreferences.amoledFor(contentMode).get(),
         isDark = isDark,
         content = content,
     )

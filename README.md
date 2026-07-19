@@ -1,64 +1,63 @@
 <div align="center">
 
 <a href="https://aniyomi.org">
-    <img src="./.github/assets/logo.png" alt="Aniyomi logo" title="Aniyomi logo" width="80"/>
+    <img src="./.github/assets/logo.png" alt="Miko logo" title="Miko" width="80"/>
 </a>
 
-# Aniyomi [App](#)
+# Miko
 
-### Full-featured player and reader, based on ~~Tachiyomi~~ Mihon.
-Discover and watch anime, cartoons, series, and more – easier than ever on your Android device.
+### A compact, customisable reader for manga, anime, and novels — built on Aniyomi & Yōkai.
 
-[![Discord server](https://img.shields.io/discord/841701076242530374.svg?label=&labelColor=6A7EC2&color=7389D8&logo=discord&logoColor=FFFFFF)](https://discord.gg/F32UjdJZrR)
-[![GitHub downloads](https://img.shields.io/github/downloads/aniyomiorg/aniyomi/total?label=downloads&labelColor=27303D&color=0D1117&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/aniyomiorg/aniyomi/releases)
+Discover, read, and watch — all in one place, with a streamlined interface that gets out of your way.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/aniyomiorg/aniyomi/build_push.yml?labelColor=27303D)](https://github.com/aniyomiorg/aniyomi/actions/workflows/build_push.yml)
 [![License: Apache-2.0](https://img.shields.io/github/license/aniyomiorg/aniyomi?labelColor=27303D&color=818cf8)](/LICENSE)
-[![Translation status](https://img.shields.io/weblate/progress/aniyomi?labelColor=27303D&color=946300)](https://hosted.weblate.org/engage/aniyomi/)
 
 ## Download
 
-[![Aniyomi Stable](https://img.shields.io/github/release/aniyomiorg/aniyomi.svg?maxAge=3600&label=Stable&labelColor=06599d&color=043b69)](https://github.com/aniyomiorg/aniyomi/releases)
-[![Aniyomi Preview](https://img.shields.io/github/v/release/aniyomiorg/aniyomi-preview.svg?maxAge=3600&label=Beta&labelColor=2c2c47&color=1c1c39)](https://github.com/aniyomiorg/aniyomi-preview/releases)
-
 *Requires Android 8.0 or higher.*
 
-## Features
+> Releases coming soon.
 
-<div align="left">
+## What is Miko?
 
-* Local reading and watching of content.
-* A configurable reader with multiple viewers, reading directions and other settings.
-* A configurable player built on mpv-android with multiple options and settings.
-* Tracker support: [MyAnimeList](https://myanimelist.net/), [AniList](https://anilist.co/), [Kitsu](https://kitsu.app/), [MangaUpdates](https://mangaupdates.com), [Shikimori](https://shikimori.one), [Simkl](https://simkl.com/), and [Bangumi](https://bgm.tv/) support.
-* Categories to organize your library.
-* Light and dark themes.
-* Schedule updating your library for new chapters/episodes.
-* Create backups locally to read/watch offline or to your desired cloud service.
-* Plus much more...
+Miko started as a fork of [Yōkai](https://github.com/null2264/yokai) — a manga reader based on TachiyomiJ2K and Mihon. Novel support was added to that fork using providers ported from [QuickNovel](https://github.com/LagradOst/QuickNovel). Later, the project moved to an [Aniyomi](https://github.com/aniyomiorg/aniyomi) base to gain anime support, bringing the novel integration along and applying Yōkai's design principles to make the UI/UX cleaner and more compact.
 
-</div>
+### What changed from Aniyomi
+
+| Area | What changed |
+|------|-------------|
+| **Novels** | Full novel reading support alongside manga and anime. Novel extensions install from [MikoNovelSources](https://github.com/keypop3750/MikoNovelSources); the extension system (`NovelSource`, `NovelSourceFactory`, `ConfigurableNovelSource`) is based on the Yōkai pattern. |
+| **Compact navigation** | The navigation area has been redesigned to be much more compact while preserving all content and functionality. More screen space for what matters. |
+| **UI/UX overhaul** | Extensive visual and interaction changes throughout the app — denser layouts, refined typography, and a cleaner browsing experience, inspired by Yōkai's design approach. |
+| **Customisability** | More options to tailor the reading and browsing experience to your preferences. |
+| **Chapter comments** | Eligible novel extensions can surface per-chapter comments directly in the reader, creating a more intimate and community-driven reading experience. A comments button appears in the reader bottom bar for sources that support it. |
+
+## Novel Extensions
+
+Miko supports novel source extensions that can be installed directly from the app.
+
+**Extension repo URL** — paste this into *Browse → Extensions → Extension Repos*:
+
+```
+https://raw.githubusercontent.com/keypop3750/MikoNovelSources/main/index.min.json
+```
+
+See the [MikoNovelSources](https://github.com/keypop3750/MikoNovelSources) repository for the full list of available novel sources and extension development guides.
 
 ## Contributing
 
-[Code of conduct](./CODE_OF_CONDUCT.md) · [Contributing guide](./CONTRIBUTING.md)
-
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-Before reporting a new issue, take a look at the [FAQ](https://aniyomi.org/docs/faq/general), the [changelog](https://aniyomi.org/changelogs/) and the already opened [issues](https://github.com/aniyomiorg/aniyomi/issues); if you got any questions, join our [Discord server](https://discord.gg/F32UjdJZrR).
-
-### Repositories
-
-[![aniyomiorg/aniyomi-website - GitHub](https://github-readme-stats.vercel.app/api/pin/?username=aniyomiorg&repo=aniyomi-website&bg_color=161B22&text_color=c9d1d9&title_color=818cf8&icon_color=818cf8&border_radius=8&hide_border=true&description_lines_count=2)](https://github.com/aniyomiorg/aniyomi-website/)
-[![aniyomiorg/aniyomi-mpv-lib - GitHub](https://github-readme-stats.vercel.app/api/pin/?username=aniyomiorg&repo=aniyomi-mpv-lib&bg_color=161B22&text_color=c9d1d9&title_color=818cf8&icon_color=818cf8&border_radius=8&hide_border=true&description_lines_count=2)](https://github.com/aniyomiorg/aniyomi-mpv-lib/)
 
 ### Credits
 
-Thank you to all the people who have contributed!
+Miko builds on the work of many open-source projects:
 
-<a href="https://github.com/aniyomiorg/aniyomi/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=aniyomiorg/aniyomi" alt="Aniyomi app contributors" title="Aniyomi app contributors" width="800"/>
-</a>
+- [Aniyomi](https://github.com/aniyomiorg/aniyomi) — the fork this project is based on.
+- [Yōkai](https://github.com/null2264/yokai) — the manga reader where novel support was first added; its design principles guided the UI/UX overhaul.
+- [QuickNovel](https://github.com/LagradOst/QuickNovel) — the novel provider integrations were ported from here.
+- [Mihon](https://github.com/mihonapp/mihon) — the successor to Tachiyomi.
+- [Tachiyomi](https://github.com/tachiyomiorg/tachiyomi) — the original manga reader.
+- [mpv-android](https://github.com/mpv-android/mpv-android) — the player engine.
 
 ### Disclaimer
 

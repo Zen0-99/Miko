@@ -50,6 +50,7 @@ sealed class NovelExtension {
             val lang: String,
             val name: String,
             val baseUrl: String,
+            val supportsComments: Boolean = false,
         ) {
             fun toStubSource(): StubNovelSource {
                 return StubNovelSource(

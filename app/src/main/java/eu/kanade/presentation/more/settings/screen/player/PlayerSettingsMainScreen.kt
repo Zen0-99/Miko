@@ -2,6 +2,7 @@ package eu.kanade.presentation.more.settings.screen.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.more.settings.screen.SettingsSearchScreen
 import eu.kanade.presentation.more.settings.screen.player.custombutton.PlayerSettingsCustomButtonScreen
 import eu.kanade.presentation.more.settings.screen.player.editor.PlayerSettingsEditorScreen
+import eu.kanade.presentation.more.settings.widget.PrefsHorizontalPadding
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.util.LocalBackPress
 import eu.kanade.presentation.util.Screen
@@ -51,6 +54,7 @@ import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.icons.CustomIcons
 import tachiyomi.presentation.core.icons.Magnet
+import tachiyomi.presentation.core.util.secondaryItemAlpha
 import cafe.adriel.voyager.core.screen.Screen as VoyagerScreen
 
 class PlayerSettingsMainScreen(private val mainSettings: Boolean) : Screen() {
@@ -130,6 +134,21 @@ class PlayerSettingsMainScreen(private val mainSettings: Boolean) : Screen() {
                     state = state,
                     contentPadding = contentPadding,
                 ) {
+                    if (!twoPane) {
+                        item {
+                            Text(
+                                text = stringResource(AYMR.strings.pref_player_settings_summary),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        horizontal = PrefsHorizontalPadding,
+                                        vertical = 8.dp,
+                                    )
+                                    .secondaryItemAlpha(),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
                     itemsIndexed(
                         items = items,
                         key = { _, item -> item.hashCode() },
@@ -158,7 +177,6 @@ class PlayerSettingsMainScreen(private val mainSettings: Boolean) : Screen() {
                             TextPreferenceWidget(
                                 modifier = modifier,
                                 title = stringResource(item.titleRes),
-                                subtitle = item.formatSubtitle(),
                                 icon = item.icon,
                                 onPreferenceClick = { navigator.navigate(item.screen, twoPane) },
                             )

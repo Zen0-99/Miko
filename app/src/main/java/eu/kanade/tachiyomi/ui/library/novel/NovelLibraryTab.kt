@@ -29,7 +29,6 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
-import eu.kanade.domain.ui.model.NavStyle
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.entries.components.LibraryBottomActionMenu
 import eu.kanade.presentation.library.DeleteLibraryEntryDialog
@@ -66,13 +65,11 @@ data object NovelLibraryTab : Tab {
     override val options: TabOptions
         @Composable
         get() {
-            val fromMore = currentNavigationStyle() == NavStyle.MOVE_NOVEL_TO_MORE
             val title = AYMR.strings.label_novel_library
             val isSelected = LocalTabNavigator.current.current.key == key
             val image = AnimatedImageVector.animatedVectorResource(R.drawable.anim_library_enter)
-            val index: UShort = if (fromMore) 5u else 2u
             return TabOptions(
-                index = index,
+                index = 2u,
                 title = stringResource(title),
                 icon = rememberAnimatedVectorPainter(image, isSelected),
             )
@@ -104,21 +101,9 @@ data object NovelLibraryTab : Tab {
             false
         }
 
-        val fromMore = currentNavigationStyle() == NavStyle.MOVE_NOVEL_TO_MORE
+        val navigateUp: (() -> Unit)? = null
 
-        val navigateUp: (() -> Unit)? = if (fromMore) {
-            {
-                if (navigator.lastItem == HomeScreen) {
-                    scope.launch { HomeScreen.openTab(HomeScreen.Tab.AnimeLib()) }
-                } else {
-                    navigator.pop()
-                }
-            }
-        } else {
-            null
-        }
-
-        val defaultTitle = stringResource(AYMR.strings.label_novel_library)
+        val defaultTitle = stringResource(MR.strings.label_library)
 
         Scaffold(
             topBar = { scrollBehavior ->

@@ -10,6 +10,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.browse.novel.NovelExtensionDetailsScreen
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelSearchScreen
 import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.presentation.core.screens.LoadingScreen
 
@@ -42,6 +43,7 @@ data class NovelExtensionDetailsScreen(
             onClickDisableAll = { screenModel.toggleSources(false) },
             onClickUninstall = screenModel::uninstallExtension,
             onClickSource = screenModel::toggleSource,
+            onClickMigrate = { novelId -> navigator.push(MigrateNovelSearchScreen(novelId)) },
         )
 
         LaunchedEffect(Unit) {

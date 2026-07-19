@@ -3,6 +3,8 @@ package tachiyomi.data.entries.novel
 import kotlinx.coroutines.flow.Flow
 import tachiyomi.data.NovelUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
+import java.time.LocalDate
+import java.time.ZoneId
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
@@ -193,6 +195,13 @@ class NovelRepositoryImpl(
             categoryIds.forEach { categoryId ->
                 novels_categoriesQueries.insert(novelId, categoryId)
             }
+        }
+    }
+
+    override suspend fun getUpcomingNovel(statuses: Set<Long>): Flow<List<Novel>> {
+        val epochMillis = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond() * 1000
+        return handler.subscribeToList {
+            novelsQueries.getUpcomingNovel(epochMillis, statuses, NovelMapper::mapNovel)
         }
     }
 }

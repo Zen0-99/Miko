@@ -91,6 +91,7 @@ data class MikoBackupNovelChapter(
             read = this.read,
             bookmark = this.bookmark,
             lastCharRead = this.lastReadPosition.toLong(),
+            totalCharCount = this.wordCount?.toLong() ?: 0L,
             dateFetch = this.dateFetch,
             dateUpload = this.dateUpload,
             chapterNumber = this.chapterNumber.toFloat(),

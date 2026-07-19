@@ -89,6 +89,10 @@ object SettingsAdvancedScreen : SearchableSettings {
     @Composable
     override fun getTitleRes() = MR.strings.pref_category_advanced
 
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = MR.strings.pref_advanced_summary
+
     @Composable
     override fun getPreferences(): List<Preference> {
         val scope = rememberCoroutineScope()

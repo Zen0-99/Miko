@@ -1,6 +1,10 @@
 package eu.kanade.presentation.library.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +35,28 @@ internal fun LibraryTabs(
             // TODO: use default when width is fixed upstream
             // https://issuetracker.google.com/issues/242879624
             divider = {},
+            indicator = {
+                Box(
+                    Modifier
+                        .tabIndicatorLayout { measurable, constraints, tabPositions ->
+                            val targetPos = tabPositions.getOrElse(currentPageIndex) { tabPositions.first() }
+                            val fraction = pagerState.currentPageOffsetFraction
+                            val left = targetPos.left + targetPos.width * fraction
+                            val width = targetPos.width
+                            val placeable = measurable.measure(
+                                constraints.copy(
+                                    minWidth = width.roundToPx(),
+                                    maxWidth = width.roundToPx(),
+                                ),
+                            )
+                            layout(constraints.maxWidth, constraints.maxHeight) {
+                                placeable.place(left.roundToPx(), constraints.maxHeight - placeable.height)
+                            }
+                        }
+                        .height(2.dp)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            },
         ) {
             categories.forEachIndexed { index, category ->
                 Tab(

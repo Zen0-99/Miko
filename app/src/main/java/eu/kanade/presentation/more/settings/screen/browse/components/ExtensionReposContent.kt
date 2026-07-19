@@ -3,6 +3,7 @@ package eu.kanade.presentation.more.settings.screen.browse.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,8 +41,8 @@ fun ExtensionReposContent(
     LazyColumn(
         state = lazyListState,
         contentPadding = paddingValues,
-        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-        modifier = modifier,
+        verticalArrangement = Arrangement.Top,
+        modifier = modifier.fillMaxSize(),
     ) {
         repos.forEach {
             item {

@@ -16,6 +16,7 @@ enum class EditCoverAction {
 enum class EntryScreenItem {
     INFO_BOX,
     ACTION_ROW,
+    CONTINUE_BUTTON,
     DESCRIPTION_WITH_TAG,
     ITEM_HEADER,
     ITEM,

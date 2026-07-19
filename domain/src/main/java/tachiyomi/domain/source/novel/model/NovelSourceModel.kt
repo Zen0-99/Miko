@@ -8,6 +8,7 @@ data class NovelSource(
     val isStub: Boolean,
     val pin: Pins = Pins.unpinned,
     val isUsedLast: Boolean = false,
+    val supportsComments: Boolean = false,
 ) {
 
     val visualName: String

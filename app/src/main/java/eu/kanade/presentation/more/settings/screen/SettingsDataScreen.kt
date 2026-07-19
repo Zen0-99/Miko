@@ -92,6 +92,10 @@ object SettingsDataScreen : SearchableSettings {
     @Composable
     override fun getTitleRes() = MR.strings.label_data_storage
 
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = MR.strings.pref_backup_summary
+
     @Composable
     override fun RowScope.AppBarAction() {
         val uriHandler = LocalUriHandler.current

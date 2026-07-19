@@ -1,12 +1,19 @@
 package eu.kanade.tachiyomi.ui.entries.novel
 
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import eu.kanade.presentation.entries.novel.components.rememberNovelAccentColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -16,21 +23,27 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifNovelSourcesLoaded
+import eu.kanade.domain.entries.novel.model.hasCustomCover
 import eu.kanade.domain.entries.novel.model.toSNovel
+import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import eu.kanade.presentation.entries.novel.NovelScreen
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
+import tachiyomi.presentation.core.screens.LoadingScreen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialog
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelSearchScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
-import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryTab
+import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
+import eu.kanade.tachiyomi.ui.reader.novel.NovelHighlightsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toast
@@ -41,6 +54,8 @@ import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class NovelScreen(
     private val novelId: Long,
@@ -76,6 +91,13 @@ class NovelScreen(
         val successState = state as NovelScreenModel.State.Success
         val isHttpSource = remember { successState.source is NovelHttpSource }
 
+        val extractedAccent = rememberNovelAccentColor(successState.novel)
+        LaunchedEffect(extractedAccent) {
+            if (extractedAccent != successState.accentColor) {
+                screenModel.setAccentColor(extractedAccent)
+            }
+        }
+
         LaunchedEffect(successState.novel, screenModel.source) {
             if (isHttpSource) {
                 try {
@@ -103,6 +125,7 @@ class NovelScreen(
                 screenModel.toggleFavorite()
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             },
+            onCoverClick = { screenModel.showFullCoverDialog() },
             onWebViewClicked = {
                 openNovelInWebView(navigator, screenModel.novel, screenModel.source)
             }.takeIf { isHttpSource },
@@ -111,6 +134,18 @@ class NovelScreen(
             }.takeIf { isHttpSource },
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
             onFilterButtonClicked = screenModel::showSettingsDialog,
+            onBookmarkFilterClicked = {
+                screenModel.setBookmarkedFilter(
+                    when (successState.novel.bookmarkedFilter) {
+                        tachiyomi.core.common.preference.TriState.DISABLED -> tachiyomi.core.common.preference.TriState.ENABLED_IS
+                        tachiyomi.core.common.preference.TriState.ENABLED_IS -> tachiyomi.core.common.preference.TriState.DISABLED
+                        tachiyomi.core.common.preference.TriState.ENABLED_NOT -> tachiyomi.core.common.preference.TriState.DISABLED
+                    },
+                )
+            },
+            onHighlightsClicked = {
+                navigator.push(NovelHighlightsScreen(successState.novel.title, successState.novel.id))
+            }.takeIf { successState.novel.favorite },
             onRefresh = screenModel::fetchAllFromSource,
             onContinueReading = {
                 val firstUnread = successState.chapters.firstOrNull { !it.chapter.read }
@@ -120,9 +155,21 @@ class NovelScreen(
             onShareClicked = { shareNovel(context, screenModel.novel, screenModel.source) }.takeIf { isHttpSource },
             onDownloadActionClicked = screenModel::runDownloadAction.takeIf { !successState.source.isLocalOrStub() },
             onEditCategoryClicked = screenModel::showChangeCategoryDialog.takeIf { successState.novel.favorite },
+            onEditNovel = { title, author, desc, status, tags ->
+                screenModel.updateNovelMetadata(title, author, desc, status, tags)
+            },
             onMigrateClicked = {
                 navigator.push(MigrateNovelSearchScreen(successState.novel.id))
             }.takeIf { successState.novel.favorite },
+            onMarkAllReadClicked = { screenModel.markAllRead() },
+            onMarkAllUnreadClicked = { screenModel.markAllUnread() },
+            onRefreshTrackingClicked = { screenModel.refreshTracking() },
+            onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
+            onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
+            onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
             onMultiBookmarkClicked = screenModel::bookmarkChapters,
             onMultiMarkAsReadClicked = screenModel::markChaptersRead,
             onMarkPreviousAsReadClicked = screenModel::markPreviousChapterRead,
@@ -131,6 +178,10 @@ class NovelScreen(
             onChapterSelected = screenModel::toggleSelection,
             onAllChapterSelected = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
+            onFetchNewChapters = { screenModel.fetchNewChapters() }
+                .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
+            onFetchAllChapters = { screenModel.fetchAllChaptersWithProgress() }
+                .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
         )
 
         val onDismissRequest = {
@@ -184,11 +235,48 @@ class NovelScreen(
                     novel = successState.novel,
                     onUnreadFilterChanged = screenModel::setUnreadFilter,
                     onBookmarkedFilterChanged = screenModel::setBookmarkedFilter,
+                    onDownloadedFilterChanged = screenModel::setDownloadedFilter,
                     onSortModeChanged = screenModel::setSorting,
                     onDisplayModeChanged = screenModel::setDisplayMode,
                     onSetAsDefault = screenModel::setAsDefault,
                     onResetToDefault = screenModel::resetToDefaultSettings,
+                    accentColor = successState.accentColor,
                 )
+            }
+            NovelScreenModel.Dialog.FullCover -> {
+                val sm = rememberScreenModel { NovelCoverScreenModel(successState.novel.id) }
+                val novelState by sm.state.collectAsState()
+                val novelObj = novelState
+                if (novelObj != null) {
+                    val getContent = rememberLauncherForActivityResult(
+                        ActivityResultContracts.GetContent(),
+                    ) {
+                        if (it == null) return@rememberLauncherForActivityResult
+                        sm.editCover(context, it)
+                    }
+                    eu.kanade.presentation.entries.novel.components.NovelCoverDialog(
+                        novel = novelObj,
+                        snackbarHostState = sm.snackbarHostState,
+                        isCustomCover = remember(novelObj) {
+                            novelObj.hasCustomCover()
+                        },
+                        onShareClick = { sm.shareCover(context) },
+                        onSaveClick = { sm.saveCover(context) },
+                        onEditClick = if (novelObj.favorite) {
+                            {
+                                when (it) {
+                                    EditCoverAction.EDIT -> getContent.launch("image/*")
+                                    EditCoverAction.DELETE -> sm.deleteCustomCover(context)
+                                }
+                            }
+                        } else {
+                            null
+                        },
+                        onDismissRequest = onDismissRequest,
+                    )
+                } else {
+                    LoadingScreen(Modifier.systemBarsPadding())
+                }
             }
         }
     }
@@ -246,8 +334,10 @@ class NovelScreen(
 
         when (val previousController = navigator.items[navigator.size - 2]) {
             is HomeScreen -> {
+                // Set mode to NOVEL so the library search targets novel content.
+                Injekt.get<UiPreferences>().contentMode().set(ContentMode.NOVEL)
                 navigator.pop()
-                NovelLibraryTab.search(query)
+                LibraryTab.search(query)
             }
             is BrowseNovelSourceScreen -> {
                 navigator.pop()

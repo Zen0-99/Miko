@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.browse.novel.source.browse
 
+import android.util.Log
 import android.content.res.Configuration
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.runtime.Immutable
@@ -71,6 +72,10 @@ class BrowseNovelSourceScreenModel(
 
     val source = sourceManager.getOrStub(sourceId)
 
+    init {
+        Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] init - sourceId=$sourceId, source=${source.name} (id=${source.id}), isCatalogueSource=${source is NovelCatalogueSource}, isStub=${source is tachiyomi.domain.source.novel.model.StubNovelSource}, listingQuery='$listingQuery'")
+    }
+
     val savedSearchesFlow = getSavedSearches.subscribe(sourceId)
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyList())
 
@@ -91,6 +96,9 @@ class BrowseNovelSourceScreenModel(
                     toolbarQuery = query,
                 )
             }
+            Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] init - initialized listing for catalogue source: listing=${state.value.listing}, toolbarQuery='${state.value.toolbarQuery}'")
+        } else {
+            Log.w("NovelSearch", "[BrowseNovelSourceScreenModel] init - source is NOT a NovelCatalogueSource, listing not initialized")
         }
 
         if (!sourcePreferences.incognitoNovelExtensions().isSet()) {
@@ -118,7 +126,7 @@ class BrowseNovelSourceScreenModel(
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyFlow())
 
     fun setListing(listing: Listing) {
-        mutableState.update { it.copy(listing = listing) }
+        mutableState.update { it.copy(listing = listing, toolbarQuery = null) }
     }
 
     fun setFilters(filters: NovelFilterList) {
@@ -132,14 +140,25 @@ class BrowseNovelSourceScreenModel(
     }
 
     fun search(query: String? = null, filters: NovelFilterList? = null) {
-        val actualQuery = query ?: state.value.toolbarQuery
-        val actualFilters = filters ?: state.value.filters
+        Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] search() - query='$query', filters=${filters?.size}, source=${source.name}")
+        if (source !is NovelCatalogueSource) {
+            Log.w("NovelSearch", "[BrowseNovelSourceScreenModel] search() - source is NOT a NovelCatalogueSource, returning early")
+            return
+        }
+
+        val input = state.value.listing as? Listing.Search
+            ?: Listing.Search(query = null, filters = source.getFilterList())
+
         mutableState.update {
             it.copy(
-                listing = Listing.Search(actualQuery, actualFilters),
-                toolbarQuery = actualQuery,
+                listing = input.copy(
+                    query = query ?: input.query,
+                    filters = filters ?: input.filters,
+                ),
+                toolbarQuery = query ?: input.query,
             )
         }
+        Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] search() - updated listing to ${state.value.listing}, toolbarQuery='${state.value.toolbarQuery}'")
     }
 
     fun searchGenre(genre: String) {

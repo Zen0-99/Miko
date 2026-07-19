@@ -1,13 +1,20 @@
 package eu.kanade.presentation.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -45,7 +52,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -131,8 +137,25 @@ fun AppBar(
 
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
+    // Use a fixed status-bar height so the app bar height does not change
+    // when system bars are hidden/shown (e.g. leaving fullscreen reader).
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val statusBarHeight = remember {
+        val res = context.resources
+        val id = res.getIdentifier("status_bar_height", "dimen", "android")
+        if (id > 0) with(density) { res.getDimensionPixelSize(id).toDp() } else 0.dp
+    }
+
+    // Resolve the background color so we can apply it to the status bar area too
+    val resolvedBg = backgroundColor ?: MaterialTheme.colorScheme.surfaceColorAtElevation(
+        elevation = if (isActionMode) 3.dp else 0.dp,
+    )
+
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .background(resolvedBg)
+            .padding(top = statusBarHeight),
     ) {
         TopAppBar(
             navigationIcon = {
@@ -145,7 +168,11 @@ fun AppBar(
                     }
                 } else {
                     navigateUp?.let {
-                        IconButton(onClick = it) {
+                        IconButton(onClick = {
+                            android.util.Log.d("NovelSearch", "[AppBar] back arrow IconButton CLICKED - calling navigateUp")
+                            android.util.Log.d("NovelSearch", "[AppBar] back arrow stacktrace:", Throwable("back arrow click"))
+                            it()
+                        }) {
                             UpIcon(navigationIcon = navigationIcon)
                         }
                     }
@@ -154,11 +181,11 @@ fun AppBar(
             title = titleContent,
             actions = actions,
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = backgroundColor ?: MaterialTheme.colorScheme.surfaceColorAtElevation(
-                    elevation = if (isActionMode) 3.dp else 0.dp,
-                ),
+                containerColor = Color.Transparent,
+                scrolledContainerColor = Color.Transparent,
             ),
             scrollBehavior = scrollBehavior,
+            windowInsets = WindowInsets(0, 0, 0, 0),
         )
     }
 }
@@ -239,7 +266,8 @@ fun AppBarActions(
         }
     }
 
-    val overflowActions = actions.filterIsInstance<AppBar.OverflowAction>()
+    val overflowActions = actions.filterIsInstance<AppBar.AppBarAction>()
+        .filter { it is AppBar.OverflowAction || it is AppBar.NestedOverflowAction }
     if (overflowActions.isNotEmpty()) {
         TooltipBox(
             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
@@ -266,14 +294,36 @@ fun AppBarActions(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
         ) {
-            overflowActions.map {
-                DropdownMenuItem(
-                    onClick = {
-                        it.onClick()
-                        showMenu = false
-                    },
-                    text = { Text(it.title, fontWeight = FontWeight.Normal) },
-                )
+            overflowActions.map { action ->
+                when (action) {
+                    is AppBar.Action -> {} // Not rendered in overflow menu
+                    is AppBar.OverflowAction -> {
+                        DropdownMenuItem(
+                            onClick = {
+                                action.onClick()
+                                showMenu = false
+                            },
+                            text = { Text(action.title) },
+                        )
+                    }
+                    is AppBar.NestedOverflowAction -> {
+                        eu.kanade.presentation.components.NestedMenuItem(
+                            text = { Text(action.title) },
+                            children = { closeNested ->
+                                action.subActions.forEach { subAction ->
+                                    DropdownMenuItem(
+                                        onClick = {
+                                            subAction.onClick()
+                                            closeNested()
+                                            showMenu = false
+                                        },
+                                        text = { Text(subAction.title) },
+                                    )
+                                }
+                            },
+                        )
+                    }
+                }
             }
         }
     }
@@ -308,12 +358,13 @@ fun SearchToolbar(
             if (searchQuery == null) return@AppBar titleContent()
 
             val keyboardController = LocalSoftwareKeyboardController.current
-            val focusManager = LocalFocusManager.current
 
             val searchAndClearFocus: () -> Unit = f@{
+                android.util.Log.d("NovelSearch", "[SearchToolbar] searchAndClearFocus called - searchQuery='$searchQuery', isBlank=${searchQuery.isBlank()}")
                 if (searchQuery.isBlank()) return@f
+                android.util.Log.d("NovelSearch", "[SearchToolbar] searchAndClearFocus - calling onSearch('$searchQuery')")
                 onSearch(searchQuery)
-                focusManager.clearFocus()
+                android.util.Log.d("NovelSearch", "[SearchToolbar] searchAndClearFocus - hiding keyboard (focus will be cleared by clearFocusOnSoftKeyboardHide after IME closes)")
                 keyboardController?.hide()
             }
 
@@ -366,7 +417,13 @@ fun SearchToolbar(
                 },
             )
         },
-        navigateUp = if (searchQuery == null) navigateUp else onClickCloseSearch,
+        navigateUp = if (searchQuery == null) {
+            android.util.Log.d("NovelSearch", "[SearchToolbar] navigateUp wiring - searchQuery is null, using original navigateUp")
+            navigateUp
+        } else {
+            android.util.Log.d("NovelSearch", "[SearchToolbar] navigateUp wiring - searchQuery='$searchQuery' is NOT null, using onClickCloseSearch")
+            onClickCloseSearch
+        },
         actions = {
             key("search") {
                 val onClick = { onChangeSearchQuery("") }
@@ -452,5 +509,14 @@ sealed interface AppBar {
     data class OverflowAction(
         val title: String,
         val onClick: () -> Unit,
+    ) : AppBarAction
+
+    /**
+     * An overflow action that expands into a nested submenu (with ">" icon)
+     * instead of performing an action directly.
+     */
+    data class NestedOverflowAction(
+        val title: String,
+        val subActions: List<OverflowAction>,
     ) : AppBarAction
 }

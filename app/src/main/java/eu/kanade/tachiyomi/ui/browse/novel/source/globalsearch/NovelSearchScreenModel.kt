@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.produceState
@@ -57,7 +58,6 @@ abstract class NovelSearchScreenModel(
 
     private val sortComparator = { map: Map<NovelCatalogueSource, NovelSearchItemResult> ->
         compareBy<NovelCatalogueSource>(
-            { (map[it] as? NovelSearchItemResult.Success)?.isEmpty ?: true },
             { "${it.id}" !in pinnedSources },
             { "${it.name.lowercase()} (${it.lang})" },
         )
@@ -83,7 +83,8 @@ abstract class NovelSearchScreenModel(
     }
 
     open fun getEnabledSources(): List<NovelCatalogueSource> {
-        return sourceManager.getCatalogueSources()
+        val allCatalogueSources = sourceManager.getCatalogueSources()
+        val result = allCatalogueSources
             .filter { it.lang in enabledLanguages && "${it.id}" !in disabledSources }
             .sortedWith(
                 compareBy(
@@ -91,6 +92,11 @@ abstract class NovelSearchScreenModel(
                     { "${it.name.lowercase()} (${it.lang})" },
                 ),
             )
+        Log.d(
+            "NovelSearch",
+            "[NovelSearchScreenModel] getEnabledSources - total catalogue sources=${allCatalogueSources.size}, enabled=${result.size}, enabledLanguages=$enabledLanguages, disabledSourcesCount=${disabledSources.size}, names=${result.map { it.name }}",
+        )
+        return result
     }
 
     private fun getSelectedSources(): List<NovelCatalogueSource> {
@@ -98,14 +104,17 @@ abstract class NovelSearchScreenModel(
 
         val filter = extensionFilter
         if (filter.isNullOrEmpty()) {
+            Log.d("NovelSearch", "[NovelSearchScreenModel] getSelectedSources - no extensionFilter, returning all ${enabledSources.size} enabled sources")
             return enabledSources
         }
 
-        return extensionManager.installedExtensionsFlow.value
+        val filtered = extensionManager.installedExtensionsFlow.value
             .filter { it.pkgName == filter }
             .flatMap { it.sources }
             .filterIsInstance<NovelCatalogueSource>()
             .filter { it in enabledSources }
+        Log.d("NovelSearch", "[NovelSearchScreenModel] getSelectedSources - extensionFilter='$filter', matched ${filtered.size} sources from filter, names=${filtered.map { it.name }}")
+        return filtered
     }
 
     fun updateSearchQuery(query: String?) {
@@ -125,15 +134,23 @@ abstract class NovelSearchScreenModel(
         val query = state.value.searchQuery
         val sourceFilter = state.value.sourceFilter
 
-        if (query.isNullOrBlank()) return
+        Log.d("NovelSearch", "[NovelSearchScreenModel] search() - query='$query', sourceFilter=$sourceFilter, lastQuery='$lastQuery', lastSourceFilter=$lastSourceFilter")
+        if (query.isNullOrBlank()) {
+            Log.w("NovelSearch", "[NovelSearchScreenModel] search() - query is null/blank, returning early (NO SEARCH PERFORMED)")
+            return
+        }
         val sameQuery = this.lastQuery == query
-        if (sameQuery && this.lastSourceFilter == sourceFilter) return
+        if (sameQuery && this.lastSourceFilter == sourceFilter) {
+            Log.d("NovelSearch", "[NovelSearchScreenModel] search() - same query and filter as last time, returning early")
+            return
+        }
 
         this.lastQuery = query
         this.lastSourceFilter = sourceFilter
 
         searchJob?.cancel()
         val sources = getSelectedSources()
+        Log.d("NovelSearch", "[NovelSearchScreenModel] search() - querying ${sources.size} sources for '$query'")
 
         if (sameQuery) {
             val existingResults = state.value.items
@@ -155,6 +172,7 @@ abstract class NovelSearchScreenModel(
                     if (state.value.items[source] !is NovelSearchItemResult.Loading) {
                         return@async
                     }
+                    Log.d("NovelSearch", "[NovelSearchScreenModel] search() - querying source=${source.name} (id=${source.id}, lang=${source.lang})")
                     try {
                         val page = withContext(coroutineDispatcher) {
                             source.getSearchNovels(1, query, source.getFilterList())
@@ -164,10 +182,12 @@ abstract class NovelSearchScreenModel(
                             networkToLocalNovel.await(it.toDomainNovel(source.id))
                         }
 
+                        Log.d("NovelSearch", "[NovelSearchScreenModel] search() - source=${source.name} returned ${titles.size} novels")
                         if (isActive) {
                             updateItem(source, NovelSearchItemResult.Success(titles))
                         }
                     } catch (e: Exception) {
+                        Log.e("NovelSearch", "[NovelSearchScreenModel] search() - ERROR querying source=${source.name}: ${e.message}", e)
                         if (isActive) {
                             updateItem(source, NovelSearchItemResult.Error(e))
                         }
@@ -199,7 +219,7 @@ abstract class NovelSearchScreenModel(
     data class State(
         val fromSourceId: Long? = null,
         val searchQuery: String? = null,
-        val sourceFilter: NovelSourceFilter = NovelSourceFilter.PinnedOnly,
+        val sourceFilter: NovelSourceFilter = NovelSourceFilter.All,
         val onlyShowHasResults: Boolean = false,
         val items: PersistentMap<NovelCatalogueSource, NovelSearchItemResult> = persistentMapOf(),
     ) {

@@ -81,18 +81,22 @@ internal fun GlobalSearchContent(
                     subtitle = LocaleHelper.getLocalizedDisplayName(source.lang),
                     onClick = { onClickSource(source) },
                     modifier = Modifier.animateItem(),
+                    isLoading = result is AnimeSearchItemResult.Loading,
+                    hasResults = result is AnimeSearchItemResult.Success && result.result.isNotEmpty(),
                 ) {
                     when (result) {
                         AnimeSearchItemResult.Loading -> {
-                            GlobalSearchLoadingResultItem()
+                            // Loading spinner is now shown in the header row
                         }
                         is AnimeSearchItemResult.Success -> {
-                            GlobalAnimeSearchCardRow(
-                                titles = result.result,
-                                getAnime = getAnime,
-                                onClick = onClickItem,
-                                onLongClick = onLongClickItem,
-                            )
+                            if (result.result.isNotEmpty()) {
+                                GlobalAnimeSearchCardRow(
+                                    titles = result.result,
+                                    getAnime = getAnime,
+                                    onClick = onClickItem,
+                                    onLongClick = onLongClickItem,
+                                )
+                            }
                         }
                         is AnimeSearchItemResult.Error -> {
                             GlobalSearchErrorResultItem(message = result.throwable.message)

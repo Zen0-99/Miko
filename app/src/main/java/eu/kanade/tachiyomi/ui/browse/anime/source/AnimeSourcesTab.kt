@@ -1,34 +1,50 @@
 package eu.kanade.tachiyomi.ui.browse.anime.source
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.TravelExplore
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.browse.anime.AnimeSourceOptionsDialog
 import eu.kanade.presentation.browse.anime.AnimeSourcesScreen
+import eu.kanade.presentation.browse.manga.ExtensionTrustDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
+import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
+import eu.kanade.tachiyomi.ui.browse.anime.extension.details.AnimeExtensionDetailsScreen
+import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
+import eu.kanade.tachiyomi.extension.InstallStep
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
+import eu.kanade.tachiyomi.util.system.toast
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun Screen.animeSourcesTab(): TabContent {
     val navigator = LocalNavigator.currentOrThrow
+    val context = LocalContext.current
     val screenModel = rememberScreenModel { AnimeSourcesScreenModel() }
     val state by screenModel.state.collectAsState()
+    val extensionManager = remember { Injekt.get<AnimeExtensionManager>() }
 
     return TabContent(
         titleRes = AYMR.strings.label_anime_sources,
@@ -38,16 +54,16 @@ fun Screen.animeSourcesTab(): TabContent {
                 icon = Icons.Outlined.TravelExplore,
                 onClick = { navigator.push(GlobalAnimeSearchScreen()) },
             ),
-            AppBar.Action(
-                title = stringResource(MR.strings.action_filter),
-                icon = Icons.Outlined.FilterList,
-                onClick = { navigator.push(AnimeSourcesFilterScreen()) },
-            ),
         ),
         content = { contentPadding, snackbarHostState ->
+            var trustDialogExtension by remember { mutableStateOf<AnimeExtension.Untrusted?>(null) }
+            val scope = rememberCoroutineScope()
+            val downloadStates = remember { mutableStateMapOf<String, InstallStep>() }
+
             AnimeSourcesScreen(
                 state = state,
                 contentPadding = contentPadding,
+                downloadStates = downloadStates,
                 onClickItem = { source, listing ->
                     navigator.push(BrowseAnimeSourceScreen(source.id, listing.query))
                 },
@@ -55,7 +71,43 @@ fun Screen.animeSourcesTab(): TabContent {
                 onLongClickItem = screenModel::showSourceDialog,
                 onSwipeHide = screenModel::toggleSource,
                 swipeToHideEnabled = screenModel.swipeToHideSource,
+                onClickExtension = { source ->
+                    val pkgName = extensionManager.getExtensionPackage(source.id)
+                    if (pkgName != null) {
+                        navigator.push(AnimeExtensionDetailsScreen(pkgName))
+                    }
+                },
+                onClickInstallExtension = { extension ->
+                    scope.launch {
+                        downloadStates[extension.pkgName] = InstallStep.Pending
+                        extensionManager.installExtension(extension).collect { step ->
+                            downloadStates[extension.pkgName] = step
+                            if (step == InstallStep.Error) {
+                                context.toast("Extension installation failed")
+                            }
+                        }
+                    }
+                },
+                onClickTrustExtension = { extension ->
+                    trustDialogExtension = extension
+                },
             )
+
+            trustDialogExtension?.let { extension ->
+                ExtensionTrustDialog(
+                    onClickConfirm = {
+                        scope.launch { extensionManager.trust(extension) }
+                        trustDialogExtension = null
+                    },
+                    onClickDismiss = {
+                        scope.launch { extensionManager.uninstallExtension(extension) }
+                        trustDialogExtension = null
+                    },
+                    onDismissRequest = {
+                        trustDialogExtension = null
+                    },
+                )
+            }
 
             state.dialog?.let { dialog ->
                 val source = dialog.source
@@ -67,6 +119,23 @@ fun Screen.animeSourcesTab(): TabContent {
                     },
                     onClickDisable = {
                         screenModel.toggleSource(source)
+                        screenModel.closeDialog()
+                    },
+                    onClickMigrate = {
+                        val pkgName = extensionManager.getExtensionPackage(source.id)
+                        if (pkgName != null) {
+                            navigator.push(AnimeExtensionDetailsScreen(pkgName))
+                        }
+                        screenModel.closeDialog()
+                    },
+                    onClickUninstall = {
+                        val pkgName = extensionManager.getExtensionPackage(source.id)
+                        if (pkgName != null) {
+                            val ext = extensionManager.installedExtensionsFlow.value.find { it.pkgName == pkgName }
+                            if (ext != null) {
+                                extensionManager.uninstallExtension(ext)
+                            }
+                        }
                         screenModel.closeDialog()
                     },
                     onDismiss = screenModel::closeDialog,

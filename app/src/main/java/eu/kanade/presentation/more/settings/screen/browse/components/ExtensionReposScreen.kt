@@ -2,7 +2,10 @@
 
 package eu.kanade.presentation.more.settings.screen.browse.components
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -69,6 +72,33 @@ fun ExtensionReposScreen(
             repos = state.repos,
             lazyListState = lazyListState,
             paddingValues = paddingValues + topSmallPaddingValues +
+                PaddingValues(horizontal = MaterialTheme.padding.medium),
+            onOpenWebsite = onOpenWebsite,
+            onClickDelete = onClickDelete,
+        )
+    }
+}
+
+/**
+ * The repos list content without its own Scaffold/AppBar, intended to be embedded
+ * inside a tab of the consolidated extension repos screen.
+ */
+@Composable
+fun ExtensionReposTabContent(
+    state: RepoScreenState.Success,
+    onClickCreate: () -> Unit,
+    onOpenWebsite: (ExtensionRepo) -> Unit,
+    onClickDelete: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val lazyListState = rememberLazyListState()
+    if (state.isEmpty) {
+        EmptyScreen(MR.strings.information_empty_repos)
+    } else {
+        ExtensionReposContent(
+            repos = state.repos,
+            lazyListState = lazyListState,
+            paddingValues = topSmallPaddingValues +
                 PaddingValues(horizontal = MaterialTheme.padding.medium),
             onOpenWebsite = onOpenWebsite,
             onClickDelete = onClickDelete,

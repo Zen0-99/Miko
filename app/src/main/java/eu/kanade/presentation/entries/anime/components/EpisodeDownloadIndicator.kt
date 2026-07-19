@@ -54,12 +54,15 @@ fun EpisodeDownloadIndicator(
     downloadProgressProvider: () -> Int,
     onClick: (EpisodeDownloadAction) -> Unit,
     modifier: Modifier = Modifier,
+    accentColor: Color? = null,
 ) {
+    val iconTint = accentColor ?: MaterialTheme.colorScheme.onSurfaceVariant
     when (val downloadState = downloadStateProvider()) {
         AnimeDownload.State.NOT_DOWNLOADED -> NotDownloadedIndicator(
             enabled = enabled,
             modifier = modifier,
             onClick = onClick,
+            iconTint = iconTint,
         )
         AnimeDownload.State.QUEUE, AnimeDownload.State.DOWNLOADING -> DownloadingIndicator(
             enabled = enabled,
@@ -67,11 +70,13 @@ fun EpisodeDownloadIndicator(
             downloadState = downloadState,
             downloadProgressProvider = downloadProgressProvider,
             onClick = onClick,
+            iconTint = iconTint,
         )
         AnimeDownload.State.DOWNLOADED -> DownloadedIndicator(
             enabled = enabled,
             modifier = modifier,
             onClick = onClick,
+            iconTint = iconTint,
         )
         AnimeDownload.State.ERROR -> ErrorIndicator(
             enabled = enabled,
@@ -86,6 +91,7 @@ private fun NotDownloadedIndicator(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     onClick: (EpisodeDownloadAction) -> Unit,
+    iconTint: Color,
 ) {
     Box(
         modifier = modifier
@@ -103,7 +109,7 @@ private fun NotDownloadedIndicator(
             painter = painterResource(R.drawable.ic_download_item_24dp),
             contentDescription = stringResource(MR.strings.manga_download),
             modifier = Modifier.size(IndicatorSize),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = iconTint,
         )
     }
 }
@@ -115,6 +121,7 @@ private fun DownloadingIndicator(
     downloadProgressProvider: () -> Int,
     onClick: (EpisodeDownloadAction) -> Unit,
     modifier: Modifier = Modifier,
+    iconTint: Color,
 ) {
     var isMenuExpanded by remember { mutableStateOf(false) }
     Box(
@@ -129,7 +136,7 @@ private fun DownloadingIndicator(
         contentAlignment = Alignment.Center,
     ) {
         val arrowColor: Color
-        val strokeColor = MaterialTheme.colorScheme.onSurfaceVariant
+        val strokeColor = iconTint
         val downloadProgress = downloadProgressProvider()
         val indeterminate = downloadState == AnimeDownload.State.QUEUE ||
             (downloadState == AnimeDownload.State.DOWNLOADING && downloadProgress == 0)
@@ -193,6 +200,7 @@ private fun DownloadedIndicator(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     onClick: (EpisodeDownloadAction) -> Unit,
+    iconTint: Color,
 ) {
     var isMenuExpanded by remember { mutableStateOf(false) }
     Box(
@@ -210,7 +218,7 @@ private fun DownloadedIndicator(
             imageVector = Icons.Filled.CheckCircle,
             contentDescription = null,
             modifier = Modifier.size(IndicatorSize),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = iconTint,
         )
         DropdownMenu(expanded = isMenuExpanded, onDismissRequest = { isMenuExpanded = false }) {
             DropdownMenuItem(

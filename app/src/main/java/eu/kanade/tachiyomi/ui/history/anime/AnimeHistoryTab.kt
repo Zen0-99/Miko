@@ -68,7 +68,7 @@ fun Screen.animeHistoryTab(
     val navigateUp: (() -> Unit)? = if (fromMore) {
         {
             if (navigator.lastItem == HomeScreen) {
-                scope.launch { HomeScreen.openTab(HomeScreen.Tab.AnimeLib()) }
+                scope.launch { HomeScreen.openTab(HomeScreen.Tab.Library()) }
             } else {
                 navigator.pop()
             }

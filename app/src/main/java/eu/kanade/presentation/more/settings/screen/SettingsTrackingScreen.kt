@@ -75,6 +75,10 @@ object SettingsTrackingScreen : SearchableSettings {
     @Composable
     override fun getTitleRes() = MR.strings.pref_category_tracking
 
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = MR.strings.pref_tracking_summary
+
     @Composable
     override fun RowScope.AppBarAction() {
         val uriHandler = LocalUriHandler.current

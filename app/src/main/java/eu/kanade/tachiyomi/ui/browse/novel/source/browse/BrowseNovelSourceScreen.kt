@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.browse.novel.source.browse
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -77,7 +78,10 @@ data class BrowseNovelSourceScreen(
 
     @Composable
     override fun Content() {
-        if (!ifNovelSourcesLoaded()) {
+        val sourcesLoaded = ifNovelSourcesLoaded()
+        Log.d("NovelSearch", "[BrowseNovelSourceScreen] Content() - sourceId=$sourceId, listingQuery='$listingQuery', sourcesLoaded=$sourcesLoaded")
+        if (!sourcesLoaded) {
+            Log.w("NovelSearch", "[BrowseNovelSourceScreen] Content() - novel sources NOT loaded, showing LoadingScreen")
             LoadingScreen()
             return
         }
@@ -87,19 +91,29 @@ data class BrowseNovelSourceScreen(
 
         val navigator = LocalNavigator.currentOrThrow
         val navigateUp: () -> Unit = {
+            Log.d("NovelSearch", "[BrowseNovelSourceScreen] navigateUp called - isUserQuery=${state.isUserQuery}, toolbarQuery='${state.toolbarQuery}'")
+            Log.d("NovelSearch", "[BrowseNovelSourceScreen] navigateUp stacktrace:", Throwable("navigateUp caller"))
             when {
-                !state.isUserQuery && state.toolbarQuery != null -> screenModel.setToolbarQuery(null)
-                else -> navigator.pop()
+                !state.isUserQuery && state.toolbarQuery != null -> {
+                    Log.d("NovelSearch", "[BrowseNovelSourceScreen] navigateUp - clearing toolbar query (was non-user query)")
+                    screenModel.setToolbarQuery(null)
+                }
+                else -> {
+                    Log.d("NovelSearch", "[BrowseNovelSourceScreen] navigateUp - navigator.pop() (closing source browse)")
+                    navigator.pop()
+                }
             }
         }
 
         if (screenModel.source is StubNovelSource) {
+            Log.w("NovelSearch", "[BrowseNovelSourceScreen] Content() - source is StubNovelSource (not installed): ${screenModel.source}, showing MissingNovelSourceScreen")
             MissingNovelSourceScreen(
                 source = screenModel.source,
                 navigateUp = navigateUp,
             )
             return
         }
+        Log.d("NovelSearch", "[BrowseNovelSourceScreen] Content() - source loaded: ${screenModel.source.name} (id=${screenModel.source.id}), listing=${state.listing}, toolbarQuery='${state.toolbarQuery}'")
 
         val scope = rememberCoroutineScope()
         val haptic = LocalHapticFeedback.current
@@ -218,7 +232,10 @@ data class BrowseNovelSourceScreen(
                 contentPadding = paddingValues,
                 onWebViewClick = onWebViewClick,
                 onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                onNovelClick = { navigator.push(NovelScreen(it.id, true)) },
+                onNovelClick = {
+                    Log.d("NovelSearch", "[BrowseNovelSourceScreen] onNovelClick - '${it.title}' (id=${it.id}), pushing NovelScreen")
+                    navigator.push(NovelScreen(it.id, true))
+                },
                 onNovelLongClick = { novel ->
                     scope.launchIO {
                         val duplicateNovel = screenModel.getDuplicateLibraryNovel(novel)
@@ -301,6 +318,7 @@ data class BrowseNovelSourceScreen(
         LaunchedEffect(Unit) {
             queryEvent.receiveAsFlow()
                 .collectLatest {
+                    Log.d("NovelSearch", "[BrowseNovelSourceScreen] queryEvent received: $it")
                     when (it) {
                         is SearchType.Genre -> screenModel.searchGenre(it.txt)
                         is SearchType.Text -> screenModel.search(it.txt)

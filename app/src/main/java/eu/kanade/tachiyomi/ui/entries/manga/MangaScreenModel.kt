@@ -6,6 +6,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.util.fastAny
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
@@ -71,6 +72,7 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetMangaWithChapters
+import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
 import tachiyomi.domain.entries.manga.interactor.SetMangaChapterFlags
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.repository.MangaRepository
@@ -120,6 +122,7 @@ class MangaScreenModel(
     private val setMangaCategories: SetMangaCategories = Injekt.get(),
     private val mangaRepository: MangaRepository = Injekt.get(),
     private val filterChaptersForDownload: FilterChaptersForDownload = Injekt.get(),
+    private val fetchInterval: MangaFetchInterval = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -168,6 +171,10 @@ class MangaScreenModel(
                 is State.Success -> func(it)
             }
         }
+    }
+
+    fun setAccentColor(color: Color?) {
+        updateSuccessState { it.copy(accentColor = color) }
     }
 
     init {
@@ -225,6 +232,10 @@ class MangaScreenModel(
             val needRefreshChapter = chapters.isEmpty()
 
             // Show what we have earlier
+            val intervalDays = fetchInterval.calculateInterval(
+                chapters.map { it.chapter },
+                java.time.ZoneId.systemDefault(),
+            )
             mutableState.update {
                 State.Success(
                     manga = manga,
@@ -235,6 +246,7 @@ class MangaScreenModel(
                     excludedScanlators = getExcludedScanlators.await(mangaId),
                     isRefreshingData = needRefreshInfo || needRefreshChapter,
                     dialog = null,
+                    intervalDays = intervalDays,
                 )
             }
 
@@ -794,6 +806,47 @@ class MangaScreenModel(
         }
     }
 
+    fun markAllRead() {
+        val chapters = successState?.chapters?.map { it.chapter } ?: return
+        markChaptersRead(chapters, true)
+    }
+
+    fun markAllUnread() {
+        val chapters = successState?.chapters?.map { it.chapter } ?: return
+        markChaptersRead(chapters, false)
+    }
+
+    fun deleteAllDownloads() {
+        val state = successState ?: return
+        downloadManager.deleteManga(state.manga, state.source)
+    }
+
+    fun deleteNonBookmarkedDownloads() {
+        val state = successState ?: return
+        val chapters = state.chapters.filter { !it.chapter.bookmark }.map { it.chapter }
+        if (chapters.isNotEmpty()) {
+            screenModelScope.launchNonCancellable {
+                downloadManager.deleteChapters(chapters, state.manga, state.source)
+            }
+        }
+    }
+
+    fun deleteReadDownloads() {
+        val state = successState ?: return
+        val chapters = state.chapters.filter { it.chapter.read }.map { it.chapter }
+        if (chapters.isNotEmpty()) {
+            screenModelScope.launchNonCancellable {
+                downloadManager.deleteChapters(chapters, state.manga, state.source)
+            }
+        }
+    }
+
+    fun refreshTracking() {
+        screenModelScope.launchIO {
+            refreshTrackers()
+        }
+    }
+
     private suspend fun refreshTrackers(
         refreshTracks: RefreshMangaTracks = Injekt.get(),
     ) {
@@ -1153,6 +1206,8 @@ class MangaScreenModel(
             val isRefreshingData: Boolean = false,
             val dialog: Dialog? = null,
             val hasPromptedToAddBefore: Boolean = false,
+            val accentColor: Color? = null,
+            val intervalDays: Int? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(manga).toList()

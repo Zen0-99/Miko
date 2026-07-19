@@ -48,6 +48,7 @@ internal class NovelExtensionInstaller(private val context: Context) {
 
     fun downloadAndInstall(url: String, extension: NovelExtension): Flow<InstallStep> {
         val pkgName = extension.pkgName
+        logcat(LogPriority.DEBUG) { "NovelExtensionInstaller: downloadAndInstall url=$url pkg=$pkgName" }
 
         val oldDownload = activeDownloads[pkgName]
         if (oldDownload != null) {

@@ -34,4 +34,6 @@ interface NovelRepository {
     suspend fun updateAllNovel(updates: List<NovelUpdate>): Boolean
 
     suspend fun setNovelCategories(novelId: Long, categoryIds: List<Long>)
+
+    suspend fun getUpcomingNovel(statuses: Set<Long>): Flow<List<Novel>>
 }

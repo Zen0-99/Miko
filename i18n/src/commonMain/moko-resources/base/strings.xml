@@ -33,6 +33,7 @@
     <string name="label_data_storage">Data and storage</string>
     <string name="label_stats">Statistics</string>
     <string name="label_migration">Migrate</string>
+    <string name="label_languages">Languages</string>
     <string name="label_extensions">Extensions</string>
     <string name="label_extension_info">Extension info</string>
     <string name="label_help">Help</string>
@@ -79,6 +80,14 @@
     <string name="action_select_inverse">Select inverse</string>
     <string name="action_mark_as_read">Mark as read</string>
     <string name="action_mark_as_unread">Mark as unread</string>
+    <string name="action_mark_all_as_read">Mark all as read</string>
+    <string name="action_mark_all_as_unread">Mark all as unread</string>
+    <string name="action_refresh_tracking">Refresh tracking</string>
+    <string name="action_remove_downloads">Remove downloads</string>
+    <string name="action_remove_all_downloads">All chapters</string>
+    <string name="action_remove_non_bookmarked_downloads">All but bookmarked chapters</string>
+    <string name="action_remove_read_downloads">All read chapters</string>
+    <string name="action_remove_custom_range_downloads">Custom range</string>
     <string name="action_mark_previous_as_read">Mark previous as read</string>
     <string name="action_download">Download</string>
     <string name="action_bookmark">Bookmark chapter</string>
@@ -107,6 +116,7 @@
     <string name="action_remove_everything">Remove everything</string>
     <string name="action_start">Start</string>
     <string name="action_resume">Resume</string>
+    <string name="action_continue">Continue</string>
     <string name="action_open_in_browser">Open in browser</string>
     <string name="action_show_manga">Show entry</string>
     <string name="action_copy_to_clipboard">Copy to clipboard</string>
@@ -131,6 +141,9 @@
     <string name="action_disable">Disable</string>
     <string name="action_pin">Pin</string>
     <string name="action_unpin">Unpin</string>
+    <string name="action_favorite">Favorite</string>
+    <string name="action_unfavorite">Unfavorite</string>
+    <string name="action_uninstall">Uninstall</string>
     <string name="action_apply">Apply</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_ok">OK</string>
@@ -331,6 +344,7 @@
     <string name="ext_downloading">Downloading</string>
     <string name="ext_installing">Installing</string>
     <string name="ext_installed">Installed</string>
+    <string name="ext_not_installed">Not Installed</string>
     <string name="ext_trust">Trust</string>
     <string name="ext_untrusted">Untrusted</string>
     <string name="ext_uninstall">Uninstall</string>
@@ -438,6 +452,31 @@
     <string name="black_background">Black</string>
     <string name="automatic_background">Auto</string>
     <string name="pref_viewer_type">Default reading mode</string>
+    <string name="reading_mode_title">Reading mode</string>
+    <string name="text_settings">Text</string>
+    <string name="text_size">Text size</string>
+    <string name="line_height">Line height</string>
+    <string name="paragraph_spacing">Paragraph spacing</string>
+    <string name="text_alignment">Text alignment</string>
+    <string name="infinite_scroll">Infinite scroll</string>
+    <string name="overscroll">Overscroll</string>
+    <string name="bionic_reading">Bionic reading</string>
+    <string name="reading_mode_default">Default (Single Chapter)</string>
+    <string name="reading_mode_infinite_scroll">Infinite Scroll</string>
+    <string name="reading_mode_overscroll">Overscroll Navigation</string>
+    <string name="smart_by_page">Smart (by page)</string>
+    <string name="smart_by_theme">Smart (by theme)</string>
+    <string name="novel_orientation">Orientation</string>
+    <string name="orientation_free">Free</string>
+    <string name="orientation_portrait">Portrait</string>
+    <string name="orientation_landscape">Landscape</string>
+    <string name="orientation_locked_portrait">Locked Portrait</string>
+    <string name="orientation_locked_landscape">Locked Landscape</string>
+    <string name="pref_novel_show_reading_progress">Show reading progress</string>
+    <string name="alignment_left">Start</string>
+    <string name="alignment_center">Center</string>
+    <string name="alignment_justify">Justify</string>
+    <string name="alignment_right">End</string>
     <string name="l_nav">L shaped</string>
     <string name="kindlish_nav">Kindle-ish</string>
     <string name="edge_nav">Edge</string>
@@ -680,7 +719,7 @@
     <string name="local_source">Local source</string>
     <string name="other_source">Other</string>
     <string name="last_used_source">Last used</string>
-    <string name="pinned_sources">Pinned</string>
+    <string name="pinned_sources">Favorites</string>
     <string name="action_global_search_hint">Global search…</string>
     <string name="action_global_search_query">Search for \"%1$s\" globally</string>
     <string name="latest">Latest</string>
@@ -707,7 +746,7 @@
     <string name="cancelled">Cancelled</string>
     <string name="on_hiatus">On hiatus</string>
     <string name="add_to_library">Add to library</string>
-    <string name="in_library">In library</string>
+    <string name="in_library">In Library</string>
     <!-- missing confirm menu after Compose rewrite #7901 -->
     <string name="remove_from_library">Remove from library</string>
     <string name="unknown_title">Unknown title</string>
@@ -723,6 +762,7 @@
     <string name="source_not_installed">Source not installed: %1$s</string>
     <string name="snack_add_to_library">Add to library?</string>
     <string name="description_placeholder">No description</string>
+    <string name="about_this_novel">About this novel</string>
 
     <!-- Manga chapters -->
     <string name="display_mode_chapter">Chapter %1$s</string>
@@ -817,6 +857,7 @@
     <string name="cover_updated">Cover updated</string>
     <string name="share_page_info">%1$s: %2$s, page %3$d</string>
     <string name="chapter_progress">Page: %1$d</string>
+    <string name="novel_chapter_progress">%1$d%% Read</string>
     <string name="no_next_chapter">Next chapter not found</string>
     <string name="decode_image_error">The image couldn\'t be loaded</string>
     <string name="confirm_set_image_as_cover">Use this image as cover art?</string>

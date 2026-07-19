@@ -1,52 +1,60 @@
 package eu.kanade.presentation.entries.novel
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import tachiyomi.presentation.core.components.material.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
 import eu.kanade.presentation.components.relativeDateTimeText
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryToolbar
-import eu.kanade.presentation.entries.components.ItemHeader
 import eu.kanade.presentation.entries.novel.components.ExpandableNovelDescription
+import eu.kanade.presentation.entries.novel.components.NovelEditDialog
+import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.stringResource
 import eu.kanade.presentation.entries.novel.components.NovelActionRow
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadAction
+import eu.kanade.presentation.entries.novel.components.NovelChapterHeader
 import eu.kanade.presentation.entries.novel.components.NovelChapterListItem
+import eu.kanade.presentation.entries.novel.components.NovelContinueButton
 import eu.kanade.presentation.entries.novel.components.NovelInfoBox
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
 import eu.kanade.tachiyomi.ui.entries.novel.NovelChapterList
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreenModel
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
-import tachiyomi.presentation.core.util.shouldExpandFAB
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.components.material.PullRefresh
-import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
 fun NovelScreen(
@@ -59,17 +67,27 @@ fun NovelScreen(
     onChapterClicked: (NovelChapter) -> Unit,
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
+    onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
+    onBookmarkFilterClicked: () -> Unit,
+    onHighlightsClicked: (() -> Unit)? = null,
     onRefresh: () -> Unit,
     onContinueReading: () -> Unit,
     onSearch: (String, Boolean) -> Unit,
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
     onEditCategoryClicked: (() -> Unit)?,
+    onEditNovel: ((String, String, String, Long, List<String>) -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
+    onMarkAllReadClicked: (() -> Unit)?,
+    onMarkAllUnreadClicked: (() -> Unit)?,
+    onRefreshTrackingClicked: (() -> Unit)?,
+    onRemoveAllDownloadsClicked: (() -> Unit)?,
+    onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
+    onRemoveReadDownloadsClicked: (() -> Unit)?,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter) -> Unit,
@@ -78,6 +96,8 @@ fun NovelScreen(
     onChapterSelected: (NovelChapterList.Item, Boolean, Boolean, Boolean) -> Unit,
     onAllChapterSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+    onFetchNewChapters: (() -> Unit)? = null,
+    onFetchAllChapters: (() -> Unit)? = null,
 ) {
     if (isTabletUi) {
         NovelScreenLargeImpl(
@@ -89,17 +109,27 @@ fun NovelScreen(
             onChapterClicked = onChapterClicked,
             onDownloadChapter = onDownloadChapter,
             onAddToLibraryClicked = onAddToLibraryClicked,
+            onCoverClick = onCoverClick,
             onWebViewClicked = onWebViewClicked,
             onWebViewLongClicked = onWebViewLongClicked,
             onTagSearch = onTagSearch,
             onFilterButtonClicked = onFilterButtonClicked,
+            onBookmarkFilterClicked = onBookmarkFilterClicked,
+            onHighlightsClicked = onHighlightsClicked,
             onRefresh = onRefresh,
             onContinueReading = onContinueReading,
             onSearch = onSearch,
             onShareClicked = onShareClicked,
             onDownloadActionClicked = onDownloadActionClicked,
             onEditCategoryClicked = onEditCategoryClicked,
+            onEditNovel = onEditNovel,
             onMigrateClicked = onMigrateClicked,
+            onMarkAllReadClicked = onMarkAllReadClicked,
+            onMarkAllUnreadClicked = onMarkAllUnreadClicked,
+            onRefreshTrackingClicked = onRefreshTrackingClicked,
+            onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+            onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+            onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -108,6 +138,8 @@ fun NovelScreen(
             onChapterSelected = onChapterSelected,
             onAllChapterSelected = onAllChapterSelected,
             onInvertSelection = onInvertSelection,
+            onFetchNewChapters = onFetchNewChapters,
+            onFetchAllChapters = onFetchAllChapters,
         )
     } else {
         NovelScreenSmallImpl(
@@ -119,17 +151,27 @@ fun NovelScreen(
             onChapterClicked = onChapterClicked,
             onDownloadChapter = onDownloadChapter,
             onAddToLibraryClicked = onAddToLibraryClicked,
+            onCoverClick = onCoverClick,
             onWebViewClicked = onWebViewClicked,
             onWebViewLongClicked = onWebViewLongClicked,
             onTagSearch = onTagSearch,
             onFilterButtonClicked = onFilterButtonClicked,
+            onBookmarkFilterClicked = onBookmarkFilterClicked,
+            onHighlightsClicked = onHighlightsClicked,
             onRefresh = onRefresh,
             onContinueReading = onContinueReading,
             onSearch = onSearch,
             onShareClicked = onShareClicked,
             onDownloadActionClicked = onDownloadActionClicked,
             onEditCategoryClicked = onEditCategoryClicked,
+            onEditNovel = onEditNovel,
             onMigrateClicked = onMigrateClicked,
+            onMarkAllReadClicked = onMarkAllReadClicked,
+            onMarkAllUnreadClicked = onMarkAllUnreadClicked,
+            onRefreshTrackingClicked = onRefreshTrackingClicked,
+            onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+            onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+            onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -138,6 +180,8 @@ fun NovelScreen(
             onChapterSelected = onChapterSelected,
             onAllChapterSelected = onAllChapterSelected,
             onInvertSelection = onInvertSelection,
+            onFetchNewChapters = onFetchNewChapters,
+            onFetchAllChapters = onFetchAllChapters,
         )
     }
 }
@@ -152,17 +196,27 @@ private fun NovelScreenSmallImpl(
     onChapterClicked: (NovelChapter) -> Unit,
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
+    onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
+    onBookmarkFilterClicked: () -> Unit,
+    onHighlightsClicked: (() -> Unit)? = null,
     onRefresh: () -> Unit,
     onContinueReading: () -> Unit,
     onSearch: (String, Boolean) -> Unit,
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
     onEditCategoryClicked: (() -> Unit)?,
+    onEditNovel: ((String, String, String, Long, List<String>) -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
+    onMarkAllReadClicked: (() -> Unit)?,
+    onMarkAllUnreadClicked: (() -> Unit)?,
+    onRefreshTrackingClicked: (() -> Unit)?,
+    onRemoveAllDownloadsClicked: (() -> Unit)?,
+    onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
+    onRemoveReadDownloadsClicked: (() -> Unit)?,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter) -> Unit,
@@ -171,11 +225,25 @@ private fun NovelScreenSmallImpl(
     onChapterSelected: (NovelChapterList.Item, Boolean, Boolean, Boolean) -> Unit,
     onAllChapterSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+    onFetchNewChapters: (() -> Unit)? = null,
+    onFetchAllChapters: (() -> Unit)? = null,
 ) {
     val chapterListState = rememberLazyListState()
 
     val chapters = remember(state) { state.processedChapters }
     val isAnySelected = remember(state) { state.isAnySelected }
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    if (showEditDialog) {
+        NovelEditDialog(
+            novel = state.novel,
+            onDismiss = { showEditDialog = false },
+            onSave = { title, author, description, status, tags ->
+                onEditNovel?.invoke(title, author, description, status, tags)
+                showEditDialog = false
+            },
+        )
+    }
 
     BackHandler(onBack = {
         if (isAnySelected) {
@@ -185,6 +253,17 @@ private fun NovelScreenSmallImpl(
         }
     })
 
+    val pullToRefreshState = rememberPullToRefreshState()
+
+    Box(
+        modifier = Modifier
+            .pullToRefresh(
+                isRefreshing = state.isRefreshingData,
+                state = pullToRefreshState,
+                enabled = !isAnySelected,
+                onRefresh = onRefresh,
+            ),
+    ) {
     Scaffold(
         topBar = {
             val selectedChapterCount = remember(chapters) {
@@ -208,13 +287,23 @@ private fun NovelScreenSmallImpl(
                 title = state.novel.title,
                 hasFilters = state.filterActive,
                 navigateUp = navigateUp,
-                onClickFilter = onFilterButtonClicked,
+                onClickFilter = null,
                 onClickShare = onShareClicked,
                 onClickDownload = onDownloadActionClicked,
-                onClickEditCategory = onEditCategoryClicked,
-                onClickRefresh = onRefresh,
+                onClickEditCategory = if (onEditNovel != null) {
+                    { showEditDialog = true }
+                } else {
+                    onEditCategoryClicked
+                },
+                onClickRefresh = if (state.source.isRateLimited) onRefresh else null,
                 onClickMigrate = onMigrateClicked,
                 onClickSettings = null,
+                onClickMarkAllRead = onMarkAllReadClicked,
+                onClickMarkAllUnread = onMarkAllUnreadClicked,
+                onClickRefreshTracking = onRefreshTrackingClicked,
+                onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
+                onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
+                onClickRemoveReadDownloads = onRemoveReadDownloadsClicked,
                 changeAnimeSkipIntro = null,
                 actionModeCounter = selectedChapterCount,
                 onCancelActionMode = { onAllChapterSelected(false) },
@@ -222,46 +311,21 @@ private fun NovelScreenSmallImpl(
                 onInvertSelection = { onInvertSelection() },
                 titleAlphaProvider = { titleAlpha },
                 backgroundAlphaProvider = { backgroundAlpha },
-                isManga = false,
+                isManga = true, // Novels use chapter/unread terminology like manga
+                toolbarBackgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
+                intervalDays = state.intervalDays,
+                showIntervalBadge = true,
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        floatingActionButton = {
-            val isFABVisible = remember(chapters) {
-                chapters.any { !it.chapter.read } && !isAnySelected
-            }
-            AnimatedVisibility(
-                visible = isFABVisible,
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
-                ExtendedFloatingActionButton(
-                    text = {
-                        val isReading = remember(state.chapters) {
-                            state.chapters.any { it.chapter.read }
-                        }
-                        Text(
-                            text = stringResource(if (isReading) MR.strings.action_resume else MR.strings.action_start),
-                        )
-                    },
-                    icon = { Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null) },
-                    onClick = onContinueReading,
-                    expanded = chapterListState.shouldExpandFAB(),
-                )
-            }
-        },
     ) { contentPadding ->
         val topPadding = contentPadding.calculateTopPadding()
 
-        PullRefresh(
-            refreshing = state.isRefreshingData,
-            onRefresh = onRefresh,
-            enabled = !isAnySelected,
-            indicatorPadding = PaddingValues(top = topPadding),
-        ) {
             val layoutDirection = LocalLayoutDirection.current
             LazyColumn(
-                modifier = Modifier.fillMaxHeight(),
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .consumeWindowInsets(contentPadding),
                 state = chapterListState,
                 contentPadding = PaddingValues(
                     start = contentPadding.calculateStartPadding(layoutDirection),
@@ -277,7 +341,8 @@ private fun NovelScreenSmallImpl(
                         appBarPadding = topPadding,
                         novel = state.novel,
                         sourceName = state.source.name,
-                        onCoverClick = {},
+                        accentColor = state.accentColor,
+                        onCoverClick = onCoverClick,
                         doSearch = onSearch,
                     )
                 }
@@ -288,10 +353,11 @@ private fun NovelScreenSmallImpl(
                 ) {
                     NovelActionRow(
                         favorite = state.novel.favorite,
+                        accentColor = state.accentColor,
                         onAddToLibraryClicked = onAddToLibraryClicked,
                         onWebViewClicked = onWebViewClicked,
-                        onWebViewLongClicked = onWebViewLongClicked,
-                        onEditCategory = onEditCategoryClicked,
+                        onShareClicked = onShareClicked,
+                        onHighlightsClicked = onHighlightsClicked,
                     )
                 }
 
@@ -300,10 +366,25 @@ private fun NovelScreenSmallImpl(
                     contentType = EntryScreenItem.DESCRIPTION_WITH_TAG,
                 ) {
                     ExpandableNovelDescription(
-                        defaultExpandState = state.isFromSource,
+                        defaultExpandState = false,
                         description = state.novel.description,
                         tagsProvider = { state.novel.genre },
+                        accentColor = state.accentColor,
                         onTagSearch = onTagSearch,
+                    )
+                }
+
+                item(
+                    key = EntryScreenItem.CONTINUE_BUTTON,
+                    contentType = EntryScreenItem.CONTINUE_BUTTON,
+                ) {
+                    NovelContinueButton(
+                        chapterItem = state.nextContinueChapter,
+                        hasReadChapters = remember(state.chapters) {
+                            state.chapters.fastAny { it.chapter.read }
+                        },
+                        accentColor = state.accentColor,
+                        onClick = onContinueReading,
                     )
                 }
 
@@ -311,12 +392,12 @@ private fun NovelScreenSmallImpl(
                     key = EntryScreenItem.ITEM_HEADER,
                     contentType = EntryScreenItem.ITEM_HEADER,
                 ) {
-                    ItemHeader(
-                        enabled = !isAnySelected,
+                    NovelChapterHeader(
                         itemCount = chapters.size,
-                        missingItemsCount = 0,
                         onClick = onFilterButtonClicked,
-                        isManga = false,
+                        accentColor = state.accentColor,
+                        onFetchNewChapters = onFetchNewChapters,
+                        onFetchAllChapters = onFetchAllChapters,
                     )
                 }
 
@@ -330,6 +411,9 @@ private fun NovelScreenSmallImpl(
                         isFromSource = state.isFromSource,
                         downloadIndicatorEnabled = !isAnySelected && !state.source.isLocalOrStub(),
                         date = relativeDateTimeText(chapterItem.chapter.dateUpload),
+                        readProgress = chapterItem.readProgress?.let {
+                            stringResource(MR.strings.novel_chapter_progress, it)
+                        },
                         scanlator = chapterItem.chapter.scanlator,
                         onClick = { onChapterClicked(chapterItem.chapter) },
                         onLongClick = { onChapterSelected(chapterItem, !chapterItem.selected, true, true) },
@@ -343,6 +427,7 @@ private fun NovelScreenSmallImpl(
                         onSelect = { selected -> onChapterSelected(chapterItem, selected, true, false) },
                         chapterSwipeStartAction = chapterSwipeStartAction,
                         chapterSwipeEndAction = chapterSwipeEndAction,
+                        accentColor = state.accentColor,
                     )
                 }
             }
@@ -350,7 +435,7 @@ private fun NovelScreenSmallImpl(
             val selected = chapters.filter { it.selected }
             EntryBottomActionMenu(
                 visible = isAnySelected,
-                isManga = false,
+                isManga = true, // Novels use chapter/unread terminology like manga
                 onBookmarkClicked = {
                     onMultiBookmarkClicked(selected.map { it.chapter }, true)
                 }.takeIf { selected.fastAny { !it.chapter.bookmark } },
@@ -377,6 +462,18 @@ private fun NovelScreenSmallImpl(
                 }.takeIf { onDownloadChapter != null },
             )
         }
+
+        // Pull-to-refresh indicator rendered on top of the Scaffold (above the toolbar)
+        androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .wrapContentSize(Alignment.TopCenter),
+            isRefreshing = state.isRefreshingData,
+            state = pullToRefreshState,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -390,17 +487,27 @@ private fun NovelScreenLargeImpl(
     onChapterClicked: (NovelChapter) -> Unit,
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
+    onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
+    onBookmarkFilterClicked: () -> Unit,
+    onHighlightsClicked: (() -> Unit)? = null,
     onRefresh: () -> Unit,
     onContinueReading: () -> Unit,
     onSearch: (String, Boolean) -> Unit,
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
     onEditCategoryClicked: (() -> Unit)?,
+    onEditNovel: ((String, String, String, Long, List<String>) -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
+    onMarkAllReadClicked: (() -> Unit)?,
+    onMarkAllUnreadClicked: (() -> Unit)?,
+    onRefreshTrackingClicked: (() -> Unit)?,
+    onRemoveAllDownloadsClicked: (() -> Unit)?,
+    onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
+    onRemoveReadDownloadsClicked: (() -> Unit)?,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter) -> Unit,
@@ -409,6 +516,8 @@ private fun NovelScreenLargeImpl(
     onChapterSelected: (NovelChapterList.Item, Boolean, Boolean, Boolean) -> Unit,
     onAllChapterSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+    onFetchNewChapters: (() -> Unit)? = null,
+    onFetchAllChapters: (() -> Unit)? = null,
 ) {
     NovelScreenSmallImpl(
         state = state,
@@ -419,17 +528,26 @@ private fun NovelScreenLargeImpl(
         onChapterClicked = onChapterClicked,
         onDownloadChapter = onDownloadChapter,
         onAddToLibraryClicked = onAddToLibraryClicked,
+        onCoverClick = onCoverClick,
         onWebViewClicked = onWebViewClicked,
         onWebViewLongClicked = onWebViewLongClicked,
         onTagSearch = onTagSearch,
         onFilterButtonClicked = onFilterButtonClicked,
+        onBookmarkFilterClicked = onBookmarkFilterClicked,
         onRefresh = onRefresh,
         onContinueReading = onContinueReading,
         onSearch = onSearch,
         onShareClicked = onShareClicked,
         onDownloadActionClicked = onDownloadActionClicked,
         onEditCategoryClicked = onEditCategoryClicked,
+        onEditNovel = onEditNovel,
         onMigrateClicked = onMigrateClicked,
+        onMarkAllReadClicked = onMarkAllReadClicked,
+        onMarkAllUnreadClicked = onMarkAllUnreadClicked,
+        onRefreshTrackingClicked = onRefreshTrackingClicked,
+        onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+        onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+        onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
         onMultiBookmarkClicked = onMultiBookmarkClicked,
         onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
         onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -438,5 +556,7 @@ private fun NovelScreenLargeImpl(
         onChapterSelected = onChapterSelected,
         onAllChapterSelected = onAllChapterSelected,
         onInvertSelection = onInvertSelection,
+        onFetchNewChapters = onFetchNewChapters,
+        onFetchAllChapters = onFetchAllChapters,
     )
 }

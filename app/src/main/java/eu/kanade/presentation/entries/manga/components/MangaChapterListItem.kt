@@ -65,6 +65,7 @@ fun MangaChapterListItem(
     onDownloadClick: ((ChapterDownloadAction) -> Unit)?,
     onChapterSwipe: (LibraryPreferences.ChapterSwipeAction) -> Unit,
     modifier: Modifier = Modifier,
+    accentColor: Color? = null,
 ) {
     val start = getSwipeAction(
         action = chapterSwipeStartAction,
@@ -179,6 +180,7 @@ fun MangaChapterListItem(
                 downloadStateProvider = downloadStateProvider,
                 downloadProgressProvider = downloadProgressProvider,
                 onClick = { onDownloadClick?.invoke(it) },
+                accentColor = accentColor,
             )
         }
     }

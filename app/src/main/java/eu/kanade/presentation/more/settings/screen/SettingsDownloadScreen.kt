@@ -51,6 +51,10 @@ object SettingsDownloadScreen : SearchableSettings {
     @Composable
     override fun getTitleRes() = MR.strings.pref_category_downloads
 
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = MR.strings.pref_downloads_summary
+
     @Composable
     override fun getPreferences(): List<Preference> {
         val getMangaCategories = remember { Injekt.get<GetMangaCategories>() }

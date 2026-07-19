@@ -49,6 +49,7 @@ fun NovelChapterListItem(
     isFromSource: Boolean,
     downloadIndicatorEnabled: Boolean,
     date: String?,
+    readProgress: String?,
     scanlator: String?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -59,16 +60,23 @@ fun NovelChapterListItem(
     chapterSwipeStartAction: LibraryPreferences.ChapterSwipeAction,
     chapterSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
     modifier: Modifier = Modifier,
+    accentColor: Color? = null,
 ) {
     val chapter = item.chapter
     val downloadState = item.downloadState
+    val accent = accentColor ?: MaterialTheme.colorScheme.primary
 
     val start = getSwipeAction(
         action = chapterSwipeStartAction,
         read = chapter.read,
         bookmark = chapter.bookmark,
         downloadState = downloadState,
-        background = MaterialTheme.colorScheme.primaryContainer,
+        background = when (chapterSwipeStartAction) {
+            LibraryPreferences.ChapterSwipeAction.ToggleRead -> MaterialTheme.colorScheme.tertiary
+            LibraryPreferences.ChapterSwipeAction.ToggleBookmark -> MaterialTheme.colorScheme.secondary
+            LibraryPreferences.ChapterSwipeAction.Download -> MaterialTheme.colorScheme.primary
+            LibraryPreferences.ChapterSwipeAction.Disabled -> MaterialTheme.colorScheme.primary
+        },
         onSwipe = onSwipeLeft,
     )
     val end = getSwipeAction(
@@ -76,7 +84,12 @@ fun NovelChapterListItem(
         read = chapter.read,
         bookmark = chapter.bookmark,
         downloadState = downloadState,
-        background = MaterialTheme.colorScheme.primaryContainer,
+        background = when (chapterSwipeEndAction) {
+            LibraryPreferences.ChapterSwipeAction.ToggleRead -> MaterialTheme.colorScheme.tertiary
+            LibraryPreferences.ChapterSwipeAction.ToggleBookmark -> MaterialTheme.colorScheme.secondary
+            LibraryPreferences.ChapterSwipeAction.Download -> MaterialTheme.colorScheme.primary
+            LibraryPreferences.ChapterSwipeAction.Disabled -> MaterialTheme.colorScheme.primary
+        },
         onSwipe = onSwipeRight,
     )
 
@@ -112,7 +125,7 @@ fun NovelChapterListItem(
                             modifier = Modifier
                                 .height(8.dp)
                                 .padding(end = 4.dp),
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = accent,
                         )
                     }
                     if (chapter.bookmark) {
@@ -120,7 +133,7 @@ fun NovelChapterListItem(
                             imageVector = Icons.Filled.Bookmark,
                             contentDescription = stringResource(MR.strings.action_filter_bookmarked),
                             modifier = Modifier.padding(end = 4.dp),
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = accent,
                         )
                     }
                     Text(
@@ -145,11 +158,19 @@ fun NovelChapterListItem(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (scanlator != null) DotSeparatorText()
+                            if (scanlator != null || readProgress != null) DotSeparatorText()
                         }
                         if (scanlator != null) {
                             Text(
                                 text = scanlator,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (readProgress != null) DotSeparatorText()
+                        }
+                        if (readProgress != null) {
+                            Text(
+                                text = readProgress,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -164,6 +185,7 @@ fun NovelChapterListItem(
                 downloadStateProvider = { item.downloadState },
                 downloadProgressProvider = { item.downloadProgress },
                 onClick = { onDownloadClick?.invoke(it) },
+                accentColor = accentColor,
             )
         }
     }

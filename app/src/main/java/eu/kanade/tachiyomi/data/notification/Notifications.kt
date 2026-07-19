@@ -76,6 +76,12 @@ object Notifications {
     const val ID_TORRENT_SERVER = -801
 
     /**
+     * Notification channel and ids used for novel chapter fetching
+     */
+    const val CHANNEL_NOVEL_CHAPTER_FETCH = "novel_chapter_fetch_channel"
+    const val ID_NOVEL_CHAPTER_FETCH = -901
+
+    /**
      * Notification channel and ids used for app and extension updates.
      */
     private const val GROUP_APK_UPDATES = "group_apk_updates"
@@ -172,6 +178,10 @@ object Notifications {
                 },
                 buildNotificationChannel(CHANNEL_TORRENT_SERVER, IMPORTANCE_LOW) {
                     setName(context.stringResource(AYMR.strings.pref_category_torrentserver))
+                    setShowBadge(false)
+                },
+                buildNotificationChannel(CHANNEL_NOVEL_CHAPTER_FETCH, IMPORTANCE_LOW) {
+                    setName("Novel chapter fetching")
                     setShowBadge(false)
                 },
                 buildNotificationChannel(CHANNEL_APP_UPDATE, IMPORTANCE_DEFAULT) {

@@ -64,6 +64,7 @@ private fun BrowseNovelSourceCompactGridItem(
     onLongClick: () -> Unit = onClick,
 ) {
     EntryCompactGridItem(
+        title = novel.title,
         coverData = NovelCover(
             novelId = novel.id,
             sourceId = novel.source,

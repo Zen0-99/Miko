@@ -1,11 +1,17 @@
 package eu.kanade.presentation.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -44,8 +50,9 @@ fun TabbedScreen(
     onChangeAnimeSearchQuery: (String?) -> Unit = {},
     novelSearchQuery: String? = null,
     onChangeNovelSearchQuery: (String?) -> Unit = {},
+    titleContent: (@Composable () -> Unit)? = null,
 
-) {
+    ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -55,22 +62,35 @@ fun TabbedScreen(
                 val tab = tabs[state.currentPage]
                 val searchEnabled = tab.searchEnabled
 
-                val actualQuery = when (state.currentPage) {
-                    3 -> animeSearchQuery
-                    4 -> mangaSearchQuery
-                    5 -> novelSearchQuery
-                    else -> null
+                // Single-tab mode: use the first available search query directly.
+                // Multi-tab mode: route by page index (legacy hardcoded indices).
+                val actualQuery = if (tabs.size == 1) {
+                    animeSearchQuery ?: mangaSearchQuery ?: novelSearchQuery
+                } else {
+                    when (state.currentPage) {
+                        3 -> animeSearchQuery
+                        4 -> mangaSearchQuery
+                        5 -> novelSearchQuery
+                        else -> null
+                    }
                 }
 
-                val actualOnChange = when (state.currentPage) {
-                    3 -> onChangeAnimeSearchQuery
-                    4 -> onChangeMangaSearchQuery
-                    5 -> onChangeNovelSearchQuery
-                    else -> ({ _: String? -> })
+                val actualOnChange = if (tabs.size == 1) {
+                    onChangeAnimeSearchQuery.takeIf { animeSearchQuery != null }
+                        ?: onChangeMangaSearchQuery.takeIf { mangaSearchQuery != null }
+                        ?: onChangeNovelSearchQuery.takeIf { novelSearchQuery != null }
+                        ?: ({ _: String? -> })
+                } else {
+                    when (state.currentPage) {
+                        3 -> onChangeAnimeSearchQuery
+                        4 -> onChangeMangaSearchQuery
+                        5 -> onChangeNovelSearchQuery
+                        else -> ({ _: String? -> })
+                    }
                 }
 
                 SearchToolbar(
-                    titleContent = {
+                    titleContent = titleContent ?: {
                         AppBarTitle(
                             stringResource(titleRes),
                             modifier = modifier,
@@ -95,22 +115,26 @@ fun TabbedScreen(
                 end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
             ),
         ) {
-            FlexibleTabRow(
-                scrollable = scrollable,
-                selectedTabIndex = state.currentPage,
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    Tab(
-                        selected = state.currentPage == index,
-                        onClick = { scope.launch { state.animateScrollToPage(index) } },
-                        text = {
-                            TabText(
-                                text = stringResource(tab.titleRes),
-                                badgeCount = tab.badgeNumber,
-                            )
-                        },
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurface,
-                    )
+            // Hide the tab row when there's only one tab (mode-aware single-content mode).
+            if (tabs.size > 1) {
+                FlexibleTabRow(
+                    scrollable = scrollable,
+                    selectedTabIndex = state.currentPage,
+                    pagerState = state,
+                ) {
+                    tabs.forEachIndexed { index, tab ->
+                        Tab(
+                            selected = state.currentPage == index,
+                            onClick = { scope.launch { state.animateScrollToPage(index) } },
+                            text = {
+                                TabText(
+                                    text = stringResource(tab.titleRes),
+                                    badgeCount = tab.badgeNumber,
+                                )
+                            },
+                            unselectedContentColor = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
 
@@ -143,6 +167,7 @@ data class TabContent(
 private fun FlexibleTabRow(
     scrollable: Boolean,
     selectedTabIndex: Int,
+    pagerState: PagerState? = null,
     block: @Composable () -> Unit,
 ) {
     return if (scrollable) {
@@ -150,6 +175,26 @@ private fun FlexibleTabRow(
             selectedTabIndex = selectedTabIndex,
             edgePadding = 13.dp,
             modifier = Modifier.zIndex(1f),
+            indicator = if (pagerState != null) {
+                { tabPositions ->
+                    val targetPos = tabPositions.getOrElse(pagerState.currentPage) { tabPositions.first() }
+                    val fraction = pagerState.currentPageOffsetFraction
+                    val leftDp = targetPos.left + targetPos.width * fraction
+                    val widthDp = targetPos.width
+                    Box(Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .offset(x = leftDp)
+                                .width(widthDp)
+                                .height(2.dp)
+                                .align(Alignment.BottomStart)
+                                .background(MaterialTheme.colorScheme.primary),
+                        )
+                    }
+                }
+            } else {
+                {}
+            },
         ) {
             block()
         }
@@ -157,6 +202,32 @@ private fun FlexibleTabRow(
         PrimaryTabRow(
             selectedTabIndex = selectedTabIndex,
             modifier = Modifier.zIndex(1f),
+            indicator = if (pagerState != null) {
+                {
+                    Box(
+                        Modifier
+                            .tabIndicatorLayout { measurable, constraints, tabPositions ->
+                                val targetPos = tabPositions.getOrElse(pagerState.currentPage) { tabPositions.first() }
+                                val fraction = pagerState.currentPageOffsetFraction
+                                val left = targetPos.left + targetPos.width * fraction
+                                val width = targetPos.width
+                                val placeable = measurable.measure(
+                                    constraints.copy(
+                                        minWidth = width.roundToPx(),
+                                        maxWidth = width.roundToPx(),
+                                    ),
+                                )
+                                layout(constraints.maxWidth, constraints.maxHeight) {
+                                    placeable.place(left.roundToPx(), constraints.maxHeight - placeable.height)
+                                }
+                            }
+                            .height(2.dp)
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
+                }
+            } else {
+                {}
+            },
         ) {
             block()
         }

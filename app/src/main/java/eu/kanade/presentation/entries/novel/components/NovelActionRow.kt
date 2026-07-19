@@ -1,94 +1,76 @@
 package eu.kanade.presentation.entries.novel.components
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Public
-import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import tachiyomi.presentation.core.components.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import eu.kanade.presentation.entries.components.EntryIconAction
+import eu.kanade.presentation.entries.components.EntryTogglePill
 import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
+import tachiyomi.i18n.aniyomi.AYMR
+import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
 fun NovelActionRow(
     favorite: Boolean,
+    accentColor: Color?,
     onAddToLibraryClicked: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
-    onWebViewLongClicked: (() -> Unit)?,
-    onEditCategory: (() -> Unit)?,
+    onShareClicked: (() -> Unit)?,
+    onHighlightsClicked: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val defaultActionButtonColor = MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
+    val accent = accentColor ?: MaterialTheme.colorScheme.primary
 
-    Row(modifier = modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)) {
-        NovelActionButton(
-            title = if (favorite) {
-                stringResource(MR.strings.in_library)
-            } else {
-                stringResource(MR.strings.add_to_library)
-            },
-            icon = if (favorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-            color = if (favorite) MaterialTheme.colorScheme.primary else defaultActionButtonColor,
-            onClick = onAddToLibraryClicked,
-            onLongClick = onEditCategory,
-        )
-        if (onWebViewClicked != null) {
-            NovelActionButton(
-                title = stringResource(MR.strings.action_web_view),
-                icon = Icons.Outlined.Public,
-                color = defaultActionButtonColor,
-                onClick = onWebViewClicked,
-                onLongClick = onWebViewLongClicked,
-            )
-        }
-    }
-}
-
-@Composable
-private fun RowScope.NovelActionButton(
-    title: String,
-    icon: ImageVector,
-    color: Color,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-) {
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier.weight(1f),
-        onLongClick = onLongClick,
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = title,
-                color = color,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-            )
-        }
+        // In Library pill
+        EntryTogglePill(
+            checked = favorite,
+            checkedText = stringResource(MR.strings.in_library),
+            uncheckedText = stringResource(MR.strings.add_to_library),
+            checkedIcon = Icons.Filled.Favorite,
+            uncheckedIcon = Icons.Outlined.FavoriteBorder,
+            accentColor = accent,
+            onClick = onAddToLibraryClicked,
+        )
+
+        // Icon-only actions — use accent color like Miko
+        EntryIconAction(
+            icon = Icons.Outlined.Public,
+            contentDescription = stringResource(MR.strings.action_web_view),
+            tint = accent,
+            onClick = onWebViewClicked,
+        )
+        EntryIconAction(
+            icon = Icons.Outlined.Share,
+            contentDescription = stringResource(MR.strings.action_share),
+            tint = accent,
+            onClick = onShareClicked,
+        )
+        EntryIconAction(
+            icon = Icons.AutoMirrored.Outlined.MenuBook,
+            contentDescription = stringResource(AYMR.strings.highlights),
+            tint = accent,
+            onClick = onHighlightsClicked,
+        )
     }
 }

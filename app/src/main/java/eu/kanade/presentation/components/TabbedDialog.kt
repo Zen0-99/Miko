@@ -1,10 +1,13 @@
 package eu.kanade.presentation.components
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -63,6 +66,28 @@ fun TabbedDialog(
                     selectedTabIndex = pagerState.currentPage,
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     divider = {},
+                    indicator = {
+                        Box(
+                            Modifier
+                                .tabIndicatorLayout { measurable, constraints, tabPositions ->
+                                    val targetPos = tabPositions.getOrElse(pagerState.currentPage) { tabPositions.first() }
+                                    val fraction = pagerState.currentPageOffsetFraction
+                                    val left = targetPos.left + targetPos.width * fraction
+                                    val width = targetPos.width
+                                    val placeable = measurable.measure(
+                                        constraints.copy(
+                                            minWidth = width.roundToPx(),
+                                            maxWidth = width.roundToPx(),
+                                        ),
+                                    )
+                                    layout(constraints.maxWidth, constraints.maxHeight) {
+                                        placeable.place(left.roundToPx(), constraints.maxHeight - placeable.height)
+                                    }
+                                }
+                                .height(2.dp)
+                                .background(MaterialTheme.colorScheme.primary),
+                        )
+                    },
                 ) {
                     tabTitles.fastForEachIndexed { index, tab ->
                         Tab(

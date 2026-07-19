@@ -40,7 +40,7 @@ class AnimeFetchInterval(
         return Pair(lowerBound.toEpochSecond() * 1000, upperBound.toEpochSecond() * 1000 - 1)
     }
 
-    internal fun calculateInterval(episodes: List<Episode>, zone: ZoneId): Int {
+    fun calculateInterval(episodes: List<Episode>, zone: ZoneId): Int {
         val episodeWindow = if (episodes.size <= 8) 3 else 10
 
         val uploadDates = episodes.asSequence()

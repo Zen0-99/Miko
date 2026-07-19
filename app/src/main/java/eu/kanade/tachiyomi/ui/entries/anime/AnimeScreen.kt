@@ -37,6 +37,8 @@ import eu.kanade.presentation.entries.anime.SeasonSettingsDialog
 import eu.kanade.presentation.entries.anime.components.AnimeImagesDialog
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
 import eu.kanade.presentation.entries.components.SetIntervalDialog
+import eu.kanade.presentation.entries.components.rememberEntryAccentColor
+import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.presentation.more.settings.screen.player.PlayerSettingsGesturesScreen.SkipIntroLengthDialog
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.Screen
@@ -57,7 +59,9 @@ import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearch
 import eu.kanade.tachiyomi.ui.category.CategoriesTab
 import eu.kanade.tachiyomi.ui.entries.anime.track.AnimeTrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
-import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
@@ -76,6 +80,8 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class AnimeScreen(
     private val animeId: Long,
@@ -110,6 +116,17 @@ class AnimeScreen(
 
         val successState = state as AnimeScreenModel.State.Success
         val isAnimeHttpSource = remember { successState.source is AnimeHttpSource }
+
+        val extractedAccent = rememberEntryAccentColor(
+            entryId = successState.anime.id,
+            cover = successState.anime,
+            type = EntryCoverMetadata.EntryType.ANIME,
+        )
+        LaunchedEffect(extractedAccent) {
+            if (extractedAccent != successState.accentColor) {
+                screenModel.setAccentColor(extractedAccent)
+            }
+        }
 
         LaunchedEffect(successState.anime, screenModel.source) {
             if (isAnimeHttpSource) {
@@ -209,6 +226,15 @@ class AnimeScreen(
             onEpisodeSelected = screenModel::toggleSelection,
             onAllEpisodeSelected = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
+            onMarkAllSeenClicked = { screenModel.markAllSeen() },
+            onMarkAllUnseenClicked = { screenModel.markAllUnseen() },
+            onRefreshTrackingClicked = { screenModel.refreshTracking() },
+            onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
+            onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
+            onRemoveSeenDownloadsClicked = { screenModel.deleteSeenDownloads() }
+                .takeIf { !successState.source.isLocalOrStub() },
             onSeasonClicked = {
                 navigator.push(AnimeScreen(it.id))
             },
@@ -478,8 +504,10 @@ class AnimeScreen(
 
         when (val previousController = navigator.items[navigator.size - 2]) {
             is HomeScreen -> {
+                // Set mode to ANIME so the library search targets anime content.
+                Injekt.get<UiPreferences>().contentMode().set(ContentMode.ANIME)
                 navigator.pop()
-                AnimeLibraryTab.search(query)
+                LibraryTab.search(query)
             }
             is BrowseAnimeSourceScreen -> {
                 navigator.pop()

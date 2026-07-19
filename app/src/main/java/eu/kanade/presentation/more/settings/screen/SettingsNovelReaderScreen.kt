@@ -20,6 +20,10 @@ object SettingsNovelReaderScreen : SearchableSettings {
     @Composable
     override fun getTitleRes() = AYMR.strings.pref_category_novel_reader
 
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = AYMR.strings.pref_novel_reader_summary
+
     @Composable
     override fun getPreferences(): List<Preference> {
         val pref = remember { Injekt.get<NovelReaderPreferences>() }

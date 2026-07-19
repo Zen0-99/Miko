@@ -81,18 +81,23 @@ internal fun GlobalSearchContent(
                     subtitle = LocaleHelper.getLocalizedDisplayName(source.lang),
                     onClick = { onClickSource(source) },
                     modifier = Modifier.animateItem(),
+                    isLoading = result is NovelSearchItemResult.Loading,
+                    hasResults = result is NovelSearchItemResult.Success && result.result.isNotEmpty(),
                 ) {
                     when (result) {
                         NovelSearchItemResult.Loading -> {
-                            GlobalSearchLoadingResultItem()
+                            // Loading spinner is now shown in the header row
                         }
                         is NovelSearchItemResult.Success -> {
-                            GlobalNovelSearchCardRow(
-                                titles = result.result,
-                                getNovel = getNovel,
-                                onClick = onClickItem,
-                                onLongClick = onLongClickItem,
-                            )
+                            if (result.result.isNotEmpty()) {
+                                GlobalNovelSearchCardRow(
+                                    titles = result.result,
+                                    getNovel = getNovel,
+                                    onClick = onClickItem,
+                                    onLongClick = onLongClickItem,
+                                )
+                            }
+                            // Empty results: "No results" shown inline in header, no content
                         }
                         is NovelSearchItemResult.Error -> {
                             GlobalSearchErrorResultItem(message = result.throwable.message)

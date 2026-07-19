@@ -55,7 +55,12 @@ BEGIN
     UPDATE novels SET version = version + 1
     WHERE _id = new._id AND new.is_syncing = 0 AND (
         new.url != old.url OR
+        new.title != old.title OR
+        new.author != old.author OR
+        new.artist != old.artist OR
         new.description != old.description OR
+        new.genre != old.genre OR
+        new.status != old.status OR
         new.favorite != old.favorite
     );
 END;

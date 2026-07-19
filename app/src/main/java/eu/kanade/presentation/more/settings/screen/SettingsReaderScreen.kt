@@ -28,6 +28,10 @@ object SettingsReaderScreen : SearchableSettings {
     @Composable
     override fun getTitleRes() = AYMR.strings.pref_category_manga_reader
 
+    @ReadOnlyComposable
+    @Composable
+    override fun getSubtitleRes() = MR.strings.pref_reader_summary
+
     @Composable
     override fun getPreferences(): List<Preference> {
         val readerPref = remember { Injekt.get<ReaderPreferences>() }

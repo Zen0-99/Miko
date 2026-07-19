@@ -121,5 +121,5 @@ internal fun Modifier.highlightBackground(highlighted: Boolean): Modifier = comp
 
 internal val TrailingWidgetBuffer = 16.dp
 internal val PrefsHorizontalPadding = 16.dp
-internal val PrefsVerticalPadding = 16.dp
+internal val PrefsVerticalPadding = 10.dp
 internal val TitleFontSize = 16.sp
