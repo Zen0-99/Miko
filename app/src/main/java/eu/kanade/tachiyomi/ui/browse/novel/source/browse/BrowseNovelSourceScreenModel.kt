@@ -215,7 +215,7 @@ class BrowseNovelSourceScreenModel(
         } else {
             libraryPreferences.novelPortraitColumns().get()
         }
-        return if (columns == 0) GridCells.Adaptive(96.dp) else GridCells.Fixed(columns)
+        return if (columns == 0) GridCells.Adaptive(128.dp) else GridCells.Fixed(columns)
     }
 
     fun getColumnsPreferenceForCurrentOrientation(orientation: Int): Int {

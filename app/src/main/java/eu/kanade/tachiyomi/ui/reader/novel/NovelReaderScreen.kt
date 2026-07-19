@@ -226,6 +226,7 @@ class NovelReaderScreen(
                 textConfig = textConfig,
                 isLoading = isLoading,
                 accentColor = accentColor,
+                bottomPaddingDp = if (screenModel.preferences.showBatteryAndTime().get()) 28 else 0,
                 onToggleControls = { screenModel.toggleControls() },
                 onRecyclerViewReady = { rv -> recyclerViewRef = rv },
             )
@@ -239,7 +240,7 @@ class NovelReaderScreen(
                     screenModel.positionTracker.getEstimatedReadingTime()
                 } else -1,
                 fullscreen = screenModel.preferences.fullscreen().get(),
-                showPhoneInfo = screenModel.preferences.inlinePhoneInfo().get(),
+                showPhoneInfo = screenModel.preferences.showBatteryAndTime().get(),
                 readerBackgroundColor = bgColor,
                 showCommentsButton = screenModel.supportsComments,
                 isTtsActive = screenModel.isTtsActive,
@@ -274,7 +275,7 @@ class NovelReaderScreen(
                     accentColor = accentColor,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = if (isControlsVisible) 56.dp else 0.dp),
+                        .padding(bottom = if (isControlsVisible) 72.dp else 0.dp),
                 )
             }
         }
@@ -404,6 +405,7 @@ class NovelReaderScreen(
         textConfig: TextConfig,
         isLoading: Boolean,
         accentColor: Color?,
+        bottomPaddingDp: Int = 0,
         onToggleControls: () -> Unit,
         onRecyclerViewReady: (RecyclerView) -> Unit,
     ) {
@@ -415,6 +417,11 @@ class NovelReaderScreen(
                 val rv = RecyclerView(ctx).apply {
                     layoutManager = LinearLayoutManager(ctx)
                     setHasFixedSize(false)
+                    if (bottomPaddingDp > 0) {
+                        val density = ctx.resources.displayMetrics.density
+                        setPadding(0, 0, 0, (bottomPaddingDp * density).toInt())
+                        clipToPadding = false
+                    }
                 }
 
                 val gestureDetector = GestureDetector(

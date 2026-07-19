@@ -464,6 +464,9 @@ class NovelReaderScreenModel(
             horizontalPadding = effectivePadding,
             textAlignment = preferences.textAlignment().get(),
             bionicReading = preferences.bionicReading().get(),
+            forceBold = preferences.forceBoldText().get(),
+            forceItalic = preferences.forceItalicText().get(),
+            forceParagraphIndent = preferences.forceParagraphIndent().get(),
         )
     }
 

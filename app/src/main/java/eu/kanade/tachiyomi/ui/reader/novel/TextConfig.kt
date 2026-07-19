@@ -15,4 +15,7 @@ data class TextConfig(
     val isTextSelectable: Boolean = true,
     val textAlignment: TextAlignment = TextAlignment.LEFT,
     val bionicReading: Boolean = false,
+    val forceBold: Boolean = false,
+    val forceItalic: Boolean = false,
+    val forceParagraphIndent: Boolean = false,
 )

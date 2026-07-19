@@ -58,6 +58,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.graphics.res.animatedVectorResource
+import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
+import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -65,6 +68,7 @@ import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.tachiyomi.R
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
@@ -89,10 +93,11 @@ data object HomeHubTab : Tab {
         @Composable
         get() {
             val isSelected = LocalTabNavigator.current.current.key == key
+            val image = AnimatedImageVector.animatedVectorResource(R.drawable.anim_home_enter)
             return TabOptions(
                 index = 0u,
                 title = stringResource(AYMR.strings.label_home),
-                icon = rememberVectorPainter(Icons.Outlined.Home),
+                icon = rememberAnimatedVectorPainter(image, isSelected),
             )
         }
 

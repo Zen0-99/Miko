@@ -248,12 +248,6 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         accentColor = accentColor,
     )
 
-    CheckboxItem(
-        label = "In-line phone info",
-        pref = screenModel.preferences.inlinePhoneInfo(),
-        accentColor = accentColor,
-    )
-
     // ---- Reader tools sub-section ----
     SubHeader("Reader tools", accentColor)
 

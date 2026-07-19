@@ -163,13 +163,6 @@ fun NovelReaderBottomBar(
                     tint = accentColor ?: MaterialTheme.colorScheme.onSurface,
                 )
             }
-            IconButton(onClick = onWebviewClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Public,
-                    contentDescription = "Open in WebView",
-                    tint = accentColor ?: MaterialTheme.colorScheme.onSurface,
-                )
-            }
             IconButton(onClick = onHighlightsClick) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.MenuBook,

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.reader.novel
 
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.Spannable
 import android.text.SpannableString
@@ -178,7 +179,31 @@ class TextAdapter(
                     TextAlignment.RIGHT -> textView.gravity = Gravity.END
                 }
 
-                config.textFont?.let { textView.typeface = it }
+                config.textFont?.let { font ->
+                    val style = when {
+                        config.forceBold && config.forceItalic -> Typeface.BOLD_ITALIC
+                        config.forceBold -> Typeface.BOLD
+                        config.forceItalic -> Typeface.ITALIC
+                        else -> Typeface.NORMAL
+                    }
+                    textView.typeface = Typeface.create(font, style)
+                } ?: run {
+                    val style = when {
+                        config.forceBold && config.forceItalic -> Typeface.BOLD_ITALIC
+                        config.forceBold -> Typeface.BOLD
+                        config.forceItalic -> Typeface.ITALIC
+                        else -> Typeface.NORMAL
+                    }
+                    if (style != Typeface.NORMAL) {
+                        textView.typeface = Typeface.create(textView.typeface, style)
+                    }
+                }
+
+                // Force paragraph indent: add leading margin to first line
+                if (config.forceParagraphIndent && item is TextItem.Paragraph) {
+                    val indentPx = (config.textSize * 2).toInt()
+                    textView.setPadding(indentPx, textView.paddingTop, textView.paddingRight, textView.paddingBottom)
+                }
 
                 // Setup tap detection for highlighted text.
                 setupHighlightTapDetection(textView, item)

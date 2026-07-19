@@ -97,7 +97,13 @@ data object BrowseTab : Tab {
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { padding ->
-            sourceTab.content(padding, snackbarHostState)
+            val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+                ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            val resolvedPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = padding.calculateTopPadding(),
+                bottom = padding.calculateBottomPadding() + hostBottom,
+            )
+            sourceTab.content(resolvedPadding, snackbarHostState)
         }
 
         LaunchedEffect(Unit) {

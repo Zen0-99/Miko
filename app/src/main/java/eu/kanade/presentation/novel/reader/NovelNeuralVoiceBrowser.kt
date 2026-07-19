@@ -1,5 +1,6 @@
 package eu.kanade.presentation.novel.reader
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,6 +74,7 @@ fun ColumnScope.NeuralVoiceBrowser(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = 400.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {

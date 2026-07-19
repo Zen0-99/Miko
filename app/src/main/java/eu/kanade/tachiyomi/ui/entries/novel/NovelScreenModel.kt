@@ -798,6 +798,8 @@ class NovelScreenModel(
                     var totalUpdated = 0
                     var totalFetched = 0
                     var sourceOrder = 0L
+                    val seenUrls = mutableSetOf<String>()
+                    var consecutiveDuplicatePages = 0
 
                     for (page in 1..125) { // hard cap of 125 pages
                         val pageResult = source.getChapterListPage(state.novel.toSNovel(), page)
@@ -815,18 +817,37 @@ class NovelScreenModel(
                         }
 
                         // Convert and merge with current local chapters
+                        // Deduplicate within this fetch session — skip chapters we've
+                        // already seen on a previous page to prevent the same chapters
+                        // being added thousands of times when a source returns the same
+                        // data on every page (e.g. Ranobes embeds all chapters in
+                        // window.__DATA__ regardless of the page URL).
                         val localChapters = novelChapterRepository.getNovelChaptersByNovelId(novelId)
-                        val newChapters = pageResult.chapters.map { sNovelChapter ->
-                            tachiyomi.domain.items.chapter.model.NovelChapter.create().copy(
-                                novelId = novelId,
-                                url = sNovelChapter.url,
-                                name = sNovelChapter.name,
-                                chapterNumber = sNovelChapter.chapter_number.toDouble(),
-                                sourceOrder = sourceOrder++,
-                                dateFetch = sNovelChapter.date_upload,
-                                dateUpload = sNovelChapter.date_upload,
-                            )
+                        val newChapters = pageResult.chapters
+                            .filter { sNovelChapter -> seenUrls.add(sNovelChapter.url) }
+                            .map { sNovelChapter ->
+                                tachiyomi.domain.items.chapter.model.NovelChapter.create().copy(
+                                    novelId = novelId,
+                                    url = sNovelChapter.url,
+                                    name = sNovelChapter.name,
+                                    chapterNumber = sNovelChapter.chapter_number.toDouble(),
+                                    sourceOrder = sourceOrder++,
+                                    dateFetch = sNovelChapter.date_upload,
+                                    dateUpload = sNovelChapter.date_upload,
+                                )
+                            }
+
+                        if (newChapters.isEmpty()) {
+                            logcat(LogPriority.DEBUG) { "NovelScreenModel: page $page returned only duplicates, incrementing duplicate counter" }
+                            consecutiveDuplicatePages++
+                            if (consecutiveDuplicatePages >= 2) {
+                                logcat(LogPriority.DEBUG) { "NovelScreenModel: 2 consecutive duplicate pages, stopping fetch" }
+                                break
+                            }
+                            if (page >= totalPages) break
+                            continue
                         }
+                        consecutiveDuplicatePages = 0
 
                         val mergedChapters = mergeChapters(localChapters, newChapters)
                         val toAdd = mergedChapters.filter { it.id == -1L }

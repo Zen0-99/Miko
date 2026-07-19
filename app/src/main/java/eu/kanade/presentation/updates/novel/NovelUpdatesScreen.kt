@@ -89,11 +89,17 @@ fun NovelUpdateScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { contentPadding ->
+        val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+            ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+        val resolvedContentPadding = androidx.compose.foundation.layout.PaddingValues(
+            top = contentPadding.calculateTopPadding(),
+            bottom = contentPadding.calculateBottomPadding() + hostBottom,
+        )
         when {
-            state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
+            state.isLoading -> LoadingScreen(Modifier.padding(resolvedContentPadding))
             state.items.isEmpty() -> EmptyScreen(
                 stringRes = MR.strings.information_no_recent,
-                modifier = Modifier.padding(contentPadding),
+                modifier = Modifier.padding(resolvedContentPadding),
             )
             else -> {
                 val scope = rememberCoroutineScope()
@@ -111,10 +117,10 @@ fun NovelUpdateScreen(
                         }
                     },
                     enabled = !state.selectionMode,
-                    indicatorPadding = contentPadding,
+                    indicatorPadding = resolvedContentPadding,
                 ) {
                     FastScrollLazyColumn(
-                        contentPadding = contentPadding,
+                        contentPadding = resolvedContentPadding,
                     ) {
                         novelUpdatesLastUpdatedItem(lastUpdated)
 

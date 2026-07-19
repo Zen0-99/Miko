@@ -17,6 +17,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -108,13 +109,16 @@ internal fun CheckboxItem(
     ) {
         Text(text = label, style = MaterialTheme.typography.bodyMedium)
         val accent = accentColor ?: MaterialTheme.colorScheme.primary
-        val accentedScheme = MaterialTheme.colorScheme.copy(primary = accent)
-        MaterialTheme(colorScheme = accentedScheme) {
-            Switch(
-                checked = checked,
-                onCheckedChange = { pref.set(it) },
-            )
-        }
+        Switch(
+            checked = checked,
+            onCheckedChange = { pref.set(it) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.surface,
+                checkedTrackColor = accent,
+                checkedBorderColor = accent,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+            ),
+        )
     }
 }
 

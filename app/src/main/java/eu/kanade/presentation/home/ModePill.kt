@@ -1,6 +1,7 @@
 package eu.kanade.presentation.home
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -75,7 +76,10 @@ fun ModePill(
                 maxLines = 1,
                 modifier = Modifier
                     .weight(1f)
-                    .clickable {
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {
                         uiPreferences.contentMode().set(mode)
                     }
                     .padding(vertical = 8.dp),
