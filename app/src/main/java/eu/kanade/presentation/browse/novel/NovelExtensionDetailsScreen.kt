@@ -17,10 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Launch
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -30,34 +27,31 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import eu.kanade.domain.extension.novel.interactor.NovelExtensionSourceItem
 import eu.kanade.presentation.browse.novel.components.NovelExtensionIcon
 import eu.kanade.presentation.components.AppBar
-import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.WarningBanner
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TrailingWidgetBuffer
 import eu.kanade.tachiyomi.novelsource.ConfigurableNovelSource
-import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelExtensionDetailsScreenModel
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.entries.novel.model.NovelCover
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -75,53 +69,11 @@ fun NovelExtensionDetailsScreen(
     onClickSource: (sourceId: Long) -> Unit,
     onClickMigrate: (novelId: Long) -> Unit = {},
 ) {
-    val uriHandler = LocalUriHandler.current
-    val url = remember(state.extension) {
-        val regex = """https://raw.githubusercontent.com/(.+?)/(.+?)/.+""".toRegex()
-        regex.find(state.extension?.repoUrl.orEmpty())
-            ?.let {
-                val (user, repo) = it.destructured
-                "https://github.com/$user/$repo"
-            }
-            ?: state.extension?.repoUrl
-    }
-
     Scaffold(
         topBar = { scrollBehavior ->
             AppBar(
                 title = stringResource(MR.strings.label_extension_info),
                 navigateUp = navigateUp,
-                actions = {
-                    AppBarActions(
-                        actions = persistentListOf<AppBar.AppBarAction>().builder()
-                            .apply {
-                                if (url != null) {
-                                    add(
-                                        AppBar.Action(
-                                            title = stringResource(MR.strings.action_open_repo),
-                                            icon = Icons.AutoMirrored.Outlined.Launch,
-                                            onClick = {
-                                                uriHandler.openUri(url)
-                                            },
-                                        ),
-                                    )
-                                }
-                                addAll(
-                                    listOf(
-                                        AppBar.OverflowAction(
-                                            title = stringResource(MR.strings.action_enable_all),
-                                            onClick = onClickEnableAll,
-                                        ),
-                                        AppBar.OverflowAction(
-                                            title = stringResource(MR.strings.action_disable_all),
-                                            onClick = onClickDisableAll,
-                                        ),
-                                    ),
-                                )
-                            }
-                            .build(),
-                    )
-                },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -139,6 +91,8 @@ fun NovelExtensionDetailsScreen(
             extension = state.extension,
             sources = state.sources,
             migrateItems = state.migrateItems,
+            onClickEnableAll = onClickEnableAll,
+            onClickDisableAll = onClickDisableAll,
             onClickUninstall = onClickUninstall,
             onClickSource = onClickSource,
             onClickMigrate = onClickMigrate,
@@ -152,6 +106,8 @@ private fun NovelExtensionDetails(
     extension: NovelExtension.Installed,
     sources: ImmutableList<NovelExtensionSourceItem>,
     migrateItems: ImmutableList<NovelExtensionDetailsScreenModel.MigrateNovelItem>,
+    onClickEnableAll: () -> Unit,
+    onClickDisableAll: () -> Unit,
     onClickUninstall: () -> Unit,
     onClickSource: (sourceId: Long) -> Unit,
     onClickMigrate: (novelId: Long) -> Unit = {},
@@ -170,6 +126,10 @@ private fun NovelExtensionDetails(
         item {
             DetailsHeader(
                 extension = extension,
+                isExtensionEnabled = sources.any { it.enabled },
+                onToggleExtension = { enabled ->
+                    if (enabled) onClickEnableAll() else onClickDisableAll()
+                },
                 onClickUninstall = onClickUninstall,
                 onClickAppInfo = {
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -184,7 +144,8 @@ private fun NovelExtensionDetails(
         item {
             Text(
                 text = stringResource(MR.strings.label_languages),
-                style = MaterialTheme.typography.titleMedium,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
@@ -206,7 +167,8 @@ private fun NovelExtensionDetails(
         item {
             Text(
                 text = stringResource(MR.strings.label_migration),
-                style = MaterialTheme.typography.titleMedium,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
@@ -249,6 +211,8 @@ private fun NovelExtensionDetails(
 @Composable
 private fun DetailsHeader(
     extension: NovelExtension,
+    isExtensionEnabled: Boolean,
+    onToggleExtension: (Boolean) -> Unit,
     onClickUninstall: () -> Unit,
     onClickAppInfo: (() -> Unit)?,
 ) {
@@ -291,7 +255,8 @@ private fun DetailsHeader(
         ) {
             NovelExtensionIcon(
                 modifier = Modifier
-                    .size(72.dp),
+                    .size(72.dp)
+                    .then(if (!isExtensionEnabled) Modifier.alpha(0.4f) else Modifier),
                 extension = extension,
                 density = DisplayMetrics.DENSITY_XXXHIGH,
             )
@@ -299,7 +264,9 @@ private fun DetailsHeader(
             Spacer(modifier = Modifier.width(MaterialTheme.padding.medium))
 
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(if (!isExtensionEnabled) Modifier.alpha(0.4f) else Modifier),
             ) {
                 Text(
                     text = extension.name,
@@ -307,24 +274,6 @@ private fun DetailsHeader(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-
-                val displayUrl = when (extension) {
-                    is NovelExtension.Installed -> {
-                        extension.repoUrl
-                            ?: extension.sources.firstNotNullOfOrNull { (it as? NovelHttpSource)?.baseUrl }
-                    }
-                    is NovelExtension.Available -> extension.repoUrl
-                    else -> null
-                }
-                if (!displayUrl.isNullOrBlank()) {
-                    Text(
-                        text = displayUrl,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
 
                 Spacer(modifier = Modifier.height(2.dp))
 
@@ -362,6 +311,11 @@ private fun DetailsHeader(
                     }
                 }
             }
+
+            Switch(
+                checked = isExtensionEnabled,
+                onCheckedChange = onToggleExtension,
+            )
         }
 
         Row(
@@ -389,8 +343,6 @@ private fun DetailsHeader(
                 }
             }
         }
-
-        HorizontalDivider()
     }
 }
 

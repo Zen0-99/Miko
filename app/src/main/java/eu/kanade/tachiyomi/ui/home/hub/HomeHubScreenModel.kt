@@ -200,7 +200,14 @@ class HomeHubScreenModel(
                         currentMode = mode,
                         // Re-resolve hero for the new mode; null if no history for it
                         hero = lastCombinedData?.let { data -> resolveHero(data) },
+                        // Clear recommendations — will be reloaded for the new mode
+                        recommendations = emptyList(),
                     )
+                }
+                // Reload recommendations for the new mode
+                val data = lastCombinedData
+                if (data != null) {
+                    loadRecommendations(data.animeHistory, data.mangaHistory, data.novelHistory)
                 }
             }
         }
@@ -283,59 +290,74 @@ class HomeHubScreenModel(
         mangaHistory: List<MangaHistoryWithRelations>,
         novelHistory: List<NovelHistoryWithRelations>,
     ) {
-        // Find most recent history item across all types and build a seed
-        val animeFirst = animeHistory.firstOrNull()
-        val mangaFirst = mangaHistory.firstOrNull()
-        val novelFirst = novelHistory.firstOrNull()
+        val currentMode = mutableState.value.currentMode
 
-        val animeTime = animeFirst?.seenAt?.time ?: 0L
-        val mangaTime = mangaFirst?.readAt?.time ?: 0L
-        val novelTime = novelFirst?.readAt?.time ?: 0L
-
-        val seed: SuggestionSeed? = when {
-            animeFirst != null && animeTime >= mangaTime && animeTime >= novelTime -> SuggestionSeed(
-                mediaType = SuggestionMediaType.ANIME,
-                primaryTitle = animeFirst.title,
-                candidateTitles = listOf(animeFirst.title),
-                description = null,
-                author = null,
-                genres = null,
-            )
-            mangaFirst != null && mangaTime >= novelTime -> SuggestionSeed(
-                mediaType = SuggestionMediaType.MANGA,
-                primaryTitle = mangaFirst.title,
-                candidateTitles = listOf(mangaFirst.title),
-                description = null,
-                author = null,
-                genres = null,
-            )
-            novelFirst != null -> SuggestionSeed(
-                mediaType = SuggestionMediaType.NOVEL,
-                primaryTitle = novelFirst.title,
-                candidateTitles = listOf(novelFirst.title),
-                description = null,
-                author = null,
-                genres = null,
-            )
-            else -> null
+        // Only use history from the current content mode
+        val seed: SuggestionSeed? = when (currentMode) {
+            ContentMode.ANIME -> {
+                val animeFirst = animeHistory.firstOrNull()
+                if (animeFirst != null) SuggestionSeed(
+                    mediaType = SuggestionMediaType.ANIME,
+                    primaryTitle = animeFirst.title,
+                    candidateTitles = listOf(animeFirst.title),
+                    description = null,
+                    author = null,
+                    genres = null,
+                ) else null
+            }
+            ContentMode.MANGA -> {
+                val mangaFirst = mangaHistory.firstOrNull()
+                if (mangaFirst != null) SuggestionSeed(
+                    mediaType = SuggestionMediaType.MANGA,
+                    primaryTitle = mangaFirst.title,
+                    candidateTitles = listOf(mangaFirst.title),
+                    description = null,
+                    author = null,
+                    genres = null,
+                ) else null
+            }
+            ContentMode.NOVEL -> {
+                val novelFirst = novelHistory.firstOrNull()
+                if (novelFirst != null) SuggestionSeed(
+                    mediaType = SuggestionMediaType.NOVEL,
+                    primaryTitle = novelFirst.title,
+                    candidateTitles = listOf(novelFirst.title),
+                    description = null,
+                    author = null,
+                    genres = null,
+                ) else null
+            }
         }
 
-        if (seed == null) return
+        if (seed == null) {
+            // No history for current mode — clear recommendations
+            mutableState.update { it.copy(recommendations = emptyList()) }
+            return
+        }
 
         try {
             val result = suggestionCoordinator.fetchSuggestions(seed, limit = 10)
-            val recItems = result.items.take(10).map { item ->
-                HomeHubCardItem(
-                    id = item.providerUrl.hashCode().toLong(),
-                    title = item.title,
-                    coverData = item.thumbnailUrl,
-                    mediaType = when (item.mediaType) {
-                        SuggestionMediaType.ANIME -> HomeHubMediaType.ANIME
-                        SuggestionMediaType.MANGA -> HomeHubMediaType.MANGA
-                        SuggestionMediaType.NOVEL -> HomeHubMediaType.NOVEL
-                    },
-                )
+            // Filter results to only match the current mode
+            val modeMediaType = when (currentMode) {
+                ContentMode.ANIME -> SuggestionMediaType.ANIME
+                ContentMode.MANGA -> SuggestionMediaType.MANGA
+                ContentMode.NOVEL -> SuggestionMediaType.NOVEL
             }
+            val recItems = result.items
+                .filter { it.mediaType == modeMediaType }
+                .take(10)
+                .map { item ->
+                    HomeHubCardItem(
+                        id = item.providerUrl.hashCode().toLong(),
+                        title = item.title,
+                        coverData = item.thumbnailUrl,
+                        mediaType = when (item.mediaType) {
+                            SuggestionMediaType.ANIME -> HomeHubMediaType.ANIME
+                            SuggestionMediaType.MANGA -> HomeHubMediaType.MANGA
+                            SuggestionMediaType.NOVEL -> HomeHubMediaType.NOVEL
+                        },
+                    )
+                }
             mutableState.update { it.copy(recommendations = recItems) }
         } catch (e: Exception) {
             // Silently fail — recommendations are optional

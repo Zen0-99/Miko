@@ -136,25 +136,12 @@ private fun HomeHubContent(
     val listState = rememberLazyListState()
     val tabNavigator = LocalTabNavigator.current
 
-    // Register with shared top bar — selection mode shows count + delete + cancel
-    if (state.selectionMode) {
-        useSharedTopBar(
-            title = "${state.selection.size}",
-            actions = persistentListOf(
-                AppBar.Action(
-                    title = "Delete",
-                    icon = Icons.Outlined.Delete,
-                    onClick = { screenModel.deleteSelectedItems() },
-                ),
-            ),
-            navigateUp = screenModel::clearSelection,
-        )
-    } else {
-        useSharedTopBar(
-            title = stringResource(AYMR.strings.label_home),
-            actions = globalOverflowActions(onClickSettings = { navigator.push(SettingsScreen()) }),
-        )
-    }
+    // Register with shared top bar — only when NOT in selection mode
+    // Selection mode uses a separate overlay top bar that stays visible while scrolling
+    useSharedTopBar(
+        title = stringResource(AYMR.strings.label_home),
+        actions = globalOverflowActions(onClickSettings = { navigator.push(SettingsScreen()) }),
+    )
 
     if (state.isEmpty) {
         Scaffold(
@@ -186,20 +173,21 @@ private fun HomeHubContent(
         return
     }
 
-    Scaffold(
-        topBar = {},
-    ) { padding ->
-        val hostBottomPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
-            ?.calculateBottomPadding() ?: 0.dp
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            contentPadding = PaddingValues(
-                top = padding.calculateTopPadding(),
-                bottom = padding.calculateBottomPadding() + hostBottomPadding + 24.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {},
+        ) { padding ->
+            val hostBottomPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+                ?.calculateBottomPadding() ?: 0.dp
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                contentPadding = PaddingValues(
+                    top = padding.calculateTopPadding(),
+                    bottom = padding.calculateBottomPadding() + hostBottomPadding + 24.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+            ) {
             // --- Hero Card ---
             item(key = "hero") {
                 state.hero?.let { hero ->
@@ -324,6 +312,32 @@ private fun HomeHubContent(
                         }
                     }
                 }
+            }
+        }
+        }
+
+        // Selection mode overlay top bar — stays visible while scrolling
+        if (state.selectionMode) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 3.dp,
+            ) {
+                AppBar(
+                    title = "${state.selection.size}",
+                    actions = {
+                        AppBarActions(
+                            persistentListOf(
+                                AppBar.Action(
+                                    title = "Delete",
+                                    icon = Icons.Outlined.Delete,
+                                    onClick = { screenModel.deleteSelectedItems() },
+                                ),
+                            ),
+                        )
+                    },
+                    navigateUp = screenModel::clearSelection,
+                )
             }
         }
     }

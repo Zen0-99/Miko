@@ -73,6 +73,11 @@ object SettingsBrowseScreen : SearchableSettings {
                         preference = sourcePreferences.swipeToHideSource(),
                         title = stringResource(AYMR.strings.pref_swipe_to_hide_source),
                     ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = sourcePreferences.browseCardDesign(),
+                        title = "Card design",
+                        subtitle = "Display extensions as cards with blurred icon backgrounds",
+                    ),
                     Preference.PreferenceItem.TextPreference(
                         title = stringResource(MR.strings.label_extension_repos),
                         subtitle = pluralStringResource(

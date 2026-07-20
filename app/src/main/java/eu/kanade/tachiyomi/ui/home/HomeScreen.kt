@@ -160,6 +160,11 @@ object HomeScreen : Screen() {
                 val topBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(
                     rememberTopAppBarState(),
                 )
+                // Reset top bar visibility when switching tabs
+                val currentTabKey = tabNavigator.current.key
+                LaunchedEffect(currentTabKey) {
+                    topBarScrollBehavior.state.heightOffset = 0f
+                }
                 Scaffold(
                     modifier = Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection),
                     containerColor = MaterialTheme.colorScheme.background,
@@ -178,12 +183,10 @@ object HomeScreen : Screen() {
                                 }
                             },
                             actions = {
-                                AnimatedContent(
+                                // Crossfade actions to avoid icons stacking during transition
+                                androidx.compose.animation.Crossfade(
                                     targetState = sharedTopBarState.actions,
-                                    transitionSpec = {
-                                        fadeIn(animationSpec = tween(200)) togetherWith
-                                            fadeOut(animationSpec = tween(200))
-                                    },
+                                    animationSpec = tween(200),
                                     label = "topbar_actions",
                                 ) { actions ->
                                     AppBarActions(actions)

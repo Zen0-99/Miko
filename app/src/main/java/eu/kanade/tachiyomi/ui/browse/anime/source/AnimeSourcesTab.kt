@@ -27,6 +27,7 @@ import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.browse.anime.extension.details.AnimeExtensionDetailsScreen
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.InstallStep
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
@@ -57,6 +58,10 @@ fun Screen.animeSourcesTab(): TabContent {
         }
         .collectAsState(emptySet())
 
+    val sourcePreferences: SourcePreferences = remember { Injekt.get() }
+    val cardDesign by sourcePreferences.browseCardDesign().changes().collectAsState(false)
+    val cardColumns by sourcePreferences.browseCardColumns().changes().collectAsState(2)
+
     return TabContent(
         titleRes = AYMR.strings.label_anime_sources,
         actions = persistentListOf(
@@ -76,6 +81,8 @@ fun Screen.animeSourcesTab(): TabContent {
                 contentPadding = contentPadding,
                 downloadStates = downloadStates,
                 sourcesWithUpdates = sourcesWithUpdates,
+                cardDesign = cardDesign,
+                cardColumns = cardColumns,
                 onClickItem = { source, listing ->
                     navigator.push(BrowseAnimeSourceScreen(source.id, listing.query))
                 },

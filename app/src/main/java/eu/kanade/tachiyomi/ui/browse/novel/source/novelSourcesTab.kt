@@ -23,6 +23,7 @@ import eu.kanade.presentation.browse.novel.NovelSourceOptionsDialog
 import eu.kanade.presentation.browse.novel.NovelSourcesScreen
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
@@ -58,6 +59,10 @@ fun Screen.novelSourcesTab(): TabContent {
         }
         .collectAsState(emptySet())
 
+    val sourcePreferences: SourcePreferences = remember { Injekt.get() }
+    val cardDesign by sourcePreferences.browseCardDesign().changes().collectAsState(false)
+    val cardColumns by sourcePreferences.browseCardColumns().changes().collectAsState(2)
+
     return TabContent(
         titleRes = AYMR.strings.label_novel_sources,
         actions = persistentListOf(
@@ -77,6 +82,8 @@ fun Screen.novelSourcesTab(): TabContent {
                 contentPadding = contentPadding,
                 downloadStates = downloadStates,
                 sourcesWithUpdates = sourcesWithUpdates,
+                cardDesign = cardDesign,
+                cardColumns = cardColumns,
                 onClickItem = { source, listing ->
                     Log.d("NovelSearch", "[novelSourcesTab] onClickItem - source=${source.name} (id=${source.id}), listing.query='${listing.query}', pushing BrowseNovelSourceScreen")
                     navigator.push(BrowseNovelSourceScreen(source.id, listing.query))

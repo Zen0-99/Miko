@@ -22,6 +22,7 @@ import eu.kanade.presentation.browse.manga.MangaSourcesScreen
 import eu.kanade.presentation.browse.manga.ExtensionTrustDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.ui.browse.manga.source.browse.BrowseMangaSourceScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
@@ -57,6 +58,10 @@ fun Screen.mangaSourcesTab(): TabContent {
         }
         .collectAsState(emptySet())
 
+    val sourcePreferences: SourcePreferences = remember { Injekt.get() }
+    val cardDesign by sourcePreferences.browseCardDesign().changes().collectAsState(false)
+    val cardColumns by sourcePreferences.browseCardColumns().changes().collectAsState(2)
+
     return TabContent(
         titleRes = AYMR.strings.label_manga_sources,
         actions = persistentListOf(
@@ -76,6 +81,8 @@ fun Screen.mangaSourcesTab(): TabContent {
                 contentPadding = contentPadding,
                 downloadStates = downloadStates,
                 sourcesWithUpdates = sourcesWithUpdates,
+                cardDesign = cardDesign,
+                cardColumns = cardColumns,
                 onClickItem = { source, listing ->
                     navigator.push(BrowseMangaSourceScreen(source.id, listing.query))
                 },

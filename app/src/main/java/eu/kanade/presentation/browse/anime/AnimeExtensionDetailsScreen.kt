@@ -18,10 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Launch
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,20 +34,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import eu.kanade.domain.extension.anime.interactor.AnimeExtensionSourceItem
 import eu.kanade.presentation.browse.anime.components.AnimeExtensionIcon
 import eu.kanade.presentation.browse.manga.NsfwWarningDialog
 import eu.kanade.presentation.components.AppBar
-import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.WarningBanner
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.library.components.EntryListItem
@@ -57,14 +55,12 @@ import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TrailingWidgetBuffer
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.ui.browse.anime.extension.details.AnimeExtensionDetailsScreenModel
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.entries.anime.model.AnimeCover
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -85,57 +81,11 @@ fun AnimeExtensionDetailsScreen(
     onClickIncognito: (Boolean) -> Unit,
     onClickMigrate: (animeId: Long) -> Unit = {},
 ) {
-    val uriHandler = LocalUriHandler.current
-    val url = remember(state.extension) {
-        val regex = """https://raw.githubusercontent.com/(.+?)/(.+?)/.+""".toRegex()
-        regex.find(state.extension?.repoUrl.orEmpty())
-            ?.let {
-                val (user, repo) = it.destructured
-                "https://github.com/$user/$repo"
-            }
-            ?: state.extension?.repoUrl
-    }
-
     Scaffold(
         topBar = { scrollBehavior ->
             AppBar(
                 title = stringResource(MR.strings.label_extension_info),
                 navigateUp = navigateUp,
-                actions = {
-                    AppBarActions(
-                        actions = persistentListOf<AppBar.AppBarAction>().builder()
-                            .apply {
-                                if (url != null) {
-                                    add(
-                                        AppBar.Action(
-                                            title = stringResource(MR.strings.action_open_repo),
-                                            icon = Icons.AutoMirrored.Outlined.Launch,
-                                            onClick = {
-                                                uriHandler.openUri(url)
-                                            },
-                                        ),
-                                    )
-                                }
-                                addAll(
-                                    listOf(
-                                        AppBar.OverflowAction(
-                                            title = stringResource(MR.strings.action_enable_all),
-                                            onClick = onClickEnableAll,
-                                        ),
-                                        AppBar.OverflowAction(
-                                            title = stringResource(MR.strings.action_disable_all),
-                                            onClick = onClickDisableAll,
-                                        ),
-                                        AppBar.OverflowAction(
-                                            title = stringResource(MR.strings.pref_clear_cookies),
-                                            onClick = onClickClearCookies,
-                                        ),
-                                    ),
-                                )
-                            }
-                            .build(),
-                    )
-                },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -155,6 +105,8 @@ fun AnimeExtensionDetailsScreen(
             migrateItems = state.migrateItems,
             incognitoMode = state.isIncognito,
             onClickSourcePreferences = onClickSourcePreferences,
+            onClickEnableAll = onClickEnableAll,
+            onClickDisableAll = onClickDisableAll,
             onClickUninstall = onClickUninstall,
             onClickSource = onClickSource,
             onClickIncognito = onClickIncognito,
@@ -171,6 +123,8 @@ private fun AnimeExtensionDetails(
     migrateItems: ImmutableList<AnimeExtensionDetailsScreenModel.MigrateAnimeItem>,
     incognitoMode: Boolean,
     onClickSourcePreferences: (sourceId: Long) -> Unit,
+    onClickEnableAll: () -> Unit,
+    onClickDisableAll: () -> Unit,
     onClickUninstall: () -> Unit,
     onClickSource: (sourceId: Long) -> Unit,
     onClickIncognito: (Boolean) -> Unit,
@@ -192,6 +146,10 @@ private fun AnimeExtensionDetails(
             DetailsHeader(
                 extension = extension,
                 extIncognitoMode = incognitoMode,
+                isExtensionEnabled = sources.any { it.enabled },
+                onToggleExtension = { enabled ->
+                    if (enabled) onClickEnableAll() else onClickDisableAll()
+                },
                 onClickUninstall = onClickUninstall,
                 onClickAppInfo = {
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -210,7 +168,8 @@ private fun AnimeExtensionDetails(
         item {
             Text(
                 text = stringResource(MR.strings.label_languages),
-                style = MaterialTheme.typography.titleMedium,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
@@ -233,7 +192,8 @@ private fun AnimeExtensionDetails(
         item {
             Text(
                 text = stringResource(MR.strings.label_migration),
-                style = MaterialTheme.typography.titleMedium,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
@@ -284,6 +244,8 @@ private fun AnimeExtensionDetails(
 private fun DetailsHeader(
     extension: AnimeExtension,
     extIncognitoMode: Boolean,
+    isExtensionEnabled: Boolean,
+    onToggleExtension: (Boolean) -> Unit,
     onClickAgeRating: () -> Unit,
     onClickUninstall: () -> Unit,
     onClickAppInfo: (() -> Unit)?,
@@ -328,7 +290,8 @@ private fun DetailsHeader(
         ) {
             AnimeExtensionIcon(
                 modifier = Modifier
-                    .size(72.dp),
+                    .size(72.dp)
+                    .then(if (!isExtensionEnabled) Modifier.alpha(0.4f) else Modifier),
                 extension = extension,
                 density = DisplayMetrics.DENSITY_XXXHIGH,
             )
@@ -336,7 +299,9 @@ private fun DetailsHeader(
             Spacer(modifier = Modifier.width(MaterialTheme.padding.medium))
 
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(if (!isExtensionEnabled) Modifier.alpha(0.4f) else Modifier),
             ) {
                 Text(
                     text = extension.name,
@@ -344,24 +309,6 @@ private fun DetailsHeader(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-
-                val displayUrl = when (extension) {
-                    is AnimeExtension.Installed -> {
-                        extension.repoUrl
-                            ?: extension.sources.firstNotNullOfOrNull { (it as? AnimeHttpSource)?.baseUrl }
-                    }
-                    is AnimeExtension.Available -> extension.repoUrl
-                    else -> null
-                }
-                if (!displayUrl.isNullOrBlank()) {
-                    Text(
-                        text = displayUrl,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
 
                 Spacer(modifier = Modifier.height(2.dp))
 
@@ -400,6 +347,11 @@ private fun DetailsHeader(
                     }
                 }
             }
+
+            Switch(
+                checked = isExtensionEnabled,
+                onCheckedChange = onToggleExtension,
+            )
         }
 
         Row(
@@ -445,8 +397,6 @@ private fun DetailsHeader(
                 }
             },
         )
-
-        HorizontalDivider()
     }
 }
 

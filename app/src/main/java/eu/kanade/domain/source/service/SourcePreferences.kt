@@ -86,6 +86,10 @@ class SourcePreferences(
     fun mangaExtensionUpdatesCount() = preferenceStore.getInt("ext_updates_count", 0)
     fun novelExtensionUpdatesCount() = preferenceStore.getInt("novel_ext_updates_count", 0)
 
+    // Browse card design
+    fun browseCardDesign() = preferenceStore.getBoolean("browse_card_design", false)
+    fun browseCardColumns() = preferenceStore.getInt("browse_card_columns", 2)
+
     fun hideInAnimeLibraryItems() = preferenceStore.getBoolean(
         "browse_hide_in_anime_library_items",
         false,

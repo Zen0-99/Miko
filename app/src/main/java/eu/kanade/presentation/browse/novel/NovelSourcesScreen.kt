@@ -1,7 +1,10 @@
 package eu.kanade.presentation.browse.novel
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import eu.kanade.presentation.browse.components.ExtensionCard
 import eu.kanade.presentation.browse.novel.components.BaseNovelSourceItem
 import eu.kanade.presentation.browse.novel.components.NovelExtensionIcon
 import eu.kanade.tachiyomi.extension.InstallStep
@@ -78,6 +82,8 @@ fun NovelSourcesScreen(
     onClickTrustExtension: (NovelExtension.Untrusted) -> Unit = {},
     downloadStates: SnapshotStateMap<String, InstallStep> = mutableStateMapOf(),
     sourcesWithUpdates: Set<Long> = emptySet(),
+    cardDesign: Boolean = false,
+    cardColumns: Int = 2,
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
@@ -97,6 +103,22 @@ fun NovelSourcesScreen(
             modifier = Modifier.padding(contentPadding),
         )
         else -> {
+            if (cardDesign) {
+                NovelSourcesCardView(
+                    items = visibleItems,
+                    contentPadding = contentPadding + topSmallPaddingValues,
+                    notInstalledExpanded = notInstalledExpanded,
+                    onToggleNotInstalled = { notInstalledExpanded = !notInstalledExpanded },
+                    cardColumns = cardColumns,
+                    sourcesWithUpdates = sourcesWithUpdates,
+                    onClickItem = onClickItem,
+                    onLongClickItem = onLongClickItem,
+                    onClickExtension = onClickExtension,
+                    onClickInstallExtension = onClickInstallExtension,
+                    onClickTrustExtension = onClickTrustExtension,
+                    downloadStates = downloadStates,
+                )
+            } else {
             FastScrollLazyColumn(
                 contentPadding = contentPadding + topSmallPaddingValues,
             ) {
@@ -169,6 +191,129 @@ fun NovelSourcesScreen(
                                 extension = model.extension,
                                 onClickTrust = onClickTrustExtension,
                             )
+                        }
+                    }
+                }
+            }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovelSourcesCardView(
+    items: List<NovelSourceUiModel>,
+    contentPadding: PaddingValues,
+    notInstalledExpanded: Boolean,
+    onToggleNotInstalled: () -> Unit,
+    cardColumns: Int,
+    sourcesWithUpdates: Set<Long>,
+    onClickItem: (NovelSource, Listing) -> Unit,
+    onLongClickItem: (NovelSource) -> Unit,
+    onClickExtension: (NovelSource) -> Unit,
+    onClickInstallExtension: (NovelExtension.Available) -> Unit,
+    onClickTrustExtension: (NovelExtension.Untrusted) -> Unit,
+    downloadStates: SnapshotStateMap<String, InstallStep>,
+) {
+    // Group items by section (header + items)
+    val sectionedItems = remember(items) {
+        val sections = mutableListOf<Pair<NovelSourceUiModel.Header?, List<NovelSourceUiModel>>>()
+        var currentHeader: NovelSourceUiModel.Header? = null
+        var currentItems = mutableListOf<NovelSourceUiModel>()
+        for (item in items) {
+            when (item) {
+                is NovelSourceUiModel.Header -> {
+                    if (currentHeader != null || currentItems.isNotEmpty()) {
+                        sections.add(currentHeader to currentItems)
+                    }
+                    currentHeader = item
+                    currentItems = mutableListOf()
+                }
+                else -> currentItems.add(item)
+            }
+        }
+        if (currentHeader != null || currentItems.isNotEmpty()) {
+            sections.add(currentHeader to currentItems)
+        }
+        sections
+    }
+
+    FastScrollLazyColumn(
+        contentPadding = contentPadding,
+    ) {
+        sectionedItems.forEach { (header, sectionItems) ->
+            item(key = header?.hashCode() ?: "no-header") {
+                if (header != null) {
+                    when (header.language) {
+                        NovelSourcesScreenModel.NOT_INSTALLED_KEY -> {
+                            NovelSourceSectionHeader(
+                                text = stringResource(MR.strings.ext_not_installed),
+                                expanded = notInstalledExpanded,
+                                onClick = onToggleNotInstalled,
+                            )
+                        }
+                        NovelSourcesScreenModel.INSTALLED_KEY -> {
+                            NovelSourceSectionHeader(
+                                text = stringResource(MR.strings.ext_installed),
+                            )
+                        }
+                        else -> {
+                            SourceHeader(language = header.language)
+                        }
+                    }
+                }
+            }
+
+            // Render items as cards in FlowRow
+            if (header?.language != NovelSourcesScreenModel.NOT_INSTALLED_KEY || notInstalledExpanded) {
+                item(key = "cards-${header?.hashCode() ?: "no-header"}") {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        maxItemsInEachRow = cardColumns,
+                    ) {
+                        sectionItems.forEach { model ->
+                            when (model) {
+                                is NovelSourceUiModel.Item -> {
+                                    val cardWidth = when (cardColumns) {
+                                        1 -> 1f
+                                        2 -> 0.5f
+                                        else -> 0.33f
+                                    }
+                                    Box(modifier = Modifier.weight(cardWidth)) {
+                                        ExtensionCard(
+                                            title = model.source.name,
+                                            lang = model.source.lang.uppercase(),
+                                            version = "",
+                                            iconUrl = null,
+                                            hasUpdate = model.source.id in sourcesWithUpdates,
+                                            onClick = { onClickItem(model.source, Listing.Popular) },
+                                            onCogClick = { onClickExtension(model.source) },
+                                        )
+                                    }
+                                }
+                                is NovelSourceUiModel.AvailableExtension -> {
+                                    val cardWidth = when (cardColumns) {
+                                        1 -> 1f
+                                        2 -> 0.5f
+                                        else -> 0.33f
+                                    }
+                                    Box(modifier = Modifier.weight(cardWidth)) {
+                                        ExtensionCard(
+                                            title = model.extension.name,
+                                            lang = model.extension.lang.uppercase(),
+                                            version = model.extension.versionName,
+                                            iconUrl = null,
+                                            onClick = { onClickInstallExtension(model.extension) },
+                                            onCogClick = {},
+                                        )
+                                    }
+                                }
+                                else -> {}
+                            }
                         }
                     }
                 }
