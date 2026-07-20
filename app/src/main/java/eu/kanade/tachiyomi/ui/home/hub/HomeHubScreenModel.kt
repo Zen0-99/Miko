@@ -93,6 +93,27 @@ class HomeHubScreenModel(
                     greetingReady = true,
                     hero = modeAwareHero,
                     currentMode = currentMode,
+                    // Restore cached recommendations (filtered by current mode)
+                    recommendations = cached.recommendations
+                        .filter { rec ->
+                            rec.mediaType == when (currentMode) {
+                                ContentMode.ANIME -> HomeHubMediaType.ANIME.key
+                                ContentMode.MANGA -> HomeHubMediaType.MANGA.key
+                                ContentMode.NOVEL -> HomeHubMediaType.NOVEL.key
+                            }
+                        }
+                        .map { rec ->
+                            HomeHubCardItem(
+                                id = rec.id,
+                                title = rec.title,
+                                coverData = rec.coverUrl,
+                                mediaType = when (rec.mediaType) {
+                                    HomeHubMediaType.ANIME.key -> HomeHubMediaType.ANIME
+                                    HomeHubMediaType.MANGA.key -> HomeHubMediaType.MANGA
+                                    else -> HomeHubMediaType.NOVEL
+                                },
+                            )
+                        },
                 )
             }
         } else {
@@ -466,10 +487,21 @@ class HomeHubScreenModel(
             }
         }
 
+        // Cache recommendations
+        val cachedRecs = mutableState.value.recommendations.map { rec ->
+            CachedRecommendationItem(
+                id = rec.id,
+                title = rec.title,
+                coverUrl = rec.coverData as? String,
+                mediaType = rec.mediaType.key,
+            )
+        }
+
         fastCache.save(
             CachedHomeHubState(
                 hero = cachedHero,
                 history = cachedHistory,
+                recommendations = cachedRecs,
                 userName = uiPreferences.userName().get(),
                 isInitialized = true,
             ),

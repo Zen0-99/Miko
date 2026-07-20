@@ -201,6 +201,7 @@ private fun HomeHubContent(
                     SectionHeader(
                         title = stringResource(AYMR.strings.home_recommendations),
                         topPadding = 32.dp,
+                        onViewAll = { tabNavigator.current = BrowseTab },
                     )
                 }
                 item(key = "recommendations_row") {
@@ -316,28 +317,34 @@ private fun HomeHubContent(
         }
         }
 
-        // Selection mode overlay top bar — stays visible while scrolling
+        // Selection mode overlay top bar — sits above the global top bar, same height
         if (state.selectionMode) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 3.dp,
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopStart),
             ) {
-                AppBar(
-                    title = "${state.selection.size}",
-                    actions = {
-                        AppBarActions(
-                            persistentListOf(
-                                AppBar.Action(
-                                    title = "Delete",
-                                    icon = Icons.Outlined.Delete,
-                                    onClick = { screenModel.deleteSelectedItems() },
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 4.dp,
+                ) {
+                    AppBar(
+                        title = "${state.selection.size}",
+                        actions = {
+                            AppBarActions(
+                                persistentListOf(
+                                    AppBar.Action(
+                                        title = "Delete",
+                                        icon = Icons.Outlined.Delete,
+                                        onClick = { screenModel.deleteSelectedItems() },
+                                    ),
                                 ),
-                            ),
-                        )
-                    },
-                    navigateUp = screenModel::clearSelection,
-                )
+                            )
+                        },
+                        navigateUp = screenModel::clearSelection,
+                    )
+                }
             }
         }
     }

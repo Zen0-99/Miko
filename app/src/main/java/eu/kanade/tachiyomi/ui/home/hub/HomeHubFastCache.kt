@@ -32,6 +32,7 @@ class HomeHubFastCache(context: Context) {
 
         val heroJson = prefs.getString(KEY_HERO, null)
         val historyJson = prefs.getString(KEY_HISTORY, null)
+        val recsJson = prefs.getString(KEY_RECOMMENDATIONS, null)
         val userName = prefs.getString(KEY_USER_NAME, "") ?: ""
         val initialized = prefs.getBoolean(KEY_INITIALIZED, false)
 
@@ -39,6 +40,9 @@ class HomeHubFastCache(context: Context) {
             hero = heroJson?.let { runCatching { json.decodeFromString<CachedHeroItem>(it) }.getOrNull() },
             history = historyJson?.let {
                 runCatching { json.decodeFromString<List<CachedHistoryItem>>(it) }.getOrNull()
+            } ?: emptyList(),
+            recommendations = recsJson?.let {
+                runCatching { json.decodeFromString<List<CachedRecommendationItem>>(it) }.getOrNull()
             } ?: emptyList(),
             userName = userName,
             isInitialized = initialized,
@@ -56,6 +60,7 @@ class HomeHubFastCache(context: Context) {
         prefs.edit().apply {
             putString(KEY_HERO, state.hero?.let { json.encodeToString(it) })
             putString(KEY_HISTORY, json.encodeToString(state.history))
+            putString(KEY_RECOMMENDATIONS, json.encodeToString(state.recommendations))
             putString(KEY_USER_NAME, state.userName)
             putBoolean(KEY_INITIALIZED, state.isInitialized)
             apply()
@@ -75,6 +80,7 @@ class HomeHubFastCache(context: Context) {
     companion object {
         private const val KEY_HERO = "hero"
         private const val KEY_HISTORY = "history"
+        private const val KEY_RECOMMENDATIONS = "recommendations"
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_INITIALIZED = "initialized"
     }
@@ -84,6 +90,7 @@ class HomeHubFastCache(context: Context) {
 data class CachedHomeHubState(
     val hero: CachedHeroItem? = null,
     val history: List<CachedHistoryItem> = emptyList(),
+    val recommendations: List<CachedRecommendationItem> = emptyList(),
     val userName: String = "",
     val isInitialized: Boolean = false,
 ) {
@@ -109,5 +116,13 @@ data class CachedHistoryItem(
     val progressNumber: Double,
     val coverUrl: String?,
     val coverLastModified: Long,
+    val mediaType: String,
+)
+
+@Serializable
+data class CachedRecommendationItem(
+    val id: Long,
+    val title: String,
+    val coverUrl: String?,
     val mediaType: String,
 )

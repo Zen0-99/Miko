@@ -6,6 +6,7 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -48,15 +49,24 @@ fun Screen.animeSourcesTab(): TabContent {
     val state by screenModel.state.collectAsState()
     val extensionManager = remember { Injekt.get<AnimeExtensionManager>() }
 
-    // Track which source IDs have extension updates available
-    val sourcesWithUpdates by extensionManager.installedExtensionsFlow
-        .map { extensions ->
-            extensions.filter { it.hasUpdate }
+    // Track which source IDs have extension updates available + extension info for cards
+    val installedExtensions by extensionManager.installedExtensionsFlow.collectAsState(emptyList())
+    val sourcesWithUpdates by remember(installedExtensions) {
+        derivedStateOf {
+            installedExtensions.filter { it.hasUpdate }
                 .flatMap { it.sources }
                 .map { it.id }
                 .toSet()
         }
-        .collectAsState(emptySet())
+    }
+    // Map source ID → extension info for card rendering
+    val sourceExtensionMap by remember(installedExtensions) {
+        derivedStateOf {
+            installedExtensions.flatMap { ext ->
+                ext.sources.map { source -> source.id to ext }
+            }.toMap()
+        }
+    }
 
     val sourcePreferences: SourcePreferences = remember { Injekt.get() }
     val cardDesign by sourcePreferences.browseCardDesign().changes().collectAsState(false)
@@ -83,6 +93,7 @@ fun Screen.animeSourcesTab(): TabContent {
                 sourcesWithUpdates = sourcesWithUpdates,
                 cardDesign = cardDesign,
                 cardColumns = cardColumns,
+                sourceExtensionMap = sourceExtensionMap,
                 onClickItem = { source, listing ->
                     navigator.push(BrowseAnimeSourceScreen(source.id, listing.query))
                 },
@@ -94,6 +105,16 @@ fun Screen.animeSourcesTab(): TabContent {
                     val pkgName = extensionManager.getExtensionPackage(source.id)
                     if (pkgName != null) {
                         navigator.push(AnimeExtensionDetailsScreen(pkgName))
+                    }
+                },
+                onClickUpdate = { source ->
+                    val ext = sourceExtensionMap[source.id]
+                    if (ext != null) {
+                        scope.launch {
+                            extensionManager.updateExtension(ext).collect { step ->
+                                downloadStates[ext.pkgName] = step
+                            }
+                        }
                     }
                 },
                 onClickInstallExtension = { extension ->

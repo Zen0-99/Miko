@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -49,15 +50,24 @@ fun Screen.novelSourcesTab(): TabContent {
     val state by screenModel.state.collectAsState()
     val extensionManager = remember { Injekt.get<NovelExtensionManager>() }
 
-    // Track which source IDs have extension updates available
-    val sourcesWithUpdates by extensionManager.installedExtensionsFlow
-        .map { extensions ->
-            extensions.filter { it.hasUpdate }
+    // Track which source IDs have extension updates available + extension info for cards
+    val installedExtensions by extensionManager.installedExtensionsFlow.collectAsState(emptyList())
+    val sourcesWithUpdates by remember(installedExtensions) {
+        derivedStateOf {
+            installedExtensions.filter { it.hasUpdate }
                 .flatMap { it.sources }
                 .map { it.id }
                 .toSet()
         }
-        .collectAsState(emptySet())
+    }
+    // Map source ID → extension info for card rendering
+    val sourceExtensionMap by remember(installedExtensions) {
+        derivedStateOf {
+            installedExtensions.flatMap { ext ->
+                ext.sources.map { source -> source.id to ext }
+            }.toMap()
+        }
+    }
 
     val sourcePreferences: SourcePreferences = remember { Injekt.get() }
     val cardDesign by sourcePreferences.browseCardDesign().changes().collectAsState(false)
@@ -84,6 +94,7 @@ fun Screen.novelSourcesTab(): TabContent {
                 sourcesWithUpdates = sourcesWithUpdates,
                 cardDesign = cardDesign,
                 cardColumns = cardColumns,
+                sourceExtensionMap = sourceExtensionMap,
                 onClickItem = { source, listing ->
                     Log.d("NovelSearch", "[novelSourcesTab] onClickItem - source=${source.name} (id=${source.id}), listing.query='${listing.query}', pushing BrowseNovelSourceScreen")
                     navigator.push(BrowseNovelSourceScreen(source.id, listing.query))
@@ -96,6 +107,16 @@ fun Screen.novelSourcesTab(): TabContent {
                     val pkgName = extensionManager.getExtensionPackage(source.id)
                     if (pkgName != null) {
                         navigator.push(NovelExtensionDetailsScreen(pkgName))
+                    }
+                },
+                onClickUpdate = { source ->
+                    val ext = sourceExtensionMap[source.id]
+                    if (ext != null) {
+                        scope.launch {
+                            extensionManager.updateExtension(ext).collect { step ->
+                                downloadStates[ext.pkgName] = step
+                            }
+                        }
                     }
                 },
                 onClickInstallExtension = { extension ->

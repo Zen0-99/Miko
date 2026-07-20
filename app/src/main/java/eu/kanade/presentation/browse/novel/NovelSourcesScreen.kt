@@ -84,6 +84,8 @@ fun NovelSourcesScreen(
     sourcesWithUpdates: Set<Long> = emptySet(),
     cardDesign: Boolean = false,
     cardColumns: Int = 2,
+    sourceExtensionMap: Map<Long, NovelExtension.Installed> = emptyMap(),
+    onClickUpdate: (NovelSource) -> Unit = {},
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
@@ -111,9 +113,11 @@ fun NovelSourcesScreen(
                     onToggleNotInstalled = { notInstalledExpanded = !notInstalledExpanded },
                     cardColumns = cardColumns,
                     sourcesWithUpdates = sourcesWithUpdates,
+                    sourceExtensionMap = sourceExtensionMap,
                     onClickItem = onClickItem,
                     onLongClickItem = onLongClickItem,
                     onClickExtension = onClickExtension,
+                    onClickUpdate = onClickUpdate,
                     onClickInstallExtension = onClickInstallExtension,
                     onClickTrustExtension = onClickTrustExtension,
                     downloadStates = downloadStates,
@@ -211,9 +215,11 @@ private fun NovelSourcesCardView(
     onClickItem: (NovelSource, Listing) -> Unit,
     onLongClickItem: (NovelSource) -> Unit,
     onClickExtension: (NovelSource) -> Unit,
+    onClickUpdate: (NovelSource) -> Unit,
     onClickInstallExtension: (NovelExtension.Available) -> Unit,
     onClickTrustExtension: (NovelExtension.Untrusted) -> Unit,
     downloadStates: SnapshotStateMap<String, InstallStep>,
+    sourceExtensionMap: Map<Long, NovelExtension.Installed>,
 ) {
     // Group items by section (header + items)
     val sectionedItems = remember(items) {
@@ -283,15 +289,20 @@ private fun NovelSourcesCardView(
                                         2 -> 0.5f
                                         else -> 0.33f
                                     }
+                                    val ext = sourceExtensionMap[model.source.id]
+                                    val hasUpdate = model.source.id in sourcesWithUpdates
                                     Box(modifier = Modifier.weight(cardWidth)) {
                                         ExtensionCard(
                                             title = model.source.name,
                                             lang = model.source.lang.uppercase(),
-                                            version = "",
+                                            version = ext?.versionName ?: "",
                                             iconUrl = null,
-                                            hasUpdate = model.source.id in sourcesWithUpdates,
+                                            hasUpdate = hasUpdate,
                                             onClick = { onClickItem(model.source, Listing.Popular) },
-                                            onCogClick = { onClickExtension(model.source) },
+                                            onCogClick = {
+                                                if (hasUpdate) onClickUpdate(model.source)
+                                                else onClickExtension(model.source)
+                                            },
                                         )
                                     }
                                 }
@@ -306,7 +317,7 @@ private fun NovelSourcesCardView(
                                             title = model.extension.name,
                                             lang = model.extension.lang.uppercase(),
                                             version = model.extension.versionName,
-                                            iconUrl = null,
+                                            iconUrl = model.extension.iconUrl,
                                             onClick = { onClickInstallExtension(model.extension) },
                                             onCogClick = {},
                                         )

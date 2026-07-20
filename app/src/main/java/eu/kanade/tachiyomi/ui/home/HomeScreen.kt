@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -183,7 +184,23 @@ object HomeScreen : Screen() {
                                 }
                             },
                             actions = {
-                                AppBarActions(sharedTopBarState.actions)
+                                // Fade between action sets on tab change.
+                                // Wrapped in a Box so old/new overlap cleanly during fade.
+                                Box {
+                                    AnimatedContent(
+                                        targetState = sharedTopBarState.actions,
+                                        transitionSpec = {
+                                            fadeIn(animationSpec = tween(150)) togetherWith
+                                                fadeOut(animationSpec = tween(150))
+                                        },
+                                        contentKey = { it.hashCode() },
+                                        label = "topbar_actions",
+                                    ) { actions ->
+                                        Row {
+                                            AppBarActions(actions)
+                                        }
+                                    }
+                                }
                             },
                             navigateUp = sharedTopBarState.navigateUp,
                             scrollBehavior = topBarScrollBehavior,

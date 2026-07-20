@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.collections.immutable.ImmutableList
@@ -303,6 +304,7 @@ fun AppBarActions(
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
+            offset = DpOffset(0.dp, 8.dp),
         ) {
             overflowActions.map { action ->
                 when (action) {

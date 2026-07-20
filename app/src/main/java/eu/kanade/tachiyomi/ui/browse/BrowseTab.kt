@@ -3,29 +3,15 @@
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -97,7 +83,6 @@ data object BrowseTab : Tab {
         val sourcePreferences: SourcePreferences = remember { Injekt.get() }
         val cardDesign by sourcePreferences.browseCardDesign().changes().collectAsState(false)
         val cardColumns by sourcePreferences.browseCardColumns().changes().collectAsState(2)
-        var showColumnSelector by remember { mutableStateOf(false) }
 
         // Register with shared top bar
         val extensionAction = listOf<AppBar.AppBarAction>(
@@ -108,10 +93,22 @@ data object BrowseTab : Tab {
         )
         val columnSelectorAction = if (cardDesign) {
             listOf<AppBar.AppBarAction>(
-                AppBar.Action(
-                    title = "Columns",
-                    icon = Icons.Outlined.GridView,
-                    onClick = { showColumnSelector = true },
+                AppBar.NestedOverflowAction(
+                    title = "Card Columns",
+                    subActions = listOf(
+                        AppBar.OverflowAction(
+                            title = "1 column",
+                            onClick = { sourcePreferences.browseCardColumns().set(1) },
+                        ),
+                        AppBar.OverflowAction(
+                            title = "2 columns",
+                            onClick = { sourcePreferences.browseCardColumns().set(2) },
+                        ),
+                        AppBar.OverflowAction(
+                            title = "3 columns",
+                            onClick = { sourcePreferences.browseCardColumns().set(3) },
+                        ),
+                    ),
                 ),
             )
         } else {
@@ -124,18 +121,6 @@ data object BrowseTab : Tab {
             title = stringResource(titleRes),
             actions = allActions,
         )
-
-        // Column selector dialog
-        if (showColumnSelector) {
-            ColumnSelectorDialog(
-                currentColumns = cardColumns,
-                onSelect = { cols ->
-                    sourcePreferences.browseCardColumns().set(cols)
-                    showColumnSelector = false
-                },
-                onDismiss = { showColumnSelector = false },
-            )
-        }
 
         Scaffold(
             topBar = {},
@@ -159,45 +144,4 @@ data object BrowseTab : Tab {
             (context as? MainActivity)?.ready = true
         }
     }
-}
-
-@Composable
-private fun ColumnSelectorDialog(
-    currentColumns: Int,
-    onSelect: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val options = listOf(1 to "1 column", 2 to "2 columns", 3 to "3 columns")
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Card columns") },
-        text = {
-            Column {
-                options.forEach { (cols, label) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(cols) }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = cols == currentColumns,
-                            onClick = { onSelect(cols) },
-                        )
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        },
-    )
 }
