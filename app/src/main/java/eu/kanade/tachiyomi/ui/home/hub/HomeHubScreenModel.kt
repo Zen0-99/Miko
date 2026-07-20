@@ -6,10 +6,6 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
-import eu.kanade.tachiyomi.data.suggestions.SuggestionCoordinator
-import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
-import eu.kanade.tachiyomi.data.suggestions.SuggestionSeed
-import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -66,13 +62,10 @@ class HomeHubScreenModel(
     private val getLibraryNovels: GetLibraryNovels = Injekt.get(),
     private val activityDataRepository: ActivityDataRepository = Injekt.get(),
     private val achievementRepository: AchievementRepository = Injekt.get(),
-    private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
 ) : StateScreenModel<HomeHubState>(HomeHubState()) {
 
     private val fastCache = HomeHubFastCache(context)
     private var lastCombinedData: HomeHubCombinedData? = null
-    // Raw suggestion items keyed by recommendation card ID, for navigation on click
-    private val recommendationItems: MutableMap<Long, SuggestionItem> = mutableMapOf()
 
     init {
         // --- Fast cache: apply cached snapshot synchronously for instant render ---
@@ -96,27 +89,7 @@ class HomeHubScreenModel(
                     greetingReady = true,
                     hero = modeAwareHero,
                     currentMode = currentMode,
-                    // Restore cached recommendations (filtered by current mode)
-                    recommendations = cached.recommendations
-                        .filter { rec ->
-                            rec.mediaType == when (currentMode) {
-                                ContentMode.ANIME -> HomeHubMediaType.ANIME.key
-                                ContentMode.MANGA -> HomeHubMediaType.MANGA.key
-                                ContentMode.NOVEL -> HomeHubMediaType.NOVEL.key
-                            }
-                        }
-                        .map { rec ->
-                            HomeHubCardItem(
-                                id = rec.id,
-                                title = rec.title,
-                                coverData = rec.coverUrl,
-                                mediaType = when (rec.mediaType) {
-                                    HomeHubMediaType.ANIME.key -> HomeHubMediaType.ANIME
-                                    HomeHubMediaType.MANGA.key -> HomeHubMediaType.MANGA
-                                    else -> HomeHubMediaType.NOVEL
-                                },
-                            )
-                        },
+                    recommendations = emptyList(),
                 )
             }
         } else {
@@ -224,32 +197,11 @@ class HomeHubScreenModel(
                         currentMode = mode,
                         // Re-resolve hero for the new mode; null if no history for it
                         hero = lastCombinedData?.let { data -> resolveHero(data) },
-                        // Clear recommendations — will be reloaded for the new mode
-                        recommendations = emptyList(),
                     )
-                }
-                // Reload recommendations for the new mode
-                val data = lastCombinedData
-                if (data != null) {
-                    loadRecommendations(data.animeHistory, data.mangaHistory, data.novelHistory)
                 }
             }
         }
-
-        // --- Load recommendations (once, based on most recent library item) ---
-        screenModelScope.launchIO {
-            // Wait until we have library data loaded, then fetch recommendations once
-            state
-                .map { Triple(it.recentAnime, it.recentManga, it.recentNovels) }
-                .filter { it.first.isNotEmpty() || it.second.isNotEmpty() || it.third.isNotEmpty() }
-                .distinctUntilChanged { _, _ -> false } // Only emit once
-                .collect { (animeHistory, mangaHistory, novelHistory) ->
-                    loadRecommendations(animeHistory, mangaHistory, novelHistory)
-                }
-        }
     }
-
-    fun getRecommendationItem(id: Long): SuggestionItem? = recommendationItems[id]
 
     fun updateUserName(name: String) {
         uiPreferences.userName().set(name)
@@ -306,89 +258,6 @@ class HomeHubScreenModel(
                     selection = emptySet(),
                 )
             }
-        }
-    }
-
-    // --- Recommendations ---
-
-    private suspend fun loadRecommendations(
-        animeHistory: List<AnimeHistoryWithRelations>,
-        mangaHistory: List<MangaHistoryWithRelations>,
-        novelHistory: List<NovelHistoryWithRelations>,
-    ) {
-        val currentMode = mutableState.value.currentMode
-
-        // Only use history from the current content mode
-        val seed: SuggestionSeed? = when (currentMode) {
-            ContentMode.ANIME -> {
-                val animeFirst = animeHistory.firstOrNull()
-                if (animeFirst != null) SuggestionSeed(
-                    mediaType = SuggestionMediaType.ANIME,
-                    primaryTitle = animeFirst.title,
-                    candidateTitles = listOf(animeFirst.title),
-                    description = null,
-                    author = null,
-                    genres = null,
-                ) else null
-            }
-            ContentMode.MANGA -> {
-                val mangaFirst = mangaHistory.firstOrNull()
-                if (mangaFirst != null) SuggestionSeed(
-                    mediaType = SuggestionMediaType.MANGA,
-                    primaryTitle = mangaFirst.title,
-                    candidateTitles = listOf(mangaFirst.title),
-                    description = null,
-                    author = null,
-                    genres = null,
-                ) else null
-            }
-            ContentMode.NOVEL -> {
-                val novelFirst = novelHistory.firstOrNull()
-                if (novelFirst != null) SuggestionSeed(
-                    mediaType = SuggestionMediaType.NOVEL,
-                    primaryTitle = novelFirst.title,
-                    candidateTitles = listOf(novelFirst.title),
-                    description = null,
-                    author = null,
-                    genres = null,
-                ) else null
-            }
-        }
-
-        if (seed == null) {
-            // No history for current mode — clear recommendations
-            mutableState.update { it.copy(recommendations = emptyList()) }
-            return
-        }
-
-        try {
-            val result = suggestionCoordinator.fetchSuggestions(seed, limit = 10)
-            // Filter results to only match the current mode
-            val modeMediaType = when (currentMode) {
-                ContentMode.ANIME -> SuggestionMediaType.ANIME
-                ContentMode.MANGA -> SuggestionMediaType.MANGA
-                ContentMode.NOVEL -> SuggestionMediaType.NOVEL
-            }
-            val recItems = result.items
-                .filter { it.mediaType == modeMediaType }
-                .take(10)
-                .map { item ->
-                    val cardId = item.providerUrl.hashCode().toLong()
-                    recommendationItems[cardId] = item
-                    HomeHubCardItem(
-                        id = cardId,
-                        title = item.title,
-                        coverData = item.thumbnailUrl,
-                        mediaType = when (item.mediaType) {
-                            SuggestionMediaType.ANIME -> HomeHubMediaType.ANIME
-                            SuggestionMediaType.MANGA -> HomeHubMediaType.MANGA
-                            SuggestionMediaType.NOVEL -> HomeHubMediaType.NOVEL
-                        },
-                    )
-                }
-            mutableState.update { it.copy(recommendations = recItems) }
-        } catch (e: Exception) {
-            // Silently fail — recommendations are optional
         }
     }
 

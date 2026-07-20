@@ -300,9 +300,7 @@ private fun MangaSourcesCardView(
                                             title = model.source.name,
                                             lang = model.source.lang.uppercase(),
                                             version = ext?.versionName ?: "",
-                                            iconContent = if (ext != null) {
-                                                { mod -> MangaExtensionIcon(extension = ext, modifier = mod) }
-                                            } else null,
+                                            iconDrawable = ext?.icon,
                                             hasUpdate = hasUpdate,
                                             isUpdating = isUpdating,
                                             onClick = { onClickItem(model.source, Listing.Popular) },

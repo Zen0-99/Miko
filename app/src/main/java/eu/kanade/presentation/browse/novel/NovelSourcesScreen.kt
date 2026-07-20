@@ -299,9 +299,7 @@ private fun NovelSourcesCardView(
                                             title = model.source.name,
                                             lang = model.source.lang.uppercase(),
                                             version = ext?.versionName ?: "",
-                                            iconContent = if (ext != null) {
-                                                { mod -> NovelExtensionIcon(extension = ext, modifier = mod) }
-                                            } else null,
+                                            iconDrawable = ext?.icon,
                                             hasUpdate = hasUpdate,
                                             isUpdating = isUpdating,
                                             onClick = { onClickItem(model.source, Listing.Popular) },

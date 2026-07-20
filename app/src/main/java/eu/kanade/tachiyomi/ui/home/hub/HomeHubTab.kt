@@ -217,35 +217,6 @@ private fun HomeHubContent(
                 } ?: HomeHubHeroPlaceholder()
             }
 
-            // --- Recommendations section ---
-            if (state.recommendations.isNotEmpty()) {
-                item(key = "recommendations_header") {
-                    SectionHeader(
-                        title = stringResource(AYMR.strings.home_recommendations),
-                        topPadding = 32.dp,
-                        onViewAll = { tabNavigator.current = BrowseTab },
-                    )
-                }
-                item(key = "recommendations_row") {
-                    HistoryRow(
-                        items = state.recommendations,
-                        onItemClick = { item ->
-                            val suggestion = screenModel.getRecommendationItem(item.id)
-                            if (suggestion != null) {
-                                scope.launch {
-                                    // Open as a direct entry if a native source target exists
-                                    val directScreen = suggestion.toDirectEntryScreenOrNull()
-                                    if (directScreen != null) {
-                                        navigator.push(directScreen)
-                                    }
-                                    // If no native source target, do nothing - don't fall back to search
-                                }
-                            }
-                        },
-                    )
-                }
-            }
-
             // --- Mode-aware section filtering ---
             when (state.currentMode) {
                 ContentMode.ANIME -> {

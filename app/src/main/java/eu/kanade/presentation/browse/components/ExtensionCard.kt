@@ -1,5 +1,7 @@
 package eu.kanade.presentation.browse.components
 
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,24 +25,38 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
+import androidx.core.graphics.drawable.toBitmap
+import androidx.palette.graphics.Palette
+import coil3.asDrawable
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.request.bitmapConfig
+import coil3.size.Precision
+import coil3.size.Scale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
  * A horizontal rectangle card for displaying extensions in browse.
- * The extension icon is used as a large blurred background fill via [iconContent].
+ * The background is a gradient sampled from 3 distinct colors extracted from
+ * the extension icon via Palette.
  * Bold title in top-left, language below, version inline with language (dot-separated).
  * Settings cog (or download icon when update available) in bottom-right.
  * When [isUpdating] is true, a progress indicator replaces the cog.
@@ -50,8 +66,8 @@ fun ExtensionCard(
     title: String,
     lang: String,
     version: String,
+    iconDrawable: Drawable? = null,
     iconUrl: String? = null,
-    iconContent: (@Composable (Modifier) -> Unit)? = null,
     hasUpdate: Boolean = false,
     isUpdating: Boolean = false,
     supportsComments: Boolean = false,
@@ -59,14 +75,21 @@ fun ExtensionCard(
     onCogClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Saturation boost color matrix (1.6x saturation)
-    val saturationMatrix = ColorMatrix(
-        floatArrayOf(
-            1.6f, 0f, 0f, 0f, 0f,
-            0f, 1.6f, 0f, 0f, 0f,
-            0f, 0f, 1.6f, 0f, 0f,
-            0f, 0f, 0f, 1f, 0f,
-        ),
+    val context = LocalContext.current
+    var gradientColors by remember(title) {
+        mutableStateOf<List<Color>?>(null)
+    }
+
+    // Extract 3 distinct colors from the icon
+    LaunchedEffect(iconDrawable, iconUrl) {
+        gradientColors = extractGradientColors(context, iconDrawable, iconUrl)
+    }
+
+    // Fallback colors if extraction fails or is loading
+    val colors = gradientColors ?: listOf(
+        MaterialTheme.colorScheme.surfaceVariant,
+        MaterialTheme.colorScheme.surfaceVariant,
+        MaterialTheme.colorScheme.surfaceVariant,
     )
 
     Surface(
@@ -79,35 +102,22 @@ fun ExtensionCard(
         shadowElevation = 4.dp,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Blurred icon as large background fill - scaled up and heavily blurred
-            if (iconContent != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(32.dp),
-                ) {
-                    // Render icon at 1.6x size so it fills the card generously
-                    iconContent(
-                        Modifier.fillMaxSize(1.6f),
-                    )
-                }
-            } else if (iconUrl != null) {
-                AsyncImage(
-                    model = iconUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    colorFilter = ColorFilter.colorMatrix(saturationMatrix),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(32.dp),
-                )
-            }
-
-            // Dark overlay for text readability
+            // Gradient background from 3 sampled colors
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f)),
+                    .background(
+                        Brush.linearGradient(
+                            colors = colors,
+                        ),
+                    ),
+            )
+
+            // Subtle dark overlay for text readability
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f)),
             )
 
             // Content
@@ -179,5 +189,83 @@ fun ExtensionCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Extracts 3 distinct colors from an icon (Drawable or URL) using Palette.
+ * Returns a list of 3 Colors suitable for a gradient.
+ */
+private suspend fun extractGradientColors(
+    context: android.content.Context,
+    drawable: Drawable?,
+    url: String?,
+): List<Color> {
+    val bitmap = when {
+        drawable != null -> drawable.toBitmap(128, 128)
+        url != null -> loadBitmapFromUrl(context, url)
+        else -> return emptyList()
+    } ?: return emptyList()
+
+    return withContext(Dispatchers.Default) {
+        val palette = Palette.from(bitmap).generate()
+        // Get 3 distinct swatches: dominant, vibrant, muted
+        val dominant = palette.dominantSwatch?.rgb
+        val vibrant = palette.vibrantSwatch?.rgb
+            ?: palette.lightVibrantSwatch?.rgb
+            ?: palette.darkVibrantSwatch?.rgb
+        val muted = palette.mutedSwatch?.rgb
+            ?: palette.lightMutedSwatch?.rgb
+            ?: palette.darkMutedSwatch?.rgb
+
+        // Build the 3-color list, filling gaps with dominant or a default
+        val colors = mutableListOf<Int>()
+        if (dominant != null) colors.add(dominant)
+        if (vibrant != null && colors.size < 3) colors.add(vibrant)
+        if (muted != null && colors.size < 3) colors.add(muted)
+
+        // Fill remaining slots with dominant or derived colors
+        while (colors.size < 3) {
+            colors.add(dominant ?: 0xFF444444.toInt())
+        }
+
+        // Boost saturation for each color
+        colors.map { boostSaturation(Color(it)) }
+    }
+}
+
+private fun boostSaturation(color: Color): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.RGBToHSV(
+        (color.red * 255).toInt(),
+        (color.green * 255).toInt(),
+        (color.blue * 255).toInt(),
+        hsv,
+    )
+    // Boost saturation to at least 0.5 for vivid gradient
+    if (hsv[1] < 0.5f) {
+        hsv[1] = (hsv[1] + 0.3f).coerceAtMost(1.0f)
+    }
+    val argb = android.graphics.Color.HSVToColor(hsv)
+    return Color(argb)
+}
+
+private suspend fun loadBitmapFromUrl(
+    context: android.content.Context,
+    url: String,
+): Bitmap? {
+    return withContext(Dispatchers.IO) {
+        val loader = context.imageLoader
+        val request = ImageRequest.Builder(context)
+            .data(url)
+            .size(128, 128)
+            .scale(Scale.FILL)
+            .precision(Precision.INEXACT)
+            .bitmapConfig(Bitmap.Config.ARGB_8888)
+            .build()
+        val drawable = runCatching {
+            loader.execute(request).image?.asDrawable(context.resources)
+        }.getOrNull()
+        drawable?.toBitmap(128, 128)
     }
 }
