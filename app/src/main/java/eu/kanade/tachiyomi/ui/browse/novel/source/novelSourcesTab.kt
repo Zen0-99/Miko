@@ -115,6 +115,9 @@ fun Screen.novelSourcesTab(): TabContent {
                         scope.launch {
                             extensionManager.updateExtension(ext).collect { step ->
                                 downloadStates[ext.pkgName] = step
+                                if (step == InstallStep.Installed || step == InstallStep.Error) {
+                                    downloadStates.remove(ext.pkgName)
+                                }
                             }
                         }
                     }

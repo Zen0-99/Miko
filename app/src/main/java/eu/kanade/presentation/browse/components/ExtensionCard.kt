@@ -27,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +59,16 @@ fun ExtensionCard(
     onCogClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Saturation boost color matrix (1.6x saturation)
+    val saturationMatrix = ColorMatrix(
+        floatArrayOf(
+            1.6f, 0f, 0f, 0f, 0f,
+            0f, 1.6f, 0f, 0f, 0f,
+            0f, 0f, 1.6f, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f,
+        ),
+    )
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -67,21 +79,27 @@ fun ExtensionCard(
         shadowElevation = 4.dp,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Blurred icon as large background fill
+            // Blurred icon as large background fill - scaled up and heavily blurred
             if (iconContent != null) {
-                iconContent(
-                    Modifier
+                Box(
+                    modifier = Modifier
                         .fillMaxSize()
-                        .blur(24.dp),
-                )
+                        .blur(32.dp),
+                ) {
+                    // Render icon at 1.6x size so it fills the card generously
+                    iconContent(
+                        Modifier.fillMaxSize(1.6f),
+                    )
+                }
             } else if (iconUrl != null) {
                 AsyncImage(
                     model = iconUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    colorFilter = ColorFilter.colorMatrix(saturationMatrix),
                     modifier = Modifier
                         .fillMaxSize()
-                        .blur(24.dp),
+                        .blur(32.dp),
                 )
             }
 
@@ -114,8 +132,8 @@ fun ExtensionCard(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        // Language · Version (only show dot separator if version is non-empty)
-                        val langVersion = if (version.isNotBlank()) "$lang · $version" else lang
+                        // Language - Version (only show dot separator if version is non-empty)
+                        val langVersion = if (version.isNotBlank()) "$lang - $version" else lang
                         Text(
                             text = langVersion,
                             fontSize = 12.sp,

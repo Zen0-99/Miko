@@ -91,7 +91,6 @@ import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import kotlinx.coroutines.launch
 import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
-import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -139,12 +138,32 @@ private fun HomeHubContent(
     val tabNavigator = LocalTabNavigator.current
     val scope = rememberCoroutineScope()
 
-    // Register with shared top bar — only when NOT in selection mode
-    // Selection mode uses a separate overlay top bar that stays visible while scrolling
-    useSharedTopBar(
-        title = stringResource(AYMR.strings.label_home),
-        actions = globalOverflowActions(onClickSettings = { navigator.push(SettingsScreen()) }),
-    )
+    // Clear selection mode when navigating away from Home tab
+    LaunchedEffect(tabNavigator.current) {
+        if (tabNavigator.current !is HomeHubTab && state.selectionMode) {
+            screenModel.clearSelection()
+        }
+    }
+
+    // Register with shared top bar — use selection-mode actions when in selection mode
+    if (state.selectionMode) {
+        useSharedTopBar(
+            title = "${state.selection.size}",
+            actions = persistentListOf(
+                AppBar.Action(
+                    title = "Delete",
+                    icon = Icons.Outlined.Delete,
+                    onClick = { screenModel.deleteSelectedItems() },
+                ),
+            ),
+            navigateUp = screenModel::clearSelection,
+        )
+    } else {
+        useSharedTopBar(
+            title = stringResource(AYMR.strings.label_home),
+            actions = globalOverflowActions(onClickSettings = { navigator.push(SettingsScreen()) }),
+        )
+    }
 
     if (state.isEmpty) {
         Scaffold(
@@ -214,12 +233,12 @@ private fun HomeHubContent(
                             val suggestion = screenModel.getRecommendationItem(item.id)
                             if (suggestion != null) {
                                 scope.launch {
+                                    // Open as a direct entry if a native source target exists
                                     val directScreen = suggestion.toDirectEntryScreenOrNull()
                                     if (directScreen != null) {
                                         navigator.push(directScreen)
-                                    } else {
-                                        navigator.push(suggestion.toGlobalSearchScreen())
                                     }
+                                    // If no native source target, do nothing - don't fall back to search
                                 }
                             }
                         },
@@ -333,37 +352,6 @@ private fun HomeHubContent(
                 }
             }
         }
-        }
-
-        // Selection mode overlay top bar — sits above the global top bar, same height
-        if (state.selectionMode) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopStart),
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 4.dp,
-                ) {
-                    AppBar(
-                        title = "${state.selection.size}",
-                        actions = {
-                            AppBarActions(
-                                persistentListOf(
-                                    AppBar.Action(
-                                        title = "Delete",
-                                        icon = Icons.Outlined.Delete,
-                                        onClick = { screenModel.deleteSelectedItems() },
-                                    ),
-                                ),
-                            )
-                        },
-                        navigateUp = screenModel::clearSelection,
-                    )
-                }
-            }
         }
     }
 }

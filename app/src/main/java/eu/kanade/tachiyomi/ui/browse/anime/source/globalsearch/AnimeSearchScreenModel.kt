@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.domain.entries.anime.interactor.GetAnime
 import tachiyomi.domain.entries.anime.interactor.NetworkToLocalAnime
@@ -157,8 +158,17 @@ abstract class AnimeSearchScreenModel(
                         return@async
                     }
                     try {
-                        val page = withContext(coroutineDispatcher) {
-                            source.getSearchAnime(1, query, source.getFilterList())
+                        val page = withTimeoutOrNull(60_000L) {
+                            withContext(coroutineDispatcher) {
+                                source.getSearchAnime(1, query, source.getFilterList())
+                            }
+                        }
+
+                        if (page == null) {
+                            if (isActive) {
+                                updateItem(source, AnimeSearchItemResult.Error(Exception("Search timed out")))
+                            }
+                            return@async
                         }
 
                         val titles = page.animes.map {

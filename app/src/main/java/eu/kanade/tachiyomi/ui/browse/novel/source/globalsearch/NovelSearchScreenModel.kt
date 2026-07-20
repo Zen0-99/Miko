@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
@@ -174,8 +175,18 @@ abstract class NovelSearchScreenModel(
                     }
                     Log.d("NovelSearch", "[NovelSearchScreenModel] search() - querying source=${source.name} (id=${source.id}, lang=${source.lang})")
                     try {
-                        val page = withContext(coroutineDispatcher) {
-                            source.getSearchNovels(1, query, source.getFilterList())
+                        val page = withTimeoutOrNull(60_000L) {
+                            withContext(coroutineDispatcher) {
+                                source.getSearchNovels(1, query, source.getFilterList())
+                            }
+                        }
+
+                        if (page == null) {
+                            Log.e("NovelSearch", "[NovelSearchScreenModel] search() - TIMEOUT (60s) querying source=${source.name}")
+                            if (isActive) {
+                                updateItem(source, NovelSearchItemResult.Error(Exception("Search timed out")))
+                            }
+                            return@async
                         }
 
                         val titles = page.novels.map {

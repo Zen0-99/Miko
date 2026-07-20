@@ -67,7 +67,8 @@ class AniListRecommendationSource(
         return when (mediaType) {
             SuggestionMediaType.ANIME -> upperType == "ANIME"
             SuggestionMediaType.MANGA -> upperType == "MANGA" && upperFormat != "NOVEL"
-            SuggestionMediaType.NOVEL -> upperType == "MANGA"
+            // For NOVEL, only accept entries that are actually novels (NOVEL format) or one-shots
+            SuggestionMediaType.NOVEL -> upperType == "MANGA" && (upperFormat == "NOVEL" || upperFormat == "ONE_SHOT")
         }
     }
 

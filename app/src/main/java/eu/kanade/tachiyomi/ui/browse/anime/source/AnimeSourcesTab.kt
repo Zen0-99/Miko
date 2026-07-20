@@ -113,6 +113,10 @@ fun Screen.animeSourcesTab(): TabContent {
                         scope.launch {
                             extensionManager.updateExtension(ext).collect { step ->
                                 downloadStates[ext.pkgName] = step
+                                // Clear state when update completes or errors so icon reverts to cog
+                                if (step == InstallStep.Installed || step == InstallStep.Error) {
+                                    downloadStates.remove(ext.pkgName)
+                                }
                             }
                         }
                     }

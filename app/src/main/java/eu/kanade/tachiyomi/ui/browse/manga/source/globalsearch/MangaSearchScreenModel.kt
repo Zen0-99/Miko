@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
@@ -157,8 +158,17 @@ abstract class MangaSearchScreenModel(
                         return@async
                     }
                     try {
-                        val page = withContext(coroutineDispatcher) {
-                            source.getSearchManga(1, query, source.getFilterList())
+                        val page = withTimeoutOrNull(60_000L) {
+                            withContext(coroutineDispatcher) {
+                                source.getSearchManga(1, query, source.getFilterList())
+                            }
+                        }
+
+                        if (page == null) {
+                            if (isActive) {
+                                updateItem(source, MangaSearchItemResult.Error(Exception("Search timed out")))
+                            }
+                            return@async
                         }
 
                         val titles = page.mangas.map {
