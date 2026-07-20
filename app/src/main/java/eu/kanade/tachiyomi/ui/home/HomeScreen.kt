@@ -183,14 +183,7 @@ object HomeScreen : Screen() {
                                 }
                             },
                             actions = {
-                                // Crossfade actions to avoid icons stacking during transition
-                                androidx.compose.animation.Crossfade(
-                                    targetState = sharedTopBarState.actions,
-                                    animationSpec = tween(200),
-                                    label = "topbar_actions",
-                                ) { actions ->
-                                    AppBarActions(actions)
-                                }
+                                AppBarActions(sharedTopBarState.actions)
                             },
                             navigateUp = sharedTopBarState.navigateUp,
                             scrollBehavior = topBarScrollBehavior,
