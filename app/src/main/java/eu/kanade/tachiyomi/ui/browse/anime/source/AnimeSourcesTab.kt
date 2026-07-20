@@ -30,6 +30,7 @@ import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.extension.InstallStep
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -45,6 +46,16 @@ fun Screen.animeSourcesTab(): TabContent {
     val screenModel = rememberScreenModel { AnimeSourcesScreenModel() }
     val state by screenModel.state.collectAsState()
     val extensionManager = remember { Injekt.get<AnimeExtensionManager>() }
+
+    // Track which source IDs have extension updates available
+    val sourcesWithUpdates by extensionManager.installedExtensionsFlow
+        .map { extensions ->
+            extensions.filter { it.hasUpdate }
+                .flatMap { it.sources }
+                .map { it.id }
+                .toSet()
+        }
+        .collectAsState(emptySet())
 
     return TabContent(
         titleRes = AYMR.strings.label_anime_sources,
@@ -64,6 +75,7 @@ fun Screen.animeSourcesTab(): TabContent {
                 state = state,
                 contentPadding = contentPadding,
                 downloadStates = downloadStates,
+                sourcesWithUpdates = sourcesWithUpdates,
                 onClickItem = { source, listing ->
                     navigator.push(BrowseAnimeSourceScreen(source.id, listing.query))
                 },

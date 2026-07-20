@@ -1,5 +1,9 @@
 package eu.kanade.presentation.components
 
+import androidx.compose.animation.graphics.ExperimentalAnimationGraphicsApi
+import androidx.compose.animation.graphics.res.animatedVectorResource
+import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
+import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -16,14 +20,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.MoreHoriz
+import eu.kanade.tachiyomi.R
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
@@ -242,6 +245,7 @@ fun AppBarTitle(
     }
 }
 
+@OptIn(ExperimentalAnimationGraphicsApi::class)
 @Composable
 fun AppBarActions(
     actions: ImmutableList<AppBar.AppBarAction>,
@@ -283,11 +287,12 @@ fun AppBarActions(
             },
             state = rememberTooltipState(),
         ) {
+            val moreImage = AnimatedImageVector.animatedVectorResource(R.drawable.anim_more_enter)
             IconButton(
                 onClick = { showMenu = !showMenu },
             ) {
                 Icon(
-                    Icons.Outlined.MoreHoriz,
+                    rememberAnimatedVectorPainter(moreImage, showMenu),
                     contentDescription = stringResource(
                         MR.strings.action_menu_overflow_description,
                     ),
@@ -298,7 +303,6 @@ fun AppBarActions(
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
-            offset = DpOffset(0.dp, 48.dp),
         ) {
             overflowActions.map { action ->
                 when (action) {

@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Button
@@ -725,7 +724,7 @@ private fun HistoryRow(
                     }
                 }
 
-                // Selection mode overlay
+                // Selection mode overlay — border like Library, no checkmark
                 if (inSelectionMode) {
                     Box(
                         modifier = Modifier
@@ -733,20 +732,14 @@ private fun HistoryRow(
                             .background(
                                 if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                                 else Color.Black.copy(alpha = 0.4f),
-                            ),
-                        contentAlignment = Alignment.TopEnd,
-                    ) {
-                        if (isSelected) {
-                            Icon(
-                                imageVector = Icons.Outlined.CheckCircle,
-                                contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .padding(6.dp)
-                                    .size(22.dp),
                             )
-                        }
-                    }
+                            .border(
+                                width = 3.dp,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary
+                                else Color.Transparent,
+                                shape = cardShape,
+                            ),
+                    )
                 }
             }
         }

@@ -82,7 +82,7 @@ data object UpdatesTab : Tab {
         val contentMode by uiPreferences.contentMode().collectAsState()
         val nestedScrollConnection = remember { object : NestedScrollConnection {} }
 
-        // Build 5 sub-tabs: Updates, History, Downloads, Stats, Calendar
+        // Build 5 sub-tabs: Updates, History, Downloads, Calendar, Stats
         // Override titleRes so tabs show their function name, not the content mode
         val updatesTab = when (contentMode) {
             ContentMode.ANIME -> animeUpdatesTab(context, fromMore = false)
@@ -100,13 +100,13 @@ data object UpdatesTab : Tab {
             ContentMode.ANIME -> animeDownloadTab(nestedScrollConnection)
             ContentMode.MANGA -> mangaDownloadTab(nestedScrollConnection)
             ContentMode.NOVEL -> novelDownloadTab(nestedScrollConnection)
-        }.copy(titleRes = MR.strings.label_download_queue, navigateUp = null)
+        }.copy(titleRes = MR.strings.label_downloads, navigateUp = null)
 
         val statsTab = when (contentMode) {
             ContentMode.ANIME -> animeStatsTab()
             ContentMode.MANGA -> mangaStatsTab()
             ContentMode.NOVEL -> mangaStatsTab() // No novel stats yet, reuse manga
-        }.copy(titleRes = MR.strings.label_stats, navigateUp = null)
+        }.copy(titleRes = MR.strings.label_stats_short, navigateUp = null)
 
         // Calendar tab — embeds the Upcoming screen content directly
         val calendarTab = when (contentMode) {
@@ -159,7 +159,7 @@ data object UpdatesTab : Tab {
 
         TabbedScreen(
             titleRes = MR.strings.label_recent_updates,
-            tabs = persistentListOf(updatesTab, historyTab, downloadsTab, statsTab, calendarTab),
+            tabs = persistentListOf(updatesTab, historyTab, downloadsTab, calendarTab, statsTab),
             scrollable = true,
             onClickSettings = { navigator.push(SettingsScreen()) },
         )

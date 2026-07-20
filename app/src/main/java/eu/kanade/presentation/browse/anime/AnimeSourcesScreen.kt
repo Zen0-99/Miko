@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PushPin
@@ -41,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.browse.anime.components.AnimeExtensionIcon
 import eu.kanade.presentation.browse.anime.components.BaseAnimeSourceItem
 import eu.kanade.tachiyomi.extension.InstallStep
@@ -75,6 +77,7 @@ fun AnimeSourcesScreen(
     onClickInstallExtension: (AnimeExtension.Available) -> Unit = {},
     onClickTrustExtension: (AnimeExtension.Untrusted) -> Unit = {},
     downloadStates: SnapshotStateMap<String, InstallStep> = mutableStateMapOf(),
+    sourcesWithUpdates: Set<Long> = emptySet(),
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
@@ -150,6 +153,7 @@ fun AnimeSourcesScreen(
                             onSwipeHide = onSwipeHide,
                             swipeToHideEnabled = swipeToHideEnabled,
                             onClickExtension = onClickExtension,
+                            hasUpdate = model.source.id in sourcesWithUpdates,
                         )
                         is AnimeSourceUiModel.AvailableExtension -> {
                             AnimeAvailableExtensionItem(
@@ -214,7 +218,8 @@ private fun AnimeSourceSectionHeader(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.titleMedium,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
@@ -241,6 +246,7 @@ private fun AnimeSourceItem(
     onSwipeHide: (AnimeSource) -> Unit,
     swipeToHideEnabled: Boolean,
     onClickExtension: (AnimeSource) -> Unit = {},
+    hasUpdate: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
@@ -262,15 +268,14 @@ private fun AnimeSourceItem(
             onClickItem = { onClickItem(source, Listing.Popular) },
             onLongClickItem = { onLongClickItem(source) },
             action = {
-                // Cog icon — opens extension details
+                // Cog icon — opens extension details. Changes to download icon when update available.
                 if (source.id != LocalAnimeSource.ID) {
                     IconButton(onClick = { onClickExtension(source) }) {
                         Icon(
-                            imageVector = Icons.Outlined.Settings,
+                            imageVector = if (hasUpdate) Icons.Outlined.Download else Icons.Outlined.Settings,
                             contentDescription = stringResource(MR.strings.label_extension_info),
-                            tint = MaterialTheme.colorScheme.onBackground.copy(
-                                alpha = SECONDARY_ALPHA,
-                            ),
+                            tint = if (hasUpdate) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
                         )
                     }
                 }

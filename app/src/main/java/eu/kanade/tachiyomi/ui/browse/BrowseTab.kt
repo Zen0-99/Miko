@@ -4,9 +4,7 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -14,11 +12,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.globalOverflowActions
@@ -83,10 +85,9 @@ data object BrowseTab : Tab {
         val titleRes = MR.strings.browse
 
         // Register with shared top bar
-        val extensionAction = listOf<AppBar.Action>(
-            AppBar.Action(
+        val extensionAction = listOf<AppBar.AppBarAction>(
+            AppBar.OverflowAction(
                 title = stringResource(MR.strings.label_extension_repos),
-                icon = Icons.Outlined.Extension,
                 onClick = { navigator.push(ConsolidatedExtensionReposScreen()) },
             ),
         )

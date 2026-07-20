@@ -3,7 +3,10 @@ package eu.kanade.tachiyomi.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -21,12 +24,15 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +47,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -110,6 +117,7 @@ object HomeScreen : Screen() {
     private val uiPreferences: UiPreferences by injectLazy()
     private val defaultTab = uiPreferences.startScreen().get().tab
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navStyle by uiPreferences.navStyle().collectAsStateWithLifecycle()
@@ -149,15 +157,40 @@ object HomeScreen : Screen() {
                 LocalSharedTopBar provides sharedTopBarState,
             ) {
                 val hazeState = remember { HazeState() }
+                val topBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(
+                    rememberTopAppBarState(),
+                )
                 Scaffold(
+                    modifier = Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection),
                     containerColor = MaterialTheme.colorScheme.background,
                     topBar = {
                         AppBar(
-                            title = sharedTopBarState.title,
+                            titleContent = {
+                                AnimatedContent(
+                                    targetState = sharedTopBarState.title,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(200)) togetherWith
+                                            fadeOut(animationSpec = tween(200))
+                                    },
+                                    label = "topbar_title",
+                                ) { title ->
+                                    Text(title)
+                                }
+                            },
                             actions = {
-                                AppBarActions(sharedTopBarState.actions)
+                                AnimatedContent(
+                                    targetState = sharedTopBarState.actions,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(200)) togetherWith
+                                            fadeOut(animationSpec = tween(200))
+                                    },
+                                    label = "topbar_actions",
+                                ) { actions ->
+                                    AppBarActions(actions)
+                                }
                             },
                             navigateUp = sharedTopBarState.navigateUp,
+                            scrollBehavior = topBarScrollBehavior,
                         )
                     },
                     startBar = {

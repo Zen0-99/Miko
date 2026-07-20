@@ -261,9 +261,12 @@ class HomeHubScreenModel(
             currentState.recentNovels.filter { it.novelId in selectedIds }.forEach {
                 novelHistoryRepository.resetNovelHistory(it.id)
             }
-            // Optimistically remove recently-added items
+            // Optimistically remove both recently-read and recently-added items
             mutableState.update { state ->
                 state.copy(
+                    recentAnime = state.recentAnime.filterNot { it.animeId in selectedIds },
+                    recentManga = state.recentManga.filterNot { it.mangaId in selectedIds },
+                    recentNovels = state.recentNovels.filterNot { it.novelId in selectedIds },
                     recentlyAddedAnime = state.recentlyAddedAnime.filterNot { it.id in selectedIds },
                     recentlyAddedManga = state.recentlyAddedManga.filterNot { it.id in selectedIds },
                     recentlyAddedNovels = state.recentlyAddedNovels.filterNot { it.id in selectedIds },

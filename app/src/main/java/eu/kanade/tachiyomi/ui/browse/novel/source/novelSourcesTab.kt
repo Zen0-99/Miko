@@ -31,6 +31,7 @@ import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.extension.InstallStep
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -46,6 +47,16 @@ fun Screen.novelSourcesTab(): TabContent {
     val screenModel = rememberScreenModel { NovelSourcesScreenModel() }
     val state by screenModel.state.collectAsState()
     val extensionManager = remember { Injekt.get<NovelExtensionManager>() }
+
+    // Track which source IDs have extension updates available
+    val sourcesWithUpdates by extensionManager.installedExtensionsFlow
+        .map { extensions ->
+            extensions.filter { it.hasUpdate }
+                .flatMap { it.sources }
+                .map { it.id }
+                .toSet()
+        }
+        .collectAsState(emptySet())
 
     return TabContent(
         titleRes = AYMR.strings.label_novel_sources,
@@ -65,6 +76,7 @@ fun Screen.novelSourcesTab(): TabContent {
                 state = state,
                 contentPadding = contentPadding,
                 downloadStates = downloadStates,
+                sourcesWithUpdates = sourcesWithUpdates,
                 onClickItem = { source, listing ->
                     Log.d("NovelSearch", "[novelSourcesTab] onClickItem - source=${source.name} (id=${source.id}), listing.query='${listing.query}', pushing BrowseNovelSourceScreen")
                     navigator.push(BrowseNovelSourceScreen(source.id, listing.query))
