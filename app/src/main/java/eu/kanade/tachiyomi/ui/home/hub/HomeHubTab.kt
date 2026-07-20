@@ -90,6 +90,8 @@ import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import kotlinx.coroutines.launch
+import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -135,6 +137,7 @@ private fun HomeHubContent(
 ) {
     val listState = rememberLazyListState()
     val tabNavigator = LocalTabNavigator.current
+    val scope = rememberCoroutineScope()
 
     // Register with shared top bar — only when NOT in selection mode
     // Selection mode uses a separate overlay top bar that stays visible while scrolling
@@ -205,7 +208,22 @@ private fun HomeHubContent(
                     )
                 }
                 item(key = "recommendations_row") {
-                    HistoryRow(items = state.recommendations, onItemClick = { })
+                    HistoryRow(
+                        items = state.recommendations,
+                        onItemClick = { item ->
+                            val suggestion = screenModel.getRecommendationItem(item.id)
+                            if (suggestion != null) {
+                                scope.launch {
+                                    val directScreen = suggestion.toDirectEntryScreenOrNull()
+                                    if (directScreen != null) {
+                                        navigator.push(directScreen)
+                                    } else {
+                                        navigator.push(suggestion.toGlobalSearchScreen())
+                                    }
+                                }
+                            }
+                        },
+                    )
                 }
             }
 

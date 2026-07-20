@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import eu.kanade.tachiyomi.R
@@ -301,6 +302,9 @@ fun AppBarActions(
             }
         }
 
+        // Track which nested action's submenu is open (replaces parent menu)
+        var nestedAction by remember { mutableStateOf<AppBar.NestedOverflowAction?>(null) }
+
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
@@ -336,23 +340,47 @@ fun AppBarActions(
                         )
                     }
                     is AppBar.NestedOverflowAction -> {
-                        eu.kanade.presentation.components.NestedMenuItem(
+                        DropdownMenuItem(
                             text = { Text(action.title) },
-                            children = { closeNested ->
-                                action.subActions.forEach { subAction ->
-                                    DropdownMenuItem(
-                                        onClick = {
-                                            subAction.onClick()
-                                            closeNested()
-                                            showMenu = false
-                                        },
-                                        text = { Text(subAction.title) },
-                                    )
-                                }
+                            onClick = {
+                                // Close parent menu, open submenu in its place
+                                showMenu = false
+                                nestedAction = action
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.ArrowRight,
+                                    contentDescription = null,
+                                )
                             },
                         )
                     }
                 }
+            }
+        }
+
+        // Submenu dropdown — appears in the same position as the parent menu
+        DropdownMenu(
+            expanded = nestedAction != null,
+            onDismissRequest = { nestedAction = null },
+            offset = DpOffset(0.dp, 8.dp),
+        ) {
+            // Back item to return to main menu
+            DropdownMenuItem(
+                text = { Text("‹ Back") },
+                onClick = {
+                    nestedAction = null
+                    showMenu = true
+                },
+            )
+            nestedAction?.subActions?.forEach { subAction ->
+                DropdownMenuItem(
+                    onClick = {
+                        subAction.onClick()
+                        nestedAction = null
+                    },
+                    text = { Text(subAction.title) },
+                )
             }
         }
     }

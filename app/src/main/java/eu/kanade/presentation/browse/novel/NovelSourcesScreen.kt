@@ -291,13 +291,19 @@ private fun NovelSourcesCardView(
                                     }
                                     val ext = sourceExtensionMap[model.source.id]
                                     val hasUpdate = model.source.id in sourcesWithUpdates
+                                    val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
+                                        it == InstallStep.Pending || it == InstallStep.Downloading
+                                    } == true
                                     Box(modifier = Modifier.weight(cardWidth)) {
                                         ExtensionCard(
                                             title = model.source.name,
                                             lang = model.source.lang.uppercase(),
                                             version = ext?.versionName ?: "",
-                                            iconUrl = null,
+                                            iconContent = if (ext != null) {
+                                                { mod -> NovelExtensionIcon(extension = ext, modifier = mod) }
+                                            } else null,
                                             hasUpdate = hasUpdate,
+                                            isUpdating = isUpdating,
                                             onClick = { onClickItem(model.source, Listing.Popular) },
                                             onCogClick = {
                                                 if (hasUpdate) onClickUpdate(model.source)

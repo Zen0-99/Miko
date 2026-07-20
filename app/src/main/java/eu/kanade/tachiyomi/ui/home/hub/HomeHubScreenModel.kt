@@ -7,6 +7,7 @@ import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.data.suggestions.SuggestionCoordinator
+import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.data.suggestions.SuggestionSeed
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import kotlinx.coroutines.flow.collectLatest
@@ -70,6 +71,8 @@ class HomeHubScreenModel(
 
     private val fastCache = HomeHubFastCache(context)
     private var lastCombinedData: HomeHubCombinedData? = null
+    // Raw suggestion items keyed by recommendation card ID, for navigation on click
+    private val recommendationItems: MutableMap<Long, SuggestionItem> = mutableMapOf()
 
     init {
         // --- Fast cache: apply cached snapshot synchronously for instant render ---
@@ -246,6 +249,8 @@ class HomeHubScreenModel(
         }
     }
 
+    fun getRecommendationItem(id: Long): SuggestionItem? = recommendationItems[id]
+
     fun updateUserName(name: String) {
         uiPreferences.userName().set(name)
         fastCache.updateUserName(name)
@@ -368,8 +373,10 @@ class HomeHubScreenModel(
                 .filter { it.mediaType == modeMediaType }
                 .take(10)
                 .map { item ->
+                    val cardId = item.providerUrl.hashCode().toLong()
+                    recommendationItems[cardId] = item
                     HomeHubCardItem(
-                        id = item.providerUrl.hashCode().toLong(),
+                        id = cardId,
                         title = item.title,
                         coverData = item.thumbnailUrl,
                         mediaType = when (item.mediaType) {

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,9 +38,10 @@ import tachiyomi.presentation.core.i18n.stringResource
 
 /**
  * A horizontal rectangle card for displaying extensions in browse.
- * The extension icon is used as a large blurred background fill.
+ * The extension icon is used as a large blurred background fill via [iconContent].
  * Bold title in top-left, language below, version inline with language (dot-separated).
  * Settings cog (or download icon when update available) in bottom-right.
+ * When [isUpdating] is true, a progress indicator replaces the cog.
  */
 @Composable
 fun ExtensionCard(
@@ -48,8 +49,9 @@ fun ExtensionCard(
     lang: String,
     version: String,
     iconUrl: String? = null,
-    iconBitmap: ImageBitmap? = null,
+    iconContent: (@Composable (Modifier) -> Unit)? = null,
     hasUpdate: Boolean = false,
+    isUpdating: Boolean = false,
     supportsComments: Boolean = false,
     onClick: () -> Unit,
     onCogClick: () -> Unit,
@@ -66,12 +68,9 @@ fun ExtensionCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Blurred icon as large background fill
-            if (iconBitmap != null) {
-                androidx.compose.foundation.Image(
-                    bitmap = iconBitmap,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
+            if (iconContent != null) {
+                iconContent(
+                    Modifier
                         .fillMaxSize()
                         .blur(24.dp),
                 )
@@ -135,21 +134,29 @@ fun ExtensionCard(
                     }
                 }
 
-                // Bottom section: cog or download icon
+                // Bottom section: cog, download, or progress
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    IconButton(
-                        onClick = onCogClick,
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (hasUpdate) Icons.Outlined.Download else Icons.Outlined.Settings,
-                            contentDescription = if (hasUpdate) "Update" else stringResource(MR.strings.label_extension_info),
-                            tint = if (hasUpdate) MaterialTheme.colorScheme.primary else Color.White,
-                            modifier = Modifier.size(20.dp),
+                    if (isUpdating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
                         )
+                    } else {
+                        IconButton(
+                            onClick = onCogClick,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (hasUpdate) Icons.Outlined.Download else Icons.Outlined.Settings,
+                                contentDescription = if (hasUpdate) "Update" else stringResource(MR.strings.label_extension_info),
+                                tint = if (hasUpdate) MaterialTheme.colorScheme.primary else Color.White,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }
