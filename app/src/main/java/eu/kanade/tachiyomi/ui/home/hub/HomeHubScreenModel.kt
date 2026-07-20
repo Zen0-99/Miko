@@ -27,10 +27,13 @@ import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.model.NovelCover
 import tachiyomi.domain.history.anime.interactor.GetAnimeHistory
 import tachiyomi.domain.history.anime.model.AnimeHistoryWithRelations
+import tachiyomi.domain.history.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.history.manga.interactor.GetMangaHistory
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
+import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
 import tachiyomi.domain.history.novel.interactor.GetNovelHistory
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
+import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
 import tachiyomi.domain.library.anime.LibraryAnime
 import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.domain.library.novel.LibraryNovel
@@ -54,6 +57,9 @@ class HomeHubScreenModel(
     private val getAnimeHistory: GetAnimeHistory = Injekt.get(),
     private val getMangaHistory: GetMangaHistory = Injekt.get(),
     private val getNovelHistory: GetNovelHistory = Injekt.get(),
+    private val animeHistoryRepository: AnimeHistoryRepository = Injekt.get(),
+    private val mangaHistoryRepository: MangaHistoryRepository = Injekt.get(),
+    private val novelHistoryRepository: NovelHistoryRepository = Injekt.get(),
     private val getLibraryAnime: GetLibraryAnime = Injekt.get(),
     private val getLibraryManga: GetLibraryManga = Injekt.get(),
     private val getLibraryNovels: GetLibraryNovels = Injekt.get(),
@@ -216,6 +222,46 @@ class HomeHubScreenModel(
         uiPreferences.userName().set(name)
         fastCache.updateUserName(name)
         mutableState.update { it.copy(userName = name) }
+    }
+
+    // --- Long-press to remove from recently read ---
+
+    fun deleteHistoryItem(item: HomeHubCardItem) {
+        screenModelScope.launchIO {
+            val currentState = mutableState.value
+            when (item.mediaType) {
+                HomeHubMediaType.ANIME -> {
+                    val history = currentState.recentAnime.find { it.animeId == item.id }
+                    history?.let { animeHistoryRepository.resetAnimeHistory(it.id) }
+                }
+                HomeHubMediaType.MANGA -> {
+                    val history = currentState.recentManga.find { it.mangaId == item.id }
+                    history?.let { mangaHistoryRepository.resetMangaHistory(it.id) }
+                }
+                HomeHubMediaType.NOVEL -> {
+                    val history = currentState.recentNovels.find { it.novelId == item.id }
+                    history?.let { novelHistoryRepository.resetNovelHistory(it.id) }
+                }
+            }
+        }
+    }
+
+    fun removeRecentlyAddedItem(item: HomeHubCardItem) {
+        // Optimistically remove from state — the item will reappear on next library refresh
+        // if it's still in the library. This provides instant visual feedback.
+        mutableState.update { state ->
+            when (item.mediaType) {
+                HomeHubMediaType.ANIME -> state.copy(
+                    recentlyAddedAnime = state.recentlyAddedAnime.filterNot { it.id == item.id },
+                )
+                HomeHubMediaType.MANGA -> state.copy(
+                    recentlyAddedManga = state.recentlyAddedManga.filterNot { it.id == item.id },
+                )
+                HomeHubMediaType.NOVEL -> state.copy(
+                    recentlyAddedNovels = state.recentlyAddedNovels.filterNot { it.id == item.id },
+                )
+            }
+        }
     }
 
     // --- Recommendations ---

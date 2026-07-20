@@ -21,6 +21,8 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -32,6 +34,7 @@ import androidx.compose.ui.zIndex
 import dev.icerock.moko.resources.StringResource
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -58,7 +61,12 @@ fun TabbedScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val collapseScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+        rememberTopAppBarState(),
+    )
+
     Scaffold(
+        topBarScrollBehavior = collapseScrollBehavior,
         topBar = {
             if (titleRes != null) {
                 val tab = tabs[state.currentPage]
@@ -104,10 +112,12 @@ fun TabbedScreen(
                     searchQuery = if (searchEnabled) actualQuery else null,
                     onChangeSearchQuery = actualOnChange,
                     actions = {
-                        AppBarActions(tab.actions)
-                        if (onClickSettings != null) {
-                            AppBarActions(globalOverflowActions(onClickSettings = onClickSettings))
+                        val allActions = if (onClickSettings != null) {
+                            (tab.actions + globalOverflowActions(onClickSettings = onClickSettings)).toImmutableList()
+                        } else {
+                            tab.actions
                         }
+                        AppBarActions(allActions)
                     },
                     navigateUp = tab.navigateUp,
                 )

@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.home.hub
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -41,8 +43,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -129,7 +133,7 @@ private fun HomeHubContent(
 ) {
     val listState = rememberLazyListState()
     val tabNavigator = LocalTabNavigator.current
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     if (state.isEmpty) {
         Scaffold(
@@ -226,7 +230,11 @@ private fun HomeHubContent(
                             )
                         }
                         item(key = "recent_anime_row") {
-                            HistoryRow(items = state.recentAnimeCards, onItemClick = { })
+                            HistoryRow(
+                                items = state.recentAnimeCards,
+                                onItemClick = { },
+                                onLongClick = { screenModel.deleteHistoryItem(it) },
+                            )
                         }
                     }
                     if (state.recentlyAddedAnime.isNotEmpty()) {
@@ -237,7 +245,11 @@ private fun HomeHubContent(
                             )
                         }
                         item(key = "recently_added_anime_row") {
-                            HistoryRow(items = state.recentlyAddedAnimeCards, onItemClick = { })
+                            HistoryRow(
+                                items = state.recentlyAddedAnimeCards,
+                                onItemClick = { },
+                                onLongClick = { screenModel.removeRecentlyAddedItem(it) },
+                            )
                         }
                     }
                 }
@@ -250,7 +262,11 @@ private fun HomeHubContent(
                             )
                         }
                         item(key = "recent_manga_row") {
-                            HistoryRow(items = state.recentMangaCards, onItemClick = { })
+                            HistoryRow(
+                                items = state.recentMangaCards,
+                                onItemClick = { },
+                                onLongClick = { screenModel.deleteHistoryItem(it) },
+                            )
                         }
                     }
                     if (state.recentlyAddedManga.isNotEmpty()) {
@@ -261,7 +277,11 @@ private fun HomeHubContent(
                             )
                         }
                         item(key = "recently_added_manga_row") {
-                            HistoryRow(items = state.recentlyAddedMangaCards, onItemClick = { })
+                            HistoryRow(
+                                items = state.recentlyAddedMangaCards,
+                                onItemClick = { },
+                                onLongClick = { screenModel.removeRecentlyAddedItem(it) },
+                            )
                         }
                     }
                 }
@@ -274,7 +294,11 @@ private fun HomeHubContent(
                             )
                         }
                         item(key = "recent_novels_row") {
-                            HistoryRow(items = state.recentNovelCards, onItemClick = { })
+                            HistoryRow(
+                                items = state.recentNovelCards,
+                                onItemClick = { },
+                                onLongClick = { screenModel.deleteHistoryItem(it) },
+                            )
                         }
                     }
                     if (state.recentlyAddedNovels.isNotEmpty()) {
@@ -285,7 +309,11 @@ private fun HomeHubContent(
                             )
                         }
                         item(key = "recently_added_novels_row") {
-                            HistoryRow(items = state.recentlyAddedNovelCards, onItemClick = { })
+                            HistoryRow(
+                                items = state.recentlyAddedNovelCards,
+                                onItemClick = { },
+                                onLongClick = { screenModel.removeRecentlyAddedItem(it) },
+                            )
                         }
                     }
                 }
@@ -598,7 +626,11 @@ private fun SectionHeader(
 // --- History Row (full-height cover art cards) ---
 
 @Composable
-private fun HistoryRow(items: List<HomeHubCardItem>, onItemClick: (HomeHubCardItem) -> Unit) {
+private fun HistoryRow(
+    items: List<HomeHubCardItem>,
+    onItemClick: (HomeHubCardItem) -> Unit,
+    onLongClick: ((HomeHubCardItem) -> Unit)? = null,
+) {
     val cardShape = remember { RoundedCornerShape(16.dp) }
     val gradientScrim = remember {
         Brush.verticalGradient(
@@ -616,13 +648,27 @@ private fun HistoryRow(items: List<HomeHubCardItem>, onItemClick: (HomeHubCardIt
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(items, key = { it.id }, contentType = { "home_hub_card" }) { item ->
+            var showRemoveOverlay by remember { mutableStateOf(false) }
             Box(
                 modifier = Modifier
                     .width(120.dp)
                     .height(200.dp)
                     .clip(cardShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable { onItemClick(item) },
+                    .combinedClickable(
+                        onClick = {
+                            if (showRemoveOverlay) {
+                                showRemoveOverlay = false
+                            } else {
+                                onItemClick(item)
+                            }
+                        },
+                        onLongClick = {
+                            if (onLongClick != null) {
+                                showRemoveOverlay = true
+                            }
+                        },
+                    ),
             ) {
                 // Full-height cover image
                 AsyncImage(
@@ -665,6 +711,35 @@ private fun HistoryRow(items: List<HomeHubCardItem>, onItemClick: (HomeHubCardIt
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                    }
+                }
+
+                // Long-press remove overlay
+                if (showRemoveOverlay) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .clickable { onLongClick?.invoke(item) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = "Remove",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp),
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Remove",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
                     }
                 }
             }

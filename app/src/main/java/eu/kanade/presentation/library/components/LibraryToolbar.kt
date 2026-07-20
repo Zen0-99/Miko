@@ -108,6 +108,7 @@ private fun LibraryRegularToolbar(
                         maxLines = 1,
                         modifier = Modifier.weight(1f, false),
                         overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     )
                 }
                 if (title.numberOfEntries != null) {

@@ -11,6 +11,8 @@ import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -107,7 +109,12 @@ data object NovelLibraryTab : Tab {
 
         val defaultTitle = stringResource(MR.strings.label_library)
 
+        val collapseScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+            rememberTopAppBarState(),
+        )
+
         Scaffold(
+            topBarScrollBehavior = collapseScrollBehavior,
             topBar = { scrollBehavior ->
                 val title = state.getToolbarTitle(
                     defaultTitle = defaultTitle,

@@ -12,7 +12,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.text.BasicTextField
@@ -272,6 +277,11 @@ fun AppBarActions(
     val overflowActions = actions.filterIsInstance<AppBar.AppBarAction>()
         .filter { it is AppBar.OverflowAction || it is AppBar.NestedOverflowAction || it is AppBar.CheckableOverflowAction }
     if (overflowActions.isNotEmpty()) {
+        val rotation by animateFloatAsState(
+            targetValue = if (showMenu) 90f else 0f,
+            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+            label = "overflowRotation",
+        )
         TooltipBox(
             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
             tooltip = {
@@ -289,6 +299,7 @@ fun AppBarActions(
                     contentDescription = stringResource(
                         MR.strings.action_menu_overflow_description,
                     ),
+                    modifier = Modifier.graphicsLayer { rotationZ = rotation },
                 )
             }
         }
