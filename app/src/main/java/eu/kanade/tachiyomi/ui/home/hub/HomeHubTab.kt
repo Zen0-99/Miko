@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Button
@@ -72,6 +73,7 @@ import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBar
+import kotlinx.collections.immutable.persistentListOf
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
@@ -135,11 +137,25 @@ private fun HomeHubContent(
     val listState = rememberLazyListState()
     val tabNavigator = LocalTabNavigator.current
 
-    // Register with shared top bar
-    useSharedTopBar(
-        title = stringResource(AYMR.strings.label_home),
-        actions = globalOverflowActions(onClickSettings = { navigator.push(SettingsScreen()) }),
-    )
+    // Register with shared top bar — selection mode shows count + delete + cancel
+    if (state.selectionMode) {
+        useSharedTopBar(
+            title = "${state.selection.size}",
+            actions = persistentListOf(
+                AppBar.Action(
+                    title = "Delete",
+                    icon = Icons.Outlined.Delete,
+                    onClick = { screenModel.deleteSelectedItems() },
+                ),
+            ),
+            navigateUp = screenModel::clearSelection,
+        )
+    } else {
+        useSharedTopBar(
+            title = stringResource(AYMR.strings.label_home),
+            actions = globalOverflowActions(onClickSettings = { navigator.push(SettingsScreen()) }),
+        )
+    }
 
     if (state.isEmpty) {
         Scaffold(
@@ -219,7 +235,8 @@ private fun HomeHubContent(
                             HistoryRow(
                                 items = state.recentAnimeCards,
                                 onItemClick = { },
-                                onLongClick = { screenModel.deleteHistoryItem(it) },
+                                selection = state.selection,
+                                onToggleSelection = { screenModel.toggleSelection(it) },
                             )
                         }
                     }
@@ -234,7 +251,8 @@ private fun HomeHubContent(
                             HistoryRow(
                                 items = state.recentlyAddedAnimeCards,
                                 onItemClick = { },
-                                onLongClick = { screenModel.removeRecentlyAddedItem(it) },
+                                selection = state.selection,
+                                onToggleSelection = { screenModel.toggleSelection(it) },
                             )
                         }
                     }
@@ -251,7 +269,8 @@ private fun HomeHubContent(
                             HistoryRow(
                                 items = state.recentMangaCards,
                                 onItemClick = { },
-                                onLongClick = { screenModel.deleteHistoryItem(it) },
+                                selection = state.selection,
+                                onToggleSelection = { screenModel.toggleSelection(it) },
                             )
                         }
                     }
@@ -266,7 +285,8 @@ private fun HomeHubContent(
                             HistoryRow(
                                 items = state.recentlyAddedMangaCards,
                                 onItemClick = { },
-                                onLongClick = { screenModel.removeRecentlyAddedItem(it) },
+                                selection = state.selection,
+                                onToggleSelection = { screenModel.toggleSelection(it) },
                             )
                         }
                     }
@@ -283,7 +303,8 @@ private fun HomeHubContent(
                             HistoryRow(
                                 items = state.recentNovelCards,
                                 onItemClick = { },
-                                onLongClick = { screenModel.deleteHistoryItem(it) },
+                                selection = state.selection,
+                                onToggleSelection = { screenModel.toggleSelection(it) },
                             )
                         }
                     }
@@ -298,7 +319,8 @@ private fun HomeHubContent(
                             HistoryRow(
                                 items = state.recentlyAddedNovelCards,
                                 onItemClick = { },
-                                onLongClick = { screenModel.removeRecentlyAddedItem(it) },
+                                selection = state.selection,
+                                onToggleSelection = { screenModel.toggleSelection(it) },
                             )
                         }
                     }
@@ -616,6 +638,8 @@ private fun HistoryRow(
     items: List<HomeHubCardItem>,
     onItemClick: (HomeHubCardItem) -> Unit,
     onLongClick: ((HomeHubCardItem) -> Unit)? = null,
+    selection: Set<Long> = emptySet(),
+    onToggleSelection: ((HomeHubCardItem) -> Unit)? = null,
 ) {
     val cardShape = remember { RoundedCornerShape(16.dp) }
     val gradientScrim = remember {
@@ -634,7 +658,8 @@ private fun HistoryRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(items, key = { it.id }, contentType = { "home_hub_card" }) { item ->
-            var showRemoveOverlay by remember { mutableStateOf(false) }
+            val isSelected = item.id in selection
+            val inSelectionMode = selection.isNotEmpty()
             Box(
                 modifier = Modifier
                     .width(120.dp)
@@ -643,15 +668,15 @@ private fun HistoryRow(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .combinedClickable(
                         onClick = {
-                            if (showRemoveOverlay) {
-                                showRemoveOverlay = false
+                            if (inSelectionMode && onToggleSelection != null) {
+                                onToggleSelection(item)
                             } else {
                                 onItemClick(item)
                             }
                         },
                         onLongClick = {
-                            if (onLongClick != null) {
-                                showRemoveOverlay = true
+                            if (onToggleSelection != null) {
+                                onToggleSelection(item)
                             }
                         },
                     ),
@@ -700,30 +725,25 @@ private fun HistoryRow(
                     }
                 }
 
-                // Long-press remove overlay
-                if (showRemoveOverlay) {
+                // Selection mode overlay
+                if (inSelectionMode) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.6f))
-                            .clickable { onLongClick?.invoke(item) },
-                        contentAlignment = Alignment.Center,
+                            .background(
+                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                else Color.Black.copy(alpha = 0.4f),
+                            ),
+                        contentAlignment = Alignment.TopEnd,
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
+                        if (isSelected) {
                             Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Remove",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp),
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Remove",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
+                                imageVector = Icons.Outlined.CheckCircle,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .padding(6.dp)
+                                    .size(22.dp),
                             )
                         }
                     }

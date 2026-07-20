@@ -56,7 +56,11 @@ data class HomeHubState(
     val hiddenAnimeCategories: Set<Long> = emptySet(),
     val hiddenMangaCategories: Set<Long> = emptySet(),
     val hiddenNovelCategories: Set<Long> = emptySet(),
+    // --- Selection mode for long-press overlay ---
+    val selection: Set<Long> = emptySet(),
 ) {
+    val selectionMode: Boolean
+        get() = selection.isNotEmpty()
     val hasAnyRecent: Boolean
         get() = recentAnime.isNotEmpty() || recentManga.isNotEmpty() || recentNovels.isNotEmpty()
 

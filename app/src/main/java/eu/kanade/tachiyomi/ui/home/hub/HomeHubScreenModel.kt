@@ -226,39 +226,48 @@ class HomeHubScreenModel(
 
     // --- Long-press to remove from recently read ---
 
-    fun deleteHistoryItem(item: HomeHubCardItem) {
-        screenModelScope.launchIO {
-            val currentState = mutableState.value
-            when (item.mediaType) {
-                HomeHubMediaType.ANIME -> {
-                    val history = currentState.recentAnime.find { it.animeId == item.id }
-                    history?.let { animeHistoryRepository.resetAnimeHistory(it.id) }
-                }
-                HomeHubMediaType.MANGA -> {
-                    val history = currentState.recentManga.find { it.mangaId == item.id }
-                    history?.let { mangaHistoryRepository.resetMangaHistory(it.id) }
-                }
-                HomeHubMediaType.NOVEL -> {
-                    val history = currentState.recentNovels.find { it.novelId == item.id }
-                    history?.let { novelHistoryRepository.resetNovelHistory(it.id) }
-                }
+    // --- Selection mode for long-press overlay ---
+
+    fun toggleSelection(item: HomeHubCardItem) {
+        mutableState.update { state ->
+            val newSelection = if (item.id in state.selection) {
+                state.selection - item.id
+            } else {
+                state.selection + item.id
             }
+            state.copy(selection = newSelection)
         }
     }
 
-    fun removeRecentlyAddedItem(item: HomeHubCardItem) {
-        // Optimistically remove from state — the item will reappear on next library refresh
-        // if it's still in the library. This provides instant visual feedback.
-        mutableState.update { state ->
-            when (item.mediaType) {
-                HomeHubMediaType.ANIME -> state.copy(
-                    recentlyAddedAnime = state.recentlyAddedAnime.filterNot { it.id == item.id },
-                )
-                HomeHubMediaType.MANGA -> state.copy(
-                    recentlyAddedManga = state.recentlyAddedManga.filterNot { it.id == item.id },
-                )
-                HomeHubMediaType.NOVEL -> state.copy(
-                    recentlyAddedNovels = state.recentlyAddedNovels.filterNot { it.id == item.id },
+    fun clearSelection() {
+        mutableState.update { it.copy(selection = emptySet()) }
+    }
+
+    /**
+     * Delete all selected items. For recently-read items, resets the history entry.
+     * For recently-added items, optimistically removes from state.
+     */
+    fun deleteSelectedItems() {
+        val currentState = mutableState.value
+        val selectedIds = currentState.selection
+        screenModelScope.launchIO {
+            // Delete history entries for recently-read items
+            currentState.recentAnime.filter { it.animeId in selectedIds }.forEach {
+                animeHistoryRepository.resetAnimeHistory(it.id)
+            }
+            currentState.recentManga.filter { it.mangaId in selectedIds }.forEach {
+                mangaHistoryRepository.resetMangaHistory(it.id)
+            }
+            currentState.recentNovels.filter { it.novelId in selectedIds }.forEach {
+                novelHistoryRepository.resetNovelHistory(it.id)
+            }
+            // Optimistically remove recently-added items
+            mutableState.update { state ->
+                state.copy(
+                    recentlyAddedAnime = state.recentlyAddedAnime.filterNot { it.id in selectedIds },
+                    recentlyAddedManga = state.recentlyAddedManga.filterNot { it.id in selectedIds },
+                    recentlyAddedNovels = state.recentlyAddedNovels.filterNot { it.id in selectedIds },
+                    selection = emptySet(),
                 )
             }
         }
