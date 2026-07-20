@@ -57,6 +57,10 @@ import dev.chrisbanes.haze.hazeSource
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.AppBarActions
+import eu.kanade.presentation.components.LocalSharedTopBar
+import eu.kanade.presentation.components.SharedTopBarState
 import eu.kanade.presentation.home.ModePill
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
@@ -111,6 +115,7 @@ object HomeScreen : Screen() {
         val navStyle by uiPreferences.navStyle().collectAsStateWithLifecycle()
         val contentMode by uiPreferences.contentMode().collectAsStateWithLifecycle()
         val showManga by uiPreferences.showMangaMode().collectAsStateWithLifecycle()
+        val sharedTopBarState = remember { SharedTopBarState() }
         val showAnime by uiPreferences.showAnimeMode().collectAsStateWithLifecycle()
         val showNovel by uiPreferences.showNovelMode().collectAsStateWithLifecycle()
         val navigator = LocalNavigator.currentOrThrow
@@ -139,10 +144,22 @@ object HomeScreen : Screen() {
             key = TAB_NAVIGATOR_KEY,
         ) { tabNavigator ->
             // Provide usable navigator to content screen
-            CompositionLocalProvider(LocalNavigator provides navigator) {
+            CompositionLocalProvider(
+                LocalNavigator provides navigator,
+                LocalSharedTopBar provides sharedTopBarState,
+            ) {
                 val hazeState = remember { HazeState() }
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
+                    topBar = {
+                        AppBar(
+                            title = sharedTopBarState.title,
+                            actions = {
+                                AppBarActions(sharedTopBarState.actions)
+                            },
+                            navigateUp = sharedTopBarState.navigateUp,
+                        )
+                    },
                     startBar = {
                         if (isTabletUi()) {
                             NavigationRail {

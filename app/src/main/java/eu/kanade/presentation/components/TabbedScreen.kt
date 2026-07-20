@@ -21,8 +21,6 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,68 +59,23 @@ fun TabbedScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val collapseScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-        rememberTopAppBarState(),
-    )
+    // Register with shared top bar — update title/actions when sub-tab changes
+    if (titleRes != null) {
+        val tab = tabs[state.currentPage]
+        val allActions = if (onClickSettings != null) {
+            (tab.actions + globalOverflowActions(onClickSettings = onClickSettings)).toImmutableList()
+        } else {
+            tab.actions
+        }
+        useSharedTopBar(
+            title = stringResource(titleRes),
+            actions = allActions,
+            navigateUp = tab.navigateUp,
+        )
+    }
 
     Scaffold(
-        topBarScrollBehavior = collapseScrollBehavior,
-        topBar = {
-            if (titleRes != null) {
-                val tab = tabs[state.currentPage]
-                val searchEnabled = tab.searchEnabled
-
-                // Single-tab mode: use the first available search query directly.
-                // Multi-tab mode: route by page index (legacy hardcoded indices).
-                val actualQuery = if (tabs.size == 1) {
-                    animeSearchQuery ?: mangaSearchQuery ?: novelSearchQuery
-                } else {
-                    when (state.currentPage) {
-                        3 -> animeSearchQuery
-                        4 -> mangaSearchQuery
-                        5 -> novelSearchQuery
-                        else -> null
-                    }
-                }
-
-                val actualOnChange = if (tabs.size == 1) {
-                    onChangeAnimeSearchQuery.takeIf { animeSearchQuery != null }
-                        ?: onChangeMangaSearchQuery.takeIf { mangaSearchQuery != null }
-                        ?: onChangeNovelSearchQuery.takeIf { novelSearchQuery != null }
-                        ?: ({ _: String? -> })
-                } else {
-                    when (state.currentPage) {
-                        3 -> onChangeAnimeSearchQuery
-                        4 -> onChangeMangaSearchQuery
-                        5 -> onChangeNovelSearchQuery
-                        else -> ({ _: String? -> })
-                    }
-                }
-
-                SearchToolbar(
-                    titleContent = titleContent ?: {
-                        AppBarTitle(
-                            stringResource(titleRes),
-                            modifier = modifier,
-                            null,
-                            tab.numberTitle,
-                        )
-                    },
-                    searchEnabled = searchEnabled,
-                    searchQuery = if (searchEnabled) actualQuery else null,
-                    onChangeSearchQuery = actualOnChange,
-                    actions = {
-                        val allActions = if (onClickSettings != null) {
-                            (tab.actions + globalOverflowActions(onClickSettings = onClickSettings)).toImmutableList()
-                        } else {
-                            tab.actions
-                        }
-                        AppBarActions(allActions)
-                    },
-                    navigateUp = tab.navigateUp,
-                )
-            }
-        },
+        topBar = {},
         snackbarHost = {
             SnackbarHost(
                 hostState = snackbarHostState,

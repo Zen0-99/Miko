@@ -7,12 +7,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -21,11 +18,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import kotlinx.collections.immutable.toImmutableList
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.globalOverflowActions
+import eu.kanade.presentation.components.useSharedTopBar
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.Navigator
@@ -35,7 +32,6 @@ import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
-import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
@@ -86,39 +82,24 @@ data object BrowseTab : Tab {
 
         val titleRes = MR.strings.browse
 
-        val collapseScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-            rememberTopAppBarState(),
+        // Register with shared top bar
+        val extensionAction = listOf<AppBar.Action>(
+            AppBar.Action(
+                title = stringResource(MR.strings.label_extension_repos),
+                icon = Icons.Outlined.Extension,
+                onClick = { navigator.push(ConsolidatedExtensionReposScreen()) },
+            ),
+        )
+        val allActions = (sourceTab.actions + extensionAction + globalOverflowActions(
+            onClickSettings = { navigator.push(SettingsScreen()) },
+        )).toImmutableList()
+        useSharedTopBar(
+            title = stringResource(titleRes),
+            actions = allActions,
         )
 
         Scaffold(
-            topBarScrollBehavior = collapseScrollBehavior,
-            topBar = { scrollBehavior ->
-                SearchToolbar(
-                    searchQuery = null,
-                    onChangeSearchQuery = {},
-                    titleContent = {
-                        Text(
-                            stringResource(titleRes),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        )
-                    },
-                    actions = {
-                        val extensionAction = listOf<AppBar.Action>(
-                            AppBar.Action(
-                                title = stringResource(MR.strings.label_extension_repos),
-                                icon = Icons.Outlined.Extension,
-                                onClick = { navigator.push(ConsolidatedExtensionReposScreen()) },
-                            ),
-                        )
-                        val allActions = (sourceTab.actions + extensionAction + globalOverflowActions(
-                            onClickSettings = { navigator.push(SettingsScreen()) },
-                        )).toImmutableList()
-                        AppBarActions(allActions)
-                    },
-                    scrollBehavior = scrollBehavior,
-                    searchEnabled = false,
-                )
-            },
+            topBar = {},
             snackbarHost = {
                 SnackbarHost(
                     snackbarHostState,

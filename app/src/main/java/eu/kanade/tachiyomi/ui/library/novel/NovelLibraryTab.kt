@@ -8,11 +8,13 @@ import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,6 +36,9 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.globalOverflowActions
+import eu.kanade.presentation.components.useSharedTopBar
 import eu.kanade.presentation.entries.components.LibraryBottomActionMenu
 import eu.kanade.presentation.library.DeleteLibraryEntryDialog
 import eu.kanade.presentation.library.components.LibraryToolbar
@@ -41,11 +46,13 @@ import eu.kanade.presentation.library.novel.NovelLibraryContent
 import eu.kanade.presentation.library.novel.NovelLibrarySettingsDialog
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
 import eu.kanade.presentation.util.Tab
+import tachiyomi.presentation.core.theme.active
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -109,38 +116,49 @@ data object NovelLibraryTab : Tab {
 
         val defaultTitle = stringResource(MR.strings.label_library)
 
-        val collapseScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-            rememberTopAppBarState(),
+        // Register with shared top bar
+        val title = state.getToolbarTitle(
+            defaultTitle = defaultTitle,
+            defaultCategoryTitle = stringResource(MR.strings.label_default),
+            page = screenModel.activeCategoryIndex,
         )
-
-        Scaffold(
-            topBarScrollBehavior = collapseScrollBehavior,
-            topBar = { scrollBehavior ->
-                val title = state.getToolbarTitle(
-                    defaultTitle = defaultTitle,
-                    defaultCategoryTitle = stringResource(MR.strings.label_default),
-                    page = screenModel.activeCategoryIndex,
-                )
-                val tabVisible = state.showCategoryTabs && state.categories.size > 1
-                LibraryToolbar(
-                    hasActiveFilters = state.hasActiveFilters,
-                    selectedCount = state.selection.size,
-                    title = title,
-                    onClickUnselectAll = screenModel::clearSelection,
-                    onClickSelectAll = { screenModel.selectAll(screenModel.activeCategoryIndex) },
-                    onClickInvertSelection = {
-                        screenModel.invertSelection(
-                            screenModel.activeCategoryIndex,
-                        )
-                    },
-                    onClickFilter = screenModel::showSettingsDialog,
-                    onClickRefresh = {
-                        onClickRefresh(
-                            state.categories[screenModel.activeCategoryIndex],
-                        )
-                    },
-                    onClickGlobalUpdate = { onClickRefresh(null) },
-                    onClickOpenRandomEntry = {
+        if (state.selectionMode) {
+            // Selection mode — show count and selection actions
+            useSharedTopBar(
+                title = "${state.selection.size}",
+                actions = persistentListOf(
+                    AppBar.Action(
+                        title = stringResource(MR.strings.action_select_all),
+                        icon = Icons.Outlined.SelectAll,
+                        onClick = { screenModel.selectAll(screenModel.activeCategoryIndex) },
+                    ),
+                    AppBar.Action(
+                        title = stringResource(MR.strings.action_select_inverse),
+                        icon = Icons.Outlined.FlipToBack,
+                        onClick = { screenModel.invertSelection(screenModel.activeCategoryIndex) },
+                    ),
+                ),
+                navigateUp = screenModel::clearSelection,
+            )
+        } else {
+            val libraryActions = buildList {
+                add(AppBar.Action(
+                    title = stringResource(MR.strings.action_filter),
+                    icon = Icons.Outlined.FilterList,
+                    iconTint = if (state.hasActiveFilters) MaterialTheme.colorScheme.active else null,
+                    onClick = screenModel::showSettingsDialog,
+                ))
+                add(AppBar.OverflowAction(
+                    title = stringResource(MR.strings.action_update_library),
+                    onClick = { onClickRefresh(null) },
+                ))
+                add(AppBar.OverflowAction(
+                    title = stringResource(MR.strings.action_update_category),
+                    onClick = { onClickRefresh(state.categories[screenModel.activeCategoryIndex]) },
+                ))
+                add(AppBar.OverflowAction(
+                    title = stringResource(MR.strings.action_open_random_manga),
+                    onClick = {
                         scope.launch {
                             val randomItem = screenModel.getRandomLibraryItemForCurrentCategory()
                             if (randomItem != null) {
@@ -152,13 +170,18 @@ data object NovelLibraryTab : Tab {
                             }
                         }
                     },
-                    onClickSettings = { navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen()) },
-                    searchQuery = state.searchQuery,
-                    onSearchQueryChange = screenModel::search,
-                    scrollBehavior = scrollBehavior.takeIf { !tabVisible },
-                    navigateUp = navigateUp,
-                )
-            },
+                ))
+                addAll(globalOverflowActions(onClickSettings = { navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen()) }))
+            }.toPersistentList()
+            useSharedTopBar(
+                title = title.text,
+                actions = libraryActions,
+                navigateUp = navigateUp,
+            )
+        }
+
+        Scaffold(
+            topBar = {},
             bottomBar = {
                 LibraryBottomActionMenu(
                     visible = state.selectionMode,

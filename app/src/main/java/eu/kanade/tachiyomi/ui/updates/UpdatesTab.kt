@@ -100,13 +100,13 @@ data object UpdatesTab : Tab {
             ContentMode.ANIME -> animeDownloadTab(nestedScrollConnection)
             ContentMode.MANGA -> mangaDownloadTab(nestedScrollConnection)
             ContentMode.NOVEL -> novelDownloadTab(nestedScrollConnection)
-        }.copy(titleRes = MR.strings.label_download_queue)
+        }.copy(titleRes = MR.strings.label_download_queue, navigateUp = null)
 
         val statsTab = when (contentMode) {
             ContentMode.ANIME -> animeStatsTab()
             ContentMode.MANGA -> mangaStatsTab()
             ContentMode.NOVEL -> mangaStatsTab() // No novel stats yet, reuse manga
-        }.copy(titleRes = MR.strings.label_stats)
+        }.copy(titleRes = MR.strings.label_stats, navigateUp = null)
 
         // Calendar tab — embeds the Upcoming screen content directly
         val calendarTab = when (contentMode) {
@@ -114,7 +114,7 @@ data object UpdatesTab : Tab {
                 val screenModel = rememberScreenModel { UpcomingAnimeScreenModel() }
                 val state by screenModel.state.collectAsState()
                 TabContent(
-                    titleRes = MR.strings.action_view_upcoming,
+                    titleRes = MR.strings.label_calendar,
                     content = { contentPadding, _ ->
                         UpcomingAnimeScreenContent(
                             state = state,
@@ -129,7 +129,7 @@ data object UpdatesTab : Tab {
                 val screenModel = rememberScreenModel { UpcomingMangaScreenModel() }
                 val state by screenModel.state.collectAsState()
                 TabContent(
-                    titleRes = MR.strings.action_view_upcoming,
+                    titleRes = MR.strings.label_calendar,
                     content = { contentPadding, _ ->
                         UpcomingMangaScreenContent(
                             state = state,
@@ -144,7 +144,7 @@ data object UpdatesTab : Tab {
                 val screenModel = rememberScreenModel { UpcomingNovelScreenModel() }
                 val state by screenModel.state.collectAsState()
                 TabContent(
-                    titleRes = MR.strings.action_view_upcoming,
+                    titleRes = MR.strings.label_calendar,
                     content = { contentPadding, _ ->
                         UpcomingNovelScreenContent(
                             state = state,
@@ -160,6 +160,7 @@ data object UpdatesTab : Tab {
         TabbedScreen(
             titleRes = MR.strings.label_recent_updates,
             tabs = persistentListOf(updatesTab, historyTab, downloadsTab, statsTab, calendarTab),
+            scrollable = true,
             onClickSettings = { navigator.push(SettingsScreen()) },
         )
 

@@ -71,6 +71,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.globalOverflowActions
+import eu.kanade.presentation.components.useSharedTopBar
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
@@ -133,21 +134,16 @@ private fun HomeHubContent(
 ) {
     val listState = rememberLazyListState()
     val tabNavigator = LocalTabNavigator.current
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
+    // Register with shared top bar
+    useSharedTopBar(
+        title = stringResource(AYMR.strings.label_home),
+        actions = globalOverflowActions(onClickSettings = { navigator.push(SettingsScreen()) }),
+    )
 
     if (state.isEmpty) {
         Scaffold(
-            topBar = {
-                AppBar(
-                    title = stringResource(AYMR.strings.label_home),
-                    scrollBehavior = scrollBehavior,
-                    actions = {
-                        AppBarActions(globalOverflowActions(
-                            onClickSettings = { navigator.push(SettingsScreen()) },
-                        ))
-                    },
-                )
-            },
+            topBar = {},
         ) { padding ->
             Column(
                 modifier = Modifier
@@ -176,17 +172,7 @@ private fun HomeHubContent(
     }
 
     Scaffold(
-        topBar = {
-            AppBar(
-                title = stringResource(AYMR.strings.label_home),
-                scrollBehavior = scrollBehavior,
-                actions = {
-                    AppBarActions(globalOverflowActions(
-                        onClickSettings = { navigator.push(SettingsScreen()) },
-                    ))
-                },
-            )
-        },
+        topBar = {},
     ) { padding ->
         val hostBottomPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
             ?.calculateBottomPadding() ?: 0.dp

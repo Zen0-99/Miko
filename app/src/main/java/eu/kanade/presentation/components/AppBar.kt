@@ -12,21 +12,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
@@ -277,11 +274,6 @@ fun AppBarActions(
     val overflowActions = actions.filterIsInstance<AppBar.AppBarAction>()
         .filter { it is AppBar.OverflowAction || it is AppBar.NestedOverflowAction || it is AppBar.CheckableOverflowAction }
     if (overflowActions.isNotEmpty()) {
-        val rotation by animateFloatAsState(
-            targetValue = if (showMenu) 90f else 0f,
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-            label = "overflowRotation",
-        )
         TooltipBox(
             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
             tooltip = {
@@ -295,11 +287,10 @@ fun AppBarActions(
                 onClick = { showMenu = !showMenu },
             ) {
                 Icon(
-                    Icons.Outlined.MoreVert,
+                    Icons.Outlined.MoreHoriz,
                     contentDescription = stringResource(
                         MR.strings.action_menu_overflow_description,
                     ),
-                    modifier = Modifier.graphicsLayer { rotationZ = rotation },
                 )
             }
         }
@@ -307,6 +298,7 @@ fun AppBarActions(
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
+            offset = DpOffset(0.dp, 48.dp),
         ) {
             overflowActions.map { action ->
                 when (action) {
