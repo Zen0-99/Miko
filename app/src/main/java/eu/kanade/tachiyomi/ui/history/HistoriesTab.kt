@@ -9,7 +9,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.rememberScreenModel
+import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.domain.ui.UiPreferences
@@ -57,6 +59,7 @@ data object HistoriesTab : Tab {
     @Composable
     override fun Content() {
         val context = LocalContext.current
+        val navigator = LocalNavigator.currentOrThrow
         val contentMode by uiPreferences.contentMode().collectAsState()
 
         // Hoist only the current mode's screen model for search-bar sharing.
@@ -84,6 +87,7 @@ data object HistoriesTab : Tab {
             // Single-tab mode: TabbedScreen picks the first non-null query.
             animeSearchQuery = searchQuery,
             onChangeAnimeSearchQuery = onChangeSearchQuery,
+            onClickSettings = { navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen()) },
         )
 
         LaunchedEffect(Unit) {

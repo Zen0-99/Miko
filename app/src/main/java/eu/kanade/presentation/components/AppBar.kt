@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -204,6 +205,7 @@ fun AppBarTitle(
                 maxLines = 1,
                 modifier = Modifier.weight(1f, false),
                 overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             )
             val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
             Pill(
@@ -220,6 +222,7 @@ fun AppBarTitle(
                     text = it,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 )
             }
             subtitle?.let {
@@ -267,7 +270,7 @@ fun AppBarActions(
     }
 
     val overflowActions = actions.filterIsInstance<AppBar.AppBarAction>()
-        .filter { it is AppBar.OverflowAction || it is AppBar.NestedOverflowAction }
+        .filter { it is AppBar.OverflowAction || it is AppBar.NestedOverflowAction || it is AppBar.CheckableOverflowAction }
     if (overflowActions.isNotEmpty()) {
         TooltipBox(
             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
@@ -304,6 +307,23 @@ fun AppBarActions(
                                 showMenu = false
                             },
                             text = { Text(action.title) },
+                        )
+                    }
+                    is AppBar.CheckableOverflowAction -> {
+                        DropdownMenuItem(
+                            onClick = {
+                                action.onCheckedChange(!action.checked)
+                            },
+                            text = { Text(action.title) },
+                            trailingIcon = {
+                                Checkbox(
+                                    checked = action.checked,
+                                    onCheckedChange = {
+                                        action.onCheckedChange(it)
+                                        showMenu = false
+                                    },
+                                )
+                            },
                         )
                     }
                     is AppBar.NestedOverflowAction -> {
@@ -509,6 +529,16 @@ sealed interface AppBar {
     data class OverflowAction(
         val title: String,
         val onClick: () -> Unit,
+    ) : AppBarAction
+
+    /**
+     * An overflow action with a checkbox (toggle) state.
+     * Used for settings like "Downloaded only" and "Incognito mode".
+     */
+    data class CheckableOverflowAction(
+        val title: String,
+        val checked: Boolean,
+        val onCheckedChange: (Boolean) -> Unit,
     ) : AppBarAction
 
     /**

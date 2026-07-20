@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -150,6 +151,7 @@ data object MangaLibraryTab : Tab {
                             }
                         }
                     },
+                    onClickSettings = { navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen()) },
                     searchQuery = state.searchQuery,
                     onSearchQueryChange = screenModel::search,
                     scrollBehavior = scrollBehavior.takeIf { !tabVisible }, // For scroll overlay when no tab
@@ -168,7 +170,12 @@ data object MangaLibraryTab : Tab {
                     isManga = true,
                 )
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(bottom = 80.dp),
+                )
+            },
         ) { contentPadding ->
             val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
                 ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline

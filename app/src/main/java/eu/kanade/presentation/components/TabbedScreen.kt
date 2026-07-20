@@ -32,6 +32,7 @@ import androidx.compose.ui.zIndex
 import dev.icerock.moko.resources.StringResource
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TabText
@@ -51,6 +52,7 @@ fun TabbedScreen(
     novelSearchQuery: String? = null,
     onChangeNovelSearchQuery: (String?) -> Unit = {},
     titleContent: (@Composable () -> Unit)? = null,
+    onClickSettings: (() -> Unit)? = null,
 
     ) {
     val scope = rememberCoroutineScope()
@@ -101,12 +103,22 @@ fun TabbedScreen(
                     searchEnabled = searchEnabled,
                     searchQuery = if (searchEnabled) actualQuery else null,
                     onChangeSearchQuery = actualOnChange,
-                    actions = { AppBarActions(tab.actions) },
+                    actions = {
+                        AppBarActions(tab.actions)
+                        if (onClickSettings != null) {
+                            AppBarActions(globalOverflowActions(onClickSettings = onClickSettings))
+                        }
+                    },
                     navigateUp = tab.navigateUp,
                 )
             }
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = 80.dp),
+            )
+        },
     ) { contentPadding ->
         Column(
             modifier = Modifier.padding(

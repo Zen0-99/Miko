@@ -40,7 +40,10 @@ sealed class AndroidPreference<T>(
     }
 
     override fun set(value: T) {
-        preferences.edit(action = write(key, value))
+        // Use commit = true (synchronous) instead of apply() (async) to ensure
+        // preference changes survive app crashes. The async apply() can lose
+        // data if the process is killed before the write completes.
+        preferences.edit(commit = true, action = write(key, value))
     }
 
     override fun isSet(): Boolean {

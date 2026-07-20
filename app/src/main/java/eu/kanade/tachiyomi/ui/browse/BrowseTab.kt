@@ -15,7 +15,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import eu.kanade.presentation.components.globalOverflowActions
+import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -90,12 +95,20 @@ data object BrowseTab : Tab {
                                 contentDescription = stringResource(MR.strings.label_extension_repos),
                             )
                         }
+                        AppBarActions(globalOverflowActions(
+                            onClickSettings = { navigator.push(SettingsScreen()) },
+                        ))
                     },
                     scrollBehavior = scrollBehavior,
                     searchEnabled = false,
                 )
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = {
+                SnackbarHost(
+                    snackbarHostState,
+                    modifier = Modifier.padding(bottom = 80.dp),
+                )
+            },
         ) { padding ->
             val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
                 ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline

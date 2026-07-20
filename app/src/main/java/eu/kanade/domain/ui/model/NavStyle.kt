@@ -18,13 +18,13 @@ import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import tachiyomi.i18n.aniyomi.AYMR
 
 /**
- * Determines which tab is moved to the More screen, keeping the bottom nav at 5 items.
+ * Determines the bottom nav layout. With the More tab removed (replaced by a
+ * three-dot overflow menu in each tab's top bar) and History moved into the
+ * Updates tab as a sub-tab, the nav bar always shows 4 tabs:
+ * Home, Library, Updates, Browse.
  *
- * [LibraryTab] and [HomeHubTab] are always visible. One of Updates/History/Browse is moved to More.
- * The legacy MOVE_MANGA_TO_MORE and MOVE_NOVEL_TO_MORE values were removed when the
- * three per-type library tabs were collapsed into a single mode-aware [LibraryTab].
- * Users with those stored values will get [MOVE_HISTORY_TO_MORE] (the default) via
- * the [tachiyomi.core.common.preference.getEnum] fallback.
+ * The enum values are kept for backward compatibility with stored preferences,
+ * but no longer affect which tabs are visible.
  */
 enum class NavStyle(
     val titleRes: StringResource,
@@ -45,13 +45,11 @@ enum class NavStyle(
 
     val tabs: List<Tab>
         get() {
-            return mutableListOf(
+            return listOf(
                 HomeHubTab,
                 LibraryTab,
                 UpdatesTab,
-                HistoriesTab,
                 BrowseTab,
-                MoreTab,
-            ).apply { remove(this@NavStyle.moreTab) }
+            )
         }
 }

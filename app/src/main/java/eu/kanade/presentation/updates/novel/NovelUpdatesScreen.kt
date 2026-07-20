@@ -87,7 +87,12 @@ fun NovelUpdateScreen(
                 onMultiDeleteClicked = onMultiDeleteClicked,
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = 80.dp),
+            )
+        },
     ) { contentPadding ->
         val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
             ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline

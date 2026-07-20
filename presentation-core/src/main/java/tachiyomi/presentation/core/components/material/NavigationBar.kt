@@ -91,7 +91,10 @@ fun FloatingGlassNavigationBar(
         if (isDark) {
             Color.White.copy(alpha = 0.12f)
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+            // Light mode: use surfaceVariant (slightly darker than surface) at
+            // 95% opacity so light cover art behind the glass doesn't wash out
+            // the nav icons and text.
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
         }
     }
     val shape: Shape = GlassShape
@@ -159,7 +162,7 @@ fun FloatingGlassNavigationBarWithModes(
         if (isDark) {
             Color.White.copy(alpha = 0.12f)
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
         }
     }
     val shape: Shape = GlassShape

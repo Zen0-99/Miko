@@ -27,6 +27,7 @@ import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.asNovelCover
+import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
 import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackService
@@ -45,6 +46,7 @@ class NovelReaderScreenModel(
     private val chapterId: Long?,
     private val getNovel: GetNovel = Injekt.get(),
     private val getNovelWithChapters: GetNovelWithChapters = Injekt.get(),
+    private val getNovelChapter: GetNovelChapter = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
     private val setReadStatus: SetNovelReadStatus = Injekt.get(),
     private val upsertNovelHistory: UpsertNovelHistory = Injekt.get(),
@@ -130,6 +132,15 @@ class NovelReaderScreenModel(
     val showHighlightColorPicker = _showHighlightColorPicker.asStateFlow()
 
     private var pendingSelectedText: String? = null
+
+    /**
+     * When previous chapter is prepended in infinite scroll, this holds the
+     * number of items added. The screen's `update` callback reads and clears
+     * it, then scrolls after `submitList` completes — avoiding a race where
+     * the scroll runs before the adapter has the new list.
+     */
+    @Volatile
+    var pendingScrollAdjustment: Int? = null
 
     fun initHighlightManager(context: Context) {
         if (highlightManager == null) {
@@ -581,7 +592,9 @@ class NovelReaderScreenModel(
                 _chapters.value = chapterList.sortedBy { it.chapterNumber }
 
                 val targetChapter = if (chapterId != null) {
-                    chapterList.find { it.id == chapterId }
+                    // Fetch directly from DB to get fresh lastCharRead data,
+                    // since the chapter list may be cached/stale.
+                    getNovelChapter.await(chapterId) ?: chapterList.find { it.id == chapterId }
                 } else {
                     chapterList.find { !it.read } ?: chapterList.firstOrNull()
                 }
@@ -987,8 +1000,11 @@ class NovelReaderScreenModel(
 
                 // Notify the screen to adjust scroll offset by the number of
                 // prepended items so the user stays at the same spot.
+                // Stored as a pending field so the screen can apply it AFTER
+                // submitList completes — avoiding a race condition that caused
+                // random scroll jumps.
                 val addedCount = updatedItems.size - prevItemCount
-                _events.emit(NovelReaderEvent.AdjustScrollOffset(addedCount))
+                pendingScrollAdjustment = addedCount
             } catch (e: Exception) {
                 val currentItems = _contentItems.value.toMutableList()
                 _contentItems.value = currentItems.drop(1)
@@ -1333,8 +1349,6 @@ sealed interface NovelReaderEvent {
     data class ChapterChanged(val title: String) : NovelReaderEvent
     /** Scroll to a position: 0 = top, -1 = bottom. */
     data class ScrollToPosition(val position: Int) : NovelReaderEvent
-    /** Adjust scroll offset by [delta] items (used after prepending in infinite scroll). */
-    data class AdjustScrollOffset(val delta: Int) : NovelReaderEvent
     /** Scroll to a specific character offset within the current chapter. */
     data class ScrollToCharacter(val characterPosition: Int) : NovelReaderEvent
 }

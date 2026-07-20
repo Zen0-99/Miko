@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import eu.kanade.presentation.entries.anime.components.EpisodeDownloadAction
@@ -64,7 +65,12 @@ fun AnimeUpdateScreen(
                 onOpenEpisode = onOpenEpisode,
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = 80.dp),
+            )
+        },
     ) { contentPadding ->
         val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
             ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline

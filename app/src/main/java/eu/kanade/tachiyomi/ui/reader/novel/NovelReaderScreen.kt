@@ -155,17 +155,6 @@ class NovelReaderScreen(
                             }
                         }
                     }
-                    is NovelReaderEvent.AdjustScrollOffset -> {
-                        val rv = recyclerViewRef
-                        if (rv != null && event.delta > 0) {
-                            rv.post {
-                                val lm = rv.layoutManager as? LinearLayoutManager
-                                // Offset scroll by the number of prepended items so the
-                                // user stays at the same visual position.
-                                lm?.scrollToPositionWithOffset(event.delta, 0)
-                            }
-                        }
-                    }
                     is NovelReaderEvent.ScrollToCharacter -> {
                         val rv = recyclerViewRef
                         if (rv != null && event.characterPosition > 0) {
@@ -616,7 +605,18 @@ class NovelReaderScreen(
                 rv
             },
             update = { rv ->
-                adapter?.submitList(contentItems)
+                val pending = screenModel.pendingScrollAdjustment
+                if (pending != null) {
+                    screenModel.pendingScrollAdjustment = null
+                    adapter?.submitList(contentItems) {
+                        rv.post {
+                            val lm = rv.layoutManager as? LinearLayoutManager
+                            lm?.scrollToPositionWithOffset(pending, 0)
+                        }
+                    }
+                } else {
+                    adapter?.submitList(contentItems)
+                }
             },
             modifier = Modifier.fillMaxSize(),
         )

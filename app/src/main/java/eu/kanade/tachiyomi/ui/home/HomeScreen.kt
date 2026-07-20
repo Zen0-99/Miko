@@ -105,7 +105,6 @@ object HomeScreen : Screen() {
 
     private val uiPreferences: UiPreferences by injectLazy()
     private val defaultTab = uiPreferences.startScreen().get().tab
-    private val moreTab = uiPreferences.navStyle().get().moreTab
 
     @Composable
     override fun Content() {
@@ -162,7 +161,7 @@ object HomeScreen : Screen() {
                                 val navBarIconsOnly by uiPreferences.navBarIconsOnly().collectAsStateWithLifecycle()
                                 val modeCount = listOf(showManga, showAnime, showNovel).count { it }
                                 AnimatedVisibility(
-                                    visible = bottomNavVisible && tabNavigator.current != navStyle.moreTab,
+                                    visible = bottomNavVisible,
                                     enter = expandVertically(),
                                     exit = shrinkVertically(),
                                 ) {
@@ -245,15 +244,10 @@ object HomeScreen : Screen() {
                 }
 
             val goToStartScreen = {
-                if (defaultTab != moreTab) {
-                    tabNavigator.current = defaultTab
-                } else {
-                    tabNavigator.current = LibraryTab
-                }
+                tabNavigator.current = defaultTab
             }
             BackHandler(
-                enabled = (tabNavigator.current == moreTab || tabNavigator.current != defaultTab) &&
-                    (tabNavigator.current != LibraryTab || defaultTab != moreTab),
+                enabled = tabNavigator.current != defaultTab,
                 onBack = goToStartScreen,
             )
 
@@ -274,9 +268,13 @@ object HomeScreen : Screen() {
                         tabNavigator.current = when (it) {
                             is Tab.Library -> LibraryTab
                             is Tab.Updates -> UpdatesTab
-                            is Tab.History -> HistoriesTab
+                            is Tab.History -> UpdatesTab // History is now a sub-tab of Updates
                             is Tab.Browse -> BrowseTab
-                            is Tab.More -> MoreTab
+                            is Tab.More -> {
+                                // More tab removed — navigate to Settings instead
+                                navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen())
+                                tabNavigator.current
+                            }
                         }
 
                         if (it is Tab.Library && it.entryIdToOpen != null) {
@@ -344,12 +342,12 @@ object HomeScreen : Screen() {
         val iconColor = if (selected) {
             accent
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDark) 0.72f else 0.78f)
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDark) 0.72f else 0.85f)
         }
         val labelColor = if (selected) {
             accent
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDark) 0.82f else 0.88f)
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDark) 0.82f else 0.92f)
         }
         val iconBackgroundBrush = if (selected) {
             Brush.verticalGradient(

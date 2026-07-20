@@ -153,8 +153,8 @@ class NovelScreen(
             }.takeIf { successState.novel.favorite },
             onRefresh = screenModel::fetchAllFromSource,
             onContinueReading = {
-                val firstUnread = successState.chapters.firstOrNull { !it.chapter.read }
-                navigator.push(NovelReaderScreen(novelId, firstUnread?.id))
+                val firstUnread = successState.nextContinueChapter
+                navigator.push(NovelReaderScreen(novelId, firstUnread?.chapter?.id))
             },
             onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
             onShareClicked = { shareNovel(context, screenModel.novel, screenModel.source) }.takeIf { isHttpSource },

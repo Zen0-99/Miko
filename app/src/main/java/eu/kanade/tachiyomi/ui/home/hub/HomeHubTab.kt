@@ -65,6 +65,9 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
+import eu.kanade.presentation.components.AppBarActions
+import eu.kanade.presentation.components.globalOverflowActions
+import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.domain.ui.model.ContentMode
@@ -104,10 +107,11 @@ data object HomeHubTab : Tab {
     @Composable
     override fun Content() {
         val context = LocalContext.current
+        val navigator = LocalNavigator.currentOrThrow
         val screenModel = rememberScreenModel { HomeHubScreenModel() }
         val state by screenModel.state.collectAsStateWithLifecycle()
 
-        HomeHubContent(state = state, screenModel = screenModel)
+        HomeHubContent(state = state, screenModel = screenModel, navigator = navigator)
 
         LaunchedEffect(Unit) {
             (context as? MainActivity)?.ready = true
@@ -121,6 +125,7 @@ data object HomeHubTab : Tab {
 private fun HomeHubContent(
     state: HomeHubState,
     screenModel: HomeHubScreenModel,
+    navigator: cafe.adriel.voyager.navigator.Navigator,
 ) {
     val listState = rememberLazyListState()
     val tabNavigator = LocalTabNavigator.current
@@ -132,6 +137,11 @@ private fun HomeHubContent(
                 AppBar(
                     title = stringResource(AYMR.strings.label_home),
                     scrollBehavior = scrollBehavior,
+                    actions = {
+                        AppBarActions(globalOverflowActions(
+                            onClickSettings = { navigator.push(SettingsScreen()) },
+                        ))
+                    },
                 )
             },
         ) { padding ->
@@ -166,6 +176,11 @@ private fun HomeHubContent(
             AppBar(
                 title = stringResource(AYMR.strings.label_home),
                 scrollBehavior = scrollBehavior,
+                actions = {
+                    AppBarActions(globalOverflowActions(
+                        onClickSettings = { navigator.push(SettingsScreen()) },
+                    ))
+                },
             )
         },
     ) { padding ->

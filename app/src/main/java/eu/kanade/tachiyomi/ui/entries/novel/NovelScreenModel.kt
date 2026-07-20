@@ -1614,7 +1614,10 @@ class NovelScreenModel(
                 get() = novel.chaptersFiltered()
 
             val nextContinueChapter: NovelChapterList.Item?
-                get() = chapters.firstOrNull { !it.chapter.read } ?: chapters.firstOrNull()
+                get() = chapters
+                    .filter { !it.chapter.read }
+                    .minByOrNull { it.chapter.chapterNumber }
+                    ?: chapters.minByOrNull { it.chapter.chapterNumber }
 
             private fun List<NovelChapterList.Item>.applyFilters(novel: Novel): Sequence<NovelChapterList.Item> {
                 val unreadFilter = novel.unreadFilter
