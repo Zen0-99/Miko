@@ -61,7 +61,7 @@ fun AchievementCard(
             .drawBehind {
                 // Top hairline divider
                 drawLine(
-                    color = Color.White.copy(alpha = 0.06f),
+                    color = colors.divider,
                     start = Offset(0f, 0f),
                     end = Offset(size.width, 0f),
                     strokeWidth = 1.dp.toPx(),
@@ -182,10 +182,10 @@ private fun HiddenAchievementIcon(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(alpha = 0.02f))
+            .background(colors.surface.copy(alpha = 0.3f))
             .border(
                 width = 0.5.dp,
-                color = Color.White.copy(alpha = 0.05f),
+                color = colors.divider,
                 shape = RoundedCornerShape(8.dp),
             ),
         contentAlignment = Alignment.Center,

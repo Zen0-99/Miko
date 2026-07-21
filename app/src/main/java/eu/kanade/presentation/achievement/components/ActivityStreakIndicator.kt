@@ -85,7 +85,7 @@ fun ActivityStreakIndicator(
             .background(colors.surface.copy(alpha = 0.15f))
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.08f),
+                color = colors.divider,
                 shape = RoundedCornerShape(24.dp),
             )
             .padding(6.dp),
@@ -105,7 +105,7 @@ fun ActivityStreakIndicator(
                 )
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.12f),
+                    color = colors.divider,
                     shape = RoundedCornerShape(18.dp),
                 )
                 .padding(12.dp),
@@ -119,7 +119,7 @@ fun ActivityStreakIndicator(
                     .drawBehind {
                         val strokeWidth = 1.dp.toPx()
                         drawLine(
-                            color = Color.White.copy(alpha = 0.1f),
+                            color = colors.divider,
                             start = Offset(size.width, 0f),
                             end = Offset(size.width, size.height),
                             strokeWidth = strokeWidth,

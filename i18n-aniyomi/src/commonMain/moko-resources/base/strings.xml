@@ -400,6 +400,7 @@
     <string name="manga_categories">Manga Categories</string>
     <string name="general_categories">Categories</string>
     <string name="anime_categories">Anime Categories</string>
+    <string name="novel_categories">Novel Categories</string>
     <string name="entries">Library entries</string>
     <string name="chapters_episodes">Chapters and episodes</string>
     <string name="episodes">Episodes</string>
@@ -472,6 +473,7 @@
     <string name="default_anime_category">Default anime category</string>
     <string name="pref_manga_library_update_categories_details">Manga in excluded categories will not be updated even if they are also in included categories.</string>
     <string name="pref_anime_library_update_categories_details">Anime in excluded categories will not be updated even if they are also in included categories.</string>
+    <string name="pref_novel_library_update_categories_details">Novels in excluded categories will not be updated even if they are also in included categories.</string>
     <string name="unofficial_extension_message_aniyomi">This extension is not from the official list.</string>
     <string name="unofficial_anime_extension_message">This extension is not from the official list.</string>
     <string name="episode_download_progress">%1$d%%</string>
@@ -663,8 +665,8 @@
     <string name="achievement_vs_last_month">vs last month</string>
     <string name="achievement_no_data">No data</string>
     <string name="achievement_year_activity_title">Activity for the year</string>
-    <string name="achievement_period_jan_jun">Janâ€“Jun</string>
-    <string name="achievement_period_jul_dec">Julâ€“Dec</string>
+    <string name="achievement_period_jan_jun">Jan - Jun</string>
+    <string name="achievement_period_jul_dec">Jul - Dec</string>
     <string name="achievement_stat_total">Total: %d</string>
     <string name="achievement_stat_chapters">Chapters: %d</string>
     <string name="achievement_stat_episodes">Episodes: %d</string>

@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +64,7 @@ fun AchievementScreen(
     onAchievementClick: (achievement: Achievement) -> Unit = {},
     onDialogDismiss: () -> Unit = {},
     onLocaleChanged: () -> Unit = {},
+    onTestAchievement: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
@@ -76,7 +81,15 @@ fun AchievementScreen(
                 title = title,
                 titleContent = null,
                 onNavigateUp = onClickBack,
-                actions = {},
+                actions = {
+                    IconButton(onClick = { onTestAchievement() }) {
+                        Icon(
+                            imageVector = Icons.Outlined.BugReport,
+                            contentDescription = "Test achievement popup",
+                            tint = colors.accent,
+                        )
+                    }
+                },
             )
         },
         containerColor = colors.background,

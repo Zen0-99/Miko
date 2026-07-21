@@ -8,11 +8,16 @@ import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import eu.kanade.presentation.achievement.screenmodel.AchievementScreenModel
 import eu.kanade.presentation.achievement.ui.AchievementScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import tachiyomi.domain.achievement.model.Achievement
+import tachiyomi.domain.achievement.model.AchievementCategory
+import tachiyomi.domain.achievement.model.AchievementRarity
+import tachiyomi.domain.achievement.model.AchievementType
 
 /**
  * Voyager Screen wrapper for AchievementScreen.
@@ -39,6 +44,20 @@ object AchievementScreenVoyager : Screen() {
             },
             onLocaleChanged = {
                 screenModel.refreshAchievements()
+            },
+            onTestAchievement = {
+                AchievementBannerManager.showAchievement(
+                    Achievement(
+                        id = "test_popup",
+                        type = AchievementType.FEATURE_BASED,
+                        category = AchievementCategory.SECRET,
+                        points = 25,
+                        title = "Test Achievement",
+                        description = "This is a fake achievement for visual testing.",
+                        badgeIcon = "ic_badge_default",
+                        rarity = AchievementRarity.RARE,
+                    ),
+                )
             },
             modifier = Modifier,
         )

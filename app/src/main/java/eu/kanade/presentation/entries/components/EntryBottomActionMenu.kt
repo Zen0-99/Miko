@@ -22,17 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.ZeroCornerSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Label
-import androidx.compose.material.icons.automirrored.outlined.LabelOff
-import androidx.compose.material.icons.outlined.BookmarkAdd
-import androidx.compose.material.icons.outlined.BookmarkRemove
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Input
-import androidx.compose.material.icons.outlined.NewLabel
-import androidx.compose.material.icons.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.RemoveDone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -129,7 +119,7 @@ fun EntryBottomActionMenu(
                     val bookmark = if (isManga) MR.strings.action_bookmark else AYMR.strings.action_bookmark_episode
                     Button(
                         title = stringResource(bookmark),
-                        icon = Icons.Outlined.BookmarkAdd,
+                        icon = ImageVector.vectorResource(R.drawable.ic_bookmark_24dp),
                         toConfirm = confirm[0],
                         onLongClick = { onLongClickItem(0) },
                         onClick = onBookmarkClicked,
@@ -143,7 +133,7 @@ fun EntryBottomActionMenu(
                     }
                     Button(
                         title = stringResource(removeBookmark),
-                        icon = Icons.Outlined.BookmarkRemove,
+                        icon = ImageVector.vectorResource(R.drawable.ic_bookmark_off_24dp),
                         toConfirm = confirm[1],
                         onLongClick = { onLongClickItem(1) },
                         onClick = onRemoveBookmarkClicked,
@@ -152,7 +142,7 @@ fun EntryBottomActionMenu(
                 if (onFillermarkClicked != null) {
                     Button(
                         title = stringResource(AYMR.strings.action_fillermark_episode),
-                        icon = Icons.Outlined.NewLabel,
+                        icon = ImageVector.vectorResource(R.drawable.ic_label_24dp),
                         toConfirm = confirm[2],
                         onLongClick = { onLongClickItem(2) },
                         onClick = onFillermarkClicked,
@@ -161,7 +151,7 @@ fun EntryBottomActionMenu(
                 if (onRemoveFillermarkClicked != null) {
                     Button(
                         title = stringResource(AYMR.strings.action_remove_fillermark_episode),
-                        icon = Icons.AutoMirrored.Outlined.LabelOff,
+                        icon = ImageVector.vectorResource(R.drawable.ic_label_outline_24dp),
                         toConfirm = confirm[3],
                         onLongClick = { onLongClickItem(3) },
                         onClick = onRemoveFillermarkClicked,
@@ -171,7 +161,7 @@ fun EntryBottomActionMenu(
                     val viewed = if (isManga) MR.strings.action_mark_as_read else AYMR.strings.action_mark_as_seen
                     Button(
                         title = stringResource(viewed),
-                        icon = Icons.Outlined.DoneAll,
+                        icon = ImageVector.vectorResource(R.drawable.ic_eye_24dp),
                         toConfirm = confirm[4],
                         onLongClick = { onLongClickItem(4) },
                         onClick = onMarkAsViewedClicked,
@@ -181,7 +171,7 @@ fun EntryBottomActionMenu(
                     val unviewed = if (isManga) MR.strings.action_mark_as_unread else AYMR.strings.action_mark_as_unseen
                     Button(
                         title = stringResource(unviewed),
-                        icon = Icons.Outlined.RemoveDone,
+                        icon = ImageVector.vectorResource(R.drawable.ic_eye_off_24dp),
                         toConfirm = confirm[5],
                         onLongClick = { onLongClickItem(5) },
                         onClick = onMarkAsUnviewedClicked,
@@ -195,7 +185,7 @@ fun EntryBottomActionMenu(
                     }
                     Button(
                         title = stringResource(previousUnviewed),
-                        icon = ImageVector.vectorResource(R.drawable.ic_done_prev_24dp),
+                        icon = ImageVector.vectorResource(R.drawable.ic_eye_down_24dp),
                         toConfirm = confirm[6],
                         onLongClick = { onLongClickItem(6) },
                         onClick = onMarkPreviousAsViewedClicked,
@@ -213,7 +203,7 @@ fun EntryBottomActionMenu(
                 if (onDeleteClicked != null) {
                     Button(
                         title = stringResource(MR.strings.action_delete),
-                        icon = Icons.Outlined.Delete,
+                        icon = ImageVector.vectorResource(R.drawable.ic_delete_24dp),
                         toConfirm = confirm[8],
                         onLongClick = { onLongClickItem(8) },
                         onClick = onDeleteClicked,
@@ -222,7 +212,7 @@ fun EntryBottomActionMenu(
                 if (!isManga && onExternalClicked != null && !playerPreferences.alwaysUseExternalPlayer().get()) {
                     Button(
                         title = stringResource(AYMR.strings.action_play_externally),
-                        icon = Icons.Outlined.OpenInNew,
+                        icon = ImageVector.vectorResource(R.drawable.ic_open_in_webview_24dp),
                         toConfirm = confirm[9],
                         onLongClick = { onLongClickItem(9) },
                         onClick = onExternalClicked,
@@ -231,7 +221,7 @@ fun EntryBottomActionMenu(
                 if (!isManga && onInternalClicked != null && playerPreferences.alwaysUseExternalPlayer().get()) {
                     Button(
                         title = stringResource(AYMR.strings.action_play_internally),
-                        icon = Icons.Outlined.Input,
+                        icon = ImageVector.vectorResource(R.drawable.ic_play_arrow_24dp),
                         toConfirm = confirm[10],
                         onLongClick = { onLongClickItem(10) },
                         onClick = onInternalClicked,
@@ -335,7 +325,7 @@ fun LibraryBottomActionMenu(
             ) {
                 Button(
                     title = stringResource(MR.strings.action_move_category),
-                    icon = Icons.AutoMirrored.Outlined.Label,
+                    icon = ImageVector.vectorResource(R.drawable.ic_label_24dp),
                     toConfirm = confirm[0],
                     onLongClick = { onLongClickItem(0) },
                     onClick = onChangeCategoryClicked,
@@ -343,7 +333,7 @@ fun LibraryBottomActionMenu(
                 val viewed = if (isManga) MR.strings.action_mark_as_read else AYMR.strings.action_mark_as_seen
                 Button(
                     title = stringResource(viewed),
-                    icon = Icons.Outlined.DoneAll,
+                    icon = ImageVector.vectorResource(R.drawable.ic_eye_24dp),
                     toConfirm = confirm[1],
                     onLongClick = { onLongClickItem(1) },
                     onClick = onMarkAsViewedClicked,
@@ -351,7 +341,7 @@ fun LibraryBottomActionMenu(
                 val unviewed = if (isManga) MR.strings.action_mark_as_unread else AYMR.strings.action_mark_as_unseen
                 Button(
                     title = stringResource(unviewed),
-                    icon = Icons.Outlined.RemoveDone,
+                    icon = ImageVector.vectorResource(R.drawable.ic_eye_off_24dp),
                     toConfirm = confirm[2],
                     onLongClick = { onLongClickItem(2) },
                     onClick = onMarkAsUnviewedClicked,
@@ -376,7 +366,7 @@ fun LibraryBottomActionMenu(
                 }
                 Button(
                     title = stringResource(MR.strings.action_delete),
-                    icon = Icons.Outlined.Delete,
+                    icon = ImageVector.vectorResource(R.drawable.ic_delete_24dp),
                     toConfirm = confirm[4],
                     onLongClick = { onLongClickItem(4) },
                     onClick = onDeleteClicked,

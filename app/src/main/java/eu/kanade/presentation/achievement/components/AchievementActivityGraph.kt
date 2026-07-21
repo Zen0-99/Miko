@@ -127,7 +127,7 @@ fun AchievementActivityGraph(
                 .background(colors.surface.copy(alpha = 0.15f))
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.05f),
+                    color = colors.divider,
                     shape = RoundedCornerShape(20.dp),
                 )
                 .padding(4.dp),
@@ -146,7 +146,7 @@ fun AchievementActivityGraph(
                     )
                     .border(
                         width = 1.dp,
-                        color = Color.White.copy(alpha = 0.08f),
+                        color = colors.divider,
                         shape = RoundedCornerShape(16.dp),
                     )
                     .padding(16.dp),

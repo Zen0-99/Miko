@@ -261,12 +261,12 @@ class MainActivity : BaseActivity() {
                                 .padding(contentPadding)
                                 .consumeWindowInsets(contentPadding),
                         )
-                        // Achievement unlock banners (overlaid on bottom center)
+                        // Achievement unlock banners (overlaid on top center)
                         AchievementUnlockBanner(
-                            modifier = Modifier.align(Alignment.BottomCenter),
+                            modifier = Modifier.align(Alignment.TopCenter),
                         )
                         AchievementGroupNotification(
-                            modifier = Modifier.align(Alignment.BottomCenter),
+                            modifier = Modifier.align(Alignment.TopCenter),
                             onViewAll = {
                                 navigator?.push(AchievementScreenVoyager)
                             },

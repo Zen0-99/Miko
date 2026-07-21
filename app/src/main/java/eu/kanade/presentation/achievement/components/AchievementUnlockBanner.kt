@@ -398,12 +398,6 @@ private fun AchievementBannerItem(
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
-    val mutedGradient = remember(colors.accent, colors.surface) {
-        mutedUnlockBannerGradient(
-            accent = colors.accent,
-            surface = colors.surface,
-        )
-    }
 
     // Glow animation for rare achievements
     var glowScale by remember { mutableFloatStateOf(1f) }
@@ -450,34 +444,14 @@ private fun AchievementBannerItem(
                 },
             )
             .clip(RoundedCornerShape(AchievementPopupSizeTokens.unlockContainerCornerRadius))
-            .background(
-                brush = Brush.linearGradient(
-                    colors = if (isRare) {
-                        // Rare achievements keep gold/orange theme (universal for rarity)
-                        listOf(
-                            Color(0xFFFF6B00), // Orange
-                            Color(0xFFFFD700), // Gold
-                            Color(0xFFFF8C42), // Light Orange
-                            Color(0xFFFFD700), // Gold
-                        )
-                    } else {
-                        mutedGradient
-                    },
-                    start = Offset(0f, 0f),
-                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
-                ),
-            )
+            .background(colors.surface)
             .border(
                 width = if (isRare) {
                     AchievementPopupSizeTokens.unlockRareBorderWidth
                 } else {
                     AchievementPopupSizeTokens.unlockNormalBorderWidth
                 },
-                color = if (isRare) {
-                    Color.White.copy(alpha = 0.5f)
-                } else {
-                    Color.White.copy(alpha = 0.3f)
-                },
+                color = colors.accent,
                 shape = RoundedCornerShape(AchievementPopupSizeTokens.unlockContainerCornerRadius),
             )
             .padding(AchievementPopupSizeTokens.unlockContentPadding),
@@ -565,7 +539,7 @@ private fun AchievementBannerItem(
                     Icon(
                         imageVector = Icons.Default.EmojiEvents,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = colors.accent,
                         modifier = Modifier.size(AchievementPopupSizeTokens.unlockHeaderIconSize),
                     )
                     Text(
@@ -574,7 +548,7 @@ private fun AchievementBannerItem(
                         } else {
                             stringResource(AYMR.strings.achievement_banner_unlocked_title)
                         },
-                        color = Color.White.copy(alpha = 0.95f),
+                        color = colors.accent,
                         fontSize = if (isRare) {
                             AchievementPopupSizeTokens.unlockLabelRareFontSize
                         } else {
@@ -586,12 +560,6 @@ private fun AchievementBannerItem(
                         } else {
                             AchievementPopupSizeTokens.unlockLabelNormalLetterSpacing
                         },
-                        style = TextStyle(
-                            shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.4f),
-                                blurRadius = 4f,
-                            ),
-                        ),
                     )
                 }
 
@@ -600,7 +568,7 @@ private fun AchievementBannerItem(
                 // Achievement title with bold typography
                 Text(
                     text = achievement.title,
-                    color = Color.White,
+                    color = colors.textPrimary,
                     fontSize = if (isRare) {
                         AchievementPopupSizeTokens.unlockTitleRareFontSize
                     } else {
@@ -608,12 +576,6 @@ private fun AchievementBannerItem(
                     },
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 0.5.sp,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.3f),
-                            blurRadius = 8f,
-                        ),
-                    ),
                 )
 
                 // Description
@@ -621,7 +583,7 @@ private fun AchievementBannerItem(
                     Spacer(modifier = Modifier.height(AchievementPopupSizeTokens.unlockDescriptionTopSpacing))
                     Text(
                         text = description,
-                        color = Color.White.copy(alpha = 0.9f),
+                        color = colors.textSecondary,
                         fontSize = AchievementPopupSizeTokens.unlockDescriptionFontSize,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -638,13 +600,13 @@ private fun AchievementBannerItem(
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
-                            tint = Color(0xFFFFD700),
+                            tint = colors.accent,
                             modifier = Modifier.size(AchievementPopupSizeTokens.unlockRarePointsIconSize),
                         )
                     }
                     Text(
                         text = stringResource(AYMR.strings.achievement_points_reward, achievement.points),
-                        color = if (isRare) Color(0xFFFFD700) else Color.White.copy(alpha = 0.95f),
+                        color = colors.accent,
                         fontSize = if (isRare) {
                             AchievementPopupSizeTokens.unlockPointsRareFontSize
                         } else {
@@ -652,16 +614,6 @@ private fun AchievementBannerItem(
                         },
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.5.sp,
-                        style = TextStyle(
-                            shadow = if (isRare) {
-                                Shadow(
-                                    color = Color(0xFFFF6B00).copy(alpha = 0.5f),
-                                    blurRadius = 8f,
-                                )
-                            } else {
-                                null
-                            },
-                        ),
                     )
                 }
             }
