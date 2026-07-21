@@ -69,8 +69,10 @@ fun Screen.animeSourcesTab(): TabContent {
     }
 
     val sourcePreferences: SourcePreferences = remember { Injekt.get() }
-    val cardDesign by sourcePreferences.browseCardDesign().changes().collectAsState(false)
-    val cardColumns by sourcePreferences.browseCardColumns().changes().collectAsState(2)
+    val cardDesignPref = sourcePreferences.browseCardDesign()
+    val cardColumnsPref = sourcePreferences.browseCardColumns()
+    val cardDesign by cardDesignPref.changes().collectAsState(cardDesignPref.get())
+    val cardColumns by cardColumnsPref.changes().collectAsState(cardColumnsPref.get())
 
     return TabContent(
         titleRes = AYMR.strings.label_anime_sources,
