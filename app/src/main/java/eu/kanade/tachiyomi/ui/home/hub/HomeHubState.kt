@@ -74,19 +74,25 @@ data class HomeHubState(
     // --- Card helpers for unified rendering ---
 
     val recentAnimeCards: List<HomeHubCardItem>
-        get() = recentAnime.map {
-            HomeHubCardItem(it.animeId, it.title, it.coverData, HomeHubMediaType.ANIME, "Ep. ${it.episodeNumber}")
-        }
+        get() = recentAnime
+            .distinctBy { it.animeId }
+            .map {
+                HomeHubCardItem(it.animeId, it.title, it.coverData, HomeHubMediaType.ANIME, "Ep. ${it.episodeNumber}")
+            }
 
     val recentMangaCards: List<HomeHubCardItem>
-        get() = recentManga.map {
-            HomeHubCardItem(it.mangaId, it.title, it.coverData, HomeHubMediaType.MANGA, "Ch. ${it.chapterNumber}")
-        }
+        get() = recentManga
+            .distinctBy { it.mangaId }
+            .map {
+                HomeHubCardItem(it.mangaId, it.title, it.coverData, HomeHubMediaType.MANGA, "Ch. ${it.chapterNumber}")
+            }
 
     val recentNovelCards: List<HomeHubCardItem>
-        get() = recentNovels.map {
-            HomeHubCardItem(it.novelId, it.title, it.coverData, HomeHubMediaType.NOVEL, "Ch. ${it.chapterNumber}")
-        }
+        get() = recentNovels
+            .distinctBy { it.novelId }
+            .map {
+                HomeHubCardItem(it.novelId, it.title, it.coverData, HomeHubMediaType.NOVEL, "Ch. ${it.chapterNumber}")
+            }
 
     val recentlyAddedAnimeCards: List<HomeHubCardItem>
         get() = recentlyAddedAnime.map {

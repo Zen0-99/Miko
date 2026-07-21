@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.domain.ui.model.setAppCompatDelegateThemeMode
 import eu.kanade.presentation.more.settings.widget.AppThemePreferenceWidget
@@ -45,8 +46,11 @@ internal class ThemeStep : OnboardingStep {
                 value = lightTheme,
                 amoled = false,
                 isDarkTheme = false,
-                onItemClick = {
-                    lightThemePref.set(it)
+                onItemClick = { theme ->
+                    // Apply to all content modes so anime/manga/novel share the onboarding choice
+                    lightThemePref.set(theme)
+                    uiPreferences.animeLightTheme().set(theme)
+                    uiPreferences.novelLightTheme().set(theme)
                     themeModePref.set(ThemeMode.LIGHT)
                     setAppCompatDelegateThemeMode(ThemeMode.LIGHT)
                 },
@@ -59,8 +63,11 @@ internal class ThemeStep : OnboardingStep {
                 value = darkTheme,
                 amoled = amoled,
                 isDarkTheme = true,
-                onItemClick = {
-                    darkThemePref.set(it)
+                onItemClick = { theme ->
+                    // Apply to all content modes so anime/manga/novel share the onboarding choice
+                    darkThemePref.set(theme)
+                    uiPreferences.animeDarkTheme().set(theme)
+                    uiPreferences.novelDarkTheme().set(theme)
                     themeModePref.set(ThemeMode.DARK)
                     setAppCompatDelegateThemeMode(ThemeMode.DARK)
                 },

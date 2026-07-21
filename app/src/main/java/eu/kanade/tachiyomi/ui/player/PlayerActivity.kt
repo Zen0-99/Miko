@@ -105,6 +105,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -233,6 +234,9 @@ class PlayerActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
 
+        // Defer achievement unlock banners while in the player
+        AchievementBannerManager.setInReaderOrPlayer(true)
+
         setupPlayerMPV()
         setupPlayerAudio()
         setupMediaSession()
@@ -313,6 +317,9 @@ class PlayerActivity : BaseActivity() {
         MPVLib.removeObserver(playerObserver)
         player.destroy()
         viewModel.stopHttpServer()
+
+        // Resume deferred achievement unlock banners now that player is closing
+        AchievementBannerManager.setInReaderOrPlayer(false)
 
         super.onDestroy()
     }

@@ -69,6 +69,9 @@ import eu.kanade.presentation.components.AppStateBanners
 import eu.kanade.presentation.components.DownloadedOnlyBannerBackgroundColor
 import eu.kanade.presentation.components.IncognitoModeBannerBackgroundColor
 import eu.kanade.presentation.components.IndexingBannerBackgroundColor
+import eu.kanade.presentation.achievement.components.AchievementUnlockBanner
+import eu.kanade.presentation.achievement.components.AchievementGroupNotification
+import eu.kanade.presentation.achievement.screen.AchievementScreenVoyager
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.AssistContentScreen
@@ -257,6 +260,16 @@ class MainActivity : BaseActivity() {
                             modifier = Modifier
                                 .padding(contentPadding)
                                 .consumeWindowInsets(contentPadding),
+                        )
+                        // Achievement unlock banners (overlaid on bottom center)
+                        AchievementUnlockBanner(
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        )
+                        AchievementGroupNotification(
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                            onViewAll = {
+                                navigator?.push(AchievementScreenVoyager)
+                            },
                         )
                         // Draw navigation bar scrim when needed
                         if (remember { isNavigationBarNeedsScrim() }) {

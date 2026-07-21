@@ -52,9 +52,12 @@ import eu.kanade.tachiyomi.util.system.WebViewUtil
 import eu.kanade.tachiyomi.util.system.animatorDurationScale
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notify
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
 import logcat.AndroidLogcatLogger
 import logcat.LogPriority
 import logcat.LogcatLogger
@@ -68,7 +71,12 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.data.achievement.handler.AchievementHandler
+import tachiyomi.data.achievement.handler.SessionManager
+import tachiyomi.data.achievement.loader.AchievementLoader
+import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.model.AchievementEvent
+import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.widget.entries.anime.AnimeWidgetManager
 import tachiyomi.presentation.widget.entries.manga.MangaWidgetManager
@@ -83,6 +91,9 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     private val basePreferences: BasePreferences by injectLazy()
     private val networkPreferences: NetworkPreferences by injectLazy()
     private val achievementEventBus: AchievementEventBus by injectLazy()
+    private val achievementHandler: AchievementHandler by injectLazy()
+    private val achievementLoader: AchievementLoader by injectLazy()
+    private val sessionManager: SessionManager by injectLazy()
 
     private val disableIncognitoReceiver = DisableIncognitoReceiver()
     private var sessionStartMs: Long = 0L
@@ -190,10 +201,33 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
         initializeMigrator()
 
-        // Defer achievement AppStart event past the first frame so it doesn't block startup
+        // Defer achievement init past the first frame so it doesn't block startup.
+        // Loads achievement definitions from assets into the DB, then starts the
+        // event handler so emitted events (chapter read, etc.) are processed.
         android.os.Handler(android.os.Looper.getMainLooper()).post {
-            val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-            achievementEventBus.tryEmit(AchievementEvent.AppStart(hourOfDay = hourOfDay))
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            scope.launch {
+                try {
+                    achievementLoader.loadAchievements()
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR) { "[ACHIEVEMENTS-INIT] Failed to load achievements: ${e.message}" }
+                }
+
+                try {
+                    achievementHandler.unlockCallback =
+                        object : AchievementHandler.AchievementUnlockCallback {
+                            override fun onAchievementUnlocked(achievement: Achievement) {
+                                AchievementBannerManager.showAchievement(achievement)
+                            }
+                        }
+                    achievementHandler.start()
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR) { "[ACHIEVEMENTS-INIT] Failed to start achievement handler: ${e.message}" }
+                }
+
+                val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                achievementEventBus.tryEmit(AchievementEvent.AppStart(hourOfDay = hourOfDay))
+            }
         }
     }
 
@@ -263,6 +297,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     override fun onStart(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStart()
         sessionStartMs = System.currentTimeMillis()
+        sessionManager.onSessionStart()
     }
 
     override fun onStop(owner: LifecycleOwner) {
@@ -273,6 +308,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             achievementEventBus.tryEmit(AchievementEvent.SessionEnd(durationMs = durationMs))
             sessionStartMs = 0L
         }
+        sessionManager.onSessionEnd()
     }
 
     override fun getPackageName(): String {

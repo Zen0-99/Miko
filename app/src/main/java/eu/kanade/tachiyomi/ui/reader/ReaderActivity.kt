@@ -99,6 +99,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import java.io.ByteArrayOutputStream
 
 class ReaderActivity : BaseActivity() {
@@ -159,6 +160,9 @@ class ReaderActivity : BaseActivity() {
 
         binding = ReaderActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Defer achievement unlock banners while in the reader
+        AchievementBannerManager.setInReaderOrPlayer(true)
 
         if (viewModel.needsInit()) {
             val manga = intent.extras?.getLong("manga", -1) ?: -1L
@@ -253,6 +257,8 @@ class ReaderActivity : BaseActivity() {
         config = null
         menuToggleToast?.cancel()
         readingModeToast?.cancel()
+        // Resume deferred achievement unlock banners now that reader is closing
+        AchievementBannerManager.setInReaderOrPlayer(false)
     }
 
     override fun onPause() {

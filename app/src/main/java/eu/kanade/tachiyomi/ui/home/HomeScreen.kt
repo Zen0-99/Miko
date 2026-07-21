@@ -258,7 +258,11 @@ object HomeScreen : Screen() {
                                             }
                                         }
                                     } else {
-                                        Column {
+                                        Column(
+                                            modifier = Modifier.background(
+                                                MaterialTheme.colorScheme.surfaceContainer,
+                                            ),
+                                        ) {
                                             if (modeCount > 1) {
                                                 ModePill(
                                                     modifier = Modifier.fillMaxWidth(),

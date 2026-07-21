@@ -23,7 +23,6 @@ import eu.kanade.domain.ui.asBooleanPreference
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.domain.ui.model.NavBarAppearance
-import eu.kanade.domain.ui.model.NavStyle
 import eu.kanade.domain.ui.model.StartScreen
 import eu.kanade.domain.ui.model.TabletUiMode
 import eu.kanade.domain.ui.model.ThemeMode
@@ -94,6 +93,7 @@ object SettingsAppearanceScreen : SearchableSettings {
                 Preference.PreferenceItem.CustomPreference(
                     title = stringResource(AYMR.strings.pref_content_mode_theme),
                 ) {
+                    val contentModePref = uiPreferences.contentMode()
                     SingleChoiceSegmentedButtonRow(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -102,7 +102,10 @@ object SettingsAppearanceScreen : SearchableSettings {
                         ContentMode.entries.forEachIndexed { index, mode ->
                             SegmentedButton(
                                 selected = mode == editingMode,
-                                onClick = { editingMode = mode },
+                                onClick = {
+                                    editingMode = mode
+                                    contentModePref.set(mode)
+                                },
                                 shape = SegmentedButtonDefaults.itemShape(
                                     index,
                                     ContentMode.entries.size,
@@ -121,6 +124,7 @@ object SettingsAppearanceScreen : SearchableSettings {
                         value = lightTheme,
                         amoled = false,
                         isDarkTheme = false,
+                        recreateOnSelect = false,
                         onItemClick = {
                             lightThemePref.set(it)
                             themeModePref.set(ThemeMode.LIGHT)
@@ -137,6 +141,7 @@ object SettingsAppearanceScreen : SearchableSettings {
                         value = darkTheme,
                         amoled = amoled,
                         isDarkTheme = true,
+                        recreateOnSelect = false,
                         onItemClick = {
                             darkThemePref.set(it)
                             themeModePref.set(ThemeMode.DARK)
@@ -199,14 +204,6 @@ object SettingsAppearanceScreen : SearchableSettings {
                         context.toast(MR.strings.requires_app_restart)
                         true
                     },
-                ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = uiPreferences.navStyle(),
-                    entries = NavStyle.entries
-                        .associateWith { stringResource(it.titleRes) }
-                        .toImmutableMap(),
-                    title = "Navigation Style",
-                    onValueChanged = { true },
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = remember { uiPreferences.navBarAppearance().asBooleanPreference(

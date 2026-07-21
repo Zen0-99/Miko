@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.CollectionsBookmark
+import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Info
@@ -42,6 +43,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
+import eu.kanade.presentation.achievement.screen.AchievementScreenVoyager
 import eu.kanade.presentation.more.settings.screen.about.AboutScreen
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.util.LocalBackPress
@@ -217,6 +219,12 @@ object SettingsMainScreen : Screen() {
             subtitleRes = MR.strings.pref_tracking_summary,
             icon = Icons.Outlined.Sync,
             screen = SettingsTrackingScreen,
+        ),
+        Item(
+            titleRes = AYMR.strings.label_achievements,
+            subtitleRes = AYMR.strings.pref_achievements_summary,
+            icon = Icons.Outlined.EmojiEvents,
+            screen = AchievementScreenVoyager,
         ),
         Item(
             titleRes = MR.strings.browse,

@@ -32,7 +32,7 @@ internal object LimeColorScheme : BaseColorScheme() {
         onBackground = Color(0xFFE3E5E3),
         surface = Color(0xFF202125),
         onSurface = Color(0xFFE3E5E3),
-        surfaceVariant = Color(0xFF202125),
+        surfaceVariant = Color(0xFF2A2D30),
         onSurfaceVariant = Color(0xFFC5C6D0),
         surfaceTint = Color(0xFF7CF7A5),
         inverseSurface = Color(0xFFE3E5E3),
@@ -40,9 +40,9 @@ internal object LimeColorScheme : BaseColorScheme() {
         outline = Color(0xFF8E9099),
         surfaceContainerLowest = Color(0xFF1B1B1E),
         surfaceContainerLow = Color(0xFF1E1E21),
-        surfaceContainer = Color(0xFF202125),
-        surfaceContainerHigh = Color(0xFF252529),
-        surfaceContainerHighest = Color(0xFF2A2A2E),
+        surfaceContainer = Color(0xFF242528),
+        surfaceContainerHigh = Color(0xFF2A2D30),
+        surfaceContainerHighest = Color(0xFF35383B),
     )
 
     override val lightScheme = lightColorScheme(
