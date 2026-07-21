@@ -3,7 +3,6 @@ package eu.kanade.presentation.browse.novel
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -275,57 +273,49 @@ private fun NovelSourcesCardView(
             // Render items as cards in FlowRow
             if (header?.language != NovelSourcesScreenModel.NOT_INSTALLED_KEY || notInstalledExpanded) {
                 item(key = "cards-${header?.hashCode() ?: "no-header"}") {
-                    val spacing = 8.dp
-                    val horizontalPadding = 12.dp
-                    BoxWithConstraints(
+                    FlowRow(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = horizontalPadding),
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        maxItemsInEachRow = cardColumns,
                     ) {
-                        val totalSpacing = spacing * (cardColumns - 1)
-                        val cardWidth = (maxWidth - totalSpacing) / cardColumns
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(spacing),
-                            verticalArrangement = Arrangement.spacedBy(spacing),
-                            maxItemsInEachRow = cardColumns,
-                        ) {
-                            sectionItems.forEach { model ->
-                                when (model) {
-                                    is NovelSourceUiModel.Item -> {
-                                        val ext = sourceExtensionMap[model.source.id]
-                                        val hasUpdate = model.source.id in sourcesWithUpdates
-                                        val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
-                                            it == InstallStep.Pending || it == InstallStep.Downloading
-                                        } == true
-                                        ExtensionCard(
-                                            modifier = Modifier.width(cardWidth),
-                                            title = model.source.name,
-                                            lang = model.source.lang.uppercase(),
-                                            version = ext?.versionName ?: "",
-                                            iconDrawable = ext?.icon,
-                                            hasUpdate = hasUpdate,
-                                            isUpdating = isUpdating,
-                                            onClick = { onClickItem(model.source, Listing.Popular) },
-                                            onCogClick = {
-                                                if (hasUpdate) onClickUpdate(model.source)
-                                                else onClickExtension(model.source)
-                                            },
-                                        )
-                                    }
-                                    is NovelSourceUiModel.AvailableExtension -> {
-                                        ExtensionCard(
-                                            modifier = Modifier.width(cardWidth),
-                                            title = model.extension.name,
-                                            lang = model.extension.lang.uppercase(),
-                                            version = model.extension.versionName,
-                                            iconUrl = model.extension.iconUrl,
-                                            onClick = { onClickInstallExtension(model.extension) },
-                                            onCogClick = {},
-                                        )
-                                    }
-                                    else -> {}
+                        sectionItems.forEach { model ->
+                            when (model) {
+                                is NovelSourceUiModel.Item -> {
+                                    val ext = sourceExtensionMap[model.source.id]
+                                    val hasUpdate = model.source.id in sourcesWithUpdates
+                                    val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
+                                        it == InstallStep.Pending || it == InstallStep.Downloading
+                                    } == true
+                                    ExtensionCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = model.source.name,
+                                        lang = model.source.lang.uppercase(),
+                                        version = ext?.versionName ?: "",
+                                        iconDrawable = ext?.icon,
+                                        hasUpdate = hasUpdate,
+                                        isUpdating = isUpdating,
+                                        onClick = { onClickItem(model.source, Listing.Popular) },
+                                        onCogClick = {
+                                            if (hasUpdate) onClickUpdate(model.source)
+                                            else onClickExtension(model.source)
+                                        },
+                                    )
                                 }
+                                is NovelSourceUiModel.AvailableExtension -> {
+                                    ExtensionCard(
+                                        modifier = Modifier.weight(1f),
+                                        title = model.extension.name,
+                                        lang = model.extension.lang.uppercase(),
+                                        version = model.extension.versionName,
+                                        iconUrl = model.extension.iconUrl,
+                                        onClick = { onClickInstallExtension(model.extension) },
+                                        onCogClick = {},
+                                    )
+                                }
+                                else -> {}
                             }
                         }
                     }
