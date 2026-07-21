@@ -17,6 +17,13 @@ private val DEFAULT_CACHE_CONTROL = CacheControl.Builder().maxAge(10, MINUTES).b
 private val DEFAULT_HEADERS = Headers.Builder().build()
 private val DEFAULT_BODY: RequestBody = FormBody.Builder().build()
 
+/**
+ * Cache control that forces a network fetch, bypassing any cached response.
+ * Use for pull-to-refresh and manual update checks where stale cache would
+ * hide newly published extension updates.
+ */
+val FORCE_NETWORK = CacheControl.Builder().noCache().build()
+
 fun GET(
     url: String,
     headers: Headers = DEFAULT_HEADERS,

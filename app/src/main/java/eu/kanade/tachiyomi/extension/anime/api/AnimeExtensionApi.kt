@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.anime.model.AnimeLoadResult
 import eu.kanade.tachiyomi.extension.anime.util.AnimeExtensionLoader
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.FORCE_NETWORK
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.parseAs
@@ -52,7 +53,7 @@ internal class AnimeExtensionApi {
         val repoBaseUrl = extRepo.baseUrl
         return try {
             val response = networkService.client
-                .newCall(GET("$repoBaseUrl/index.min.json"))
+                .newCall(GET("$repoBaseUrl/index.min.json", cache = FORCE_NETWORK))
                 .awaitSuccess()
 
             with(json) {

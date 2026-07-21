@@ -141,13 +141,29 @@ class NovelSourcesScreenModel(
     }
 
     fun findAvailableExtensions() {
+        logcat(LogPriority.DEBUG) { "NovelSourcesScreenModel.findAvailableExtensions() called" }
         screenModelScope.launchIO {
             mutableState.update { it.copy(isRefreshing = true) }
 
+            val before = extensionManager.installedExtensionsFlow.value.count { it.hasUpdate }
+            logcat(LogPriority.DEBUG) { "Before refresh: $before installed extensions have hasUpdate=true" }
+            logcat(LogPriority.DEBUG) { "Installed extensions: ${extensionManager.installedExtensionsFlow.value.size}, Available: ${extensionManager.availableExtensionsFlow.value.size}" }
+
             extensionManager.findAvailableExtensions()
 
-            // Fake slower refresh so it doesn't seem like it's not doing anything
             delay(1.seconds)
+
+            val after = extensionManager.installedExtensionsFlow.value.count { it.hasUpdate }
+            val installed = extensionManager.installedExtensionsFlow.value
+            val available = extensionManager.availableExtensionsFlow.value
+            logcat(LogPriority.DEBUG) { "After refresh: $after installed extensions have hasUpdate=true" }
+            logcat(LogPriority.DEBUG) { "Installed: ${installed.size}, Available: ${available.size}" }
+            installed.forEach { ext ->
+                val avail = available.find { it.pkgName == ext.pkgName }
+                logcat(LogPriority.DEBUG) {
+                    "  ${ext.pkgName}: installed code=${ext.versionCode}, available code=${avail?.versionCode}, hasUpdate=${ext.hasUpdate}"
+                }
+            }
 
             mutableState.update { it.copy(isRefreshing = false) }
         }
