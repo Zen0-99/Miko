@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -88,6 +89,7 @@ fun MangaSourcesScreen(
     sourceExtensionMap: Map<Long, MangaExtension.Installed> = emptyMap(),
     onClickUpdate: (Source) -> Unit = {},
     onRefresh: () -> Unit = {},
+    onClickUpdateAll: () -> Unit = {},
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
@@ -128,6 +130,7 @@ fun MangaSourcesScreen(
                         onClickInstallExtension = onClickInstallExtension,
                         onClickTrustExtension = onClickTrustExtension,
                         downloadStates = downloadStates,
+                        onClickUpdateAll = onClickUpdateAll,
                     )
                 } else {
                 FastScrollLazyColumn(
@@ -167,6 +170,17 @@ fun MangaSourcesScreen(
                                     MangaSourceSectionHeader(
                                         modifier = Modifier.animateItem(),
                                         text = stringResource(MR.strings.ext_installed),
+                                        action = {
+                                            if (sourcesWithUpdates.isNotEmpty()) {
+                                                IconButton(onClick = onClickUpdateAll) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Download,
+                                                        contentDescription = stringResource(MR.strings.ext_update_all),
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                    )
+                                                }
+                                            }
+                                        },
                                     )
                                 }
                                 else -> {
@@ -228,6 +242,7 @@ private fun MangaSourcesCardView(
     onClickTrustExtension: (MangaExtension.Untrusted) -> Unit,
     downloadStates: SnapshotStateMap<String, InstallStep>,
     sourceExtensionMap: Map<Long, MangaExtension.Installed>,
+    onClickUpdateAll: () -> Unit = {},
 ) {
     // Group items by section (header + items)
     val sectionedItems = remember(items) {
@@ -269,6 +284,17 @@ private fun MangaSourcesCardView(
                         MangaSourcesScreenModel.INSTALLED_KEY -> {
                             MangaSourceSectionHeader(
                                 text = stringResource(MR.strings.ext_installed),
+                                action = {
+                                    if (sourcesWithUpdates.isNotEmpty()) {
+                                        IconButton(onClick = onClickUpdateAll) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Download,
+                                                contentDescription = stringResource(MR.strings.ext_update_all),
+                                                tint = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    }
+                                },
                             )
                         }
                         else -> {
@@ -386,7 +412,7 @@ private fun SourceItem(
             onClickItem = { onClickItem(source, Listing.Popular) },
             onLongClickItem = { onLongClickItem(source) },
             action = {
-                // Cog icon — opens extension details. Changes to download icon when update available.
+                // Cog icon â€” opens extension details. Changes to download icon when update available.
                 if (source.id != LocalMangaSource.ID) {
                     IconButton(onClick = { onClickExtension(source) }) {
                         Icon(
@@ -513,6 +539,7 @@ private fun MangaSourceSectionHeader(
     expanded: Boolean? = null,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    action: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
         modifier = modifier
@@ -531,6 +558,7 @@ private fun MangaSourceSectionHeader(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
+        action()
         if (expanded != null) {
             Icon(
                 imageVector = if (expanded) {

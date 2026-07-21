@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -87,6 +88,7 @@ fun AnimeSourcesScreen(
     sourceExtensionMap: Map<Long, AnimeExtension.Installed> = emptyMap(),
     onClickUpdate: (AnimeSource) -> Unit = {},
     onRefresh: () -> Unit = {},
+    onClickUpdateAll: () -> Unit = {},
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
@@ -127,6 +129,7 @@ fun AnimeSourcesScreen(
                     onClickInstallExtension = onClickInstallExtension,
                     onClickTrustExtension = onClickTrustExtension,
                     downloadStates = downloadStates,
+                    onClickUpdateAll = onClickUpdateAll,
                 )
             } else {
             FastScrollLazyColumn(
@@ -166,6 +169,17 @@ fun AnimeSourcesScreen(
                                     AnimeSourceSectionHeader(
                                         modifier = Modifier.animateItem(),
                                         text = stringResource(MR.strings.ext_installed),
+                                        action = {
+                                            if (sourcesWithUpdates.isNotEmpty()) {
+                                                IconButton(onClick = onClickUpdateAll) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Download,
+                                                        contentDescription = stringResource(MR.strings.ext_update_all),
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                    )
+                                                }
+                                            }
+                                        },
                                     )
                                 }
                                 else -> {
@@ -227,6 +241,7 @@ private fun AnimeSourcesCardView(
     onClickInstallExtension: (AnimeExtension.Available) -> Unit,
     onClickTrustExtension: (AnimeExtension.Untrusted) -> Unit,
     downloadStates: SnapshotStateMap<String, InstallStep>,
+    onClickUpdateAll: () -> Unit = {},
 ) {
     // Group items by section (header + items)
     val sectionedItems = remember(items) {
@@ -268,6 +283,17 @@ private fun AnimeSourcesCardView(
                         AnimeSourcesScreenModel.INSTALLED_KEY -> {
                             AnimeSourceSectionHeader(
                                 text = stringResource(MR.strings.ext_installed),
+                                action = {
+                                    if (sourcesWithUpdates.isNotEmpty()) {
+                                        IconButton(onClick = onClickUpdateAll) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Download,
+                                                contentDescription = stringResource(MR.strings.ext_update_all),
+                                                tint = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    }
+                                },
                             )
                         }
                         else -> {
@@ -360,6 +386,7 @@ private fun AnimeSourceSectionHeader(
     expanded: Boolean? = null,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    action: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
         modifier = modifier
@@ -378,6 +405,7 @@ private fun AnimeSourceSectionHeader(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
+        action()
         if (expanded != null) {
             Icon(
                 imageVector = if (expanded) {
@@ -423,7 +451,7 @@ private fun AnimeSourceItem(
             onClickItem = { onClickItem(source, Listing.Popular) },
             onLongClickItem = { onLongClickItem(source) },
             action = {
-                // Cog icon — opens extension details. Changes to download icon when update available.
+                // Cog icon â€” opens extension details. Changes to download icon when update available.
                 if (source.id != LocalAnimeSource.ID) {
                     IconButton(onClick = { onClickExtension(source) }) {
                         Icon(

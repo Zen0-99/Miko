@@ -97,6 +97,18 @@ fun Screen.animeSourcesTab(): TabContent {
                 cardColumns = cardColumns,
                 sourceExtensionMap = sourceExtensionMap,
                 onRefresh = screenModel::findAvailableExtensions,
+                onClickUpdateAll = {
+                    installedExtensions.filter { it.hasUpdate }.forEach { ext ->
+                        scope.launch {
+                            extensionManager.updateExtension(ext).collect { step ->
+                                downloadStates[ext.pkgName] = step
+                                if (step == InstallStep.Installed || step == InstallStep.Error) {
+                                    downloadStates.remove(ext.pkgName)
+                                }
+                            }
+                        }
+                    }
+                },
                 onClickItem = { source, listing ->
                     navigator.push(BrowseAnimeSourceScreen(source.id, listing.query))
                 },

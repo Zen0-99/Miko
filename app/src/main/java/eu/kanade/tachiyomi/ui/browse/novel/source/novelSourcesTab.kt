@@ -98,6 +98,18 @@ fun Screen.novelSourcesTab(): TabContent {
                 cardColumns = cardColumns,
                 sourceExtensionMap = sourceExtensionMap,
                 onRefresh = screenModel::findAvailableExtensions,
+                onClickUpdateAll = {
+                    installedExtensions.filter { it.hasUpdate }.forEach { ext ->
+                        scope.launch {
+                            extensionManager.updateExtension(ext).collect { step ->
+                                downloadStates[ext.pkgName] = step
+                                if (step == InstallStep.Installed || step == InstallStep.Error) {
+                                    downloadStates.remove(ext.pkgName)
+                                }
+                            }
+                        }
+                    }
+                },
                 onClickItem = { source, listing ->
                     Log.d("NovelSearch", "[novelSourcesTab] onClickItem - source=${source.name} (id=${source.id}), listing.query='${listing.query}', pushing BrowseNovelSourceScreen")
                     navigator.push(BrowseNovelSourceScreen(source.id, listing.query))
