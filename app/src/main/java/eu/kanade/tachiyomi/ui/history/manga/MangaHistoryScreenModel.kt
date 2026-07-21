@@ -4,7 +4,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.entries.manga.interactor.UpdateManga
 import eu.kanade.domain.track.manga.interactor.AddMangaTracks
 import eu.kanade.presentation.history.manga.MangaHistoryUiModel
@@ -46,6 +45,7 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.time.LocalDate
 
 class MangaHistoryScreenModel(
     private val addTracks: AddMangaTracks = Injekt.get(),
@@ -91,16 +91,71 @@ class MangaHistoryScreenModel(
     }
 
     private fun List<MangaHistoryWithRelations>.toHistoryUiModels(): List<MangaHistoryUiModel> {
-        return map { MangaHistoryUiModel.Item(it) }
-            .insertSeparators { before, after ->
-                val beforeDate = before?.item?.readAt?.time?.toLocalDate()
-                val afterDate = after?.item?.readAt?.time?.toLocalDate()
-                when {
-                    beforeDate != afterDate && afterDate != null -> MangaHistoryUiModel.Header(afterDate)
-                    // Return null to avoid adding a separator between two items.
-                    else -> null
+        // Group consecutive entries from the same manga whose readAt timestamps
+        // fall within BATCH_WINDOW_MS. If a group has >= BATCH_MIN_SIZE entries,
+        // collapse it into a single MangaHistoryUiModel.Batch; otherwise emit
+        // individual items. Date headers are inserted between groups/items that
+        // cross a day boundary.
+        val BATCH_WINDOW_MS = 60_000L // 1 minute
+        val BATCH_MIN_SIZE = 5
+
+        if (isEmpty()) return emptyList()
+
+        // First pass: build groups of consecutive same-manga entries within the window.
+        data class Group(
+            val mangaId: Long,
+            val entries: List<MangaHistoryWithRelations>,
+        )
+
+        val groups = mutableListOf<Group>()
+        var current: MutableList<MangaHistoryWithRelations>? = null
+        var currentMangaId: Long? = null
+        var windowStart: Long = 0L
+        for (entry in this) {
+            val t = entry.readAt?.time ?: 0L
+            if (current != null && entry.mangaId == currentMangaId && t - windowStart <= BATCH_WINDOW_MS) {
+                current!!.add(entry)
+            } else {
+                if (current != null) {
+                    groups.add(Group(currentMangaId!!, current!!))
                 }
+                current = mutableListOf(entry)
+                currentMangaId = entry.mangaId
+                windowStart = t
             }
+        }
+        if (current != null) groups.add(Group(currentMangaId!!, current!!))
+
+        // Second pass: build the final UI model list with headers.
+        val result = mutableListOf<MangaHistoryUiModel>()
+        var lastDate: LocalDate? = null
+        groups.forEach { group ->
+            val entries = group.entries
+            val first = entries.first()
+            val last = entries.last()
+            val firstDate = first.readAt?.time?.toLocalDate()
+            if (firstDate != null && firstDate != lastDate) {
+                result.add(MangaHistoryUiModel.Header(firstDate))
+                lastDate = firstDate
+            }
+            if (entries.size >= BATCH_MIN_SIZE) {
+                result.add(
+                    MangaHistoryUiModel.Batch(
+                        mangaId = group.mangaId,
+                        title = first.title,
+                        firstChapter = first.chapterNumber,
+                        lastChapter = last.chapterNumber,
+                        firstReadAt = first.readAt ?: java.util.Date(0),
+                        lastReadAt = last.readAt ?: java.util.Date(0),
+                        coverData = first.coverData,
+                        historyIds = entries.map { it.id },
+                    ),
+                )
+            } else {
+                entries.forEach { result.add(MangaHistoryUiModel.Item(it)) }
+            }
+        }
+        return result
     }
 
     suspend fun getNextChapter(): Chapter? {

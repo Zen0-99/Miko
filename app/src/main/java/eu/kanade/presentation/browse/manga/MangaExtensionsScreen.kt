@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
@@ -169,6 +170,11 @@ private fun ExtensionContent(
                 contentType = "header",
                 key = "extensionHeader-${header.hashCode()}",
             ) {
+                // Check if there are any extension updates pending
+                val hasUpdatesPending = state.items.keys.any {
+                    it is MangaExtensionUiModel.Header.Resource &&
+                        it.textRes == MR.strings.ext_updates_pending
+                }
                 when (header) {
                     is MangaExtensionUiModel.Header.Resource -> {
                         val action: @Composable RowScope.() -> Unit =
@@ -180,6 +186,16 @@ private fun ExtensionContent(
                                             style = LocalTextStyle.current.copy(
                                                 color = MaterialTheme.colorScheme.onPrimary,
                                             ),
+                                        )
+                                    }
+                                }
+                            } else if (header.textRes == MR.strings.ext_installed && hasUpdatesPending) {
+                                {
+                                    IconButton(onClick = { onClickUpdateAll() }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Download,
+                                            contentDescription = stringResource(MR.strings.ext_update_all),
+                                            tint = MaterialTheme.colorScheme.primary,
                                         )
                                     }
                                 }

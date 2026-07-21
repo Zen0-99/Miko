@@ -147,11 +147,6 @@ fun Screen.novelUpdatesTab(
                     icon = Icons.Outlined.CalendarMonth,
                     onClick = { navigator.push(UpcomingNovelScreen()) },
                 ),
-                AppBar.Action(
-                    title = stringResource(MR.strings.action_update_library),
-                    icon = Icons.Outlined.Refresh,
-                    onClick = { screenModel.updateLibrary() },
-                ),
             )
         },
         navigateUp = navigateUp,

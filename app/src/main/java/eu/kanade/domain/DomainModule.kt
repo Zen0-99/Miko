@@ -408,7 +408,7 @@ class DomainModule : InjektModule {
         addFactory { GetEpisodesByAnimeId(get()) }
         addFactory { GetEpisodeByUrlAndAnimeId(get()) }
         addFactory { UpdateEpisode(get()) }
-        addFactory { SetSeenStatus(get(), get(), get(), get(), get()) }
+        addFactory { SetSeenStatus(get(), get(), get(), get(), get(), get()) }
         addFactory { ShouldUpdateDbEpisode() }
         addFactory { SyncEpisodesWithSource(get(), get(), get(), get(), get(), get(), get(), get()) }
         addFactory { FilterEpisodesForDownload(get(), get(), get()) }
@@ -418,7 +418,7 @@ class DomainModule : InjektModule {
         addFactory { GetChaptersByMangaId(get()) }
         addFactory { GetChapterByUrlAndMangaId(get()) }
         addFactory { UpdateChapter(get()) }
-        addFactory { SetReadStatus(get(), get(), get(), get(), get()) }
+        addFactory { SetReadStatus(get(), get(), get(), get(), get(), get()) }
         addFactory { ShouldUpdateDbChapter() }
         addFactory { SyncChaptersWithSource(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         addFactory { GetAvailableScanlators(get()) }
@@ -557,7 +557,7 @@ class DomainModule : InjektModule {
         addFactory { SetNovelDefaultChapterFlags(get(), get(), get()) }
         addFactory { UpdateNovel(get()) }
         addFactory { UpdateNovelChapter(get()) }
-        addFactory { SetNovelReadStatus(get(), get()) }
+        addFactory { SetNovelReadStatus(get(), get(), get()) }
         addFactory { SetNovelReadingPosition(get()) }
         addFactory { CharacterPositionTracker(get()) }
         addFactory { tachiyomi.domain.entries.novel.interactor.NovelFetchInterval() }

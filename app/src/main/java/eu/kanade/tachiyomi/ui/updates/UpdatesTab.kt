@@ -38,6 +38,7 @@ import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.stats.anime.animeStatsTab
 import eu.kanade.tachiyomi.ui.stats.manga.mangaStatsTab
+import eu.kanade.tachiyomi.ui.stats.novel.novelStatsTab
 import eu.kanade.tachiyomi.ui.updates.anime.animeUpdatesTab
 import eu.kanade.tachiyomi.ui.updates.manga.mangaUpdatesTab
 import eu.kanade.tachiyomi.ui.updates.novel.novelUpdatesTab
@@ -105,7 +106,7 @@ data object UpdatesTab : Tab {
         val statsTab = when (contentMode) {
             ContentMode.ANIME -> animeStatsTab()
             ContentMode.MANGA -> mangaStatsTab()
-            ContentMode.NOVEL -> mangaStatsTab() // No novel stats yet, reuse manga
+            ContentMode.NOVEL -> novelStatsTab()
         }.copy(titleRes = MR.strings.label_stats_short, navigateUp = null)
 
         // Calendar tab — embeds the Upcoming screen content directly
@@ -159,7 +160,7 @@ data object UpdatesTab : Tab {
 
         TabbedScreen(
             titleRes = MR.strings.label_recent_updates,
-            tabs = persistentListOf(updatesTab, historyTab, downloadsTab, calendarTab, statsTab),
+            tabs = persistentListOf(updatesTab, calendarTab, downloadsTab, statsTab, historyTab),
             scrollable = true,
             onClickSettings = { navigator.push(SettingsScreen()) },
         )

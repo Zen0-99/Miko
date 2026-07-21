@@ -1,12 +1,26 @@
 package eu.kanade.presentation.history.manga
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -23,6 +37,7 @@ import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun MangaHistoryScreen(
@@ -63,6 +78,7 @@ fun MangaHistoryScreen(
                     onClickResume = { history -> onClickResume(history.mangaId, history.chapterId) },
                     onClickDelete = { item -> onDialogChange(MangaHistoryScreenModel.Dialog.Delete(item)) },
                     onClickFavorite = { history -> onClickFavorite(history.mangaId) },
+                    onClickBatchCover = onClickCover,
                 )
             }
         }
@@ -77,6 +93,7 @@ private fun MangaHistoryScreenContent(
     onClickResume: (MangaHistoryWithRelations) -> Unit,
     onClickDelete: (MangaHistoryWithRelations) -> Unit,
     onClickFavorite: (MangaHistoryWithRelations) -> Unit,
+    onClickBatchCover: (Long) -> Unit,
 ) {
     FastScrollLazyColumn(
         contentPadding = contentPadding,
@@ -88,6 +105,7 @@ private fun MangaHistoryScreenContent(
                 when (it) {
                     is MangaHistoryUiModel.Header -> "header"
                     is MangaHistoryUiModel.Item -> "item"
+                    is MangaHistoryUiModel.Batch -> "batch"
                 }
             },
         ) { item ->
@@ -109,6 +127,13 @@ private fun MangaHistoryScreenContent(
                         onClickFavorite = { onClickFavorite(value) },
                     )
                 }
+                is MangaHistoryUiModel.Batch -> {
+                    MangaHistoryBatchItem(
+                        modifier = Modifier.animateItemFastScroll(),
+                        batch = item,
+                        onClickCover = { onClickBatchCover(item.mangaId) },
+                    )
+                }
             }
         }
     }
@@ -117,6 +142,22 @@ private fun MangaHistoryScreenContent(
 sealed interface MangaHistoryUiModel {
     data class Header(val date: LocalDate) : MangaHistoryUiModel
     data class Item(val item: MangaHistoryWithRelations) : MangaHistoryUiModel
+
+    /**
+     * A batched group of history entries for the same manga whose readAt
+     * timestamps fall within a short window (e.g. mass mark-as-read).
+     * Renders as "Chapter X - Y" with a time range "X AM - Y AM".
+     */
+    data class Batch(
+        val mangaId: Long,
+        val title: String,
+        val firstChapter: Double,
+        val lastChapter: Double,
+        val firstReadAt: java.util.Date,
+        val lastReadAt: java.util.Date,
+        val coverData: tachiyomi.domain.entries.manga.model.MangaCover,
+        val historyIds: List<Long>,
+    ) : MangaHistoryUiModel
 }
 
 @PreviewLightDark
@@ -135,5 +176,66 @@ internal fun HistoryScreenPreviews(
             onDialogChange = {},
             onClickFavorite = {},
         )
+    }
+}
+
+@Composable
+private fun MangaHistoryBatchItem(
+    batch: MangaHistoryUiModel.Batch,
+    onClickCover: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val timeFormatter = remember { DateTimeFormatter.ofPattern("h:mm a") }
+    val zone = remember { java.time.ZoneId.systemDefault() }
+    val firstTime = remember(batch.firstReadAt) {
+        timeFormatter.format(batch.firstReadAt.toInstant().atZone(zone))
+    }
+    val lastTime = remember(batch.lastReadAt) {
+        timeFormatter.format(batch.lastReadAt.toInstant().atZone(zone))
+    }
+    val chapterRange = remember(batch.firstChapter, batch.lastChapter) {
+        if (batch.firstChapter == batch.lastChapter) {
+            "Chapter ${batch.firstChapter}"
+        } else {
+            "Chapter ${batch.firstChapter} - ${batch.lastChapter}"
+        }
+    }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = batch.title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = chapterRange,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "$firstTime - $lastTime",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        IconButton(onClick = onClickCover) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = "Open",
+            )
+        }
     }
 }

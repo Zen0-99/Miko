@@ -1,12 +1,26 @@
 package eu.kanade.presentation.history.anime
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -24,6 +38,7 @@ import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun AnimeHistoryScreen(
@@ -64,6 +79,7 @@ fun AnimeHistoryScreen(
                     onClickResume = { history -> onClickResume(history.animeId, history.episodeId) },
                     onClickDelete = { item -> onDialogChange(AnimeHistoryScreenModel.Dialog.Delete(item)) },
                     onClickFavorite = { history -> onClickFavorite(history.animeId) },
+                    onClickBatchCover = onClickCover,
                 )
             }
         }
@@ -78,6 +94,7 @@ private fun AnimeHistoryScreenContent(
     onClickResume: (AnimeHistoryWithRelations) -> Unit,
     onClickDelete: (AnimeHistoryWithRelations) -> Unit,
     onClickFavorite: (AnimeHistoryWithRelations) -> Unit,
+    onClickBatchCover: (Long) -> Unit,
 ) {
     FastScrollLazyColumn(
         contentPadding = contentPadding,
@@ -89,6 +106,7 @@ private fun AnimeHistoryScreenContent(
                 when (it) {
                     is AnimeHistoryUiModel.Header -> "header"
                     is AnimeHistoryUiModel.Item -> "item"
+                    is AnimeHistoryUiModel.Batch -> "batch"
                 }
             },
         ) { item ->
@@ -110,6 +128,13 @@ private fun AnimeHistoryScreenContent(
                         onClickFavorite = { onClickFavorite(value) },
                     )
                 }
+                is AnimeHistoryUiModel.Batch -> {
+                    AnimeHistoryBatchItem(
+                        modifier = Modifier.animateItemFastScroll(),
+                        batch = item,
+                        onClickCover = { onClickBatchCover(item.animeId) },
+                    )
+                }
             }
         }
     }
@@ -118,6 +143,22 @@ private fun AnimeHistoryScreenContent(
 sealed interface AnimeHistoryUiModel {
     data class Header(val date: LocalDate) : AnimeHistoryUiModel
     data class Item(val item: AnimeHistoryWithRelations) : AnimeHistoryUiModel
+
+    /**
+     * A batched group of history entries for the same anime whose seenAt
+     * timestamps fall within a short window (e.g. mass mark-as-seen).
+     * Renders as "Episode X - Y" with a time range "X AM - Y AM".
+     */
+    data class Batch(
+        val animeId: Long,
+        val title: String,
+        val firstEpisode: Double,
+        val lastEpisode: Double,
+        val firstSeenAt: java.util.Date,
+        val lastSeenAt: java.util.Date,
+        val coverData: tachiyomi.domain.entries.anime.model.AnimeCover,
+        val historyIds: List<Long>,
+    ) : AnimeHistoryUiModel
 }
 
 @PreviewLightDark
@@ -136,5 +177,66 @@ internal fun HistoryScreenPreviews(
             onDialogChange = {},
             onClickFavorite = {},
         )
+    }
+}
+
+@Composable
+private fun AnimeHistoryBatchItem(
+    batch: AnimeHistoryUiModel.Batch,
+    onClickCover: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val timeFormatter = remember { DateTimeFormatter.ofPattern("h:mm a") }
+    val zone = remember { java.time.ZoneId.systemDefault() }
+    val firstTime = remember(batch.firstSeenAt) {
+        timeFormatter.format(batch.firstSeenAt.toInstant().atZone(zone))
+    }
+    val lastTime = remember(batch.lastSeenAt) {
+        timeFormatter.format(batch.lastSeenAt.toInstant().atZone(zone))
+    }
+    val episodeRange = remember(batch.firstEpisode, batch.lastEpisode) {
+        if (batch.firstEpisode == batch.lastEpisode) {
+            "Episode ${batch.firstEpisode}"
+        } else {
+            "Episode ${batch.firstEpisode} - ${batch.lastEpisode}"
+        }
+    }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = batch.title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = episodeRange,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "$firstTime - $lastTime",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        IconButton(onClick = onClickCover) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = "Open",
+            )
+        }
     }
 }

@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FlipToBack
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -174,11 +173,6 @@ fun Screen.animeUpdatesTab(
                     title = stringResource(MR.strings.action_view_upcoming),
                     icon = Icons.Outlined.CalendarMonth,
                     onClick = { navigator.push(UpcomingAnimeScreen()) },
-                ),
-                AppBar.Action(
-                    title = stringResource(MR.strings.action_update_library),
-                    icon = Icons.Outlined.Refresh,
-                    onClick = { screenModel.updateLibrary() },
                 ),
             )
         },

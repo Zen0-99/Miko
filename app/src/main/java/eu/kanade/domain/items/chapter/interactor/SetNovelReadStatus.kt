@@ -5,12 +5,16 @@ import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.achievement.handler.AchievementEventBus
 import tachiyomi.domain.achievement.model.AchievementEvent
+import tachiyomi.domain.history.novel.interactor.UpsertNovelHistory
+import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
+import java.util.Date
 
 class SetNovelReadStatus(
     private val novelChapterRepository: NovelChapterRepository,
+    private val upsertHistory: UpsertNovelHistory? = null,
     private val achievementEventBus: AchievementEventBus? = null,
 ) {
 
@@ -44,6 +48,20 @@ class SetNovelReadStatus(
 
         // Emit achievement events for novel chapters marked as read
         if (read) {
+            // Record history entries for manually-marked-as-read chapters
+            if (upsertHistory != null) {
+                val now = Date()
+                chaptersToUpdate.forEach { chapter ->
+                    upsertHistory.await(
+                        NovelHistoryUpdate(
+                            chapterId = chapter.id,
+                            readAt = now,
+                            sessionReadDuration = 0L,
+                        ),
+                    )
+                }
+            }
+
             chaptersToUpdate.forEach { chapter ->
                 achievementEventBus?.tryEmit(
                     AchievementEvent.NovelChapterRead(

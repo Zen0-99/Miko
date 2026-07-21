@@ -10,15 +10,19 @@ import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.history.manga.interactor.UpsertMangaHistory
+import tachiyomi.domain.history.manga.model.MangaHistoryUpdate
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.items.chapter.model.ChapterUpdate
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
+import java.util.Date
 
 class SetReadStatus(
     private val downloadPreferences: DownloadPreferences,
     private val deleteDownload: DeleteChapterDownload,
     private val mangaRepository: MangaRepository,
     private val chapterRepository: ChapterRepository,
+    private val upsertHistory: UpsertMangaHistory? = null,
     private val achievementEventBus: AchievementEventBus? = null,
 ) {
 
@@ -52,6 +56,20 @@ class SetReadStatus(
 
         // Emit achievement events for chapters marked as read
         if (read) {
+            // Record history entries for manually-marked-as-read chapters
+            if (upsertHistory != null) {
+                val now = Date()
+                chaptersToUpdate.forEach { chapter ->
+                    upsertHistory.await(
+                        MangaHistoryUpdate(
+                            chapterId = chapter.id,
+                            readAt = now,
+                            sessionReadDuration = 0L,
+                        ),
+                    )
+                }
+            }
+
             chaptersToUpdate.forEach { chapter ->
                 achievementEventBus?.tryEmit(
                     AchievementEvent.ChapterRead(

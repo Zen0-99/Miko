@@ -4,8 +4,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.core.util.insertSeparators
 import eu.kanade.tachiyomi.util.lang.toLocalDate
+import java.time.LocalDate
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -68,15 +68,71 @@ class NovelHistoryScreenModel(
     }
 
     private fun List<NovelHistoryWithRelations>.toHistoryUiModels(): List<NovelHistoryUiModel> {
-        return map { NovelHistoryUiModel.Item(it) }
-            .insertSeparators { before, after ->
-                val beforeDate = before?.item?.readAt?.time?.toLocalDate()
-                val afterDate = after?.item?.readAt?.time?.toLocalDate()
-                when {
-                    beforeDate != afterDate && afterDate != null -> NovelHistoryUiModel.Header(afterDate)
-                    else -> null
+        // Group consecutive entries from the same novel whose readAt timestamps
+        // fall within BATCH_WINDOW_MS. If a group has >= BATCH_MIN_SIZE entries,
+        // collapse it into a single NovelHistoryUiModel.Batch; otherwise emit
+        // individual items. Date headers are inserted between groups/items that
+        // cross a day boundary.
+        val BATCH_WINDOW_MS = 60_000L // 1 minute
+        val BATCH_MIN_SIZE = 5
+
+        if (isEmpty()) return emptyList()
+
+        // First pass: build groups of consecutive same-novel entries within the window.
+        data class Group(
+            val novelId: Long,
+            val entries: List<NovelHistoryWithRelations>,
+        )
+
+        val groups = mutableListOf<Group>()
+        var current: MutableList<NovelHistoryWithRelations>? = null
+        var currentNovelId: Long? = null
+        var windowStart: Long = 0L
+        for (entry in this) {
+            val t = entry.readAt?.time ?: 0L
+            if (current != null && entry.novelId == currentNovelId && t - windowStart <= BATCH_WINDOW_MS) {
+                current!!.add(entry)
+            } else {
+                if (current != null) {
+                    groups.add(Group(currentNovelId!!, current!!))
                 }
+                current = mutableListOf(entry)
+                currentNovelId = entry.novelId
+                windowStart = t
             }
+        }
+        if (current != null) groups.add(Group(currentNovelId!!, current!!))
+
+        // Second pass: build the final UI model list with headers.
+        val result = mutableListOf<NovelHistoryUiModel>()
+        var lastDate: LocalDate? = null
+        groups.forEach { group ->
+            val entries = group.entries
+            val first = entries.first()
+            val last = entries.last()
+            val firstDate = first.readAt?.time?.toLocalDate()
+            if (firstDate != null && firstDate != lastDate) {
+                result.add(NovelHistoryUiModel.Header(firstDate))
+                lastDate = firstDate
+            }
+            if (entries.size >= BATCH_MIN_SIZE) {
+                result.add(
+                    NovelHistoryUiModel.Batch(
+                        novelId = group.novelId,
+                        title = first.title,
+                        firstChapter = first.chapterNumber,
+                        lastChapter = last.chapterNumber,
+                        firstReadAt = first.readAt ?: java.util.Date(0),
+                        lastReadAt = last.readAt ?: java.util.Date(0),
+                        coverData = first.coverData,
+                        historyIds = entries.map { it.id },
+                    ),
+                )
+            } else {
+                entries.forEach { result.add(NovelHistoryUiModel.Item(it)) }
+            }
+        }
+        return result
     }
 
     suspend fun getNextChapter(): NovelChapter? {

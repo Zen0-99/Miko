@@ -207,6 +207,12 @@ private fun NovelHistoryScreen(
                         onDialogChange = onDialogChange,
                     )
                 }
+                is NovelHistoryUiModel.Batch -> {
+                    NovelHistoryBatchItem(
+                        batch = item,
+                        onClickCover = onClickCover,
+                    )
+                }
             }
         }
     }
@@ -261,6 +267,66 @@ private fun NovelHistoryItem(
             Icon(
                 imageVector = Icons.Filled.Delete,
                 contentDescription = "Delete",
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovelHistoryBatchItem(
+    batch: NovelHistoryUiModel.Batch,
+    onClickCover: (Long) -> Unit,
+) {
+    val timeFormatter = remember { DateTimeFormatter.ofPattern("h:mm a") }
+    val zone = remember { java.time.ZoneId.systemDefault() }
+    val firstTime = remember(batch.firstReadAt) {
+        timeFormatter.format(batch.firstReadAt.toInstant().atZone(zone))
+    }
+    val lastTime = remember(batch.lastReadAt) {
+        timeFormatter.format(batch.lastReadAt.toInstant().atZone(zone))
+    }
+    val chapterRange = remember(batch.firstChapter, batch.lastChapter) {
+        if (batch.firstChapter == batch.lastChapter) {
+            "Chapter ${batch.firstChapter}"
+        } else {
+            "Chapter ${batch.firstChapter} - ${batch.lastChapter}"
+        }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = batch.title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = chapterRange,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "$firstTime - $lastTime",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        IconButton(onClick = { onClickCover(batch.novelId) }) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = "Open",
             )
         }
     }

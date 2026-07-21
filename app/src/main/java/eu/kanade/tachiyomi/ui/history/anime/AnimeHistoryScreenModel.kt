@@ -4,7 +4,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.entries.anime.interactor.UpdateAnime
 import eu.kanade.domain.track.anime.interactor.AddAnimeTracks
 import eu.kanade.presentation.history.anime.AnimeHistoryUiModel
@@ -46,6 +45,7 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.time.LocalDate
 
 class AnimeHistoryScreenModel(
     private val addTracks: AddAnimeTracks = Injekt.get(),
@@ -91,16 +91,71 @@ class AnimeHistoryScreenModel(
     }
 
     private fun List<AnimeHistoryWithRelations>.toAnimeHistoryUiModels(): List<AnimeHistoryUiModel> {
-        return map { AnimeHistoryUiModel.Item(it) }
-            .insertSeparators { before, after ->
-                val beforeDate = before?.item?.seenAt?.time?.toLocalDate()
-                val afterDate = after?.item?.seenAt?.time?.toLocalDate()
-                when {
-                    beforeDate != afterDate && afterDate != null -> AnimeHistoryUiModel.Header(afterDate)
-                    // Return null to avoid adding a separator between two items.
-                    else -> null
+        // Group consecutive entries from the same anime whose seenAt timestamps
+        // fall within BATCH_WINDOW_MS. If a group has >= BATCH_MIN_SIZE entries,
+        // collapse it into a single AnimeHistoryUiModel.Batch; otherwise emit
+        // individual items. Date headers are inserted between groups/items that
+        // cross a day boundary.
+        val BATCH_WINDOW_MS = 60_000L // 1 minute
+        val BATCH_MIN_SIZE = 5
+
+        if (isEmpty()) return emptyList()
+
+        // First pass: build groups of consecutive same-anime entries within the window.
+        data class Group(
+            val animeId: Long,
+            val entries: List<AnimeHistoryWithRelations>,
+        )
+
+        val groups = mutableListOf<Group>()
+        var current: MutableList<AnimeHistoryWithRelations>? = null
+        var currentAnimeId: Long? = null
+        var windowStart: Long = 0L
+        for (entry in this) {
+            val t = entry.seenAt?.time ?: 0L
+            if (current != null && entry.animeId == currentAnimeId && t - windowStart <= BATCH_WINDOW_MS) {
+                current!!.add(entry)
+            } else {
+                if (current != null) {
+                    groups.add(Group(currentAnimeId!!, current!!))
                 }
+                current = mutableListOf(entry)
+                currentAnimeId = entry.animeId
+                windowStart = t
             }
+        }
+        if (current != null) groups.add(Group(currentAnimeId!!, current!!))
+
+        // Second pass: build the final UI model list with headers.
+        val result = mutableListOf<AnimeHistoryUiModel>()
+        var lastDate: LocalDate? = null
+        groups.forEach { group ->
+            val entries = group.entries
+            val first = entries.first()
+            val last = entries.last()
+            val firstDate = first.seenAt?.time?.toLocalDate()
+            if (firstDate != null && firstDate != lastDate) {
+                result.add(AnimeHistoryUiModel.Header(firstDate))
+                lastDate = firstDate
+            }
+            if (entries.size >= BATCH_MIN_SIZE) {
+                result.add(
+                    AnimeHistoryUiModel.Batch(
+                        animeId = group.animeId,
+                        title = first.title,
+                        firstEpisode = first.episodeNumber,
+                        lastEpisode = last.episodeNumber,
+                        firstSeenAt = first.seenAt ?: java.util.Date(0),
+                        lastSeenAt = last.seenAt ?: java.util.Date(0),
+                        coverData = first.coverData,
+                        historyIds = entries.map { it.id },
+                    ),
+                )
+            } else {
+                entries.forEach { result.add(AnimeHistoryUiModel.Item(it)) }
+            }
+        }
+        return result
     }
 
     suspend fun getNextEpisode(): Episode? {
