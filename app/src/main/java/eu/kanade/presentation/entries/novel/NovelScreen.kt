@@ -79,6 +79,7 @@ fun NovelScreen(
     onFilterButtonClicked: () -> Unit,
     onBookmarkFilterClicked: () -> Unit,
     onHighlightsClicked: (() -> Unit)? = null,
+    onTrackingClicked: (() -> Unit)? = null,
     onRefresh: () -> Unit,
     onContinueReading: () -> Unit,
     onSearch: (String, Boolean) -> Unit,
@@ -128,6 +129,7 @@ fun NovelScreen(
             onFilterButtonClicked = onFilterButtonClicked,
             onBookmarkFilterClicked = onBookmarkFilterClicked,
             onHighlightsClicked = onHighlightsClicked,
+            onTrackingClicked = onTrackingClicked,
             onRefresh = onRefresh,
             onContinueReading = onContinueReading,
             onSearch = onSearch,
@@ -177,6 +179,7 @@ fun NovelScreen(
             onFilterButtonClicked = onFilterButtonClicked,
             onBookmarkFilterClicked = onBookmarkFilterClicked,
             onHighlightsClicked = onHighlightsClicked,
+            onTrackingClicked = onTrackingClicked,
             onRefresh = onRefresh,
             onContinueReading = onContinueReading,
             onSearch = onSearch,
@@ -229,6 +232,7 @@ private fun NovelScreenSmallImpl(
     onFilterButtonClicked: () -> Unit,
     onBookmarkFilterClicked: () -> Unit,
     onHighlightsClicked: (() -> Unit)? = null,
+    onTrackingClicked: (() -> Unit)? = null,
     onRefresh: () -> Unit,
     onContinueReading: () -> Unit,
     onSearch: (String, Boolean) -> Unit,
@@ -350,8 +354,6 @@ private fun NovelScreenSmallImpl(
                 backgroundAlphaProvider = { backgroundAlpha },
                 isManga = true, // Novels use chapter/unread terminology like manga
                 toolbarBackgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
-                intervalDays = state.intervalDays,
-                showIntervalBadge = true,
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -395,6 +397,8 @@ private fun NovelScreenSmallImpl(
                         onWebViewClicked = onWebViewClicked,
                         onShareClicked = onShareClicked,
                         onHighlightsClicked = onHighlightsClicked,
+                        trackingCount = state.trackingCount,
+                        onTrackingClicked = onTrackingClicked,
                     )
                 }
 
@@ -443,8 +447,7 @@ private fun NovelScreenSmallImpl(
                         itemCount = chapters.size,
                         onClick = onFilterButtonClicked,
                         accentColor = state.accentColor,
-                        onFetchNewChapters = onFetchNewChapters,
-                        onFetchAllChapters = onFetchAllChapters,
+                        intervalDays = state.intervalDays,
                     )
                 }
 
@@ -491,6 +494,7 @@ private fun NovelScreenSmallImpl(
                         chapterSwipeStartAction = chapterSwipeStartAction,
                         chapterSwipeEndAction = chapterSwipeEndAction,
                         accentColor = state.accentColor,
+                        isRangeStart = rangeMarkStart?.first?.id == chapterItem.chapter.id,
                     )
                 }
             }
@@ -580,6 +584,7 @@ private fun NovelScreenLargeImpl(
     onFilterButtonClicked: () -> Unit,
     onBookmarkFilterClicked: () -> Unit,
     onHighlightsClicked: (() -> Unit)? = null,
+    onTrackingClicked: (() -> Unit)? = null,
     onRefresh: () -> Unit,
     onContinueReading: () -> Unit,
     onSearch: (String, Boolean) -> Unit,
@@ -627,6 +632,8 @@ private fun NovelScreenLargeImpl(
         onTagSearch = onTagSearch,
         onFilterButtonClicked = onFilterButtonClicked,
         onBookmarkFilterClicked = onBookmarkFilterClicked,
+        onHighlightsClicked = onHighlightsClicked,
+        onTrackingClicked = onTrackingClicked,
         onRefresh = onRefresh,
         onContinueReading = onContinueReading,
         onSearch = onSearch,

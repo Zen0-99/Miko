@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FlipToBack
@@ -90,14 +91,6 @@ fun EntryToolbar(
         navigateUp = navigateUp,
         actions = {
             var downloadExpanded by remember { mutableStateOf(false) }
-
-            // Smart update interval badge (novels only) — always shown for novels
-            if (showIntervalBadge) {
-                IntervalBadge(
-                    intervalDays = intervalDays,
-                    tint = LocalContentColor.current,
-                )
-            }
 
             if (onClickDownload != null) {
                 val onDismissRequest = { downloadExpanded = false }
@@ -207,8 +200,9 @@ fun EntryToolbar(
                     }
                     if (onClickRefresh != null) {
                         add(
-                            AppBar.OverflowAction(
+                            AppBar.Action(
                                 title = stringResource(MR.strings.action_webview_refresh),
+                                icon = Icons.Filled.Refresh,
                                 onClick = onClickRefresh,
                             ),
                         )

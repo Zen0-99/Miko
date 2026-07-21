@@ -90,6 +90,9 @@ import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import kotlinx.coroutines.launch
+import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
 import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -230,7 +233,7 @@ private fun HomeHubContent(
                         item(key = "recent_anime_row") {
                             HistoryRow(
                                 items = state.recentAnimeCards,
-                                onItemClick = { },
+                                onItemClick = { navigator.push(AnimeScreen(it.id)) },
                                 selection = state.selection,
                                 onToggleSelection = { screenModel.toggleSelection(it) },
                             )
@@ -246,7 +249,7 @@ private fun HomeHubContent(
                         item(key = "recently_added_anime_row") {
                             HistoryRow(
                                 items = state.recentlyAddedAnimeCards,
-                                onItemClick = { },
+                                onItemClick = { navigator.push(AnimeScreen(it.id)) },
                                 selection = state.selection,
                                 onToggleSelection = { screenModel.toggleSelection(it) },
                             )
@@ -264,7 +267,7 @@ private fun HomeHubContent(
                         item(key = "recent_manga_row") {
                             HistoryRow(
                                 items = state.recentMangaCards,
-                                onItemClick = { },
+                                onItemClick = { navigator.push(MangaScreen(it.id)) },
                                 selection = state.selection,
                                 onToggleSelection = { screenModel.toggleSelection(it) },
                             )
@@ -280,7 +283,7 @@ private fun HomeHubContent(
                         item(key = "recently_added_manga_row") {
                             HistoryRow(
                                 items = state.recentlyAddedMangaCards,
-                                onItemClick = { },
+                                onItemClick = { navigator.push(MangaScreen(it.id)) },
                                 selection = state.selection,
                                 onToggleSelection = { screenModel.toggleSelection(it) },
                             )
@@ -298,7 +301,7 @@ private fun HomeHubContent(
                         item(key = "recent_novels_row") {
                             HistoryRow(
                                 items = state.recentNovelCards,
-                                onItemClick = { },
+                                onItemClick = { navigator.push(NovelScreen(it.id)) },
                                 selection = state.selection,
                                 onToggleSelection = { screenModel.toggleSelection(it) },
                             )
@@ -314,7 +317,7 @@ private fun HomeHubContent(
                         item(key = "recently_added_novels_row") {
                             HistoryRow(
                                 items = state.recentlyAddedNovelCards,
-                                onItemClick = { },
+                                onItemClick = { navigator.push(NovelScreen(it.id)) },
                                 selection = state.selection,
                                 onToggleSelection = { screenModel.toggleSelection(it) },
                             )

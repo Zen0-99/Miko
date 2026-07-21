@@ -1,5 +1,6 @@
 package eu.kanade.presentation.entries.novel.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -61,6 +62,7 @@ fun NovelChapterListItem(
     chapterSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
+    isRangeStart: Boolean = false,
 ) {
     val chapter = item.chapter
     val downloadState = item.downloadState
@@ -104,6 +106,13 @@ fun NovelChapterListItem(
             modifier = modifier
                 .fillMaxWidth()
                 .selectedBackground(item.selected)
+                .then(
+                    if (isRangeStart) {
+                        Modifier.background(accent.copy(alpha = 0.12f))
+                    } else {
+                        Modifier
+                    },
+                )
                 .combinedClickable(
                     onClick = if (item.selected) { { onSelect(!item.selected) } } else onClick,
                     onLongClick = onLongClick,

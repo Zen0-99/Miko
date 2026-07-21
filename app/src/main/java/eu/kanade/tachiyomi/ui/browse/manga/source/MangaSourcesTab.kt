@@ -102,7 +102,7 @@ fun Screen.mangaSourcesTab(): TabContent {
                 onSwipeHide = screenModel::toggleSource,
                 swipeToHideEnabled = screenModel.swipeToHideSource,
                 onClickExtension = { source ->
-                    val pkgName = extensionManager.getExtensionPackage(source.id)
+                    val pkgName = sourceExtensionMap[source.id]?.pkgName
                     if (pkgName != null) {
                         navigator.push(MangaExtensionDetailsScreen(pkgName))
                     }
@@ -165,14 +165,14 @@ fun Screen.mangaSourcesTab(): TabContent {
                         screenModel.closeDialog()
                     },
                     onClickMigrate = {
-                        val pkgName = extensionManager.getExtensionPackage(source.id)
+                        val pkgName = sourceExtensionMap[source.id]?.pkgName
                         if (pkgName != null) {
                             navigator.push(MangaExtensionDetailsScreen(pkgName))
                         }
                         screenModel.closeDialog()
                     },
                     onClickUninstall = {
-                        val pkgName = extensionManager.getExtensionPackage(source.id)
+                        val pkgName = sourceExtensionMap[source.id]?.pkgName
                         if (pkgName != null) {
                             val ext = extensionManager.installedExtensionsFlow.value.find { it.pkgName == pkgName }
                             if (ext != null) {

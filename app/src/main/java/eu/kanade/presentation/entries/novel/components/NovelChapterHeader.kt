@@ -19,6 +19,7 @@ fun NovelChapterHeader(
     accentColor: Color? = null,
     onFetchNewChapters: (() -> Unit)? = null,
     onFetchAllChapters: (() -> Unit)? = null,
+    intervalDays: Int? = null,
 ) {
     EntryChapterHeader(
         itemCountText = pluralStringResource(MR.plurals.manga_num_chapters, count = itemCount, itemCount),
@@ -27,5 +28,6 @@ fun NovelChapterHeader(
         accentColor = accentColor,
         onFetchNew = onFetchNewChapters,
         onFetchAll = onFetchAllChapters,
+        intervalDays = intervalDays,
     )
 }

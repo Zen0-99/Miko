@@ -367,8 +367,6 @@ private fun MangaScreenSmallImpl(
                 backgroundAlphaProvider = { backgroundAlpha },
                 isManga = true,
                 toolbarBackgroundColor = MaterialTheme.colorScheme.background,
-                intervalDays = state.intervalDays,
-                showIntervalBadge = true,
                 onClickMarkAllRead = onMarkAllReadClicked,
                 onClickMarkAllUnread = onMarkAllUnreadClicked,
                 onClickRefreshTracking = onRefreshTrackingClicked,
@@ -508,6 +506,7 @@ private fun MangaScreenSmallImpl(
                             ),
                             onClick = onFilterClicked,
                             accentColor = state.accentColor,
+                            intervalDays = state.intervalDays,
                         )
                         MissingItemCountListItem(count = missingChaptersCount)
                     }
@@ -640,8 +639,6 @@ fun MangaScreenLargeImpl(
                 backgroundAlphaProvider = { 1f },
                 isManga = true,
                 toolbarBackgroundColor = MaterialTheme.colorScheme.background,
-                intervalDays = state.intervalDays,
-                showIntervalBadge = true,
                 onClickMarkAllRead = onMarkAllReadClicked,
                 onClickMarkAllUnread = onMarkAllUnreadClicked,
                 onClickRefreshTracking = onRefreshTrackingClicked,
@@ -760,6 +757,7 @@ fun MangaScreenLargeImpl(
                                     ),
                                     onClick = onFilterButtonClicked,
                                     accentColor = state.accentColor,
+                                    intervalDays = state.intervalDays,
                                 )
                                 MissingItemCountListItem(count = missingChaptersCount)
                             }

@@ -181,6 +181,7 @@ private fun VoiceRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
+                    color = accentColor,
                 )
             }
         }

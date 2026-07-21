@@ -40,11 +40,13 @@ import eu.kanade.tachiyomi.data.suggestions.novel.NovelSearchFallbackEngine
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import eu.kanade.tachiyomi.data.suggestions.util.bestMatchScoreFor
 import eu.kanade.tachiyomi.data.suggestions.util.dedupeByCleanTitle
+import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
+import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.lang.chop
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
@@ -94,6 +96,8 @@ import tachiyomi.domain.items.chapter.service.getNovelChapterSort
 import tachiyomi.domain.library.service.LibraryPreferences
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import tachiyomi.domain.source.novel.service.NovelSourceManager
+import tachiyomi.domain.track.novel.interactor.GetNovelTracks
+import eu.kanade.domain.track.novel.interactor.RefreshNovelTracks
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
@@ -132,6 +136,8 @@ class NovelScreenModel(
     private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
     private val searchFallbackEngine: NovelSearchFallbackEngine = Injekt.get(),
     private val relatedSuggestionCoordinator: NovelRelatedSuggestionCoordinator = Injekt.get(),
+    private val trackerManager: TrackerManager = Injekt.get(),
+    private val getTracks: GetNovelTracks = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
 
@@ -434,6 +440,9 @@ class NovelScreenModel(
                     intervalDays = intervalDays,
                 )
             }
+
+            // Start observe tracking since it only needs novelId
+            observeTrackers()
 
             // Fetch suggestions asynchronously
             loadSuggestions(buildSuggestionSeed(novel))
@@ -1129,8 +1138,63 @@ class NovelScreenModel(
     }
 
     fun refreshTracking() {
-        // Tracking refresh - placeholder for now
+        screenModelScope.launchIO {
+            refreshTrackers()
+        }
     }
+
+    private suspend fun refreshTrackers(
+        refreshTracks: RefreshNovelTracks = Injekt.get(),
+    ) {
+        refreshTracks.await(novelId)
+            .filter { it.first != null }
+            .forEach { (track, e) ->
+                logcat(LogPriority.ERROR, e) {
+                    "Failed to refresh track data novelId=$novelId for service ${track!!.name}"
+                }
+                withUIContext {
+                    context.toast(
+                        context.stringResource(
+                            MR.strings.track_error,
+                            track!!.name,
+                            e.message ?: "",
+                        ),
+                    )
+                }
+            }
+    }
+
+    // Track sheet - start
+
+    private fun observeTrackers() {
+        val novel = successState?.novel ?: return
+
+        screenModelScope.launchIO {
+            combine(
+                getTracks.subscribe(novel.id).catch { logcat(LogPriority.ERROR, it) },
+                trackerManager.loggedInNovelTrackersFlow(),
+            ) { novelTracks, loggedInTrackers ->
+                val supportedTrackerIds = loggedInTrackers.map { it.id }.toHashSet()
+                novelTracks.filter { it.trackerId in supportedTrackerIds }.size to loggedInTrackers.isNotEmpty()
+            }
+                .flowWithLifecycle(lifecycle)
+                .distinctUntilChanged()
+                .collectLatest { (trackingCount, hasLoggedInTrackers) ->
+                    updateSuccessState {
+                        it.copy(
+                            trackingCount = trackingCount,
+                            hasLoggedInTrackers = hasLoggedInTrackers,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun showTrackSheet() {
+        updateSuccessState { it.copy(dialog = Dialog.TrackSheet) }
+    }
+
+    // Track sheet - end
 
     fun updateNovelMetadata(
         title: String,
@@ -1583,6 +1647,7 @@ class NovelScreenModel(
         data object SettingsSheet : Dialog
         data object FullCover : Dialog
         data object LinkedSources : Dialog
+        data object TrackSheet : Dialog
     }
 
     sealed interface State {
@@ -1595,6 +1660,8 @@ class NovelScreenModel(
             val source: NovelSource,
             val isFromSource: Boolean,
             val chapters: List<NovelChapterList.Item>,
+            val trackingCount: Int = 0,
+            val hasLoggedInTrackers: Boolean = false,
             val isRefreshingData: Boolean = false,
             val dialog: Dialog? = null,
             val hasPromptedToAddBefore: Boolean = false,

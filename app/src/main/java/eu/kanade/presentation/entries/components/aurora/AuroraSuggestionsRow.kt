@@ -100,7 +100,6 @@ fun AuroraSuggestionsRow(
         Column(modifier = Modifier.fillMaxWidth()) {
             AuroraCoverSectionHeader(
                 title = stringResource(AYMR.strings.suggestions_similar_titles),
-                icon = Icons.Default.AutoAwesome,
                 showChevron = true,
                 onChevronClick = onOpenSuggestions,
                 trailingContent = {

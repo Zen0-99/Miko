@@ -3,8 +3,6 @@ package eu.kanade.presentation.novel.reader
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,8 +50,8 @@ fun NovelTtsControlsBar(
 ) {
     AnimatedVisibility(
         visible = state.isInitialized || state.isPlaying,
-        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        enter = fadeIn(),
+        exit = fadeOut(),
         modifier = modifier,
     ) {
         Surface(

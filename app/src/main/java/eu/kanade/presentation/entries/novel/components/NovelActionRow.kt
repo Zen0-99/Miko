@@ -7,9 +7,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Public
-import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,6 +22,7 @@ import eu.kanade.presentation.entries.components.EntryTogglePill
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
+import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
@@ -31,6 +33,8 @@ fun NovelActionRow(
     onWebViewClicked: (() -> Unit)?,
     onShareClicked: (() -> Unit)?,
     onHighlightsClicked: (() -> Unit)?,
+    trackingCount: Int = 0,
+    onTrackingClicked: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
@@ -53,18 +57,29 @@ fun NovelActionRow(
             onClick = onAddToLibraryClicked,
         )
 
+        // Tracking pill
+        if (onTrackingClicked != null) {
+            EntryTogglePill(
+                checked = trackingCount > 0,
+                checkedText = if (trackingCount == 0) {
+                    stringResource(MR.strings.manga_tracking_tab)
+                } else {
+                    pluralStringResource(MR.plurals.num_trackers, trackingCount, trackingCount)
+                },
+                uncheckedText = stringResource(MR.strings.manga_tracking_tab),
+                checkedIcon = Icons.Outlined.Done,
+                uncheckedIcon = Icons.Outlined.Sync,
+                accentColor = accent,
+                onClick = onTrackingClicked,
+            )
+        }
+
         // Icon-only actions — use accent color like Miko
         EntryIconAction(
             icon = Icons.Outlined.Public,
             contentDescription = stringResource(MR.strings.action_web_view),
             tint = accent,
             onClick = onWebViewClicked,
-        )
-        EntryIconAction(
-            icon = Icons.Outlined.Share,
-            contentDescription = stringResource(MR.strings.action_share),
-            tint = accent,
-            onClick = onShareClicked,
         )
         EntryIconAction(
             icon = Icons.AutoMirrored.Outlined.MenuBook,

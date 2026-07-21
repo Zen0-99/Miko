@@ -26,10 +26,12 @@ import eu.kanade.core.util.ifNovelSourcesLoaded
 import eu.kanade.domain.entries.novel.model.hasCustomCover
 import eu.kanade.domain.entries.novel.model.toSNovel
 import eu.kanade.presentation.entries.EditCoverAction
+import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import eu.kanade.presentation.entries.novel.NovelScreen
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
+import eu.kanade.tachiyomi.ui.entries.novel.track.NovelTrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
 import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
 import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
@@ -151,6 +153,8 @@ class NovelScreen(
             onHighlightsClicked = {
                 navigator.push(NovelHighlightsScreen(successState.novel.title, successState.novel.id))
             }.takeIf { successState.novel.favorite },
+            onTrackingClicked = { screenModel.showTrackSheet() }
+                .takeIf { successState.hasLoggedInTrackers },
             onRefresh = screenModel::fetchAllFromSource,
             onContinueReading = {
                 val firstUnread = successState.nextContinueChapter
@@ -317,6 +321,17 @@ class NovelScreen(
                     onMakePrimary = screenModel::makeLinkedPrimary,
                     onOpenNovel = { navigator.push(NovelScreen(it)) },
                     onRefreshAll = screenModel::refreshLinkedSources,
+                    onDismissRequest = onDismissRequest,
+                )
+            }
+            NovelScreenModel.Dialog.TrackSheet -> {
+                NavigatorAdaptiveSheet(
+                    screen = NovelTrackInfoDialogHomeScreen(
+                        novelId = successState.novel.id,
+                        novelTitle = successState.novel.title,
+                        sourceId = successState.source.id,
+                    ),
+                    enableSwipeDismiss = { it.lastItem is NovelTrackInfoDialogHomeScreen },
                     onDismissRequest = onDismissRequest,
                 )
             }

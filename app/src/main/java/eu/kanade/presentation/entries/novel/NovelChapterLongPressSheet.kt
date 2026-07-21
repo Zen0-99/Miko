@@ -1,24 +1,30 @@
 package eu.kanade.presentation.entries.novel
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,38 +42,80 @@ fun NovelChapterLongPressSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        // No drag handle — cleaner look
+        dragHandle = null,
     ) {
+        // Centered chapter title
         Text(
             text = chapterTitle,
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
         )
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            ListItem(
-                headlineContent = { Text("Open in WebView") },
-                leadingContent = { Icon(Icons.Filled.Public, contentDescription = null) },
-                modifier = Modifier.clickable { onOpenInWebView(); onDismiss() },
+
+        // Smaller, compact options
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+        ) {
+            SheetOption(
+                label = "Open in WebView",
+                icon = Icons.Filled.Public,
+                onClick = { onOpenInWebView(); onDismiss() },
             )
-            ListItem(
-                headlineContent = { Text("Mark previous as read") },
-                leadingContent = { Icon(Icons.Filled.DoneAll, contentDescription = null) },
-                modifier = Modifier.clickable { onMarkPreviousAsRead(); onDismiss() },
+            SheetOption(
+                label = "Mark previous as read",
+                icon = Icons.Filled.DoneAll,
+                onClick = { onMarkPreviousAsRead(); onDismiss() },
             )
-            ListItem(
-                headlineContent = { Text("Mark previous as unread") },
-                leadingContent = { Icon(Icons.Filled.Undo, contentDescription = null) },
-                modifier = Modifier.clickable { onMarkPreviousAsUnread(); onDismiss() },
+            SheetOption(
+                label = "Mark previous as unread",
+                icon = Icons.Filled.Undo,
+                onClick = { onMarkPreviousAsUnread(); onDismiss() },
             )
-            ListItem(
-                headlineContent = { Text("Mark range as read") },
-                leadingContent = { Icon(Icons.Filled.SelectAll, contentDescription = null) },
-                modifier = Modifier.clickable { onMarkRangeAsRead(); onDismiss() },
+            SheetOption(
+                label = "Mark range as read",
+                icon = Icons.Filled.SelectAll,
+                onClick = { onMarkRangeAsRead(); onDismiss() },
             )
-            ListItem(
-                headlineContent = { Text("Mark range as unread") },
-                leadingContent = { Icon(Icons.Filled.RemoveDone, contentDescription = null) },
-                modifier = Modifier.clickable { onMarkRangeAsUnread(); onDismiss() },
+            SheetOption(
+                label = "Mark range as unread",
+                icon = Icons.Filled.RemoveDone,
+                onClick = { onMarkRangeAsUnread(); onDismiss() },
             )
         }
+    }
+}
+
+@Composable
+private fun SheetOption(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }

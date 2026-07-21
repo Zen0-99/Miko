@@ -255,7 +255,7 @@ private fun DetailsHeader(
         ) {
             NovelExtensionIcon(
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(48.dp)
                     .then(if (!isExtensionEnabled) Modifier.alpha(0.4f) else Modifier),
                 extension = extension,
                 density = DisplayMetrics.DENSITY_XXXHIGH,
@@ -343,6 +343,9 @@ private fun DetailsHeader(
                 }
             }
         }
+
+        // Extra spacing before the languages section
+        Spacer(modifier = Modifier.height(MaterialTheme.padding.large))
     }
 }
 

@@ -35,7 +35,7 @@ import eu.kanade.presentation.theme.AuroraTheme
 @Composable
 fun AuroraCoverSectionHeader(
     title: String,
-    icon: ImageVector,
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier,
     count: String? = null,
     showChevron: Boolean = false,
@@ -56,25 +56,27 @@ fun AuroraCoverSectionHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(
-                        color = if (isDark) {
-                            Color.White.copy(alpha = 0.08f)
-                        } else {
-                            colors.accent
-                        },
-                        shape = CircleShape,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (isDark) colors.accent else Color.White,
-                    modifier = Modifier.size(16.dp),
-                )
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            color = if (isDark) {
+                                Color.White.copy(alpha = 0.08f)
+                            } else {
+                                colors.accent
+                            },
+                            shape = CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (isDark) colors.accent else Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
 
             Text(

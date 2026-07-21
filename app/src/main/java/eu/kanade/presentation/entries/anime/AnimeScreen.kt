@@ -434,8 +434,6 @@ private fun AnimeScreenSmallImpl(
                     isManga = false,
                     modifier = Modifier.onSizeChanged { toolbarHeight = it.height },
                     toolbarBackgroundColor = MaterialTheme.colorScheme.background,
-                    intervalDays = state.intervalDays,
-                    showIntervalBadge = true,
                     onClickMarkAllRead = onMarkAllSeenClicked,
                     onClickMarkAllUnread = onMarkAllUnseenClicked,
                     onClickRefreshTracking = onRefreshTrackingClicked,
@@ -602,6 +600,7 @@ private fun AnimeScreenSmallImpl(
                             itemCountText = headerText,
                             onClick = onFilterClicked,
                             accentColor = state.accentColor,
+                            intervalDays = state.intervalDays,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                         )
                         MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
@@ -805,8 +804,6 @@ fun AnimeScreenLargeImpl(
                     backgroundAlphaProvider = { 1f },
                     isManga = false,
                     toolbarBackgroundColor = MaterialTheme.colorScheme.background,
-                    intervalDays = state.intervalDays,
-                    showIntervalBadge = true,
                     onClickMarkAllRead = onMarkAllSeenClicked,
                     onClickMarkAllUnread = onMarkAllUnseenClicked,
                     onClickRefreshTracking = onRefreshTrackingClicked,
@@ -943,6 +940,7 @@ fun AnimeScreenLargeImpl(
                                     itemCountText = headerText,
                                     onClick = onFilterButtonClicked,
                                     accentColor = state.accentColor,
+                                    intervalDays = state.intervalDays,
                                     modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                                 )
                                 MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
