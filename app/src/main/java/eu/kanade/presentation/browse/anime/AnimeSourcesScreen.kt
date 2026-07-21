@@ -57,6 +57,7 @@ import tachiyomi.domain.source.anime.model.AnimeSource
 import tachiyomi.domain.source.anime.model.Pin
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
+import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
@@ -85,6 +86,7 @@ fun AnimeSourcesScreen(
     cardColumns: Int = 2,
     sourceExtensionMap: Map<Long, AnimeExtension.Installed> = emptyMap(),
     onClickUpdate: (AnimeSource) -> Unit = {},
+    onRefresh: () -> Unit = {},
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
@@ -97,26 +99,31 @@ fun AnimeSourcesScreen(
         }
     }
 
-    when {
-        state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
-        state.isEmpty -> EmptyScreen(
-            stringRes = MR.strings.source_empty_screen,
-            modifier = Modifier.padding(contentPadding),
-        )
-        else -> {
-            if (cardDesign) {
-                AnimeSourcesCardView(
-                    items = visibleItems,
-                    contentPadding = contentPadding + topSmallPaddingValues,
-                    notInstalledExpanded = notInstalledExpanded,
-                    onToggleNotInstalled = { notInstalledExpanded = !notInstalledExpanded },
-                    cardColumns = cardColumns,
-                    sourcesWithUpdates = sourcesWithUpdates,
-                    sourceExtensionMap = sourceExtensionMap,
-                    onClickItem = onClickItem,
-                    onLongClickItem = onLongClickItem,
-                    onClickExtension = onClickExtension,
-                    onClickUpdate = onClickUpdate,
+    PullRefresh(
+        refreshing = state.isRefreshing,
+        onRefresh = onRefresh,
+        enabled = !state.isLoading,
+    ) {
+        when {
+            state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
+            state.isEmpty -> EmptyScreen(
+                stringRes = MR.strings.source_empty_screen,
+                modifier = Modifier.padding(contentPadding),
+            )
+            else -> {
+                if (cardDesign) {
+                    AnimeSourcesCardView(
+                        items = visibleItems,
+                        contentPadding = contentPadding + topSmallPaddingValues,
+                        notInstalledExpanded = notInstalledExpanded,
+                        onToggleNotInstalled = { notInstalledExpanded = !notInstalledExpanded },
+                        cardColumns = cardColumns,
+                        sourcesWithUpdates = sourcesWithUpdates,
+                        sourceExtensionMap = sourceExtensionMap,
+                        onClickItem = onClickItem,
+                        onLongClickItem = onLongClickItem,
+                        onClickExtension = onClickExtension,
+                        onClickUpdate = onClickUpdate,
                     onClickInstallExtension = onClickInstallExtension,
                     onClickTrustExtension = onClickTrustExtension,
                     downloadStates = downloadStates,
@@ -199,6 +206,7 @@ fun AnimeSourcesScreen(
                 }
             }
             }
+        }
         }
     }
 }

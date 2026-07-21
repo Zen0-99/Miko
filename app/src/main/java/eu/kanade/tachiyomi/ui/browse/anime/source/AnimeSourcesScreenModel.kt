@@ -24,9 +24,11 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
+import kotlin.time.Duration.Companion.seconds
 import tachiyomi.domain.source.anime.model.AnimeSource
 import tachiyomi.domain.source.anime.model.Pin
 import uy.kohesive.injekt.Injekt
@@ -140,6 +142,19 @@ class AnimeSourcesScreenModel(
         mutableState.update { it.copy(dialog = null) }
     }
 
+    fun findAvailableExtensions() {
+        screenModelScope.launchIO {
+            mutableState.update { it.copy(isRefreshing = true) }
+
+            extensionManager.findAvailableExtensions()
+
+            // Fake slower refresh so it doesn't seem like it's not doing anything
+            delay(1.seconds)
+
+            mutableState.update { it.copy(isRefreshing = false) }
+        }
+    }
+
     sealed interface Event {
         data object FailedFetchingSources : Event
     }
@@ -150,6 +165,7 @@ class AnimeSourcesScreenModel(
     data class State(
         val dialog: Dialog? = null,
         val isLoading: Boolean = true,
+        val isRefreshing: Boolean = false,
         val items: ImmutableList<AnimeSourceUiModel> = persistentListOf(),
     ) {
         val isEmpty = items.isEmpty()

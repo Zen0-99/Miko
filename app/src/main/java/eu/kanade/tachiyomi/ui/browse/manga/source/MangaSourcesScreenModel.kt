@@ -28,9 +28,11 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
+import kotlin.time.Duration.Companion.seconds
 import tachiyomi.domain.source.manga.model.Pin
 import tachiyomi.domain.source.manga.model.Source
 import uy.kohesive.injekt.Injekt
@@ -165,6 +167,19 @@ class MangaSourcesScreenModel(
         mutableState.update { it.copy(dialog = null) }
     }
 
+    fun findAvailableExtensions() {
+        screenModelScope.launchIO {
+            mutableState.update { it.copy(isRefreshing = true) }
+
+            extensionManager.findAvailableExtensions()
+
+            // Fake slower refresh so it doesn't seem like it's not doing anything
+            delay(1.seconds)
+
+            mutableState.update { it.copy(isRefreshing = false) }
+        }
+    }
+
     sealed interface Event {
         data object FailedFetchingSources : Event
     }
@@ -175,6 +190,7 @@ class MangaSourcesScreenModel(
     data class State(
         val dialog: Dialog? = null,
         val isLoading: Boolean = true,
+        val isRefreshing: Boolean = false,
         val items: ImmutableList<MangaSourceUiModel> = persistentListOf(),
         // SY -->
         val dataSaverEnabled: Boolean = false,

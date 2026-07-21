@@ -96,6 +96,7 @@ fun Screen.mangaSourcesTab(): TabContent {
                 cardDesign = cardDesign,
                 cardColumns = cardColumns,
                 sourceExtensionMap = sourceExtensionMap,
+                onRefresh = screenModel::findAvailableExtensions,
                 onClickItem = { source, listing ->
                     navigator.push(BrowseMangaSourceScreen(source.id, listing.query))
                 },

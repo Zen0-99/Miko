@@ -96,6 +96,7 @@ fun Screen.animeSourcesTab(): TabContent {
                 cardDesign = cardDesign,
                 cardColumns = cardColumns,
                 sourceExtensionMap = sourceExtensionMap,
+                onRefresh = screenModel::findAvailableExtensions,
                 onClickItem = { source, listing ->
                     navigator.push(BrowseAnimeSourceScreen(source.id, listing.query))
                 },

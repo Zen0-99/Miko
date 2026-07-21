@@ -59,6 +59,7 @@ import tachiyomi.domain.source.novel.model.LocalNovelSource
 import tachiyomi.domain.source.novel.model.Pin
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
+import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
@@ -86,6 +87,7 @@ fun NovelSourcesScreen(
     cardColumns: Int = 2,
     sourceExtensionMap: Map<Long, NovelExtension.Installed> = emptyMap(),
     onClickUpdate: (NovelSource) -> Unit = {},
+    onRefresh: () -> Unit = {},
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
@@ -98,34 +100,39 @@ fun NovelSourcesScreen(
         }
     }
 
-    when {
-        state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
-        state.isEmpty -> EmptyScreen(
-            stringRes = MR.strings.source_empty_screen,
-            modifier = Modifier.padding(contentPadding),
-        )
-        else -> {
-            if (cardDesign) {
-                NovelSourcesCardView(
-                    items = visibleItems,
+    PullRefresh(
+        refreshing = state.isRefreshing,
+        onRefresh = onRefresh,
+        enabled = !state.isLoading,
+    ) {
+        when {
+            state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
+            state.isEmpty -> EmptyScreen(
+                stringRes = MR.strings.source_empty_screen,
+                modifier = Modifier.padding(contentPadding),
+            )
+            else -> {
+                if (cardDesign) {
+                    NovelSourcesCardView(
+                        items = visibleItems,
+                        contentPadding = contentPadding + topSmallPaddingValues,
+                        notInstalledExpanded = notInstalledExpanded,
+                        onToggleNotInstalled = { notInstalledExpanded = !notInstalledExpanded },
+                        cardColumns = cardColumns,
+                        sourcesWithUpdates = sourcesWithUpdates,
+                        sourceExtensionMap = sourceExtensionMap,
+                        onClickItem = onClickItem,
+                        onLongClickItem = onLongClickItem,
+                        onClickExtension = onClickExtension,
+                        onClickUpdate = onClickUpdate,
+                        onClickInstallExtension = onClickInstallExtension,
+                        onClickTrustExtension = onClickTrustExtension,
+                        downloadStates = downloadStates,
+                    )
+                } else {
+                FastScrollLazyColumn(
                     contentPadding = contentPadding + topSmallPaddingValues,
-                    notInstalledExpanded = notInstalledExpanded,
-                    onToggleNotInstalled = { notInstalledExpanded = !notInstalledExpanded },
-                    cardColumns = cardColumns,
-                    sourcesWithUpdates = sourcesWithUpdates,
-                    sourceExtensionMap = sourceExtensionMap,
-                    onClickItem = onClickItem,
-                    onLongClickItem = onLongClickItem,
-                    onClickExtension = onClickExtension,
-                    onClickUpdate = onClickUpdate,
-                    onClickInstallExtension = onClickInstallExtension,
-                    onClickTrustExtension = onClickTrustExtension,
-                    downloadStates = downloadStates,
-                )
-            } else {
-            FastScrollLazyColumn(
-                contentPadding = contentPadding + topSmallPaddingValues,
-            ) {
+                ) {
                 items(
                     items = visibleItems,
                     contentType = {
@@ -200,6 +207,7 @@ fun NovelSourcesScreen(
                 }
             }
             }
+        }
         }
     }
 }

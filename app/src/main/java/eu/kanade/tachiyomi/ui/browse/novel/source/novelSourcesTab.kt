@@ -97,6 +97,7 @@ fun Screen.novelSourcesTab(): TabContent {
                 cardDesign = cardDesign,
                 cardColumns = cardColumns,
                 sourceExtensionMap = sourceExtensionMap,
+                onRefresh = screenModel::findAvailableExtensions,
                 onClickItem = { source, listing ->
                     Log.d("NovelSearch", "[novelSourcesTab] onClickItem - source=${source.name} (id=${source.id}), listing.query='${listing.query}', pushing BrowseNovelSourceScreen")
                     navigator.push(BrowseNovelSourceScreen(source.id, listing.query))
