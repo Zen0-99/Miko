@@ -68,7 +68,7 @@ fun AchievementStatsComparison(
                 .background(colors.surface.copy(alpha = 0.15f))
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.05f),
+                    color = colors.divider,
                     shape = RoundedCornerShape(20.dp),
                 )
                 .padding(4.dp),
@@ -87,7 +87,7 @@ fun AchievementStatsComparison(
                     )
                     .border(
                         width = 1.dp,
-                        color = Color.White.copy(alpha = 0.08f),
+                        color = colors.divider,
                         shape = RoundedCornerShape(16.dp),
                     ),
             ) {
@@ -98,14 +98,14 @@ fun AchievementStatsComparison(
                         .drawBehind {
                             // Horizontal divider
                             drawLine(
-                                color = Color.White.copy(alpha = 0.06f),
+                                color = colors.divider,
                                 start = Offset(0f, size.height * 0.5f),
                                 end = Offset(size.width, size.height * 0.5f),
                                 strokeWidth = 1.dp.toPx(),
                             )
                             // Vertical divider
                             drawLine(
-                                color = Color.White.copy(alpha = 0.06f),
+                                color = colors.divider,
                                 start = Offset(size.width * 0.5f, 0f),
                                 end = Offset(size.width * 0.5f, size.height),
                                 strokeWidth = 1.dp.toPx(),

@@ -8,6 +8,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RippleConfiguration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -121,10 +122,16 @@ private fun BaseTachiyomiTheme(
 ) {
     val targetScheme = getThemeColorScheme(appTheme, isAmoled, isDark)
     val colorScheme = if (animate) targetScheme.animateColors() else targetScheme
-    MaterialTheme(
-        colorScheme = colorScheme,
-        content = content,
-    )
+    // Provide AuroraColors derived from the actual selected color scheme so that
+    // AuroraTheme-based components (achievements, etc.) follow the user's theme
+    // instead of falling back to the hardcoded AuroraColors.Dark default.
+    val auroraColors = AuroraColors.fromColorScheme(colorScheme, isDark, isAmoled)
+    CompositionLocalProvider(LocalAuroraColors provides auroraColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            content = content,
+        )
+    }
 }
 
 private const val THEME_ANIMATION_DURATION_MS = 300

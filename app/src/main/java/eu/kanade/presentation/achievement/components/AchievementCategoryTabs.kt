@@ -23,9 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,21 +70,7 @@ fun AchievementCategoryTabs(
                     .fillMaxHeight()
                     .width(segmentWidth)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                colors.accent.copy(alpha = 0.9f),
-                                colors.progressCyan.copy(alpha = 0.9f),
-                            ),
-                        ),
-                    )
-                    .drawBehind {
-                        drawRoundRect(
-                            color = Color.White.copy(alpha = 0.15f),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
-                        )
-                    },
+                    .background(colors.accent.copy(alpha = 0.15f)),
             )
 
             Row(
@@ -98,7 +81,7 @@ fun AchievementCategoryTabs(
                 tabs.forEach { (category, label) ->
                     val isSelected = category == selectedCategory
                     val textColor by animateColorAsState(
-                        targetValue = if (isSelected) colors.textPrimary else colors.textSecondary,
+                        targetValue = if (isSelected) colors.accent else colors.textSecondary,
                         label = "tab_text_color",
                     )
 

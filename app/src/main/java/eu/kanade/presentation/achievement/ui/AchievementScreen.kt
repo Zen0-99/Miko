@@ -272,7 +272,7 @@ private fun BentoLevelCard(
             .background(colors.surface.copy(alpha = 0.15f))
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.05f),
+                color = colors.divider,
                 shape = RoundedCornerShape(20.dp),
             )
             .padding(4.dp),
@@ -292,7 +292,7 @@ private fun BentoLevelCard(
                 )
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.08f),
+                    color = colors.divider,
                     shape = RoundedCornerShape(16.dp),
                 )
                 .padding(14.dp),
@@ -365,7 +365,7 @@ private fun BentoLevelCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(2.dp)
-                            .background(Color.White.copy(alpha = 0.05f)),
+                            .background(colors.divider),
                     ) {
                         val progressFraction = levelInfo.progressFraction.coerceIn(0f, 1f)
                         if (progressFraction > 0f) {
@@ -402,7 +402,7 @@ private fun BentoStatsCard(
             .background(colors.surface.copy(alpha = 0.12f))
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.04f),
+                color = colors.divider,
                 shape = RoundedCornerShape(16.dp),
             )
             .padding(4.dp),
@@ -422,7 +422,7 @@ private fun BentoStatsCard(
                 )
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.06f),
+                    color = colors.divider,
                     shape = RoundedCornerShape(12.dp),
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -492,7 +492,7 @@ private fun BentoStreakCard(
             .background(colors.surface.copy(alpha = 0.12f))
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.04f),
+                color = colors.divider,
                 shape = RoundedCornerShape(16.dp),
             )
             .padding(4.dp),
@@ -512,7 +512,7 @@ private fun BentoStreakCard(
                 )
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.06f),
+                    color = colors.divider,
                     shape = RoundedCornerShape(12.dp),
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -551,7 +551,7 @@ private fun BentoStreakCard(
                                 .size(width = 4.dp, height = 14.dp)
                                 .clip(RoundedCornerShape(1.dp))
                                 .background(
-                                    if (isActive) colors.accent else Color.White.copy(alpha = 0.05f),
+                                    if (isActive) colors.accent else colors.divider,
                                 )
                                 .border(
                                     width = 0.5.dp,
@@ -560,7 +560,7 @@ private fun BentoStreakCard(
                                             alpha = 0.5f,
                                         )
                                     } else {
-                                        Color.White.copy(alpha = 0.1f)
+                                        colors.divider
                                     },
                                     shape = RoundedCornerShape(1.dp),
                                 ),
