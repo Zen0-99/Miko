@@ -41,7 +41,6 @@ SELECT
     readDuration
 FROM novelhistoryView
 WHERE novelhistoryView.readAt > 0
-AND maxReadAtChapterId = novelhistoryView.chapterId
 AND lower(novelhistoryView.title) LIKE ('%' || :query || '%')
 ORDER BY readAt DESC;
 

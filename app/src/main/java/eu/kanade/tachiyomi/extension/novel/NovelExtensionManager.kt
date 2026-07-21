@@ -23,7 +23,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import logcat.LogPriority
+import mihon.domain.extensionrepo.novel.interactor.CreateNovelExtensionRepo
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.novel.model.StubNovelSource
@@ -47,6 +49,10 @@ class NovelExtensionManager(
 
     private val installer by lazy { NovelExtensionInstaller(context) }
 
+    companion object {
+        private const val DEFAULT_REPO_URL = "https://raw.githubusercontent.com/keypop3750/MikoNovelSources/main"
+    }
+
     private val iconMap = mutableMapOf<String, Drawable>()
 
     private val installedExtensionsMapFlow = MutableStateFlow(emptyMap<String, NovelExtension.Installed>())
@@ -61,6 +67,27 @@ class NovelExtensionManager(
     init {
         initExtensions()
         NovelExtensionInstallReceiver(NovelInstallationListener()).register(context)
+        seedDefaultRepoIfNeeded()
+    }
+
+    /**
+     * Seeds the default MikoNovelSources extension repo on first launch so that
+     * available extensions and updates are detected without manual setup.
+     */
+    private fun seedDefaultRepoIfNeeded() {
+        val seeded = preferences.novelDefaultRepoSeeded()
+        if (seeded.get()) return
+        scope.launch {
+            try {
+                val createRepo = Injekt.get<CreateNovelExtensionRepo>()
+                createRepo.await(DEFAULT_REPO_URL)
+                seeded.set(true)
+                // Refresh available extensions now that the repo is configured
+                findAvailableExtensions()
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "Failed to seed default novel extension repo" }
+            }
+        }
     }
 
     private var subLanguagesEnabledOnFirstRun = preferences.enabledLanguages().isSet()

@@ -39,7 +39,6 @@ episodeNumber,
 seenAt
 FROM animehistoryView
 WHERE animehistoryView.seenAt > 0
-AND maxSeenAtEpisodeId = animehistoryView.episodeId
 AND lower(animehistoryView.title) LIKE ('%' || :query || '%')
 ORDER BY seenAt DESC;
 

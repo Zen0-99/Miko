@@ -86,6 +86,9 @@ class SourcePreferences(
     fun mangaExtensionUpdatesCount() = preferenceStore.getInt("ext_updates_count", 0)
     fun novelExtensionUpdatesCount() = preferenceStore.getInt("novel_ext_updates_count", 0)
 
+    // Default repo seeding flags
+    fun novelDefaultRepoSeeded() = preferenceStore.getBoolean("novel_default_repo_seeded", false)
+
     // Browse card design
     fun browseCardDesign() = preferenceStore.getBoolean("browse_card_design", false)
     fun browseCardColumns() = preferenceStore.getInt("browse_card_columns", 2)

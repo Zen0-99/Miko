@@ -153,8 +153,7 @@ class NovelScreen(
             onHighlightsClicked = {
                 navigator.push(NovelHighlightsScreen(successState.novel.title, successState.novel.id))
             }.takeIf { successState.novel.favorite },
-            onTrackingClicked = { screenModel.showTrackSheet() }
-                .takeIf { successState.hasLoggedInTrackers },
+            onTrackingClicked = { screenModel.showTrackSheet() },
             onRefresh = screenModel::fetchAllFromSource,
             onContinueReading = {
                 val firstUnread = successState.nextContinueChapter

@@ -7,10 +7,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,10 +41,17 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
- * Horizontal extension card with icon inline on the left, title/language/version
- * in the middle, and cog (or download/progress) on the right.
- * Fill uses the theme's surfaceContainer color (same family as the nav bar,
- * without blur/transparency).
+ * Extension card with a two-row layout:
+ *
+ *  [icon]                              [cog]
+ *
+ *  lang - version
+ *  Title
+ *                              [comments badge]
+ *
+ * The gap between the top row (icon/cog) and the bottom row (lang/title/badge)
+ * provides visual separation between the identity and metadata sections.
+ * Fill uses surfaceContainerHigh for a lighter-than-background card surface.
  */
 @Composable
 fun ExtensionCard(
@@ -64,78 +72,85 @@ fun ExtensionCard(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        // Same color family as the nav bar, without blur/transparency
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        // Lighter than the background — surfaceContainerHigh lifts the card
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 1.dp,
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Extension icon on the left
-            ExtensionIcon(
-                iconDrawable = iconDrawable,
-                iconUrl = iconUrl,
-                modifier = Modifier.size(40.dp),
-            )
-
-            // Title + language/version in the middle
-            Column(
-                modifier = Modifier.weight(1f),
+            // Top row: icon (left) + cog/download/progress (right)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ExtensionIcon(
+                    iconDrawable = iconDrawable,
+                    iconUrl = iconUrl,
+                    modifier = Modifier.size(40.dp),
+                )
+
+                if (isUpdating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    IconButton(
+                        onClick = onCogClick,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (hasUpdate) Icons.Outlined.Download else Icons.Outlined.Settings,
+                            contentDescription = if (hasUpdate) "Update" else stringResource(MR.strings.label_extension_info),
+                            tint = if (hasUpdate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
+
+            // Bottom row: lang/version + title (left) + comments badge (right)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
                 ) {
+                    // Language - Version (above title)
+                    val langVersion = if (version.isNotBlank()) "$lang - $version" else lang
+                    Text(
+                        text = langVersion,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    // Title (below lang/version)
                     Text(
                         text = title,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
                     )
-                    if (supportsComments) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Comment,
-                            contentDescription = "Supports comments",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
                 }
-                // Language - Version (only show dot separator if version is non-empty)
-                val langVersion = if (version.isNotBlank()) "$lang - $version" else lang
-                Text(
-                    text = langVersion,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
 
-            // Cog, download, or progress on the right
-            if (isUpdating) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            } else {
-                IconButton(
-                    onClick = onCogClick,
-                    modifier = Modifier.size(36.dp),
-                ) {
+                if (supportsComments) {
+                    Spacer(modifier = Modifier.size(4.dp))
                     Icon(
-                        imageVector = if (hasUpdate) Icons.Outlined.Download else Icons.Outlined.Settings,
-                        contentDescription = if (hasUpdate) "Update" else stringResource(MR.strings.label_extension_info),
-                        tint = if (hasUpdate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp),
+                        imageVector = Icons.AutoMirrored.Filled.Comment,
+                        contentDescription = "Supports comments",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }

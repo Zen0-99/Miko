@@ -8,11 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.RemoveDone
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -70,22 +66,22 @@ fun NovelChapterLongPressSheet(
             )
             SheetOption(
                 label = "Mark previous as read",
-                icon = Icons.Filled.DoneAll,
+                icon = EyeDown,
                 onClick = { onMarkPreviousAsRead(); onDismiss() },
             )
             SheetOption(
                 label = "Mark previous as unread",
-                icon = Icons.Filled.Undo,
+                icon = EyeOffDown,
                 onClick = { onMarkPreviousAsUnread(); onDismiss() },
             )
             SheetOption(
                 label = "Mark range as read",
-                icon = Icons.Filled.SelectAll,
+                icon = EyeDots,
                 onClick = { onMarkRangeAsRead(); onDismiss() },
             )
             SheetOption(
                 label = "Mark range as unread",
-                icon = Icons.Filled.RemoveDone,
+                icon = EyeOffDots,
                 onClick = { onMarkRangeAsUnread(); onDismiss() },
             )
         }

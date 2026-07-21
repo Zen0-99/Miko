@@ -2,7 +2,6 @@ package eu.kanade.presentation.browse.anime
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -273,6 +272,11 @@ private fun AnimeSourcesCardView(
             // Render items as cards in FlowRow
             if (header?.language != AnimeSourcesScreenModel.NOT_INSTALLED_KEY || notInstalledExpanded) {
                 item(key = "cards-${header?.hashCode() ?: "no-header"}") {
+                    val cardFraction = when (cardColumns) {
+                        1 -> 1f
+                        2 -> 0.5f
+                        else -> 0.33f
+                    }
                     FlowRow(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -284,48 +288,36 @@ private fun AnimeSourcesCardView(
                         sectionItems.forEach { model ->
                             when (model) {
                                 is AnimeSourceUiModel.Item -> {
-                                    val cardWidth = when (cardColumns) {
-                                        1 -> 1f
-                                        2 -> 0.5f
-                                        else -> 0.33f
-                                    }
                                     val ext = sourceExtensionMap[model.source.id]
                                     val hasUpdate = model.source.id in sourcesWithUpdates
                                     val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
                                         it == InstallStep.Pending || it == InstallStep.Downloading
                                     } == true
-                                    Box(modifier = Modifier.weight(cardWidth)) {
-                                        ExtensionCard(
-                                            title = model.source.name,
-                                            lang = model.source.lang.uppercase(),
-                                            version = ext?.versionName ?: "",
-                                            iconDrawable = ext?.icon,
-                                            hasUpdate = hasUpdate,
-                                            isUpdating = isUpdating,
-                                            onClick = { onClickItem(model.source, Listing.Popular) },
-                                            onCogClick = {
-                                                if (hasUpdate) onClickUpdate(model.source)
-                                                else onClickExtension(model.source)
-                                            },
-                                        )
-                                    }
+                                    ExtensionCard(
+                                        modifier = Modifier.fillMaxWidth(cardFraction),
+                                        title = model.source.name,
+                                        lang = model.source.lang.uppercase(),
+                                        version = ext?.versionName ?: "",
+                                        iconDrawable = ext?.icon,
+                                        hasUpdate = hasUpdate,
+                                        isUpdating = isUpdating,
+                                        onClick = { onClickItem(model.source, Listing.Popular) },
+                                        onCogClick = {
+                                            if (hasUpdate) onClickUpdate(model.source)
+                                            else onClickExtension(model.source)
+                                        },
+                                    )
                                 }
                                 is AnimeSourceUiModel.AvailableExtension -> {
-                                    val cardWidth = when (cardColumns) {
-                                        1 -> 1f
-                                        2 -> 0.5f
-                                        else -> 0.33f
-                                    }
-                                    Box(modifier = Modifier.weight(cardWidth)) {
-                                        ExtensionCard(
-                                            title = model.extension.name,
-                                            lang = model.extension.lang.uppercase(),
-                                            version = model.extension.versionName,
-                                            iconUrl = model.extension.iconUrl,
-                                            onClick = { onClickInstallExtension(model.extension) },
-                                            onCogClick = {},
-                                        )
-                                    }
+                                    ExtensionCard(
+                                        modifier = Modifier.fillMaxWidth(cardFraction),
+                                        title = model.extension.name,
+                                        lang = model.extension.lang.uppercase(),
+                                        version = model.extension.versionName,
+                                        iconUrl = model.extension.iconUrl,
+                                        onClick = { onClickInstallExtension(model.extension) },
+                                        onCogClick = {},
+                                    )
                                 }
                                 else -> {}
                             }
