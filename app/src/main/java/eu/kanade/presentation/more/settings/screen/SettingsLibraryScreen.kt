@@ -66,6 +66,8 @@ object SettingsLibraryScreen : SearchableSettings {
         val allCategories by getCategories.subscribe().collectAsState(initial = emptyList())
         val getAnimeCategories = remember { Injekt.get<GetAnimeCategories>() }
         val allAnimeCategories by getAnimeCategories.subscribe().collectAsState(initial = emptyList())
+        val getNovelCategories = remember { Injekt.get<tachiyomi.domain.category.novel.interactor.GetNovelCategories>() }
+        val allNovelCategories by getNovelCategories.subscribe().collectAsState(initial = emptyList())
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
 
         return listOf(
@@ -73,9 +75,10 @@ object SettingsLibraryScreen : SearchableSettings {
                 LocalNavigator.currentOrThrow,
                 allCategories,
                 allAnimeCategories,
+                allNovelCategories,
                 libraryPreferences,
             ),
-            getGlobalUpdateGroup(allCategories, allAnimeCategories, libraryPreferences),
+            getGlobalUpdateGroup(allCategories, allAnimeCategories, allNovelCategories, libraryPreferences),
             getSeasonBehaviorGroup(libraryPreferences),
             getAnimeBehaviorGroup(libraryPreferences),
             getBehaviorGroup(libraryPreferences),
@@ -87,22 +90,28 @@ object SettingsLibraryScreen : SearchableSettings {
         navigator: Navigator,
         allCategories: List<Category>,
         allAnimeCategories: List<Category>,
+        allNovelCategories: List<Category>,
         libraryPreferences: LibraryPreferences,
     ): Preference.PreferenceGroup {
         val scope = rememberCoroutineScope()
         val userCategoriesCount = allCategories.filterNot(Category::isSystemCategory).size
         val userAnimeCategoriesCount = allAnimeCategories.filterNot(Category::isSystemCategory).size
+        val userNovelCategoriesCount = allNovelCategories.filterNot(Category::isSystemCategory).size
 
         // For default category
         val mangaIds = listOf(libraryPreferences.defaultMangaCategory().defaultValue()) +
             allCategories.fastMap { it.id.toInt() }
         val animeIds = listOf(libraryPreferences.defaultAnimeCategory().defaultValue()) +
             allAnimeCategories.fastMap { it.id.toInt() }
+        val novelIds = listOf(libraryPreferences.defaultNovelCategory().defaultValue()) +
+            allNovelCategories.fastMap { it.id.toInt() }
 
         val mangaLabels = listOf(stringResource(MR.strings.default_category_summary)) +
             allCategories.fastMap { it.visualName }
         val animeLabels = listOf(stringResource(MR.strings.default_category_summary)) +
             allAnimeCategories.fastMap { it.visualName }
+        val novelLabels = listOf(stringResource(MR.strings.default_category_summary)) +
+            allNovelCategories.fastMap { it.visualName }
 
         return Preference.PreferenceGroup(
             title = stringResource(AYMR.strings.general_categories),
@@ -162,6 +171,7 @@ object SettingsLibraryScreen : SearchableSettings {
     private fun getGlobalUpdateGroup(
         allMangaCategories: List<Category>,
         allAnimeCategories: List<Category>,
+        allNovelCategories: List<Category>,
         libraryPreferences: LibraryPreferences,
     ): Preference.PreferenceGroup {
         val context = LocalContext.current
@@ -223,6 +233,33 @@ object SettingsLibraryScreen : SearchableSettings {
             )
         }
 
+        val novelAutoUpdateCategoriesPref = libraryPreferences.novelUpdateCategories()
+        val novelAutoUpdateCategoriesExcludePref =
+            libraryPreferences.novelUpdateCategoriesExclude()
+
+        val includedNovel by novelAutoUpdateCategoriesPref.collectAsState()
+        val excludedNovel by novelAutoUpdateCategoriesExcludePref.collectAsState()
+        var showNovelCategoriesDialog by rememberSaveable { mutableStateOf(false) }
+        if (showNovelCategoriesDialog) {
+            TriStateListDialog(
+                title = stringResource(AYMR.strings.novel_categories),
+                message = stringResource(AYMR.strings.pref_novel_library_update_categories_details),
+                items = allNovelCategories,
+                initialChecked = includedNovel.mapNotNull { id -> allNovelCategories.find { it.id.toString() == id } },
+                initialInversed = excludedNovel.mapNotNull { id -> allNovelCategories.find { it.id.toString() == id } },
+                itemLabel = { it.visualName },
+                onDismissRequest = { showNovelCategoriesDialog = false },
+                onValueChanged = { newIncluded, newExcluded ->
+                    novelAutoUpdateCategoriesPref.set(newIncluded.map { it.id.toString() }.toSet())
+                    novelAutoUpdateCategoriesExcludePref.set(
+                        newExcluded.map { it.id.toString() }
+                            .toSet(),
+                    )
+                    showNovelCategoriesDialog = false
+                },
+            )
+        }
+
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_library_update),
             preferenceItems = persistentListOf(
@@ -240,6 +277,7 @@ object SettingsLibraryScreen : SearchableSettings {
                     onValueChanged = {
                         MangaLibraryUpdateJob.setupTask(context, it)
                         AnimeLibraryUpdateJob.setupTask(context, it)
+                        eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob.setupTask(context, it)
                         true
                     },
                 ),
@@ -258,6 +296,7 @@ object SettingsLibraryScreen : SearchableSettings {
                         ContextCompat.getMainExecutor(context).execute {
                             MangaLibraryUpdateJob.setupTask(context)
                             AnimeLibraryUpdateJob.setupTask(context)
+                            eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob.setupTask(context)
                         }
                         true
                     },
@@ -280,6 +319,15 @@ object SettingsLibraryScreen : SearchableSettings {
                     ),
                     onClick = { showMangaCategoriesDialog = true },
                 ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(AYMR.strings.novel_categories),
+                    subtitle = getCategoriesLabel(
+                        allCategories = allNovelCategories,
+                        included = includedNovel,
+                        excluded = excludedNovel,
+                    ),
+                    onClick = { showNovelCategoriesDialog = true },
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.autoUpdateMetadata(),
                     title = stringResource(MR.strings.pref_library_update_refresh_metadata),
@@ -298,6 +346,11 @@ object SettingsLibraryScreen : SearchableSettings {
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.newShowUpdatesCount(),
                     title = stringResource(AYMR.strings.pref_library_update_show_tab_badge),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = libraryPreferences.showUpdateProgressOverlay(),
+                    title = stringResource(AYMR.strings.pref_show_update_progress_overlay),
+                    subtitle = stringResource(AYMR.strings.pref_show_update_progress_overlay_summary),
                 ),
             ),
         )

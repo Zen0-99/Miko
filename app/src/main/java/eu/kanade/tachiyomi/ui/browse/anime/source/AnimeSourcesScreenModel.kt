@@ -80,8 +80,13 @@ class AnimeSourcesScreenModel(
         untrusted: List<AnimeExtension.Untrusted>,
     ): ImmutableList<AnimeSourceUiModel> {
         val installedPkgNames = installed.map { it.pkgName }.toSet()
+        // Set of source IDs that have a currently-installed extension. Sources
+        // whose extension was uninstalled become stubs and should not appear in
+        // the Installed section.
+        val installedSourceIds = installed.flatMap { it.sources.map { s -> s.id } }.toSet()
 
-        // Build the "Installed" section (sources grouped by language)
+        // Build the "Installed" section (sources grouped by language) — filter
+        // out stub sources whose extension is no longer installed.
         val map = TreeMap<String, MutableList<AnimeSource>> { d1, d2 ->
             when {
                 d1 == LAST_USED_KEY && d2 != LAST_USED_KEY -> -1
@@ -93,13 +98,15 @@ class AnimeSourcesScreenModel(
                 else -> d1.compareTo(d2)
             }
         }
-        val byLang = sources.groupByTo(map) {
-            when {
-                it.isUsedLast -> LAST_USED_KEY
-                Pin.Actual in it.pin -> PINNED_KEY
-                else -> it.lang
+        val byLang = sources
+            .filter { it.id in installedSourceIds || !it.isStub }
+            .groupByTo(map) {
+                when {
+                    it.isUsedLast -> LAST_USED_KEY
+                    Pin.Actual in it.pin -> PINNED_KEY
+                    else -> it.lang
+                }
             }
-        }
 
         val installedItems = listOf(AnimeSourceUiModel.Header(INSTALLED_KEY)) +
             byLang.flatMap {
@@ -164,7 +171,7 @@ class AnimeSourcesScreenModel(
     @Immutable
     data class State(
         val dialog: Dialog? = null,
-        val isLoading: Boolean = true,
+        val isLoading: Boolean = false,
         val isRefreshing: Boolean = false,
         val items: ImmutableList<AnimeSourceUiModel> = persistentListOf(),
     ) {

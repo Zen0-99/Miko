@@ -977,6 +977,18 @@ class NotificationReceiver : BroadcastReceiver() {
         }
 
         /**
+         * Returns [PendingIntent] that opens the app on the Fetching sub-tab inside Updates,
+         * so the user can see failed fetches in-app instead of as an external HTML file.
+         */
+        internal fun openFetchingTabPendingActivity(context: Context): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                action = Constants.SHORTCUT_FETCHING
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        }
+
+        /**
          * Returns [PendingIntent] that cancels a backup restore job.
          *
          * @param context context of application

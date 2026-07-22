@@ -566,6 +566,7 @@ private fun AnimeScreenSmallImpl(
                             onOpenSuggestions = onOpenSuggestions,
                             onRetryClick = onRetrySuggestions,
                             modifier = Modifier.fillMaxWidth(),
+                            accentColor = state.accentColor,
                         )
                     }
 
@@ -894,6 +895,7 @@ fun AnimeScreenLargeImpl(
                                 onOpenSuggestions = onOpenSuggestions,
                                 onRetryClick = onRetrySuggestions,
                                 modifier = Modifier.fillMaxWidth(),
+                                accentColor = state.accentColor,
                             )
                         }
                     },

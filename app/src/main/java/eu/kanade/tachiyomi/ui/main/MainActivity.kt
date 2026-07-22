@@ -59,6 +59,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.NavigatorDisposeBehavior
 import cafe.adriel.voyager.navigator.currentOrThrow
+import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.source.anime.interactor.GetAnimeIncognitoState
 import eu.kanade.domain.source.manga.interactor.GetMangaIncognitoState
@@ -72,6 +73,7 @@ import eu.kanade.presentation.components.IndexingBannerBackgroundColor
 import eu.kanade.presentation.achievement.components.AchievementUnlockBanner
 import eu.kanade.presentation.achievement.components.AchievementGroupNotification
 import eu.kanade.presentation.achievement.screen.AchievementScreenVoyager
+import eu.kanade.presentation.library.LibraryUpdateProgressOverlay
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.AssistContentScreen
@@ -103,21 +105,27 @@ import eu.kanade.tachiyomi.ui.more.NewUpdateScreen
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
 import eu.kanade.tachiyomi.ui.player.ExternalIntents
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
+import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
 import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
 import eu.kanade.tachiyomi.util.view.setComposeContent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import logcat.LogPriority
 import mihon.core.migration.Migrator
 import tachiyomi.core.common.i18n.stringResource
@@ -159,8 +167,41 @@ class MainActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val isLaunch = savedInstanceState == null
 
+        // Pre-initialize source managers eagerly so their init blocks run
+        // before the splash screen dismisses. The managers are singletons;
+        // accessing them triggers their init block which loads installed
+        // extensions into the sources map on a background coroutine.
+        val animeSourceManager = if (isLaunch) Injekt.get<tachiyomi.domain.source.anime.service.AnimeSourceManager>() else null
+        val mangaSourceManager = if (isLaunch) Injekt.get<tachiyomi.domain.source.manga.service.MangaSourceManager>() else null
+        val novelSourceManager = if (isLaunch) Injekt.get<tachiyomi.domain.source.novel.service.NovelSourceManager>() else null
+
         // Prevent splash screen showing up on configuration changes
         val splashScreen = if (isLaunch) installSplashScreen() else null
+
+        // Keep the splash screen visible until all source managers report
+        // initialized so the user never sees a "no sources" flash on Browse.
+        if (isLaunch && splashScreen != null) {
+            var sourcesReady = false
+            splashScreen.setKeepOnScreenCondition { !sourcesReady }
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val anime = animeSourceManager?.isInitialized
+                    val manga = mangaSourceManager?.isInitialized
+                    val novel = novelSourceManager?.isInitialized
+                    if (anime != null && manga != null && novel != null) {
+                        // Wait for all three to report initialized (with a 2s
+                        // safety timeout so we never hang on a broken init).
+                        withTimeoutOrNull(2000L) {
+                            combine(anime, manga, novel) { a, m, n -> a && m && n }.first { it }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Ignore — fall through to dismiss splash
+                } finally {
+                    sourcesReady = true
+                }
+            }
+        }
 
         super.onCreate(savedInstanceState)
 
@@ -270,6 +311,18 @@ class MainActivity : BaseActivity() {
                             onViewAll = {
                                 navigator?.push(AchievementScreenVoyager)
                             },
+                        )
+                        // Library update progress overlay (mirrors achievement banner placement)
+                        val tabNavigator = LocalTabNavigator.current
+                        LibraryUpdateProgressOverlay(
+                            onViewFailures = {
+                                // Switch to the Updates tab so the user can see the Fetching sub-tab.
+                                // The bottom navigator is driven by TabNavigator; we reselect
+                                // UpdatesTab which conditionally renders the Fetching sub-tab when
+                                // there are failed fetches or an in-progress run.
+                                tabNavigator.current = UpdatesTab
+                            },
+                            modifier = Modifier.align(Alignment.TopCenter),
                         )
                         // Draw navigation bar scrim when needed
                         if (remember { isNavigationBarNeedsScrim() }) {
@@ -506,6 +559,7 @@ class MainActivity : BaseActivity() {
                 HomeScreen.Tab.Library(mode = ContentMode.ANIME, entryIdToOpen = idToOpen)
             }
             Constants.SHORTCUT_UPDATES -> HomeScreen.Tab.Updates
+            Constants.SHORTCUT_FETCHING -> HomeScreen.Tab.Fetching
             Constants.SHORTCUT_HISTORY -> HomeScreen.Tab.History
             Constants.SHORTCUT_SOURCES -> HomeScreen.Tab.Browse(false)
             Constants.SHORTCUT_ANIMEEXTENSIONS -> HomeScreen.Tab.Browse(true, true)

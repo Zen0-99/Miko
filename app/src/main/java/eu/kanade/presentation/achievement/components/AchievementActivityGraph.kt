@@ -23,7 +23,9 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -88,7 +90,7 @@ fun AchievementActivityGraph(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Заголовок с индикатором периода
@@ -119,82 +121,58 @@ fun AchievementActivityGraph(
             )
         }
 
-        // Bento Shell Box
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(colors.surface.copy(alpha = 0.15f))
-                .border(
-                    width = 1.dp,
-                    color = colors.divider,
-                    shape = RoundedCornerShape(20.dp),
-                )
-                .padding(4.dp),
+        // Single surface — matches ExtensionCard style (no double border)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shadowElevation = 1.dp,
         ) {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                colors.surface.copy(alpha = 0.5f),
-                                colors.surface.copy(alpha = 0.3f),
-                            ),
-                        ),
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = colors.divider,
-                        shape = RoundedCornerShape(16.dp),
-                    )
                     .padding(16.dp),
             ) {
-                Column(
+                // Горизонтальный Pager
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    // Горизонтальный Pager
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { page ->
-                        val monthsToShow = when (page) {
-                            0 -> firstHalf
-                            1 -> secondHalf
-                            else -> emptyList()
-                        }
-
-                        MonthBarChart(
-                            months = monthsToShow,
-                            maxActivity = maxActivity,
-                            locale = locale,
-                        )
+                ) { page ->
+                    val monthsToShow = when (page) {
+                        0 -> firstHalf
+                        1 -> secondHalf
+                        else -> emptyList()
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    MonthBarChart(
+                        months = monthsToShow,
+                        maxActivity = maxActivity,
+                        locale = locale,
+                    )
+                }
 
-                    // Индикаторы страниц (горизонтальные линии)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        repeat(2) { index ->
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 3.dp)
-                                    .size(width = 12.dp, height = 2.dp)
-                                    .background(
-                                        color = if (pagerState.currentPage == index) {
-                                            colors.accent
-                                        } else {
-                                            colors.textSecondary.copy(alpha = 0.2f)
-                                        },
-                                        shape = RoundedCornerShape(1.dp),
-                                    ),
-                            )
-                        }
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Индикаторы страниц (горизонтальные линии)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    repeat(2) { index ->
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 3.dp)
+                                .size(width = 12.dp, height = 2.dp)
+                                .background(
+                                    color = if (pagerState.currentPage == index) {
+                                        colors.accent
+                                    } else {
+                                        colors.textSecondary.copy(alpha = 0.2f)
+                                    },
+                                    shape = RoundedCornerShape(1.dp),
+                                ),
+                        )
                     }
                 }
             }

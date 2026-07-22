@@ -67,6 +67,7 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
+import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.components.LocalSharedTopBar
 import eu.kanade.presentation.components.SharedTopBarState
 import eu.kanade.presentation.home.ModePill
@@ -170,41 +171,52 @@ object HomeScreen : Screen() {
                     modifier = Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection),
                     containerColor = MaterialTheme.colorScheme.background,
                     topBar = {
-                        AppBar(
-                            titleContent = {
-                                AnimatedContent(
-                                    targetState = sharedTopBarState.title,
-                                    transitionSpec = {
-                                        fadeIn(animationSpec = tween(200)) togetherWith
-                                            fadeOut(animationSpec = tween(200))
-                                    },
-                                    label = "topbar_title",
-                                ) { title ->
-                                    Text(title)
-                                }
-                            },
-                            actions = {
-                                // Fade between action sets on tab change.
-                                // Wrapped in a Box so old/new overlap cleanly during fade.
-                                Box {
+                        Column {
+                            SearchToolbar(
+                                searchQuery = if (sharedTopBarState.searchEnabled) sharedTopBarState.searchQuery else null,
+                                onChangeSearchQuery = sharedTopBarState.onSearchQueryChange,
+                                searchEnabled = sharedTopBarState.searchEnabled,
+                                placeholderText = sharedTopBarState.searchPlaceholderText,
+                                onSearch = sharedTopBarState.onSearch,
+                                titleContent = {
                                     AnimatedContent(
-                                        targetState = sharedTopBarState.actions,
+                                        targetState = sharedTopBarState.title,
                                         transitionSpec = {
-                                            fadeIn(animationSpec = tween(150)) togetherWith
-                                                fadeOut(animationSpec = tween(150))
+                                            fadeIn(animationSpec = tween(200)) togetherWith
+                                                fadeOut(animationSpec = tween(200))
                                         },
-                                        contentKey = { it.hashCode() },
-                                        label = "topbar_actions",
-                                    ) { actions ->
-                                        Row {
-                                            AppBarActions(actions)
+                                        label = "topbar_title",
+                                    ) { title ->
+                                        Text(title)
+                                    }
+                                },
+                                actions = {
+                                    // Fade between action sets on tab change.
+                                    // Wrapped in a Box so old/new overlap cleanly during fade.
+                                    Box {
+                                        AnimatedContent(
+                                            targetState = sharedTopBarState.actions,
+                                            transitionSpec = {
+                                                fadeIn(animationSpec = tween(150)) togetherWith
+                                                    fadeOut(animationSpec = tween(150))
+                                            },
+                                            contentKey = { it.hashCode() },
+                                            label = "topbar_actions",
+                                        ) { actions ->
+                                            Row {
+                                                AppBarActions(actions)
+                                            }
                                         }
                                     }
-                                }
-                            },
-                            navigateUp = sharedTopBarState.navigateUp,
-                            scrollBehavior = topBarScrollBehavior,
-                        )
+                                },
+                                navigateUp = sharedTopBarState.navigateUp,
+                                scrollBehavior = topBarScrollBehavior,
+                            )
+                            // Optional pill content shown below search bar while search is active
+                            if (sharedTopBarState.searchEnabled && sharedTopBarState.searchQuery != null) {
+                                sharedTopBarState.searchPillContent?.invoke()
+                            }
+                        }
                     },
                     startBar = {
                         if (isTabletUi()) {
@@ -336,6 +348,7 @@ object HomeScreen : Screen() {
                             is Tab.Library -> LibraryTab
                             is Tab.Updates -> UpdatesTab
                             is Tab.History -> UpdatesTab // History is now a sub-tab of Updates
+                            is Tab.Fetching -> UpdatesTab // Fetching is a conditional sub-tab of Updates
                             is Tab.Browse -> BrowseTab
                             is Tab.More -> {
                                 // More tab removed — navigate to Settings instead
@@ -600,6 +613,8 @@ object HomeScreen : Screen() {
         ) : Tab
         data object Updates : Tab
         data object History : Tab
+        /** Opens the Updates tab and switches to the Fetching sub-tab. */
+        data object Fetching : Tab
         data class Browse(val toExtensions: Boolean = false, val anime: Boolean = false) : Tab
         data class More(val toDownloads: Boolean) : Tab
     }

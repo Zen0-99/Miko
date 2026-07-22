@@ -1336,4 +1336,24 @@
     <string name="novel_reader_tts_prefer_translated_text_summary">Uses translated chapter text when it is available, otherwise falls back to the original text.</string>
     <string name="novel_reader_tts_read_chapter_title">Read chapter title first</string>
 
+    <!-- Library update progress overlay + Fetching tab -->
+    <string name="pref_show_update_progress_overlay">Show update progress overlay</string>
+    <string name="pref_show_update_progress_overlay_summary">Display a floating progress box when the library is being updated</string>
+    <string name="label_fetching_tab">Fetching</string>
+    <string name="fetching_progress_title">Updating %1$s library</string>
+    <string name="fetching_failed_so_far">%1$d failed so far</string>
+    <string name="failed_fetches_empty">No failed fetches</string>
+    <string name="action_clear_failed_fetches">Clear all failed fetches</string>
+    <string name="clear_failed_fetches_confirmation">Clear all failed fetch entries? This does not remove the library items themselves.</string>
+    <string name="action_clear_group">Clear this group</string>
+    <string name="action_migrate_entry">Migrate entry</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_clear">Clear</string>
+    <string name="fetching_overlay_title">Updating library</string>
+    <string name="fetching_overlay_view_failures">View %1$d failed</string>
+    <string name="fetching_overlay_hide">Hide</string>
+
 </resources>

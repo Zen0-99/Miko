@@ -19,6 +19,8 @@ import logcat.LogPriority
 import mihon.domain.extensionrepo.anime.interactor.GetAnimeExtensionRepo
 import mihon.domain.extensionrepo.anime.interactor.UpdateAnimeExtensionRepo
 import mihon.domain.extensionrepo.model.ExtensionRepo
+import mihon.domain.extensionrepo.service.ExtensionIndexEntry
+import mihon.domain.extensionrepo.service.ExtensionRepoService
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.withIOContext
@@ -35,6 +37,7 @@ internal class AnimeExtensionApi {
     private val updateExtensionRepo: UpdateAnimeExtensionRepo by injectLazy()
     private val animeExtensionManager: AnimeExtensionManager by injectLazy()
     private val json: Json by injectLazy()
+    private val extensionRepoService: ExtensionRepoService by injectLazy()
 
     private val lastExtCheck: Preference<Long> by lazy {
         preferenceStore.getLong("last_ext_check", 0)
@@ -52,19 +55,44 @@ internal class AnimeExtensionApi {
     private suspend fun getExtensions(extRepo: ExtensionRepo): List<AnimeExtension.Available> {
         val repoBaseUrl = extRepo.baseUrl
         return try {
-            val response = networkService.client
-                .newCall(GET("$repoBaseUrl/index.min.json", cache = FORCE_NETWORK))
-                .awaitSuccess()
-
-            with(json) {
-                response
-                    .parseAs<List<AnimeExtensionJsonObject>>()
-                    .toExtensions(repoBaseUrl)
-            }
+            val entries = extensionRepoService.fetchExtensionIndex(repoBaseUrl)
+                ?: return emptyList()
+            entries.toAnimeExtensions()
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to get extensions from $repoBaseUrl" }
             emptyList()
         }
+    }
+
+    private fun List<ExtensionIndexEntry>.toAnimeExtensions(): List<AnimeExtension.Available> {
+        return this
+            .filter {
+                it.libVersion >= AnimeExtensionLoader.LIB_VERSION_MIN &&
+                    it.libVersion <= AnimeExtensionLoader.LIB_VERSION_MAX
+            }
+            .map {
+                AnimeExtension.Available(
+                    name = it.name,
+                    pkgName = it.pkgName,
+                    versionName = it.versionName,
+                    versionCode = it.versionCode,
+                    libVersion = it.libVersion,
+                    lang = it.lang,
+                    isNsfw = it.isNsfw,
+                    isTorrent = it.isTorrent,
+                    sources = it.sources.map { src ->
+                        AnimeExtension.Available.AnimeSource(
+                            id = src.id,
+                            lang = src.lang,
+                            name = src.name,
+                            baseUrl = src.baseUrl,
+                        )
+                    },
+                    apkName = it.apkName,
+                    iconUrl = it.iconUrl,
+                    repoUrl = it.repoUrl,
+                )
+            }
     }
 
     suspend fun checkForUpdates(

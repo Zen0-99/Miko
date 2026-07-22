@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -189,14 +190,22 @@ private fun ExtensionContent(
                                         )
                                     }
                                 }
-                            } else if (header.textRes == MR.strings.ext_installed && hasUpdatesPending) {
+                            } else if (header.textRes == MR.strings.ext_installed) {
                                 {
-                                    IconButton(onClick = { onClickUpdateAll() }) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Download,
-                                            contentDescription = stringResource(MR.strings.ext_update_all),
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
+                                    // Reserve fixed space so layout doesn't shift when icon appears/disappears
+                                    Box(
+                                        modifier = Modifier.size(48.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        if (hasUpdatesPending) {
+                                            IconButton(onClick = { onClickUpdateAll() }) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Download,
+                                                    contentDescription = stringResource(MR.strings.ext_update_all),
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             } else {
@@ -452,8 +461,17 @@ private fun ExtensionItemActions(
                     is NovelExtension.Installed -> {
                         IconButton(onClick = { onClickItemSecondaryAction(extension) }) {
                             Icon(
-                                imageVector = Icons.Outlined.Settings,
+                                imageVector = if (extension.isObsolete) {
+                                    Icons.Outlined.Warning
+                                } else {
+                                    Icons.Outlined.Settings
+                                },
                                 contentDescription = stringResource(MR.strings.action_settings),
+                                tint = if (extension.isObsolete) {
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                             )
                         }
 
@@ -475,17 +493,6 @@ private fun ExtensionItemActions(
                         }
                     }
                     is NovelExtension.Available -> {
-                        if (extension.sources.isNotEmpty()) {
-                            IconButton(
-                                onClick = { onClickItemSecondaryAction(extension) },
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Public,
-                                    contentDescription = stringResource(MR.strings.action_open_in_web_view),
-                                )
-                            }
-                        }
-
                         IconButton(onClick = { onClickItemAction(extension) }) {
                             Icon(
                                 imageVector = Icons.Outlined.GetApp,

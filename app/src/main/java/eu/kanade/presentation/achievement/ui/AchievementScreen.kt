@@ -22,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -265,36 +267,16 @@ private fun BentoLevelCard(
 ) {
     val colors = AuroraTheme.colors
 
-    // Outer Shell
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(colors.surface.copy(alpha = 0.15f))
-            .border(
-                width = 1.dp,
-                color = colors.divider,
-                shape = RoundedCornerShape(20.dp),
-            )
-            .padding(4.dp),
+    // Single surface — matches ExtensionCard style (no double border)
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 1.dp,
     ) {
-        // Inner Core
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.surface.copy(alpha = 0.5f),
-                            colors.surface.copy(alpha = 0.3f),
-                        ),
-                    ),
-                )
-                .border(
-                    width = 1.dp,
-                    color = colors.divider,
-                    shape = RoundedCornerShape(16.dp),
-                )
                 .padding(14.dp),
         ) {
             // Giant Monospace Watermark background number
@@ -395,42 +377,19 @@ private fun BentoStatsCard(
 ) {
     val colors = AuroraTheme.colors
 
-    // Outer Shell
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.surface.copy(alpha = 0.12f))
-            .border(
-                width = 1.dp,
-                color = colors.divider,
-                shape = RoundedCornerShape(16.dp),
-            )
-            .padding(4.dp),
+    // Single surface — matches ExtensionCard style (no double border)
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 1.dp,
     ) {
-        // Inner Core
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.surface.copy(alpha = 0.4f),
-                            colors.surface.copy(alpha = 0.2f),
-                        ),
-                    ),
-                )
-                .border(
-                    width = 1.dp,
-                    color = colors.divider,
-                    shape = RoundedCornerShape(12.dp),
-                )
                 .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.SpaceAround,
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceAround,
-            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -473,7 +432,6 @@ private fun BentoStatsCard(
             }
         }
     }
-}
 
 /**
  * Bento Streak Card displaying current streak and horizontal micro timeline
@@ -485,87 +443,52 @@ private fun BentoStreakCard(
 ) {
     val colors = AuroraTheme.colors
 
-    // Outer Shell
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.surface.copy(alpha = 0.12f))
-            .border(
-                width = 1.dp,
-                color = colors.divider,
-                shape = RoundedCornerShape(16.dp),
-            )
-            .padding(4.dp),
+    // Single surface — matches ExtensionCard style (no double border)
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 1.dp,
     ) {
-        // Inner Core
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.surface.copy(alpha = 0.4f),
-                            colors.surface.copy(alpha = 0.2f),
-                        ),
-                    ),
-                )
-                .border(
-                    width = 1.dp,
-                    color = colors.divider,
-                    shape = RoundedCornerShape(12.dp),
-                )
                 .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            Column {
+                Text(
+                    text = stringResource(AYMR.strings.achievement_bento_streak),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textSecondary.copy(alpha = 0.4f),
+                    letterSpacing = 0.5.sp,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(AYMR.strings.achievement_bento_days, currentStreak),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.accent,
+                )
+            }
+
+            // Micro timeline indicator: 5 micro-lines indicating streak status
             Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column {
-                    Text(
-                        text = stringResource(AYMR.strings.achievement_bento_streak),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.textSecondary.copy(alpha = 0.4f),
-                        letterSpacing = 0.5.sp,
+                repeat(5) { index ->
+                    val isActive = index < currentStreak.coerceAtMost(5)
+                    Box(
+                        modifier = Modifier
+                            .size(width = 4.dp, height = 14.dp)
+                            .clip(RoundedCornerShape(1.dp))
+                            .background(
+                                if (isActive) colors.accent else colors.divider,
+                            ),
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = stringResource(AYMR.strings.achievement_bento_days, currentStreak),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.accent,
-                    )
-                }
-
-                // Micro timeline indicator: 5 micro-lines indicating streak status
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    repeat(5) { index ->
-                        val isActive = index < currentStreak.coerceAtMost(5)
-                        Box(
-                            modifier = Modifier
-                                .size(width = 4.dp, height = 14.dp)
-                                .clip(RoundedCornerShape(1.dp))
-                                .background(
-                                    if (isActive) colors.accent else colors.divider,
-                                )
-                                .border(
-                                    width = 0.5.dp,
-                                    color = if (isActive) {
-                                        colors.accent.copy(
-                                            alpha = 0.5f,
-                                        )
-                                    } else {
-                                        colors.divider
-                                    },
-                                    shape = RoundedCornerShape(1.dp),
-                                ),
-                        )
-                    }
                 }
             }
         }

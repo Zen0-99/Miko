@@ -143,10 +143,11 @@ class MangaLibraryUpdateNotifier(
     }
 
     /**
-     * Shows notification containing update entries that failed with action to open full log.
+     * Shows notification containing update entries that failed with action to open the
+     * in-app Fetching tab (which groups failures by reason and offers migration).
      *
      * @param failed Number of entries that failed to update.
-     * @param uri Uri for error log file containing all titles that failed.
+     * @param uri Uri for error log file (kept as a fallback for the "Export error report" action).
      */
     fun showUpdateErrorNotification(failed: Int, uri: Uri) {
         if (failed == 0) {
@@ -161,7 +162,7 @@ class MangaLibraryUpdateNotifier(
             setContentText(context.stringResource(MR.strings.action_show_errors))
             setSmallIcon(R.drawable.ic_ani)
 
-            setContentIntent(NotificationReceiver.openErrorLogPendingActivity(context, uri))
+            setContentIntent(NotificationReceiver.openFetchingTabPendingActivity(context))
         }
     }
 

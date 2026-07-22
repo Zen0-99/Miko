@@ -1,0 +1,60 @@
+import kotlin.Boolean;
+import kotlin.Long;
+
+CREATE TABLE failed_fetches(
+    _id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL,
+    entry_kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    cover_url TEXT,
+    source_id INTEGER NOT NULL,
+    source_name TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    timestamp INTEGER NOT NULL
+);
+
+CREATE INDEX failed_fetches_kind_index ON failed_fetches(entry_kind);
+CREATE INDEX failed_fetches_reason_index ON failed_fetches(reason);
+CREATE INDEX failed_fetches_timestamp_index ON failed_fetches(timestamp);
+
+selectAll:
+SELECT *
+FROM failed_fetches
+ORDER BY timestamp DESC;
+
+selectAllAsFlow:
+SELECT *
+FROM failed_fetches
+ORDER BY timestamp DESC;
+
+selectByReason:
+SELECT *
+FROM failed_fetches
+WHERE reason = :reason
+ORDER BY timestamp DESC;
+
+insert:
+INSERT INTO failed_fetches(entry_id, entry_kind, title, cover_url, source_id, source_name, reason, timestamp)
+VALUES (:entryId, :entryKind, :title, :coverUrl, :sourceId, :sourceName, :reason, :timestamp);
+
+selectLastInsertedRowId:
+SELECT last_insert_rowid();
+
+deleteById:
+DELETE FROM failed_fetches
+WHERE _id = :id;
+
+deleteByEntryId:
+DELETE FROM failed_fetches
+WHERE entry_id = :entryId AND entry_kind = :entryKind;
+
+deleteByReason:
+DELETE FROM failed_fetches
+WHERE reason = :reason;
+
+clearAll:
+DELETE FROM failed_fetches;
+
+count:
+SELECT COUNT(*)
+FROM failed_fetches;

@@ -23,6 +23,8 @@ import eu.kanade.domain.entries.manga.model.toSManga
 import eu.kanade.domain.items.chapter.interactor.SyncChaptersWithSource
 import eu.kanade.tachiyomi.data.cache.MangaCoverCache
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
+import eu.kanade.tachiyomi.data.library.FailedFetchStore
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
@@ -116,11 +118,12 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
         val categoryId = inputData.getLong(KEY_CATEGORY, -1L)
+        val isResume = inputData.getBoolean(KEY_RESUME, false)
         addMangaToQueue(categoryId)
 
         return withIOContext {
             try {
-                updateChapterList()
+                updateChapterList(isResume = isResume)
                 Result.success()
             } catch (e: Exception) {
                 if (e is CancellationException) {
@@ -246,7 +249,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      *
      * @return an observable delivering the progress of each update.
      */
-    private suspend fun updateChapterList() {
+    private suspend fun updateChapterList(isResume: Boolean = false) {
         val semaphore = Semaphore(5)
         val progressCount = AtomicInteger(0)
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
@@ -254,6 +257,14 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val failedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
         val hasDownloads = AtomicBoolean(false)
         val fetchWindow = mangaFetchInterval.getWindow(ZonedDateTime.now())
+
+        // Publish initial running state to the in-app progress bus
+        LibraryUpdateProgressBus.startRun(total = mangaToUpdate.size, source = "Manga", isResume = isResume)
+        if (isResume) {
+            // Start the progress counter at the checkpoint size so the UI shows
+            // the correct "X / Y" ratio immediately.
+            progressCount.set(LibraryUpdateProgressBus.checkpoint.size)
+        }
 
         coroutineScope {
             mangaToUpdate.groupBy { it.manga.source }.values
@@ -264,8 +275,23 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                 val manga = libraryManga.manga
                                 ensureActive()
 
+                                // Cooperative pause/cancel check
+                                if (LibraryUpdateProgressBus.isCancelRequested()) {
+                                    throw CancellationException("User cancelled library update")
+                                }
+                                if (LibraryUpdateProgressBus.isPauseRequested()) {
+                                    // Pause = cancel this run; checkpoint is preserved for resume
+                                    throw CancellationException("User paused library update")
+                                }
+
                                 // Don't continue to update if manga is not in library
                                 if (getManga.await(manga.id)?.favorite != true) {
+                                    return@forEach
+                                }
+
+                                // Skip entries already processed in a prior (paused) run
+                                if (manga.id in LibraryUpdateProgressBus.checkpoint) {
+                                    progressCount.incrementAndGet()
                                     return@forEach
                                 }
 
@@ -304,6 +330,36 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                         failedUpdates.add(manga to errorMessage)
                                     }
                                 }
+
+                                // Mark processed for resume checkpoint
+                                LibraryUpdateProgressBus.markProcessed(manga.id)
+
+                                // Publish progress to the in-app bus
+                                LibraryUpdateProgressBus.updateProgress(
+                                    processed = progressCount.get(),
+                                    currentlyUpdating = currentlyUpdatingManga.map {
+                                        eu.kanade.tachiyomi.data.library.EntryRef(
+                                            id = it.id,
+                                            title = it.title,
+                                            sourceId = it.source,
+                                            kind = tachiyomi.domain.library.model.EntryKind.MANGA,
+                                        )
+                                    },
+                                    failedSoFar = failedUpdates.map { (m, reason) ->
+                                        eu.kanade.tachiyomi.data.library.FailedEntry(
+                                            entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                                                id = m.id,
+                                                title = m.title,
+                                                sourceId = m.source,
+                                                kind = tachiyomi.domain.library.model.EntryKind.MANGA,
+                                            ),
+                                            reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                                            sourceName = sourceManager.getOrStub(m.source).name,
+                                        )
+                                    },
+                                    totalEntries = mangaToUpdate.size,
+                                    source = "Manga",
+                                )
                             }
                         }
                     }
@@ -320,7 +376,22 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             }
         }
 
-        if (failedUpdates.isNotEmpty()) {
+        // Publish completion + persist failures to the FailedFetch table
+        val failedEntries = failedUpdates.map { (m, reason) ->
+            eu.kanade.tachiyomi.data.library.FailedEntry(
+                entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                    id = m.id,
+                    title = m.title,
+                    sourceId = m.source,
+                    kind = tachiyomi.domain.library.model.EntryKind.MANGA,
+                ),
+                reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                sourceName = sourceManager.getOrStub(m.source).name,
+            )
+        }
+        LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Manga")
+        if (failedEntries.isNotEmpty()) {
+            FailedFetchStore.insert(failedEntries)
             val errorFile = writeErrorFile(failedUpdates)
             notifier.showUpdateErrorNotification(
                 failedUpdates.size,
@@ -431,6 +502,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
          * Key for category to update.
          */
         private const val KEY_CATEGORY = "category"
+        private const val KEY_RESUME = "resume"
 
         fun cancelAllWorks(context: Context) {
             context.workManager.cancelAllWorkByTag(TAG)
@@ -488,6 +560,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         fun startNow(
             context: Context,
             category: Category? = null,
+            resumeFromCheckpoint: Boolean = false,
         ): Boolean {
             val wm = context.workManager
             if (wm.isRunning(TAG)) {
@@ -497,6 +570,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
             val inputData = workDataOf(
                 KEY_CATEGORY to category?.id,
+                KEY_RESUME to resumeFromCheckpoint,
             )
             val request = OneTimeWorkRequestBuilder<MangaLibraryUpdateJob>()
                 .addTag(TAG)

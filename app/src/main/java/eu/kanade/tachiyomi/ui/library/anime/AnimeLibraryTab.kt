@@ -6,6 +6,9 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.FilterList
@@ -39,6 +42,7 @@ import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBar
+import eu.kanade.presentation.components.useSharedTopBarWithSearch
 import eu.kanade.presentation.entries.components.LibraryBottomActionMenu
 import eu.kanade.presentation.library.DeleteLibraryEntryDialog
 import eu.kanade.presentation.library.anime.AnimeLibraryContent
@@ -186,9 +190,18 @@ data object AnimeLibraryTab : Tab {
                 ))
                 addAll(globalOverflowActions(onClickSettings = { navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen()) }))
             }.toPersistentList()
-            useSharedTopBar(
+            useSharedTopBarWithSearch(
                 title = title.text,
                 actions = libraryActions,
+                searchEnabled = true,
+                searchQuery = state.searchQuery,
+                onSearchQueryChange = { query ->
+                    if (query == null) {
+                        screenModel.search(null)
+                    } else {
+                        screenModel.search(query)
+                    }
+                },
             )
         }
 
@@ -209,7 +222,9 @@ data object AnimeLibraryTab : Tab {
             snackbarHost = {
                 SnackbarHost(
                     hostState = snackbarHostState,
-                    modifier = Modifier.padding(bottom = 80.dp),
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = 86.dp),
                 )
             },
         ) { contentPadding ->

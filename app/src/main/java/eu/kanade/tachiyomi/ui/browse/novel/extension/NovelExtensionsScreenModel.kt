@@ -224,7 +224,7 @@ class NovelExtensionsScreenModel(
 
     @Immutable
     data class State(
-        val isLoading: Boolean = true,
+        val isLoading: Boolean = false,
         val isRefreshing: Boolean = false,
         val items: NovelItemGroups = mutableMapOf(),
         val updates: Int = 0,

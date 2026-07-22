@@ -2,10 +2,6 @@ package eu.kanade.presentation.achievement.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -214,15 +210,6 @@ fun AchievementUnlockBanner(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                // Lottie fireworks for rare achievements
-                if (isRare) {
-                    FireworksAnimation(
-                        modifier = Modifier
-                            .size(AchievementPopupSizeTokens.unlockFireworksSize)
-                            .offset(y = AchievementPopupSizeTokens.unlockFireworksYOffset),
-                    )
-                }
-
                 // Particle burst effect
                 ParticleBurstEffect(
                     isActive = isVisible,
@@ -245,50 +232,6 @@ fun AchievementUnlockBanner(
                 )
             }
         }
-    }
-}
-
-/**
- * Fireworks animation for rare achievements.
- * Uses a simple animated emoji/icon instead of Lottie (not available in aniyomi-fork).
- */
-@Composable
-private fun FireworksAnimation(
-    modifier: Modifier = Modifier,
-) {
-    // Simple animated sparkle effect using Compose primitives
-    val infiniteTransition = rememberInfiniteTransition(label = "fireworks")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "fireworks_scale",
-    )
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "fireworks_alpha",
-    )
-
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Default.EmojiEvents,
-            contentDescription = null,
-            tint = Color(0xFFFFD700).copy(alpha = alpha),
-            modifier = Modifier
-                .scale(scale)
-                .size(AchievementPopupSizeTokens.unlockFireworksSize),
-        )
     }
 }
 

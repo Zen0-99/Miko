@@ -17,6 +17,8 @@ import androidx.work.WorkQuery
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import eu.kanade.domain.entries.novel.model.toSNovel
+import eu.kanade.tachiyomi.data.library.FailedFetchStore
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.model.NovelUpdateStrategy
@@ -85,11 +87,12 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
         val categoryId = inputData.getLong(KEY_CATEGORY, -1L)
+        val isResume = inputData.getBoolean(KEY_RESUME, false)
         addNovelsToQueue(categoryId)
 
         return withIOContext {
             try {
-                updateChapterList()
+                updateChapterList(isResume = isResume)
                 Result.success()
             } catch (e: Exception) {
                 if (e is CancellationException) {
@@ -191,12 +194,18 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      * Method that updates novels in [novelsToUpdate]. It's called in a background thread, so it's safe
      * to do heavy operations or network calls here.
      */
-    private suspend fun updateChapterList() {
+    private suspend fun updateChapterList(isResume: Boolean = false) {
         val semaphore = Semaphore(5)
         val progressCount = AtomicInteger(0)
         val currentlyUpdatingNovels = CopyOnWriteArrayList<Novel>()
         val newUpdates = CopyOnWriteArrayList<Pair<Novel, List<NovelChapter>>>()
         val failedUpdates = CopyOnWriteArrayList<Pair<Novel, String?>>()
+
+        // Publish initial running state to the in-app progress bus
+        LibraryUpdateProgressBus.startRun(total = novelsToUpdate.size, source = "Novel", isResume = isResume)
+        if (isResume) {
+            progressCount.set(LibraryUpdateProgressBus.checkpoint.size)
+        }
 
         coroutineScope {
             novelsToUpdate.groupBy { it.novel.source }.values
@@ -207,8 +216,22 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                 val novel = libraryNovel.novel
                                 ensureActive()
 
+                                // Cooperative pause/cancel check
+                                if (LibraryUpdateProgressBus.isCancelRequested()) {
+                                    throw CancellationException("User cancelled library update")
+                                }
+                                if (LibraryUpdateProgressBus.isPauseRequested()) {
+                                    throw CancellationException("User paused library update")
+                                }
+
                                 // Don't continue to update if novel is not in library
                                 if (getNovel.await(novel.id)?.favorite != true) {
+                                    return@forEach
+                                }
+
+                                // Skip entries already processed in a prior (paused) run
+                                if (novel.id in LibraryUpdateProgressBus.checkpoint) {
+                                    progressCount.incrementAndGet()
                                     return@forEach
                                 }
 
@@ -231,6 +254,36 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                         failedUpdates.add(novel to errorMessage)
                                     }
                                 }
+
+                                // Mark processed for resume checkpoint
+                                LibraryUpdateProgressBus.markProcessed(novel.id)
+
+                                // Publish progress to the in-app bus
+                                LibraryUpdateProgressBus.updateProgress(
+                                    processed = progressCount.get(),
+                                    currentlyUpdating = currentlyUpdatingNovels.map {
+                                        eu.kanade.tachiyomi.data.library.EntryRef(
+                                            id = it.id,
+                                            title = it.title,
+                                            sourceId = it.source,
+                                            kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
+                                        )
+                                    },
+                                    failedSoFar = failedUpdates.map { (n, reason) ->
+                                        eu.kanade.tachiyomi.data.library.FailedEntry(
+                                            entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                                                id = n.id,
+                                                title = n.title,
+                                                sourceId = n.source,
+                                                kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
+                                            ),
+                                            reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                                            sourceName = sourceManager.getOrStub(n.source).name,
+                                        )
+                                    },
+                                    totalEntries = novelsToUpdate.size,
+                                    source = "Novel",
+                                )
                             }
                         }
                     }
@@ -245,7 +298,22 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             notifier.showUpdateNotifications(newUpdates)
         }
 
-        if (failedUpdates.isNotEmpty()) {
+        // Publish completion + persist failures to the FailedFetch table
+        val failedEntries = failedUpdates.map { (n, reason) ->
+            eu.kanade.tachiyomi.data.library.FailedEntry(
+                entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                    id = n.id,
+                    title = n.title,
+                    sourceId = n.source,
+                    kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
+                ),
+                reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                sourceName = sourceManager.getOrStub(n.source).name,
+            )
+        }
+        LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Novel")
+        if (failedEntries.isNotEmpty()) {
+            FailedFetchStore.insert(failedEntries)
             logcat(LogPriority.ERROR) {
                 "Failed updates: ${failedUpdates.joinToString { "${it.first.title}: ${it.second}" }}"
             }
@@ -392,8 +460,13 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val WORK_NAME_MANUAL = "NovelLibraryUpdate-$TAG-manual"
         private const val WORK_NAME_AUTO = "NovelLibraryUpdate-$TAG-auto"
         private const val KEY_CATEGORY = "category"
+        private const val KEY_RESUME = "resume"
 
-        fun startNow(context: Context, category: Category? = null): Boolean {
+        fun startNow(
+            context: Context,
+            category: Category? = null,
+            resumeFromCheckpoint: Boolean = false,
+        ): Boolean {
             val wm = androidx.work.WorkManager.getInstance(context)
             val workQuery = androidx.work.WorkQuery.Builder
                 .fromTags(listOf(TAG))
@@ -409,6 +482,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 .setInputData(
                     workDataOf(
                         KEY_CATEGORY to (category?.id ?: -1L),
+                        KEY_RESUME to resumeFromCheckpoint,
                     ),
                 )
                 .build()

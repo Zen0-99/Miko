@@ -76,13 +76,7 @@ fun Screen.animeSourcesTab(): TabContent {
 
     return TabContent(
         titleRes = AYMR.strings.label_anime_sources,
-        actions = persistentListOf(
-            AppBar.Action(
-                title = stringResource(MR.strings.action_global_search),
-                icon = Icons.Outlined.TravelExplore,
-                onClick = { navigator.push(GlobalAnimeSearchScreen()) },
-            ),
-        ),
+        actions = persistentListOf(),
         content = { contentPadding, snackbarHostState ->
             var trustDialogExtension by remember { mutableStateOf<AnimeExtension.Untrusted?>(null) }
             val scope = rememberCoroutineScope()

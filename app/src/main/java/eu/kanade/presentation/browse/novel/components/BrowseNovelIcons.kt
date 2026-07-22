@@ -120,8 +120,7 @@ fun NovelExtensionIcon(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .offset(x = 4.dp, y = 4.dp)
-                    .size(16.dp)
+                    .size(14.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center,
@@ -130,7 +129,7 @@ fun NovelExtensionIcon(
                     imageVector = Icons.AutoMirrored.Filled.Comment,
                     contentDescription = "Supports comments",
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(10.dp),
+                    modifier = Modifier.size(9.dp),
                 )
             }
         }

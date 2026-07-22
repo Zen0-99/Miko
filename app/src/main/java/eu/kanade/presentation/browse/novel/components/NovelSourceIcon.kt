@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -62,15 +61,16 @@ fun NovelSourceIcon(
             }
         }
 
-        // Comments support badge — small icon at bottom-end
+        // Comments support badge — small icon at bottom-end, kept within the
+        // 40dp icon bounds (no offset) so novel icons aren't visually larger
+        // than manga/anime icons.
         if (source.supportsComments) {
             Surface(
                 color = MaterialTheme.colorScheme.primary,
                 shape = androidx.compose.foundation.shape.CircleShape,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .size(14.dp)
-                    .offset(x = 2.dp, y = 2.dp),
+                    .size(14.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Comment,

@@ -76,13 +76,7 @@ fun Screen.mangaSourcesTab(): TabContent {
 
     return TabContent(
         titleRes = AYMR.strings.label_manga_sources,
-        actions = persistentListOf(
-            AppBar.Action(
-                title = stringResource(MR.strings.action_global_search),
-                icon = Icons.Outlined.TravelExplore,
-                onClick = { navigator.push(GlobalMangaSearchScreen()) },
-            ),
-        ),
+        actions = persistentListOf(),
         content = { contentPadding, snackbarHostState ->
             var trustDialogExtension by remember { mutableStateOf<MangaExtension.Untrusted?>(null) }
             val scope = rememberCoroutineScope()

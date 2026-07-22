@@ -40,10 +40,13 @@ fun AuroraCoverSectionHeader(
     count: String? = null,
     showChevron: Boolean = false,
     onChevronClick: (() -> Unit)? = null,
+    accentColor: Color? = null,
     trailingContent: (@Composable () -> Unit)? = null,
 ) {
     val colors = AuroraTheme.colors
     val isDark = colors.isDark
+    // Cover-derived accent (from detail screen) overrides the global theme accent
+    val effectiveAccent = accentColor ?: colors.accent
 
     Row(
         modifier = modifier
@@ -64,7 +67,7 @@ fun AuroraCoverSectionHeader(
                             color = if (isDark) {
                                 Color.White.copy(alpha = 0.08f)
                             } else {
-                                colors.accent
+                                effectiveAccent
                             },
                             shape = CircleShape,
                         ),
@@ -73,7 +76,7 @@ fun AuroraCoverSectionHeader(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (isDark) colors.accent else Color.White,
+                        tint = if (isDark) effectiveAccent else Color.White,
                         modifier = Modifier.size(16.dp),
                     )
                 }
@@ -120,7 +123,7 @@ fun AuroraCoverSectionHeader(
                 ) {
                     Text(
                         text = count,
-                        color = colors.accent,
+                        color = effectiveAccent,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                     )
@@ -137,7 +140,7 @@ fun AuroraCoverSectionHeader(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null,
-                        tint = colors.accent,
+                        tint = effectiveAccent,
                         modifier = Modifier.size(24.dp),
                     )
                 }

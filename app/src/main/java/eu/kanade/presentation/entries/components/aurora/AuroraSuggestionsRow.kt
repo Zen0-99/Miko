@@ -71,11 +71,14 @@ fun AuroraSuggestionsRow(
     onOpenSuggestions: () -> Unit,
     onRetryClick: () -> Unit,
     modifier: Modifier = Modifier,
+    accentColor: Color? = null,
 ) {
     if (state is SuggestionState.Idle || state is SuggestionState.Disabled) return
     if (state is SuggestionState.Success && state.items.isEmpty()) return
 
     val colors = AuroraTheme.colors
+    // Cover-derived accent (from detail screen) overrides the global theme accent
+    val effectiveAccent = accentColor ?: colors.accent
 
     val scrimBrush = if (!colors.isDark) {
         Brush.verticalGradient(
@@ -102,11 +105,12 @@ fun AuroraSuggestionsRow(
                 title = stringResource(AYMR.strings.suggestions_similar_titles),
                 showChevron = true,
                 onChevronClick = onOpenSuggestions,
+                accentColor = effectiveAccent,
                 trailingContent = {
                     if (state is SuggestionState.Error) {
                         Text(
                             text = stringResource(MR.strings.action_retry),
-                            color = colors.accent,
+                            color = effectiveAccent,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             modifier = Modifier
@@ -117,7 +121,7 @@ fun AuroraSuggestionsRow(
                                     if (colors.isDark) {
                                         Color.White.copy(alpha = 0.1f)
                                     } else {
-                                        colors.accent.copy(alpha = 0.15f)
+                                        effectiveAccent.copy(alpha = 0.15f)
                                     },
                                 ),
                         )

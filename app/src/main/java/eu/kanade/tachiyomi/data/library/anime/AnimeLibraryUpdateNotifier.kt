@@ -179,7 +179,7 @@ class AnimeLibraryUpdateNotifier(
             setContentText(context.stringResource(MR.strings.action_show_errors))
             setSmallIcon(R.drawable.ic_ani)
 
-            setContentIntent(NotificationReceiver.openErrorLogPendingActivity(context, uri))
+            setContentIntent(NotificationReceiver.openFetchingTabPendingActivity(context))
         }
     }
 

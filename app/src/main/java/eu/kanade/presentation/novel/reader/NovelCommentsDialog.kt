@@ -105,6 +105,7 @@ fun NovelCommentsDialog(
             modifier = Modifier
                 .widthIn(max = 480.dp)
                 .fillMaxWidth()
+                .padding(horizontal = 16.dp)
                 .clip(RoundedCornerShape(20.dp)),
             color = dialogBackgroundColor,
             tonalElevation = 6.dp,
@@ -336,10 +337,13 @@ private fun CommentItem(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Avatar — person icon placeholder for users without avatar
-                    if (comment.avatarUrl != null) {
+                    // Avatar — person icon placeholder for users without avatar.
+                    // Treat both null and blank/empty URLs as "no avatar" since
+                    // some extensions return empty strings for missing avatars.
+                    val avatarUrl = comment.avatarUrl?.takeIf { it.isNotBlank() }
+                    if (avatarUrl != null) {
                         AsyncImage(
-                            model = comment.avatarUrl,
+                            model = avatarUrl,
                             contentDescription = null,
                             modifier = Modifier
                                 .size(32.dp)

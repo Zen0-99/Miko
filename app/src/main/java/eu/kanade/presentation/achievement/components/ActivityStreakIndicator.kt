@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -77,37 +79,16 @@ fun ActivityStreakIndicator(
         label = "pulse_alpha",
     )
 
-    // Outer double-bezel shell
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(colors.surface.copy(alpha = 0.15f))
-            .border(
-                width = 1.dp,
-                color = colors.divider,
-                shape = RoundedCornerShape(24.dp),
-            )
-            .padding(6.dp),
+    // Single surface — matches ExtensionCard style (no double border)
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 1.dp,
     ) {
-        // Inner core
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.surface.copy(alpha = 0.7f),
-                            colors.surface.copy(alpha = 0.4f),
-                        ),
-                    ),
-                )
-                .border(
-                    width = 1.dp,
-                    color = colors.divider,
-                    shape = RoundedCornerShape(18.dp),
-                )
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -225,8 +206,8 @@ fun ActivityStreakIndicator(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.03f))
-                                    .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape),
+                                    .background(colors.divider.copy(alpha = 0.3f))
+                                    .border(1.dp, colors.divider, CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(

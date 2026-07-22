@@ -212,7 +212,7 @@ fun NovelReaderBottomBar(
                     imageVector = Icons.Filled.RecordVoiceOver,
                     contentDescription = "Read aloud",
                     tint = if (isTtsActive) {
-                        MaterialTheme.colorScheme.primary
+                        accentColor ?: MaterialTheme.colorScheme.primary
                     } else {
                         accentColor ?: MaterialTheme.colorScheme.onSurface
                     },

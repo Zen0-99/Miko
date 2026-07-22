@@ -40,9 +40,13 @@ import eu.kanade.tachiyomi.ui.stats.anime.animeStatsTab
 import eu.kanade.tachiyomi.ui.stats.manga.mangaStatsTab
 import eu.kanade.tachiyomi.ui.stats.novel.novelStatsTab
 import eu.kanade.tachiyomi.ui.updates.anime.animeUpdatesTab
+import eu.kanade.tachiyomi.ui.updates.fetching.fetchingTab
 import eu.kanade.tachiyomi.ui.updates.manga.mangaUpdatesTab
 import eu.kanade.tachiyomi.ui.updates.novel.novelUpdatesTab
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import mihon.feature.upcoming.anime.UpcomingAnimeScreenContent
 import mihon.feature.upcoming.anime.UpcomingAnimeScreenModel
 import mihon.feature.upcoming.manga.UpcomingMangaScreenContent
@@ -50,6 +54,7 @@ import mihon.feature.upcoming.manga.UpcomingMangaScreenModel
 import mihon.feature.upcoming.novel.UpcomingNovelScreenContent
 import mihon.feature.upcoming.novel.UpcomingNovelScreenModel
 import tachiyomi.i18n.MR
+import tachiyomi.domain.library.interactor.GetFailedFetches
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
@@ -82,6 +87,15 @@ data object UpdatesTab : Tab {
         val navigator = LocalNavigator.currentOrThrow
         val contentMode by uiPreferences.contentMode().collectAsState()
         val nestedScrollConnection = remember { object : NestedScrollConnection {} }
+
+        // Fetching tab is conditional: only show when there are failed fetches
+        // OR a library update run is currently in progress.
+        val getFailedFetches = remember { Injekt.get<GetFailedFetches>() }
+        val failedFetches by getFailedFetches.subscribe().collectAsState(initial = emptyList())
+        val progressState by LibraryUpdateProgressBus.state.collectAsState()
+        val showFetchingTab = failedFetches.isNotEmpty() ||
+            progressState is LibraryUpdateProgress.Running ||
+            progressState is LibraryUpdateProgress.Completed
 
         // Build 5 sub-tabs: Updates, History, Downloads, Calendar, Stats
         // Override titleRes so tabs show their function name, not the content mode
@@ -158,9 +172,20 @@ data object UpdatesTab : Tab {
             }
         }
 
+        val fetchingTabContent = if (showFetchingTab) fetchingTab(context) else null
+
+        val tabs = buildList {
+            add(updatesTab)
+            add(calendarTab)
+            add(downloadsTab)
+            add(statsTab)
+            add(historyTab)
+            if (fetchingTabContent != null) add(fetchingTabContent)
+        }.toPersistentList()
+
         TabbedScreen(
             titleRes = MR.strings.label_recent_updates,
-            tabs = persistentListOf(updatesTab, calendarTab, downloadsTab, statsTab, historyTab),
+            tabs = tabs,
             scrollable = true,
             onClickSettings = { navigator.push(SettingsScreen()) },
         )

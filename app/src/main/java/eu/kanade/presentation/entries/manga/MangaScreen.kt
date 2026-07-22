@@ -488,6 +488,7 @@ private fun MangaScreenSmallImpl(
                             onOpenSuggestions = onOpenSuggestions,
                             onRetryClick = onRetrySuggestions,
                             modifier = Modifier.fillMaxWidth(),
+                            accentColor = state.accentColor,
                         )
                     }
 
@@ -726,6 +727,7 @@ fun MangaScreenLargeImpl(
                             onOpenSuggestions = onOpenSuggestions,
                             onRetryClick = onRetrySuggestions,
                             modifier = Modifier.fillMaxWidth(),
+                            accentColor = state.accentColor,
                         )
                     }
                 },

@@ -27,6 +27,8 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.data.cache.AnimeBackgroundCache
 import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
+import eu.kanade.tachiyomi.data.library.FailedFetchStore
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
@@ -117,11 +119,12 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
         val categoryId = inputData.getLong(KEY_CATEGORY, -1L)
+        val isResume = inputData.getBoolean(KEY_RESUME, false)
         addAnimeToQueue(categoryId)
 
         return withIOContext {
             try {
-                updateEpisodeList()
+                updateEpisodeList(isResume = isResume)
                 Result.success()
             } catch (e: Exception) {
                 if (e is CancellationException) {
@@ -267,7 +270,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      *
      * @return an observable delivering the progress of each update.
      */
-    private suspend fun updateEpisodeList() {
+    private suspend fun updateEpisodeList(isResume: Boolean = false) {
         val semaphore = Semaphore(5)
         val progressCount = AtomicInteger(0)
         val currentlyUpdatingAnime = CopyOnWriteArrayList<Anime>()
@@ -275,6 +278,12 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val failedUpdates = CopyOnWriteArrayList<Pair<Anime, String?>>()
         val hasDownloads = AtomicBoolean(false)
         val fetchWindow = animeFetchInterval.getWindow(ZonedDateTime.now())
+
+        // Publish initial running state to the in-app progress bus
+        LibraryUpdateProgressBus.startRun(total = animeToUpdate.size, source = "Anime", isResume = isResume)
+        if (isResume) {
+            progressCount.set(LibraryUpdateProgressBus.checkpoint.size)
+        }
 
         coroutineScope {
             animeToUpdate.groupBy { it.anime.source }.values
@@ -285,8 +294,22 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                 val anime = libraryAnime.anime
                                 ensureActive()
 
+                                // Cooperative pause/cancel check
+                                if (LibraryUpdateProgressBus.isCancelRequested()) {
+                                    throw CancellationException("User cancelled library update")
+                                }
+                                if (LibraryUpdateProgressBus.isPauseRequested()) {
+                                    throw CancellationException("User paused library update")
+                                }
+
                                 // Don't continue to update if anime is not in library
                                 if (anime.parentId == null && getAnime.await(anime.id)?.favorite != true) {
+                                    return@forEach
+                                }
+
+                                // Skip entries already processed in a prior (paused) run
+                                if (anime.id in LibraryUpdateProgressBus.checkpoint) {
+                                    progressCount.incrementAndGet()
                                     return@forEach
                                 }
 
@@ -326,6 +349,36 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                         failedUpdates.add(anime to errorMessage)
                                     }
                                 }
+
+                                // Mark processed for resume checkpoint
+                                LibraryUpdateProgressBus.markProcessed(anime.id)
+
+                                // Publish progress to the in-app bus
+                                LibraryUpdateProgressBus.updateProgress(
+                                    processed = progressCount.get(),
+                                    currentlyUpdating = currentlyUpdatingAnime.map {
+                                        eu.kanade.tachiyomi.data.library.EntryRef(
+                                            id = it.id,
+                                            title = it.title,
+                                            sourceId = it.source,
+                                            kind = tachiyomi.domain.library.model.EntryKind.ANIME,
+                                        )
+                                    },
+                                    failedSoFar = failedUpdates.map { (a, reason) ->
+                                        eu.kanade.tachiyomi.data.library.FailedEntry(
+                                            entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                                                id = a.id,
+                                                title = a.title,
+                                                sourceId = a.source,
+                                                kind = tachiyomi.domain.library.model.EntryKind.ANIME,
+                                            ),
+                                            reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                                            sourceName = sourceManager.getOrStub(a.source).name,
+                                        )
+                                    },
+                                    totalEntries = animeToUpdate.size,
+                                    source = "Anime",
+                                )
                             }
                         }
                     }
@@ -342,7 +395,22 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             }
         }
 
-        if (failedUpdates.isNotEmpty()) {
+        // Publish completion + persist failures to the FailedFetch table
+        val failedEntries = failedUpdates.map { (a, reason) ->
+            eu.kanade.tachiyomi.data.library.FailedEntry(
+                entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                    id = a.id,
+                    title = a.title,
+                    sourceId = a.source,
+                    kind = tachiyomi.domain.library.model.EntryKind.ANIME,
+                ),
+                reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                sourceName = sourceManager.getOrStub(a.source).name,
+            )
+        }
+        LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Anime")
+        if (failedEntries.isNotEmpty()) {
+            FailedFetchStore.insert(failedEntries)
             val errorFile = writeErrorFile(failedUpdates)
             notifier.showUpdateErrorNotification(
                 failedUpdates.size,
@@ -454,6 +522,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
          * Key for category to update.
          */
         private const val KEY_CATEGORY = "animeCategory"
+        private const val KEY_RESUME = "animeResume"
 
         fun cancelAllWorks(context: Context) {
             context.workManager.cancelAllWorkByTag(TAG)
@@ -510,6 +579,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         fun startNow(
             context: Context,
             category: Category? = null,
+            resumeFromCheckpoint: Boolean = false,
         ): Boolean {
             val wm = context.workManager
             if (wm.isRunning(TAG)) {
@@ -519,6 +589,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
             val inputData = workDataOf(
                 KEY_CATEGORY to category?.id,
+                KEY_RESUME to resumeFromCheckpoint,
             )
             val request = OneTimeWorkRequestBuilder<AnimeLibraryUpdateJob>()
                 .addTag(TAG)

@@ -19,6 +19,8 @@ import logcat.LogPriority
 import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.UpdateNovelExtensionRepo
 import mihon.domain.extensionrepo.model.ExtensionRepo
+import mihon.domain.extensionrepo.service.ExtensionIndexEntry
+import mihon.domain.extensionrepo.service.ExtensionRepoService
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.withIOContext
@@ -35,6 +37,7 @@ internal class NovelExtensionApi {
     private val updateExtensionRepo: UpdateNovelExtensionRepo by injectLazy()
     private val extensionManager: NovelExtensionManager by injectLazy()
     private val json: Json by injectLazy()
+    private val extensionRepoService: ExtensionRepoService by injectLazy()
 
     private val lastExtCheck: Preference<Long> by lazy {
         preferenceStore.getLong("last_novel_ext_check", 0)
@@ -52,19 +55,43 @@ internal class NovelExtensionApi {
     private suspend fun getExtensions(extRepo: ExtensionRepo): List<NovelExtension.Available> {
         val repoBaseUrl = extRepo.baseUrl
         return try {
-            val response = networkService.client
-                .newCall(GET("$repoBaseUrl/index.min.json", cache = FORCE_NETWORK))
-                .awaitSuccess()
-
-            with(json) {
-                response
-                    .parseAs<List<ExtensionJsonObject>>()
-                    .toExtensions(repoBaseUrl)
-            }
+            val entries = extensionRepoService.fetchExtensionIndex(repoBaseUrl)
+                ?: return emptyList()
+            entries.toNovelExtensions()
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to get novel extensions from $repoBaseUrl" }
             emptyList()
         }
+    }
+
+    private fun List<ExtensionIndexEntry>.toNovelExtensions(): List<NovelExtension.Available> {
+        return this
+            .filter {
+                it.libVersion >= NovelExtensionLoader.LIB_VERSION_MIN &&
+                    it.libVersion <= NovelExtensionLoader.LIB_VERSION_MAX
+            }
+            .map {
+                NovelExtension.Available(
+                    name = it.name,
+                    pkgName = it.pkgName,
+                    versionName = it.versionName,
+                    versionCode = it.versionCode,
+                    libVersion = it.libVersion,
+                    lang = it.lang,
+                    isNsfw = it.isNsfw,
+                    sources = it.sources.map { src ->
+                        NovelExtension.Available.NovelSource(
+                            id = src.id,
+                            lang = src.lang,
+                            name = src.name,
+                            baseUrl = src.baseUrl,
+                        )
+                    },
+                    apkName = it.apkName,
+                    iconUrl = it.iconUrl,
+                    repoUrl = it.repoUrl,
+                )
+            }
     }
 
     suspend fun checkForUpdates(

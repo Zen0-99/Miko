@@ -77,13 +77,7 @@ fun Screen.novelSourcesTab(): TabContent {
 
     return TabContent(
         titleRes = AYMR.strings.label_novel_sources,
-        actions = persistentListOf(
-            AppBar.Action(
-                title = stringResource(MR.strings.action_global_search),
-                icon = Icons.Outlined.TravelExplore,
-                onClick = { navigator.push(GlobalNovelSearchScreen()) },
-            ),
-        ),
+        actions = persistentListOf(),
         content = { contentPadding, snackbarHostState ->
             var trustDialogExtension by remember { mutableStateOf<NovelExtension.Untrusted?>(null) }
             val scope = rememberCoroutineScope()

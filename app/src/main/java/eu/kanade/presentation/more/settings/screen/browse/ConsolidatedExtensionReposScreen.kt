@@ -19,7 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -37,12 +40,15 @@ import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import mihon.domain.extensionrepo.service.ExtensionRepoService
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TabText
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class ConsolidatedExtensionReposScreen(
     private val url: String? = null,
@@ -68,9 +74,46 @@ class ConsolidatedExtensionReposScreen(
         )
         val pagerState = rememberPagerState { tabs.size }
         val scope = rememberCoroutineScope()
+        val repoService = remember { Injekt.get<ExtensionRepoService>() }
+
+        // Shared create dialog state — probes the repo type and routes to the
+        // appropriate tab regardless of which tab the user is currently on.
+        var showSharedCreateDialog by remember { mutableStateOf(false) }
+        var isProbing by remember { mutableStateOf(false) }
+
+        // All existing repo URLs (across all tabs) for duplicate detection
+        val animeRepos = (animeState as? RepoScreenState.Success)?.repos ?: emptyList()
+        val mangaRepos = (mangaState as? RepoScreenState.Success)?.repos ?: emptyList()
+        val novelRepos = (novelState as? RepoScreenState.Success)?.repos ?: emptyList()
+        val allRepoUrls = (animeRepos + mangaRepos + novelRepos).map { it.baseUrl }.toImmutableSet()
 
         LaunchedEffect(url) {
             url?.let { animeScreenModel.showDialog(RepoDialog.Confirm(it)) }
+        }
+
+        // Probes a repo URL and routes the create to the appropriate tab.
+        suspend fun probeAndCreateRepo(repoUrl: String) {
+            isProbing = true
+            try {
+                val type = repoService.probeRepoType(repoUrl)
+                val targetIndex = when (type) {
+                    "anime" -> 0
+                    "novel" -> 2
+                    else -> 1 // manga
+                }
+                // Navigate to the target tab
+                if (pagerState.currentPage != targetIndex) {
+                    pagerState.animateScrollToPage(targetIndex)
+                }
+                // Call the appropriate screen model's createRepo
+                when (targetIndex) {
+                    0 -> animeScreenModel.createRepo(repoUrl)
+                    1 -> mangaScreenModel.createRepo(repoUrl)
+                    2 -> novelScreenModel.createRepo(repoUrl)
+                }
+            } finally {
+                isProbing = false
+            }
         }
 
         Scaffold(
@@ -101,13 +144,7 @@ class ConsolidatedExtensionReposScreen(
                 ExtendedFloatingActionButton(
                     text = { Text(text = stringResource(MR.strings.action_add)) },
                     icon = { Icon(imageVector = Icons.Outlined.Add, contentDescription = "") },
-                    onClick = {
-                        when (pagerState.currentPage) {
-                            0 -> animeScreenModel.showDialog(RepoDialog.Create)
-                            1 -> mangaScreenModel.showDialog(RepoDialog.Create)
-                            2 -> novelScreenModel.showDialog(RepoDialog.Create)
-                        }
-                    },
+                    onClick = { showSharedCreateDialog = true },
                 )
             },
         ) { paddingValues ->
@@ -197,6 +234,20 @@ class ConsolidatedExtensionReposScreen(
             novelScreenModel.events.collectLatest { event ->
                 if (event is RepoEvent.LocalizedMessage) context.toast(event.stringRes)
             }
+        }
+
+        // Shared create dialog — probes the repo type and routes to the
+        // appropriate tab. Shown when the FAB is clicked, regardless of the
+        // current tab.
+        if (showSharedCreateDialog) {
+            ExtensionRepoCreateDialog(
+                onDismissRequest = { showSharedCreateDialog = false },
+                onCreate = { repoUrl ->
+                    showSharedCreateDialog = false
+                    scope.launch { probeAndCreateRepo(repoUrl) }
+                },
+                repoUrls = allRepoUrls,
+            )
         }
     }
 }

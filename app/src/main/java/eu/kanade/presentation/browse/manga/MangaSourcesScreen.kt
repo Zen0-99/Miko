@@ -2,11 +2,13 @@ package eu.kanade.presentation.browse.manga
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,23 +16,29 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -304,52 +312,61 @@ private fun MangaSourcesCardView(
                 }
             }
 
-            // Render items as cards in FlowRow
+            // Render items as cards — each row is a separate lazy item so
+            // LazyColumn only composes visible rows (fixes freeze with many
+            // not-installed extensions).
             if (header?.language != MangaSourcesScreenModel.NOT_INSTALLED_KEY || notInstalledExpanded) {
-                item(key = "cards-${header?.hashCode() ?: "no-header"}") {
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        maxItemsInEachRow = cardColumns,
-                    ) {
-                        sectionItems.forEach { model ->
-                            when (model) {
-                                is MangaSourceUiModel.Item -> {
-                                    val ext = sourceExtensionMap[model.source.id]
-                                    val hasUpdate = model.source.id in sourcesWithUpdates
-                                    val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
-                                        it == InstallStep.Pending || it == InstallStep.Downloading
-                                    } == true
-                                    ExtensionCard(
-                                        modifier = Modifier.weight(1f),
-                                        title = model.source.name,
-                                        lang = model.source.lang.uppercase(),
-                                        version = ext?.versionName ?: "",
-                                        iconDrawable = ext?.icon,
-                                        hasUpdate = hasUpdate,
-                                        isUpdating = isUpdating,
-                                        onClick = { onClickItem(model.source, Listing.Popular) },
-                                        onCogClick = {
-                                            if (hasUpdate) onClickUpdate(model.source)
-                                            else onClickExtension(model.source)
-                                        },
-                                    )
+                val rows = sectionItems.chunked(cardColumns)
+                rows.forEachIndexed { rowIndex, rowItems ->
+                    item(key = "cards-${header?.hashCode() ?: "no-header"}-$rowIndex") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            rowItems.forEach { model ->
+                                when (model) {
+                                    is MangaSourceUiModel.Item -> {
+                                        val ext = sourceExtensionMap[model.source.id]
+                                        val hasUpdate = model.source.id in sourcesWithUpdates
+                                        val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
+                                            it == InstallStep.Pending || it == InstallStep.Downloading
+                                        } == true
+                                        ExtensionCard(
+                                            modifier = Modifier.weight(1f),
+                                            title = model.source.name,
+                                            lang = model.source.lang.uppercase(),
+                                            version = ext?.versionName ?: "",
+                                            iconDrawable = ext?.icon,
+                                            hasUpdate = hasUpdate,
+                                            isUpdating = isUpdating,
+                                            isInstalled = true,
+                                            isObsolete = ext?.isObsolete == true,
+                                            onClick = { onClickItem(model.source, Listing.Popular) },
+                                            onLongClick = { onLongClickItem(model.source) },
+                                            onCogClick = {
+                                                if (hasUpdate) onClickUpdate(model.source)
+                                                else onClickExtension(model.source)
+                                            },
+                                        )
+                                    }
+                                    is MangaSourceUiModel.AvailableExtension -> {
+                                        ExtensionCard(
+                                            modifier = Modifier.weight(1f),
+                                            title = model.extension.name,
+                                            lang = model.extension.lang.uppercase(),
+                                            version = model.extension.versionName,
+                                            iconUrl = model.extension.iconUrl,
+                                            isInstalled = false,
+                                            onClick = { onClickInstallExtension(model.extension) },
+                                        )
+                                    }
+                                    else -> {}
                                 }
-                                is MangaSourceUiModel.AvailableExtension -> {
-                                    ExtensionCard(
-                                        modifier = Modifier.weight(1f),
-                                        title = model.extension.name,
-                                        lang = model.extension.lang.uppercase(),
-                                        version = model.extension.versionName,
-                                        iconUrl = model.extension.iconUrl,
-                                        onClick = { onClickInstallExtension(model.extension) },
-                                        onCogClick = {},
-                                    )
-                                }
-                                else -> {}
+                            }
+                            repeat(cardColumns - rowItems.size) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
@@ -462,6 +479,7 @@ private fun SourcePinButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MangaSourceOptionsDialog(
     source: Source,
@@ -474,63 +492,96 @@ fun MangaSourceOptionsDialog(
     onClickMigrate: () -> Unit = {},
     onClickUninstall: () -> Unit = {},
 ) {
-    AlertDialog(
-        title = {
-            Text(text = source.visualName)
-        },
-        text = {
-            Column {
-                val textId = if (Pin.Pinned in source.pin) MR.strings.action_unfavorite else MR.strings.action_favorite
-                Text(
-                    text = stringResource(textId),
-                    modifier = Modifier
-                        .clickable(onClick = onClickPin)
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                )
-                if (source.id != LocalMangaSource.ID) {
-                    Text(
-                        text = stringResource(MR.strings.action_migrate),
-                        modifier = Modifier
-                            .clickable(onClick = onClickMigrate)
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                    )
-                    Text(
-                        text = stringResource(MR.strings.action_disable),
-                        modifier = Modifier
-                            .clickable(onClick = onClickDisable)
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                    )
-                    Text(
-                        text = stringResource(MR.strings.action_uninstall),
-                        modifier = Modifier
-                            .clickable(onClick = onClickUninstall)
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                    )
-                }
-                // SY -->
-                if (onClickToggleDataSaver != null) {
-                    Text(
-                        text = if (source.isExcludedFromDataSaver) {
-                            stringResource(AYMR.strings.data_saver_stop_exclude)
-                        } else {
-                            stringResource(AYMR.strings.data_saver_exclude)
-                        },
-                        modifier = Modifier
-                            .clickable(onClick = onClickToggleDataSaver)
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                    )
-                }
-                // SY <--
-            }
-        },
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        confirmButton = {},
-    )
+        sheetState = sheetState,
+        dragHandle = null,
+    ) {
+        Text(
+            text = source.visualName,
+            style = MaterialTheme.typography.titleSmall,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+        ) {
+            val pinText = stringResource(
+                if (Pin.Pinned in source.pin) MR.strings.action_unfavorite else MR.strings.action_favorite,
+            )
+            MangaSourceSheetOption(
+                label = pinText,
+                icon = if (Pin.Pinned in source.pin) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                onClick = { onClickPin(); onDismiss() },
+            )
+            if (source.id != LocalMangaSource.ID) {
+                MangaSourceSheetOption(
+                    label = stringResource(MR.strings.action_migrate),
+                    icon = Icons.Outlined.SwapHoriz,
+                    onClick = { onClickMigrate(); onDismiss() },
+                )
+                MangaSourceSheetOption(
+                    label = stringResource(MR.strings.action_disable),
+                    icon = Icons.Outlined.Block,
+                    onClick = { onClickDisable(); onDismiss() },
+                )
+                MangaSourceSheetOption(
+                    label = stringResource(MR.strings.action_uninstall),
+                    icon = Icons.Outlined.Delete,
+                    onClick = { onClickUninstall(); onDismiss() },
+                )
+            }
+            // SY -->
+            if (onClickToggleDataSaver != null) {
+                MangaSourceSheetOption(
+                    label = if (source.isExcludedFromDataSaver) {
+                        stringResource(AYMR.strings.data_saver_stop_exclude)
+                    } else {
+                        stringResource(AYMR.strings.data_saver_exclude)
+                    },
+                    icon = Icons.Outlined.Settings,
+                    onClick = { onClickToggleDataSaver(); onDismiss() },
+                )
+            }
+            // SY <--
+        }
+    }
+}
+
+@Composable
+private fun MangaSourceSheetOption(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 @Composable
@@ -558,7 +609,14 @@ private fun MangaSourceSectionHeader(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        action()
+        // Reserve a fixed-size slot for the action so the title doesn't shift
+        // when the action content appears/disappears (e.g. download-all icon).
+        Box(
+            modifier = Modifier.size(36.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            with(this@Row) { action() }
+        }
         if (expanded != null) {
             Icon(
                 imageVector = if (expanded) {

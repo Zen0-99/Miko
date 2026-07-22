@@ -24,6 +24,8 @@ class CreateAnimeExtensionRepo(
             .trim()
             .trimEnd('/')
             .removeSuffix("/index.min.json")
+            .removeSuffix("/index.pb")
+            .removeSuffix("/index.pb.gz")
             .removeSuffix("/repo.json")
         return service.fetchRepoDetails(baseUrl)?.let { insert(it) } ?: Result.InvalidUrl
     }

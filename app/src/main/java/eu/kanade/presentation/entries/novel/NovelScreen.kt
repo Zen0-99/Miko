@@ -436,6 +436,7 @@ private fun NovelScreenSmallImpl(
                         onOpenSuggestions = onOpenSuggestions,
                         onRetryClick = onRetrySuggestions,
                         modifier = Modifier.fillMaxWidth(),
+                        accentColor = state.accentColor,
                     )
                 }
 

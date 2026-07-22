@@ -19,6 +19,8 @@ import logcat.LogPriority
 import mihon.domain.extensionrepo.manga.interactor.GetMangaExtensionRepo
 import mihon.domain.extensionrepo.manga.interactor.UpdateMangaExtensionRepo
 import mihon.domain.extensionrepo.model.ExtensionRepo
+import mihon.domain.extensionrepo.service.ExtensionIndexEntry
+import mihon.domain.extensionrepo.service.ExtensionRepoService
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.withIOContext
@@ -35,6 +37,7 @@ internal class MangaExtensionApi {
     private val updateExtensionRepo: UpdateMangaExtensionRepo by injectLazy()
     private val extensionManager: MangaExtensionManager by injectLazy()
     private val json: Json by injectLazy()
+    private val extensionRepoService: ExtensionRepoService by injectLazy()
 
     private val lastExtCheck: Preference<Long> by lazy {
         preferenceStore.getLong("last_ext_check", 0)
@@ -52,19 +55,43 @@ internal class MangaExtensionApi {
     private suspend fun getExtensions(extRepo: ExtensionRepo): List<MangaExtension.Available> {
         val repoBaseUrl = extRepo.baseUrl
         return try {
-            val response = networkService.client
-                .newCall(GET("$repoBaseUrl/index.min.json", cache = FORCE_NETWORK))
-                .awaitSuccess()
-
-            with(json) {
-                response
-                    .parseAs<List<ExtensionJsonObject>>()
-                    .toExtensions(repoBaseUrl)
-            }
+            val entries = extensionRepoService.fetchExtensionIndex(repoBaseUrl)
+                ?: return emptyList()
+            entries.toMangaExtensions()
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "Failed to get extensions from $repoBaseUrl" }
             emptyList()
         }
+    }
+
+    private fun List<ExtensionIndexEntry>.toMangaExtensions(): List<MangaExtension.Available> {
+        return this
+            .filter {
+                it.libVersion >= MangaExtensionLoader.LIB_VERSION_MIN &&
+                    it.libVersion <= MangaExtensionLoader.LIB_VERSION_MAX
+            }
+            .map {
+                MangaExtension.Available(
+                    name = it.name,
+                    pkgName = it.pkgName,
+                    versionName = it.versionName,
+                    versionCode = it.versionCode,
+                    libVersion = it.libVersion,
+                    lang = it.lang,
+                    isNsfw = it.isNsfw,
+                    sources = it.sources.map { src ->
+                        MangaExtension.Available.MangaSource(
+                            id = src.id,
+                            lang = src.lang,
+                            name = src.name,
+                            baseUrl = src.baseUrl,
+                        )
+                    },
+                    apkName = it.apkName,
+                    iconUrl = it.iconUrl,
+                    repoUrl = it.repoUrl,
+                )
+            }
     }
 
     suspend fun checkForUpdates(
@@ -170,3 +197,4 @@ private val extensionSourceMapper: (ExtensionSourceJsonObject) -> MangaExtension
         baseUrl = it.baseUrl,
     )
 }
+

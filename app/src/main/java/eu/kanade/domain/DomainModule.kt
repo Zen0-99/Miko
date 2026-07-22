@@ -98,6 +98,12 @@ import mihon.domain.upcoming.manga.interactor.GetUpcomingManga
 import mihon.domain.upcoming.novel.interactor.GetUpcomingNovel
 import tachiyomi.data.category.anime.AnimeCategoryRepositoryImpl
 import tachiyomi.data.category.manga.MangaCategoryRepositoryImpl
+import tachiyomi.data.library.FailedFetchRepositoryImpl
+import tachiyomi.domain.library.interactor.ClearFailedFetches
+import tachiyomi.domain.library.interactor.DeleteFailedFetch
+import tachiyomi.domain.library.interactor.GetFailedFetches
+import tachiyomi.domain.library.interactor.InsertFailedFetch
+import tachiyomi.domain.library.repository.FailedFetchRepository
 import tachiyomi.data.custombutton.CustomButtonRepositoryImpl
 import tachiyomi.data.entries.anime.AnimeRepositoryImpl
 import tachiyomi.data.entries.manga.MangaRepositoryImpl
@@ -330,6 +336,13 @@ class DomainModule : InjektModule {
         addFactory { UpdateMangaCategory(get()) }
         addFactory { HideMangaCategory(get()) }
         addFactory { DeleteMangaCategory(get(), get(), get()) }
+
+        // Failed fetch tracking (Fetching tab in Updates)
+        addSingletonFactory<FailedFetchRepository> { FailedFetchRepositoryImpl(get()) }
+        addFactory { GetFailedFetches(get()) }
+        addFactory { InsertFailedFetch(get()) }
+        addFactory { DeleteFailedFetch(get()) }
+        addFactory { ClearFailedFetches(get()) }
 
         addSingletonFactory<AnimeRepository> { AnimeRepositoryImpl(get(), get()) }
         addFactory { GetDuplicateLibraryAnime(get()) }

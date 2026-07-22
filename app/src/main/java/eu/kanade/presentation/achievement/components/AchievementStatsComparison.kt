@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -60,90 +62,65 @@ fun AchievementStatsComparison(
             modifier = Modifier.padding(horizontal = 16.dp),
         )
 
-        // Bento Shell Box
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(colors.surface.copy(alpha = 0.15f))
-                .border(
-                    width = 1.dp,
-                    color = colors.divider,
-                    shape = RoundedCornerShape(20.dp),
-                )
-                .padding(4.dp),
+        // Single surface — matches ExtensionCard style (no double border)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shadowElevation = 1.dp,
         ) {
+            // Draw grid dividers on the background
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                colors.surface.copy(alpha = 0.5f),
-                                colors.surface.copy(alpha = 0.3f),
-                            ),
-                        ),
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = colors.divider,
-                        shape = RoundedCornerShape(16.dp),
-                    ),
+                    .drawBehind {
+                        // Horizontal divider
+                        drawLine(
+                            color = colors.divider,
+                            start = Offset(0f, size.height * 0.5f),
+                            end = Offset(size.width, size.height * 0.5f),
+                            strokeWidth = 1.dp.toPx(),
+                        )
+                        // Vertical divider
+                        drawLine(
+                            color = colors.divider,
+                            start = Offset(size.width * 0.5f, 0f),
+                            end = Offset(size.width * 0.5f, size.height),
+                            strokeWidth = 1.dp.toPx(),
+                        )
+                    }
+                    .padding(8.dp),
             ) {
-                // Draw grid dividers on the background
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .drawBehind {
-                            // Horizontal divider
-                            drawLine(
-                                color = colors.divider,
-                                start = Offset(0f, size.height * 0.5f),
-                                end = Offset(size.width, size.height * 0.5f),
-                                strokeWidth = 1.dp.toPx(),
-                            )
-                            // Vertical divider
-                            drawLine(
-                                color = colors.divider,
-                                start = Offset(size.width * 0.5f, 0f),
-                                end = Offset(size.width * 0.5f, size.height),
-                                strokeWidth = 1.dp.toPx(),
-                            )
-                        }
-                        .padding(8.dp),
-                ) {
-                    Column {
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            StatItem(
-                                label = stringResource(AYMR.strings.achievement_stat_chapters_read),
-                                currentValue = currentMonth.chaptersRead,
-                                previousValue = previousMonth.chaptersRead,
-                                modifier = Modifier.weight(1f),
-                            )
-                            StatItem(
-                                label = stringResource(AYMR.strings.achievement_stat_episodes_watched),
-                                currentValue = currentMonth.episodesWatched,
-                                previousValue = previousMonth.episodesWatched,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            StatItem(
-                                label = stringResource(AYMR.strings.achievement_stat_app_time),
-                                currentValue = currentMonth.timeInAppMinutes,
-                                previousValue = previousMonth.timeInAppMinutes,
-                                isTimeValue = true,
-                                timeStrings = timeStrings,
-                                modifier = Modifier.weight(1f),
-                            )
-                            StatItem(
-                                label = stringResource(AYMR.strings.achievement_stat_unlocked),
-                                currentValue = currentMonth.achievementsUnlocked,
-                                previousValue = previousMonth.achievementsUnlocked,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
+                Column {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        StatItem(
+                            label = stringResource(AYMR.strings.achievement_stat_chapters_read),
+                            currentValue = currentMonth.chaptersRead,
+                            previousValue = previousMonth.chaptersRead,
+                            modifier = Modifier.weight(1f),
+                        )
+                        StatItem(
+                            label = stringResource(AYMR.strings.achievement_stat_episodes_watched),
+                            currentValue = currentMonth.episodesWatched,
+                            previousValue = previousMonth.episodesWatched,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        StatItem(
+                            label = stringResource(AYMR.strings.achievement_stat_app_time),
+                            currentValue = currentMonth.timeInAppMinutes,
+                            previousValue = previousMonth.timeInAppMinutes,
+                            isTimeValue = true,
+                            timeStrings = timeStrings,
+                            modifier = Modifier.weight(1f),
+                        )
+                        StatItem(
+                            label = stringResource(AYMR.strings.achievement_stat_unlocked),
+                            currentValue = currentMonth.achievementsUnlocked,
+                            previousValue = previousMonth.achievementsUnlocked,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 }
             }
