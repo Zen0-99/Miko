@@ -59,7 +59,6 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.NavigatorDisposeBehavior
 import cafe.adriel.voyager.navigator.currentOrThrow
-import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.source.anime.interactor.GetAnimeIncognitoState
 import eu.kanade.domain.source.manga.interactor.GetMangaIncognitoState
@@ -84,6 +83,7 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadCache
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
@@ -105,7 +105,6 @@ import eu.kanade.tachiyomi.ui.more.NewUpdateScreen
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
 import eu.kanade.tachiyomi.ui.player.ExternalIntents
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
-import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
 import eu.kanade.tachiyomi.util.system.openInBrowser
@@ -313,14 +312,13 @@ class MainActivity : BaseActivity() {
                             },
                         )
                         // Library update progress overlay (mirrors achievement banner placement)
-                        val tabNavigator = LocalTabNavigator.current
                         LibraryUpdateProgressOverlay(
                             onViewFailures = {
-                                // Switch to the Updates tab so the user can see the Fetching sub-tab.
-                                // The bottom navigator is driven by TabNavigator; we reselect
-                                // UpdatesTab which conditionally renders the Fetching sub-tab when
-                                // there are failed fetches or an in-progress run.
-                                tabNavigator.current = UpdatesTab
+                                // Emit a command that HomeScreen observes to switch to the
+                                // Updates tab (which renders the Fetching sub-tab). We can't use
+                                // LocalTabNavigator here because this composable is outside the
+                                // TabNavigator provider scope.
+                                LibraryUpdateProgressBus.requestViewFailures()
                             },
                             modifier = Modifier.align(Alignment.TopCenter),
                         )

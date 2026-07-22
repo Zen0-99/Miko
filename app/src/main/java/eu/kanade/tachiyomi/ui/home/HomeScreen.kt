@@ -82,6 +82,7 @@ import eu.kanade.tachiyomi.ui.history.HistoriesTab
 import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.more.MoreTab
 import eu.kanade.tachiyomi.ui.updates.UpdatesTab
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -166,6 +167,16 @@ object HomeScreen : Screen() {
                 val currentTabKey = tabNavigator.current.key
                 LaunchedEffect(currentTabKey) {
                     topBarScrollBehavior.state.heightOffset = 0f
+                }
+                // Observe "view failures" commands from the library update progress
+                // overlay (which lives outside the TabNavigator scope in MainActivity)
+                // and switch to the Updates tab when the user taps "view failures".
+                LaunchedEffect(Unit) {
+                    LibraryUpdateProgressBus.commands.collect { command ->
+                        if (command is LibraryUpdateProgressBus.Command.ViewFailures) {
+                            tabNavigator.current = UpdatesTab
+                        }
+                    }
                 }
                 Scaffold(
                     modifier = Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection),

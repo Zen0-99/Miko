@@ -164,6 +164,16 @@ object LibraryUpdateProgressBus {
         object Pause : Command
         object Resume : Command
         object Cancel : Command
+        /**
+         * Emitted when the user taps "view failures" on the progress overlay.
+         * Observed by [eu.kanade.tachiyomi.ui.home.HomeScreen] to switch to the
+         * Updates tab (which renders the Fetching sub-tab).
+         */
+        object ViewFailures : Command
+    }
+
+    fun requestViewFailures() {
+        _commands.tryEmit(Command.ViewFailures)
     }
 }
 
