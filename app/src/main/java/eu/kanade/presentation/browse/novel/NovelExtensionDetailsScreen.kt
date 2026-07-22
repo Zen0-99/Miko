@@ -53,6 +53,7 @@ import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.entries.novel.model.NovelCover
 import kotlinx.collections.immutable.ImmutableList
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
@@ -68,6 +69,7 @@ fun NovelExtensionDetailsScreen(
     onClickUninstall: () -> Unit,
     onClickSource: (sourceId: Long) -> Unit,
     onClickMigrate: (novelId: Long) -> Unit = {},
+    onClickMigrateAll: () -> Unit = {},
 ) {
     Scaffold(
         topBar = { scrollBehavior ->
@@ -96,6 +98,7 @@ fun NovelExtensionDetailsScreen(
             onClickUninstall = onClickUninstall,
             onClickSource = onClickSource,
             onClickMigrate = onClickMigrate,
+            onClickMigrateAll = onClickMigrateAll,
         )
     }
 }
@@ -111,6 +114,7 @@ private fun NovelExtensionDetails(
     onClickUninstall: () -> Unit,
     onClickSource: (sourceId: Long) -> Unit,
     onClickMigrate: (novelId: Long) -> Unit = {},
+    onClickMigrateAll: () -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -165,14 +169,36 @@ private fun NovelExtensionDetails(
 
         // Migration section — show actual favorite titles from this extension's sources
         item {
-            Text(
-                text = stringResource(MR.strings.label_migration),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
-            )
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(MR.strings.label_migration),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (migrateItems.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.clickable(onClick = onClickMigrateAll),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(AYMR.strings.action_migrate_all),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = " >",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
         }
         if (migrateItems.isEmpty()) {
             item {
