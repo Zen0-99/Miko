@@ -36,33 +36,33 @@ class DownloadPreferences(
 
     fun downloadFillermarkedItems() = preferenceStore.getBoolean("pref_download_fillermarked", false)
 
-    fun removeExcludeCategories() = preferenceStore.getStringSet(
-        REMOVE_EXCLUDE_MANGA_CATEGORIES_PREF_KEY,
+    fun removeExcludeCollections() = preferenceStore.getStringSet(
+        REMOVE_EXCLUDE_MANGA_COLLECTIONS_PREF_KEY,
         emptySet(),
     )
-    fun removeExcludeAnimeCategories() = preferenceStore.getStringSet(
-        REMOVE_EXCLUDE_ANIME_CATEGORIES_PREF_KEY,
+    fun removeExcludeAnimeCollections() = preferenceStore.getStringSet(
+        REMOVE_EXCLUDE_ANIME_COLLECTIONS_PREF_KEY,
         emptySet(),
     )
 
     fun downloadNewChapters() = preferenceStore.getBoolean("download_new", false)
     fun downloadNewEpisodes() = preferenceStore.getBoolean("download_new_episode", false)
 
-    fun downloadNewChapterCategories() = preferenceStore.getStringSet(
-        DOWNLOAD_NEW_MANGA_CATEGORIES_PREF_KEY,
+    fun downloadNewChapterCollections() = preferenceStore.getStringSet(
+        DOWNLOAD_NEW_MANGA_COLLECTIONS_PREF_KEY,
         emptySet(),
     )
-    fun downloadNewEpisodeCategories() = preferenceStore.getStringSet(
-        DOWNLOAD_NEW_ANIME_CATEGORIES_PREF_KEY,
+    fun downloadNewEpisodeCollections() = preferenceStore.getStringSet(
+        DOWNLOAD_NEW_ANIME_COLLECTIONS_PREF_KEY,
         emptySet(),
     )
 
-    fun downloadNewChapterCategoriesExclude() = preferenceStore.getStringSet(
-        DOWNLOAD_NEW_MANGA_CATEGORIES_EXCLUDE_PREF_KEY,
+    fun downloadNewChapterCollectionsExclude() = preferenceStore.getStringSet(
+        DOWNLOAD_NEW_MANGA_COLLECTIONS_EXCLUDE_PREF_KEY,
         emptySet(),
     )
-    fun downloadNewEpisodeCategoriesExclude() = preferenceStore.getStringSet(
-        DOWNLOAD_NEW_ANIME_CATEGORIES_EXCLUDE_PREF_KEY,
+    fun downloadNewEpisodeCollectionsExclude() = preferenceStore.getStringSet(
+        DOWNLOAD_NEW_ANIME_COLLECTIONS_EXCLUDE_PREF_KEY,
         emptySet(),
     )
 
@@ -73,20 +73,20 @@ class DownloadPreferences(
     fun downloadNewUnseenEpisodesOnly() = preferenceStore.getBoolean("download_new_unread_episodes_only", false)
 
     companion object {
-        private const val REMOVE_EXCLUDE_MANGA_CATEGORIES_PREF_KEY = "remove_exclude_categories"
-        private const val REMOVE_EXCLUDE_ANIME_CATEGORIES_PREF_KEY = "remove_exclude_anime_categories"
-        private const val DOWNLOAD_NEW_MANGA_CATEGORIES_PREF_KEY = "download_new_categories"
-        private const val DOWNLOAD_NEW_ANIME_CATEGORIES_PREF_KEY = "download_new_anime_categories"
-        private const val DOWNLOAD_NEW_MANGA_CATEGORIES_EXCLUDE_PREF_KEY = "download_new_categories_exclude"
-        private const val DOWNLOAD_NEW_ANIME_CATEGORIES_EXCLUDE_PREF_KEY = "download_new_anime_categories_exclude"
+        private const val REMOVE_EXCLUDE_MANGA_COLLECTIONS_PREF_KEY = "remove_exclude_categories"
+        private const val REMOVE_EXCLUDE_ANIME_COLLECTIONS_PREF_KEY = "remove_exclude_anime_categories"
+        private const val DOWNLOAD_NEW_MANGA_COLLECTIONS_PREF_KEY = "download_new_categories"
+        private const val DOWNLOAD_NEW_ANIME_COLLECTIONS_PREF_KEY = "download_new_anime_categories"
+        private const val DOWNLOAD_NEW_MANGA_COLLECTIONS_EXCLUDE_PREF_KEY = "download_new_categories_exclude"
+        private const val DOWNLOAD_NEW_ANIME_COLLECTIONS_EXCLUDE_PREF_KEY = "download_new_anime_categories_exclude"
 
-        val categoryPreferenceKeys = setOf(
-            REMOVE_EXCLUDE_MANGA_CATEGORIES_PREF_KEY,
-            REMOVE_EXCLUDE_ANIME_CATEGORIES_PREF_KEY,
-            DOWNLOAD_NEW_MANGA_CATEGORIES_PREF_KEY,
-            DOWNLOAD_NEW_ANIME_CATEGORIES_PREF_KEY,
-            DOWNLOAD_NEW_MANGA_CATEGORIES_EXCLUDE_PREF_KEY,
-            DOWNLOAD_NEW_ANIME_CATEGORIES_EXCLUDE_PREF_KEY,
+        val collectionPreferenceKeys = setOf(
+            REMOVE_EXCLUDE_MANGA_COLLECTIONS_PREF_KEY,
+            REMOVE_EXCLUDE_ANIME_COLLECTIONS_PREF_KEY,
+            DOWNLOAD_NEW_MANGA_COLLECTIONS_PREF_KEY,
+            DOWNLOAD_NEW_ANIME_COLLECTIONS_PREF_KEY,
+            DOWNLOAD_NEW_MANGA_COLLECTIONS_EXCLUDE_PREF_KEY,
+            DOWNLOAD_NEW_ANIME_COLLECTIONS_EXCLUDE_PREF_KEY,
         )
     }
 }

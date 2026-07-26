@@ -65,6 +65,7 @@ import eu.kanade.tachiyomi.util.system.LocaleHelper
 import tachiyomi.domain.source.anime.model.AnimeSource
 import tachiyomi.domain.source.anime.model.Pin
 import tachiyomi.i18n.MR
+import androidx.compose.foundation.lazy.LazyColumn
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -140,7 +141,7 @@ fun AnimeSourcesScreen(
                     onClickUpdateAll = onClickUpdateAll,
                 )
             } else {
-            FastScrollLazyColumn(
+            LazyColumn(
                 contentPadding = contentPadding + topSmallPaddingValues,
             ) {
                 items(
@@ -274,7 +275,7 @@ private fun AnimeSourcesCardView(
         sections
     }
 
-    FastScrollLazyColumn(
+    LazyColumn(
         contentPadding = contentPadding,
     ) {
         sectionedItems.forEach { (header, sectionItems) ->

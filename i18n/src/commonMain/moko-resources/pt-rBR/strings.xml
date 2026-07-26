@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Nome</string>
-    <string name="categories">Categorias</string>
+    <string name="collections">Categorias</string>
     <string name="manga">Itens da biblioteca</string>
     <string name="chapters">Capítulos</string>
     <string name="track">Monitoramento</string>
@@ -32,10 +32,10 @@
     <string name="action_update_library">Atualizar biblioteca</string>
     <string name="action_edit">Editar</string>
     <string name="action_add">Adicionar</string>
-    <string name="action_add_category">Adicionar categoria</string>
-    <string name="action_edit_categories">Editar categorias</string>
-    <string name="action_rename_category">Renomear categoria</string>
-    <string name="action_move_category">Definir categorias</string>
+    <string name="action_add_collection">Adicionar categoria</string>
+    <string name="action_edit_collections">Editar categorias</string>
+    <string name="action_rename_collection">Renomear categoria</string>
+    <string name="action_move_collection">Definir categorias</string>
     <string name="action_edit_cover">Editar a capa</string>
     <string name="action_pause">Pausar</string>
     <string name="action_previous_chapter">Capítulo anterior</string>
@@ -80,8 +80,8 @@
     <string name="charging">Quando carregando</string>
     <string name="pref_update_only_non_completed">Pular itens com o estado \"Completo\"</string>
     <string name="pref_auto_update_manga_sync">Atualizar o progresso após a leitura</string>
-    <string name="default_category">Categoria padrão</string>
-    <string name="default_category_summary">Sempre perguntar</string>
+    <string name="default_collection">Categoria padrão</string>
+    <string name="default_collection_summary">Sempre perguntar</string>
     <string name="pref_fullscreen">Tela cheia</string>
     <string name="pref_page_transitions">Animar as transições de página</string>
     <string name="pref_show_page_number">Mostrar o número da página</string>
@@ -159,7 +159,7 @@
     <string name="login">Fazer login</string>
     <string name="login_success">Login realizado</string>
     <string name="unknown_error">Erro desconhecido</string>
-    <string name="updating_category">Atualizando categoria</string>
+    <string name="updating_collection">Atualizando categoria</string>
     <string name="no_more_results">Não há mais resultados</string>
     <string name="local_source">Fonte local</string>
     <string name="ongoing">Em andamento</string>
@@ -187,8 +187,8 @@
     <string name="score">Avaliação</string>
     <string name="title">Título</string>
     <string name="status">Estado</string>
-    <string name="error_category_exists">Já existe uma categoria com este nome!</string>
-    <string name="snack_categories_deleted">Categorias excluídas</string>
+    <string name="error_collection_exists">Já existe uma categoria com este nome!</string>
+    <string name="snack_collections_deleted">Categorias excluídas</string>
     <string name="dialog_with_checkbox_remove_description">Isso irá remover a data de leitura deste capítulo. Você tem certeza?</string>
     <string name="dialog_with_checkbox_reset">Redefinir todos os capítulos deste item</string>
     <string name="snack_add_to_library">Adicionar à biblioteca?</string>
@@ -229,7 +229,7 @@
     <string name="browse">Navegar</string>
     <string name="channel_common">Comum</string>
     <string name="action_display_download_badge">Capítulos disponíveis offline</string>
-    <string name="information_empty_category">Você ainda não tem nenhuma categoria. Toque no botão Adicionar para criar uma e organizar a sua biblioteca.</string>
+    <string name="information_empty_collection">Você ainda não tem nenhuma categoria. Toque no botão Adicionar para criar uma e organizar a sua biblioteca.</string>
     <string name="label_migration">Migrar</string>
     <string name="label_extensions">Extensões</string>
     <string name="label_extension_info">Informações da extensão</string>
@@ -463,8 +463,8 @@
     <string name="exclude">Excluir: %s</string>
     <string name="include">Incluir: %s</string>
     <string name="action_sort_chapter_fetch_date">Data de busca do capítulo</string>
-    <string name="pref_library_update_categories_details">Os itens nas categorias excluídas não serão atualizados mesmo que eles também estejam nas categorias incluídas.</string>
-    <string name="pref_download_new_categories_details">Os itens nas categorias excluídas não serão disponibilizados offline mesmo que eles também estejam nas categorias incluídas.</string>
+    <string name="pref_library_update_collections_details">Os itens nas categorias excluídas não serão atualizados mesmo que eles também estejam nas categorias incluídas.</string>
+    <string name="pref_download_new_collections_details">Os itens nas categorias excluídas não serão disponibilizados offline mesmo que eles também estejam nas categorias incluídas.</string>
     <string name="pref_category_auto_download">Download automático</string>
     <string name="action_show_errors">Toque para ver os detalhes</string>
     <string name="update_check_eol">Esta versão do Android não é mais suportada</string>
@@ -494,9 +494,9 @@
     <string name="error_saving_cover">Erro ao salvar a capa</string>
     <string name="cover_saved">Capa salva</string>
     <string name="manga_cover">Capa</string>
-    <string name="categorized_display_settings">Configurações por categoria para ordenação</string>
+    <string name="per_collection_display_settings">Configurações por categoria para ordenação</string>
     <string name="tracking_guide">Guia sobre o monitoramento</string>
-    <string name="information_empty_category_dialog">Você não tem categorias ainda.</string>
+    <string name="information_empty_collection_dialog">Você não tem categorias ainda.</string>
     <string name="action_start_downloading_now">Começar o download agora</string>
     <string name="about_dont_kill_my_app">Algumas fabricantes possuem restrições adicionais de aplicativos que encerram os serviços em segundo plano. Este site possui mais informações sobre como corrigir este problema.</string>
     <string name="restore_miui_warning">O backup e restauração podem não funcionar corretamente se a Otimização da MIUI estiver desabilitada.</string>
@@ -526,7 +526,7 @@
     <string name="action_track">Monitorar</string>
     <string name="getting_started_guide">Guia de introdução</string>
     <string name="pref_tablet_ui_mode">Interface de tablet</string>
-    <string name="pref_remove_exclude_categories">Categorias ignoradas</string>
+    <string name="pref_remove_exclude_collections">Categorias ignoradas</string>
     <string name="help_translate">Ajudar a traduzir</string>
     <string name="ext_app_info">Informações</string>
     <string name="ext_installer_shizuku_stopped">O Shizuku não está em execução</string>
@@ -603,8 +603,8 @@
     <string name="pref_app_language">Idioma do aplicativo</string>
     <string name="theme_lavender">Lavanda</string>
     <string name="description_placeholder">Sem descrição</string>
-    <string name="delete_category">Deletar categoria</string>
-    <string name="delete_category_confirmation">Você deseja deletar a categoria \"%s\"?</string>
+    <string name="delete_collection">Deletar categoria</string>
+    <string name="delete_collection_confirmation">Você deseja deletar a categoria \"%s\"?</string>
     <string name="internal_error">Erro interno: Verifique os registros de travamento para mais informações</string>
     <string name="pref_user_agent_string">User Agent padrão</string>
     <string name="pref_reset_user_agent_string">Redefinir o User Agent padrão</string>
@@ -673,7 +673,7 @@
     <string name="not_applicable">N/A</string>
     <string name="seconds_short">%ds</string>
     <string name="action_not_now">Agora não</string>
-    <string name="information_no_manga_category">A categoria está vazia</string>
+    <string name="information_no_manga_collection">A categoria está vazia</string>
     <string name="pref_library_update_show_tab_badge">Mostrar a contagem no ícone de Atualizações</string>
     <string name="copied_to_clipboard_plain">Copiado para a área de transferência</string>
     <string name="enhanced_services_not_installed">Disponíveis, mas a fonte não está instalada: %s</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*obrigatório</string>
     <string name="pref_hide_in_library_items">Ocultar títulos que já estão na biblioteca</string>
     <string name="action_copy_to_clipboard">Copiar para a área de transferência</string>
-    <string name="action_update_category">Atualizar categoria</string>
+    <string name="action_update_collection">Atualizar categoria</string>
     <string name="split_tall_images">Dividir imagens compridas</string>
     <string name="overlay_header">Sobreposição</string>
     <string name="pref_page_rotate">Rotacionar páginas largas para caber</string>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Nom</string>
-    <string name="categories">Categories</string>
+    <string name="collections">Categories</string>
     <string name="manga">Elements de la biblioteca</string>
     <string name="chapters">Capítols</string>
     <string name="track">En seguiment</string>
@@ -36,10 +36,10 @@
     <string name="action_update_library">Actualitza la biblioteca</string>
     <string name="action_edit">Edita</string>
     <string name="action_add">Afegeix</string>
-    <string name="action_add_category">Afegeix una categoria</string>
-    <string name="action_edit_categories">Edita les categories</string>
-    <string name="action_rename_category">Canvia el nom de la categoria</string>
-    <string name="action_move_category">Defineix les categories</string>
+    <string name="action_add_collection">Afegeix una categoria</string>
+    <string name="action_edit_collections">Edita les categories</string>
+    <string name="action_rename_collection">Canvia el nom de la categoria</string>
+    <string name="action_move_collection">Defineix les categories</string>
     <string name="action_edit_cover">Edita la portada</string>
     <string name="action_pause">Pausa</string>
     <string name="action_previous_chapter">Capítol anterior</string>
@@ -85,8 +85,8 @@
     <string name="charging">Quan s’estigui carregant</string>
     <string name="pref_update_only_non_completed">Omet els elements amb l’estat «Completat»</string>
     <string name="pref_auto_update_manga_sync">Actualitza el progrés després de llegir</string>
-    <string name="default_category">Categoria per defecte</string>
-    <string name="default_category_summary">Demana-ho sempre</string>
+    <string name="default_collection">Categoria per defecte</string>
+    <string name="default_collection_summary">Demana-ho sempre</string>
     <string name="ext_update">Actualitza</string>
     <string name="ext_install">Instal·la</string>
     <string name="ext_pending">Pendent</string>
@@ -180,7 +180,7 @@
     <string name="login">Inicia la sessió</string>
     <string name="login_success">S’ha iniciat la sessió</string>
     <string name="unknown_error">S’ha produït un error desconegut</string>
-    <string name="updating_category">S’està actualitzant la categoria</string>
+    <string name="updating_collection">S’està actualitzant la categoria</string>
     <string name="no_more_results">No hi ha més resultats</string>
     <string name="local_source">Font local</string>
     <string name="other_source">Altres</string>
@@ -219,8 +219,8 @@
     <string name="status">Estat</string>
     <string name="track_status">Estat</string>
     <string name="track_type">Tipus</string>
-    <string name="error_category_exists">Ja hi ha una categoria amb aquest nom!</string>
-    <string name="snack_categories_deleted">S’han suprimit les categories</string>
+    <string name="error_collection_exists">Ja hi ha una categoria amb aquest nom!</string>
+    <string name="snack_collections_deleted">S’han suprimit les categories</string>
     <string name="dialog_with_checkbox_remove_description">S’eliminarà la data de lectura d’aquest capítol. N’esteu segur?</string>
     <string name="dialog_with_checkbox_reset">Reinicia tots els capítols d’aquest element</string>
     <string name="snack_add_to_library">Voleu afegir-lo a la biblioteca?</string>
@@ -259,7 +259,7 @@
     <string name="information_no_recent">No hi ha actualitzacions recents</string>
     <string name="information_no_recent_manga">No heu llegit res recentment</string>
     <string name="information_empty_library">La vostra biblioteca és buida</string>
-    <string name="information_empty_category">No teniu categories. Premeu el botó més per a crear-ne una i organitzar la vostra biblioteca.</string>
+    <string name="information_empty_collection">No teniu categories. Premeu el botó més per a crear-ne una i organitzar la vostra biblioteca.</string>
     <string name="download_notifier_downloader_title">Baixades</string>
     <string name="download_notifier_title_error">Error</string>
     <string name="download_notifier_unknown_error">No s’ha pogut baixar el capítol a causa d’un error inesperat</string>
@@ -456,8 +456,8 @@
     <string name="clipboard_copy_error">No s’ha pogut copiar al porta-retalls</string>
     <string name="notification_incognito_text">Desactiva el mode d’incògnit</string>
     <string name="pref_dns_over_https">DNS sobre HTTPS (DoH)</string>
-    <string name="pref_download_new_categories_details">Els elements de les categories excloses no es baixaran encara que també siguin a les categories incloses.</string>
-    <string name="pref_library_update_categories_details">Els elements de les categories excloses no s’actualitzaran encara que també siguin a les categories incloses.</string>
+    <string name="pref_download_new_collections_details">Els elements de les categories excloses no es baixaran encara que també siguin a les categories incloses.</string>
+    <string name="pref_library_update_collections_details">Els elements de les categories excloses no s’actualitzaran encara que també siguin a les categories incloses.</string>
     <string name="pref_category_auto_download">Baixada automàtica</string>
     <string name="rotation_landscape">Horitzontal</string>
     <string name="rotation_portrait">Vertical</string>
@@ -490,15 +490,15 @@
     <string name="tracking_guide">Guia de seguiment</string>
     <string name="off">Desactivat</string>
     <string name="on">Activat</string>
-    <string name="categorized_display_settings">Opcions d’ordenació per categoria</string>
+    <string name="per_collection_display_settings">Opcions d’ordenació per categoria</string>
     <string name="restrictions">Restriccions: %s</string>
     <string name="action_display_local_badge">Font local</string>
     <string name="pref_lowest">La més baixa</string>
     <string name="pref_low">Baixa</string>
     <string name="pref_high">Alta</string>
     <string name="pref_highest">La més alta</string>
-    <string name="pref_remove_exclude_categories">Categories excloses</string>
-    <string name="information_empty_category_dialog">Encara no teniu cap categoria.</string>
+    <string name="pref_remove_exclude_collections">Categories excloses</string>
+    <string name="information_empty_collection_dialog">Encara no teniu cap categoria.</string>
     <string name="enhanced_services">Serveis de seguiment millorats</string>
     <string name="relative_time_today">Avui</string>
     <string name="label_default">Per defecte</string>
@@ -598,8 +598,8 @@
     <string name="custom_cover">Portada personalitzada</string>
     <string name="not_installed">No instal·lat</string>
     <string name="pref_app_language">Llengua de l’aplicació</string>
-    <string name="delete_category_confirmation">Voleu eliminar la categoria «%s»?</string>
-    <string name="delete_category">Elimina la categoria</string>
+    <string name="delete_collection_confirmation">Voleu eliminar la categoria «%s»?</string>
+    <string name="delete_collection">Elimina la categoria</string>
     <string name="theme_lavender">Lavanda</string>
     <string name="description_placeholder">Sense descripció</string>
     <string name="internal_error">Error intern: Reviseu els registres de fallades per a més informació</string>
@@ -670,7 +670,7 @@
     <string name="label_tracked_titles">Elements seguits</string>
     <string name="label_mean_score">Puntuació mitjana</string>
     <string name="information_required_plain">*obligatori</string>
-    <string name="information_no_manga_category">La categoria és buida</string>
+    <string name="information_no_manga_collection">La categoria és buida</string>
     <string name="label_used">En ús</string>
     <string name="not_applicable">N/A</string>
     <string name="day_short">%dd</string>
@@ -679,7 +679,7 @@
     <string name="seconds_short">%ds</string>
     <string name="pref_hide_in_library_items">Amaga els elements que ja són a la biblioteca</string>
     <string name="action_copy_to_clipboard">Copia al porta-retalls</string>
-    <string name="action_update_category">Actualitza la categoria</string>
+    <string name="action_update_collection">Actualitza la categoria</string>
     <string name="split_tall_images">Divideix les imatges altes</string>
     <string name="pref_chapter_swipe_end">Acció en lliscar cap a la dreta</string>
     <string name="pref_chapter_swipe_start">Acció en lliscar cap a l’esquerra</string>

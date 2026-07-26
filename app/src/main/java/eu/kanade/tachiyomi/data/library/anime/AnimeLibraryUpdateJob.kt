@@ -48,7 +48,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.anime.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.anime.interactor.GetAnime
 import tachiyomi.domain.entries.anime.interactor.GetLibraryAnime
@@ -118,9 +118,9 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
-        val categoryId = inputData.getLong(KEY_CATEGORY, -1L)
+        val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
         val isResume = inputData.getBoolean(KEY_RESUME, false)
-        addAnimeToQueue(categoryId)
+        addAnimeToQueue(collectionId)
 
         return withIOContext {
             try {
@@ -157,24 +157,24 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     /**
      * Adds list of anime to be updated.
      *
-     * @param categoryId the ID of the category to update, or -1 if no category specified.
+     * @param collectionId the ID of the collection to update, or -1 if no collection specified.
      */
-    private suspend fun addAnimeToQueue(categoryId: Long) {
+    private suspend fun addAnimeToQueue(collectionId: Long) {
         val libraryAnime = getLibraryAnime.await()
 
-        val listToUpdate = if (categoryId != -1L) {
-            libraryAnime.filter { it.category == categoryId }
+        val listToUpdate = if (collectionId != -1L) {
+            libraryAnime.filter { it.collection == collectionId }
         } else {
-            val categoriesToUpdate = libraryPreferences.animeUpdateCategories().get().map { it.toLong() }
-            val includedAnime = if (categoriesToUpdate.isNotEmpty()) {
-                libraryAnime.filter { it.category in categoriesToUpdate }
+            val collectionsToUpdate = libraryPreferences.animeUpdateCollections().get().map { it.toLong() }
+            val includedAnime = if (collectionsToUpdate.isNotEmpty()) {
+                libraryAnime.filter { it.collection in collectionsToUpdate }
             } else {
                 libraryAnime
             }
 
-            val categoriesToExclude = libraryPreferences.animeUpdateCategoriesExclude().get().map { it.toLong() }
-            val excludedAnimeIds = if (categoriesToExclude.isNotEmpty()) {
-                libraryAnime.filter { it.category in categoriesToExclude }.map { it.anime.id }
+            val collectionsToExclude = libraryPreferences.animeUpdateCollectionsExclude().get().map { it.toLong() }
+            val excludedAnimeIds = if (collectionsToExclude.isNotEmpty()) {
+                libraryAnime.filter { it.collection in collectionsToExclude }.map { it.anime.id }
             } else {
                 emptyList()
             }
@@ -519,9 +519,9 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val ANIME_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 60
 
         /**
-         * Key for category to update.
+         * Key for collection to update.
          */
-        private const val KEY_CATEGORY = "animeCategory"
+        private const val KEY_COLLECTION = "animeCollection"
         private const val KEY_RESUME = "animeResume"
 
         fun cancelAllWorks(context: Context) {
@@ -578,7 +578,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
         fun startNow(
             context: Context,
-            category: Category? = null,
+            collection: Collection? = null,
             resumeFromCheckpoint: Boolean = false,
         ): Boolean {
             val wm = context.workManager
@@ -588,7 +588,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             }
 
             val inputData = workDataOf(
-                KEY_CATEGORY to category?.id,
+                KEY_COLLECTION to collection?.id,
                 KEY_RESUME to resumeFromCheckpoint,
             )
             val request = OneTimeWorkRequestBuilder<AnimeLibraryUpdateJob>()

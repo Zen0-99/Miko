@@ -57,7 +57,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import logcat.AndroidLogcatLogger
 import logcat.LogPriority
 import logcat.LogcatLogger
@@ -94,9 +97,12 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     private val achievementHandler: AchievementHandler by injectLazy()
     private val achievementLoader: AchievementLoader by injectLazy()
     private val sessionManager: SessionManager by injectLazy()
+    private val activityDataRepository: tachiyomi.domain.achievement.repository.ActivityDataRepository by injectLazy()
 
     private val disableIncognitoReceiver = DisableIncognitoReceiver()
     private var sessionStartMs: Long = 0L
+    private var lastFlushMs: Long = 0L
+    private var sessionFlushJob: kotlinx.coroutines.Job? = null
 
     @SuppressLint("LaunchActivityFromNotification")
     override fun onCreate() {
@@ -297,18 +303,59 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     override fun onStart(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStart()
         sessionStartMs = System.currentTimeMillis()
+        lastFlushMs = sessionStartMs
         sessionManager.onSessionStart()
+
+        // Ensure an activity_log row exists for today and start periodic flushing
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                activityDataRepository.recordAppOpen()
+            } catch (_: Exception) {
+            }
+        }
+        sessionFlushJob = CoroutineScope(Dispatchers.IO).launch {
+            while (true) {
+                delay(60_000L) // flush every 60 seconds
+                flushSessionTime()
+            }
+        }
     }
 
     override fun onStop(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStopped()
-        // Emit SessionEnd event for achievements system
+        sessionFlushJob?.cancel()
+        sessionFlushJob = null
+        // Emit SessionEnd event for achievements system and persist remaining session duration
         if (sessionStartMs > 0L) {
+            // Flush remaining session time in a NonCancellable coroutine so
+            // the write completes even as the app goes to background.
+            CoroutineScope(Dispatchers.IO).launch {
+                flushSessionTime()
+            }
             val durationMs = System.currentTimeMillis() - sessionStartMs
             achievementEventBus.tryEmit(AchievementEvent.SessionEnd(durationMs = durationMs))
             sessionStartMs = 0L
         }
         sessionManager.onSessionEnd()
+    }
+
+    /**
+     * Flushes the elapsed session time since the last flush to the activity log.
+     * Uses [NonCancellable] so the write completes even when the app is going
+     * to background.
+     */
+    private suspend fun flushSessionTime() {
+        val now = System.currentTimeMillis()
+        if (sessionStartMs <= 0L || lastFlushMs <= 0L) return
+        val delta = now - lastFlushMs
+        lastFlushMs = now
+        if (delta <= 0L) return
+        withContext(NonCancellable) {
+            try {
+                activityDataRepository.recordAppSession(delta)
+            } catch (_: Exception) {
+            }
+        }
     }
 
     override fun getPackageName(): String {

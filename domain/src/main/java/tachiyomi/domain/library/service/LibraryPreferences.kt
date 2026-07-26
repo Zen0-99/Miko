@@ -70,20 +70,20 @@ class LibraryPreferences(
     fun showContinueViewingButton() =
         preferenceStore.getBoolean("display_continue_reading_button", false)
 
-    // Common Category
+    // Common Collection
 
-    fun categoryTabs() = preferenceStore.getBoolean("display_category_tabs", true)
+    fun collectionTabs() = preferenceStore.getBoolean("display_category_tabs", true)
 
-    fun categoryDisplayMode() = preferenceStore.getEnum(
+    fun collectionDisplayMode() = preferenceStore.getEnum(
         "pref_library_category_display",
-        tachiyomi.domain.library.model.LibraryCategoryDisplay.TABBED,
+        tachiyomi.domain.library.model.LibraryCollectionDisplay.TABBED,
     )
 
-    fun categoryNumberOfItems() = preferenceStore.getBoolean("display_number_of_items", false)
+    fun collectionNumberOfItems() = preferenceStore.getBoolean("display_number_of_items", false)
 
-    fun categorizedDisplaySettings() = preferenceStore.getBoolean("categorized_display", false)
+    fun perCollectionDisplaySettings() = preferenceStore.getBoolean("categorized_display", false)
 
-    fun hideHiddenCategoriesSettings() = preferenceStore.getBoolean("hidden_categories", false)
+    fun hideHiddenCollectionsSettings() = preferenceStore.getBoolean("hidden_categories", false)
 
     fun filterIntervalCustom() = preferenceStore.getEnum(
         "pref_filter_library_interval_custom",
@@ -186,33 +186,33 @@ class LibraryPreferences(
     fun newAnimeUpdatesCount() = preferenceStore.getInt("library_unseen_updates_count", 0)
     fun newNovelUpdatesCount() = preferenceStore.getInt("library_novel_updates_count", 0)
 
-    // Mixture Category
+    // Mixture Collection
 
-    fun defaultAnimeCategory() = preferenceStore.getInt(DEFAULT_ANIME_CATEGORY_PREF_KEY, -1)
-    fun defaultMangaCategory() = preferenceStore.getInt(DEFAULT_MANGA_CATEGORY_PREF_KEY, -1)
-    fun defaultNovelCategory() = preferenceStore.getInt(DEFAULT_NOVEL_CATEGORY_PREF_KEY, -1)
+    fun defaultAnimeCollection() = preferenceStore.getInt(DEFAULT_ANIME_COLLECTION_PREF_KEY, -1)
+    fun defaultMangaCollection() = preferenceStore.getInt(DEFAULT_MANGA_COLLECTION_PREF_KEY, -1)
+    fun defaultNovelCollection() = preferenceStore.getInt(DEFAULT_NOVEL_COLLECTION_PREF_KEY, -1)
 
-    fun lastUsedAnimeCategory() = preferenceStore.getInt(Preference.appStateKey("last_used_anime_category"), 0)
-    fun lastUsedMangaCategory() = preferenceStore.getInt(Preference.appStateKey("last_used_category"), 0)
-    fun lastUsedNovelCategory() = preferenceStore.getInt(Preference.appStateKey("last_used_novel_category"), 0)
+    fun lastUsedAnimeCollection() = preferenceStore.getInt(Preference.appStateKey("last_used_anime_category"), 0)
+    fun lastUsedMangaCollection() = preferenceStore.getInt(Preference.appStateKey("last_used_category"), 0)
+    fun lastUsedNovelCollection() = preferenceStore.getInt(Preference.appStateKey("last_used_novel_category"), 0)
 
-    fun animeUpdateCategories() =
-        preferenceStore.getStringSet(LIBRARY_UPDATE_ANIME_CATEGORIES_PREF_KEY, emptySet())
+    fun animeUpdateCollections() =
+        preferenceStore.getStringSet(LIBRARY_UPDATE_ANIME_COLLECTIONS_PREF_KEY, emptySet())
 
-    fun mangaUpdateCategories() =
-        preferenceStore.getStringSet(LIBRARY_UPDATE_MANGA_CATEGORIES_PREF_KEY, emptySet())
+    fun mangaUpdateCollections() =
+        preferenceStore.getStringSet(LIBRARY_UPDATE_MANGA_COLLECTIONS_PREF_KEY, emptySet())
 
-    fun novelUpdateCategories() =
-        preferenceStore.getStringSet(LIBRARY_UPDATE_NOVEL_CATEGORIES_PREF_KEY, emptySet())
+    fun novelUpdateCollections() =
+        preferenceStore.getStringSet(LIBRARY_UPDATE_NOVEL_COLLECTIONS_PREF_KEY, emptySet())
 
-    fun animeUpdateCategoriesExclude() =
-        preferenceStore.getStringSet(LIBRARY_UPDATE_ANIME_CATEGORIES_EXCLUDE_PREF_KEY, emptySet())
+    fun animeUpdateCollectionsExclude() =
+        preferenceStore.getStringSet(LIBRARY_UPDATE_ANIME_COLLECTIONS_EXCLUDE_PREF_KEY, emptySet())
 
-    fun mangaUpdateCategoriesExclude() =
-        preferenceStore.getStringSet(LIBRARY_UPDATE_MANGA_CATEGORIES_EXCLUDE_PREF_KEY, emptySet())
+    fun mangaUpdateCollectionsExclude() =
+        preferenceStore.getStringSet(LIBRARY_UPDATE_MANGA_COLLECTIONS_EXCLUDE_PREF_KEY, emptySet())
 
-    fun novelUpdateCategoriesExclude() =
-        preferenceStore.getStringSet(LIBRARY_UPDATE_NOVEL_CATEGORIES_EXCLUDE_PREF_KEY, emptySet())
+    fun novelUpdateCollectionsExclude() =
+        preferenceStore.getStringSet(LIBRARY_UPDATE_NOVEL_COLLECTIONS_EXCLUDE_PREF_KEY, emptySet())
 
     // Mixture Item
 
@@ -467,25 +467,25 @@ class LibraryPreferences(
         const val MARK_DUPLICATE_EPISODE_SEEN_NEW = "new_episode"
         const val MARK_DUPLICATE_EPISODE_SEEN_EXISTING = "existing_episode"
 
-        const val DEFAULT_MANGA_CATEGORY_PREF_KEY = "default_category"
-        const val DEFAULT_ANIME_CATEGORY_PREF_KEY = "default_anime_category"
-        const val DEFAULT_NOVEL_CATEGORY_PREF_KEY = "default_novel_category"
-        private const val LIBRARY_UPDATE_MANGA_CATEGORIES_PREF_KEY = "library_update_categories"
-        private const val LIBRARY_UPDATE_ANIME_CATEGORIES_PREF_KEY = "animelib_update_categories"
-        private const val LIBRARY_UPDATE_NOVEL_CATEGORIES_PREF_KEY = "novellib_update_categories"
-        private const val LIBRARY_UPDATE_MANGA_CATEGORIES_EXCLUDE_PREF_KEY = "library_update_categories_exclude"
-        private const val LIBRARY_UPDATE_ANIME_CATEGORIES_EXCLUDE_PREF_KEY = "animelib_update_categories_exclude"
-        private const val LIBRARY_UPDATE_NOVEL_CATEGORIES_EXCLUDE_PREF_KEY = "novellib_update_categories_exclude"
-        val categoryPreferenceKeys = setOf(
-            DEFAULT_MANGA_CATEGORY_PREF_KEY,
-            DEFAULT_ANIME_CATEGORY_PREF_KEY,
-            DEFAULT_NOVEL_CATEGORY_PREF_KEY,
-            LIBRARY_UPDATE_MANGA_CATEGORIES_PREF_KEY,
-            LIBRARY_UPDATE_ANIME_CATEGORIES_PREF_KEY,
-            LIBRARY_UPDATE_NOVEL_CATEGORIES_PREF_KEY,
-            LIBRARY_UPDATE_MANGA_CATEGORIES_EXCLUDE_PREF_KEY,
-            LIBRARY_UPDATE_ANIME_CATEGORIES_EXCLUDE_PREF_KEY,
-            LIBRARY_UPDATE_NOVEL_CATEGORIES_EXCLUDE_PREF_KEY,
+        const val DEFAULT_MANGA_COLLECTION_PREF_KEY = "default_category"
+        const val DEFAULT_ANIME_COLLECTION_PREF_KEY = "default_anime_category"
+        const val DEFAULT_NOVEL_COLLECTION_PREF_KEY = "default_novel_category"
+        private const val LIBRARY_UPDATE_MANGA_COLLECTIONS_PREF_KEY = "library_update_categories"
+        private const val LIBRARY_UPDATE_ANIME_COLLECTIONS_PREF_KEY = "animelib_update_categories"
+        private const val LIBRARY_UPDATE_NOVEL_COLLECTIONS_PREF_KEY = "novellib_update_categories"
+        private const val LIBRARY_UPDATE_MANGA_COLLECTIONS_EXCLUDE_PREF_KEY = "library_update_categories_exclude"
+        private const val LIBRARY_UPDATE_ANIME_COLLECTIONS_EXCLUDE_PREF_KEY = "animelib_update_categories_exclude"
+        private const val LIBRARY_UPDATE_NOVEL_COLLECTIONS_EXCLUDE_PREF_KEY = "novellib_update_categories_exclude"
+        val collectionPreferenceKeys = setOf(
+            DEFAULT_MANGA_COLLECTION_PREF_KEY,
+            DEFAULT_ANIME_COLLECTION_PREF_KEY,
+            DEFAULT_NOVEL_COLLECTION_PREF_KEY,
+            LIBRARY_UPDATE_MANGA_COLLECTIONS_PREF_KEY,
+            LIBRARY_UPDATE_ANIME_COLLECTIONS_PREF_KEY,
+            LIBRARY_UPDATE_NOVEL_COLLECTIONS_PREF_KEY,
+            LIBRARY_UPDATE_MANGA_COLLECTIONS_EXCLUDE_PREF_KEY,
+            LIBRARY_UPDATE_ANIME_COLLECTIONS_EXCLUDE_PREF_KEY,
+            LIBRARY_UPDATE_NOVEL_COLLECTIONS_EXCLUDE_PREF_KEY,
         )
     }
 }

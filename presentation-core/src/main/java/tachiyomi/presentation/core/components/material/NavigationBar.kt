@@ -1,6 +1,7 @@
 package tachiyomi.presentation.core.components.material
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -15,7 +16,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.contentColorFor
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -86,15 +89,10 @@ fun FloatingGlassNavigationBar(
     val resolvedTint = if (tint != Color.Unspecified) {
         tint
     } else {
-        // In dark mode, surface == background (both black in AMOLED), so using
-        // surface as tint is invisible. Use a lighter color instead.
         if (isDark) {
-            Color.White.copy(alpha = 0.12f)
+            Color.Black.copy(alpha = 0.2f)
         } else {
-            // Light mode: use surfaceVariant (slightly darker than surface) at
-            // 95% opacity so light cover art behind the glass doesn't wash out
-            // the nav icons and text.
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+            Color.White.copy(alpha = 0.2f)
         }
     }
     val shape: Shape = GlassShape
@@ -116,21 +114,18 @@ fun FloatingGlassNavigationBar(
             ),
         )
 
-    androidx.compose.material3.Surface(
-        color = Color.Transparent,
-        contentColor = contentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        shape = shape,
+    Box(
         modifier = modifier.then(glassModifier),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(navRowHeight)
-                .selectableGroup(),
-            content = content,
-        )
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(navRowHeight)
+                    .selectableGroup(),
+                content = content,
+            )
+        }
     }
 }
 
@@ -150,6 +145,7 @@ fun FloatingGlassNavigationBarWithModes(
     tint: Color = Color.Unspecified,
     blurRadius: Dp = 24.dp,
     horizontalPadding: Dp = 12.dp,
+    topPadding: Dp = 8.dp,
     bottomPadding: Dp = 14.dp,
     navRowHeight: Dp = 72.dp,
     showDivider: Boolean = true,
@@ -160,16 +156,20 @@ fun FloatingGlassNavigationBarWithModes(
         tint
     } else {
         if (isDark) {
-            Color.White.copy(alpha = 0.12f)
+            Color.Black.copy(alpha = 0.2f)
         } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+            Color.White.copy(alpha = 0.2f)
         }
     }
     val shape: Shape = GlassShape
     val baseModifier = Modifier
         .fillMaxWidth()
         .windowInsetsPadding(windowInsets)
-        .padding(horizontal = horizontalPadding, vertical = bottomPadding)
+        .padding(
+            horizontal = horizontalPadding,
+            vertical = 0.dp,
+        )
+        .padding(top = topPadding, bottom = bottomPadding)
 
     val glassModifier = baseModifier
         .shadow(elevation = 8.dp, shape = shape)
@@ -184,34 +184,31 @@ fun FloatingGlassNavigationBarWithModes(
             ),
         )
 
-    androidx.compose.material3.Surface(
-        color = Color.Transparent,
-        contentColor = contentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        shape = shape,
+    Box(
         modifier = modifier.then(glassModifier),
     ) {
-        Column {
-            // Mode row — transparent so the Haze background shows through
-            modeRow()
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Column {
+                // Mode row — transparent so the Haze background shows through
+                modeRow()
 
-            // Divider between mode row and nav row
-            if (showDivider) {
-                HorizontalDivider(
-                    color = contentColor.copy(alpha = 0.1f),
-                    thickness = 0.5.dp,
-                )
-            }
+                // Divider between mode row and nav row
+                if (showDivider) {
+                    HorizontalDivider(
+                        color = contentColor.copy(alpha = 0.1f),
+                        thickness = 0.5.dp,
+                    )
+                }
 
-            // Nav row
-            Row(
+                // Nav row
+                Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(navRowHeight)
                     .selectableGroup(),
                 content = content,
             )
+            }
         }
     }
 }

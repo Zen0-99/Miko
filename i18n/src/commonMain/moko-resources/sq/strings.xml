@@ -57,8 +57,8 @@
     <string name="charging">Gjatë karikimit</string>
     <string name="pref_update_only_completely_read">Me kapituj të palexuar</string>
     <string name="pref_library_update_refresh_metadata_summary">Kontrolloni për kopertinë dhe detaje të reja kur përditësoni bibliotekën</string>
-    <string name="default_category">Kategoria e parazgjedhur</string>
-    <string name="pref_library_update_categories_details">Elementet në kategoritë e përjashtuara nuk do të përditësohen edhe nëse janë gjithashtu në kategoritë e përfshira.</string>
+    <string name="default_collection">Kategoria e parazgjedhur</string>
+    <string name="pref_library_update_collections_details">Elementet në kategoritë e përjashtuara nuk do të përditësohen edhe nëse janë gjithashtu në kategoritë e përfshira.</string>
     <string name="all">Të gjitha</string>
     <string name="none">Asnje</string>
     <string name="include">Përfshi: %s</string>
@@ -74,10 +74,10 @@
     <string name="information_empty_library">Biblioteka juaj është bosh</string>
     <string name="getting_started_guide">Udhëzues për fillimin</string>
     <string name="information_no_entries_found">Nuk u gjet asnjë element në këtë kategori</string>
-    <string name="information_empty_category">Nuk ke kategori. Prekni butonin plus për të krijuar një për organizimin e bibliotekës tuaj.</string>
+    <string name="information_empty_collection">Nuk ke kategori. Prekni butonin plus për të krijuar një për organizimin e bibliotekës tuaj.</string>
     <string name="information_webview_required">WebView kërkohet për Mihon</string>
     <string name="information_cloudflare_bypass_failure">Dështoi të anashkalojë Cloudflare</string>
-    <string name="information_empty_category_dialog">Nuk ke ende asnjë kategori.</string>
+    <string name="information_empty_collection_dialog">Nuk ke ende asnjë kategori.</string>
     <string name="download_notifier_download_paused">Shkarkimet u ndërprenë</string>
     <string name="download_notifier_no_network">Nuk ka lidhje rrjeti të disponueshme</string>
     <string name="download_notifier_unknown_error">Kapitulli nuk mund të shkarkohej për shkak të një gabimi të papritur</string>
@@ -175,14 +175,14 @@
     <string name="pref_update_only_started">Kjo nuk ka filluar</string>
     <string name="update_48hour">Çdo 2 ditë</string>
     <string name="pref_library_update_refresh_metadata">Rifresko automatikisht të dhënat meta</string>
-    <string name="default_category_summary">Gjithmonë pyesni</string>
+    <string name="default_collection_summary">Gjithmonë pyesni</string>
     <string name="ext_install">Instaloni</string>
-    <string name="categorized_display_settings">Cilësimet sipas kategorisë për renditjen dhe shfaqjen</string>
+    <string name="per_collection_display_settings">Cilësimet sipas kategorisë për renditjen dhe shfaqjen</string>
     <string name="ext_update_all">Përditëso të gjitha</string>
     <string name="ext_updates_pending">Përditësimet në pritje</string>
     <string name="on">Aktiv</string>
     <string name="off">Fikur</string>
-    <string name="categories">Kategoritë</string>
+    <string name="collections">Kategoritë</string>
     <string name="manga">Elementet e bibliotekës</string>
     <string name="chapters">Kapituj</string>
     <string name="track">Gjurmimi</string>
@@ -211,12 +211,12 @@
     <string name="action_edit">Redakto</string>
     <string name="action_add">Shtoni</string>
     <string name="action_open_random_manga">Hap hyrje të rastësishme</string>
-    <string name="action_add_category">Shto kategori</string>
-    <string name="action_edit_categories">Redakto kategoritë</string>
-    <string name="action_rename_category">Riemërto kategorinë</string>
-    <string name="action_move_category">Vendosni kategori</string>
-    <string name="delete_category_confirmation">Dëshironi të fshini kategorinë \"%s\"?</string>
-    <string name="delete_category">Fshi kategorinë</string>
+    <string name="action_add_collection">Shto kategori</string>
+    <string name="action_edit_collections">Redakto kategoritë</string>
+    <string name="action_rename_collection">Riemërto kategorinë</string>
+    <string name="action_move_collection">Vendosni kategori</string>
+    <string name="delete_collection_confirmation">Dëshironi të fshini kategorinë \"%s\"?</string>
+    <string name="delete_collection">Fshi kategorinë</string>
     <string name="action_edit_cover">Redakto kopertinën</string>
     <string name="action_view_chapters">Shiko kapitujt</string>
     <string name="action_pause">Ndalo</string>
@@ -334,7 +334,7 @@
     <string name="pref_highest">Më e larta</string>
     <string name="pref_low">E ulët</string>
     <string name="pref_category_delete_chapters">Fshi kapitujt</string>
-    <string name="pref_remove_exclude_categories">Kategoritë e përjashtuara</string>
+    <string name="pref_remove_exclude_collections">Kategoritë e përjashtuara</string>
     <string name="invalid_location">Vendndodhja e pavlefshme: %s</string>
     <string name="last_read_chapter">Kapitulli i fundit i lexuar</string>
     <string name="fourth_to_last">Kapitulli i katërt deri tek i fundit i lexuar</string>
@@ -378,7 +378,7 @@
     <string name="second_to_last">Kapitulli i dytë deri tek i fundit i lexuar</string>
     <string name="third_to_last">Kapitulli i tretë deri tek i fundit i lexuar</string>
     <string name="fifth_to_last">Kapitulli i pestë deri tek i fundit i lexuar</string>
-    <string name="pref_download_new_categories_details">Elementet në kategoritë e përjashtuara nuk do të shkarkohen edhe nëse janë gjithashtu në kategoritë e përfshira.</string>
+    <string name="pref_download_new_collections_details">Elementet në kategoritë e përjashtuara nuk do të shkarkohen edhe nëse janë gjithashtu në kategoritë e përfshira.</string>
     <string name="download_ahead_info">Punon vetëm në hyrjet në bibliotekë dhe nëse kapitulli aktual plus kapitulli tjetër janë shkarkuar tashmë</string>
     <string name="services">Gjurmuesët</string>
     <string name="split_tall_images_summary">Përmirëson performancën e lexuesit</string>
@@ -413,7 +413,7 @@
     <string name="unfinished_list">Lista e papërfunduar</string>
     <string name="on_hold_list">Në listën e pritjes</string>
     <string name="track_type">Lloji</string>
-    <string name="error_category_exists">Një kategori me këtë emër ekziston tashmë!</string>
+    <string name="error_collection_exists">Një kategori me këtë emër ekziston tashmë!</string>
     <string name="error_no_match">Nuk u gjet asnjë përputhje</string>
     <string name="dialog_with_checkbox_reset">Rivendos të gjithë kapitujt për këtë hyrje</string>
     <string name="set_as_cover">Vendos si kopertinë</string>
@@ -537,7 +537,7 @@
     <string name="logout_title">Dil nga %1$s?</string>
     <string name="logout_success">Tani keni dalë nga llogaria</string>
     <string name="unknown_error">Gabim i panjohur</string>
-    <string name="updating_category">Kategoria po përditësohet</string>
+    <string name="updating_collection">Kategoria po përditësohet</string>
     <string name="manga_from_library">Nga biblioteka</string>
     <string name="downloaded_chapters">Kapitujt e shkarkuar</string>
     <string name="tabs_header">Skedat</string>
@@ -589,7 +589,7 @@
     <string name="track_finished_reading_date">Data e mbarimit</string>
     <string name="track_remove_date_conf_title">Hiqni datën?</string>
     <string name="track_remove_finish_date_conf_text">Kjo do të heqë datën e përfundimit të zgjedhur më parë nga %s</string>
-    <string name="snack_categories_deleted">Kategoritë u fshinë</string>
+    <string name="snack_collections_deleted">Kategoritë u fshinë</string>
     <string name="picture_saved">Fotografia u ruajt</string>
     <string name="error_saving_picture">Gabim gjatë ruajtjes së fotografisë</string>
     <string name="custom_filter">Filtri i personalizuar</string>
@@ -678,7 +678,7 @@
     <string name="label_titles_in_global_update">Ne përditësimin global</string>
     <string name="hour_short">%do</string>
     <string name="minute_short">%dm</string>
-    <string name="information_no_manga_category">Kategorija është bosh</string>
+    <string name="information_no_manga_collection">Kategorija është bosh</string>
     <string name="enhanced_services_not_installed">Në dispozicion, por burimi nuk është i instaluar: %s</string>
     <string name="pref_skip_dupe_chapters">Kapërceni kapitujt e kopjuar</string>
     <string name="pref_hide_in_library_items">Fshih elementet tashmë në bibliotekë</string>
@@ -686,7 +686,7 @@
     <string name="confirm_add_duplicate_manga">Ju keni një hyrje në librarni me të njëjtin emër.
 \n
 \nDëshironi të vazhdoni?</string>
-    <string name="action_update_category">Përditëso kategorinë</string>
+    <string name="action_update_collection">Përditëso kategorinë</string>
     <string name="track_error">%1$s gabim: %2$s</string>
     <string name="information_required_plain">*kërkohet</string>
     <string name="copied_to_clipboard_plain">U kopjua në clipboard</string>

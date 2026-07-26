@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Namn</string>
-    <string name="categories">Kategorier</string>
+    <string name="collections">Kategorier</string>
     <string name="manga">Biblioteksposter</string>
     <string name="chapters">Kapitel</string>
     <string name="track">Spårning</string>
@@ -36,10 +36,10 @@
     <string name="action_update_library">Uppdatera biblioteket</string>
     <string name="action_edit">Redigera</string>
     <string name="action_add">Lägg till</string>
-    <string name="action_add_category">Lägg till kategori</string>
-    <string name="action_edit_categories">Redigera kategorier</string>
-    <string name="action_rename_category">Byt namn på kategori</string>
-    <string name="action_move_category">Välj kategorier</string>
+    <string name="action_add_collection">Lägg till kategori</string>
+    <string name="action_edit_collections">Redigera kategorier</string>
+    <string name="action_rename_collection">Byt namn på kategori</string>
+    <string name="action_move_collection">Välj kategorier</string>
     <string name="action_edit_cover">Redigera omslaget</string>
     <string name="action_pause">Paus</string>
     <string name="action_previous_chapter">Föregående kapitel</string>
@@ -85,8 +85,8 @@
     <string name="charging">Vid laddning</string>
     <string name="pref_update_only_non_completed">Hoppa över artiklar med status \"Avslutat\"</string>
     <string name="pref_auto_update_manga_sync">Uppdatera förlopp efter läsning</string>
-    <string name="default_category">Standardkategori</string>
-    <string name="default_category_summary">Fråga alltid</string>
+    <string name="default_collection">Standardkategori</string>
+    <string name="default_collection_summary">Fråga alltid</string>
     <string name="ext_update">Uppdatera</string>
     <string name="ext_install">Installera</string>
     <string name="ext_pending">Väntade</string>
@@ -182,7 +182,7 @@
     <string name="login">Logga in</string>
     <string name="login_success">Inloggad</string>
     <string name="unknown_error">Okänt fel</string>
-    <string name="updating_category">Uppdaterar kategori</string>
+    <string name="updating_collection">Uppdaterar kategori</string>
     <string name="no_more_results">Inga mer resultat</string>
     <string name="local_source">Lokal källa</string>
     <string name="other_source">Andra</string>
@@ -222,8 +222,8 @@
     <string name="status">Status</string>
     <string name="track_status">Status</string>
     <string name="track_type">Typ</string>
-    <string name="error_category_exists">En kategori med detta namn finns redan!</string>
-    <string name="snack_categories_deleted">Kategorier raderade</string>
+    <string name="error_collection_exists">En kategori med detta namn finns redan!</string>
+    <string name="snack_collections_deleted">Kategorier raderade</string>
     <string name="dialog_with_checkbox_remove_description">Detta kommer att ta bort läs datumet för detta kapitel. Är du säker?</string>
     <string name="dialog_with_checkbox_reset">Återställ alla kapitel för denna post</string>
     <string name="snack_add_to_library">Lägg till i biblioteket?</string>
@@ -262,7 +262,7 @@
     <string name="information_no_recent">Inga nya uppdateringar</string>
     <string name="information_no_recent_manga">Inget nyligen läst</string>
     <string name="information_empty_library">Ditt bibliotek är tomt</string>
-    <string name="information_empty_category">Du har inga kategorier. Tryck på plusknappen för att skapa en för att organisera ditt bibliotek.</string>
+    <string name="information_empty_collection">Du har inga kategorier. Tryck på plusknappen för att skapa en för att organisera ditt bibliotek.</string>
     <string name="download_notifier_downloader_title">Nedladdare</string>
     <string name="download_notifier_title_error">Fel</string>
     <string name="download_notifier_unknown_error">Kunde inte ladda ned kapitel på grund av ett oförväntat fel</string>
@@ -463,9 +463,9 @@
     <string name="include">Inkludera: %s</string>
     <string name="none">Ingen</string>
     <string name="action_sort_chapter_fetch_date">Datum för hämtning av kapitel</string>
-    <string name="pref_download_new_categories_details">Inlägg i uteslutna kategorier laddas inte ner även om de också ingår i inkluderade kategorier.</string>
+    <string name="pref_download_new_collections_details">Inlägg i uteslutna kategorier laddas inte ner även om de också ingår i inkluderade kategorier.</string>
     <string name="pref_category_auto_download">Ladda ned automatiskt</string>
-    <string name="pref_library_update_categories_details">Inlägg i uteslutna kategorier uppdateras inte även om de också ingår i inkluderade kategorier.</string>
+    <string name="pref_library_update_collections_details">Inlägg i uteslutna kategorier uppdateras inte även om de också ingår i inkluderade kategorier.</string>
     <string name="action_show_errors">Tryck för att se detaljer</string>
     <string name="update_check_eol">Denna Android-version stöds inte längre</string>
     <string name="clipboard_copy_error">Kunde inte kopiera till urklipp</string>
@@ -495,8 +495,8 @@
     <string name="cover_saved">Omslaget har sparats</string>
     <string name="manga_cover">Omslag</string>
     <string name="tracking_guide">Spårningsguide</string>
-    <string name="categorized_display_settings">Inställningar per kategori för sortering</string>
-    <string name="information_empty_category_dialog">Du har inga kategorier ännu.</string>
+    <string name="per_collection_display_settings">Inställningar per kategori för sortering</string>
+    <string name="information_empty_collection_dialog">Du har inga kategorier ännu.</string>
     <string name="action_start_downloading_now">Börja ladda ner nu</string>
     <string name="restore_miui_warning">Säkerhetskopiering/återställning kanske inte fungerar korrekt om MIUI-optimering är inaktiverat.</string>
     <string name="enhanced_tracking_info">Ger förbättrade funktioner för specifika källor. Poster spåras automatiskt när de läggs till i ditt bibliotek.</string>
@@ -527,7 +527,7 @@
     <string name="action_track">Spår</string>
     <string name="pref_tablet_ui_mode">Tablettgränssnitt</string>
     <string name="help_translate">Hjälp till med översättning</string>
-    <string name="pref_remove_exclude_categories">Uteslutna kategorier</string>
+    <string name="pref_remove_exclude_collections">Uteslutna kategorier</string>
     <string name="ext_app_info">Appinformation</string>
     <string name="ext_installer_shizuku_stopped">Shizuku körs inte</string>
     <string name="ext_installer_legacy">Äldre</string>
@@ -603,9 +603,9 @@
     <string name="theme_lavender">Lavendel</string>
     <string name="description_placeholder">Ingen beskrivning</string>
     <string name="pref_app_language">Appspråk</string>
-    <string name="delete_category_confirmation">Vill du radera kategorin \"%s\"?</string>
+    <string name="delete_collection_confirmation">Vill du radera kategorin \"%s\"?</string>
     <string name="internal_error">Interntfel: Kontrollera kraschloggar för ytterligare information</string>
-    <string name="delete_category">Ta bort kategori</string>
+    <string name="delete_collection">Ta bort kategori</string>
     <string name="pref_user_agent_string">Standardsträng för användaragent</string>
     <string name="pref_reset_user_agent_string">Återställ standardsträngen för användaragent</string>
     <string name="action_remove_everything">Ta bort allt</string>
@@ -656,7 +656,7 @@
     <string name="fdroid_warning">F-Droid-versioner stöds inte officiellt.
 \nTryck för att få veta mer.</string>
     <string name="split_tall_images">Dela höga bilder</string>
-    <string name="action_update_category">Uppdatera kategori</string>
+    <string name="action_update_collection">Uppdatera kategori</string>
     <string name="action_copy_to_clipboard">Kopiera till urklipp</string>
     <string name="pref_hide_in_library_items">Dölja poster som redan finns i biblioteket</string>
     <string name="download_notifier_cache_renewal">Kontrollerar nedladdningar</string>
@@ -692,7 +692,7 @@
     <string name="track_delete_text">Detta kommer att ta bort spårningen lokalt.</string>
     <string name="track_remove_finish_date_conf_text">Detta kommer att ta bort ditt tidigare valda slutdatum från %s</string>
     <string name="track_delete_remote_text">Ta även bort från %s</string>
-    <string name="information_no_manga_category">Kategorin är tom</string>
+    <string name="information_no_manga_collection">Kategorin är tom</string>
     <string name="hour_short">%dt</string>
     <string name="syncing_library">Synkronisering av bibliotek</string>
     <string name="pref_debug_info">Felsökningsinformation</string>

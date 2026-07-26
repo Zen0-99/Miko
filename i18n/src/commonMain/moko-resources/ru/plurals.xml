@@ -36,7 +36,7 @@
         <item quantity="many">Осталось %1$s глав</item>
         <item quantity="other">Осталось %1$s глав</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d категория</item>
         <item quantity="few">%d категории</item>
         <item quantity="many">%d категорий</item>

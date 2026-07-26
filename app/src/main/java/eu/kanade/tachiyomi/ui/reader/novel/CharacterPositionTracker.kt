@@ -35,6 +35,8 @@ class CharacterPositionTracker(
 
     /**
      * Update the current character position within a chapter.
+     * Also stores the RecyclerView item index and pixel offset for exact
+     * scroll restoration (no visual jump, no drift).
      */
     fun updatePosition(
         novelId: Long,
@@ -42,6 +44,8 @@ class CharacterPositionTracker(
         characterPosition: Int,
         totalCharacters: Int,
         scrollPosition: Int = 0,
+        itemIndex: Int = 0,
+        pixelOffset: Int = 0,
     ) {
         val position = CharacterPosition(
             novelId = novelId,
@@ -49,6 +53,8 @@ class CharacterPositionTracker(
             characterPosition = characterPosition,
             totalCharacters = totalCharacters,
             scrollPosition = scrollPosition,
+            itemIndex = itemIndex,
+            pixelOffset = pixelOffset,
             timestamp = System.currentTimeMillis(),
         )
         _currentPosition.value = position
@@ -58,29 +64,52 @@ class CharacterPositionTracker(
 
     /**
      * Persist the current position to the database.
+     * Packs character position + item index + pixel offset into a single Long
+     * so that scroll can be restored exactly (Tadami-style).
      */
     suspend fun savePosition() {
         val position = _currentPosition.value
         if (position.chapterId > 0) {
-            setReadingPosition.await(position.chapterId, position.characterPosition.toLong())
+            val encoded = NovelScrollPositionCodec.encode(
+                charPosition = position.characterPosition,
+                itemIndex = position.itemIndex,
+                pixelOffset = position.pixelOffset,
+            )
+            setReadingPosition.await(position.chapterId, encoded)
         }
     }
 
     /**
      * Load the saved position for a chapter from the database.
+     * Decodes the packed Long (charPos + itemIndex + pixelOffset) if the
+     * value uses the new format, or falls back to legacy character position.
      */
     suspend fun loadSavedPosition(chapter: NovelChapter): CharacterPosition? {
-        return if (chapter.lastCharRead > 0) {
+        if (chapter.lastCharRead <= 0) return null
+        val decoded = NovelScrollPositionCodec.decode(chapter.lastCharRead)
+        return if (decoded != null) {
+            CharacterPosition(
+                novelId = chapter.novelId,
+                chapterId = chapter.id,
+                characterPosition = decoded.characterPosition,
+                totalCharacters = 0,
+                scrollPosition = 0,
+                itemIndex = decoded.itemIndex,
+                pixelOffset = decoded.pixelOffset,
+                timestamp = chapter.lastModifiedAt,
+            )
+        } else {
+            // Legacy: lastCharRead is a plain character position
             CharacterPosition(
                 novelId = chapter.novelId,
                 chapterId = chapter.id,
                 characterPosition = chapter.lastCharRead.toInt(),
                 totalCharacters = 0,
                 scrollPosition = 0,
+                itemIndex = 0,
+                pixelOffset = 0,
                 timestamp = chapter.lastModifiedAt,
             )
-        } else {
-            null
         }
     }
 
@@ -216,6 +245,8 @@ data class CharacterPosition(
     val characterPosition: Int = 0,
     val totalCharacters: Int = 0,
     val scrollPosition: Int = 0,
+    val itemIndex: Int = 0,
+    val pixelOffset: Int = 0,
     val timestamp: Long = System.currentTimeMillis(),
 )
 

@@ -8,7 +8,7 @@
         <item quantity="one">%1$s সময়ে %2$s ত্রুটি সম্পন্ন</item>
         <item quantity="other">%1$s সময়ে %2$sটি ত্রুটি সম্পন্ন</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%dটি বিভাগ</item>
         <item quantity="other">%dটি বিভাগসমূহ</item>
     </plurals>

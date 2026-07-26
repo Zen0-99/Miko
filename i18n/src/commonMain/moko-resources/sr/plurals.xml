@@ -20,7 +20,7 @@
         <item quantity="few">Доступна су %d нова ажурирања додатака</item>
         <item quantity="other">Доступно је %d нових ажурирања додатака</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d категорија</item>
         <item quantity="few">%d категорије</item>
         <item quantity="other">%d категорија</item>

@@ -24,7 +24,7 @@
         <item quantity="one">%1$s बचा हुआ</item>
         <item quantity="other">%1$s बचे हुए</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d श्रेणी%d श्रेणियाँ</item>
         <item quantity="other"></item>
     </plurals>

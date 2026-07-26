@@ -46,7 +46,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
@@ -117,9 +117,9 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
-        val categoryId = inputData.getLong(KEY_CATEGORY, -1L)
+        val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
         val isResume = inputData.getBoolean(KEY_RESUME, false)
-        addMangaToQueue(categoryId)
+        addMangaToQueue(collectionId)
 
         return withIOContext {
             try {
@@ -155,24 +155,24 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     /**
      * Adds list of manga to be updated.
      *
-     * @param categoryId the ID of the category to update, or -1 if no category specified.
+     * @param collectionId the ID of the collection to update, or -1 if no collection specified.
      */
-    private suspend fun addMangaToQueue(categoryId: Long) {
+    private suspend fun addMangaToQueue(collectionId: Long) {
         val libraryManga = getLibraryManga.await()
 
-        val listToUpdate = if (categoryId != -1L) {
-            libraryManga.filter { it.category == categoryId }
+        val listToUpdate = if (collectionId != -1L) {
+            libraryManga.filter { it.collection == collectionId }
         } else {
-            val categoriesToUpdate = libraryPreferences.mangaUpdateCategories().get().map { it.toLong() }
-            val includedManga = if (categoriesToUpdate.isNotEmpty()) {
-                libraryManga.filter { it.category in categoriesToUpdate }
+            val collectionsToUpdate = libraryPreferences.mangaUpdateCollections().get().map { it.toLong() }
+            val includedManga = if (collectionsToUpdate.isNotEmpty()) {
+                libraryManga.filter { it.collection in collectionsToUpdate }
             } else {
                 libraryManga
             }
 
-            val categoriesToExclude = libraryPreferences.mangaUpdateCategoriesExclude().get().map { it.toLong() }
-            val excludedMangaIds = if (categoriesToExclude.isNotEmpty()) {
-                libraryManga.filter { it.category in categoriesToExclude }.map { it.manga.id }
+            val collectionsToExclude = libraryPreferences.mangaUpdateCollectionsExclude().get().map { it.toLong() }
+            val excludedMangaIds = if (collectionsToExclude.isNotEmpty()) {
+                libraryManga.filter { it.collection in collectionsToExclude }.map { it.manga.id }
             } else {
                 emptyList()
             }
@@ -499,9 +499,9 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val MANGA_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 60
 
         /**
-         * Key for category to update.
+         * Key for collection to update.
          */
-        private const val KEY_CATEGORY = "category"
+        private const val KEY_COLLECTION = "collection"
         private const val KEY_RESUME = "resume"
 
         fun cancelAllWorks(context: Context) {
@@ -559,7 +559,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
         fun startNow(
             context: Context,
-            category: Category? = null,
+            collection: Collection? = null,
             resumeFromCheckpoint: Boolean = false,
         ): Boolean {
             val wm = context.workManager
@@ -569,7 +569,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             }
 
             val inputData = workDataOf(
-                KEY_CATEGORY to category?.id,
+                KEY_COLLECTION to collection?.id,
                 KEY_RESUME to resumeFromCheckpoint,
             )
             val request = OneTimeWorkRequestBuilder<MangaLibraryUpdateJob>()

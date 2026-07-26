@@ -18,7 +18,7 @@ import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.anime.interactor.GetAnimeCategories
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.items.episode.model.Episode
@@ -41,7 +41,7 @@ class AnimeDownloadManager(
     private val storageManager: StorageManager = Injekt.get(),
     private val provider: AnimeDownloadProvider = Injekt.get(),
     private val cache: AnimeDownloadCache = Injekt.get(),
-    private val getCategories: GetAnimeCategories = Injekt.get(),
+    private val getCollections: GetAnimeCollections = Injekt.get(),
     private val sourceManager: AnimeSourceManager = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
 ) {
@@ -406,23 +406,23 @@ class AnimeDownloadManager(
     }
 
     private suspend fun getEpisodesToDelete(episodes: List<Episode>, anime: Anime): List<Episode> {
-        // Retrieve the categories that are set to exclude from being deleted on read
-        val categoriesToExclude =
-            downloadPreferences.removeExcludeAnimeCategories().get().map(String::toLong)
+        // Retrieve the collections that are set to exclude from being deleted on read
+        val collectionsToExclude =
+            downloadPreferences.removeExcludeAnimeCollections().get().map(String::toLong)
 
-        val categoriesForAnime = getCategories.await(anime.id)
+        val collectionsForAnime = getCollections.await(anime.id)
             .map { it.id }
             .ifEmpty { listOf(0) }
-        val filteredCategoryAnime = if (categoriesForAnime.intersect(categoriesToExclude).isNotEmpty()) {
+        val filteredCollectionAnime = if (collectionsForAnime.intersect(collectionsToExclude).isNotEmpty()) {
             episodes.filterNot { it.seen }
         } else {
             episodes
         }
 
         return if (!downloadPreferences.removeBookmarkedChapters().get()) {
-            filteredCategoryAnime.filterNot { it.bookmark }
+            filteredCollectionAnime.filterNot { it.bookmark }
         } else {
-            filteredCategoryAnime
+            filteredCollectionAnime
         }
     }
 

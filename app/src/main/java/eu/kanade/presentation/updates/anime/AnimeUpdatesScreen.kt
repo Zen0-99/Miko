@@ -1,6 +1,7 @@
 package eu.kanade.presentation.updates.anime
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarHost
@@ -16,7 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import eu.kanade.presentation.entries.anime.components.EpisodeDownloadAction
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.tachiyomi.data.download.anime.model.AnimeDownload
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.updates.anime.AnimeUpdatesItem
@@ -66,10 +69,7 @@ fun AnimeUpdateScreen(
             )
         },
         snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = 80.dp),
-            )
+            AchievementStyledSnackbarHost(hostState = snackbarHostState)
         },
     ) { contentPadding ->
         val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
@@ -101,7 +101,9 @@ fun AnimeUpdateScreen(
                         }
                     },
                     enabled = !state.selectionMode,
-                    indicatorPadding = resolvedContentPadding,
+                    indicatorPadding = PaddingValues(
+                        bottom = resolvedContentPadding.calculateBottomPadding(),
+                    ),
                 ) {
                     FastScrollLazyColumn(
                         contentPadding = resolvedContentPadding,

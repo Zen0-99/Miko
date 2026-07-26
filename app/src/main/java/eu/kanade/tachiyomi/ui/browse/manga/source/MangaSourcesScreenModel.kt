@@ -196,7 +196,7 @@ class MangaSourcesScreenModel(
     @Immutable
     data class State(
         val dialog: Dialog? = null,
-        val isLoading: Boolean = false,
+        val isLoading: Boolean = true,
         val isRefreshing: Boolean = false,
         val items: ImmutableList<MangaSourceUiModel> = persistentListOf(),
         // SY -->

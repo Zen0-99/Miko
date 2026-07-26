@@ -30,10 +30,10 @@
     <string name="download_notifier_download_finish">ダウンロード完了</string>
     <string name="action_hide">隠す</string>
     <string name="label_all">全て</string>
-    <string name="label_category">カテゴリー</string>
-    <string name="manga_categories">漫画のカテゴリー</string>
-    <string name="general_categories">カテゴリー</string>
-    <string name="anime_categories">アニメのカテゴリー</string>
+    <string name="label_collection">カテゴリー</string>
+    <string name="manga_collections">漫画のカテゴリー</string>
+    <string name="general_collections">カテゴリー</string>
+    <string name="anime_collections">アニメのカテゴリー</string>
     <string name="chapters_episodes">章と話</string>
     <string name="episodes">話</string>
     <string name="backup_settings_warning">警告: 設定をバックアップすると、トラックのパスワードも保存されるため、このバックアップ ファイルを共有しないでください。</string>
@@ -51,9 +51,9 @@
     <string name="action_sort_total_episodes">全エピソード</string>
     <string name="action_sort_latest_episode">最新のエピソード</string>
     <string name="action_display_local_badge_manga">ローカル ソース</string>
-    <string name="default_manga_category">デフォルトカテゴリー</string>
-    <string name="pref_manga_library_update_categories_details">含まれているカテゴリーに入っていても、除外対象カテゴリーにある項目は更新されません。</string>
-    <string name="pref_remove_exclude_categories_manga">除外されるカテゴリー</string>
+    <string name="default_manga_collection">デフォルトカテゴリー</string>
+    <string name="pref_manga_library_update_collections_details">含まれているカテゴリーに入っていても、除外対象カテゴリーにある項目は更新されません。</string>
+    <string name="pref_remove_exclude_collections_manga">除外されるカテゴリー</string>
     <string name="download_ahead_info_anime">ライブラリ内のエントリに対してのみ機能し、現在のエピソードと次のエピソードがすでにダウンロードされている場合にのみ機能します</string>
     <string name="pref_clear_manga_database">データベースをクリア</string>
     <string name="pref_clear_manga_database_summary">ライブラリにない項目の履歴を削除</string>

@@ -27,7 +27,7 @@ data class BackupAnime(
     @ProtoNumber(13) var dateAdded: Long = 0,
     // @ProtoNumber(15) val flags: Int = 0, 1.x value, not used in 0.x
     @ProtoNumber(16) var episodes: List<BackupEpisode> = emptyList(),
-    @ProtoNumber(17) var categories: List<Long> = emptyList(),
+    @ProtoNumber(17) var collections: List<Long> = emptyList(),
     @ProtoNumber(18) var tracking: List<BackupAnimeTracking> = emptyList(),
     // Bump by 100 for values that are not saved/implemented in 1.x but are used in 0.x
     @ProtoNumber(100) var favorite: Boolean = true,

@@ -31,7 +31,7 @@ class AnimeDownloadHolder(private val view: View, val adapter: AnimeDownloadAdap
     private lateinit var download: AnimeDownload
 
     /**
-     * Binds this holder with the given category.
+     * Binds this holder with the given collection.
      *
      * @param download the download to bind.
      */

@@ -31,7 +31,7 @@ data class AnimeMigrationFlag(
 object AnimeMigrationFlags {
 
     private const val EPISODES = 0b00001
-    private const val CATEGORIES = 0b00010
+    private const val COLLECTIONS = 0b00010
     private const val CUSTOM_BACKGROUND = 0b00100
     private const val CUSTOM_COVER = 0b01000
     private const val DELETE_DOWNLOADED = 0b10000
@@ -44,8 +44,8 @@ object AnimeMigrationFlags {
         return value and EPISODES != 0
     }
 
-    fun hasCategories(value: Int): Boolean {
-        return value and CATEGORIES != 0
+    fun hasCollections(value: Int): Boolean {
+        return value and COLLECTIONS != 0
     }
 
     fun hasCustomCover(value: Int): Boolean {
@@ -67,7 +67,7 @@ object AnimeMigrationFlags {
         if (anime?.fetchType == FetchType.Episodes) {
             flags += AnimeMigrationFlag.create(EPISODES, defaultSelectedBitMap, AYMR.strings.episodes)
         }
-        flags += AnimeMigrationFlag.create(CATEGORIES, defaultSelectedBitMap, MR.strings.categories)
+        flags += AnimeMigrationFlag.create(COLLECTIONS, defaultSelectedBitMap, MR.strings.collections)
 
         if (anime != null) {
             if (anime.hasCustomCover(coverCache)) {

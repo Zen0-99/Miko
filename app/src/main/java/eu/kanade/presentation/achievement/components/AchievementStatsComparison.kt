@@ -28,8 +28,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import eu.kanade.presentation.theme.AuroraColors
-import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.AchievementColors
+import eu.kanade.presentation.theme.achievementLabelColor
 import tachiyomi.domain.achievement.model.MonthStats
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -45,7 +45,6 @@ fun AchievementStatsComparison(
     previousMonth: MonthStats,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
     val timeStrings = achievementTimeStrings()
 
     Column(
@@ -55,11 +54,10 @@ fun AchievementStatsComparison(
         // Header
         Text(
             text = stringResource(AYMR.strings.achievement_comparison_title).uppercase(),
-            color = colors.textPrimary,
+            color = MaterialTheme.colorScheme.onBackground,
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 1.sp,
-            modifier = Modifier.padding(horizontal = 16.dp),
         )
 
         // Single surface — matches ExtensionCard style (no double border)
@@ -69,6 +67,7 @@ fun AchievementStatsComparison(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             shadowElevation = 1.dp,
         ) {
+            val dividerColor = MaterialTheme.colorScheme.outlineVariant
             // Draw grid dividers on the background
             Box(
                 modifier = Modifier
@@ -76,14 +75,14 @@ fun AchievementStatsComparison(
                     .drawBehind {
                         // Horizontal divider
                         drawLine(
-                            color = colors.divider,
+                            color = dividerColor,
                             start = Offset(0f, size.height * 0.5f),
                             end = Offset(size.width, size.height * 0.5f),
                             strokeWidth = 1.dp.toPx(),
                         )
                         // Vertical divider
                         drawLine(
-                            color = colors.divider,
+                            color = dividerColor,
                             start = Offset(size.width * 0.5f, 0f),
                             end = Offset(size.width * 0.5f, size.height),
                             strokeWidth = 1.dp.toPx(),
@@ -140,8 +139,6 @@ private fun StatItem(
     timeStrings: AchievementTimeStrings? = null,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
     val percentageChange = if (previousValue > 0) {
         ((currentValue - previousValue).toFloat() / previousValue * 100).toInt()
     } else if (currentValue > 0) {
@@ -151,7 +148,7 @@ private fun StatItem(
     }
 
     val isIncrease = currentValue >= previousValue
-    val changeColor = if (isIncrease) colors.success else colors.error
+    val changeColor = if (isIncrease) AchievementColors.Success else MaterialTheme.colorScheme.error
 
     val valueString = if (isTimeValue) {
         val strings = requireNotNull(timeStrings) {
@@ -177,7 +174,7 @@ private fun StatItem(
             text = label.uppercase(),
             fontSize = 8.sp,
             fontWeight = FontWeight.SemiBold,
-            color = colors.textSecondary.copy(alpha = 0.4f),
+            color = achievementLabelColor(),
             letterSpacing = 0.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -191,7 +188,7 @@ private fun StatItem(
                 text = valueString,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = colors.textPrimary,
+                color = MaterialTheme.colorScheme.onBackground,
             )
 
             if (previousValue > 0 || currentValue > 0) {
@@ -213,89 +210,74 @@ private fun StatItem(
 @Preview(showBackground = true)
 @Composable
 private fun AchievementStatsComparisonPreview() {
-    val colors = AuroraColors.Dark
-    androidx.compose.runtime.CompositionLocalProvider(
-        eu.kanade.presentation.theme.LocalAuroraColors provides colors,
+    Box(
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .background(colors.background)
-                .padding(16.dp),
-        ) {
-            AchievementStatsComparison(
-                currentMonth = MonthStats(
-                    chaptersRead = 127,
-                    episodesWatched = 45,
-                    timeInAppMinutes = 2340,
-                    achievementsUnlocked = 8,
-                ),
-                previousMonth = MonthStats(
-                    chaptersRead = 98,
-                    episodesWatched = 62,
-                    timeInAppMinutes = 1890,
-                    achievementsUnlocked = 5,
-                ),
-            )
-        }
+        AchievementStatsComparison(
+            currentMonth = MonthStats(
+                chaptersRead = 127,
+                episodesWatched = 45,
+                timeInAppMinutes = 2340,
+                achievementsUnlocked = 8,
+            ),
+            previousMonth = MonthStats(
+                chaptersRead = 98,
+                episodesWatched = 62,
+                timeInAppMinutes = 1890,
+                achievementsUnlocked = 5,
+            ),
+        )
     }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun AchievementStatsComparisonLightPreview() {
-    val colors = AuroraColors.Light
-    androidx.compose.runtime.CompositionLocalProvider(
-        eu.kanade.presentation.theme.LocalAuroraColors provides colors,
+    Box(
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .background(colors.background)
-                .padding(16.dp),
-        ) {
-            AchievementStatsComparison(
-                currentMonth = MonthStats(
-                    chaptersRead = 85,
-                    episodesWatched = 32,
-                    timeInAppMinutes = 1560,
-                    achievementsUnlocked = 12,
-                ),
-                previousMonth = MonthStats(
-                    chaptersRead = 120,
-                    episodesWatched = 28,
-                    timeInAppMinutes = 1800,
-                    achievementsUnlocked = 8,
-                ),
-            )
-        }
+        AchievementStatsComparison(
+            currentMonth = MonthStats(
+                chaptersRead = 85,
+                episodesWatched = 32,
+                timeInAppMinutes = 1560,
+                achievementsUnlocked = 12,
+            ),
+            previousMonth = MonthStats(
+                chaptersRead = 120,
+                episodesWatched = 28,
+                timeInAppMinutes = 1800,
+                achievementsUnlocked = 8,
+            ),
+        )
     }
 }
 
 @Preview(showBackground = true, widthDp = 400)
 @Composable
 private fun AchievementStatsComparisonUniformPreview() {
-    val colors = AuroraColors.Dark
-    androidx.compose.runtime.CompositionLocalProvider(
-        eu.kanade.presentation.theme.LocalAuroraColors provides colors,
+    Box(
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .background(colors.background)
-                .padding(16.dp),
-        ) {
-            AchievementStatsComparison(
-                currentMonth = MonthStats(
-                    chaptersRead = 9999,
-                    episodesWatched = 1,
-                    timeInAppMinutes = 9999,
-                    achievementsUnlocked = 999,
-                ),
-                previousMonth = MonthStats(
-                    chaptersRead = 5000,
-                    episodesWatched = 1,
-                    timeInAppMinutes = 5000,
-                    achievementsUnlocked = 500,
-                ),
-            )
-        }
+        AchievementStatsComparison(
+            currentMonth = MonthStats(
+                chaptersRead = 9999,
+                episodesWatched = 1,
+                timeInAppMinutes = 9999,
+                achievementsUnlocked = 999,
+            ),
+            previousMonth = MonthStats(
+                chaptersRead = 5000,
+                episodesWatched = 1,
+                timeInAppMinutes = 5000,
+                achievementsUnlocked = 500,
+            ),
+        )
     }
 }

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import eu.kanade.domain.entries.novel.interactor.UpdateNovel
-import eu.kanade.tachiyomi.data.backup.models.BackupCategory
+import eu.kanade.tachiyomi.data.backup.models.BackupCollection
 import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelHistory
@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupNovelTracking
 import tachiyomi.data.NovelUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
-import tachiyomi.domain.category.novel.interactor.GetNovelCategories
+import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.entries.novel.interactor.GetNovelByUrlAndSourceId
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
@@ -24,7 +24,7 @@ import kotlin.math.max
 
 class NovelRestorer(
     private val handler: NovelDatabaseHandler = Injekt.get(),
-    private val getCategories: GetNovelCategories = Injekt.get(),
+    private val getCollections: GetNovelCollections = Injekt.get(),
     private val getNovelByUrlAndSourceId: GetNovelByUrlAndSourceId = Injekt.get(),
     private val getChaptersByNovelId: GetNovelChaptersByNovelId = Injekt.get(),
     private val updateNovel: UpdateNovel = Injekt.get(),
@@ -57,7 +57,7 @@ class NovelRestorer(
 
     suspend fun restore(
         backupNovel: BackupNovel,
-        backupCategories: List<BackupCategory>,
+        backupCollections: List<BackupCollection>,
     ) {
         handler.await(inTransaction = true) {
             val dbNovel = findExistingNovel(backupNovel)
@@ -71,8 +71,8 @@ class NovelRestorer(
             restoreNovelDetails(
                 novel = restoredNovel,
                 chapters = backupNovel.chapters,
-                categories = backupNovel.categories,
-                backupCategories = backupCategories,
+                collections = backupNovel.collections,
+                backupCollections = backupCollections,
                 history = backupNovel.history,
                 tracks = backupNovel.tracking,
             )
@@ -178,41 +178,41 @@ class NovelRestorer(
     private suspend fun restoreNovelDetails(
         novel: Novel,
         chapters: List<BackupNovelChapter>,
-        categories: List<Long>,
-        backupCategories: List<BackupCategory>,
+        collections: List<Long>,
+        backupCollections: List<BackupCollection>,
         history: List<BackupNovelHistory>,
         tracks: List<BackupNovelTracking>,
     ): Novel {
-        restoreCategories(novel, categories, backupCategories)
+        restoreCollections(novel, collections, backupCollections)
         restoreChapters(novel, chapters)
         restoreTracking(novel, tracks)
         restoreHistory(history)
         return novel
     }
 
-    private suspend fun restoreCategories(
+    private suspend fun restoreCollections(
         novel: Novel,
-        categories: List<Long>,
-        backupCategories: List<BackupCategory>,
+        collections: List<Long>,
+        backupCollections: List<BackupCollection>,
     ) {
-        val dbCategories = getCategories.await()
-        val dbCategoriesByName = dbCategories.associateBy { it.name }
+        val dbCollections = getCollections.await()
+        val dbCollectionsByName = dbCollections.associateBy { it.name }
 
-        val backupCategoriesByOrder = backupCategories.associateBy { it.order }
+        val backupCollectionsByOrder = backupCollections.associateBy { it.order }
 
-        val novelCategoriesToUpdate = categories.mapNotNull { backupCategoryOrder ->
-            backupCategoriesByOrder[backupCategoryOrder]?.let { backupCategory ->
-                dbCategoriesByName[backupCategory.name]?.let { dbCategory ->
-                    Pair(novel.id, dbCategory.id)
+        val novelCollectionsToUpdate = collections.mapNotNull { backupCollectionOrder ->
+            backupCollectionsByOrder[backupCollectionOrder]?.let { backupCollection ->
+                dbCollectionsByName[backupCollection.name]?.let { dbCollection ->
+                    Pair(novel.id, dbCollection.id)
                 }
             }
         }
 
-        if (novelCategoriesToUpdate.isNotEmpty()) {
+        if (novelCollectionsToUpdate.isNotEmpty()) {
             handler.await(true) {
                 novels_categoriesQueries.deleteNovelCategoryByNovelId(novel.id)
-                novelCategoriesToUpdate.forEach { (novelId, categoryId) ->
-                    novels_categoriesQueries.insert(novelId, categoryId)
+                novelCollectionsToUpdate.forEach { (novelId, collectionId) ->
+                    novels_categoriesQueries.insert(novelId, collectionId)
                 }
             }
         }

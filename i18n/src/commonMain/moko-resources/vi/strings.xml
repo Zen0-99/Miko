@@ -26,10 +26,10 @@
     <string name="action_update_library">Cập nhật thư viện</string>
     <string name="action_edit">Sửa</string>
     <string name="action_add">Thêm</string>
-    <string name="action_add_category">Thêm danh mục</string>
-    <string name="action_edit_categories">Chỉnh sửa danh mục</string>
-    <string name="action_rename_category">Đổi tên danh mục</string>
-    <string name="action_move_category">Đặt danh mục</string>
+    <string name="action_add_collection">Thêm danh mục</string>
+    <string name="action_edit_collections">Chỉnh sửa danh mục</string>
+    <string name="action_rename_collection">Đổi tên danh mục</string>
+    <string name="action_move_collection">Đặt danh mục</string>
     <string name="action_edit_cover">Sửa ảnh bìa</string>
     <string name="action_pause">Tạm dừng</string>
     <string name="action_previous_chapter">Chương trước</string>
@@ -135,7 +135,7 @@
     <string name="login">Đăng nhập</string>
     <string name="login_success">Đăng nhập thành công</string>
     <string name="unknown_error">Lỗi không xác định</string>
-    <string name="updating_category">Cập nhật danh mục</string>
+    <string name="updating_collection">Cập nhật danh mục</string>
     <string name="no_more_results">Không có thêm kết quả nào</string>
     <string name="ongoing">Đang tiến hành</string>
     <string name="unknown">Không rõ</string>
@@ -162,8 +162,8 @@
     <string name="title">Tiêu đề</string>
     <string name="status">Trạng thái</string>
     <string name="chapters">Các chương</string>
-    <string name="error_category_exists">Tên danh mục này đã tồn tại!</string>
-    <string name="snack_categories_deleted">Danh mục đã bị xóa</string>
+    <string name="error_collection_exists">Tên danh mục này đã tồn tại!</string>
+    <string name="snack_collections_deleted">Danh mục đã bị xóa</string>
     <string name="dialog_with_checkbox_remove_description">Sẽ xóa ngày đọc các chương. Bạn chắc chứ?</string>
     <string name="dialog_with_checkbox_reset">Làm mới mọi chương của truyện này</string>
     <string name="snack_add_to_library">Thêm truyện vào thư viện?</string>
@@ -197,7 +197,7 @@
     <string name="download_notifier_text_only_wifi">Không có kết nối Wi-fi</string>
     <string name="download_notifier_no_network">Không có kết nối mạng</string>
     <string name="download_notifier_download_paused">Tải xuống đã tạm dừng</string>
-    <string name="categories">Hạng mục</string>
+    <string name="collections">Hạng mục</string>
     <string name="manga">Truyện trong thư viện</string>
     <string name="track">Theo dõi</string>
     <string name="history">Lịch sử</string>
@@ -211,8 +211,8 @@
     <string name="action_restore">Khôi phục</string>
     <string name="app_not_available">Ứng dụng không có sẵn</string>
     <string name="update_weekly">Mỗi tuần</string>
-    <string name="default_category">Danh mục mặc định</string>
-    <string name="default_category_summary">Luôn hỏi</string>
+    <string name="default_collection">Danh mục mặc định</string>
+    <string name="default_collection_summary">Luôn hỏi</string>
     <string name="ext_update">Cập nhật</string>
     <string name="ext_install">Cài đặt</string>
     <string name="ext_pending">Đang chờ xử lý</string>
@@ -268,7 +268,7 @@
     <string name="migration_dialog_what_to_include">Chọn dữ liệu bao gồm</string>
     <string name="migrate">Di chuyển</string>
     <string name="copy">Sao chép</string>
-    <string name="information_empty_category">Không có danh mục. Nhấn vào dấu cộng để tạo một nhóm từ thư viện.</string>
+    <string name="information_empty_collection">Không có danh mục. Nhấn vào dấu cộng để tạo một nhóm từ thư viện.</string>
     <string name="channel_common">Thường gặp</string>
     <string name="pref_read_with_long_tap">Nhấn giữ để mở mục hành động</string>
     <string name="action_open_in_web_view">Mở bằng WebView</string>
@@ -359,7 +359,7 @@
     <string name="action_search_settings">Cài đặt tìm kiếm</string>
     <string name="backup_in_progress">Sao lưu đang trong quá trình thực hiện</string>
     <string name="clear_history_confirmation">Bạn có chắc không? Tất cả lịch sử sẽ bị xoá.</string>
-    <string name="pref_library_update_categories_details">Truyện trong danh mục bị loại trừ sẽ không được cập nhật.</string>
+    <string name="pref_library_update_collections_details">Truyện trong danh mục bị loại trừ sẽ không được cập nhật.</string>
     <string name="track_finished_reading_date">Ngày kết thúc</string>
     <string name="filter_mode_lighten">Chế độ làm sáng lên</string>
     <string name="filter_mode_darken">Chế độ làm tối đi</string>
@@ -436,7 +436,7 @@
     <string name="backup_restore_content_full">Bạn sẽ cần cài đặt bất kỳ tiện ích mở rộng nào bị thiếu rồi đăng nhập vào các dịch vụ theo dõi để sử dụng chúng.</string>
     <string name="backup_restore_missing_trackers">Bộ theo dõi chưa được đăng nhập vào :</string>
     <string name="backup_restore_missing_sources">Nguồn không tìm thấy :</string>
-    <string name="pref_download_new_categories_details">Truyện trong các danh mục bị loại trừ sẽ không được tải xuống.</string>
+    <string name="pref_download_new_collections_details">Truyện trong các danh mục bị loại trừ sẽ không được tải xuống.</string>
     <string name="pref_category_auto_download">Tự động tải xuống</string>
     <string name="pref_remove_bookmarked_chapters">Cho phép xóa các chương đã đánh dấu</string>
     <string name="pref_category_delete_chapters">Xoá chương</string>
@@ -494,7 +494,7 @@
     <string name="on">Bật</string>
     <string name="off">Tắt</string>
     <string name="restrictions">Hạn chế: %s</string>
-    <string name="information_empty_category_dialog">Người dùng chưa có danh mục.</string>
+    <string name="information_empty_collection_dialog">Người dùng chưa có danh mục.</string>
     <string name="restore_miui_warning">Tính năng tối ưu hóa của MIUI phải được bật lên để việc sao lưu/khôi phục hoạt động tốt.</string>
     <string name="theme_greenapple">Chủ đề: Táo Xanh</string>
     <string name="theme_monet">Chủ đề: Động</string>
@@ -506,7 +506,7 @@
     <string name="theme_yinyang">Chủ đề: Âm &amp; Dương</string>
     <string name="theme_yotsuba">Chủ đề: Yotsuba</string>
     <string name="pref_dark_theme_pure_black">Chế độ đen tuyền</string>
-    <string name="categorized_display_settings">Tùy chỉnh mỗi danh mục cho sắp xếp</string>
+    <string name="per_collection_display_settings">Tùy chỉnh mỗi danh mục cho sắp xếp</string>
     <string name="tracking_guide">Hướng dẫn theo dõi</string>
     <string name="enhanced_services">Dịch vụ nâng cao</string>
     <string name="enhanced_tracking_info">Dịch vụ cung cấp các tính năng nâng cao cho các nguồn cụ thể. Truyện sẽ tự động theo dõi khi được thêm vào thư viện của bạn.</string>
@@ -516,7 +516,7 @@
     <string name="confirm_lock_change">Xác nhận thay đổi</string>
     <string name="label_default">Mặc định</string>
     <string name="action_track">Theo dõi</string>
-    <string name="pref_remove_exclude_categories">Các thể loại bị loại trừ</string>
+    <string name="pref_remove_exclude_collections">Các thể loại bị loại trừ</string>
     <string name="pref_hide_threshold">Độ nhạy cho phần tự ẩn mục chính khi kéo cuộn</string>
     <string name="getting_started_guide">Hướng dẫn sử dụng khởi đầu</string>
     <string name="pref_tablet_ui_mode">Giao diện máy tính bảng</string>
@@ -587,7 +587,7 @@
     <string name="pref_user_agent_string">Chuỗi đại diện người dùng mặc định</string>
     <string name="unfinished_list">Danh sách chưa hoàn thành</string>
     <string name="cant_open_last_read_chapter">Không thể mở lại chương truyện trước</string>
-    <string name="delete_category">Xóa thể loại</string>
+    <string name="delete_collection">Xóa thể loại</string>
     <string name="internal_error">Lỗi nội bộ: Kiểm tra nhật ký bị ngắt ứng dụng để biết thêm thông tin</string>
     <string name="theme_lavender">Oải Hương</string>
     <string name="pref_app_language">Ngôn ngữ ứng dụng</string>
@@ -606,7 +606,7 @@
     <string name="download_notifier_split_page_path_not_found">Không thể tìm thấy đường dẫn của trang %d</string>
     <string name="pref_reset_user_agent_string">Cài lại chuỗi đại diện người dùng mặc định</string>
     <string name="description_placeholder">Không có mô tả</string>
-    <string name="delete_category_confirmation">Bạn có muốn xóa thể loại \"%s\"?</string>
+    <string name="delete_collection_confirmation">Bạn có muốn xóa thể loại \"%s\"?</string>
     <string name="custom_cover">Tùy chỉnh ảnh bìa</string>
     <string name="appwidget_unavailable_locked">Tiện ích không còn khả dụng khi khóa ứng dụng đang bật</string>
     <string name="appwidget_updates_description">Xem các bộ truyện được cập nhật gần đây</string>
@@ -662,7 +662,7 @@
     <string name="track_remove_start_date_conf_text">Thao tác này sẽ xóa ngày bắt đầu đã chọn trước đó của bạn khỏi %s</string>
     <string name="crash_screen_title">Ôi trời!</string>
     <string name="track_remove_finish_date_conf_text">Thao tác này sẽ xóa ngày kết thúc đã chọn trước đó của bạn khỏi %s</string>
-    <string name="information_no_manga_category">Hạng mục trống</string>
+    <string name="information_no_manga_collection">Hạng mục trống</string>
     <string name="pref_invalidate_download_cache">Lập chỉ mục tải xuống</string>
     <string name="action_not_now">Lúc khác</string>
     <string name="fdroid_warning">Bản dựng F-Droid không được hỗ trợ chính thức.
@@ -675,7 +675,7 @@
     <string name="minute_short">%d phút</string>
     <string name="download_notifier_cache_renewal">Đang kiểm tra những truyện đã tải xuống</string>
     <string name="crash_screen_description">%s đã có lỗi. Bạn nên chia sẻ tệp báo lỗi tạm ở trong kênh hỗ trợ của chúng tôi trên Discord.</string>
-    <string name="action_update_category">Cập nhật danh mục</string>
+    <string name="action_update_collection">Cập nhật danh mục</string>
     <string name="confirm_add_duplicate_manga">Truyện này đã có sẵn trong thư viện bạn.
 \n
 \nBạn có muốn thêm lại không?</string>

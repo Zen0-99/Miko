@@ -20,7 +20,7 @@ import eu.kanade.presentation.library.components.LibraryTabs
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.anime.LibraryAnime
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.presentation.core.components.material.PullRefresh
@@ -28,7 +28,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun AnimeLibraryContent(
-    categories: List<Category>,
+    collections: List<Collection>,
     searchQuery: String?,
     selection: List<LibraryAnime>,
     contentPadding: PaddingValues,
@@ -40,9 +40,9 @@ fun AnimeLibraryContent(
     onContinueWatchingClicked: ((LibraryAnime) -> Unit)?,
     onToggleSelection: (LibraryAnime) -> Unit,
     onToggleRangeSelection: (LibraryAnime) -> Unit,
-    onRefresh: (Category?) -> Boolean,
+    onRefresh: (Collection?) -> Boolean,
     onGlobalSearchClicked: () -> Unit,
-    getNumberOfAnimeForCategory: (Category) -> Int?,
+    getNumberOfAnimeForCollection: (Collection) -> Int?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
     getAnimeLibraryForPage: (Int) -> List<AnimeLibraryItem>,
@@ -54,22 +54,22 @@ fun AnimeLibraryContent(
             end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         ),
     ) {
-        val coercedCurrentPage = remember { currentPage().coerceAtMost(categories.lastIndex) }
-        val pagerState = rememberPagerState(coercedCurrentPage) { categories.size }
+        val coercedCurrentPage = remember { currentPage().coerceAtMost(collections.lastIndex) }
+        val pagerState = rememberPagerState(coercedCurrentPage) { collections.size }
 
         val scope = rememberCoroutineScope()
         var isRefreshing by remember(pagerState.currentPage) { mutableStateOf(false) }
 
-        if (showPageTabs && categories.size > 1) {
-            LaunchedEffect(categories) {
-                if (categories.size <= pagerState.currentPage) {
-                    pagerState.scrollToPage(categories.size - 1)
+        if (showPageTabs && collections.size > 1) {
+            LaunchedEffect(collections) {
+                if (collections.size <= pagerState.currentPage) {
+                    pagerState.scrollToPage(collections.size - 1)
                 }
             }
             LibraryTabs(
-                categories = categories,
+                collections = collections,
                 pagerState = pagerState,
-                getNumberOfItemsForCategory = getNumberOfAnimeForCategory,
+                getNumberOfItemsForCollection = getNumberOfAnimeForCollection,
             ) { scope.launch { pagerState.animateScrollToPage(it) } }
         }
 
@@ -85,7 +85,7 @@ fun AnimeLibraryContent(
         PullRefresh(
             refreshing = isRefreshing,
             onRefresh = {
-                val started = onRefresh(categories[currentPage()])
+                val started = onRefresh(collections[currentPage()])
                 if (!started) return@PullRefresh
                 scope.launch {
                     // Fake refresh status but hide it after a second as it's a long running task

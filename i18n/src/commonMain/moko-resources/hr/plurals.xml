@@ -5,7 +5,7 @@
         <item quantity="few">Nakon %1$s minute</item>
         <item quantity="other">Nakon %1$s minuta</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategorija</item>
         <item quantity="few">%d kategorije</item>
         <item quantity="other">%d kategorija</item>

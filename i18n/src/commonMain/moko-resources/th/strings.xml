@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">ชื่อ</string>
-    <string name="categories">หมวดหมู่</string>
+    <string name="collections">หมวดหมู่</string>
     <string name="manga">รายการคลัง</string>
     <string name="chapters">ตอน</string>
     <string name="track">ติดตาม</string>
@@ -29,9 +29,9 @@
     <string name="action_update_library">อัปเดตคลัง</string>
     <string name="action_edit">แก้ไข</string>
     <string name="action_add">เพิ่ม</string>
-    <string name="action_add_category">เพิ่มหมวดหมู่</string>
-    <string name="action_edit_categories">แก้ไขหมวดหมู่</string>
-    <string name="action_rename_category">เปลี่ยนชื่อหมวดหมู่</string>
+    <string name="action_add_collection">เพิ่มหมวดหมู่</string>
+    <string name="action_edit_collections">แก้ไขหมวดหมู่</string>
+    <string name="action_rename_collection">เปลี่ยนชื่อหมวดหมู่</string>
     <string name="action_edit_cover">แก้ไขปก</string>
     <string name="action_previous_chapter">ตอนก่อนหน้า</string>
     <string name="action_next_chapter">ตอนถัดไป</string>
@@ -55,7 +55,7 @@
     <string name="update_weekly">ทุกสัปดาห์</string>
     <string name="all">ทั้งหมด</string>
     <string name="charging">ขณะกำลังชาร์จ</string>
-    <string name="default_category_summary">ถามทุกครั้ง</string>
+    <string name="default_collection_summary">ถามทุกครั้ง</string>
     <string name="ext_update">อัปเดต</string>
     <string name="ext_install">ติดตั้ง</string>
     <string name="ext_pending">รอดำเนินการ</string>
@@ -74,7 +74,7 @@
     <string name="action_filter_bookmarked">บุ๊คมาร์ค</string>
     <string name="action_bookmark">บุ๊คมาร์คตอน</string>
     <string name="action_remove_bookmark">ยกเลิกบุ๊คมาร์คตอน</string>
-    <string name="action_move_category">ตั้งหมวดหมู่</string>
+    <string name="action_move_collection">ตั้งหมวดหมู่</string>
     <string name="action_pause">หยุดชั่วคราว</string>
     <string name="action_remove">นำออก</string>
     <string name="action_resume">ดำเนินการต่อ</string>
@@ -97,7 +97,7 @@
     <string name="pref_library_update_restriction">อัปเดตข้อจำกัดของอุปกรณ์โดยอัตโนมัติ</string>
     <string name="pref_update_only_non_completed">ข้ามรายการที่มีสถานะ \"จบแล้ว\"</string>
     <string name="pref_auto_update_manga_sync">อัปเดตความคืบหน้าหลังอ่าน</string>
-    <string name="default_category">หมวดหมู่เริ่มต้น</string>
+    <string name="default_collection">หมวดหมู่เริ่มต้น</string>
     <string name="ext_trust">เชื่อถือได้</string>
     <string name="ext_untrusted">ไม่น่าเชื่อถือ</string>
     <string name="ext_uninstall">ถอนการติดตั้ง</string>
@@ -183,7 +183,7 @@
     <string name="login">ลงชื่อเข้าใช้</string>
     <string name="login_success">ลงชื่อเข้าใช้แล้ว</string>
     <string name="unknown_error">ข้อผิดพลาดที่ไม่รู้จัก</string>
-    <string name="updating_category">กำลังอัปเดตหมวดหมู่</string>
+    <string name="updating_collection">กำลังอัปเดตหมวดหมู่</string>
     <string name="no_more_results">ไม่มีผลลัพธ์เพิ่มเติม</string>
     <string name="local_source">แหล่งที่มาภายในเครื่อง</string>
     <string name="other_source">อื่น ๆ</string>
@@ -231,8 +231,8 @@
     <string name="status">สถานะ</string>
     <string name="track_status">สถานะ</string>
     <string name="track_type">ประเภท</string>
-    <string name="error_category_exists">หมวดหมู่ที่มีชื่อนี้มีอยู่แล้ว!</string>
-    <string name="snack_categories_deleted">หมวดหมู่ถูกลบแล้ว</string>
+    <string name="error_collection_exists">หมวดหมู่ที่มีชื่อนี้มีอยู่แล้ว!</string>
+    <string name="snack_collections_deleted">หมวดหมู่ถูกลบแล้ว</string>
     <string name="dialog_with_checkbox_remove_description">การดำเนินการนี้จะลบวันที่อ่านของตอนนี้ คุณแน่ใจไหม?</string>
     <string name="dialog_with_checkbox_reset">รีเซ็ตตอนทั้งหมดสำหรับรายการนี้</string>
     <string name="snack_add_to_library">เพิ่มไปยังคลัง?</string>
@@ -271,7 +271,7 @@
     <string name="information_no_recent">ไม่มีอัปเดตล่าสุด</string>
     <string name="information_no_recent_manga">ไม่มีอะไรที่อ่านเมื่อเร็ว ๆ นี้</string>
     <string name="information_empty_library">คลังว่างเปล่า</string>
-    <string name="information_empty_category">ไม่มีหมวดหมู่ แตะปุ่มบวกเพื่อสร้างปุ่มสำหรับจัดระเบียบคลัง</string>
+    <string name="information_empty_collection">ไม่มีหมวดหมู่ แตะปุ่มบวกเพื่อสร้างปุ่มสำหรับจัดระเบียบคลัง</string>
     <string name="download_notifier_downloader_title">ตัวดาวน์โหลด</string>
     <string name="download_notifier_title_error">เกิดข้อผิดพลาด</string>
     <string name="download_notifier_unknown_error">ไม่สามารถดาวน์โหลดตอนได้เนื่องจากข้อผิดพลาดที่ไม่คาดคิด</string>
@@ -320,7 +320,7 @@
     <string name="exclude">ที่ยกเว้นไว้: %s</string>
     <string name="include">ที่รวมไว้: %s</string>
     <string name="none">ไม่มี</string>
-    <string name="pref_library_update_categories_details">รายการในหมวดหมู่ที่ยกเว้นจะไม่ได้รับการอัปเดตแม้ว่าจะอยู่ในหมวดหมู่ที่รวมอยู่ด้วยก็ตาม</string>
+    <string name="pref_library_update_collections_details">รายการในหมวดหมู่ที่ยกเว้นจะไม่ได้รับการอัปเดตแม้ว่าจะอยู่ในหมวดหมู่ที่รวมอยู่ด้วยก็ตาม</string>
     <string name="pref_library_update_refresh_metadata_summary">ตรวจสอบหน้าปกและรายละเอียดใหม่เมื่ออัปเดตคลัง</string>
     <string name="pref_library_update_refresh_metadata">โหลดข้อมูลเมตาใหม่โดยอัตโนมัติ</string>
     <string name="pref_category_library_update">อัปเดตทั้งหมด</string>
@@ -460,7 +460,7 @@
     <string name="invalid_backup_file_missing_manga">แฟ้มสํารองข้อมูลไม่มีรายการคลังใด ๆ</string>
     <string name="invalid_backup_file">ข้อมูลสำรองไม่ถูกต้อง:</string>
     <string name="tracking_info">ซิงค์ทางเดียวเพื่ออัปเดตความคืบหน้าของตอนกับตัวติดตามภายนอก ตั้งค่าการติดตามรายการในแต่ละรายการได้จากปุ่มติดตาม</string>
-    <string name="pref_download_new_categories_details">รายการในหมวดหมู่ที่ยกเว้นไว้จะไม่ถูกดาวน์โหลดแม้ว่าจะอยู่ในหมวดหมู่ที่รวมอยู่ด้วยก็ตาม</string>
+    <string name="pref_download_new_collections_details">รายการในหมวดหมู่ที่ยกเว้นไว้จะไม่ถูกดาวน์โหลดแม้ว่าจะอยู่ในหมวดหมู่ที่รวมอยู่ด้วยก็ตาม</string>
     <string name="pref_category_auto_download">ดาวน์โหลดอัตโนมัติ</string>
     <string name="download_insufficient_space">ไม่สามารถดาวน์โหลดตอนได้เนื่องจากพื้นที่จัดเก็บเหลือน้อย</string>
     <string name="update_check_eol">ไม่รองรับ Android เวอร์ชันนี้อีกต่อไป</string>
@@ -478,7 +478,7 @@
     <string name="information_webview_outdated">โปรดอัปเดตแอพ WebView เพื่อความเข้ากันได้ที่ดีขึ้น</string>
     <string name="information_webview_required">แอปจำเป็นต้องใช้ WebView เพื่อให้ทำงานได้</string>
     <string name="information_cloudflare_bypass_failure">ไม่สามารถเลี่ยงผ่าน Cloudflare ได้</string>
-    <string name="information_empty_category_dialog">คุณยังไม่มีหมวดหมู่</string>
+    <string name="information_empty_collection_dialog">คุณยังไม่มีหมวดหมู่</string>
     <string name="confirm_lock_change">ยืนยันการเปลี่ยนแปลง</string>
     <string name="relative_time_today">วันนี้</string>
     <string name="pref_update_only_completely_read">ข้ามรายการที่มีตอนที่ยังไม่ได้อ่าน</string>
@@ -489,7 +489,7 @@
     <string name="library_errors_help">สำหรับความช่วยเหลือเกี่ยวกับวิธีการแก้ไขข้อผิดพลาดในการอัปเดตคลัง ไปยัง %1$s</string>
     <string name="local_filter_order_by">เรียงตาม</string>
     <string name="date">วันที่</string>
-    <string name="categorized_display_settings">การตั้งค่าการจัดเรียงตามหมวดหมู่</string>
+    <string name="per_collection_display_settings">การตั้งค่าการจัดเรียงตามหมวดหมู่</string>
     <string name="ext_install_service_notif">กำลังติดตั้งส่วนขยาย…</string>
     <string name="pref_hide_threshold">ความเร็วในการซ่อนเมนูบนเมื่อเลื่อน</string>
     <string name="restore_miui_warning">การสำรอง/กู้คืนอาจทำงานไม่ถูกต้องหากปิดใช้งานการเพิ่มประสิทธิภาพ MIUI</string>
@@ -535,7 +535,7 @@
     <string name="pref_highest">เร็วที่สุด</string>
     <string name="pref_high">เร็ว</string>
     <string name="tracking_guide">คู่มือการติดตาม</string>
-    <string name="pref_remove_exclude_categories">หมวดหมู่ที่ยกเว้นไว้</string>
+    <string name="pref_remove_exclude_collections">หมวดหมู่ที่ยกเว้นไว้</string>
     <string name="enhanced_tracking_info">ใช้สำหรับเฉพาะบางแหล่งที่มา รายการจะถูกติดตามโดยอัตโนมัติเมื่อเพิ่มลงในคลัง</string>
     <string name="ext_app_info">ข้อมูลแอพ</string>
     <string name="extension_api_error">เกิดข้อผิดพลาดในการดึงรายการส่วนขยายที่พร้อมใช้งาน</string>
@@ -603,8 +603,8 @@
     <string name="pref_app_language">ภาษาของแอพ</string>
     <string name="description_placeholder">ไม่มีคำอธิบาย</string>
     <string name="theme_lavender">ลาเวนเดอร์</string>
-    <string name="delete_category_confirmation">ต้องการจะลบหมวดหมู่ \"%s\" ไหม?</string>
-    <string name="delete_category">ลบหมวดหมู่</string>
+    <string name="delete_collection_confirmation">ต้องการจะลบหมวดหมู่ \"%s\" ไหม?</string>
+    <string name="delete_collection">ลบหมวดหมู่</string>
     <string name="internal_error">InternalError: ตรวจสอบบันทึกการแครชสำหรับข้อมูลเพิ่มเติม</string>
     <string name="pref_user_agent_string">ตัวแทนผู้ใช้เริ่มต้น</string>
     <string name="pref_reset_user_agent_string">รีเซ็ตตัวแทนผู้ใช้</string>
@@ -674,7 +674,7 @@
     <string name="seconds_short">%d วิ.</string>
     <string name="action_not_now">ไม่ใช่ตอนนี้</string>
     <string name="pref_library_update_show_tab_badge">แสดงจำนวนที่ยังไม่ได้อ่านบนไอคอนการอัปเดต</string>
-    <string name="information_no_manga_category">หมวดหมู่ว่างเปล่า</string>
+    <string name="information_no_manga_collection">หมวดหมู่ว่างเปล่า</string>
     <string name="copied_to_clipboard_plain">คัดลอกไปยังคลิปบอร์ดแล้ว</string>
     <string name="pref_skip_dupe_chapters">ข้ามตอนที่ซ้ำกัน</string>
     <string name="enhanced_services_not_installed">พร้อมใช้งานแต่ไม่ได้ติดตั้งแหล่งที่มา: %s</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*จำเป็น</string>
     <string name="pref_hide_in_library_items">ซ่อนรายการที่มีอยู่ในคลังอยู่แล้ว</string>
     <string name="action_copy_to_clipboard">คัดลอกไปยังคลิปบอร์ด</string>
-    <string name="action_update_category">อัปเดตหมวดหมู่</string>
+    <string name="action_update_collection">อัปเดตหมวดหมู่</string>
     <string name="split_tall_images">แยกภาพสูงยาว</string>
     <string name="overlay_header">โอเวอร์เลย์</string>
     <string name="pref_page_rotate">หมุนหน้ากว้างให้พอดี</string>

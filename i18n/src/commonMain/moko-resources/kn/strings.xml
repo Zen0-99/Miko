@@ -60,10 +60,10 @@
     <string name="action_pause">ವಿರಾಮ</string>
     <string name="action_view_chapters">ಅಧ್ಯಾಯಗಳನ್ನು ವೀಕ್ಷಿಸಿ</string>
     <string name="action_edit_cover">ಕವರ್ ತಿದ್ದಿ</string>
-    <string name="action_move_category">ವರ್ಗಗಳನ್ನು ಹೊಂದಿಸಿ</string>
-    <string name="action_rename_category">ವರ್ಗವನ್ನು ಮರುಹೆಸರಿಸಿ</string>
-    <string name="action_edit_categories">ವರ್ಗವನ್ನು ತಿದ್ದಿ</string>
-    <string name="action_add_category">ವರ್ಗವನ್ನು ಸೇರಿಸಿ</string>
+    <string name="action_move_collection">ವರ್ಗಗಳನ್ನು ಹೊಂದಿಸಿ</string>
+    <string name="action_rename_collection">ವರ್ಗವನ್ನು ಮರುಹೆಸರಿಸಿ</string>
+    <string name="action_edit_collections">ವರ್ಗವನ್ನು ತಿದ್ದಿ</string>
+    <string name="action_add_collection">ವರ್ಗವನ್ನು ಸೇರಿಸಿ</string>
     <string name="action_add">ಸೇರಿಸಿ</string>
     <string name="action_edit">ತಿದ್ದು</string>
     <string name="action_update_library">ಗ್ರಂಥಾಲಯ ನವೀಕರಿಸಿ</string>
@@ -92,8 +92,8 @@
     <string name="track">ಟ್ರ್ಯಾಕಿಂಗ್</string>
     <string name="chapters">ಅಧ್ಯಾಯಗಳು</string>
     <string name="manga">ಮಾಂಗಾ</string>
-    <string name="categories">ವರ್ಗಗಳು</string>
-    <string name="information_empty_category">ನೀವು ವರ್ಗಗಳನ್ನು ಹೊಂದಿಲ್ಲ. ನಿಮ್ಮ ಗ್ರಂಥಾಲಯದಲ್ಲಿ ವರ್ಗ ಒಂದನ್ನು ರಚಿಸಲು ಪ್ಲಸ್ ಬಟನ್ ಒತ್ತಿರಿ.</string>
+    <string name="collections">ವರ್ಗಗಳು</string>
+    <string name="information_empty_collection">ನೀವು ವರ್ಗಗಳನ್ನು ಹೊಂದಿಲ್ಲ. ನಿಮ್ಮ ಗ್ರಂಥಾಲಯದಲ್ಲಿ ವರ್ಗ ಒಂದನ್ನು ರಚಿಸಲು ಪ್ಲಸ್ ಬಟನ್ ಒತ್ತಿರಿ.</string>
     <string name="information_empty_library">ನಿಮ್ಮ ಲೈಬ್ರರಿ ಖಾಲಿಯಾಗಿದೆ, ಯಾವುದೇ ಮೂಲದಿಂದ ನಿಮ್ಮ ಲೈಬ್ರರಿಗೆ ಸರಣಿಯನ್ನು ಸೇರಿಸಿ.</string>
     <string name="information_no_recent_manga">ಇತ್ತೀಚೆಗೆ ಏನೂ ಓದಿಲ್ಲ</string>
     <string name="information_no_recent">ಹೊಸ ನವೀಕರಣಗಳಿಲ್ಲ</string>
@@ -208,8 +208,8 @@
     <string name="ext_update">ನವೀಕರಿಸಿ</string>
     <string name="ext_updates_pending">ಬಾಕಿ ಉಳಿದಿರುವ ನವೀಕರಣಗಳು</string>
     <string name="all">ಎಲ್ಲಾ</string>
-    <string name="default_category_summary">ಯಾವಾಗಲೂ ಕೇಳಿ</string>
-    <string name="default_category">ಡೀಫಾಲ್ಟ್ ವರ್ಗ</string>
+    <string name="default_collection_summary">ಯಾವಾಗಲೂ ಕೇಳಿ</string>
+    <string name="default_collection">ಡೀಫಾಲ್ಟ್ ವರ್ಗ</string>
     <string name="pref_update_only_non_completed">ಚಾಲ್ತಿಯಿರುವ ಮಾಂಗಾವನ್ನು ಮಾತ್ರ ನವೀಕರಿಸಿ</string>
     <string name="charging">ಚಾರ್ಜಿಂಗ್</string>
     <string name="pref_library_update_restriction">ನವೀಕರಣ ನಿರ್ಬಂಧಗಳು</string>
@@ -274,8 +274,8 @@
     <string name="picture_saved">ಚಿತ್ರ ಉಳಿಸಲಾಗಿದೆ</string>
     <string name="dialog_with_checkbox_reset">ಈ ಮಾಂಗಾದ ಎಲ್ಲಾ ಅಧ್ಯಾಯಗಳನ್ನು ಮರುಹೊಂದಿಸಿ</string>
     <string name="dialog_with_checkbox_remove_description">ಇದು ಈ ಅಧ್ಯಾಯದ ಓದುವ ದಿನಾಂಕವನ್ನು ತೆಗೆದುಹಾಕುತ್ತದೆ. ನೀವು ಖಚಿತವಾಗಿರುವಿರಾ?</string>
-    <string name="snack_categories_deleted">ವರ್ಗಗಳನ್ನು ಅಳಿಸಲಾಗಿದೆ</string>
-    <string name="error_category_exists">ಈ ಹೆಸರಿನ ವರ್ಗವು ಈಗಾಗಲೇ ಅಸ್ತಿತ್ವದಲ್ಲಿದೆ!</string>
+    <string name="snack_collections_deleted">ವರ್ಗಗಳನ್ನು ಅಳಿಸಲಾಗಿದೆ</string>
+    <string name="error_collection_exists">ಈ ಹೆಸರಿನ ವರ್ಗವು ಈಗಾಗಲೇ ಅಸ್ತಿತ್ವದಲ್ಲಿದೆ!</string>
     <string name="track_type">ಮಾದರಿ</string>
     <string name="track_status">ಸ್ಥಿತಿ</string>
     <string name="status">ಸ್ಥಿತಿ</string>
@@ -326,7 +326,7 @@
     <string name="local_source">ಲೋಕಲ್ ಮೂಲ</string>
     <string name="no_results_found">ಯಾವುದೇ ಫಲಿತಾಂಶಗಳು ಕಂಡುಬರಲಿಲ್ಲ</string>
     <string name="no_more_results">ಹೆಚ್ಚಿನ ಫಲಿತಾಂಶಗಳಿಲ್ಲ</string>
-    <string name="updating_category">ವರ್ಗವನ್ನು ನವೀಕರಿಸಲಾಗುತ್ತಿದೆ</string>
+    <string name="updating_collection">ವರ್ಗವನ್ನು ನವೀಕರಿಸಲಾಗುತ್ತಿದೆ</string>
     <string name="unknown_error">ಅಜ್ಞಾತ ದೋಷ</string>
     <string name="logout_success">ನೀವು ಈಗ ಲಾಗ್ ಔಟ್ ಆಗಿದ್ದೀರಿ</string>
     <string name="logout">ಲಾಗ್ ಔಟ್</string>
@@ -450,7 +450,7 @@
     <string name="backup_restore_content_full">ಬ್ಯಾಕಪ್ ಫೈಲ್‌ನಿಂದ ಡೇಟಾವನ್ನು ಮರುಸ್ಥಾಪಿಸಲಾಗುತ್ತದೆ.
 \n
 \nಕಾಣೆಯಾದ ಯಾವುದೇ ವಿಸ್ತರಣೆಗಳನ್ನು ನೀವು ಪುನಃ ಸ್ಥಾಪಿಸಬೇಕಾಗುತ್ತದೆ ಮತ್ತು ಅವುಗಳನ್ನು ಬಳಸಲು ಟ್ರ್ಯಾಕಿಂಗ್ ಸೇವೆಗಳಿಗೆ ಲಾಗ್ ಇನ್ ಮಾಡಬೇಕಾಗುತ್ತದೆ.</string>
-    <string name="pref_download_new_categories_details">ಹೊರಗಿಡಲಾದ ವಿಭಾಗಗಳಲ್ಲಿ ಮಾಂಗಾವನ್ನು ಸೇರಿಸಿದ ವಿಭಾಗಗಳಲ್ಲಿದ್ದರೂ ಅವುಗಳನ್ನು ಡೌನ್‌ಲೋಡ್ ಮಾಡಲಾಗುವುದಿಲ್ಲ.</string>
+    <string name="pref_download_new_collections_details">ಹೊರಗಿಡಲಾದ ವಿಭಾಗಗಳಲ್ಲಿ ಮಾಂಗಾವನ್ನು ಸೇರಿಸಿದ ವಿಭಾಗಗಳಲ್ಲಿದ್ದರೂ ಅವುಗಳನ್ನು ಡೌನ್‌ಲೋಡ್ ಮಾಡಲಾಗುವುದಿಲ್ಲ.</string>
     <string name="pref_category_auto_download">ಸ್ವಯಂ ಡೌನ್‌ಲೋಡ್</string>
     <string name="pref_viewer_nav">ನ್ಯಾವಿಗೇಶನ್ ಲೇಔಟ್</string>
     <string name="nav_zone_right">ಬಲಕ್ಕೆ</string>
@@ -469,11 +469,11 @@
     <string name="exclude">ಹೊರಗಿಡಿ: %s</string>
     <string name="include">ಸೇರಿಸಿ: %s</string>
     <string name="none">ಯಾವುದು ಅಲ್ಲ</string>
-    <string name="pref_library_update_categories_details">ಹೊರಗಿಡಲಾದ ವರ್ಗಗಳಲ್ಲಿನ ಮಾಂಗಾ ಸೇರಿಸಿದ ವಿಭಾಗಗಳಲ್ಲಿದ್ದರೂ ನವೀಕರಿಸಲಾಗುವುದಿಲ್ಲ.</string>
+    <string name="pref_library_update_collections_details">ಹೊರಗಿಡಲಾದ ವರ್ಗಗಳಲ್ಲಿನ ಮಾಂಗಾ ಸೇರಿಸಿದ ವಿಭಾಗಗಳಲ್ಲಿದ್ದರೂ ನವೀಕರಿಸಲಾಗುವುದಿಲ್ಲ.</string>
     <string name="action_show_errors">ದೋಷಗಳನ್ನು ತೋರಿಸು</string>
     <string name="cancel_all_for_series">ಈ ಸರಣಿಯ ಎಲ್ಲವನ್ನೂ ರದ್ದುಮಾಡಿ</string>
     <string name="action_display_local_badge">ಸ್ಥಳೀಯ ಬ್ಯಾಡ್ಜ್ ಗಳು</string>
-    <string name="information_empty_category_dialog">ನೀವು ಇನ್ನೂ ಯಾವುದೇ ವರ್ಗಗಳನ್ನು ಹೊಂದಿಲ್ಲ.</string>
+    <string name="information_empty_collection_dialog">ನೀವು ಇನ್ನೂ ಯಾವುದೇ ವರ್ಗಗಳನ್ನು ಹೊಂದಿಲ್ಲ.</string>
     <string name="update_check_eol">ಈ ಆಂಡ್ರಾಯ್ಡ್ ಆವೃತ್ತಿಯನ್ನು ಇನ್ನು ಮುಂದೆ ಬೆಂಬಲಿಸುವುದಿಲ್ಲ</string>
     <string name="error_no_match">ಯಾವುದೇ ಹೋಲಿಕೆ ಕಂಡುಬಂದಿಲ್ಲ</string>
     <string name="source_unsupported">ಮೂಲವನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ</string>
@@ -499,7 +499,7 @@
     <string name="pref_grayscale">ಗ್ರೇಸ್ಕೇಲ್</string>
     <string name="off">ಆಫ</string>
     <string name="on">ಆನ್</string>
-    <string name="categorized_display_settings">ಪ್ರತಿ ವರ್ಗದ ವಿಂಗಡಣೆ ಮತ್ತು ಪ್ರದರ್ಶನಕ್ಕಾಗಿ ಸೆಟ್ಟಿಂಗ್‌ಗಳು</string>
+    <string name="per_collection_display_settings">ಪ್ರತಿ ವರ್ಗದ ವಿಂಗಡಣೆ ಮತ್ತು ಪ್ರದರ್ಶನಕ್ಕಾಗಿ ಸೆಟ್ಟಿಂಗ್‌ಗಳು</string>
     <string name="restrictions">ನಿರ್ಬಂಧಗಳು: %s</string>
     <string name="action_start_downloading_now">ಈಗಲೇ ಡೌನ್‌ಲೋಡ್ ಪ್ರಾರಂಭಿಸಿ</string>
 </resources>

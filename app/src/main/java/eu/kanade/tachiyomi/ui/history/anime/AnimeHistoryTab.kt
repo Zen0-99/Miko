@@ -13,7 +13,7 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.collection.components.ChangeCollectionDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.entries.anime.DuplicateAnimeDialog
@@ -23,7 +23,7 @@ import eu.kanade.presentation.history.anime.AnimeHistoryScreen
 import eu.kanade.tachiyomi.ui.browse.anime.migration.anime.season.MigrateSeasonSelectScreen
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeDialog
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeDialogScreenModel
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
@@ -80,6 +80,10 @@ fun Screen.animeHistoryTab(
     return TabContent(
         titleRes = AYMR.strings.label_anime_history,
         searchEnabled = true,
+        searchAvailable = true,
+        searchPlaceholderText = MR.strings.search_hint_history,
+        searchQuery = searchQuery,
+        onSearchQueryChange = { screenModel.search(it) },
         content = { contentPadding, _ ->
             AnimeHistoryScreen(
                 state = state,
@@ -124,13 +128,13 @@ fun Screen.animeHistoryTab(
                         },
                     )
                 }
-                is AnimeHistoryScreenModel.Dialog.ChangeCategory -> {
-                    ChangeCategoryDialog(
+                is AnimeHistoryScreenModel.Dialog.ChangeCollection -> {
+                    ChangeCollectionDialog(
                         initialSelection = dialog.initialSelection,
                         onDismissRequest = onDismissRequest,
-                        onEditCategories = { navigator.push(CategoriesTab) },
+                        onEditCollections = { navigator.push(CollectionsTab) },
                         onConfirm = { include, _ ->
-                            screenModel.moveAnimeToCategoriesAndAddToLibrary(dialog.anime, include)
+                            screenModel.moveAnimeToCollectionsAndAddToLibrary(dialog.anime, include)
                         },
                     )
                 }

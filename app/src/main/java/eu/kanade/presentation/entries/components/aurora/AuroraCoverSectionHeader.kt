@@ -3,6 +3,7 @@ package eu.kanade.presentation.entries.components.aurora
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -24,13 +25,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import eu.kanade.presentation.theme.AuroraTheme
 
 /**
  * Section header used above cover carousels in the Aurora entry layout.
  *
  * Ported from Tadami's AuroraCoverSectionHeader, adapted for aniyomi-fork's
- * AuroraThemeCompat (no auroraSpringClick — uses standard clickable).
+ * Material3 theming (no auroraSpringClick — uses standard clickable).
  */
 @Composable
 fun AuroraCoverSectionHeader(
@@ -43,10 +43,9 @@ fun AuroraCoverSectionHeader(
     accentColor: Color? = null,
     trailingContent: (@Composable () -> Unit)? = null,
 ) {
-    val colors = AuroraTheme.colors
-    val isDark = colors.isDark
+    val isDark = isSystemInDarkTheme()
     // Cover-derived accent (from detail screen) overrides the global theme accent
-    val effectiveAccent = accentColor ?: colors.accent
+    val effectiveAccent = accentColor ?: MaterialTheme.colorScheme.primary
 
     Row(
         modifier = modifier
@@ -84,7 +83,7 @@ fun AuroraCoverSectionHeader(
 
             Text(
                 text = title,
-                color = if (isDark) colors.textPrimary else Color(0xFF241A16),
+                color = if (isDark) MaterialTheme.colorScheme.onBackground else Color(0xFF241A16),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleLarge,

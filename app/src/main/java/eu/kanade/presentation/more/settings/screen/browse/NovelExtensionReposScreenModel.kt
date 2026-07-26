@@ -13,6 +13,7 @@ import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.ReplaceNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.UpdateNovelExtensionRepo
 import mihon.domain.extensionrepo.model.ExtensionRepo
+import eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager
 import tachiyomi.core.common.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -23,6 +24,7 @@ class NovelExtensionReposScreenModel(
     private val deleteExtensionRepo: DeleteNovelExtensionRepo = Injekt.get(),
     private val replaceExtensionRepo: ReplaceNovelExtensionRepo = Injekt.get(),
     private val updateExtensionRepo: UpdateNovelExtensionRepo = Injekt.get(),
+    private val jsPluginManager: JsNovelPluginManager = Injekt.get(),
 ) : StateScreenModel<RepoScreenState>(RepoScreenState.Loading) {
 
     private val _events: Channel<RepoEvent> = Channel(Int.MAX_VALUE)
@@ -48,6 +50,14 @@ class NovelExtensionReposScreenModel(
                 CreateNovelExtensionRepo.Result.RepoAlreadyExists -> _events.send(RepoEvent.RepoAlreadyExists)
                 is CreateNovelExtensionRepo.Result.DuplicateFingerprint -> {
                     showDialog(RepoDialog.Conflict(result.oldRepo, result.newRepo))
+                }
+                CreateNovelExtensionRepo.Result.Success -> {
+                    // Refresh the JS plugin index so newly added repo's plugins
+                    // appear in the browse section immediately.
+                    try {
+                        jsPluginManager.refreshAvailablePlugins()
+                    } catch (_: Exception) {
+                    }
                 }
                 else -> {}
             }

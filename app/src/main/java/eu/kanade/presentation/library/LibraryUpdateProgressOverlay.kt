@@ -1,22 +1,21 @@
 package eu.kanade.presentation.library
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,12 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,63 +36,62 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import tachiyomi.presentation.core.util.collectAsState as preferenceCollectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import eu.kanade.presentation.components.LocalHostScaffoldContentPadding
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import kotlinx.coroutines.delay
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Floating top-center progress overlay for library updates, modeled on the
- * achievement unlock banner. Shows overall progress, the current entry being
- * fetched, and pause/resume/cancel/hide controls. Persists across main
- * navigation tabs; auto-hides on completion after a short delay.
+ * Floating glassmorphic progress overlay for library updates, mirroring the
+ * floating glass navigation bar's visual language: rounded card with Haze blur,
+ * subtle border, soft shadow, and translucent surface.
  *
- * The overlay is gated by [LibraryPreferences.showUpdateProgressOverlay].
- * Per-instance hide (the eye icon) only suppresses the current run; the next
- * pull or auto-update will show it again.
+ * Sits above the bottom navigation bar using [LocalHostScaffoldContentPadding].
+ * Persists across main navigation tabs; auto-hides on completion after a short delay.
+ *
+ * Gated by [LibraryPreferences.showUpdateProgressOverlay]. Per-instance hide
+ * (the eye icon) only suppresses the current run; the next pull or auto-update
+ * will show it again.
  */
 @Composable
 fun LibraryUpdateProgressOverlay(
     onViewFailures: () -> Unit,
+    hazeState: HazeState? = null,
+    tint: Color = Color.Unspecified,
     modifier: Modifier = Modifier,
 ) {
     val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
-    val enabled by libraryPreferences.showUpdateProgressOverlay().preferenceCollectAsState()
+    val enabled by libraryPreferences.showUpdateProgressOverlay().collectAsState()
     val state by LibraryUpdateProgressBus.state.collectAsState()
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    // Per-instance hide flag — resets when a new run starts
-    var hiddenForCurrentRun by remember { mutableStateOf(false) }
-    var lastRunSource by remember { mutableStateOf<String?>(null) }
-
-    // Reset hide flag when a new run starts (source changes from Idle/Completed to Running)
-    LaunchedEffect(state) {
-        if (state is LibraryUpdateProgress.Running) {
-            val source = (state as LibraryUpdateProgress.Running).source
-            if (source != lastRunSource) {
-                hiddenForCurrentRun = false
-                lastRunSource = source
-            }
-        } else if (state is LibraryUpdateProgress.Idle) {
-            lastRunSource = null
-        }
-    }
+    val context = LocalContext.current
 
     if (!enabled) return
 
-    // Auto-dismiss Completed state after 4 seconds
+    // Auto-dismiss Completed state after 4 seconds, then transition to Idle
+    // so the overlay doesn't reappear when the composable is recreated.
     var completedVisible by remember { mutableStateOf(false) }
     LaunchedEffect(state) {
         when (state) {
@@ -105,167 +100,259 @@ fun LibraryUpdateProgressOverlay(
                 completedVisible = true
                 delay(4000)
                 completedVisible = false
+                // Clear the bus state so navigation/recomposition doesn't
+                // re-trigger the Completed overlay.
+                LibraryUpdateProgressBus.idle()
             }
             LibraryUpdateProgress.Idle -> completedVisible = false
         }
     }
 
-    val visible = completedVisible &&
-        !hiddenForCurrentRun &&
+    // User can swipe down to hide the overlay for the current run.
+    var userDismissed by remember { mutableStateOf(false) }
+    // Reset dismiss when a new run starts (state transitions to Running from
+    // a different source, or from Idle/Completed).
+    var lastSource by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state) {
+        if (state is LibraryUpdateProgress.Running) {
+            val source = (state as LibraryUpdateProgress.Running).source
+            if (source != lastSource) {
+                userDismissed = false
+                lastSource = source
+            }
+        } else if (state is LibraryUpdateProgress.Idle) {
+            lastSource = null
+            userDismissed = false
+        }
+    }
+
+    val visible = completedVisible && !userDismissed &&
         (state is LibraryUpdateProgress.Running || state is LibraryUpdateProgress.Completed)
 
-    // Slide from top with bounce (mirrors achievement banner)
-    val slideOffset by animateFloatAsState(
-        targetValue = if (visible) 0f else -120f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow,
-        ),
-        label = "overlay_slide",
-    )
+    // Resolve the host scaffold's bottom padding (nav bar height) so the overlay
+    // sits above the nav bar regardless of floating vs. standard nav style.
+    val hostPadding = LocalHostScaffoldContentPadding.current
+    val navBarBottom = hostPadding?.calculateBottomPadding() ?: 0.dp
+
+    // Swipe-down dismiss: user can drag the overlay down to hide it.
+    val dismissThreshold = with(LocalDensity.current) { 200.dp.toPx() }
+    var dragOffset by remember { mutableStateOf(0f) }
 
     AnimatedVisibility(
         visible = visible,
-        enter = expandVertically(
-            expandFrom = Alignment.Top,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow,
+        enter = fadeIn(animationSpec = tween(300)) +
+            slideInVertically(
+                initialOffsetY = { it / 8 },
+                animationSpec = tween(300),
             ),
-        ) + fadeIn(animationSpec = tween(300)),
-        exit = shrinkVertically(
-            shrinkTowards = Alignment.Top,
-            animationSpec = tween(200),
-        ) + fadeOut(animationSpec = tween(200)),
-        modifier = modifier,
+        exit = fadeOut(animationSpec = tween(250)) +
+            slideOutVertically(
+                targetOffsetY = { it / 8 },
+                animationSpec = tween(250),
+            ),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = navBarBottom + 12.dp)
+            .padding(horizontal = 16.dp),
     ) {
-        OverlayCard(
+        GlassOverlayCard(
             state = state,
-            slideOffsetDp = slideOffset,
-            onHide = { hiddenForCurrentRun = true },
+            hazeState = hazeState,
+            tint = tint,
             onViewFailures = onViewFailures,
             onPause = LibraryUpdateProgressBus::requestPause,
             onResume = { LibraryUpdateProgressBus.resumeRun(context) },
             onCancel = LibraryUpdateProgressBus::requestCancel,
+            modifier = Modifier
+                .graphicsLayer { translationY = dragOffset }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragEnd = {
+                            if (dragOffset > dismissThreshold) {
+                                userDismissed = true
+                            }
+                            dragOffset = 0f
+                        },
+                        onDragCancel = { dragOffset = 0f },
+                    ) { _, dragAmount ->
+                        // Only respond to downward drags (positive Y)
+                        if (dragAmount.y > 0) {
+                            dragOffset += dragAmount.y
+                        }
+                    }
+                },
         )
     }
 }
 
 @Composable
-private fun OverlayCard(
+private fun GlassOverlayCard(
     state: LibraryUpdateProgress,
-    slideOffsetDp: Float,
-    onHide: () -> Unit,
+    hazeState: HazeState?,
+    tint: Color = Color.Unspecified,
     onViewFailures: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     val running = state as? LibraryUpdateProgress.Running
     val completed = state as? LibraryUpdateProgress.Completed
     val isPaused = running?.isPaused == true
     val processed = running?.processedEntries ?: completed?.totalProcessed ?: 0
     val total = running?.totalEntries ?: completed?.totalProcessed ?: 0
     val failedCount = running?.failedSoFar?.size ?: completed?.failed?.size ?: 0
+    // Keep the last non-null title so it doesn't disappear between entries
+    // during long fetches (the currentlyUpdating list can be briefly empty).
+    var lastTitle by remember { mutableStateOf<String?>(null) }
     val currentTitle = running?.currentlyUpdating?.firstOrNull()?.title
+    if (currentTitle != null) lastTitle = currentTitle
+    val displayTitle = currentTitle ?: lastTitle
     val source = running?.source ?: completed?.source ?: ""
+    val isCompleted = completed != null
+    val isAllUpToDate = isCompleted && processed == 0 && total == 0 && failedCount == 0
+
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    // Use the unified glass tint (passed from caller) so the overlay reads
+    // as the same glass surface as the nav bar and top bar.
+    val resolvedTint = if (tint != Color.Unspecified) {
+        tint
+    } else {
+        // Fallback if no tint passed
+        if (isDark) {
+            Color.Black.copy(alpha = 0.2f)
+        } else {
+            Color.White.copy(alpha = 0.2f)
+        }
+    }
+
+    val shape: Shape = RoundedCornerShape(20.dp)
+    val primaryColor = colorScheme.primary
+
+    val glassModifier = Modifier
+        .fillMaxWidth()
+        .shadow(elevation = 8.dp, shape = shape)
+        .clip(shape)
+        .then(
+            if (hazeState != null) {
+                Modifier.hazeEffect(
+                    state = hazeState,
+                    style = HazeStyle(
+                        backgroundColor = colorScheme.background,
+                        tint = HazeTint(resolvedTint),
+                        blurRadius = 24.dp,
+                        noiseFactor = 0.12f,
+                    ),
+                )
+            } else {
+                Modifier
+            },
+        )
 
     Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .fillMaxWidth()
+            .then(glassModifier),
+        contentAlignment = Alignment.BottomCenter,
     ) {
-        Surface(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .shadow(
-                    elevation = 8.dp,
-                    shape = RoundedCornerShape(16.dp),
-                )
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline,
-                    shape = RoundedCornerShape(16.dp),
-                ),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 4.dp,
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(Modifier.padding(14.dp)) {
-                // Header row: title + action icons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(AYMR.strings.fetching_overlay_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Row {
-                        if (running != null) {
-                            IconButton(onClick = if (isPaused) onResume else onPause, modifier = Modifier.size(36.dp)) {
-                                Icon(
-                                    if (isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                                    contentDescription = if (isPaused) stringResource(AYMR.strings.action_resume) else stringResource(AYMR.strings.action_pause),
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                            IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Filled.Close, contentDescription = stringResource(AYMR.strings.action_cancel), modifier = Modifier.size(20.dp))
-                            }
-                        }
-                        IconButton(onClick = onHide, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.VisibilityOff, contentDescription = stringResource(AYMR.strings.fetching_overlay_hide), modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                // Progress line
-                if (total > 0) {
-                    LinearProgressIndicator(
-                        progress = { if (total > 0) processed.toFloat() / total.toFloat() else 0f },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
+            // Text + progress column (no leading icon — clean glassmorphic look)
+            Column(modifier = Modifier.weight(1f)) {
+                // Primary line: "X / Y  ·  Source" or "All up to date"
                 Text(
-                    text = "$processed / $total" + if (source.isNotEmpty()) "  ·  $source" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = if (isAllUpToDate) {
+                        stringResource(AYMR.strings.fetching_overlay_all_up_to_date)
+                    } else {
+                        buildString {
+                            append("$processed / $total")
+                            if (source.isNotEmpty()) append("  ·  $source")
+                        }
+                    },
+                    color = colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-
                 // Current entry (only while running)
-                if (currentTitle != null) {
+                if (displayTitle != null) {
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = currentTitle,
+                        text = displayTitle,
+                        color = colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-
+                // Progress bar — custom drawn to avoid M3 LinearProgressIndicator's
+                // end dot/gap artifact.
+                if (total > 0 && !isAllUpToDate) {
+                    Spacer(Modifier.height(6.dp))
+                    val progress = if (total > 0) processed.toFloat() / total.toFloat() else 0f
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(primaryColor.copy(alpha = 0.15f)),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(primaryColor),
+                        )
+                    }
+                }
                 // Failure summary (tappable to open Fetching tab)
                 if (failedCount > 0) {
                     Spacer(Modifier.height(6.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))
+                            .background(colorScheme.error.copy(alpha = 0.12f))
                             .clickable(onClick = onViewFailures)
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
                     ) {
                         Text(
                             text = stringResource(AYMR.strings.fetching_overlay_view_failures, failedCount),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontWeight = FontWeight.Medium,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colorScheme.error,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+
+            // Action icons column
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                if (running != null) {
+                    IconButton(onClick = if (isPaused) onResume else onPause, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            if (isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (isPaused) stringResource(AYMR.strings.action_resume) else stringResource(AYMR.strings.action_pause),
+                            tint = primaryColor,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    IconButton(onClick = onCancel, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = stringResource(AYMR.strings.action_cancel),
+                            tint = colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                 }
@@ -273,4 +360,3 @@ private fun OverlayCard(
         }
     }
 }
-

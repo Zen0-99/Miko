@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Назва</string>
-    <string name="categories">Категорії</string>
+    <string name="collections">Категорії</string>
     <string name="manga">Записи бібліотеки</string>
     <string name="chapters">Розділи</string>
     <string name="track">Відстеження</string>
@@ -36,10 +36,10 @@
     <string name="action_update_library">Оновити бібліотеку</string>
     <string name="action_edit">Редагувати</string>
     <string name="action_add">Додати</string>
-    <string name="action_add_category">Додати категорію</string>
-    <string name="action_edit_categories">Редагувати категорію</string>
-    <string name="action_rename_category">Перейменувати категорію</string>
-    <string name="action_move_category">Помістити в категорію</string>
+    <string name="action_add_collection">Додати категорію</string>
+    <string name="action_edit_collections">Редагувати категорію</string>
+    <string name="action_rename_collection">Перейменувати категорію</string>
+    <string name="action_move_collection">Помістити в категорію</string>
     <string name="action_edit_cover">Змінити обкладинку</string>
     <string name="action_pause">Пауза</string>
     <string name="action_previous_chapter">Попередній розділ</string>
@@ -85,8 +85,8 @@
     <string name="charging">Коли заряджається</string>
     <string name="pref_update_only_non_completed">Пропустити глави з статусом \"Завершено\"</string>
     <string name="pref_auto_update_manga_sync">Оновлювати прогрес після прочитання</string>
-    <string name="default_category">Типова категорія</string>
-    <string name="default_category_summary">Завжди запитувати</string>
+    <string name="default_collection">Типова категорія</string>
+    <string name="default_collection_summary">Завжди запитувати</string>
     <string name="ext_update">Оновлення</string>
     <string name="ext_install">Встановити</string>
     <string name="ext_pending">Очікується</string>
@@ -182,7 +182,7 @@
     <string name="login">Логін</string>
     <string name="login_success">Вхід успішний</string>
     <string name="unknown_error">Невідома помилка</string>
-    <string name="updating_category">Оновлення категорії</string>
+    <string name="updating_collection">Оновлення категорії</string>
     <string name="no_more_results">Більше немає результатів</string>
     <string name="local_source">Локальне джерело</string>
     <string name="other_source">Інші</string>
@@ -222,8 +222,8 @@
     <string name="status">Статус</string>
     <string name="track_status">Статус</string>
     <string name="track_type">Тип</string>
-    <string name="error_category_exists">Категорія з таким іменем вже існує!</string>
-    <string name="snack_categories_deleted">Категорію видалено</string>
+    <string name="error_collection_exists">Категорія з таким іменем вже існує!</string>
+    <string name="snack_collections_deleted">Категорію видалено</string>
     <string name="dialog_with_checkbox_remove_description">Ця дія видалить дату прочитання розділу. Ви впевнені?</string>
     <string name="dialog_with_checkbox_reset">Скинути всіх розділи для цього запису</string>
     <string name="snack_add_to_library">Додати до бібліотеки?</string>
@@ -262,7 +262,7 @@
     <string name="information_no_recent">Без оновлень</string>
     <string name="information_no_recent_manga">Останнім часом нічого не прочитано</string>
     <string name="information_empty_library">Ваша бібліотека порожня</string>
-    <string name="information_empty_category">У вас немає категорій. Тицьніть кнопку плюс, для початку облаштування вашої бібліотеки.</string>
+    <string name="information_empty_collection">У вас немає категорій. Тицьніть кнопку плюс, для початку облаштування вашої бібліотеки.</string>
     <string name="download_notifier_downloader_title">Завантажувач</string>
     <string name="download_notifier_title_error">Помилка</string>
     <string name="download_notifier_unknown_error">Невідома помилка при завантаженні розділу</string>
@@ -459,12 +459,12 @@
     <string name="pref_show_navigation_mode_summary">Короткочасно відобразити, коли читалку відкрито</string>
     <string name="pref_show_navigation_mode">Оверлей зон дотику</string>
     <string name="pref_dns_over_https">DNS поверх HTTPS (DoH)</string>
-    <string name="pref_download_new_categories_details">Записи в виключених категоріях не буде завантажено, навіть якщо вона також знаходиться у включених категоріях.</string>
+    <string name="pref_download_new_collections_details">Записи в виключених категоріях не буде завантажено, навіть якщо вона також знаходиться у включених категоріях.</string>
     <string name="pref_category_auto_download">Автозавантаження</string>
     <string name="exclude">Виключати: %s</string>
     <string name="include">Включати: %s</string>
     <string name="none">Немає</string>
-    <string name="pref_library_update_categories_details">Записи в виключених категоріях не буде оновлено, навіть якщо вони також знаходяться у включених категоріях.</string>
+    <string name="pref_library_update_collections_details">Записи в виключених категоріях не буде оновлено, навіть якщо вони також знаходяться у включених категоріях.</string>
     <string name="action_sort_chapter_fetch_date">Дата отримання розділу</string>
     <string name="action_show_errors">Тицьніть для перегляду подробиць</string>
     <string name="update_check_eol">Ця версія Android більше не підтримується</string>
@@ -493,10 +493,10 @@
     <string name="tracking_guide">Гайд відстежування</string>
     <string name="off">Вимкнено</string>
     <string name="on">Увімкнено</string>
-    <string name="categorized_display_settings">Налаштування сортування для кожної категорії</string>
+    <string name="per_collection_display_settings">Налаштування сортування для кожної категорії</string>
     <string name="restrictions">Обмеження %s</string>
     <string name="action_display_local_badge">Локальне джерело</string>
-    <string name="information_empty_category_dialog">У вашій бібліотеці ще немає категорій.</string>
+    <string name="information_empty_collection_dialog">У вашій бібліотеці ще немає категорій.</string>
     <string name="about_dont_kill_my_app">У деяких виробників є додаткові обмеження застосунків, котрі вбивають фонові сервіси. На цьому сайті більше інформації з приводу того, як це виправити.</string>
     <string name="label_background_activity">Фонова активність</string>
     <string name="restore_miui_warning">Резервування/Відновлення можуть не працювати належним чином, у випадку, якщо вимкнено Оптимізацію MIUI.</string>
@@ -529,7 +529,7 @@
     <string name="help_translate">Допомогти з перекладом</string>
     <string name="ext_installer_pref">Встановлювач</string>
     <string name="ext_installer_shizuku_stopped">Shizuku не запущений</string>
-    <string name="pref_remove_exclude_categories">Виключені категорії</string>
+    <string name="pref_remove_exclude_collections">Виключені категорії</string>
     <string name="action_sort_count">Всього записів</string>
     <string name="ext_install_service_notif">Встановлюю розширення…</string>
     <string name="ext_app_info">Про застосунок</string>
@@ -604,8 +604,8 @@
     <string name="action_close">Закрити</string>
     <string name="update_check_open">Відкрити на GitHub</string>
     <string name="internal_error">InternalError: Перевірте журнал халеп задля додаткової інформації</string>
-    <string name="delete_category_confirmation">Чи бажаєте ви видалити категорію \"%s\"?</string>
-    <string name="delete_category">Видалити категорію</string>
+    <string name="delete_collection_confirmation">Чи бажаєте ви видалити категорію \"%s\"?</string>
+    <string name="delete_collection">Видалити категорію</string>
     <string name="appwidget_updates_description">Переглянути нещодавно оновлені записи бібліотеки</string>
     <string name="appwidget_unavailable_locked">Віджет не доступний при ввімкненому блокуванні застосунку</string>
     <string name="pref_user_agent_string">Типовий user agent</string>
@@ -674,7 +674,7 @@
     <string name="seconds_short">%ds</string>
     <string name="action_not_now">Не зараз</string>
     <string name="pref_library_update_show_tab_badge">Відображення кількості непрочитаних на значку \"Нове\"</string>
-    <string name="information_no_manga_category">Категорія порожня</string>
+    <string name="information_no_manga_collection">Категорія порожня</string>
     <string name="copied_to_clipboard_plain">Скопійовано в буфер обміну</string>
     <string name="enhanced_services_not_installed">Доступно, але джерело не встановлене: %s</string>
     <string name="pref_skip_dupe_chapters">Пропуск повторюваних розділів</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*необхідно</string>
     <string name="pref_hide_in_library_items">Приховати записи, які вже є в бібліотеці</string>
     <string name="action_copy_to_clipboard">Копіювати в буфер обміну</string>
-    <string name="action_update_category">Оновити категорію</string>
+    <string name="action_update_collection">Оновити категорію</string>
     <string name="split_tall_images">Розділяти довгі зображення</string>
     <string name="overlay_header">Оверлей</string>
     <string name="pref_page_rotate">Повернути широкі сторінки за розміром</string>

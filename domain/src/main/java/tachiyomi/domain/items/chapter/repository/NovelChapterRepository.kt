@@ -17,4 +17,6 @@ interface NovelChapterRepository {
     suspend fun updateNovelChapter(update: NovelChapterUpdate): Boolean
 
     suspend fun updateAllNovelChapters(updates: List<NovelChapterUpdate>): Boolean
+
+    suspend fun getTotalReadCharCount(): Long
 }

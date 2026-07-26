@@ -67,25 +67,38 @@ fun TabbedScreen(
         } else {
             tab.actions
         }
-        useSharedTopBar(
-            title = stringResource(titleRes),
-            actions = allActions,
-            navigateUp = tab.navigateUp,
-        )
+        if (tab.searchAvailable) {
+            useSharedTopBarWithSearch(
+                title = stringResource(titleRes),
+                actions = allActions,
+                navigateUp = tab.navigateUp,
+                searchEnabled = tab.searchEnabled,
+                searchQuery = tab.searchQuery,
+                onSearchQueryChange = tab.onSearchQueryChange,
+                searchPlaceholderText = tab.searchPlaceholderText?.let { stringResource(it) },
+            )
+        } else {
+            useSharedTopBar(
+                title = stringResource(titleRes),
+                actions = allActions,
+                navigateUp = tab.navigateUp,
+            )
+        }
     }
 
     Scaffold(
         topBar = {},
         snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = 80.dp),
-            )
+            AchievementStyledSnackbarHost(hostState = snackbarHostState)
         },
     ) { contentPadding ->
+        // Include the host Scaffold's top padding (from the floating glass
+        // top bar) so the tab row and content start below the top bar,
+        // while still allowing content to extend behind it for haze blur.
+        val hostTop = LocalHostScaffoldContentPadding.current?.calculateTopPadding() ?: 0.dp
         Column(
             modifier = Modifier.padding(
-                top = contentPadding.calculateTopPadding(),
+                top = contentPadding.calculateTopPadding() + hostTop,
                 start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
                 end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
             ),
@@ -118,8 +131,10 @@ fun TabbedScreen(
                 state = state,
                 verticalAlignment = Alignment.Top,
             ) { page ->
+                val hostBottom = LocalHostScaffoldContentPadding.current
+                    ?.calculateBottomPadding() ?: 0.dp
                 tabs[page].content(
-                    PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                    PaddingValues(bottom = contentPadding.calculateBottomPadding() + hostBottom),
                     snackbarHostState,
                 )
             }
@@ -131,6 +146,10 @@ data class TabContent(
     val titleRes: StringResource,
     val badgeNumber: Int? = null,
     val searchEnabled: Boolean = false,
+    val searchAvailable: Boolean = false,
+    val searchPlaceholderText: StringResource? = null,
+    val searchQuery: String? = null,
+    val onSearchQueryChange: (String?) -> Unit = {},
     val actions: ImmutableList<AppBar.AppBarAction> = persistentListOf(),
     val content: @Composable (contentPadding: PaddingValues, snackbarHostState: SnackbarHostState) -> Unit,
     val numberTitle: Int = 0,

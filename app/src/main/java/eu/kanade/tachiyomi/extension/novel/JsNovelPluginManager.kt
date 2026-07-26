@@ -13,9 +13,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import logcat.LogPriority
 import okhttp3.OkHttpClient
-import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.extension.novel.NovelPluginDownloader
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
 import tachiyomi.domain.extension.novel.model.NovelPlugin
@@ -59,6 +57,7 @@ class JsNovelPluginManager(
 
     /**
      * Fetch available plugins from all configured repos.
+     * The user must manually add repos — no default repo is seeded.
      */
     suspend fun refreshAvailablePlugins() {
         _availablePlugins.value = api.fetchAvailablePlugins().map { it.withNormalizedLang() }

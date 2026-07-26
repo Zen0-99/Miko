@@ -3,9 +3,9 @@
     <string name="confirm_exit">ব্যাক এ আবার চাপ দিন বেরোবার জন্য</string>
     <string name="pref_library_summary">বিভাগসমূহ, সার্বজনীন হালনাগাদ</string>
     <string name="pref_library_update_show_tab_badge">অপঠিত গণনা আপডেট আইকন এ দেখাও</string>
-    <string name="manga_categories">বিভাগসমূহ</string>
-    <string name="general_categories">ক্যাটাগরি</string>
-    <string name="anime_categories">এনিমে বিভাগ</string>
+    <string name="manga_collections">বিভাগসমূহ</string>
+    <string name="general_collections">ক্যাটাগরি</string>
+    <string name="anime_collections">এনিমে বিভাগ</string>
     <string name="entries">লাইব্রেরি এন্ট্রি</string>
     <string name="chapters_episodes">অধ্যায় এবং পর্ব</string>
     <string name="episodes">পর্বগুলি</string>
@@ -43,9 +43,9 @@
     <string name="action_bookmark_episode">বুকমার্ক পর্ব</string>
     <string name="action_remove_bookmark_episode">আনবুকমার্ক পর্ব</string>
     <string name="action_display_local_badge_manga">স্থানীয় মাঙ্গা</string>
-    <string name="default_manga_category">সাধারণ বিভাগ</string>
-    <string name="pref_manga_library_update_categories_details">বাদ দেওয়া ক্যাটাগরিতে মঙ্গা আপডেট করা হবে না যদিও সেগুলি অন্তর্ভুক্ত ক্যাটাগরিতেও থাকে।</string>
-    <string name="pref_remove_exclude_categories_manga">বর্জিত বিভাগ গুলি</string>
+    <string name="default_manga_collection">সাধারণ বিভাগ</string>
+    <string name="pref_manga_library_update_collections_details">বাদ দেওয়া ক্যাটাগরিতে মঙ্গা আপডেট করা হবে না যদিও সেগুলি অন্তর্ভুক্ত ক্যাটাগরিতেও থাকে।</string>
+    <string name="pref_remove_exclude_collections_manga">বর্জিত বিভাগ গুলি</string>
     <string name="pref_clear_manga_database">ডাটাবেজ পরিষ্কার করুন</string>
     <string name="pref_clear_manga_database_summary">আপনার সংগ্রহশালাতে যেসব মাংগা সংরক্ষিত নেই সেগুলোর ইতিহাস মুছে ফেলুন</string>
     <string name="snack_add_to_manga_library">সংগ্রহশালায় মাঙ্গা যোগ করবেন?</string>

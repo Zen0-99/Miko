@@ -3,7 +3,6 @@ package eu.kanade.presentation.more
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Label
-import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Settings
@@ -13,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import eu.kanade.domain.ui.model.NavStyle
-import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
@@ -34,7 +32,7 @@ fun MoreScreen(
     navStyle: NavStyle,
     onClickAlt: () -> Unit,
     onClickDownloadQueue: () -> Unit,
-    onClickCategories: () -> Unit,
+    onClickCollections: () -> Unit,
     onClickStats: () -> Unit,
     onClickStorage: () -> Unit,
     onClickSettings: () -> Unit,
@@ -45,24 +43,6 @@ fun MoreScreen(
         ) {
             item {
                 LogoHeader()
-            }
-            item {
-                SwitchPreferenceWidget(
-                    title = stringResource(MR.strings.label_downloaded_only),
-                    subtitle = stringResource(MR.strings.downloaded_only_summary),
-                    icon = Icons.Outlined.CloudOff,
-                    checked = downloadedOnly,
-                    onCheckedChanged = onDownloadedOnlyChange,
-                )
-            }
-            item {
-                SwitchPreferenceWidget(
-                    title = stringResource(MR.strings.pref_incognito_mode),
-                    subtitle = stringResource(AYMR.strings.pref_incognito_mode_summary),
-                    icon = ImageVector.vectorResource(R.drawable.ic_glasses_24dp),
-                    checked = incognitoMode,
-                    onCheckedChanged = onIncognitoModeChange,
-                )
             }
 
             item { HorizontalDivider() }
@@ -111,9 +91,9 @@ fun MoreScreen(
             }
             item {
                 TextPreferenceWidget(
-                    title = stringResource(AYMR.strings.general_categories),
+                    title = stringResource(AYMR.strings.general_collections),
                     icon = Icons.AutoMirrored.Outlined.Label,
-                    onPreferenceClick = onClickCategories,
+                    onPreferenceClick = onClickCollections,
                 )
             }
             item {

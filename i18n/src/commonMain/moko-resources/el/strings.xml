@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Όνομα</string>
-    <string name="categories">Κατηγορίες</string>
+    <string name="collections">Κατηγορίες</string>
     <string name="manga">Καταχωρήσεις βιβλιοθήκης</string>
     <string name="chapters">Κεφάλαια</string>
     <string name="track">Παρακολούθηση</string>
@@ -36,10 +36,10 @@
     <string name="action_update_library">Ενημέρωση βιβλιοθήκης</string>
     <string name="action_edit">Επεξεργασία</string>
     <string name="action_add">Προσθήκη</string>
-    <string name="action_add_category">Προσθήκη κατηγορίας</string>
-    <string name="action_edit_categories">Επεξεργασία κατηγοριών</string>
-    <string name="action_rename_category">Μετονομασία κατηγορίας</string>
-    <string name="action_move_category">Ορισμός κατηγοριών</string>
+    <string name="action_add_collection">Προσθήκη κατηγορίας</string>
+    <string name="action_edit_collections">Επεξεργασία κατηγοριών</string>
+    <string name="action_rename_collection">Μετονομασία κατηγορίας</string>
+    <string name="action_move_collection">Ορισμός κατηγοριών</string>
     <string name="action_edit_cover">Επεξεργασία εξώφυλλου</string>
     <string name="action_pause">Παύση</string>
     <string name="action_previous_chapter">Προηγούμενο κεφάλαιο</string>
@@ -85,8 +85,8 @@
     <string name="charging">Κατά τη φόρτιση</string>
     <string name="pref_update_only_non_completed">Παράλειψη καταχωρήσεων με κατάσταση \"Ολοκληρώθηκε\"</string>
     <string name="pref_auto_update_manga_sync">Ενημέρωση προόδου μετά την ανάγνωση</string>
-    <string name="default_category">Προεπιλεγμένη κατηγορία</string>
-    <string name="default_category_summary">Ερώτηση πάντα</string>
+    <string name="default_collection">Προεπιλεγμένη κατηγορία</string>
+    <string name="default_collection_summary">Ερώτηση πάντα</string>
     <string name="ext_update">Ενημέρωση</string>
     <string name="ext_install">Εγκατάσταση</string>
     <string name="ext_pending">Αναμονή</string>
@@ -182,7 +182,7 @@
     <string name="login">Σύνδεση</string>
     <string name="login_success">Συνδεθήκατε επιτυχώς</string>
     <string name="unknown_error">Άγνωστο σφάλμα</string>
-    <string name="updating_category">Ενημέρωση κατηγορίας</string>
+    <string name="updating_collection">Ενημέρωση κατηγορίας</string>
     <string name="no_more_results">Δεν υπάρχουν άλλα αποτελέσματα</string>
     <string name="local_source">Τοπική πηγή</string>
     <string name="other_source">Άλλα</string>
@@ -222,8 +222,8 @@
     <string name="status">Κατάσταση</string>
     <string name="track_status">Κατάσταση</string>
     <string name="track_type">Τύπος</string>
-    <string name="error_category_exists">Μια κατηγορία με αυτό το όνομα υπάρχει ήδη!</string>
-    <string name="snack_categories_deleted">Οι κατηγορίες διαγράφηκαν</string>
+    <string name="error_collection_exists">Μια κατηγορία με αυτό το όνομα υπάρχει ήδη!</string>
+    <string name="snack_collections_deleted">Οι κατηγορίες διαγράφηκαν</string>
     <string name="dialog_with_checkbox_remove_description">Αυτό θα αφαιρέσει την ημερομηνία ανάγνωσης αυτού του κεφαλαίου. Είστε σίγουροι;</string>
     <string name="dialog_with_checkbox_reset">Επαναφορά όλων των κεφαλαίων για αυτήν την καταχώρηση</string>
     <string name="snack_add_to_library">Προσθήκη στη βιβλιοθήκη;</string>
@@ -262,7 +262,7 @@
     <string name="information_no_recent">Δεν υπάρχουν πρόσφατες ενημερώσεις</string>
     <string name="information_no_recent_manga">Τίποτα δεν διαβάστηκε πρόσφατα</string>
     <string name="information_empty_library">Η βιβλιοθήκη σας είναι κενή</string>
-    <string name="information_empty_category">Δεν έχετε κατηγορίες. Πατήστε το κουμπί συν για να δημιουργήσετε μία για την οργάνωση της βιβλιοθήκης σας.</string>
+    <string name="information_empty_collection">Δεν έχετε κατηγορίες. Πατήστε το κουμπί συν για να δημιουργήσετε μία για την οργάνωση της βιβλιοθήκης σας.</string>
     <string name="download_notifier_downloader_title">Πρόγραμμα λήψης</string>
     <string name="download_notifier_title_error">Σφάλμα</string>
     <string name="download_notifier_unknown_error">Το κεφάλαιο δεν μπορούσε να ληφθεί λόγο μη αναμενόμενου σφάλματος</string>
@@ -463,9 +463,9 @@
     <string name="include">Συμπερίληψη: %s</string>
     <string name="none">Κανένα</string>
     <string name="action_sort_chapter_fetch_date">Ημερομηνία ανάκτησης κεφαλαίου</string>
-    <string name="pref_download_new_categories_details">Οι καταχωρήσεις σε εξαιρούμενες κατηγορίες δε θα ληφθούν ακόμη και αν βρίσκονται επίσης σε κατηγορίες που περιλαμβάνονται.</string>
+    <string name="pref_download_new_collections_details">Οι καταχωρήσεις σε εξαιρούμενες κατηγορίες δε θα ληφθούν ακόμη και αν βρίσκονται επίσης σε κατηγορίες που περιλαμβάνονται.</string>
     <string name="pref_category_auto_download">Αυτόματη λήψη</string>
-    <string name="pref_library_update_categories_details">Οι καταχωρίσεις σε εξαιρούμενες κατηγορίες δε θα ενημερώνονται ακόμη και αν περιλαμβάνονται επίσης σε κατηγορίες που περιλαμβάνονται.</string>
+    <string name="pref_library_update_collections_details">Οι καταχωρίσεις σε εξαιρούμενες κατηγορίες δε θα ενημερώνονται ακόμη και αν περιλαμβάνονται επίσης σε κατηγορίες που περιλαμβάνονται.</string>
     <string name="action_show_errors">Πατήστε για να δείτε λεπτομέρειες</string>
     <string name="update_check_eol">Αυτή η έκδοση Android δεν υποστηρίζεται πλέον</string>
     <string name="clipboard_copy_error">Απέτυχε η αντιγραφή στο πρόχειρο</string>
@@ -494,9 +494,9 @@
     <string name="error_saving_cover">Σφάλμα αποθήκευσης εξωφύλλου</string>
     <string name="cover_saved">Το εξώφυλλο αποθηκεύτηκε</string>
     <string name="manga_cover">Εξώφυλλο</string>
-    <string name="categorized_display_settings">Ρυθμίσεις για ταξινόμηση ανά κατηγορία</string>
+    <string name="per_collection_display_settings">Ρυθμίσεις για ταξινόμηση ανά κατηγορία</string>
     <string name="tracking_guide">Οδηγός tracking</string>
-    <string name="information_empty_category_dialog">Δεν έχετε κατηγορίες ακόμα.</string>
+    <string name="information_empty_collection_dialog">Δεν έχετε κατηγορίες ακόμα.</string>
     <string name="action_start_downloading_now">Έναρξη λήψης τώρα</string>
     <string name="theme_midnightdusk">Midnight Dusk</string>
     <string name="theme_greenapple">Πράσινο Μήλο</string>
@@ -526,7 +526,7 @@
     <string name="action_track">Παρακολούθηση</string>
     <string name="getting_started_guide">Οδηγός για τα πρώτα βήματα</string>
     <string name="pref_tablet_ui_mode">Διεπαφή χρήστη tablet</string>
-    <string name="pref_remove_exclude_categories">Εξαιρούμενες κατηγορίες</string>
+    <string name="pref_remove_exclude_collections">Εξαιρούμενες κατηγορίες</string>
     <string name="help_translate">Βοηθήστε στη μετάφραση</string>
     <string name="ext_app_info">Πληροφορίες εφαρμογής</string>
     <string name="ext_installer_pref">Εγκαταστάτης</string>
@@ -603,8 +603,8 @@
     <string name="pref_app_language">Γλώσσα εφαρμογής</string>
     <string name="theme_lavender">Λεβάντα</string>
     <string name="description_placeholder">Χωρίς περιγραφή</string>
-    <string name="delete_category">Διαγραφή κατηγορίας</string>
-    <string name="delete_category_confirmation">Θέλετε να διαγράψετε την κατηγορία \"%s\";</string>
+    <string name="delete_collection">Διαγραφή κατηγορίας</string>
+    <string name="delete_collection_confirmation">Θέλετε να διαγράψετε την κατηγορία \"%s\";</string>
     <string name="internal_error">InternalError: Ελέγξτε τα αρχεία καταγραφής σφαλμάτων για περισσότερες πληροφορίες</string>
     <string name="pref_user_agent_string">Προεπιλεγμένη συμβολοσειρά πράκτορα χρήστη</string>
     <string name="pref_reset_user_agent_string">Επαναφορά προεπιλεγμένης συμβολοσειράς πράκτορα χρήστη</string>
@@ -673,7 +673,7 @@
     <string name="label_downloaded">Κατεβασμένο</string>
     <string name="label_titles_in_global_update">Σε καθολική ενημέρωση</string>
     <string name="action_not_now">Όχι τώρα</string>
-    <string name="information_no_manga_category">Η κατηγορία είναι άδεια</string>
+    <string name="information_no_manga_collection">Η κατηγορία είναι άδεια</string>
     <string name="pref_library_update_show_tab_badge">Εμφάνιση του αριθμού των μη αναγνωσμένων στο εικονίδιο Ενημερώσεις</string>
     <string name="copied_to_clipboard_plain">Αντιγράφηκε στο πρόχειρο</string>
     <string name="confirm_add_duplicate_manga">Έχετε μια καταχώρηση στη βιβλιοθήκη σας με το ίδιο όνομα.
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*απαιτούμενο</string>
     <string name="pref_hide_in_library_items">Απόκρυψη καταχωρήσεων που βρίσκονται ήδη στη βιβλιοθήκη</string>
     <string name="action_copy_to_clipboard">Αντιγραφή στο πρόχειρο</string>
-    <string name="action_update_category">Ενημέρωση κατηγορίας</string>
+    <string name="action_update_collection">Ενημέρωση κατηγορίας</string>
     <string name="split_tall_images">Διαχωρισμός ψηλών εικόνων</string>
     <string name="overlay_header">Επικάλυψη</string>
     <string name="pref_page_rotate">Περιστροφή πλατιών σελίδων για να χωρέσουν</string>

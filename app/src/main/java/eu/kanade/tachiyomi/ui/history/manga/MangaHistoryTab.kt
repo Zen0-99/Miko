@@ -13,7 +13,7 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.collection.components.ChangeCollectionDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.entries.manga.DuplicateMangaDialog
@@ -22,7 +22,7 @@ import eu.kanade.presentation.history.HistoryDeleteDialog
 import eu.kanade.presentation.history.manga.MangaHistoryScreen
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialog
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialogScreenModel
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
@@ -77,6 +77,10 @@ fun Screen.mangaHistoryTab(
     return TabContent(
         titleRes = AYMR.strings.label_history,
         searchEnabled = true,
+        searchAvailable = true,
+        searchPlaceholderText = MR.strings.search_hint_history,
+        searchQuery = searchQuery,
+        onSearchQueryChange = { screenModel.search(it) },
         content = { contentPadding, _ ->
             MangaHistoryScreen(
                 state = state,
@@ -121,16 +125,16 @@ fun Screen.mangaHistoryTab(
                         },
                     )
                 }
-                is MangaHistoryScreenModel.Dialog.ChangeCategory -> {
-                    ChangeCategoryDialog(
+                is MangaHistoryScreenModel.Dialog.ChangeCollection -> {
+                    ChangeCollectionDialog(
                         initialSelection = dialog.initialSelection,
                         onDismissRequest = onDismissRequest,
-                        onEditCategories = {
-                            navigator.push(CategoriesTab)
-                            CategoriesTab.showMangaCategory()
+                        onEditCollections = {
+                            navigator.push(CollectionsTab)
+                            CollectionsTab.showMangaCollection()
                         },
                         onConfirm = { include, _ ->
-                            screenModel.moveMangaToCategoriesAndAddToLibrary(dialog.manga, include)
+                            screenModel.moveMangaToCollectionsAndAddToLibrary(dialog.manga, include)
                         },
                     )
                 }

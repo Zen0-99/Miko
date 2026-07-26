@@ -18,7 +18,7 @@ data class BackupNovel(
     @ProtoNumber(9) var thumbnailUrl: String? = null,
     @ProtoNumber(13) var dateAdded: Long = 0,
     @ProtoNumber(16) var chapters: List<BackupNovelChapter> = emptyList(),
-    @ProtoNumber(17) var categories: List<Long> = emptyList(),
+    @ProtoNumber(17) var collections: List<Long> = emptyList(),
     @ProtoNumber(18) var tracking: List<BackupNovelTracking> = emptyList(),
     // Bump by 100 for values that are not saved/implemented in 1.x but are used in 0.x
     @ProtoNumber(100) var favorite: Boolean = true,

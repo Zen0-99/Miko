@@ -30,9 +30,9 @@ import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.manga.interactor.GetMangaCategories
-import tachiyomi.domain.category.manga.interactor.SetMangaCategories
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
+import tachiyomi.domain.collection.manga.interactor.SetMangaCollections
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.model.Manga
@@ -49,14 +49,14 @@ import java.time.LocalDate
 
 class MangaHistoryScreenModel(
     private val addTracks: AddMangaTracks = Injekt.get(),
-    private val getCategories: GetMangaCategories = Injekt.get(),
+    private val getCollections: GetMangaCollections = Injekt.get(),
     private val getDuplicateLibraryManga: GetDuplicateLibraryManga = Injekt.get(),
     private val getHistory: GetMangaHistory = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val getNextChapters: GetNextChapters = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val removeHistory: RemoveMangaHistory = Injekt.get(),
-    private val setMangaCategories: SetMangaCategories = Injekt.get(),
+    private val setMangaCollections: SetMangaCollections = Injekt.get(),
     private val updateManga: UpdateManga = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
     private val sourceManager: MangaSourceManager = Injekt.get(),
@@ -202,27 +202,27 @@ class MangaHistoryScreenModel(
     }
 
     /**
-     * Get user categories.
+     * Get user collections.
      *
-     * @return List of categories, not including the default category
+     * @return List of collections, not including the default collection
      */
-    suspend fun getCategories(): List<Category> {
-        return getCategories.await().filterNot { it.isSystemCategory }
+    suspend fun getCollections(): List<Collection> {
+        return getCollections.await().filterNot { it.isSystemCollection }
     }
 
-    private fun moveMangaToCategory(mangaId: Long, categories: Category?) {
-        val categoryIds = listOfNotNull(categories).map { it.id }
-        moveMangaToCategory(mangaId, categoryIds)
+    private fun moveMangaToCollection(mangaId: Long, collections: Collection?) {
+        val collectionIds = listOfNotNull(collections).map { it.id }
+        moveMangaToCollection(mangaId, collectionIds)
     }
 
-    private fun moveMangaToCategory(mangaId: Long, categoryIds: List<Long>) {
+    private fun moveMangaToCollection(mangaId: Long, collectionIds: List<Long>) {
         screenModelScope.launchIO {
-            setMangaCategories.await(mangaId, categoryIds)
+            setMangaCollections.await(mangaId, collectionIds)
         }
     }
 
-    fun moveMangaToCategoriesAndAddToLibrary(manga: Manga, categories: List<Long>) {
-        moveMangaToCategory(manga.id, categories)
+    fun moveMangaToCollectionsAndAddToLibrary(manga: Manga, collections: List<Long>) {
+        moveMangaToCollection(manga.id, collections)
 
         if (manga.favorite) return
 
@@ -231,8 +231,8 @@ class MangaHistoryScreenModel(
         }
     }
 
-    private suspend fun getMangaCategoryIds(manga: Manga): List<Long> {
-        return getCategories.await(manga.id)
+    private suspend fun getMangaCollectionIds(manga: Manga): List<Long> {
+        return getCollections.await(manga.id)
             .map { it.id }
     }
 
@@ -252,28 +252,28 @@ class MangaHistoryScreenModel(
 
     fun addFavorite(manga: Manga) {
         screenModelScope.launchIO {
-            // Move to default category if applicable
-            val categories = getCategories()
-            val defaultCategoryId = libraryPreferences.defaultMangaCategory().get().toLong()
-            val defaultCategory = categories.find { it.id == defaultCategoryId }
+            // Move to default collection if applicable
+            val collections = getCollections()
+            val defaultCollectionId = libraryPreferences.defaultMangaCollection().get().toLong()
+            val defaultCollection = collections.find { it.id == defaultCollectionId }
 
             when {
-                // Default category set
-                defaultCategory != null -> {
+                // Default collection set
+                defaultCollection != null -> {
                     val result = updateManga.awaitUpdateFavorite(manga.id, true)
                     if (!result) return@launchIO
-                    moveMangaToCategory(manga.id, defaultCategory)
+                    moveMangaToCollection(manga.id, defaultCollection)
                 }
 
-                // Automatic 'Default' or no categories
-                defaultCategoryId == 0L || categories.isEmpty() -> {
+                // Automatic 'Default' or no collections
+                defaultCollectionId == 0L || collections.isEmpty() -> {
                     val result = updateManga.awaitUpdateFavorite(manga.id, true)
                     if (!result) return@launchIO
-                    moveMangaToCategory(manga.id, null)
+                    moveMangaToCollection(manga.id, null)
                 }
 
-                // Choose a category
-                else -> showChangeCategoryDialog(manga)
+                // Choose a collection
+                else -> showChangeCollectionDialog(manga)
             }
 
             // Sync with tracking services if applicable
@@ -287,15 +287,15 @@ class MangaHistoryScreenModel(
         }
     }
 
-    fun showChangeCategoryDialog(manga: Manga) {
+    fun showChangeCollectionDialog(manga: Manga) {
         screenModelScope.launch {
-            val categories = getCategories()
-            val selection = getMangaCategoryIds(manga)
+            val collections = getCollections()
+            val selection = getMangaCollectionIds(manga)
             mutableState.update { currentState ->
                 currentState.copy(
-                    dialog = Dialog.ChangeCategory(
+                    dialog = Dialog.ChangeCollection(
                         manga = manga,
-                        initialSelection = categories.mapAsCheckboxState { it.id in selection }.toImmutableList(),
+                        initialSelection = collections.mapAsCheckboxState { it.id in selection }.toImmutableList(),
                     ),
                 )
             }
@@ -313,9 +313,9 @@ class MangaHistoryScreenModel(
         data object DeleteAll : Dialog
         data class Delete(val history: MangaHistoryWithRelations) : Dialog
         data class DuplicateManga(val manga: Manga, val duplicate: Manga) : Dialog
-        data class ChangeCategory(
+        data class ChangeCollection(
             val manga: Manga,
-            val initialSelection: ImmutableList<CheckboxState<Category>>,
+            val initialSelection: ImmutableList<CheckboxState<Collection>>,
         ) : Dialog
         data class Migrate(val newManga: Manga, val oldManga: Manga) : Dialog
     }

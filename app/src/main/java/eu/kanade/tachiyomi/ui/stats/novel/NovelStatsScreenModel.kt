@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.history.novel.interactor.GetTotalNovelReadDuration
+import tachiyomi.domain.items.chapter.interactor.GetTotalReadNovelCharCount
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
 import uy.kohesive.injekt.Injekt
@@ -23,6 +24,7 @@ class NovelStatsScreenModel(
     private val downloadManager: NovelDownloadManager = Injekt.get(),
     private val getLibraryNovels: GetLibraryNovels = Injekt.get(),
     private val getTotalReadDuration: GetTotalNovelReadDuration = Injekt.get(),
+    private val getTotalReadCharCount: GetTotalReadNovelCharCount = Injekt.get(),
     private val getTracks: GetNovelTracks = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
 ) : StateScreenModel<StatsScreenState>(StatsScreenState.Loading) {
@@ -40,12 +42,31 @@ class NovelStatsScreenModel(
 
             val meanScore = getTrackMeanScore(scoredNovelTrackerMap)
 
+            // Reading time estimation: the database tracks actual session duration,
+            // but many chapters are marked as read without opening the reader (e.g.
+            // from the chapter list), so the tracked time is often far too low.
+            // As a fallback, estimate reading time from the total character count of
+            // all read chapters at ~250 words/minute (5 chars/word = 1250 chars/min).
+            val trackedDuration = getTotalReadDuration.await()
+            val totalReadCharCount = getTotalReadCharCount.await()
+            val readChapterCount = distinctLibraryNovels.sumOf { it.readCount }.toInt()
+            // If tracked duration seems unrealistically low (< 30s per read chapter),
+            // use the word-count estimate instead. Otherwise use the tracked duration.
+            val estimatedDuration = if (readChapterCount > 0 &&
+                totalReadCharCount > 0 &&
+                trackedDuration < readChapterCount * 30_000L
+            ) {
+                (totalReadCharCount / 1250.0 * 60_000.0).toLong()
+            } else {
+                trackedDuration
+            }
+
             val overviewStatData = StatsData.MangaOverview(
                 libraryMangaCount = distinctLibraryNovels.size,
                 completedMangaCount = distinctLibraryNovels.count {
                     it.novel.status.toInt() == SNovel.COMPLETED && it.unreadCount == 0L
                 },
-                totalReadDuration = getTotalReadDuration.await(),
+                totalReadDuration = estimatedDuration,
             )
 
             val titlesStatData = StatsData.MangaTitles(

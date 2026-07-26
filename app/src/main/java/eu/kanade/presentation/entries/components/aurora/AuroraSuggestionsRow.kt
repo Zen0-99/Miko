@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,8 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.MaterialTheme
 import coil3.compose.AsyncImage
-import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.data.suggestions.SuggestionState
 import eu.kanade.tachiyomi.data.suggestions.suggestionCoverModel
@@ -61,7 +62,7 @@ private val CardShape = RoundedCornerShape(12.dp)
 /**
  * Horizontal carousel of suggestion cards shown in the Aurora entry layout.
  *
- * Ported from Tadami, adapted for aniyomi-fork's AuroraThemeCompat and
+ * Ported from Tadami, adapted for aniyomi-fork's Material3 theming and
  * aniyomi-specific string resources (AYMR).
  */
 @Composable
@@ -76,11 +77,11 @@ fun AuroraSuggestionsRow(
     if (state is SuggestionState.Idle || state is SuggestionState.Disabled) return
     if (state is SuggestionState.Success && state.items.isEmpty()) return
 
-    val colors = AuroraTheme.colors
+    val isDark = isSystemInDarkTheme()
     // Cover-derived accent (from detail screen) overrides the global theme accent
-    val effectiveAccent = accentColor ?: colors.accent
+    val effectiveAccent = accentColor ?: MaterialTheme.colorScheme.primary
 
-    val scrimBrush = if (!colors.isDark) {
+    val scrimBrush = if (!isDark) {
         Brush.verticalGradient(
             colors = listOf(
                 Color.Transparent,
@@ -118,7 +119,7 @@ fun AuroraSuggestionsRow(
                                 .clickable(onClick = onRetryClick)
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                                 .background(
-                                    if (colors.isDark) {
+                                    if (isDark) {
                                         Color.White.copy(alpha = 0.1f)
                                     } else {
                                         effectiveAccent.copy(alpha = 0.15f)
@@ -141,7 +142,7 @@ fun AuroraSuggestionsRow(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .background(
-                                if (colors.isDark) {
+                                if (isDark) {
                                     Color.White.copy(alpha = 0.05f)
                                 } else {
                                     Color.Black.copy(
@@ -154,7 +155,7 @@ fun AuroraSuggestionsRow(
                     ) {
                         Text(
                             text = state.message ?: stringResource(AYMR.strings.suggestions_empty_state),
-                            color = if (colors.isDark) Color.White.copy(alpha = 0.6f) else colors.textSecondary,
+                            color = if (isDark) Color.White.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.sp,
                         )
                     }
@@ -169,7 +170,7 @@ fun AuroraSuggestionsRow(
                     ) {
                         Text(
                             text = state.message,
-                            color = if (colors.isDark) Color.White.copy(alpha = 0.8f) else colors.textPrimary,
+                            color = if (isDark) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onBackground,
                             fontSize = 13.sp,
                         )
                     }
@@ -259,7 +260,7 @@ private fun AuroraSuggestionCard(
 
 @Composable
 private fun AuroraSuggestionsShimmer() {
-    val colors = AuroraTheme.colors
+    val isDark = isSystemInDarkTheme()
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
     val shimmerAlpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -282,7 +283,7 @@ private fun AuroraSuggestionsShimmer() {
                     .height(CardHeight)
                     .clip(CardShape)
                     .background(
-                        if (colors.isDark) {
+                        if (isDark) {
                             Color.White.copy(alpha = shimmerAlpha)
                         } else {
                             Color.Black.copy(

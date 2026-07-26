@@ -8,7 +8,7 @@
         <item quantity="one">ह्यः</item>
         <item quantity="other">%1$d दिनानि पूर्वम्</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d वर्गः</item>
         <item quantity="other">%d वर्गाः</item>
     </plurals>

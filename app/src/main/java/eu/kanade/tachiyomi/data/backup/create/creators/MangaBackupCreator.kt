@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.data.backup.models.backupChapterMapper
 import eu.kanade.tachiyomi.data.backup.models.backupMangaTrackMapper
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
-import tachiyomi.domain.category.manga.interactor.GetMangaCategories
+import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.history.manga.interactor.GetMangaHistory
 import uy.kohesive.injekt.Injekt
@@ -16,7 +16,7 @@ import uy.kohesive.injekt.api.get
 
 class MangaBackupCreator(
     private val handler: MangaDatabaseHandler = Injekt.get(),
-    private val getCategories: GetMangaCategories = Injekt.get(),
+    private val getCollections: GetMangaCollections = Injekt.get(),
     private val getHistory: GetMangaHistory = Injekt.get(),
 ) {
 
@@ -47,11 +47,11 @@ class MangaBackupCreator(
                 ?.let { mangaObject.chapters = it }
         }
 
-        if (options.categories) {
-            // Backup categories for this manga
-            val categoriesForManga = getCategories.await(manga.id)
-            if (categoriesForManga.isNotEmpty()) {
-                mangaObject.categories = categoriesForManga.map { it.order }
+        if (options.collections) {
+            // Backup collections for this manga
+            val collectionsForManga = getCollections.await(manga.id)
+            if (collectionsForManga.isNotEmpty()) {
+                mangaObject.collections = collectionsForManga.map { it.order }
             }
         }
 

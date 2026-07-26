@@ -10,7 +10,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -26,6 +29,7 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import mihon.feature.upcoming.anime.UpcomingAnimeScreen
@@ -45,6 +49,8 @@ fun Screen.animeUpdatesTab(
     val screenModel = rememberScreenModel { AnimeUpdatesScreenModel() }
     val scope = rememberCoroutineScope()
     val state by screenModel.state.collectAsState()
+
+    var searchQuery by remember { mutableStateOf<String?>(null) }
 
     val navigateUp: (() -> Unit)? = if (fromMore) {
         {
@@ -68,9 +74,22 @@ fun Screen.animeUpdatesTab(
     return TabContent(
         titleRes = AYMR.strings.label_anime_updates,
         searchEnabled = false,
+        searchAvailable = true,
+        searchPlaceholderText = MR.strings.search_hint_updates,
+        searchQuery = searchQuery,
+        onSearchQueryChange = { searchQuery = it },
         content = { contentPadding, _ ->
+            val filteredState = if (searchQuery.isNullOrBlank()) {
+                state
+            } else {
+                state.copy(
+                    items = state.items.filter { updateItem ->
+                        updateItem.update.animeTitle.contains(searchQuery!!, ignoreCase = true)
+                    }.toPersistentList(),
+                )
+            }
             AnimeUpdateScreen(
-                state = state,
+                state = filteredState,
                 snackbarHostState = screenModel.snackbarHostState,
                 lastUpdated = screenModel.lastUpdated,
                 onClickCover = { item -> navigator.push(AnimeScreen(item.update.animeId)) },

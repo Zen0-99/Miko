@@ -32,7 +32,7 @@ data class SeasonAnime(
     fun toLibraryAnime(): LibraryAnime {
         return LibraryAnime(
             anime = anime,
-            category = -1L,
+            collection = -1L,
             totalCount = totalCount,
             seenCount = seenCount,
             bookmarkCount = bookmarkCount,

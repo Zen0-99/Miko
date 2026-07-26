@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="categories">Kategorie</string>
+    <string name="collections">Kategorie</string>
     <string name="manga">Záznamy v knihovně</string>
     <string name="chapters">Kapitoly</string>
     <string name="history">Historie</string>
@@ -27,8 +27,8 @@
     <string name="action_delete">Odstranit</string>
     <string name="action_edit">Upravit</string>
     <string name="action_add">Přidat</string>
-    <string name="action_add_category">Přidat kategorii</string>
-    <string name="action_edit_categories">Upravit kategorie</string>
+    <string name="action_add_collection">Přidat kategorii</string>
+    <string name="action_edit_collections">Upravit kategorie</string>
     <string name="action_previous_chapter">Předchozí kapitola</string>
     <string name="action_next_chapter">Následující kapitola</string>
     <string name="action_remove">Odstranit</string>
@@ -153,8 +153,8 @@
     <string name="action_bookmark">Založit kapitolu</string>
     <string name="action_remove_bookmark">Odstranit záložku</string>
     <string name="action_update_library">Aktualizovat knihovnu</string>
-    <string name="action_rename_category">Přejmenovat kategorii</string>
-    <string name="action_move_category">Vybrat kategorie</string>
+    <string name="action_rename_collection">Přejmenovat kategorii</string>
+    <string name="action_move_collection">Vybrat kategorie</string>
     <string name="action_pause">Pauza</string>
     <string name="action_retry">Opakovat</string>
     <string name="action_resume">Pokračovat</string>
@@ -176,8 +176,8 @@
     <string name="update_never">Nikdy</string>
     <string name="all">Vše</string>
     <string name="charging">Při nabíjení</string>
-    <string name="default_category">Výchozí kategorie</string>
-    <string name="default_category_summary">Vždy se zeptat</string>
+    <string name="default_collection">Výchozí kategorie</string>
+    <string name="default_collection_summary">Vždy se zeptat</string>
     <string name="pref_double_tap_anim_speed">Rychlost animace při dvojkliku</string>
     <string name="pref_crop_borders">Oříznout okraje</string>
     <string name="pref_custom_brightness">Vlastní jas</string>
@@ -222,7 +222,7 @@
     <string name="version">Verze</string>
     <string name="pref_enable_acra">Odesílat hlášení o pádu</string>
     <string name="pref_acra_summary">Pomáhá opravit chyby. Nebudou odeslány žádné citlivé údaje</string>
-    <string name="updating_category">Aktualizuji kategorie</string>
+    <string name="updating_collection">Aktualizuji kategorie</string>
     <string name="local_source">Lokální zdroj</string>
     <string name="other_source">Ostatní</string>
     <string name="latest">Nejnovější</string>
@@ -237,7 +237,7 @@
     <string name="on_hold">Pozastaveno</string>
     <string name="status">Stav</string>
     <string name="track_status">Stav</string>
-    <string name="snack_categories_deleted">Kategorie smazány</string>
+    <string name="snack_collections_deleted">Kategorie smazány</string>
     <string name="set_as_cover">Nastavit jako obal</string>
     <string name="cover_updated">Obal aktualizován</string>
     <string name="action_edit_cover">Upravit přebal</string>
@@ -256,7 +256,7 @@
     <string name="login_title">Přihlásit se do %1$s</string>
     <string name="show_title">Název zdroje</string>
     <string name="show_chapter_number">Číslo kapitoly</string>
-    <string name="error_category_exists">Kategorie s tímto jménem již existuje!</string>
+    <string name="error_collection_exists">Kategorie s tímto jménem již existuje!</string>
     <string name="dialog_with_checkbox_remove_description">Toto odstraní datum přečtení této kapitoly. Jste si jistý?</string>
     <string name="confirm_set_image_as_cover">Chcete tento obrázek nastavit jako obal?</string>
     <string name="transition_pages_error">Chyba při načítání stránek: %1$s</string>
@@ -267,7 +267,7 @@
     <string name="update_check_notification_download_in_progress">Probíhá stahování…</string>
     <string name="information_no_downloads">Žádné stahování</string>
     <string name="information_empty_library">Vaše knihovna je prázdná</string>
-    <string name="information_empty_category">Nemáte žádné kategorie. Klikněte na tlačítko plus a vytvořte nějakou pro zorganizování vaší knihovny.</string>
+    <string name="information_empty_collection">Nemáte žádné kategorie. Klikněte na tlačítko plus a vytvořte nějakou pro zorganizování vaší knihovny.</string>
     <string name="download_notifier_downloader_title">Stahovač</string>
     <string name="channel_common">Běžný</string>
     <string name="label_help">Nápověda</string>
@@ -441,7 +441,7 @@
     <string name="ext_updates_pending">Čekajících aktualizací</string>
     <string name="file_picker_error">Nebyla nalezena žádná aplikace pro výběr souborů</string>
     <string name="downloaded_only_summary">Filtruje všechnu položky ve vaší knihovně</string>
-    <string name="pref_download_new_categories_details">Položky ve vynechaných kategoriích nebudou staženy, i kdyby byly také v zahrnutých kategoriích.</string>
+    <string name="pref_download_new_collections_details">Položky ve vynechaných kategoriích nebudou staženy, i kdyby byly také v zahrnutých kategoriích.</string>
     <string name="pref_category_auto_download">Automatické stahování</string>
     <string name="pref_webtoon_side_padding">Boční odsazení</string>
     <string name="pref_skip_filtered_chapters">Přeskakovat filtrované kapitoly</string>
@@ -452,7 +452,7 @@
     <string name="exclude">Vynechat: %s</string>
     <string name="include">Zahrnout: %s</string>
     <string name="none">Žádné</string>
-    <string name="pref_library_update_categories_details">Položky ve vynechaných kategoriích nebudou aktualizovány, i kdyby byly také v zahrnutých kategoriích.</string>
+    <string name="pref_library_update_collections_details">Položky ve vynechaných kategoriích nebudou aktualizovány, i kdyby byly také v zahrnutých kategoriích.</string>
     <string name="pref_category_display">Zobrazení</string>
     <string name="action_display_show_tabs">Zobrazovat karty kategorií</string>
     <string name="update_check_eol">Tato verze systému Android již není podporována</string>
@@ -493,8 +493,8 @@
     <string name="manga_cover">Přebal</string>
     <string name="off">Vypnuto</string>
     <string name="on">Zapnuto</string>
-    <string name="categorized_display_settings">Nastavení řazení pro jednotlivé kategorie</string>
-    <string name="information_empty_category_dialog">Nemáte žádné kategorie.</string>
+    <string name="per_collection_display_settings">Nastavení řazení pro jednotlivé kategorie</string>
+    <string name="information_empty_collection_dialog">Nemáte žádné kategorie.</string>
     <string name="action_start_downloading_now">Začít stahovat nyní</string>
     <string name="about_dont_kill_my_app">Někteří výrobci používají další omezení aplikací, která vypíná služby na pozadí. Na této webové stránce najdete další informace o tom, jak to opravit.</string>
     <string name="restore_miui_warning">Pokud je MIUI optimalizace vypnutá, zálohování/obnovování nemusí fungovat správně.</string>
@@ -525,7 +525,7 @@
     <string name="confirm_lock_change">Potvrďte změnu ověřením</string>
     <string name="label_default">Výchozí</string>
     <string name="help_translate">Pomozte s překladem</string>
-    <string name="pref_remove_exclude_categories">Vyloučené kategorie</string>
+    <string name="pref_remove_exclude_collections">Vyloučené kategorie</string>
     <string name="ext_installer_shizuku_unavailable_dialog">Nainstalujte a spusťte Shizuku, abyste jej mohli používat jako instalátor rozšíření.</string>
     <string name="ext_installer_shizuku_stopped">Shizuku neběží</string>
     <string name="ext_installer_legacy">Původní</string>
@@ -603,8 +603,8 @@
     <string name="pref_app_language">Jazyk aplikace</string>
     <string name="description_placeholder">Bez popisu</string>
     <string name="theme_lavender">Levandule</string>
-    <string name="delete_category_confirmation">Přejete si smazat kategorii \"%s\"?</string>
-    <string name="delete_category">Smazat kategorii</string>
+    <string name="delete_collection_confirmation">Přejete si smazat kategorii \"%s\"?</string>
+    <string name="delete_collection">Smazat kategorii</string>
     <string name="internal_error">InternalError: Zkontrolujte záznamy pádu pro další informace</string>
     <string name="pref_reset_user_agent_string">Obnovit výchozí řetězec pro user agent</string>
     <string name="pref_user_agent_string">Výchozí řetězec pro user agent</string>
@@ -673,7 +673,7 @@
     <string name="day_short">%dd</string>
     <string name="seconds_short">%ds</string>
     <string name="action_not_now">Teď ne</string>
-    <string name="information_no_manga_category">Kategorie je prázdná</string>
+    <string name="information_no_manga_collection">Kategorie je prázdná</string>
     <string name="pref_library_update_show_tab_badge">Zobrazit počet nepřečtených kapitol na ikoně Aktualizace</string>
     <string name="copied_to_clipboard_plain">Zkopírováno do schránky</string>
     <string name="enhanced_services_not_installed">K dispozici, ale zdroj není nainstalován: %s</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*vyžadováno</string>
     <string name="pref_hide_in_library_items">Skrýt položky, které jsou již v knihovně</string>
     <string name="action_copy_to_clipboard">Zkopírovat do schránky</string>
-    <string name="action_update_category">Aktualizovat kategorii</string>
+    <string name="action_update_collection">Aktualizovat kategorii</string>
     <string name="split_tall_images">Rozdělit vysoké obrázky</string>
     <string name="overlay_header">Překrytí</string>
     <string name="pref_page_rotate_invert">Překlopení orientace otočených širokých stránek</string>

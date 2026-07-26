@@ -42,9 +42,31 @@ import eu.kanade.tachiyomi.source.anime.AndroidAnimeSourceManager
 import eu.kanade.tachiyomi.source.manga.AndroidMangaSourceManager
 import eu.kanade.tachiyomi.source.novel.AndroidNovelSourceManager
 import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
+import eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager
+import eu.kanade.tachiyomi.extension.novel.NovelPluginSourceFactory
+import eu.kanade.tachiyomi.extension.novel.api.NovelPluginApi
+import eu.kanade.tachiyomi.extension.novel.api.NovelPluginApiFacade
+import eu.kanade.tachiyomi.extension.novel.api.NovelPluginIndexFetcher
+import eu.kanade.tachiyomi.extension.novel.api.NovelPluginIndexParser
+import eu.kanade.tachiyomi.extension.novel.api.NovelPluginRepoProvider
+import eu.kanade.tachiyomi.extension.novel.api.NovelPluginRepoProviderImpl
+import eu.kanade.tachiyomi.extension.novel.api.NetworkNovelPluginIndexFetcher
+import eu.kanade.tachiyomi.extension.novel.runtime.NovelJsRuntimeFactory
+import eu.kanade.tachiyomi.extension.novel.runtime.NovelJsSourceFactory
+import eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginAssetBindings
+import eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginRuntimeOverrides
+import eu.kanade.tachiyomi.extension.novel.runtime.NovelDomainAliasResolver
+import eu.kanade.tachiyomi.extension.novel.NetworkNovelPluginDownloader
+import tachiyomi.data.extension.novel.NovelPluginStorage
+import tachiyomi.data.extension.novel.AndroidNovelPluginKeyValueStore
+import tachiyomi.data.extension.novel.NovelPluginKeyValueStore
+import tachiyomi.data.extension.novel.NovelPluginDownloader
+import tachiyomi.data.extension.novel.NovelPluginInstaller
+import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
 import eu.kanade.tachiyomi.ui.player.ExternalIntents
 import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.protobuf.ProtoBuf
 import nl.adaptivity.xmlutil.XmlDeclMode.Charset
 import nl.adaptivity.xmlutil.core.XmlVersion
@@ -285,7 +307,88 @@ class AppModule(val app: Application) : InjektModule {
 
         addSingletonFactory<MangaSourceManager> { AndroidMangaSourceManager(app, get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(app, get(), get()) }
-        addSingletonFactory<NovelSourceManager> { AndroidNovelSourceManager(app, get(), get()) }
+
+        // --- JS novel plugin runtime wiring ---
+        // Storage for plugin scripts and custom assets
+        addSingletonFactory {
+            tachiyomi.data.extension.novel.NovelPluginStorage(
+                java.io.File(app.filesDir, "novel_plugins"),
+            )
+        }
+        // Key-value store for plugin settings (SharedPreferences-backed)
+        addSingletonFactory<tachiyomi.data.extension.novel.NovelPluginKeyValueStore> {
+            tachiyomi.data.extension.novel.AndroidNovelPluginKeyValueStore(app)
+        }
+        // Network downloader for plugin scripts
+        addSingletonFactory<tachiyomi.data.extension.novel.NovelPluginDownloader> {
+            eu.kanade.tachiyomi.extension.novel.NetworkNovelPluginDownloader(get<eu.kanade.tachiyomi.network.NetworkHelper>().client)
+        }
+        // Installer that downloads + verifies + stores plugin scripts
+        addSingletonFactory<tachiyomi.data.extension.novel.NovelPluginInstallerFacade> {
+            tachiyomi.data.extension.novel.NovelPluginInstaller(get(), get(), get())
+        }
+        // Asset bindings for custom JS/CSS injection
+        addSingletonFactory {
+            eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginAssetBindings(get())
+        }
+        // Plugin index fetcher + parser (for browsing available plugins)
+        addSingletonFactory<eu.kanade.tachiyomi.extension.novel.api.NovelPluginIndexFetcher> {
+            eu.kanade.tachiyomi.extension.novel.api.NetworkNovelPluginIndexFetcher(
+                get<eu.kanade.tachiyomi.network.NetworkHelper>().client,
+            )
+        }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.extension.novel.api.NovelPluginIndexParser(get())
+        }
+        // Repo provider — bridges JS plugin API to the shared extension repo table
+        addSingletonFactory<eu.kanade.tachiyomi.extension.novel.api.NovelPluginRepoProvider> {
+            eu.kanade.tachiyomi.extension.novel.api.NovelPluginRepoProviderImpl(get())
+        }
+        // Plugin API facade — fetches available plugins from all repos
+        addSingletonFactory<eu.kanade.tachiyomi.extension.novel.api.NovelPluginApiFacade> {
+            eu.kanade.tachiyomi.extension.novel.api.NovelPluginApi(get(), get(), get())
+        }
+        // Runtime overrides (domain aliases, script patches)
+        addSingletonFactory {
+            eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginRuntimeOverrides.fromJson(get(), null)
+        }
+        // Domain alias resolver (uses runtime overrides)
+        addSingletonFactory {
+            eu.kanade.tachiyomi.extension.novel.runtime.NovelDomainAliasResolver(get())
+        }
+        // J2V8 runtime factory
+        addSingletonFactory {
+            eu.kanade.tachiyomi.extension.novel.runtime.NovelJsRuntimeFactory(
+                context = app,
+                networkHelper = get(),
+                keyValueStore = get(),
+                json = get(),
+                domainAliasResolver = get(),
+            )
+        }
+        // Source factory — creates NovelJsSource instances from installed plugins
+        addSingletonFactory<eu.kanade.tachiyomi.extension.novel.NovelPluginSourceFactory> {
+            eu.kanade.tachiyomi.extension.novel.runtime.NovelJsSourceFactory(
+                runtimeFactory = get(),
+                pluginStorage = get(),
+                json = get(),
+                runtimeOverrides = get(),
+                keyValueStore = get(),
+                assetBindings = get(),
+            )
+        }
+        // JS plugin manager — orchestrates install/uninstall/refresh
+        addSingletonFactory { eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager(get(), get(), get()) }
+
+        // Source manager — now wired with JS plugin sources flow
+        addSingletonFactory<NovelSourceManager> {
+            val jsPluginManager = get<eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager>()
+            val sourceFactory = get<eu.kanade.tachiyomi.extension.novel.NovelPluginSourceFactory>()
+            val jsSourcesFlow = jsPluginManager.installedPluginsFlow.map { plugins ->
+                plugins.mapNotNull { plugin -> sourceFactory.create(plugin) }
+            }
+            AndroidNovelSourceManager(app, get(), get(), kotlinx.coroutines.Dispatchers.IO, jsSourcesFlow)
+        }
 
         addSingletonFactory { MangaExtensionManager(app) }
         addSingletonFactory { AnimeExtensionManager(app) }

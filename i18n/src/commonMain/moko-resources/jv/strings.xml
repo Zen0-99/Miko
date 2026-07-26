@@ -58,9 +58,9 @@
     <string name="action_next_chapter">Bab sabanjure</string>
     <string name="action_previous_chapter">Bab sadurunge</string>
     <string name="action_view_chapters">Ndeleng bab</string>
-    <string name="action_rename_category">Ganti jeneng kategori</string>
-    <string name="action_edit_categories">Sunting kategori</string>
-    <string name="action_add_category">Tambah kategori</string>
+    <string name="action_rename_collection">Ganti jeneng kategori</string>
+    <string name="action_edit_collections">Sunting kategori</string>
+    <string name="action_add_collection">Tambah kategori</string>
     <string name="action_add">Tambah</string>
     <string name="action_edit">Sunting</string>
     <string name="action_disable_all">Pateni kabeh</string>
@@ -79,7 +79,7 @@
     <string name="action_filter">Saringan</string>
     <string name="action_settings">Pengaturan</string>
     <string name="history">Sejarah</string>
-    <string name="categories">Kategori</string>
+    <string name="collections">Kategori</string>
     <string name="information_no_recent">Ora ono updetan anyar</string>
     <string name="information_no_downloads">Ora ono donlotan</string>
     <string name="label_help">Nulungi</string>
@@ -102,7 +102,7 @@
     <string name="information_no_recent_manga">durung maca apa apa</string>
     <string name="action_pause">Jeda</string>
     <string name="action_edit_cover">Nyunting sampul</string>
-    <string name="action_move_category">Ngatur kategori</string>
+    <string name="action_move_collection">Ngatur kategori</string>
     <string name="action_update_library">Nganyari perpustakaan</string>
     <string name="action_remove_bookmark">Ngilangi penunjuk bab</string>
     <string name="action_bookmark">Penujuk bab</string>
@@ -118,7 +118,7 @@
     <string name="action_menu">Menu</string>
     <string name="track">Ngelacak</string>
     <string name="chapters">Bab</string>
-    <string name="information_empty_category">Sampeyan ora duwe kategori. Dhemok tombol tambah kanggo nggawe siji kategori kanggo ngatur perpustakaane sampeyan.</string>
+    <string name="information_empty_collection">Sampeyan ora duwe kategori. Dhemok tombol tambah kanggo nggawe siji kategori kanggo ngatur perpustakaane sampeyan.</string>
     <string name="information_empty_library">Koleksine sampeyan kosong</string>
     <string name="pref_category_about">Babagan</string>
     <string name="pref_category_advanced">Majeng</string>
@@ -199,7 +199,7 @@
     <string name="ext_untrusted">Ora kapracaya</string>
     <string name="pref_update_only_started">Iku durung diwiwiti</string>
     <string name="pref_library_update_refresh_metadata_summary">periksa sampul lan rinci anyar wektu memerbarui pustaka</string>
-    <string name="default_category">kategori gawan</string>
+    <string name="default_collection">kategori gawan</string>
     <string name="include">Kalebu: %s</string>
     <string name="exclude">Kajaba: %s</string>
     <string name="ext_updates_pending">Nganyari tertunda</string>
@@ -209,7 +209,7 @@
     <string name="ext_installed">Ngetrap</string>
     <string name="ext_trust">Pracaya</string>
     <string name="untrusted_extension">Ekstensi ora kapracaya</string>
-    <string name="default_category_summary">Tansah takon</string>
+    <string name="default_collection_summary">Tansah takon</string>
     <string name="pref_show_page_number">Tampilake nomer halaman</string>
     <string name="pref_inverted_colors">Kuwalik</string>
     <string name="pref_show_reading_mode">Tampilake mode maca</string>
@@ -251,7 +251,7 @@
 \n Kanthi percaya karo sertifikat iki, sampeyan nampa risiko kasebut.</string>
     <string name="ext_downloading">Ndownload</string>
     <string name="pref_show_navigation_mode">Tampilake overlay zona tutul</string>
-    <string name="pref_library_update_categories_details">Manga ing kategori sing ora kalebu ora bakal dianyari sanajan uga ana ing kategori sing kalebu.</string>
+    <string name="pref_library_update_collections_details">Manga ing kategori sing ora kalebu ora bakal dianyari sanajan uga ana ing kategori sing kalebu.</string>
     <string name="none">Ora ono</string>
     <string name="ext_pending">Ketunda</string>
     <string name="ext_info_version">Versine</string>
@@ -261,9 +261,9 @@
     <string name="pref_show_navigation_mode_summary">Tampilake kanthi ringkes nalika maca dibukak</string>
     <string name="pref_dual_page_split">Pamisahan kaca kaping pindho</string>
     <string name="pref_library_update_restriction">Nganyari otomatis watesan piranti</string>
-    <string name="categorized_display_settings">Setelan saben kategori kanggo ngurutake lan tampilan</string>
-    <string name="delete_category_confirmation">Apa sampeyan pengin mbusak kategori \"%s\"?</string>
-    <string name="delete_category">Busak kategori</string>
+    <string name="per_collection_display_settings">Setelan saben kategori kanggo ngurutake lan tampilan</string>
+    <string name="delete_collection_confirmation">Apa sampeyan pengin mbusak kategori \"%s\"?</string>
+    <string name="delete_collection">Busak kategori</string>
     <string name="pref_show_reading_mode_summary">Tampilake mode saiki kanthi ringkes nalika maca dibukak</string>
     <string name="internal_error">InternalError: Priksa log kacilakan kanggo informasi luwih lengkap</string>
     <string name="on">Morop</string>

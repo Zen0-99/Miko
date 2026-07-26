@@ -192,7 +192,7 @@ fun MangaActionRow(
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
     onEditIntervalClicked: (() -> Unit)?,
-    onEditCategory: (() -> Unit)?,
+    onEditCollection: (() -> Unit)?,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
 ) {

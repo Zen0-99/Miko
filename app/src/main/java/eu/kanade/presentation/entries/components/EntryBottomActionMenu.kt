@@ -281,7 +281,7 @@ private fun RowScope.Button(
 @Composable
 fun LibraryBottomActionMenu(
     visible: Boolean,
-    onChangeCategoryClicked: () -> Unit,
+    onChangeCollectionClicked: () -> Unit,
     onMarkAsViewedClicked: () -> Unit,
     onMarkAsUnviewedClicked: () -> Unit,
     onDownloadClicked: ((DownloadAction) -> Unit)?,
@@ -324,11 +324,11 @@ fun LibraryBottomActionMenu(
                     .padding(horizontal = 8.dp, vertical = 12.dp),
             ) {
                 Button(
-                    title = stringResource(MR.strings.action_move_category),
+                    title = stringResource(MR.strings.action_move_collection),
                     icon = ImageVector.vectorResource(R.drawable.ic_label_24dp),
                     toConfirm = confirm[0],
                     onLongClick = { onLongClickItem(0) },
-                    onClick = onChangeCategoryClicked,
+                    onClick = onChangeCollectionClicked,
                 )
                 val viewed = if (isManga) MR.strings.action_mark_as_read else AYMR.strings.action_mark_as_seen
                 Button(

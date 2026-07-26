@@ -326,6 +326,18 @@ private fun DetailsHeader(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    // APK badge — distinguishes APK extensions from JS plugins
+                    Text(
+                        text = "APK",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = " • ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Text(
                         text = LocaleHelper.getSourceDisplayName(extension.lang, context),
                         style = MaterialTheme.typography.bodySmall,

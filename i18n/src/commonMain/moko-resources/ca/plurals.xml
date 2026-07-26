@@ -35,7 +35,7 @@
         <item quantity="many">Fet en %1$s amb %2$s errors</item>
         <item quantity="other">Fet en %1$s amb %2$s errors</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d categoria</item>
         <item quantity="many">%d categories</item>
         <item quantity="other">%d categories</item>

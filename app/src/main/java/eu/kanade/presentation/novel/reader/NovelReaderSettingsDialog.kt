@@ -1,9 +1,11 @@
 package eu.kanade.presentation.novel.reader
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +24,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -186,31 +189,6 @@ private fun ColumnScope.NovelGeneralSettingsPage(
     screenModel: NovelReaderSettingsScreenModel,
     accentColor: Color? = null,
 ) {
-    // ---- Series section (colored header) ----
-    SectionHeader("Series", accentColor)
-
-    val orientation by screenModel.preferences.orientation().collectAsState()
-    val orientationLabels = listOf(
-        stringResource(MR.strings.orientation_free),
-        stringResource(MR.strings.orientation_portrait),
-        stringResource(MR.strings.orientation_landscape),
-        stringResource(MR.strings.orientation_locked_portrait),
-        stringResource(MR.strings.orientation_locked_landscape),
-    )
-    val orientationValues = NovelOrientation.entries
-    SettingsDropdown(
-        label = stringResource(MR.strings.novel_orientation),
-        selectedLabel = orientationLabels[orientationValues.indexOf(orientation)],
-        options = orientationLabels,
-    ) { index ->
-        val o = orientationValues[index]
-        screenModel.preferences.orientation().set(o)
-        screenModel.onOrientationChange(o.prefValue)
-    }
-
-    // ---- General section (colored header) ----
-    SectionHeader("General", accentColor)
-
     // ---- Display sub-section ----
     SubHeader("Display", accentColor)
 
@@ -250,6 +228,7 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         stringResource(MR.strings.black_background),
         stringResource(MR.strings.smart_by_theme),
         stringResource(MR.strings.gray_background),
+        "Custom",
     )
     val bgColorValues = NovelReaderBackgroundColor.entries
     SettingsDropdown(
@@ -260,6 +239,46 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         val mode = bgColorValues[index]
         screenModel.preferences.backgroundColorMode().set(mode)
         screenModel.onBackgroundColorChange(mode.prefValue)
+    }
+
+    // Custom theme color pickers — only shown when CUSTOM mode is selected
+    if (bgColorMode == NovelReaderBackgroundColor.CUSTOM) {
+        val customBgColor by screenModel.preferences.backgroundColor().collectAsState()
+        val customTextColor by screenModel.preferences.textColor().collectAsState()
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "Background color", style = MaterialTheme.typography.bodyMedium)
+            ColorPickerButton(
+                color = Color(customBgColor),
+                onColorSelected = { color ->
+                    screenModel.preferences.backgroundColor().set(color.toArgb())
+                    screenModel.onTextSettingChange()
+                },
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "Text color", style = MaterialTheme.typography.bodyMedium)
+            ColorPickerButton(
+                color = Color(customTextColor),
+                onColorSelected = { color ->
+                    screenModel.preferences.textColor().set(color.toArgb())
+                    screenModel.onTextSettingChange()
+                },
+            )
+        }
     }
 
     val bgTexture by screenModel.preferences.backgroundTexture().collectAsState()
@@ -302,28 +321,52 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         accentColor = accentColor,
     )
 
-    val autoScrollInterval by screenModel.preferences.autoScrollInterval().collectAsState()
-    SliderItem(
-        label = "Scroll interval",
-        value = autoScrollInterval,
-        valueRange = 500..10000,
-        valueText = "${autoScrollInterval}ms",
-        steps = 94,
+    CheckboxItem(
+        label = "Smooth auto-scroll",
+        pref = screenModel.preferences.smoothAutoScroll(),
         accentColor = accentColor,
-    ) { newValue ->
-        screenModel.preferences.autoScrollInterval().set(newValue)
-    }
+    )
 
-    val autoScrollOffset by screenModel.preferences.autoScrollOffset().collectAsState()
-    SliderItem(
-        label = "Scroll step (px)",
-        value = autoScrollOffset,
-        valueRange = 10..500,
-        valueText = "${autoScrollOffset}px",
-        steps = 489,
-        accentColor = accentColor,
-    ) { newValue ->
-        screenModel.preferences.autoScrollOffset().set(newValue)
+    val smoothAutoScroll by screenModel.preferences.smoothAutoScroll().collectAsState()
+
+    if (smoothAutoScroll) {
+        // Smooth mode: single speed slider (pixels per second)
+        val smoothSpeed by screenModel.preferences.smoothAutoScrollSpeed().collectAsState()
+        SliderItem(
+            label = "Scroll speed",
+            value = smoothSpeed,
+            valueRange = 5..100,
+            valueText = "${smoothSpeed}px/s",
+            steps = 94,
+            accentColor = accentColor,
+        ) { newValue ->
+            screenModel.preferences.smoothAutoScrollSpeed().set(newValue)
+        }
+    } else {
+        // Stepped mode: interval + offset sliders
+        val autoScrollInterval by screenModel.preferences.autoScrollInterval().collectAsState()
+        SliderItem(
+            label = "Scroll interval",
+            value = autoScrollInterval,
+            valueRange = 500..10000,
+            valueText = "${autoScrollInterval}ms",
+            steps = 94,
+            accentColor = accentColor,
+        ) { newValue ->
+            screenModel.preferences.autoScrollInterval().set(newValue)
+        }
+
+        val autoScrollOffset by screenModel.preferences.autoScrollOffset().collectAsState()
+        SliderItem(
+            label = "Scroll step (px)",
+            value = autoScrollOffset,
+            valueRange = 10..500,
+            valueText = "${autoScrollOffset}px",
+            steps = 489,
+            accentColor = accentColor,
+        ) { newValue ->
+            screenModel.preferences.autoScrollOffset().set(newValue)
+        }
     }
 
     CheckboxItem(
@@ -352,32 +395,23 @@ private fun ColumnScope.NovelGeneralSettingsPage(
     // ---- Navigation sub-section ----
     SubHeader("Navigation", accentColor)
 
-    val novelReadingMode by screenModel.preferences.readingMode().collectAsState()
-    val readingModeLabels = listOf(
-        stringResource(MR.strings.reading_mode_default),
-        stringResource(MR.strings.reading_mode_infinite_scroll),
-        stringResource(MR.strings.reading_mode_overscroll),
+    val orientation by screenModel.preferences.orientation().collectAsState()
+    val orientationLabels = listOf(
+        stringResource(MR.strings.orientation_free),
+        stringResource(MR.strings.orientation_portrait),
+        stringResource(MR.strings.orientation_landscape),
+        stringResource(MR.strings.orientation_locked_portrait),
+        stringResource(MR.strings.orientation_locked_landscape),
     )
-    val readingModeValues = NovelReadingMode.entries
+    val orientationValues = NovelOrientation.entries
     SettingsDropdown(
-        label = stringResource(MR.strings.reading_mode_title),
-        selectedLabel = readingModeLabels[readingModeValues.indexOf(novelReadingMode)],
-        options = readingModeLabels,
+        label = stringResource(MR.strings.novel_orientation),
+        selectedLabel = orientationLabels[orientationValues.indexOf(orientation)],
+        options = orientationLabels,
     ) { index ->
-        val mode = readingModeValues[index]
-        screenModel.preferences.readingMode().set(mode)
-        screenModel.onReadingModeChange(mode.prefValue)
-    }
-
-    val pageTransition by screenModel.preferences.pageTransitionStyle().collectAsState()
-    val transitionLabels = listOf("Instant", "Slide", "Depth", "Book", "Curl", "Book flip")
-    val transitionValues = NovelPageTransitionStyle.entries
-    SettingsDropdown(
-        label = "Page transition",
-        selectedLabel = transitionLabels[transitionValues.indexOf(pageTransition)],
-        options = transitionLabels,
-    ) { index ->
-        screenModel.preferences.pageTransitionStyle().set(transitionValues[index])
+        val o = orientationValues[index]
+        screenModel.preferences.orientation().set(o)
+        screenModel.onOrientationChange(o.prefValue)
     }
 
     CheckboxItem(
@@ -397,6 +431,43 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         pref = screenModel.preferences.prefetchNextChapter(),
         accentColor = accentColor,
     )
+
+    // ---- Page transition sub-section ----
+    SubHeader("Page transition", accentColor)
+
+    val novelReadingMode by screenModel.preferences.readingMode().collectAsState()
+    // Infinite scroll and Overscroll are mutually exclusive reading modes.
+    // Both off = DEFAULT, one on = that mode.
+    CheckboxItem(
+        label = "Infinite scroll",
+        isChecked = { novelReadingMode == NovelReadingMode.INFINITE_SCROLL },
+        accentColor = accentColor,
+    ) { isChecked ->
+        val mode = if (isChecked) NovelReadingMode.INFINITE_SCROLL else NovelReadingMode.DEFAULT
+        screenModel.preferences.readingMode().set(mode)
+        screenModel.onReadingModeChange(mode.prefValue)
+    }
+
+    CheckboxItem(
+        label = "Overscroll",
+        isChecked = { novelReadingMode == NovelReadingMode.OVERSCROLL },
+        accentColor = accentColor,
+    ) { isChecked ->
+        val mode = if (isChecked) NovelReadingMode.OVERSCROLL else NovelReadingMode.DEFAULT
+        screenModel.preferences.readingMode().set(mode)
+        screenModel.onReadingModeChange(mode.prefValue)
+    }
+
+    val pageTransition by screenModel.preferences.pageTransitionStyle().collectAsState()
+    val transitionLabels = listOf("Instant", "Slide", "Depth", "Book", "Curl", "Book flip")
+    val transitionValues = NovelPageTransitionStyle.entries
+    SettingsDropdown(
+        label = "Page transition",
+        selectedLabel = transitionLabels[transitionValues.indexOf(pageTransition)],
+        options = transitionLabels,
+    ) { index ->
+        screenModel.preferences.pageTransitionStyle().set(transitionValues[index])
+    }
 
     // ---- Info display sub-section (Tier 3) ----
     SubHeader("Info display", accentColor)

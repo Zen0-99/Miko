@@ -10,7 +10,7 @@
         <item quantity="few">Po %1$s minučių</item>
         <item quantity="other">Po %1$s minučių</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategorija</item>
         <item quantity="few">%d kategorijos</item>
         <item quantity="other">%d kategorijos</item>

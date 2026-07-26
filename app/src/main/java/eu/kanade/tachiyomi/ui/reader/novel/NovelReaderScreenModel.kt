@@ -15,6 +15,7 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.novelsource.model.NovelComment
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapterImpl
+import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,7 +61,7 @@ class NovelReaderScreenModel(
 ) : StateScreenModel<NovelReaderScreenModel.State>(State()) {
 
     private var currentChapterIndex = 0
-    private var currentSource: NovelHttpSource? = null
+    private var currentSource: NovelCatalogueSource? = null
 
     /** Periodic auto-save coroutine job — saves position every 15 seconds. */
     private var periodicSaveJob: kotlinx.coroutines.Job? = null
@@ -142,6 +143,18 @@ class NovelReaderScreenModel(
     @Volatile
     var pendingScrollAdjustment: Int? = null
 
+    /**
+     * Pending scroll restoration (item index + pixel offset) for when the
+     * RecyclerView becomes ready. Set in [loadChapter] from the saved
+     * position, consumed in the screen's onRecyclerViewReady callback.
+     *
+     * Unlike the old character-position approach, this restores the exact
+     * pixel-perfect scroll position (Tadami-style), eliminating both the
+     * visual jump and the per-session position drift.
+     */
+    @Volatile
+    var pendingScrollRestore: Pair<Int, Int>? = null
+
     fun initHighlightManager(context: Context) {
         if (highlightManager == null) {
             highlightManager = NovelHighlightManager(context)
@@ -194,6 +207,27 @@ class NovelReaderScreenModel(
 
     fun dismissDictionary() {
         _dictionaryQuery.value = null
+    }
+
+    // ===== Text translation =====
+    private val _translationState = MutableStateFlow<TranslationState>(TranslationState.Idle)
+    val translationState = _translationState.asStateFlow()
+
+    fun translateText(text: String) {
+        val targetLang = preferences.selectedTextTranslationTargetLang().get()
+        _translationState.value = TranslationState.Loading(text)
+        screenModelScope.launchIO {
+            val result = eu.kanade.tachiyomi.ui.reader.novel.translation.NovelTextTranslationService.translate(text, targetLang)
+            _translationState.value = if (result != null) {
+                TranslationState.Result(text, result, targetLang)
+            } else {
+                TranslationState.Error("Translation failed. Check your network connection.")
+            }
+        }
+    }
+
+    fun dismissTranslation() {
+        _translationState.value = TranslationState.Idle
     }
 
     private var context: Context? = null
@@ -399,7 +433,23 @@ class NovelReaderScreenModel(
 
     fun stopTtsPlayback() {
         ttsService?.stop()
-        _ttsPlaybackState.value = NovelTtsPlaybackState()
+        // Keep the current text visible during the fade-out animation.
+        // Clear isPlaying/isInitialized so AnimatedVisibility starts fading out,
+        // but preserve currentText so it fades with the overlay rather than
+        // disappearing instantly.
+        val currentText = _ttsPlaybackState.value.currentText
+        _ttsPlaybackState.value = _ttsPlaybackState.value.copy(
+            isPlaying = false,
+            isInitialized = false,
+            currentText = currentText,
+        )
+        // Clear the text after the fade-out animation has time to complete
+        screenModelScope.launchIO {
+            kotlinx.coroutines.delay(400)
+            if (!_ttsPlaybackState.value.isPlaying && !_ttsPlaybackState.value.isInitialized) {
+                _ttsPlaybackState.value = NovelTtsPlaybackState()
+            }
+        }
     }
 
     /**
@@ -426,6 +476,9 @@ class NovelReaderScreenModel(
             NovelReaderBackgroundColor.WHITE -> android.graphics.Color.WHITE to android.graphics.Color.BLACK
             NovelReaderBackgroundColor.BLACK -> android.graphics.Color.BLACK to android.graphics.Color.WHITE
             NovelReaderBackgroundColor.GRAY -> android.graphics.Color.parseColor("#FF202020") to android.graphics.Color.WHITE
+            NovelReaderBackgroundColor.CUSTOM -> {
+                preferences.backgroundColor().get() to preferences.textColor().get()
+            }
             NovelReaderBackgroundColor.SMART_THEME -> {
                 // Smart-by-theme: use the actual app Material theme colors.
                 if (themeBackgroundColor != null && themeTextColor != null) {
@@ -525,6 +578,11 @@ class NovelReaderScreenModel(
             textShadowBlur = preferences.textShadowBlur().get(),
             textShadowX = preferences.textShadowX().get(),
             textShadowY = preferences.textShadowY().get(),
+            backgroundTexture = preferences.backgroundTexture().get(),
+            textureStrength = preferences.nativeTextureStrength().get(),
+            oledEdgeGradient = preferences.oledEdgeGradient().get(),
+            pageEdgeShadowEnabled = preferences.pageEdgeShadowEnabled().get(),
+            pageEdgeShadowAlpha = preferences.pageEdgeShadowAlpha().get(),
         )
     }
 
@@ -579,7 +637,7 @@ class NovelReaderScreenModel(
                     }
                 }
 
-                val source = sourceManager.getOrStub(novel.source) as? NovelHttpSource
+                val source = sourceManager.getOrStub(novel.source) as? NovelCatalogueSource
                 currentSource = source
                 if (source == null) {
                     mutableState.update { it.copy(loading = false, error = "Source not available") }
@@ -676,11 +734,19 @@ class NovelReaderScreenModel(
             mutableState.update { it.copy(loading = false, error = null) }
             _events.emit(NovelReaderEvent.ChapterChanged(chapter.name))
 
-            // Restore saved character position for this chapter.
+            // Restore saved scroll position for this chapter.
+            // Uses Tadami-style exact restoration: item index + pixel offset
+            // are saved and restored precisely, eliminating both the visual
+            // jump (content loads at 0% then scrolls) and position drift
+            // (losing a few % each session).
             val saved = positionTracker.loadSavedPosition(chapter)
-            if (saved != null && saved.characterPosition > 0) {
+            if (saved != null && (saved.characterPosition > 0 || saved.itemIndex > 0)) {
                 positionTracker.startReadingSession(saved.characterPosition)
-                _events.emit(NovelReaderEvent.ScrollToCharacter(saved.characterPosition))
+                // Store the pending scroll position — the RecyclerView may not
+                // exist yet (it's created after loading=false triggers
+                // recomposition). The screen's onRecyclerViewReady callback
+                // will apply it before the first frame is drawn.
+                pendingScrollRestore = Pair(saved.itemIndex, saved.pixelOffset)
             } else {
                 positionTracker.startReadingSession(0)
             }
@@ -1198,7 +1264,11 @@ class NovelReaderScreenModel(
      * current chapter's first paragraph startCharIndex, then compute progress
      * relative to the current chapter's total character count.
      */
-    fun updateCharacterPosition(characterPosition: Int) {
+    fun updateCharacterPosition(
+        characterPosition: Int,
+        itemIndex: Int = 0,
+        pixelOffset: Int = 0,
+    ) {
         val chapter = _currentChapter.value ?: return
         val novel = _novel.value ?: return
 
@@ -1224,6 +1294,8 @@ class NovelReaderScreenModel(
             chapterId = chapter.id,
             characterPosition = perChapterPos,
             totalCharacters = chapterTotalChars,
+            itemIndex = itemIndex,
+            pixelOffset = pixelOffset,
         )
 
         if (preferences.showReadingProgress().get()) {
@@ -1243,6 +1315,11 @@ class NovelReaderScreenModel(
         screenModelScope.launchIO {
             positionTracker.savePosition()
         }
+    }
+
+    /** Synchronous save — for use in onDispose when the scope is being cancelled. */
+    suspend fun saveCurrentPositionBlocking() {
+        positionTracker.savePosition()
     }
 
     /**
@@ -1351,4 +1428,11 @@ sealed interface NovelReaderEvent {
     data class ScrollToPosition(val position: Int) : NovelReaderEvent
     /** Scroll to a specific character offset within the current chapter. */
     data class ScrollToCharacter(val characterPosition: Int) : NovelReaderEvent
+}
+
+sealed interface TranslationState {
+    object Idle : TranslationState
+    data class Loading(val originalText: String) : TranslationState
+    data class Result(val originalText: String, val translatedText: String, val targetLang: String) : TranslationState
+    data class Error(val message: String) : TranslationState
 }

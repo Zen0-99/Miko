@@ -6,7 +6,7 @@
         <item quantity="many">Po %1$s minutach</item>
         <item quantity="other">Po %1$s minutach</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategoria</item>
         <item quantity="few">%d kategorie</item>
         <item quantity="many">%d kategorii</item>

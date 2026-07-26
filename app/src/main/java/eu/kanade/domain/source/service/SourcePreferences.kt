@@ -88,6 +88,7 @@ class SourcePreferences(
 
     // Default repo seeding flags
     fun novelDefaultRepoSeeded() = preferenceStore.getBoolean("novel_default_repo_seeded", false)
+    fun novelPluginDefaultRepoSeeded() = preferenceStore.getBoolean("novel_plugin_default_repo_seeded", false)
 
     // Browse card design
     fun browseCardDesign() = preferenceStore.getBoolean("browse_card_design", false)
@@ -109,11 +110,11 @@ class SourcePreferences(
 
     // fun enableSourceBlacklist() = preferenceStore.getBoolean("eh_enable_source_blacklist", true)
 
-    // fun sourcesTabCategories() = preferenceStore.getStringSet("sources_tab_categories", mutableSetOf())
+    // fun sourcesTabCollections() = preferenceStore.getStringSet("sources_tab_categories", mutableSetOf())
 
-    // fun sourcesTabCategoriesFilter() = preferenceStore.getBoolean("sources_tab_categories_filter", false)
+    // fun sourcesTabCollectionsFilter() = preferenceStore.getBoolean("sources_tab_categories_filter", false)
 
-    // fun sourcesTabSourcesInCategories() = preferenceStore.getStringSet("sources_tab_source_categories", mutableSetOf())
+    // fun sourcesTabSourcesInCollections() = preferenceStore.getStringSet("sources_tab_source_categories", mutableSetOf())
 
     fun dataSaver() = preferenceStore.getEnum("data_saver", DataSaver.NONE)
 

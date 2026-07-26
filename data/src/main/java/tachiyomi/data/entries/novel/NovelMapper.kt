@@ -88,7 +88,7 @@ object NovelMapper {
         chapterFetchedAt: Long,
         lastRead: Long,
         bookmarkCount: Double,
-        category: Long,
+        collection: Long,
     ): LibraryNovel = LibraryNovel(
         novel = mapNovel(
             id,
@@ -116,7 +116,7 @@ object NovelMapper {
             version,
             isSyncing,
         ),
-        category = category,
+        collection = collection,
         totalChapters = totalCount,
         readCount = readCount.toLong(),
         bookmarkCount = bookmarkCount.toLong(),

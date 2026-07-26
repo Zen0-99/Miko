@@ -10,9 +10,9 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.anime.interactor.SetAnimeDisplayMode
-import tachiyomi.domain.category.anime.interactor.SetSortModeForAnimeCategory
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.anime.interactor.SetAnimeDisplayMode
+import tachiyomi.domain.collection.anime.interactor.SetSortModeForAnimeCollection
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.anime.model.AnimeLibrarySort
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -24,7 +24,7 @@ class AnimeLibrarySettingsScreenModel(
     val preferences: BasePreferences = Injekt.get(),
     val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val setAnimeDisplayMode: SetAnimeDisplayMode = Injekt.get(),
-    private val setSortModeForCategory: SetSortModeForAnimeCategory = Injekt.get(),
+    private val setSortModeForCollection: SetSortModeForAnimeCollection = Injekt.get(),
     trackerManager: TrackerManager = Injekt.get(),
 ) : ScreenModel {
 
@@ -50,12 +50,12 @@ class AnimeLibrarySettingsScreenModel(
     }
 
     fun setSort(
-        category: Category?,
+        collection: Collection?,
         mode: AnimeLibrarySort.Type,
         direction: AnimeLibrarySort.Direction,
     ) {
         screenModelScope.launchIO {
-            setSortModeForCategory.await(category, mode, direction)
+            setSortModeForCollection.await(collection, mode, direction)
         }
     }
 }

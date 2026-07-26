@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -206,8 +209,9 @@ fun ExtensionIcon(
     val shape = MaterialTheme.shapes.extraSmall
     when {
         iconDrawable != null -> {
+            val bitmap = remember(iconDrawable) { iconDrawable.toImageBitmap() }
             Image(
-                bitmap = iconDrawable.toImageBitmap(),
+                bitmap = bitmap,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = modifier.clip(shape),
@@ -215,7 +219,12 @@ fun ExtensionIcon(
         }
         iconUrl != null -> {
             AsyncImage(
-                model = iconUrl,
+                model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                    .data(iconUrl)
+                    .memoryCacheKey(iconUrl)
+                    .diskCacheKey(iconUrl)
+                    .crossfade(false)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = modifier.clip(shape),

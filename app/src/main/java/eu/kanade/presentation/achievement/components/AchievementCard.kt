@@ -16,32 +16,32 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.achievement.utils.AchievementRevealHelper
-import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.achievementLabelColor
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.model.AchievementProgress
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
- * Aurora-themed Achievement Card with glassmorphism and neon effects
+ * Aurora-themed Achievement Card.
+ *
+ * Each achievement is rendered as its own rounded surface box (matching the
+ * bento stats cards above) instead of using separator lines between rows.
  */
 @Composable
 fun AchievementCard(
@@ -50,27 +50,20 @@ fun AchievementCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
     val isUnlocked = progress?.isUnlocked == true
 
-    // Flat layout with a top hairline border
-    Box(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .drawBehind {
-                // Top hairline divider
-                drawLine(
-                    color = colors.divider,
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx(),
-                )
-            }
-            .padding(vertical = 14.dp, horizontal = 4.dp),
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 1.dp,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 14.dp, horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Achievement Icon with hexagonal shape
@@ -101,18 +94,18 @@ fun AchievementCard(
                 ) {
                     Text(
                         text = AchievementRevealHelper.getDisplayName(achievement, progress),
-                        color = if (isUnlocked) colors.textPrimary else colors.textSecondary.copy(alpha = 0.8f),
+                        color = if (isUnlocked) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
 
-                    // Points Reward
+                    // Points Reward — keeps the same position whether locked or unlocked
                     if (achievement.points > 0) {
                         Text(
                             text = "+${achievement.points} XP",
-                            color = if (isUnlocked) colors.accent else colors.textSecondary.copy(alpha = 0.5f),
+                            color = if (isUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -138,7 +131,7 @@ fun AchievementCard(
                 if (!displayDesc.isNullOrBlank()) {
                     Text(
                         text = displayDesc,
-                        color = colors.textSecondary.copy(alpha = if (isUnlocked) 0.8f else 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isUnlocked) 0.8f else 0.5f),
                         fontSize = 12.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -148,23 +141,12 @@ fun AchievementCard(
 
                 // Thin neon progress line (if locked and progress exists)
                 if (!isUnlocked && achievement.threshold != null && progress != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     ThinNeonProgressBar(
                         progress = progress.progress,
                         threshold = achievement.threshold ?: 1,
                     )
                 }
-            }
-
-            // Unlocked Checkmark indicator on the right
-            if (isUnlocked) {
-                Spacer(modifier = Modifier.width(12.dp))
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = colors.accent,
-                    modifier = Modifier.size(18.dp),
-                )
             }
         }
     }
@@ -177,15 +159,13 @@ fun AchievementCard(
 private fun HiddenAchievementIcon(
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(colors.surface.copy(alpha = 0.3f))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f))
             .border(
                 width = 0.5.dp,
-                color = colors.divider,
+                color = MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(8.dp),
             ),
         contentAlignment = Alignment.Center,
@@ -193,14 +173,17 @@ private fun HiddenAchievementIcon(
         Icon(
             imageVector = Icons.Default.Lock,
             contentDescription = null,
-            tint = colors.textSecondary.copy(alpha = 0.2f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
             modifier = Modifier.size(16.dp),
         )
     }
 }
 
 /**
- * Sleek, thin neon progress line for achievements
+ * Sleek, thin neon progress line for achievements.
+ *
+ * The "PROGRESS" label has been removed — only the x/y counter and the bar
+ * itself are shown.
  */
 @Composable
 private fun ThinNeonProgressBar(
@@ -208,37 +191,18 @@ private fun ThinNeonProgressBar(
     threshold: Int,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
     val progressFraction = (progress.toFloat() / threshold).coerceIn(0f, 1f)
 
-    Column(
+    // Single row: progress bar on the left (weighted), X/Y on the right
+    Row(
         modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "PROGRESS",
-                color = colors.textSecondary.copy(alpha = 0.4f),
-                fontSize = 8.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.5.sp,
-            )
-            Text(
-                text = "$progress/$threshold",
-                color = colors.textSecondary.copy(alpha = 0.6f),
-                fontSize = 9.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
         // Thin progress line
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
                 .height(2.dp)
                 .background(Color.White.copy(alpha = 0.05f)),
         ) {
@@ -247,9 +211,16 @@ private fun ThinNeonProgressBar(
                     modifier = Modifier
                         .fillMaxWidth(progressFraction)
                         .fillMaxHeight()
-                        .background(colors.accent),
+                        .background(MaterialTheme.colorScheme.primary),
                 )
             }
         }
+
+        Text(
+            text = "$progress/$threshold",
+            color = achievementLabelColor(),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }

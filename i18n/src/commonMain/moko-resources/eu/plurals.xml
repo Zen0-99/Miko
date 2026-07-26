@@ -24,7 +24,7 @@
         <item quantity="one">1 geratzen da</item>
         <item quantity="other">%1$s geratzen dira</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">kategoria %d</item>
         <item quantity="other">%d kategoria</item>
     </plurals>

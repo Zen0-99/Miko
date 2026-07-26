@@ -60,6 +60,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.entries.anime.model.episodesFiltered
 import eu.kanade.domain.entries.anime.model.seasonsFiltered
 import eu.kanade.presentation.components.relativeDateTimeText
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.anime.components.AnimeActionRow
@@ -138,7 +139,7 @@ fun AnimeScreen(
     // For top action menu
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditFetchIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     changeAnimeSkipIntro: (() -> Unit)?,
@@ -210,7 +211,7 @@ fun AnimeScreen(
             onCoverClicked = onCoverClicked,
             onShareClicked = onShareClicked,
             onDownloadActionClicked = onDownloadActionClicked,
-            onEditCategoryClicked = onEditCategoryClicked,
+            onEditCollectionClicked = onEditCollectionClicked,
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onMigrateClicked = onMigrateClicked,
             changeAnimeSkipIntro = changeAnimeSkipIntro,
@@ -261,7 +262,7 @@ fun AnimeScreen(
             onCoverClicked = onCoverClicked,
             onShareClicked = onShareClicked,
             onDownloadActionClicked = onDownloadActionClicked,
-            onEditCategoryClicked = onEditCategoryClicked,
+            onEditCollectionClicked = onEditCollectionClicked,
             onEditIntervalClicked = onEditFetchIntervalClicked,
             changeAnimeSkipIntro = changeAnimeSkipIntro,
             onMigrateClicked = onMigrateClicked,
@@ -323,7 +324,7 @@ private fun AnimeScreenSmallImpl(
     // For top action menu
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     changeAnimeSkipIntro: (() -> Unit)?,
@@ -420,7 +421,7 @@ private fun AnimeScreenSmallImpl(
                     onClickFilter = null,
                     onClickShare = onShareClicked,
                     onClickDownload = onDownloadActionClicked,
-                    onClickEditCategory = onEditCategoryClicked,
+                    onClickEditCollection = onEditCollectionClicked,
                     onClickRefresh = onRefresh,
                     onClickMigrate = onMigrateClicked,
                     onClickSettings = onSettingsClicked,
@@ -459,7 +460,7 @@ private fun AnimeScreenSmallImpl(
                     alwaysUseExternalPlayer = alwaysUseExternalPlayer,
                 )
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { contentPadding ->
             val topPadding = contentPadding.calculateTopPadding()
 
@@ -473,6 +474,7 @@ private fun AnimeScreenSmallImpl(
                 FastScrollLazyVerticalGrid(
                     modifier = Modifier.fillMaxHeight(),
                     state = itemListState,
+                    thumbAllowed = { false },
                     columns = if (gridSize == 0) GridCells.Adaptive(128.dp) else GridCells.Fixed(gridSize),
                     contentPadding = PaddingValues(
                         start = GRID_PADDING + contentPadding.calculateStartPadding(layoutDirection),
@@ -513,7 +515,7 @@ private fun AnimeScreenSmallImpl(
                             onWebViewLongClicked = onWebViewLongClicked,
                             onTrackingClicked = onTrackingClicked,
                             onEditIntervalClicked = onEditIntervalClicked,
-                            onEditCategory = onEditCategoryClicked,
+                            onEditCollection = onEditCollectionClicked,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                             accentColor = state.accentColor,
                         )
@@ -560,14 +562,15 @@ private fun AnimeScreenSmallImpl(
                         contentType = "SUGGESTIONS",
                         span = { GridItemSpan(maxLineSpan) },
                     ) {
-                        AuroraSuggestionsRow(
-                            state = state.suggestions,
-                            onSuggestionClick = onSuggestionClick,
-                            onOpenSuggestions = onOpenSuggestions,
-                            onRetryClick = onRetrySuggestions,
-                            modifier = Modifier.fillMaxWidth(),
-                            accentColor = state.accentColor,
-                        )
+                        // Similar titles — temporarily disabled
+//                        AuroraSuggestionsRow(
+//                            state = state.suggestions,
+//                            onSuggestionClick = onSuggestionClick,
+//                            onOpenSuggestions = onOpenSuggestions,
+//                            onRetryClick = onRetrySuggestions,
+//                            modifier = Modifier.fillMaxWidth(),
+//                            accentColor = state.accentColor,
+//                        )
                     }
 
                     item(
@@ -706,7 +709,7 @@ fun AnimeScreenLargeImpl(
     // For top action menu
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     changeAnimeSkipIntro: (() -> Unit)?,
@@ -792,7 +795,7 @@ fun AnimeScreenLargeImpl(
                     onClickFilter = null,
                     onClickShare = onShareClicked,
                     onClickDownload = onDownloadActionClicked,
-                    onClickEditCategory = onEditCategoryClicked,
+                    onClickEditCollection = onEditCollectionClicked,
                     onClickRefresh = onRefresh,
                     onClickMigrate = onMigrateClicked,
                     onCancelActionMode = { onAllEpisodeSelected(false) },
@@ -835,7 +838,7 @@ fun AnimeScreenLargeImpl(
                     )
                 }
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { contentPadding ->
             PullRefresh(
                 refreshing = state.isRefreshingData,
@@ -878,7 +881,7 @@ fun AnimeScreenLargeImpl(
                                 onWebViewLongClicked = onWebViewLongClicked,
                                 onTrackingClicked = onTrackingClicked,
                                 onEditIntervalClicked = onEditIntervalClicked,
-                                onEditCategory = onEditCategoryClicked,
+                                onEditCollection = onEditCollectionClicked,
                                 accentColor = state.accentColor,
                             )
                             ExpandableAnimeDescription(
@@ -889,20 +892,22 @@ fun AnimeScreenLargeImpl(
                                 onCopyTagToClipboard = onCopyTagToClipboard,
                                 accentColor = state.accentColor,
                             )
-                            AuroraSuggestionsRow(
-                                state = state.suggestions,
-                                onSuggestionClick = onSuggestionClick,
-                                onOpenSuggestions = onOpenSuggestions,
-                                onRetryClick = onRetrySuggestions,
-                                modifier = Modifier.fillMaxWidth(),
-                                accentColor = state.accentColor,
-                            )
+                            // Similar titles — temporarily disabled
+//                            AuroraSuggestionsRow(
+//                                state = state.suggestions,
+//                                onSuggestionClick = onSuggestionClick,
+//                                onOpenSuggestions = onOpenSuggestions,
+//                                onRetryClick = onRetrySuggestions,
+//                                modifier = Modifier.fillMaxWidth(),
+//                                accentColor = state.accentColor,
+//                            )
                         }
                     },
                     endContent = {
                         FastScrollLazyVerticalGrid(
                             modifier = Modifier.fillMaxHeight(),
                             state = itemListState,
+                            thumbAllowed = { false },
                             columns = if (gridSize == 0) GridCells.Adaptive(128.dp) else GridCells.Fixed(gridSize),
                             contentPadding = PaddingValues(
                                 start = GRID_PADDING,

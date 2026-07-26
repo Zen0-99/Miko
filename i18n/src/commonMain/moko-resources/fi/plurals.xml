@@ -24,7 +24,7 @@
         <item quantity="one">1 jäljellä</item>
         <item quantity="other">%1$s jäljellä</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategoria</item>
         <item quantity="other">%d kategoriaa</item>
     </plurals>

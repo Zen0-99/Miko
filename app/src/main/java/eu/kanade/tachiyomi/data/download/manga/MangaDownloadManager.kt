@@ -20,7 +20,7 @@ import tachiyomi.core.common.storage.extension
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.manga.interactor.GetMangaCategories
+import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.items.chapter.model.Chapter
@@ -43,7 +43,7 @@ class MangaDownloadManager(
     private val storageManager: StorageManager = Injekt.get(),
     private val provider: MangaDownloadProvider = Injekt.get(),
     private val cache: MangaDownloadCache = Injekt.get(),
-    private val getCategories: GetMangaCategories = Injekt.get(),
+    private val getCollections: GetMangaCollections = Injekt.get(),
     private val sourceManager: MangaSourceManager = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
 ) {
@@ -407,24 +407,24 @@ class MangaDownloadManager(
     }
 
     private suspend fun getChaptersToDelete(chapters: List<Chapter>, manga: Manga): List<Chapter> {
-        // Retrieve the categories that are set to exclude from being deleted on read
-        val categoriesToExclude = downloadPreferences.removeExcludeCategories().get().map(
+        // Retrieve the collections that are set to exclude from being deleted on read
+        val collectionsToExclude = downloadPreferences.removeExcludeCollections().get().map(
             String::toLong,
         )
 
-        val categoriesForManga = getCategories.await(manga.id)
+        val collectionsForManga = getCollections.await(manga.id)
             .map { it.id }
             .ifEmpty { listOf(0) }
-        val filteredCategoryManga = if (categoriesForManga.intersect(categoriesToExclude).isNotEmpty()) {
+        val filteredCollectionManga = if (collectionsForManga.intersect(collectionsToExclude).isNotEmpty()) {
             chapters.filterNot { it.read }
         } else {
             chapters
         }
 
         return if (!downloadPreferences.removeBookmarkedChapters().get()) {
-            filteredCategoryManga.filterNot { it.bookmark }
+            filteredCollectionManga.filterNot { it.bookmark }
         } else {
-            filteredCategoryManga
+            filteredCollectionManga
         }
     }
 

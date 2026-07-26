@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="manga_categories">የማንጋ ምድቦች</string>
-    <string name="general_categories">ምድቦች</string>
-    <string name="anime_categories">የአኒሜ ምድቦች</string>
+    <string name="manga_collections">የማንጋ ምድቦች</string>
+    <string name="general_collections">ምድቦች</string>
+    <string name="anime_collections">የአኒሜ ምድቦች</string>
     <string name="entries">የስብስብ ግቤቶች</string>
     <string name="chapters_episodes">ምዕራፎች እና ክፍሎች</string>
     <string name="episodes">ክፍሎች</string>
@@ -27,7 +27,7 @@
     <string name="action_sort_last_seen">ለመጨረሻ ግዜ የታየው</string>
     <string name="action_sort_last_checked">መጨረሻ የተፈተሸ</string>
     <string name="action_sort_latest_episode">የቅርብ ጊዜ ክፍል</string>
-    <string name="default_manga_category">ነባሪ ምድብ</string>
+    <string name="default_manga_collection">ነባሪ ምድብ</string>
     <string name="download_notifier_download_paused_chapters">ማውረድ ለአፍታ ቆሟል</string>
     <string name="channel_new_chapters_episodes">የምዕራፍ ዝመናዎች</string>
 </resources>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Nama</string>
-    <string name="categories">Kategori</string>
+    <string name="collections">Kategori</string>
     <string name="manga">Entri pustaka</string>
     <string name="chapters">Bab-bab</string>
     <string name="track">Penjejakan</string>
@@ -33,10 +33,10 @@
     <string name="action_update_library">Kemas kini pustaka</string>
     <string name="action_edit">Ubah</string>
     <string name="action_add">Tambah</string>
-    <string name="action_add_category">Tambah kategori</string>
-    <string name="action_edit_categories">Edit kategori</string>
-    <string name="action_rename_category">Ubah nama kategori</string>
-    <string name="action_move_category">Tetapkan kategori</string>
+    <string name="action_add_collection">Tambah kategori</string>
+    <string name="action_edit_collections">Edit kategori</string>
+    <string name="action_rename_collection">Ubah nama kategori</string>
+    <string name="action_move_collection">Tetapkan kategori</string>
     <string name="action_edit_cover">Ubah muka hadapan</string>
     <string name="action_pause">Henti sebentar</string>
     <string name="action_previous_chapter">Bab sebelumnya</string>
@@ -81,8 +81,8 @@
     <string name="charging">Ketika mengecas</string>
     <string name="pref_update_only_non_completed">Langkau entri dengan status \"Sudah selesai\"</string>
     <string name="pref_auto_update_manga_sync">Kemas kini selepas dibaca</string>
-    <string name="default_category">Kategori lalai</string>
-    <string name="default_category_summary">Sentiasa tanya</string>
+    <string name="default_collection">Kategori lalai</string>
+    <string name="default_collection_summary">Sentiasa tanya</string>
     <string name="pref_fullscreen">Skrin penuh</string>
     <string name="pref_page_transitions">Menggerakkan peralihan muka surat</string>
     <string name="pref_show_page_number">Tunjuk nombor muka surat</string>
@@ -160,7 +160,7 @@
     <string name="login">Log masuk</string>
     <string name="login_success">Log masuk berjaya</string>
     <string name="unknown_error">Ralat tidak diketahui</string>
-    <string name="updating_category">mengemaskinikan kategori</string>
+    <string name="updating_collection">mengemaskinikan kategori</string>
     <string name="no_more_results">Tiada lagi hasil</string>
     <string name="local_source">Sumber lokal</string>
     <string name="other_source">Lain</string>
@@ -192,8 +192,8 @@
     <string name="score">Skor</string>
     <string name="title">Tajuk</string>
     <string name="status">Status</string>
-    <string name="error_category_exists">Kategori dengan nama ini sudah wujud!</string>
-    <string name="snack_categories_deleted">Kategori dipadam</string>
+    <string name="error_collection_exists">Kategori dengan nama ini sudah wujud!</string>
+    <string name="snack_collections_deleted">Kategori dipadam</string>
     <string name="dialog_with_checkbox_remove_description">Tarikh bacaan bab ini akan dipadam. Adakah anda pasti?</string>
     <string name="dialog_with_checkbox_reset">Set semula semua bab bagi entri ini</string>
     <string name="snack_add_to_library">Tambah ke pustaka?</string>
@@ -272,7 +272,7 @@
     <string name="migration_dialog_what_to_include">Pilih data untuk disertakan</string>
     <string name="migrate">Beralih</string>
     <string name="copy">Salin</string>
-    <string name="information_empty_category">Anda tidak mempunyai kategori. Ketik butang tambah untuk membuat satu untuk mengatur pustaka anda.</string>
+    <string name="information_empty_collection">Anda tidak mempunyai kategori. Ketik butang tambah untuk membuat satu untuk mengatur pustaka anda.</string>
     <string name="pref_color_filter_mode">Mod turas warna campuran</string>
     <string name="label_help">Bantuan</string>
     <string name="filter_mode_overlay">Lapisan atas</string>
@@ -463,8 +463,8 @@
     <string name="exclude">Kecuali: %s</string>
     <string name="include">Hanya: %s</string>
     <string name="none">Tiada</string>
-    <string name="pref_library_update_categories_details">Entri di dalam kategori berkecuali tidak akan dikemas kini walaupun ianya ada di dalam kategori hanya.</string>
-    <string name="pref_download_new_categories_details">Entri di dalam kategori berkecuali tidak akan dimuat turun walaupun ianya ada di dalam kategori hanya.</string>
+    <string name="pref_library_update_collections_details">Entri di dalam kategori berkecuali tidak akan dikemas kini walaupun ianya ada di dalam kategori hanya.</string>
+    <string name="pref_download_new_collections_details">Entri di dalam kategori berkecuali tidak akan dimuat turun walaupun ianya ada di dalam kategori hanya.</string>
     <string name="pref_category_auto_download">Muat turun automatik</string>
     <string name="action_show_errors">Ketik untuk lihat butiran</string>
     <string name="update_check_eol">Versi Android ini tidak lagi disokong</string>
@@ -494,9 +494,9 @@
     <string name="error_saving_cover">Ralat menyimpan muka hadapan</string>
     <string name="cover_saved">Muka hadapan disimpan</string>
     <string name="manga_cover">Muka hadapan</string>
-    <string name="categorized_display_settings">Tetapan setiap kategori untuk susunan</string>
+    <string name="per_collection_display_settings">Tetapan setiap kategori untuk susunan</string>
     <string name="tracking_guide">Panduan penjejakan</string>
-    <string name="information_empty_category_dialog">Anda belum mempunyai kategori.</string>
+    <string name="information_empty_collection_dialog">Anda belum mempunyai kategori.</string>
     <string name="action_start_downloading_now">Mula memuat turun sekarang</string>
     <string name="pref_dark_theme_pure_black">Mod gelap hitam asli</string>
     <string name="theme_yotsuba">Yotsuba</string>
@@ -526,7 +526,7 @@
     <string name="action_track">Jejak</string>
     <string name="getting_started_guide">Panduan penggunaan</string>
     <string name="pref_tablet_ui_mode">UI tablet</string>
-    <string name="pref_remove_exclude_categories">Kategori dikecualikan</string>
+    <string name="pref_remove_exclude_collections">Kategori dikecualikan</string>
     <string name="help_translate">Bantu menterjemah</string>
     <string name="ext_app_info">Maklumat aplikasi</string>
     <string name="ext_installer_legacy">Legasi</string>
@@ -603,9 +603,9 @@
     <string name="pref_app_language">Bahasa aplikasi</string>
     <string name="theme_lavender">Lavender</string>
     <string name="description_placeholder">Tiada deskripsi</string>
-    <string name="delete_category_confirmation">Adakah anda ingin padam kategori \"%s\"?</string>
+    <string name="delete_collection_confirmation">Adakah anda ingin padam kategori \"%s\"?</string>
     <string name="internal_error">RalatDalam: semak log kerosakan untuk maklumat lanjut</string>
-    <string name="delete_category">Padam kategori</string>
+    <string name="delete_collection">Padam kategori</string>
     <string name="pref_user_agent_string">Untaian ejen pengguna lalai</string>
     <string name="pref_reset_user_agent_string">Set semula untaian ejen pengguna lalai</string>
     <string name="action_remove_everything">Buang semuanya</string>
@@ -673,7 +673,7 @@
     <string name="minute_short">%dm</string>
     <string name="seconds_short">%ds</string>
     <string name="action_not_now">Bukan sekarang</string>
-    <string name="information_no_manga_category">Kategori kosong</string>
+    <string name="information_no_manga_collection">Kategori kosong</string>
     <string name="pref_library_update_show_tab_badge">Tunjuk bilangan belum dibaca pada ikon Kemas kini</string>
     <string name="pref_skip_dupe_chapters">Langkau bab pendua</string>
     <string name="enhanced_services_not_installed">Tersedia tetapi sumber tidak dipasang: %s</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*diperlukan</string>
     <string name="pref_hide_in_library_items">Sembunyikan entri yang sudah ada di dalam pustaka</string>
     <string name="action_copy_to_clipboard">Salin ke papan keratan</string>
-    <string name="action_update_category">Kemas kini kategori</string>
+    <string name="action_update_collection">Kemas kini kategori</string>
     <string name="split_tall_images">Memisah imej yang tinggi</string>
     <string name="overlay_header">Tindanan</string>
     <string name="pref_page_rotate_invert">Terbalikkan orientasi muka surat lebar yang diputarkan</string>

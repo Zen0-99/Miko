@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="categories">類別</string>
+    <string name="collections">類別</string>
     <string name="manga">藏書</string>
     <string name="chapters">章節</string>
     <string name="history">記錄</string>
@@ -35,10 +35,10 @@
     <string name="action_update_library">更新書櫃</string>
     <string name="action_edit">編輯</string>
     <string name="action_add">新增</string>
-    <string name="action_add_category">新增類別</string>
-    <string name="action_edit_categories">編輯類別</string>
-    <string name="action_rename_category">重新命名類別</string>
-    <string name="action_move_category">設定類別</string>
+    <string name="action_add_collection">新增類別</string>
+    <string name="action_edit_collections">編輯類別</string>
+    <string name="action_rename_collection">重新命名類別</string>
+    <string name="action_move_collection">設定類別</string>
     <string name="action_edit_cover">編輯封面</string>
     <string name="action_pause">暫停</string>
     <string name="action_previous_chapter">上一章</string>
@@ -81,8 +81,8 @@
     <string name="pref_library_update_restriction">自動更新的裝置限制</string>
     <string name="charging">僅充電時</string>
     <string name="pref_update_only_non_completed">略過已完結的作品</string>
-    <string name="default_category">預設類別</string>
-    <string name="default_category_summary">總是詢問</string>
+    <string name="default_collection">預設類別</string>
+    <string name="default_collection_summary">總是詢問</string>
     <string name="ext_update">更新</string>
     <string name="ext_install">安裝</string>
     <string name="ext_pending">等待中</string>
@@ -134,7 +134,7 @@
     <string name="chapter_error">錯誤</string>
     <string name="chapter_paused">已暫停</string>
     <string name="manga_download">下載</string>
-    <string name="snack_categories_deleted">已刪除類別</string>
+    <string name="snack_collections_deleted">已刪除類別</string>
     <string name="picture_saved">圖片已儲存</string>
     <string name="set_as_cover">設為封面</string>
     <string name="cover_updated">已更新封面</string>
@@ -192,7 +192,7 @@
     <string name="pref_acra_summary">協助我們修復錯誤，傳送的資料將不包含個人敏感資訊</string>
     <string name="login_title">登入 %1$s</string>
     <string name="username">使用者名稱</string>
-    <string name="updating_category">正在更新類別</string>
+    <string name="updating_collection">正在更新類別</string>
     <string name="action_global_search_hint">全域搜尋…</string>
     <string name="snack_add_to_library">將作品收藏至書櫃？</string>
     <string name="file_select_cover">選擇封面圖片</string>
@@ -225,7 +225,7 @@
     <string name="decode_image_error">圖片無法載入</string>
     <string name="notification_first_add_to_library">請先將作品收藏至書櫃</string>
     <string name="file_select_backup">選擇備份檔</string>
-    <string name="information_empty_category">尚無任何類別，輕觸新增按鈕即可建立類別以組織你的書櫃</string>
+    <string name="information_empty_collection">尚無任何類別，輕觸新增按鈕即可建立類別以組織你的書櫃</string>
     <string name="download_notifier_downloader_title">下載管理員</string>
     <string name="download_unread">未讀</string>
     <string name="confirm_set_image_as_cover">要將該圖片設為封面嗎？</string>
@@ -236,7 +236,7 @@
     <string name="migrate">遷移</string>
     <string name="notification_cover_update_failed">封面更新失敗</string>
     <string name="confirm_delete_chapters">確定要刪除所選的章節嗎？</string>
-    <string name="error_category_exists">已有名稱相同的類別！</string>
+    <string name="error_collection_exists">已有名稱相同的類別！</string>
     <string name="chapter_progress">第 %1$d 頁</string>
     <string name="no_next_chapter">找不到下一章</string>
     <string name="transition_finished">已閱畢：</string>
@@ -466,12 +466,12 @@
     <string name="update_check_eol">不再支援此 Android 版本</string>
     <string name="clipboard_copy_error">無法複製到剪貼簿</string>
     <string name="backup_restore_content_full">你可能需要安裝任何缺少的擴充套件並重新登入各歷程平臺以開始使用</string>
-    <string name="pref_download_new_categories_details">類別同時屬於「排除」及「包含」的作品，將不會自動下載</string>
+    <string name="pref_download_new_collections_details">類別同時屬於「排除」及「包含」的作品，將不會自動下載</string>
     <string name="pref_create_folder_per_manga">儲存頁面至個別資料夾</string>
     <string name="pref_create_folder_per_manga_summary">根據作品標題建立資料夾</string>
     <string name="pref_show_navigation_mode_summary">開始閱讀時，短暫浮現輕觸區域</string>
     <string name="pref_show_navigation_mode">輕觸區域提示</string>
-    <string name="pref_library_update_categories_details">類別同時屬於「排除」及「包含」的作品將不會自動更新</string>
+    <string name="pref_library_update_collections_details">類別同時屬於「排除」及「包含」的作品將不會自動更新</string>
     <string name="cancel_all_for_series">取消此作品</string>
     <string name="automatic_background">自動</string>
     <string name="pref_grayscale">灰階</string>
@@ -487,7 +487,7 @@
     <string name="local_filter_order_by">排序</string>
     <string name="local_invalid_format">無效的章節格式</string>
     <string name="action_display_local_badge">本機來源</string>
-    <string name="information_empty_category_dialog">你目前沒有任何類別</string>
+    <string name="information_empty_collection_dialog">你目前沒有任何類別</string>
     <string name="error_sharing_cover">分享封面時發生錯誤</string>
     <string name="error_saving_cover">儲存封面時發生錯誤</string>
     <string name="cover_saved">已儲存封面</string>
@@ -499,7 +499,7 @@
     <string name="enhanced_tracking_info">為特定來源提供增強功能，當作品被加入書櫃時，將自動登錄閱讀歷程</string>
     <string name="enhanced_services">增強式歷程平臺</string>
     <string name="tracking_guide">歷程平臺指南</string>
-    <string name="categorized_display_settings">獨立各類別的排序方式</string>
+    <string name="per_collection_display_settings">獨立各類別的排序方式</string>
     <string name="pref_dark_theme_pure_black">純黑深色模式</string>
     <string name="theme_yotsuba">四葉</string>
     <string name="theme_yinyang">陰陽</string>
@@ -524,7 +524,7 @@
     <string name="getting_started_guide">入門指南</string>
     <string name="action_track">新增</string>
     <string name="help_translate">協助翻譯</string>
-    <string name="pref_remove_exclude_categories">排除的類別</string>
+    <string name="pref_remove_exclude_collections">排除的類別</string>
     <string name="ext_app_info">程式資訊</string>
     <string name="ext_installer_shizuku_unavailable_dialog">若要使用 Shizuku 來安裝擴充套件，請先安裝 Shizuku 並開啟</string>
     <string name="ext_installer_legacy">傳統</string>
@@ -600,9 +600,9 @@
     <string name="pref_app_language">應用程式語言</string>
     <string name="theme_lavender">薰衣草</string>
     <string name="description_placeholder">沒有簡介</string>
-    <string name="delete_category_confirmation">確定要刪除「%s」類別嗎？</string>
+    <string name="delete_collection_confirmation">確定要刪除「%s」類別嗎？</string>
     <string name="internal_error">InternalError：請檢視當機記錄以瞭解詳情</string>
-    <string name="delete_category">刪除類別</string>
+    <string name="delete_collection">刪除類別</string>
     <string name="pref_reset_user_agent_string">重設預設使用者代理字串</string>
     <string name="pref_user_agent_string">預設使用者代理字串</string>
     <string name="action_remove_everything">全部清除</string>
@@ -669,7 +669,7 @@
     <string name="minute_short">%d 分鐘</string>
     <string name="seconds_short">%d 秒鐘</string>
     <string name="action_not_now">暫時不要</string>
-    <string name="information_no_manga_category">類別尚無作品</string>
+    <string name="information_no_manga_collection">類別尚無作品</string>
     <string name="pref_library_update_show_tab_badge">在「更新」導覽圖示上標記未讀章數</string>
     <string name="copied_to_clipboard_plain">已複製到剪貼簿</string>
     <string name="pref_skip_dupe_chapters">略過重複的章節</string>
@@ -679,7 +679,7 @@
     <string name="information_required_plain">*必填</string>
     <string name="pref_hide_in_library_items">隱藏已在書櫃的作品</string>
     <string name="action_copy_to_clipboard">複製</string>
-    <string name="action_update_category">更新類別</string>
+    <string name="action_update_collection">更新類別</string>
     <string name="split_tall_images">分割過高的圖片</string>
     <string name="overlay_header">封面附加元素</string>
     <string name="pref_page_rotate">旋轉寬頁以符合螢幕</string>

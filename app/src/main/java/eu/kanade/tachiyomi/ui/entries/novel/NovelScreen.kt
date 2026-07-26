@@ -162,7 +162,7 @@ class NovelScreen(
             onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
             onShareClicked = { shareNovel(context, screenModel.novel, screenModel.source) }.takeIf { isHttpSource },
             onDownloadActionClicked = screenModel::runDownloadAction.takeIf { !successState.source.isLocalOrStub() },
-            onEditCategoryClicked = screenModel::showChangeCategoryDialog.takeIf { successState.novel.favorite },
+            onEditCollectionClicked = screenModel::showChangeCollectionDialog.takeIf { successState.novel.favorite },
             onEditNovel = { title, author, desc, status, tags ->
                 screenModel.updateNovelMetadata(title, author, desc, status, tags)
             },
@@ -222,13 +222,13 @@ class NovelScreen(
         }
         when (val dialog = successState.dialog) {
             null -> {}
-            is NovelScreenModel.Dialog.ChangeCategory -> {
-                eu.kanade.presentation.category.components.ChangeCategoryDialog(
+            is NovelScreenModel.Dialog.ChangeCollection -> {
+                eu.kanade.presentation.collection.components.ChangeCollectionDialog(
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
-                    onEditCategories = { /* TODO: categories tab */ },
+                    onEditCollections = { /* TODO: collections tab */ },
                     onConfirm = { include, _ ->
-                        screenModel.moveNovelToCategoriesAndAddToLibrary(dialog.novel, include)
+                        screenModel.moveNovelToCollectionsAndAddToLibrary(dialog.novel, include)
                     },
                 )
             }

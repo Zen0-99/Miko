@@ -24,6 +24,7 @@ enum class NovelReaderBackgroundColor(val prefValue: Int) {
     BLACK(1),
     SMART_THEME(2),
     GRAY(3),
+    CUSTOM(4),
 }
 
 /**

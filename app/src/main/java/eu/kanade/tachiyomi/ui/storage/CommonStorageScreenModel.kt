@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.service.LibraryPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -23,34 +23,34 @@ abstract class CommonStorageScreenModel<T>(
     private val downloadCacheChanges: SharedFlow<Unit>,
     private val downloadCacheIsInitializing: StateFlow<Boolean>,
     private val libraries: Flow<List<T>>,
-    private val categories: (Boolean) -> Flow<List<Category>>,
+    private val collections: (Boolean) -> Flow<List<Collection>>,
     private val getDownloadSize: T.() -> Long,
     private val getDownloadCount: T.() -> Int,
     private val getId: T.() -> Long,
-    private val getCategoryId: T.() -> Long,
+    private val getCollectionId: T.() -> Long,
     private val getTitle: T.() -> String,
     private val getThumbnail: T.() -> String?,
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
 ) : StateScreenModel<StorageScreenState>(StorageScreenState.Loading) {
 
-    private val selectedCategory = MutableStateFlow(AllCategory)
+    private val selectedCollection = MutableStateFlow(AllCollection)
 
     init {
         screenModelScope.launchIO {
-            val hideHiddenCategories = libraryPreferences.hideHiddenCategoriesSettings().get()
+            val hideHiddenCollections = libraryPreferences.hideHiddenCollectionsSettings().get()
 
             combine(
                 flow = downloadCacheChanges,
                 flow2 = downloadCacheIsInitializing,
                 flow3 = libraries,
-                flow4 = categories(hideHiddenCategories),
-                flow5 = selectedCategory,
-                transform = { _, _, libraries, categories, selectedCategory ->
+                flow4 = collections(hideHiddenCollections),
+                flow5 = selectedCollection,
+                transform = { _, _, libraries, collections, selectedCollection ->
                     // initialize the screen with an empty state
                     mutableState.update {
                         StorageScreenState.Success(
-                            selectedCategory = selectedCategory,
-                            categories = listOf(AllCategory, *categories.toTypedArray()),
+                            selectedCollection = selectedCollection,
+                            collections = listOf(AllCollection, *collections.toTypedArray()),
                             items = emptyList(),
                         )
                     }
@@ -58,16 +58,16 @@ abstract class CommonStorageScreenModel<T>(
                     val distinctLibraries = libraries.distinctBy {
                         it.getId()
                     }.filter { item ->
-                        val categoryId = item.getCategoryId()
+                        val collectionId = item.getCollectionId()
                         when {
                             // if all is selected, we want to make sure to include all entries
-                            // from only visible categories
-                            selectedCategory == AllCategory -> categories.find {
-                                it.id == categoryId
+                            // from only visible collections
+                            selectedCollection == AllCollection -> collections.find {
+                                it.id == collectionId
                             } != null
 
-                            // else include only entries from the selected category
-                            else -> categoryId == selectedCategory.id
+                            // else include only entries from the selected collection
+                            else -> collectionId == selectedCollection.id
                         }
                     }
 
@@ -101,17 +101,17 @@ abstract class CommonStorageScreenModel<T>(
         }
     }
 
-    fun setSelectedCategory(category: Category) {
-        selectedCategory.update { category }
+    fun setSelectedCollection(collection: Collection) {
+        selectedCollection.update { collection }
     }
 
     abstract fun deleteEntry(id: Long)
 
     companion object {
         /**
-         * A dummy category used to display all entries irrespective of the category.
+         * A dummy collection used to display all entries irrespective of the collection.
          */
-        private val AllCategory = Category(
+        private val AllCollection = Collection(
             id = -1L,
             name = "All",
             order = 0L,

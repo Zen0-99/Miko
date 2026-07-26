@@ -7,7 +7,7 @@ import tachiyomi.i18n.aniyomi.AYMR
 
 data class BackupOptions(
     val libraryEntries: Boolean = true,
-    val categories: Boolean = true,
+    val collections: Boolean = true,
     val chapters: Boolean = true,
     val tracking: Boolean = true,
     val history: Boolean = true,
@@ -22,7 +22,7 @@ data class BackupOptions(
 
     fun asBooleanArray() = booleanArrayOf(
         libraryEntries,
-        categories,
+        collections,
         chapters,
         tracking,
         history,
@@ -36,7 +36,7 @@ data class BackupOptions(
     )
 
     fun canCreate() = libraryEntries ||
-        categories ||
+        collections ||
         appSettings ||
         extensionRepoSettings ||
         customButton ||
@@ -68,9 +68,9 @@ data class BackupOptions(
                 enabled = { it.libraryEntries },
             ),
             Entry(
-                label = MR.strings.categories,
-                getter = BackupOptions::categories,
-                setter = { options, enabled -> options.copy(categories = enabled) },
+                label = MR.strings.collections,
+                getter = BackupOptions::collections,
+                setter = { options, enabled -> options.copy(collections = enabled) },
             ),
             Entry(
                 label = AYMR.strings.non_library_settings,
@@ -119,7 +119,7 @@ data class BackupOptions(
 
         fun fromBooleanArray(array: BooleanArray) = BackupOptions(
             libraryEntries = array[0],
-            categories = array[1],
+            collections = array[1],
             chapters = array[2],
             tracking = array[3],
             history = array[4],

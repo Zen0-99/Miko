@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Név</string>
-    <string name="categories">Kategóriák</string>
+    <string name="collections">Kategóriák</string>
     <string name="manga">Könyvtári elemek</string>
     <string name="chapters">Fejezetek</string>
     <string name="track">Nyilvántartás</string>
@@ -41,8 +41,8 @@
     <string name="pref_library_update_restriction">Frissítések korlátozása</string>
     <string name="charging">Töltés közben</string>
     <string name="pref_update_only_non_completed">\"Befejezett\" állapotú elemek kihagyása</string>
-    <string name="default_category">Alapértelmezett kategória</string>
-    <string name="default_category_summary">Mindig kérdezzen rá</string>
+    <string name="default_collection">Alapértelmezett kategória</string>
+    <string name="default_collection_summary">Mindig kérdezzen rá</string>
     <string name="pref_fullscreen">Teljes képernyő</string>
     <string name="pref_show_page_number">Oldalszám megjelenítése</string>
     <string name="pref_keep_screen_on">Képernyő bekapcsolva tartása</string>
@@ -82,10 +82,10 @@
     <string name="action_update_library">Könyvtár frissítése</string>
     <string name="action_edit">Szerkesztés</string>
     <string name="action_add">Hozzáadás</string>
-    <string name="action_add_category">Kategória hozzáadása</string>
-    <string name="action_edit_categories">Kategóriák szerkesztése</string>
-    <string name="action_rename_category">Kategória átnevezése</string>
-    <string name="action_move_category">Kategóriák beállítása</string>
+    <string name="action_add_collection">Kategória hozzáadása</string>
+    <string name="action_edit_collections">Kategóriák szerkesztése</string>
+    <string name="action_rename_collection">Kategória átnevezése</string>
+    <string name="action_move_collection">Kategóriák beállítása</string>
     <string name="action_edit_cover">Borító szerkesztése</string>
     <string name="action_pause">Szüneteltetés</string>
     <string name="action_previous_chapter">Előző fejezet</string>
@@ -205,7 +205,7 @@
     <string name="pref_category_reading">Olvasás</string>
     <string name="label_data">Adat</string>
     <string name="backup_created">Biztonsági mentés létrehozva</string>
-    <string name="information_empty_category">Nincsenek kategóriái. Érintse meg a plusz gombot, hogy létrehozzon egyet a könyvtára rendezéséhez.</string>
+    <string name="information_empty_collection">Nincsenek kategóriái. Érintse meg a plusz gombot, hogy létrehozzon egyet a könyvtára rendezéséhez.</string>
     <string name="pinned_sources">Kitűzött</string>
     <string name="other_source">Egyéb</string>
     <string name="manga_tracking_tab">Nyilvántartás</string>
@@ -257,7 +257,7 @@
     <string name="ongoing">Folyamatban van</string>
     <string name="last_used_source">Utoljára használt</string>
     <string name="downloaded_chapters">Letöltött fejezetek</string>
-    <string name="updating_category">Kategóriák frissítése</string>
+    <string name="updating_collection">Kategóriák frissítése</string>
     <string name="unknown_error">Ismeretlen hiba</string>
     <string name="logout_success">Mostmár ki van jelentkezve</string>
     <string name="logout">Kijelentkezés</string>
@@ -277,8 +277,8 @@
     <string name="exclude">Tiltott: %s</string>
     <string name="include">Kedvelt: %s</string>
     <string name="none">Semmi</string>
-    <string name="pref_download_new_categories_details">Elemek a tiltott kategóriákban nem lesznek letöltve, még akkor se, ha a kedvelt kategóriában is vannak.</string>
-    <string name="pref_library_update_categories_details">Elemek a tiltott kategóriákban nem lesznek frissítve, még akkor se, ha a kedvelt kategóriákban is vannak.</string>
+    <string name="pref_download_new_collections_details">Elemek a tiltott kategóriákban nem lesznek letöltve, még akkor se, ha a kedvelt kategóriában is vannak.</string>
+    <string name="pref_library_update_collections_details">Elemek a tiltott kategóriákban nem lesznek frissítve, még akkor se, ha a kedvelt kategóriákban is vannak.</string>
     <string name="secure_screen">Biztonságos képernyő</string>
     <string name="lock_when_idle">Zárás tétlen állapotban</string>
     <string name="lock_with_biometrics">Biometrikus zár</string>
@@ -306,7 +306,7 @@
     <string name="pref_show_navigation_mode_summary">Pillanatnyilag megjelníti, amikor az olvasó meg van nyitva</string>
     <string name="pref_show_navigation_mode">Érintési zónák átfedésének mutatása</string>
     <string name="ext_app_info">Alkalmazás információ</string>
-    <string name="categorized_display_settings">Kategóriakénti beállítások rendezéshez</string>
+    <string name="per_collection_display_settings">Kategóriakénti beállítások rendezéshez</string>
     <string name="theme_tako">Polip</string>
     <string name="theme_strawberrydaiquiri">Eper koktél</string>
     <string name="relative_time_today">Ma</string>
@@ -333,7 +333,7 @@
     <string name="third_to_last">Harmadik utoljára olvasott fejezet</string>
     <string name="second_to_last">Második utoljára olvasott fejezet</string>
     <string name="disabled">Kikapcsolva</string>
-    <string name="pref_remove_exclude_categories">Tiltott kategóriák</string>
+    <string name="pref_remove_exclude_collections">Tiltott kategóriák</string>
     <string name="pref_remove_bookmarked_chapters">Könyvjelzőzött fejezetek törlésének engedélyezése</string>
     <string name="pref_remove_after_read">Automatikus törlés olvasás után</string>
     <string name="pref_remove_after_marked_as_read">Olvasottnak jelölés után</string>
@@ -412,7 +412,7 @@
     <string name="latest">Legújabb</string>
     <string name="date">Dátum</string>
     <string name="clear_history_confirmation">Biztos benne? Minden előzmény elvész.</string>
-    <string name="delete_category">Kategória törlése</string>
+    <string name="delete_collection">Kategória törlése</string>
     <string name="pref_app_language">Alkalmazás nyelve</string>
     <string name="unread">Olvasatlan</string>
     <string name="set_chapter_settings_as_default">Beállítás alapértelmezettként</string>
@@ -425,7 +425,7 @@
     <string name="sort_by_upload_date">Feltöltési dátum szerint</string>
     <string name="dialog_with_checkbox_remove_description">Ez eltávolítja a fejezet olvasási dátumát. Biztos benne?</string>
     <string name="pref_update_only_completely_read">Olvasatlan fejezet(ek)et tartalmazó elemek kihagyása</string>
-    <string name="delete_category_confirmation">Törölni akarja a %s kategóriát ?</string>
+    <string name="delete_collection_confirmation">Törölni akarja a %s kategóriát ?</string>
     <string name="internal_error">InternalError: Nézze meg a hibaüzenetet további információért</string>
     <string name="network_not_metered">Csak korlátlan hálózatokon</string>
     <string name="backup_choice">Mit tartalmazzon a biztonsági mentés?</string>
@@ -448,7 +448,7 @@
     <string name="cache_delete_error">Hiba történt törlés közben</string>
     <string name="clear_database_confirmation">Biztos benne? Nem könyvtári elemek olvasott fejezetei elvesznek</string>
     <string name="file_picker_error">Nem található fájl választó alkalmazás</string>
-    <string name="information_empty_category_dialog">Nincsenek még kategóriáid.</string>
+    <string name="information_empty_collection_dialog">Nincsenek még kategóriáid.</string>
     <string name="information_cloudflare_bypass_failure">Nem sikerült megkerülni a Cloudflare-t</string>
     <string name="pref_landscape_zoom">Automatikusan nagyítsa a széles képeket</string>
     <string name="restore_completed">Helyreállítás befejeződött</string>
@@ -461,7 +461,7 @@
     <string name="pref_incognito_mode_summary">Olvasási előzmények rögzítésének szüneteltetése</string>
     <string name="manga_cover">Fedlap</string>
     <string name="on_hold">Szüneteltetve</string>
-    <string name="snack_categories_deleted">Kategóriák törölve</string>
+    <string name="snack_collections_deleted">Kategóriák törölve</string>
     <string name="file_select_cover">Válasszon képet a fedlapnak</string>
     <string name="update_check_no_new_updates">Nem található új frissítés</string>
     <string name="ext_info_version">Verzió</string>
@@ -559,7 +559,7 @@
     <string name="myanimelist_relogin">Kérjük, jelentkezzen be MAL-ba újra</string>
     <string name="source_unsupported">A forrás nem támogatott</string>
     <string name="error_no_match">Nincs egyezés</string>
-    <string name="error_category_exists">Ilyen nevű kategória már létezik!</string>
+    <string name="error_collection_exists">Ilyen nevű kategória már létezik!</string>
     <string name="dialog_with_checkbox_reset">Összes fejezet visszaállítása ebben az elemben</string>
     <string name="error_saving_picture">Hiba a kép mentése közben</string>
     <string name="on_hold_list">Szüneteltettek listája</string>
@@ -644,7 +644,7 @@
     <string name="multi_lang">Több</string>
     <string name="pref_browse_summary">Források, bővítmények, globális keresés</string>
     <string name="action_copy_to_clipboard">Másolás a vágólapra</string>
-    <string name="action_update_category">Kategória frissítése</string>
+    <string name="action_update_collection">Kategória frissítése</string>
     <string name="copied_to_clipboard_plain">Vágólapra másolva</string>
     <string name="confirm_add_duplicate_manga">Van már egy ilyen nevű elem a könyvtáradban.
 \n
@@ -659,7 +659,7 @@
     <string name="label_used">Használt</string>
     <string name="track_error">%1$s hiba: %2$s</string>
     <string name="are_you_sure">Biztos vagy benne?</string>
-    <string name="information_no_manga_category">Kategória üres</string>
+    <string name="information_no_manga_collection">Kategória üres</string>
     <string name="track_remove_finish_date_conf_text">Ez eltávolítja az eddig kiválasztott befejezési dátumot a(z) %s szolgáltatásból</string>
     <string name="label_read_duration">Olvasási időtartam</string>
     <string name="information_no_entries_found">Nem található elem ebben a kategóriában</string>

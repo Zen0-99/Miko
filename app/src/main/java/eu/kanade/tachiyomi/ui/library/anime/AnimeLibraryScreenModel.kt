@@ -53,9 +53,9 @@ import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.domain.category.anime.interactor.GetVisibleAnimeCategories
-import tachiyomi.domain.category.anime.interactor.SetAnimeCategories
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.anime.interactor.GetVisibleAnimeCollections
+import tachiyomi.domain.collection.anime.interactor.SetAnimeCollections
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.anime.interactor.GetLibraryAnime
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.AnimeUpdate
@@ -77,19 +77,19 @@ import uy.kohesive.injekt.api.get
 import kotlin.random.Random
 
 /**
- * Typealias for the library anime, using the category as keys, and list of anime as values.
+ * Typealias for the library anime, using the collection as keys, and list of anime as values.
  */
-typealias AnimeLibraryMap = Map<Category, List<AnimeLibraryItem>>
+typealias AnimeLibraryMap = Map<Collection, List<AnimeLibraryItem>>
 
 class AnimeLibraryScreenModel(
     private val getLibraryAnime: GetLibraryAnime = Injekt.get(),
-    private val getCategories: GetVisibleAnimeCategories = Injekt.get(),
+    private val getCollections: GetVisibleAnimeCollections = Injekt.get(),
     private val getTracksPerAnime: GetTracksPerAnime = Injekt.get(),
     private val getNextEpisodes: GetNextEpisodes = Injekt.get(),
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
     private val setSeenStatus: SetSeenStatus = Injekt.get(),
     private val updateAnime: UpdateAnime = Injekt.get(),
-    private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
+    private val setAnimeCollections: SetAnimeCollections = Injekt.get(),
     private val preferences: BasePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val coverCache: AnimeCoverCache = Injekt.get(),
@@ -100,7 +100,7 @@ class AnimeLibraryScreenModel(
     private val trackerManager: TrackerManager = Injekt.get(),
 ) : StateScreenModel<AnimeLibraryScreenModel.State>(State()) {
 
-    var activeCategoryIndex: Int by libraryPreferences.lastUsedAnimeCategory().asState(
+    var activeCollectionIndex: Int by libraryPreferences.lastUsedAnimeCollection().asState(
         screenModelScope,
     )
 
@@ -135,14 +135,14 @@ class AnimeLibraryScreenModel(
         }
 
         combine(
-            libraryPreferences.categoryTabs().changes(),
-            libraryPreferences.categoryNumberOfItems().changes(),
+            libraryPreferences.collectionTabs().changes(),
+            libraryPreferences.collectionNumberOfItems().changes(),
             libraryPreferences.showContinueViewingButton().changes(),
         ) { a, b, c -> arrayOf(a, b, c) }
-            .onEach { (showCategoryTabs, showAnimeCount, showAnimeContinueButton) ->
+            .onEach { (showCollectionTabs, showAnimeCount, showAnimeContinueButton) ->
                 mutableState.update { state ->
                     state.copy(
-                        showCategoryTabs = showCategoryTabs,
+                        showCollectionTabs = showCollectionTabs,
                         showAnimeCount = showAnimeCount,
                         showAnimeContinueButton = showAnimeContinueButton,
                     )
@@ -373,7 +373,7 @@ class AnimeLibraryScreenModel(
     }
 
     /**
-     * Get the categories and all its anime from the database.
+     * Get the collections and all its anime from the database.
      */
     private fun getLibraryFlow(): Flow<AnimeLibraryMap> {
         val animelibAnimesFlow = combine(
@@ -383,7 +383,7 @@ class AnimeLibraryScreenModel(
         ) { animelibAnimeList, prefs, _ ->
             animelibAnimeList
                 .map { animelibAnime ->
-                    // Display mode based on user preference: take it from global library setting or category
+                    // Display mode based on user preference: take it from global library setting or collection
                     AnimeLibraryItem(
                         animelibAnime,
                         downloadCount = if (prefs.downloadBadge) {
@@ -400,17 +400,17 @@ class AnimeLibraryScreenModel(
                         },
                     )
                 }
-                .groupBy { it.libraryAnime.category }
+                .groupBy { it.libraryAnime.collection }
         }
 
-        return combine(getCategories.subscribe(), animelibAnimesFlow) { categories, animelibAnime ->
-            val displayCategories = if (animelibAnime.isNotEmpty() && !animelibAnime.containsKey(0)) {
-                categories.fastFilterNot { it.isSystemCategory }
+        return combine(getCollections.subscribe(), animelibAnimesFlow) { collections, animelibAnime ->
+            val displayCollections = if (animelibAnime.isNotEmpty() && !animelibAnime.containsKey(0)) {
+                collections.fastFilterNot { it.isSystemCollection }
             } else {
-                categories
+                collections
             }
 
-            displayCategories.associateWith { animelibAnime[it.id].orEmpty() }
+            displayCollections.associateWith { animelibAnime[it.id].orEmpty() }
         }
     }
 
@@ -435,14 +435,14 @@ class AnimeLibraryScreenModel(
     }
 
     /**
-     * Returns the common categories for the given list of anime.
+     * Returns the common collections for the given list of anime.
      *
      * @param animes the list of anime.
      */
-    private suspend fun getCommonCategories(animes: List<Anime>): Collection<Category> {
-        if (animes.isEmpty()) return emptyList()
+    private suspend fun getCommonCollections(animes: List<Anime>): Set<Collection> {
+        if (animes.isEmpty()) return emptySet()
         return animes
-            .map { getCategories.await(it.id).toSet() }
+            .map { getCollections.await(it.id).toSet() }
             .reduce { set1, set2 -> set1.intersect(set2) }
     }
 
@@ -451,15 +451,15 @@ class AnimeLibraryScreenModel(
     }
 
     /**
-     * Returns the mix (non-common) categories for the given list of anime.
+     * Returns the mix (non-common) collections for the given list of anime.
      *
      * @param animes the list of anime.
      */
-    private suspend fun getMixCategories(animes: List<Anime>): Collection<Category> {
-        if (animes.isEmpty()) return emptyList()
-        val nimeCategories = animes.map { getCategories.await(it.id).toSet() }
-        val common = nimeCategories.reduce { set1, set2 -> set1.intersect(set2) }
-        return nimeCategories.flatten().distinct().subtract(common)
+    private suspend fun getMixCollections(animes: List<Anime>): Set<Collection> {
+        if (animes.isEmpty()) return emptySet()
+        val nimeCollections = animes.map { getCollections.await(it.id).toSet() }
+        val common = nimeCollections.reduce { set1, set2 -> set1.intersect(set2) }
+        return nimeCollections.flatten().distinct().subtract(common)
     }
 
     fun runDownloadActionSelection(action: DownloadAction) {
@@ -552,26 +552,26 @@ class AnimeLibraryScreenModel(
     }
 
     /**
-     * Bulk update categories of anime using old and new common categories.
+     * Bulk update collections of anime using old and new common collections.
      *
      * @param animeList the list of anime to move.
-     * @param addCategories the categories to add for all animes.
-     * @param removeCategories the categories to remove in all animes.
+     * @param addCollections the collections to add for all animes.
+     * @param removeCollections the collections to remove in all animes.
      */
-    fun setAnimeCategories(
+    fun setAnimeCollections(
         animeList: List<Anime>,
-        addCategories: List<Long>,
-        removeCategories: List<Long>,
+        addCollections: List<Long>,
+        removeCollections: List<Long>,
     ) {
         screenModelScope.launchNonCancellable {
             animeList.forEach { anime ->
-                val categoryIds = getCategories.await(anime.id)
+                val collectionIds = getCollections.await(anime.id)
                     .map { it.id }
-                    .subtract(removeCategories.toSet())
-                    .plus(addCategories)
+                    .subtract(removeCollections.toSet())
+                    .plus(addCollections)
                     .toList()
 
-                setAnimeCategories.await(anime.id, categoryIds)
+                setAnimeCollections.await(anime.id, collectionIds)
             }
         }
     }
@@ -592,12 +592,12 @@ class AnimeLibraryScreenModel(
         )
     }
 
-    suspend fun getRandomAnimelibItemForCurrentCategory(): AnimeLibraryItem? {
-        if (state.value.categories.isEmpty()) return null
+    suspend fun getRandomAnimelibItemForCurrentCollection(): AnimeLibraryItem? {
+        if (state.value.collections.isEmpty()) return null
 
         return withIOContext {
             state.value
-                .getAnimelibItemsByCategoryId(state.value.categories[activeCategoryIndex].id)
+                .getAnimelibItemsByCollectionId(state.value.collections[activeCollectionIndex].id)
                 ?.randomOrNull()
         }
     }
@@ -625,18 +625,18 @@ class AnimeLibraryScreenModel(
 
     /**
      * Selects all nimes between and including the given anime and the last pressed anime from the
-     * same category as the given anime
+     * same collection as the given anime
      */
     fun toggleRangeSelection(anime: LibraryAnime) {
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
                 val lastSelected = list.lastOrNull()
-                if (lastSelected?.category != anime.category) {
+                if (lastSelected?.collection != anime.collection) {
                     list.add(anime)
                     return@mutate
                 }
 
-                val items = state.getAnimelibItemsByCategoryId(anime.category)
+                val items = state.getAnimelibItemsByCollectionId(anime.collection)
                     ?.fastMap { it.libraryAnime }.orEmpty()
                 val lastAnimeIndex = items.indexOf(lastSelected)
                 val curAnimeIndex = items.indexOf(anime)
@@ -660,9 +660,9 @@ class AnimeLibraryScreenModel(
     fun selectAll(index: Int) {
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
-                val categoryId = state.categories.getOrNull(index)?.id ?: -1
+                val collectionId = state.collections.getOrNull(index)?.id ?: -1
                 val selectedIds = list.fastMap { it.id }
-                state.getAnimelibItemsByCategoryId(categoryId)
+                state.getAnimelibItemsByCollectionId(collectionId)
                     ?.fastMapNotNull { item ->
                         item.libraryAnime.takeUnless { it.id in selectedIds }
                     }
@@ -675,8 +675,8 @@ class AnimeLibraryScreenModel(
     fun invertSelection(index: Int) {
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
-                val categoryId = state.categories[index].id
-                val items = state.getAnimelibItemsByCategoryId(categoryId)?.fastMap { it.libraryAnime }.orEmpty()
+                val collectionId = state.collections[index].id
+                val items = state.getAnimelibItemsByCollectionId(collectionId)?.fastMap { it.libraryAnime }.orEmpty()
                 val selectedIds = list.fastMap { it.id }
                 val (toRemove, toAdd) = items.fastPartition { it.id in selectedIds }
                 val toRemoveIds = toRemove.fastMap { it.id }
@@ -691,19 +691,19 @@ class AnimeLibraryScreenModel(
         mutableState.update { it.copy(searchQuery = query) }
     }
 
-    fun openChangeCategoryDialog() {
+    fun openChangeCollectionDialog() {
         screenModelScope.launchIO {
             // Create a copy of selected anime
             val animeList = state.value.selection.map { it.anime }
 
-            // Hide the default category because it has a different behavior than the ones from db.
-            val categories = state.value.categories.filter { it.id != 0L }
+            // Hide the default collection because it has a different behavior than the ones from db.
+            val collections = state.value.collections.filter { it.id != 0L }
 
-            // Get indexes of the common categories to preselect.
-            val common = getCommonCategories(animeList)
-            // Get indexes of the mix categories to preselect.
-            val mix = getMixCategories(animeList)
-            val preselected = categories
+            // Get indexes of the common collections to preselect.
+            val common = getCommonCollections(animeList)
+            // Get indexes of the mix collections to preselect.
+            val mix = getMixCollections(animeList)
+            val preselected = collections
                 .map {
                     when (it) {
                         in common -> CheckboxState.State.Checked(it)
@@ -712,7 +712,7 @@ class AnimeLibraryScreenModel(
                     }
                 }
                 .toImmutableList()
-            mutableState.update { it.copy(dialog = Dialog.ChangeCategory(animeList, preselected)) }
+            mutableState.update { it.copy(dialog = Dialog.ChangeCollection(animeList, preselected)) }
         }
     }
 
@@ -727,9 +727,9 @@ class AnimeLibraryScreenModel(
 
     sealed interface Dialog {
         data object SettingsSheet : Dialog
-        data class ChangeCategory(
+        data class ChangeCollection(
             val anime: List<Anime>,
-            val initialSelection: ImmutableList<CheckboxState<Category>>,
+            val initialSelection: ImmutableList<CheckboxState<Collection>>,
         ) : Dialog
         data class DeleteAnime(val anime: List<Anime>) : Dialog
     }
@@ -758,7 +758,7 @@ class AnimeLibraryScreenModel(
         val searchQuery: String? = null,
         val selection: PersistentList<LibraryAnime> = persistentListOf(),
         val hasActiveFilters: Boolean = false,
-        val showCategoryTabs: Boolean = false,
+        val showCollectionTabs: Boolean = false,
         val showAnimeCount: Boolean = false,
         val showAnimeContinueButton: Boolean = false,
         val dialog: Dialog? = null,
@@ -774,35 +774,35 @@ class AnimeLibraryScreenModel(
 
         val selectionMode = selection.isNotEmpty()
 
-        val categories = library.keys.toList()
+        val collections = library.keys.toList()
 
-        fun getAnimelibItemsByCategoryId(categoryId: Long): List<AnimeLibraryItem>? {
-            return library.firstNotNullOfOrNull { (k, v) -> v.takeIf { k.id == categoryId } }
+        fun getAnimelibItemsByCollectionId(collectionId: Long): List<AnimeLibraryItem>? {
+            return library.firstNotNullOfOrNull { (k, v) -> v.takeIf { k.id == collectionId } }
         }
 
         fun getAnimelibItemsByPage(page: Int): List<AnimeLibraryItem> {
             return library.values.toTypedArray().getOrNull(page).orEmpty()
         }
 
-        fun getAnimeCountForCategory(category: Category): Int? {
-            return if (showAnimeCount || !searchQuery.isNullOrEmpty()) library[category]?.size else null
+        fun getAnimeCountForCollection(collection: Collection): Int? {
+            return if (showAnimeCount || !searchQuery.isNullOrEmpty()) library[collection]?.size else null
         }
 
         fun getToolbarTitle(
             defaultTitle: String,
-            defaultCategoryTitle: String,
+            defaultCollectionTitle: String,
             page: Int,
         ): LibraryToolbarTitle {
-            val category = categories.getOrNull(page) ?: return LibraryToolbarTitle(defaultTitle)
-            val categoryName = category.let {
-                if (it.isSystemCategory) defaultCategoryTitle else it.name
+            val collection = collections.getOrNull(page) ?: return LibraryToolbarTitle(defaultTitle)
+            val collectionName = collection.let {
+                if (it.isSystemCollection) defaultCollectionTitle else it.name
             }
-            // Title is always "Library"; subtitle is the current category name
-            // only shown when there is more than one category.
-            val subtitle = if (categories.size > 1) categoryName else null
+            // Title is always "Library"; subtitle is the current collection name
+            // only shown when there is more than one collection.
+            val subtitle = if (collections.size > 1) collectionName else null
             val count = when {
                 !showAnimeCount -> null
-                !showCategoryTabs -> getAnimeCountForCategory(category)
+                !showCollectionTabs -> getAnimeCountForCollection(collection)
                 // Whole library count
                 else -> libraryCount
             }

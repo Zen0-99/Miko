@@ -41,14 +41,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.AdaptiveSheet
-import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
  * Full-screen dialog showing list of newly unlocked achievements
- * Opens when user taps "Смотреть" on group notification
+ * Opens when user taps "Ð¡Ð¼Ð¾Ñ‚Ñ€ÐµÑ‚ÑŒ" on group notification
  */
 @Composable
 fun AchievementListDialog(
@@ -76,7 +75,7 @@ fun AchievementListDialog(
                         text = stringResource(AYMR.strings.achievement_list_title),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = AuroraTheme.colors.textPrimary,
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
                     Text(
                         text = stringResource(
@@ -85,7 +84,7 @@ fun AchievementListDialog(
                             totalPoints,
                         ),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = AuroraTheme.colors.textSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -93,7 +92,7 @@ fun AchievementListDialog(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = stringResource(AYMR.strings.achievement_action_close),
-                        tint = AuroraTheme.colors.textSecondary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -121,7 +120,7 @@ fun AchievementListDialog(
                 onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = AuroraTheme.colors.accent,
+                    containerColor = MaterialTheme.colorScheme.primary,
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {
@@ -139,7 +138,6 @@ fun AchievementListDialog(
 private fun AchievementListItem(
     achievement: Achievement,
 ) {
-    val colors = AuroraTheme.colors
     var isPressed by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
@@ -169,8 +167,8 @@ private fun AchievementListItem(
                 } else {
                     Brush.linearGradient(
                         colors = listOf(
-                            colors.accent.copy(alpha = 0.15f),
-                            colors.surface,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            MaterialTheme.colorScheme.surface,
                         ),
                     )
                 },
@@ -180,7 +178,7 @@ private fun AchievementListItem(
                 color = if (isRare) {
                     Color(0xFFFFD700).copy(alpha = 0.5f)
                 } else {
-                    colors.accent.copy(alpha = 0.3f)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                 },
                 shape = RoundedCornerShape(16.dp),
             )
@@ -209,7 +207,7 @@ private fun AchievementListItem(
                     text = achievement.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (isRare) Color(0xFFFF6B00) else colors.textPrimary,
+                    color = if (isRare) Color(0xFFFF6B00) else MaterialTheme.colorScheme.onBackground,
                 )
 
                 if (isRare) {
@@ -226,7 +224,7 @@ private fun AchievementListItem(
                 Text(
                     text = desc,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = colors.textSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                 )
             }
@@ -238,14 +236,14 @@ private fun AchievementListItem(
                 Icon(
                     imageVector = Icons.Default.Star,
                     contentDescription = null,
-                    tint = if (isRare) Color(0xFFFFD700) else colors.accent,
+                    tint = if (isRare) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(14.dp),
                 )
                 Text(
                     text = stringResource(AYMR.strings.achievement_points_reward, achievement.points),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (isRare) Color(0xFFFFD700) else colors.accent,
+                    color = if (isRare) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
                 )
             }
         }

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,9 +18,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,7 +30,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -38,7 +40,6 @@ fun AchievementCategoryTabs(
     onCategoryChanged: (AchievementCategory) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
     val tabs = listOf(
         AchievementCategory.BOTH to stringResource(AYMR.strings.achievement_category_all),
         AchievementCategory.ANIME to stringResource(AYMR.strings.achievement_category_anime),
@@ -70,7 +71,7 @@ fun AchievementCategoryTabs(
                     .fillMaxHeight()
                     .width(segmentWidth)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(colors.accent.copy(alpha = 0.15f)),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
             )
 
             Row(
@@ -81,7 +82,7 @@ fun AchievementCategoryTabs(
                 tabs.forEach { (category, label) ->
                     val isSelected = category == selectedCategory
                     val textColor by animateColorAsState(
-                        targetValue = if (isSelected) colors.accent else colors.textSecondary,
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         label = "tab_text_color",
                     )
 
@@ -92,7 +93,10 @@ fun AchievementCategoryTabs(
                             .weight(1f)
                             .fillMaxSize()
                             .clip(RoundedCornerShape(20.dp))
-                            .clickable { onCategoryChanged(category) },
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { onCategoryChanged(category) },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="categories">Kategori</string>
+    <string name="collections">Kategori</string>
     <string name="manga">Entri pustaka</string>
     <string name="chapters">Bab</string>
     <string name="track">Pelacakan</string>
@@ -31,10 +31,10 @@
     <string name="action_update_library">Perbarui pustaka</string>
     <string name="action_edit">Ubah</string>
     <string name="action_add">Tambah</string>
-    <string name="action_add_category">Tambah kategori</string>
-    <string name="action_edit_categories">Ubah kategori</string>
-    <string name="action_rename_category">Ubah nama kategori</string>
-    <string name="action_move_category">Masukkan ke kategori</string>
+    <string name="action_add_collection">Tambah kategori</string>
+    <string name="action_edit_collections">Ubah kategori</string>
+    <string name="action_rename_collection">Ubah nama kategori</string>
+    <string name="action_move_collection">Masukkan ke kategori</string>
     <string name="action_edit_cover">Ubah gambar sampul</string>
     <string name="action_pause">Hentikan sementara</string>
     <string name="action_previous_chapter">Bab sebelumnya</string>
@@ -80,8 +80,8 @@
     <string name="charging">Saat mengisi daya</string>
     <string name="pref_update_only_non_completed">Lewati daftar dengan status \"Selesai\"</string>
     <string name="pref_auto_update_manga_sync">Perbarui kemajuan setelah membaca</string>
-    <string name="default_category">Kategori bawaan</string>
-    <string name="default_category_summary">Selalu tanya</string>
+    <string name="default_collection">Kategori bawaan</string>
+    <string name="default_collection_summary">Selalu tanya</string>
     <string name="pref_fullscreen">Layar penuh</string>
     <string name="pref_page_transitions">Animasikan transisi halaman</string>
     <string name="pref_show_page_number">Tampilkan nomor halaman</string>
@@ -157,7 +157,7 @@
     <string name="login">Masuk</string>
     <string name="login_success">Sudah Masuk</string>
     <string name="unknown_error">Kesalahan tidak diketahui</string>
-    <string name="updating_category">Memperbarui kategori</string>
+    <string name="updating_collection">Memperbarui kategori</string>
     <string name="no_more_results">Tidak ada hasil lainnya</string>
     <string name="local_source">Sumber lokal</string>
     <string name="ongoing">Berlanjut</string>
@@ -185,8 +185,8 @@
     <string name="score">Nilai</string>
     <string name="title">Judul</string>
     <string name="status">Status</string>
-    <string name="error_category_exists">Kategori dengan nama ini sudah ada!</string>
-    <string name="snack_categories_deleted">Kategori dihapus</string>
+    <string name="error_collection_exists">Kategori dengan nama ini sudah ada!</string>
+    <string name="snack_collections_deleted">Kategori dihapus</string>
     <string name="dialog_with_checkbox_remove_description">Ini akan menghapus tanggal baca bab ini. Apakah Anda yakin?</string>
     <string name="dialog_with_checkbox_reset">Setel ulang semua bab untuk entri ini</string>
     <string name="snack_add_to_library">Tambahkan ke pustaka?</string>
@@ -227,7 +227,7 @@
     <string name="latest">Terbaru</string>
     <string name="browse">Jelajahi</string>
     <string name="channel_common">Umum</string>
-    <string name="information_empty_category">Anda belum memiliki kategori. Tekan tombol tambah untuk menambahkan kategori baru untuk mengatur pustaka Anda.</string>
+    <string name="information_empty_collection">Anda belum memiliki kategori. Tekan tombol tambah untuk menambahkan kategori baru untuk mengatur pustaka Anda.</string>
     <string name="label_migration">Migrasi</string>
     <string name="label_extensions">Ekstensi</string>
     <string name="label_extension_info">Info Ekstensi</string>
@@ -472,11 +472,11 @@
     <string name="unread">Belum dibaca</string>
     <string name="rotation_landscape">Layar mendatar</string>
     <string name="rotation_portrait">Layar Tegak</string>
-    <string name="pref_download_new_categories_details">Entri dalam kategori yang dikecualikan tidak akan diunduh meskipun mereka juga termasuk dalam kategori yang disertakan.</string>
+    <string name="pref_download_new_collections_details">Entri dalam kategori yang dikecualikan tidak akan diunduh meskipun mereka juga termasuk dalam kategori yang disertakan.</string>
     <string name="rotation_type">Rotasi</string>
     <string name="pref_grayscale">Skala abu-abu</string>
     <string name="pref_show_navigation_mode">Tampilkan zona ketukan</string>
-    <string name="pref_library_update_categories_details">Entri dalam kategori yang dikecualikan tidak akan diperbarui meskipun mereka juga termasuk dalam kategori yang disertakan.</string>
+    <string name="pref_library_update_collections_details">Entri dalam kategori yang dikecualikan tidak akan diperbarui meskipun mereka juga termasuk dalam kategori yang disertakan.</string>
     <string name="date">Tanggal</string>
     <string name="local_filter_order_by">Urutkan menurut</string>
     <string name="local_invalid_format">Format bab tidak valid</string>
@@ -493,8 +493,8 @@
     <string name="off">Matikan</string>
     <string name="on">Aktif</string>
     <string name="tracking_guide">Panduan pelacakan</string>
-    <string name="categorized_display_settings">Pengaturan per-kategori untuk urutan</string>
-    <string name="information_empty_category_dialog">Anda belum memiliki kategori apapun.</string>
+    <string name="per_collection_display_settings">Pengaturan per-kategori untuk urutan</string>
+    <string name="information_empty_collection_dialog">Anda belum memiliki kategori apapun.</string>
     <string name="action_start_downloading_now">Mulai mengunduh sekarang</string>
     <string name="about_dont_kill_my_app">Beberapa pabrikan mempunyai batasan aplikasi tambahan yang mematikan layanan latar belakang. Website ini memiliki info lebih lanjut untuk memperbaikinya.</string>
     <string name="restore_miui_warning">Pencadangan/pemulihan mungkin tidak berfungsi jika Optimisasi MIUI dimatikan.</string>
@@ -523,7 +523,7 @@
     <string name="pref_category_appearance">Tampilan</string>
     <string name="confirm_lock_change">Autentikasi untuk mengonfirmasi perubahan</string>
     <string name="label_default">Bawaan</string>
-    <string name="pref_remove_exclude_categories">Kategori yang dikecualikan</string>
+    <string name="pref_remove_exclude_collections">Kategori yang dikecualikan</string>
     <string name="help_translate">Bantu terjemahkan</string>
     <string name="pref_tablet_ui_mode">UI tablet</string>
     <string name="ext_app_info">Informasi aplikasi</string>
@@ -603,9 +603,9 @@
     <string name="pref_app_language">Bahasa aplikasi</string>
     <string name="theme_lavender">Bunga Lavender</string>
     <string name="description_placeholder">Tidak ada deskripsi</string>
-    <string name="delete_category_confirmation">Apakah anda ingin menghapus kategori \"%s\"?</string>
+    <string name="delete_collection_confirmation">Apakah anda ingin menghapus kategori \"%s\"?</string>
     <string name="internal_error">InternalError: Periksa log kerusakan untuk informasi lebih lanjut</string>
-    <string name="delete_category">Hapus kategori</string>
+    <string name="delete_collection">Hapus kategori</string>
     <string name="pref_user_agent_string">String agen pengguna default</string>
     <string name="pref_reset_user_agent_string">Setel ulang string agen pengguna default</string>
     <string name="action_remove_everything">Hapus semuanya</string>
@@ -674,7 +674,7 @@
     <string name="day_short">%dhari</string>
     <string name="action_not_now">Tidak sekarang</string>
     <string name="pref_library_update_show_tab_badge">Tampilkan jumlah yang belum dibaca pada ikon Pembaruan</string>
-    <string name="information_no_manga_category">Kategori ini kosong</string>
+    <string name="information_no_manga_collection">Kategori ini kosong</string>
     <string name="copied_to_clipboard_plain">Tersalin di papan klip</string>
     <string name="enhanced_services_not_installed">Tersedia tetapi sumber tidak terpasang: %s</string>
     <string name="pref_skip_dupe_chapters">Melewati bab terduplikasi</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*dibutuhkan</string>
     <string name="pref_hide_in_library_items">Semua catatan tersembunyi sudah ada di perpustakaan</string>
     <string name="action_copy_to_clipboard">Salin ke papan klip</string>
-    <string name="action_update_category">Perbarui kategori</string>
+    <string name="action_update_collection">Perbarui kategori</string>
     <string name="split_tall_images">Potong gambar tinggi</string>
     <string name="overlay_header">Lapisan awal</string>
     <string name="pref_page_rotate">Memutar halaman lebar agar pas</string>

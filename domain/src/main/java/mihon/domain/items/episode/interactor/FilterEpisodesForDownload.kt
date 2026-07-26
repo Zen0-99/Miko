@@ -1,6 +1,6 @@
 package mihon.domain.items.episode.interactor
 
-import tachiyomi.domain.category.anime.interactor.GetAnimeCategories
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
@@ -11,12 +11,12 @@ import tachiyomi.domain.items.episode.model.Episode
  *
  * @property getEpisodesByAnimeId Interactor for retrieving episodes by anime ID.
  * @property downloadPreferences User preferences related to episode downloads.
- * @property getCategories Interactor for retrieving categories associated with an anime.
+ * @property getCollections Interactor for retrieving collections associated with an anime.
  */
 class FilterEpisodesForDownload(
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId,
     private val downloadPreferences: DownloadPreferences,
-    private val getCategories: GetAnimeCategories,
+    private val getCollections: GetAnimeCollections,
 ) {
 
     /**
@@ -45,28 +45,28 @@ class FilterEpisodesForDownload(
 
     /**
      * Determines whether new episodes should be downloaded for the anime based on user preferences and the
-     * categories to which the anime belongs.
+     * collections to which the anime belongs.
      *
      * @return `true` if episodes of the anime should be downloaded
      */
     private suspend fun Anime.shouldDownloadNewEpisodes(): Boolean {
         if (!favorite) return false
-        val categories = getCategories.await(id).map { it.id }.ifEmpty { listOf(DEFAULT_CATEGORY_ID) }
-        val includedCategories = downloadPreferences.downloadNewEpisodeCategories().get().map { it.toLong() }
-        val excludedCategories = downloadPreferences.downloadNewEpisodeCategoriesExclude().get().map { it.toLong() }
+        val collections = getCollections.await(id).map { it.id }.ifEmpty { listOf(DEFAULT_COLLECTION_ID) }
+        val includedCollections = downloadPreferences.downloadNewEpisodeCollections().get().map { it.toLong() }
+        val excludedCollections = downloadPreferences.downloadNewEpisodeCollectionsExclude().get().map { it.toLong() }
         return when {
-            // Default Download from all categories
-            includedCategories.isEmpty() && excludedCategories.isEmpty() -> true
-            // In excluded category
-            categories.any { it in excludedCategories } -> false
-            // Included category not selected
-            includedCategories.isEmpty() -> true
-            // In included category
-            else -> categories.any { it in includedCategories }
+            // Default Download from all collections
+            includedCollections.isEmpty() && excludedCollections.isEmpty() -> true
+            // In excluded collection
+            collections.any { it in excludedCollections } -> false
+            // Included collection not selected
+            includedCollections.isEmpty() -> true
+            // In included collection
+            else -> collections.any { it in includedCollections }
         }
     }
 
     companion object {
-        private const val DEFAULT_CATEGORY_ID = 0L
+        private const val DEFAULT_COLLECTION_ID = 0L
     }
 }

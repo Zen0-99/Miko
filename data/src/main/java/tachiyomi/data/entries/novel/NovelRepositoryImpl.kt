@@ -218,11 +218,11 @@ class NovelRepositoryImpl(
         }
     }
 
-    override suspend fun setNovelCategories(novelId: Long, categoryIds: List<Long>) {
+    override suspend fun setNovelCollections(novelId: Long, collectionIds: List<Long>) {
         handler.await(inTransaction = true) {
             novels_categoriesQueries.deleteNovelCategoryByNovelId(novelId)
-            categoryIds.forEach { categoryId ->
-                novels_categoriesQueries.insert(novelId, categoryId)
+            collectionIds.forEach { collectionId ->
+                novels_categoriesQueries.insert(novelId, collectionId)
             }
         }
     }

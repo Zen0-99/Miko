@@ -12,7 +12,7 @@ import java.util.concurrent.TimeoutException
 
 /**
  * Structured logger for plugin compatibility issues.
- * Logs include plugin id, operation, capability, and failure category
+ * Logs include plugin id, operation, capability, and failure collection
  * to help debug compatibility issues with specific plugins.
  */
 class CompatibilityLogger(
@@ -28,12 +28,12 @@ class CompatibilityLogger(
         Log.d(LOG_TAG, message)
     }
 
-    fun logFailure(operation: String, capability: String, category: String, error: Throwable? = null) {
+    fun logFailure(operation: String, capability: String, collection: String, error: Throwable? = null) {
         val message = buildString {
             append("plugin=$pluginId")
             append(" op=$operation")
             append(" cap=$capability")
-            append(" failure=$category")
+            append(" failure=$collection")
             if (error != null) append(" error=${error.message}")
         }
         Log.e(LOG_TAG, message, error)

@@ -6,12 +6,12 @@ import kotlinx.serialization.protobuf.ProtoNumber
 @Serializable
 data class MikoBackup(
     @ProtoNumber(1) val backupManga: List<BackupManga> = emptyList(),
-    @ProtoNumber(2) var backupCategories: List<BackupCategory> = emptyList(),
+    @ProtoNumber(2) var backupCollections: List<BackupCollection> = emptyList(),
     @ProtoNumber(101) var backupSources: List<BackupSource> = emptyList(),
     @ProtoNumber(104) var backupPreferences: List<BackupPreference> = emptyList(),
     @ProtoNumber(105) var backupSourcePreferences: List<BackupSourcePreferences> = emptyList(),
     @ProtoNumber(200) var backupNovels: List<MikoBackupNovel> = emptyList(),
-    @ProtoNumber(201) var backupNovelCategories: List<MikoBackupNovelCategory> = emptyList(),
+    @ProtoNumber(201) var backupNovelCollections: List<MikoBackupNovelCollection> = emptyList(),
     @ProtoNumber(202) var backupNovelSources: List<BackupSource> = emptyList(),
 )
 
@@ -29,7 +29,7 @@ data class MikoBackupNovel(
     @ProtoNumber(10) var dateAdded: Long = 0,
     @ProtoNumber(11) var chapterFlags: Int = 0,
     @ProtoNumber(12) var chapters: List<MikoBackupNovelChapter> = emptyList(),
-    @ProtoNumber(13) var categories: List<Int> = emptyList(),
+    @ProtoNumber(13) var collections: List<Int> = emptyList(),
     @ProtoNumber(14) var history: List<MikoBackupNovelHistory> = emptyList(),
     @ProtoNumber(15) var wordCount: Int? = null,
     @ProtoNumber(16) var chapterCount: Int? = null,
@@ -60,7 +60,7 @@ data class MikoBackupNovel(
             initialized = this.initialized,
         ).also { backup ->
             backup.chapters = this.chapters.map { it.toBackupNovelChapter() }
-            backup.categories = this.categories.map { it.toLong() }
+            backup.collections = this.collections.map { it.toLong() }
             backup.history = this.history.map { it.toBackupNovelHistory() }
             backup.tracking = this.tracking.map { it.toBackupNovelTracking() }
         }
@@ -148,13 +148,13 @@ data class MikoBackupNovelTrack(
 }
 
 @Serializable
-data class MikoBackupNovelCategory(
+data class MikoBackupNovelCollection(
     @ProtoNumber(1) var name: String,
     @ProtoNumber(2) var order: Int = 0,
     @ProtoNumber(100) var flags: Int = 0,
 ) {
-    fun toBackupCategory(): BackupCategory {
-        return BackupCategory(
+    fun toBackupCollection(): BackupCollection {
+        return BackupCollection(
             name = this.name,
             order = this.order.toLong(),
             flags = this.flags.toLong(),

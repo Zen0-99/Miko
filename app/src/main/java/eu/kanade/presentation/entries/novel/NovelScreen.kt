@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
 import eu.kanade.presentation.components.relativeDateTimeText
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
@@ -85,7 +86,7 @@ fun NovelScreen(
     onSearch: (String, Boolean) -> Unit,
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditNovel: ((String, String, String, Long, List<String>) -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onMarkAllReadClicked: (() -> Unit)?,
@@ -135,7 +136,7 @@ fun NovelScreen(
             onSearch = onSearch,
             onShareClicked = onShareClicked,
             onDownloadActionClicked = onDownloadActionClicked,
-            onEditCategoryClicked = onEditCategoryClicked,
+            onEditCollectionClicked = onEditCollectionClicked,
             onEditNovel = onEditNovel,
             onMigrateClicked = onMigrateClicked,
             onMarkAllReadClicked = onMarkAllReadClicked,
@@ -185,7 +186,7 @@ fun NovelScreen(
             onSearch = onSearch,
             onShareClicked = onShareClicked,
             onDownloadActionClicked = onDownloadActionClicked,
-            onEditCategoryClicked = onEditCategoryClicked,
+            onEditCollectionClicked = onEditCollectionClicked,
             onEditNovel = onEditNovel,
             onMigrateClicked = onMigrateClicked,
             onMarkAllReadClicked = onMarkAllReadClicked,
@@ -238,7 +239,7 @@ private fun NovelScreenSmallImpl(
     onSearch: (String, Boolean) -> Unit,
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditNovel: ((String, String, String, Long, List<String>) -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onMarkAllReadClicked: (() -> Unit)?,
@@ -330,10 +331,10 @@ private fun NovelScreenSmallImpl(
                 onClickFilter = null,
                 onClickShare = onShareClicked,
                 onClickDownload = onDownloadActionClicked,
-                onClickEditCategory = if (onEditNovel != null) {
+                onClickEditCollection = if (onEditNovel != null) {
                     { showEditDialog = true }
                 } else {
-                    onEditCategoryClicked
+                    onEditCollectionClicked
                 },
                 onClickRefresh = if (state.source.isRateLimited) onRefresh else null,
                 onClickMigrate = onMigrateClicked,
@@ -356,7 +357,7 @@ private fun NovelScreenSmallImpl(
                 toolbarBackgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
     ) { contentPadding ->
         val topPadding = contentPadding.calculateTopPadding()
 
@@ -429,16 +430,17 @@ private fun NovelScreenSmallImpl(
                     )
                 }
 
-                item(key = "SUGGESTIONS", contentType = "SUGGESTIONS") {
-                    AuroraSuggestionsRow(
-                        state = state.suggestions,
-                        onSuggestionClick = onSuggestionClick,
-                        onOpenSuggestions = onOpenSuggestions,
-                        onRetryClick = onRetrySuggestions,
-                        modifier = Modifier.fillMaxWidth(),
-                        accentColor = state.accentColor,
-                    )
-                }
+                // Similar titles — temporarily disabled
+//                item(key = "SUGGESTIONS", contentType = "SUGGESTIONS") {
+//                    AuroraSuggestionsRow(
+//                        state = state.suggestions,
+//                        onSuggestionClick = onSuggestionClick,
+//                        onOpenSuggestions = onOpenSuggestions,
+//                        onRetryClick = onRetrySuggestions,
+//                        modifier = Modifier.fillMaxWidth(),
+//                        accentColor = state.accentColor,
+//                    )
+//                }
 
                 item(
                     key = EntryScreenItem.ITEM_HEADER,
@@ -591,7 +593,7 @@ private fun NovelScreenLargeImpl(
     onSearch: (String, Boolean) -> Unit,
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditNovel: ((String, String, String, Long, List<String>) -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onMarkAllReadClicked: (() -> Unit)?,
@@ -640,7 +642,7 @@ private fun NovelScreenLargeImpl(
         onSearch = onSearch,
         onShareClicked = onShareClicked,
         onDownloadActionClicked = onDownloadActionClicked,
-        onEditCategoryClicked = onEditCategoryClicked,
+        onEditCollectionClicked = onEditCollectionClicked,
         onEditNovel = onEditNovel,
         onMigrateClicked = onMigrateClicked,
         onMarkAllReadClicked = onMarkAllReadClicked,

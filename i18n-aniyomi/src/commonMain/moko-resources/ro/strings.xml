@@ -2,11 +2,11 @@
 <resources>
     <string name="pref_library_summary">Categorii, actualizări globale</string>
     <string name="pref_library_update_show_tab_badge">Afișați numărul de necitite pe pictograma Actualizări</string>
-    <string name="manga_categories">Categorii</string>
+    <string name="manga_collections">Categorii</string>
     <string name="action_display_local_badge_manga">Manga local</string>
-    <string name="default_manga_category">Categorie implicită</string>
-    <string name="pref_manga_library_update_categories_details">Manga din categoriile excluse nu vor fi actualizate, chiar dacă se află și în categoriile incluse.</string>
-    <string name="pref_remove_exclude_categories_manga">Categorii excluse</string>
+    <string name="default_manga_collection">Categorie implicită</string>
+    <string name="pref_manga_library_update_collections_details">Manga din categoriile excluse nu vor fi actualizate, chiar dacă se află și în categoriile incluse.</string>
+    <string name="pref_remove_exclude_collections_manga">Categorii excluse</string>
     <string name="pref_clear_manga_database">Curățați baza de date</string>
     <string name="pref_clear_manga_database_summary">Ștergeți istoricul pentru manga care nu sunt salvate în bibliotecă</string>
     <string name="snack_add_to_manga_library">Adaugă manga în bibliotecă?</string>

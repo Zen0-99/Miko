@@ -35,7 +35,7 @@
     <string name="ext_install">Ларт</string>
     <string name="ext_update">Ҫӗнет</string>
     <string name="all">Пурне те</string>
-    <string name="default_category_summary">Кашнинчех ыйтмалла</string>
+    <string name="default_collection_summary">Кашнинчех ыйтмалла</string>
     <string name="charging">Петтерей тулнӑ чух</string>
     <string name="pref_library_update_restriction">Хатӗр валли хӑй-хальлӗн ҫӗнетӳ чарӑвӗсем</string>
     <string name="update_weekly">Кашни ерне</string>
@@ -85,10 +85,10 @@
     <string name="action_pause">Чар</string>
     <string name="action_view_chapters">Сыпӑксене пӑх</string>
     <string name="action_edit_cover">Хуплашкана улӑштар</string>
-    <string name="action_move_category">Пухмӑша кӗрт</string>
-    <string name="action_rename_category">Пухмӑш йатне улӑштар</string>
-    <string name="action_edit_categories">Пухмӑшсене улӑштар</string>
-    <string name="action_add_category">Пухмӑша хуш</string>
+    <string name="action_move_collection">Пухмӑша кӗрт</string>
+    <string name="action_rename_collection">Пухмӑш йатне улӑштар</string>
+    <string name="action_edit_collections">Пухмӑшсене улӑштар</string>
+    <string name="action_add_collection">Пухмӑша хуш</string>
     <string name="action_add">Хуш</string>
     <string name="action_mark_previous_as_read">Умӗнхине вуланӑ пек паллӑ ту</string>
     <string name="action_edit">Улӑштар</string>
@@ -116,7 +116,7 @@
     <string name="action_settings">Ӗнерӳ</string>
     <string name="history">Кун-ҫул</string>
     <string name="chapters">Сыпӑксем</string>
-    <string name="categories">Пухмӑшсем</string>
+    <string name="collections">Пухмӑшсем</string>
     <string name="information_empty_library">Санӑн вулавӑш пушӑ</string>
     <string name="label_recent_manga">Кун-ҫул</string>
     <string name="label_download_queue">Тийев черечӗ</string>
@@ -167,12 +167,12 @@
     <string name="track">Йӗрлев</string>
     <string name="information_webview_outdated">Чи лайӑх пӗрлӗхшӗн WebView-а ҫӗнет</string>
     <string name="information_cloudflare_bypass_failure">Cloudflare-ран иртеймерӗ</string>
-    <string name="information_empty_category">Санӑн пухмӑшсем ҫук. Хӑвӑн вулавӑша пухмӑшсем туса йӗркелеме «Хуш» пускӑч ҫине пус.</string>
+    <string name="information_empty_collection">Санӑн пухмӑшсем ҫук. Хӑвӑн вулавӑша пухмӑшсем туса йӗркелеме «Хуш» пускӑч ҫине пус.</string>
     <string name="label_migration">Куҫару</string>
     <string name="label_backup">Янтӑлав тата тавӑру</string>
     <string name="ext_obsolete">Кивелнӗ</string>
     <string name="ext_updates_pending">Ҫӗнетӳ кӗтеҫҫӗ</string>
-    <string name="default_category">Йаланхилле пухмӑш</string>
+    <string name="default_collection">Йаланхилле пухмӑш</string>
     <string name="pref_library_update_refresh_metadata_summary">Вулавӑша ҫӗнетнӗ чухне ҫӗнӗ хуплашка тата вак-тӗвек пуррине тӗрӗслени</string>
     <string name="pref_library_update_refresh_metadata">Хӑй-халлӗн метта пӗлӗмсене ҫӗнетмелле</string>
     <string name="pref_update_only_non_completed">Серилӗх вӗҫленнӗ</string>
@@ -295,8 +295,8 @@
     <string name="set_as_cover">Хуплашка пек ларт</string>
     <string name="picture_saved">Ӳкерчӗке упранӑ</string>
     <string name="dialog_with_checkbox_remove_description">Ҫакӑ вара сыпӑка вулани вӑхӑта катертӗ. Чӑнах катертесшӗн-и?</string>
-    <string name="snack_categories_deleted">Пухмӑшсем катертнӗ</string>
-    <string name="error_category_exists">Ун пек ятпа пухмӑш пур ӗнтӗ!</string>
+    <string name="snack_collections_deleted">Пухмӑшсем катертнӗ</string>
+    <string name="error_collection_exists">Ун пек ятпа пухмӑш пур ӗнтӗ!</string>
     <string name="track_type">Тӗс</string>
     <string name="track_status">Хал</string>
     <string name="status">Хал</string>
@@ -349,7 +349,7 @@
     <string name="no_more_results">Урӑх тупсӑмсем ҫук</string>
     <string name="tabs_header">Кантӑксем</string>
     <string name="invalid_backup_file">Тӗрӗс мар янтӑв файлӗ</string>
-    <string name="updating_category">Пухмӑша ҫӗнетни</string>
+    <string name="updating_collection">Пухмӑша ҫӗнетни</string>
     <string name="unknown_error">Паллӑ мар йӑнӑш</string>
     <string name="logout_success">Есӗ тухрӑн</string>
     <string name="logout">Тух</string>
@@ -479,8 +479,8 @@
     <string name="action_sort_unread_count">Йулнӑ сыпӑксемпе</string>
     <string name="action_sort_count">Хайлав шучӗпе</string>
     <string name="action_remove_everything">Пурне те катерт</string>
-    <string name="delete_category_confirmation">«%s» пухмӑша катертесшӗнех-и?</string>
-    <string name="delete_category">Пухмӑша катерт</string>
+    <string name="delete_collection_confirmation">«%s» пухмӑша катертесшӗнех-и?</string>
+    <string name="delete_collection">Пухмӑша катерт</string>
     <string name="action_display_local_badge">Вырӑнти ҫӑл куҫран</string>
     <string name="label_warning">Асӑрхаттару</string>
     <string name="action_display_cover_only_grid">Йатсӑр сетке</string>
@@ -531,7 +531,7 @@
     <string name="label_stats">Шутлавсем</string>
     <string name="action_copy_to_clipboard">Пайлашу асне ӑт</string>
     <string name="pref_backup_summary">Хӑй тӗллӗн тата хӑй-хальлӗн йантӑлав</string>
-    <string name="action_update_category">Пухмӑша ҫӗнет</string>
+    <string name="action_update_collection">Пухмӑша ҫӗнет</string>
     <string name="pref_advanced_summary">Йӑнӑш кӗнекине тийесе йани, паттарейе лайӑхлатни</string>
     <string name="pref_library_update_show_tab_badge">Вуламан сыпӑксен шутне «Ҫӗнӗлӗх» ыккун ҫинче кӑтартни</string>
     <string name="pref_landscape_zoom">Сӑна тӑрӑх пысӑклатни</string>
@@ -539,7 +539,7 @@
     <string name="automatic_background">Хӑй-хальлӗн</string>
     <string name="disabled_nav">Сӳнтернӗ</string>
     <string name="extension_api_error">Хушмасен йат-йышне илесси пулаймарӗ</string>
-    <string name="categorized_display_settings">Кашни пухмӑшӑн хӑйӗн ала ӗнерӗвӗсем</string>
+    <string name="per_collection_display_settings">Кашни пухмӑшӑн хӑйӗн ала ӗнерӗвӗсем</string>
     <string name="ext_app_info">Ап ҫинчен</string>
     <string name="split_tall_images_summary">Вулӑшӑн тухӑҫа лайӑхлатать</string>
     <string name="error_user_agent_string_blank">User agent пушӑ пулмалла мар</string>
@@ -565,7 +565,7 @@
     <string name="action_ok">Йурӗ</string>
     <string name="unlock_app_title">%s уҫ</string>
     <string name="action_move_to_bottom_all_for_series">Хайлава вӗҫе куҫар</string>
-    <string name="pref_library_update_categories_details">Кӗртнӗ пухмӑшсенче пулнӑ пулсан та кӑларса пӑрахнӑ пухмӑшсенче пулнӑ серилӗхсем ҫӗнелмӗҫ.</string>
+    <string name="pref_library_update_collections_details">Кӗртнӗ пухмӑшсенче пулнӑ пулсан та кӑларса пӑрахнӑ пухмӑшсенче пулнӑ серилӗхсем ҫӗнелмӗҫ.</string>
     <string name="selected">Суйланӑ</string>
     <string name="not_selected">Суйламан</string>
     <string name="action_bar_up_description">Ҫӳлелле куҫ</string>

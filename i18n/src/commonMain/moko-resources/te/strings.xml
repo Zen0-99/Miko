@@ -14,9 +14,9 @@
     <string name="label_settings">అమరికలు</string>
     <string name="label_more">మరింత</string>
     <string name="name">పేరు</string>
-    <string name="action_rename_category">విభాగ పేరును మార్చుము</string>
-    <string name="action_edit_categories">విభాగములను సవరించుము</string>
-    <string name="action_add_category">విభాగమును జోడించుము</string>
+    <string name="action_rename_collection">విభాగ పేరును మార్చుము</string>
+    <string name="action_edit_collections">విభాగములను సవరించుము</string>
+    <string name="action_add_collection">విభాగమును జోడించుము</string>
     <string name="action_add">జోడించుము</string>
     <string name="action_edit">సవరించుము</string>
     <string name="action_disable_all">అన్నిటిని అచైతన్న పరుచుము</string>
@@ -49,8 +49,8 @@
     <string name="track">కంట కనిపెట్టుట</string>
     <string name="chapters">అధ్యాయాలు</string>
     <string name="manga">లైబ్రరీ ఎంట్రీలు</string>
-    <string name="categories">విభాగములు</string>
-    <string name="information_empty_category">మీ దగ్గర ఏ విభాగములు లేవు। మీ గ్రంథాలయాన్ని సరికూర్చుకోడానికి ప్లస్ చిహ్నాన్ని నొక్కి కొత్త దాన్ని సృష్టించుకోండి॥</string>
+    <string name="collections">విభాగములు</string>
+    <string name="information_empty_collection">మీ దగ్గర ఏ విభాగములు లేవు। మీ గ్రంథాలయాన్ని సరికూర్చుకోడానికి ప్లస్ చిహ్నాన్ని నొక్కి కొత్త దాన్ని సృష్టించుకోండి॥</string>
     <string name="information_empty_library">మీ గ్రంథాలయము ఖాళీగా ఉన్నది</string>
     <string name="information_no_recent_manga">ఈ మధ్య మీరు ఏమి చదవలేదు</string>
     <string name="information_no_recent">కొత్త నవీకరణలు లేవు</string>
@@ -61,7 +61,7 @@
     <string name="action_pause">తాత్కాలికముగా నిలిపి వేయుము</string>
     <string name="action_view_chapters">అధ్యాయాములను చూడుము</string>
     <string name="action_edit_cover">ముఖచిత్రమును సవరించుము</string>
-    <string name="action_move_category">విభాగములను క్రమీకరించుము</string>
+    <string name="action_move_collection">విభాగములను క్రమీకరించుము</string>
     <string name="action_sort_chapter_fetch_date">పొందబడిన తేదీ</string>
     <string name="action_filter_tracked">కంట కనిపెట్టబడ్డవి</string>
     <string name="label_default">ప్రమాణము</string>
@@ -158,8 +158,8 @@
     <string name="action_sort_unread_count">చదవని లెక్క</string>
     <string name="action_sort_last_manga_update">చివరి అప్డేట్ తనిఖీ</string>
     <string name="action_remove_everything">మొత్తం తీసేయండి</string>
-    <string name="delete_category_confirmation">మీరు \"%s\" క్యాటగిరీ తీసివేయాలి అనుకుంటున్నారా?</string>
-    <string name="delete_category">క్యాటగిరీ తీసేయండి</string>
+    <string name="delete_collection_confirmation">మీరు \"%s\" క్యాటగిరీ తీసివేయాలి అనుకుంటున్నారా?</string>
+    <string name="delete_collection">క్యాటగిరీ తీసేయండి</string>
     <string name="action_move_to_top_all_for_series">సిరీస్ పైన పెట్టండి</string>
     <string name="action_search_hint">అన్వేషించండి…</string>
     <string name="action_not_now">ఇప్పుడు కాదు</string>

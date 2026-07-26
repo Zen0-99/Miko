@@ -8,7 +8,7 @@
         <item quantity="one">I går</item>
         <item quantity="other">%1$d dagar sidan</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategori</item>
         <item quantity="other">%d kategoriar</item>
     </plurals>

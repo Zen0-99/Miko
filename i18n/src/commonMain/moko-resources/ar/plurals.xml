@@ -48,7 +48,7 @@
         <item quantity="many">بعد %1$s دقائق</item>
         <item quantity="other">بعد %1$s دقائق</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="zero">لا يوجد فئات</item>
         <item quantity="one">فئة</item>
         <item quantity="two">فئتان</item>

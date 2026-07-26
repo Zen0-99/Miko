@@ -114,7 +114,7 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.anime.interactor.GetAnimeCategories
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
 import tachiyomi.domain.custombuttons.interactor.GetCustomButtons
 import tachiyomi.domain.custombuttons.model.CustomButton
 import tachiyomi.domain.download.service.DownloadPreferences
@@ -162,7 +162,7 @@ class PlayerViewModel @JvmOverloads constructor(
     private val getAnime: GetAnime = Injekt.get(),
     private val getNextEpisodes: GetNextEpisodes = Injekt.get(),
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
-    private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
+    private val getAnimeCollections: GetAnimeCollections = Injekt.get(),
     private val getTracks: GetAnimeTracks = Injekt.get(),
     private val upsertHistory: UpsertAnimeHistory = Injekt.get(),
     private val updateEpisode: UpdateEpisode = Injekt.get(),
@@ -1295,7 +1295,7 @@ class PlayerViewModel @JvmOverloads constructor(
                 MPVLib.setPropertyInt("user-data/current-anime/intro-length", getAnimeSkipIntroLength())
                 MPVLib.setPropertyString(
                     "user-data/current-anime/category",
-                    getAnimeCategories.await(anime.id).joinToString {
+                    getAnimeCollections.await(anime.id).joinToString {
                         it.name
                     },
                 )

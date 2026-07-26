@@ -16,7 +16,7 @@
         <item quantity="one">برای ۱ مانگا</item>
         <item quantity="other">برای %d مانگا</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d دسته</item>
         <item quantity="other">%d دسته</item>
     </plurals>

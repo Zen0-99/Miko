@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="action_add">Добавить</string>
-    <string name="action_add_category">Добавить категорию</string>
+    <string name="action_add_collection">Добавить категорию</string>
     <string name="action_bookmark">Добавить закладку</string>
     <string name="action_cancel">Отмена</string>
     <string name="action_delete">Удалить</string>
@@ -11,7 +11,7 @@
     <string name="action_display_mode">Режим отображения</string>
     <string name="action_download">Загрузить</string>
     <string name="action_edit">Изменить</string>
-    <string name="action_edit_categories">Изменить категории</string>
+    <string name="action_edit_collections">Изменить категории</string>
     <string name="action_edit_cover">Изменить обложку</string>
     <string name="action_filter">Фильтрация</string>
     <string name="action_filter_bookmarked">В закладках</string>
@@ -21,14 +21,14 @@
     <string name="action_mark_as_read">Пометить как «Прочитано»</string>
     <string name="action_mark_as_unread">Пометить как «Не прочитано»</string>
     <string name="action_mark_previous_as_read">Пометить предыдущее как «Прочитано»</string>
-    <string name="action_move_category">Добавить в категории</string>
+    <string name="action_move_collection">Добавить в категории</string>
     <string name="action_next_chapter">Следующая глава</string>
     <string name="action_open_in_browser">Открыть в браузере</string>
     <string name="action_pause">Пауза</string>
     <string name="action_previous_chapter">Предыдущая глава</string>
     <string name="action_remove">Удалить</string>
     <string name="action_remove_bookmark">Удалить закладку</string>
-    <string name="action_rename_category">Переименовать категорию</string>
+    <string name="action_rename_collection">Переименовать категорию</string>
     <string name="action_reset">Сбросить</string>
     <string name="action_resume">Продолжить</string>
     <string name="action_retry">Повторить</string>
@@ -75,7 +75,7 @@
     <string name="download_queue_error">Невозможно скачать главы. Можете попробовать ещё раз в очереди загрузок</string>
     <string name="download_unread">Непрочитанные главы</string>
     <string name="dropped">Брошено</string>
-    <string name="error_category_exists">Категория с таким названием уже существует!</string>
+    <string name="error_collection_exists">Категория с таким названием уже существует!</string>
     <string name="fifth_to_last">Пятая от прочитанной главы</string>
     <string name="file_select_backup">Выбрать файл резервной копии</string>
     <string name="file_select_cover">Выбрать обложку</string>
@@ -181,7 +181,7 @@
     <string name="update_check_notification_download_in_progress">Загрузка…</string>
     <string name="update_check_notification_update_available">Доступно обновление!</string>
     <string name="update_never">Выключено</string>
-    <string name="updating_category">Обновление категории</string>
+    <string name="updating_collection">Обновление категории</string>
     <string name="used_cache">Использовано: %1$s</string>
     <string name="username">Имя пользователя</string>
     <string name="version">Версия</string>
@@ -196,11 +196,11 @@
     <string name="action_undo">Отменить</string>
     <string name="backup_choice">Что добавить в резервную копию?</string>
     <string name="backup_created">Резервная копия создана</string>
-    <string name="categories">Категории</string>
+    <string name="collections">Категории</string>
     <string name="chapter_paused">Пауза</string>
     <string name="creating_backup">Создание резервной копии</string>
-    <string name="default_category">Основная категория</string>
-    <string name="default_category_summary">Спрашивать</string>
+    <string name="default_collection">Основная категория</string>
+    <string name="default_collection_summary">Спрашивать</string>
     <string name="delete_downloads_for_manga">Удалить загруженные главы?</string>
     <string name="download_notifier_download_paused">Загрузки приостановлены</string>
     <string name="history">История</string>
@@ -215,7 +215,7 @@
     <string name="pref_restore_backup_summ">Восстановить библиотеку из резервной копии</string>
     <string name="restore_completed">Восстановление завершено</string>
     <string name="restoring_backup">Восстановление из резервной копии</string>
-    <string name="snack_categories_deleted">Категории удалены</string>
+    <string name="snack_collections_deleted">Категории удалены</string>
     <string name="track">Отслеживание</string>
     <string name="update_weekly">Еженедельно</string>
     <string name="action_sort_total">Количество глав</string>
@@ -229,7 +229,7 @@
     <string name="latest">Последние</string>
     <string name="browse">Поисковик</string>
     <string name="channel_common">Общий</string>
-    <string name="information_empty_category">Нет категорий в библиотеке. Нажмите кнопку «Добавить» чтобы создать категорию для организации вашей библиотеки.</string>
+    <string name="information_empty_collection">Нет категорий в библиотеке. Нажмите кнопку «Добавить» чтобы создать категорию для организации вашей библиотеки.</string>
     <string name="label_migration">Перенос</string>
     <string name="label_extensions">Расширения</string>
     <string name="label_extension_info">Информация о расширении</string>
@@ -463,8 +463,8 @@
     <string name="exclude">Исключать: %s</string>
     <string name="include">Включать: %s</string>
     <string name="action_sort_chapter_fetch_date">Последнее получение главы</string>
-    <string name="pref_download_new_categories_details">Серии в исключённых категориях не будут загружаться, даже если находятся во включённых категориях.</string>
-    <string name="pref_library_update_categories_details">Серии в исключённых категориях не будут обновляться, даже если находятся во включённых категориях.</string>
+    <string name="pref_download_new_collections_details">Серии в исключённых категориях не будут загружаться, даже если находятся во включённых категориях.</string>
+    <string name="pref_library_update_collections_details">Серии в исключённых категориях не будут обновляться, даже если находятся во включённых категориях.</string>
     <string name="pref_category_auto_download">Автозагрузка</string>
     <string name="action_show_errors">Нажать, чтобы увидеть подробности</string>
     <string name="update_check_eol">Эта версия Android больше не поддерживается</string>
@@ -494,9 +494,9 @@
     <string name="error_saving_cover">Ошибка сохранения обложки</string>
     <string name="cover_saved">Обложка сохранена</string>
     <string name="manga_cover">Обложка</string>
-    <string name="categorized_display_settings">Каждая категория имеет собственные настройки сортировки</string>
+    <string name="per_collection_display_settings">Каждая категория имеет собственные настройки сортировки</string>
     <string name="tracking_guide">Руководство по отслеживанию</string>
-    <string name="information_empty_category_dialog">Ваша библиотека не имеет категорий.</string>
+    <string name="information_empty_collection_dialog">Ваша библиотека не имеет категорий.</string>
     <string name="action_start_downloading_now">Начать загрузку сейчас</string>
     <string name="theme_greenapple">Зелёное Яблоко</string>
     <string name="pref_app_theme">Тема приложения</string>
@@ -526,7 +526,7 @@
     <string name="getting_started_guide">Руководство по началу работы с приложением</string>
     <string name="action_track">Отслеживать</string>
     <string name="pref_tablet_ui_mode">Планшетный интерфейс</string>
-    <string name="pref_remove_exclude_categories">Исключённые категории</string>
+    <string name="pref_remove_exclude_collections">Исключённые категории</string>
     <string name="help_translate">Помочь с переводом</string>
     <string name="ext_app_info">О приложении</string>
     <string name="ext_installer_shizuku_unavailable_dialog">Установите и запустите Shizuku, чтобы использовать его как установщик расширений.</string>
@@ -604,8 +604,8 @@
     <string name="theme_lavender">Лаванда</string>
     <string name="description_placeholder">Без описания</string>
     <string name="internal_error">InternalError: Проверьте журнал сбоев для дополнительной информации</string>
-    <string name="delete_category_confirmation">Хотите ли вы удалить категорию \"%s\"?</string>
-    <string name="delete_category">Удалить категорию</string>
+    <string name="delete_collection_confirmation">Хотите ли вы удалить категорию \"%s\"?</string>
+    <string name="delete_collection">Удалить категорию</string>
     <string name="pref_user_agent_string">User agent по умолчанию</string>
     <string name="pref_reset_user_agent_string">Сбросить user agent по умолчанию</string>
     <string name="action_remove_everything">Удалить всё</string>
@@ -673,7 +673,7 @@
     <string name="label_titles_in_global_update">В глобальном обновлении</string>
     <string name="label_local">На устройстве</string>
     <string name="action_not_now">Не сейчас</string>
-    <string name="information_no_manga_category">Категория пуста</string>
+    <string name="information_no_manga_collection">Категория пуста</string>
     <string name="pref_library_update_show_tab_badge">Количество непрочитанных глав на иконке «Обновления»</string>
     <string name="copied_to_clipboard_plain">Скопировано в буфер обмена</string>
     <string name="enhanced_services_not_installed">Доступно, но источник не установлен: %s</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*необходимо</string>
     <string name="pref_hide_in_library_items">Скрывать серии, уже находящиеся в библиотеке</string>
     <string name="action_copy_to_clipboard">Копировать в буфер обмена</string>
-    <string name="action_update_category">Обновить категорию</string>
+    <string name="action_update_collection">Обновить категорию</string>
     <string name="split_tall_images">Разделять длинные изображения</string>
     <string name="overlay_header">Наложение</string>
     <string name="pref_page_rotate">Развернуть широкие страницы под размер экрана</string>

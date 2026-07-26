@@ -172,7 +172,7 @@ data object UpdatesTab : Tab {
             }
         }
 
-        val fetchingTabContent = if (showFetchingTab) fetchingTab(context) else null
+        val fetchingTabContent = if (showFetchingTab) fetchingTab(context, contentMode) else null
 
         val tabs = buildList {
             add(updatesTab)

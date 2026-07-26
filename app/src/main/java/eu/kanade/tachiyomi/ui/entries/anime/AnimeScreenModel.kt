@@ -92,9 +92,9 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.anime.interactor.GetAnimeCategories
-import tachiyomi.domain.category.anime.interactor.SetAnimeCategories
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.anime.interactor.SetAnimeCollections
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.anime.interactor.GetAnimeWithEpisodesAndSeasons
 import tachiyomi.domain.entries.anime.interactor.GetDuplicateLibraryAnime
@@ -154,10 +154,10 @@ class AnimeScreenModel(
     private val updateAnime: UpdateAnime = Injekt.get(),
     private val syncEpisodesWithSource: SyncEpisodesWithSource = Injekt.get(),
     private val syncSeasonsWithSource: SyncSeasonsWithSource = Injekt.get(),
-    private val getCategories: GetAnimeCategories = Injekt.get(),
+    private val getCollections: GetAnimeCollections = Injekt.get(),
     private val getTracks: GetAnimeTracks = Injekt.get(),
     private val addTracks: AddAnimeTracks = Injekt.get(),
-    private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
+    private val setAnimeCollections: SetAnimeCollections = Injekt.get(),
     private val animeRepository: AnimeRepository = Injekt.get(),
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
     private val filterEpisodesForDownload: FilterEpisodesForDownload = Injekt.get(),
@@ -199,7 +199,7 @@ class AnimeScreenModel(
     private val selectedPositions: Array<Int> = arrayOf(-1, -1) // first and last selected index in list
     private val selectedEpisodeIds: HashSet<Long> = HashSet()
 
-    internal var isFromChangeCategory: Boolean = false
+    internal var isFromChangeCollection: Boolean = false
 
     internal val autoOpenTrack: Boolean
         get() = successState?.hasLoggedInTrackers == true && trackPreferences.trackOnAddingToLibrary().get()
@@ -572,29 +572,29 @@ class AnimeScreenModel(
                     }
                 }
 
-                // Now check if user previously set categories, when available
-                val categories = getCategories()
-                val defaultCategoryId = libraryPreferences.defaultAnimeCategory().get().toLong()
-                val defaultCategory = categories.find { it.id == defaultCategoryId }
+                // Now check if user previously set collections, when available
+                val collections = getCollections()
+                val defaultCollectionId = libraryPreferences.defaultAnimeCollection().get().toLong()
+                val defaultCollection = collections.find { it.id == defaultCollectionId }
                 when {
-                    // Default category set
-                    defaultCategory != null -> {
+                    // Default collection set
+                    defaultCollection != null -> {
                         val result = updateAnime.awaitUpdateFavorite(anime.id, true)
                         if (!result) return@launchIO
-                        moveAnimeToCategory(defaultCategory)
+                        moveAnimeToCollection(defaultCollection)
                     }
 
-                    // Automatic 'Default' or no categories
-                    defaultCategoryId == 0L || categories.isEmpty() -> {
+                    // Automatic 'Default' or no collections
+                    defaultCollectionId == 0L || collections.isEmpty() -> {
                         val result = updateAnime.awaitUpdateFavorite(anime.id, true)
                         if (!result) return@launchIO
-                        moveAnimeToCategory(null)
+                        moveAnimeToCollection(null)
                     }
 
-                    // Choose a category
+                    // Choose a collection
                     else -> {
-                        isFromChangeCategory = true
-                        showChangeCategoryDialog()
+                        isFromChangeCollection = true
+                        showChangeCollectionDialog()
                     }
                 }
 
@@ -607,16 +607,16 @@ class AnimeScreenModel(
         }
     }
 
-    fun showChangeCategoryDialog() {
+    fun showChangeCollectionDialog() {
         val anime = successState?.anime ?: return
         screenModelScope.launch {
-            val categories = getCategories()
-            val selection = getAnimeCategoryIds(anime)
+            val collections = getCollections()
+            val selection = getAnimeCollectionIds(anime)
             updateSuccessState { successState ->
                 successState.copy(
-                    dialog = Dialog.ChangeCategory(
+                    dialog = Dialog.ChangeCollection(
                         anime = anime,
-                        initialSelection = categories.mapAsCheckboxState { it.id in selection }.toImmutableList(),
+                        initialSelection = collections.mapAsCheckboxState { it.id in selection }.toImmutableList(),
                     ),
                 )
             }
@@ -661,27 +661,27 @@ class AnimeScreenModel(
     }
 
     /**
-     * Get user categories.
+     * Get user collections.
      *
-     * @return List of categories, not including the default category
+     * @return List of collections, not including the default collection
      */
-    suspend fun getCategories(): List<Category> {
-        return getCategories.await().filterNot { it.isSystemCategory }
+    suspend fun getCollections(): List<Collection> {
+        return getCollections.await().filterNot { it.isSystemCollection }
     }
 
     /**
-     * Gets the category id's the anime is in, if the anime is not in a category, returns the default id.
+     * Gets the collection id's the anime is in, if the anime is not in a collection, returns the default id.
      *
-     * @param anime the anime to get categories from.
-     * @return Array of category ids the anime is in, if none returns default id
+     * @param anime the anime to get collections from.
+     * @return Array of collection ids the anime is in, if none returns default id
      */
-    private suspend fun getAnimeCategoryIds(anime: Anime): List<Long> {
-        return getCategories.await(anime.id)
+    private suspend fun getAnimeCollectionIds(anime: Anime): List<Long> {
+        return getCollections.await(anime.id)
             .map { it.id }
     }
 
-    fun moveAnimeToCategoriesAndAddToLibrary(anime: Anime, categories: List<Long>) {
-        moveAnimeToCategory(categories)
+    fun moveAnimeToCollectionsAndAddToLibrary(anime: Anime, collections: List<Long>) {
+        moveAnimeToCollection(collections)
         if (anime.favorite) return
 
         screenModelScope.launchIO {
@@ -690,28 +690,28 @@ class AnimeScreenModel(
     }
 
     /**
-     * Move the given anime to categories.
+     * Move the given anime to collections.
      *
-     * @param categories the selected categories.
+     * @param collections the selected collections.
      */
-    private fun moveAnimeToCategories(categories: List<Category>) {
-        val categoryIds = categories.map { it.id }
-        moveAnimeToCategory(categoryIds)
+    private fun moveAnimeToCollections(collections: List<Collection>) {
+        val collectionIds = collections.map { it.id }
+        moveAnimeToCollection(collectionIds)
     }
 
-    private fun moveAnimeToCategory(categoryIds: List<Long>) {
+    private fun moveAnimeToCollection(collectionIds: List<Long>) {
         screenModelScope.launchIO {
-            setAnimeCategories.await(animeId, categoryIds)
+            setAnimeCollections.await(animeId, collectionIds)
         }
     }
 
     /**
-     * Move the given anime to the category.
+     * Move the given anime to the collection.
      *
-     * @param category the selected category, or null for default category.
+     * @param collection the selected collection, or null for default collection.
      */
-    private fun moveAnimeToCategory(category: Category?) {
-        moveAnimeToCategories(listOfNotNull(category))
+    private fun moveAnimeToCollection(collection: Collection?) {
+        moveAnimeToCollections(listOfNotNull(collection))
     }
 
     // Anime info - end
@@ -1789,9 +1789,9 @@ class AnimeScreenModel(
     // Track sheet - end
 
     sealed interface Dialog {
-        data class ChangeCategory(
+        data class ChangeCollection(
             val anime: Anime,
-            val initialSelection: ImmutableList<CheckboxState<Category>>,
+            val initialSelection: ImmutableList<CheckboxState<Collection>>,
         ) : Dialog
         data class DeleteEpisodes(val episodes: List<Episode>) : Dialog
         data class DuplicateAnime(val anime: Anime, val duplicate: Anime) : Dialog

@@ -12,7 +12,7 @@
     <string name="label_recent_manga">ប្រវត្តិ</string>
     <string name="action_sort_alpha">តម្រៀបតាមអក្ខរក្រម</string>
     <string name="name">ឈ្មោះ</string>
-    <string name="categories">ការតម្រៀបថ្នាក់</string>
+    <string name="collections">ការតម្រៀបថ្នាក់</string>
     <string name="history">ប្រវត្តិ</string>
     <string name="label_more">ច្រើនទៀត</string>
     <string name="label_settings">ការកំណត់</string>
@@ -35,8 +35,8 @@
     <string name="action_mark_as_read">បញ្ជាក់ថាបានអាន</string>
     <string name="action_download">ទាញយក</string>
     <string name="action_bookmark">ចំណាំភាគនេះទុក</string>
-    <string name="action_rename_category">ប្ដូរឈ្មោះថ្នាក់ក្រម</string>
-    <string name="action_move_category">កំណត់</string>
+    <string name="action_rename_collection">ប្ដូរឈ្មោះថ្នាក់ក្រម</string>
+    <string name="action_move_collection">កំណត់</string>
     <string name="action_edit_cover">ផ្លាស់ប្ដូរកម្របត្លុក</string>
     <string name="action_view_chapters">មើលភាគ</string>
     <string name="action_pause">ផ្អាក</string>
@@ -72,7 +72,7 @@
     <string name="information_no_recent_manga">អ្នកពុំបានអានអ្វីថ្មីឡើយ</string>
     <string name="label_extension_info">អំពីប្រភពម៊េងហ្គា</string>
     <string name="information_empty_library">បណ្ណាល័យរបស់អ្នកទទេស្អាត</string>
-    <string name="information_empty_category">អ្នកពុំមានការទម្រៀបម៊េងហ្គាឡើយ។ ចុចប៊ូតុងសញ្ញាបូកដើម្បីទម្រៀបម៊េងហ្គាសម្រាប់បណ្ណាល័យរបស់អ្នក។</string>
+    <string name="information_empty_collection">អ្នកពុំមានការទម្រៀបម៊េងហ្គាឡើយ។ ចុចប៊ូតុងសញ្ញាបូកដើម្បីទម្រៀបម៊េងហ្គាសម្រាប់បណ្ណាល័យរបស់អ្នក។</string>
     <string name="manga">បណ្តុំក្នុងបណ្ណាល័យ</string>
     <string name="confirm_lock_change">ផ្ទៀងផ្ទាត់ភាពត្រឹមត្រូវដើម្បីបញ្ជាក់ការផ្លាស់ប្តូរ</string>
     <string name="action_settings">ការកំណត់</string>
@@ -86,11 +86,11 @@
     <string name="action_mark_as_unread">បញ្ជាក់ថាមិនទាន់បានអាន</string>
     <string name="action_update_library">ធ្វើបច្ចុប្បន្នភាពបណ្ណាល័យ</string>
     <string name="action_enable_all">បើកទាំងអស់</string>
-    <string name="action_add_category">បន្ថែមថ្នាក់ក្រម</string>
+    <string name="action_add_collection">បន្ថែមថ្នាក់ក្រម</string>
     <string name="action_disable_all">បិទទាំងអស់</string>
     <string name="action_edit">ផ្លាស់ប្ដូរ</string>
     <string name="action_add">បញ្ចូល</string>
-    <string name="action_edit_categories">កែប្រែ</string>
+    <string name="action_edit_collections">កែប្រែ</string>
     <string name="action_next_chapter">ភាគបន្ទាប់</string>
     <string name="action_open_in_browser">បើកនៅក្នុងកម្មវិធីរុករក</string>
     <string name="action_show_manga">បង្ហាញត្លុក</string>
@@ -167,7 +167,7 @@
     <string name="title">ចំណងជើង</string>
     <string name="completed">បានបញ្ចប់ការចេញផ្សាយ</string>
     <string name="ongoing">កំពុងតែចេញផ្សាយ</string>
-    <string name="default_category">ថ្នាក់ធម្មតា</string>
+    <string name="default_collection">ថ្នាក់ធម្មតា</string>
     <string name="on_hiatus">ត្រូវបានផ្អាកការចេញផ្សាយ</string>
     <string name="unknown">មិនច្បាស់</string>
     <string name="local_invalid_format">ទម្រង់ភាគមិនត្រឹមត្រួវ</string>
@@ -191,10 +191,10 @@
     <string name="delete_downloaded">លុបអ្វីដែលបានទាញហើយ</string>
     <string name="label_local">ក្នុងទូរស័ព្ទ</string>
     <string name="on">បើក</string>
-    <string name="action_update_category">ធ្វើបច្ចុប្បន្នភាពថ្នាក់ក្រម</string>
+    <string name="action_update_collection">ធ្វើបច្ចុប្បន្នភាពថ្នាក់ក្រម</string>
     <string name="action_menu_overflow_description">ជម្រើសបន្ថែមទៀត</string>
     <string name="off">បិទ</string>
-    <string name="delete_category_confirmation">តើអ្នកចង់លុបថ្នាក់ក្រម %s ឬ?</string>
+    <string name="delete_collection_confirmation">តើអ្នកចង់លុបថ្នាក់ក្រម %s ឬ?</string>
     <string name="selected">បានជ្រើសយក</string>
     <string name="not_selected">មិនបានជ្រើសយក</string>
     <string name="scanlator">អ្នកបកប្រែ</string>
@@ -205,6 +205,6 @@
     <string name="label_started">បានចាប់ផ្តើមហើយ</string>
     <string name="action_sort_unread_count">ចំនួនមិនទាន់អាន</string>
     <string name="action_sort_last_manga_update">ពិនិត្យបច្ចុប្បន្នភាពចុងក្រោយ</string>
-    <string name="delete_category">លុបថ្នាក់ក្រម</string>
+    <string name="delete_collection">លុបថ្នាក់ក្រម</string>
     <string name="action_sort_next_updated">ភាគថ្មីរំពឹងទុកនៅ</string>
 </resources>

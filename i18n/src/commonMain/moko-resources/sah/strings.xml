@@ -31,8 +31,8 @@
     <string name="track">Кэтээһин</string>
     <string name="chapters">Түһүмэхтэр</string>
     <string name="manga">Маанга</string>
-    <string name="categories">Бөлөхтөр</string>
-    <string name="information_empty_category">Эйиэхэ бөлөхтөр суохтар. Эбэр бэлиэни батта, бэбэлэтиэкэҕэ саҥа бөлөҕү оҥорорго.</string>
+    <string name="collections">Бөлөхтөр</string>
+    <string name="information_empty_collection">Эйиэхэ бөлөхтөр суохтар. Эбэр бэлиэни батта, бэбэлэтиэкэҕэ саҥа бөлөҕү оҥорорго.</string>
     <string name="information_empty_library">Эн бэбэлэтиэкэн кураанах. Бэбэлэтиэкэҕэ айымньыыларыы көрдөөһүнтэн эп.</string>
     <string name="information_no_recent_manga">Бүтэһик кэмҥэ тугу да аахпатын</string>
     <string name="information_no_recent">Саҥардыылар суохтар</string>
@@ -50,8 +50,8 @@
     <string name="label_settings">Түстэл</string>
     <string name="label_more">Эбии</string>
     <string name="name">Аат</string>
-    <string name="default_category_summary">Наар ыйыт</string>
-    <string name="default_category">Куолутунан бөлөх</string>
+    <string name="default_collection_summary">Наар ыйыт</string>
+    <string name="default_collection">Куолутунан бөлөх</string>
     <string name="pref_library_update_refresh_metadata_summary">Саҥа тас уонна кыра чаастар баалларын, бэрэбиэркэлээ</string>
     <string name="pref_library_update_refresh_metadata">Метаданнайдары автоматическайдык саҥарт</string>
     <string name="pref_update_only_non_completed">Бүтэ илик маанганы эрэ, саҥарт</string>
@@ -131,10 +131,10 @@
     <string name="action_pause">Тохтобул</string>
     <string name="action_view_chapters">Түһүмэхтэри көр</string>
     <string name="action_edit_cover">Таһын уларытыы</string>
-    <string name="action_move_category">Бөлө(ххө/хтөргө) киллэр</string>
-    <string name="action_rename_category">Бөлөх аатын уларыт</string>
-    <string name="action_edit_categories">Бөлөхтөрү уларыт</string>
-    <string name="action_add_category">Бөлөҕү киллэр</string>
+    <string name="action_move_collection">Бөлө(ххө/хтөргө) киллэр</string>
+    <string name="action_rename_collection">Бөлөх аатын уларыт</string>
+    <string name="action_edit_collections">Бөлөхтөрү уларыт</string>
+    <string name="action_add_collection">Бөлөҕү киллэр</string>
     <string name="pref_webtoon_side_padding">Ойоҕостон тэйии</string>
     <string name="pref_category_reading">Ааҕы</string>
     <string name="pref_category_reading_mode">Ааҕы эрэһиимэ</string>
@@ -280,7 +280,7 @@
     <string name="no_results_found">Түмүк суох</string>
     <string name="no_more_results">Эбии түмүк суох</string>
     <string name="tabs_header">Кыбытыктар</string>
-    <string name="updating_category">Бөлөх саҥардыыта</string>
+    <string name="updating_collection">Бөлөх саҥардыыта</string>
     <string name="unknown_error">Биллибэт сыыһыы</string>
     <string name="logout_success">Эн таҕыстын</string>
     <string name="logout">Тахсыы</string>
@@ -339,8 +339,8 @@
     <string name="picture_saved">Хартыыҥка оннунан хаалла</string>
     <string name="dialog_with_checkbox_reset">Бу маанга бары түһүмэхтэрин түһэрии</string>
     <string name="dialog_with_checkbox_remove_description">Бу дьайыы түһүмэх ааҕыллыбыт кэмин сотторуо. Эрэллээххин дуо?</string>
-    <string name="snack_categories_deleted">Бөлөхтөр соттороллубуттар</string>
-    <string name="error_category_exists">Оннук ааттах бөлөх уруккуттан баар!</string>
+    <string name="snack_collections_deleted">Бөлөхтөр соттороллубуттар</string>
+    <string name="error_collection_exists">Оннук ааттах бөлөх уруккуттан баар!</string>
     <string name="track_type">Көрүҥ</string>
     <string name="track_status">Турук</string>
     <string name="status">Турук</string>
@@ -403,7 +403,7 @@
     <string name="exclude">Киллэримэ: %s</string>
     <string name="include">Киллэр: %s</string>
     <string name="none">Суох</string>
-    <string name="pref_library_update_categories_details">Сотуллубут категориялар маангалара саҥардыллыа суоҕа, холбоммут категорияларга баарын үрдүнэн.</string>
+    <string name="pref_library_update_collections_details">Сотуллубут категориялар маангалара саҥардыллыа суоҕа, холбоммут категорияларга баарын үрдүнэн.</string>
     <string name="action_show_errors">Сыһааһыннары көрдөр</string>
     <string name="action_desc">Кыччыытынан</string>
     <string name="action_asc">Улаатыытынан</string>

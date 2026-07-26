@@ -4,7 +4,7 @@
         <item quantity="one">Post %1$s minuto</item>
         <item quantity="other">Post %1$s minutoj</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategorio</item>
         <item quantity="other">%d kategorioj</item>
     </plurals>

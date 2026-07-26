@@ -113,7 +113,7 @@ object AnimeMapper {
         lastSeen: Long,
         bookmarkCount: Double,
         fillermarkCount: Double,
-        category: Long,
+        collection: Long,
     ): LibraryAnime = LibraryAnime(
         anime = mapAnime(
             id,
@@ -148,7 +148,7 @@ object AnimeMapper {
             backgroundUrl,
             backgroundLastModified,
         ),
-        category = category,
+        collection = collection,
         totalCount = totalCount,
         seenCount = seenCount.toLong(),
         bookmarkCount = bookmarkCount.toLong(),

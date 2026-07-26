@@ -8,7 +8,7 @@
         <item quantity="one">%1$s минуттан кейін</item>
         <item quantity="other">%1$s минуттан кейін</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d санат</item>
         <item quantity="other">%d санаттар</item>
     </plurals>

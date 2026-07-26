@@ -11,7 +11,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -26,6 +29,7 @@ import mihon.feature.upcoming.novel.UpcomingNovelScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
@@ -41,6 +45,8 @@ fun Screen.novelUpdatesTab(
     val navigator = LocalNavigator.currentOrThrow
     val screenModel = rememberScreenModel { NovelUpdatesScreenModel() }
     val state by screenModel.state.collectAsState()
+
+    var searchQuery by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
     val navigateUp: (() -> Unit)? = if (fromMore) {
@@ -58,9 +64,22 @@ fun Screen.novelUpdatesTab(
     return TabContent(
         titleRes = AYMR.strings.label_novel_updates,
         searchEnabled = false,
+        searchAvailable = true,
+        searchPlaceholderText = MR.strings.search_hint_updates,
+        searchQuery = searchQuery,
+        onSearchQueryChange = { searchQuery = it },
         content = { contentPadding, _ ->
+            val filteredState = if (searchQuery.isNullOrBlank()) {
+                state
+            } else {
+                state.copy(
+                    items = state.items.filter { updateItem ->
+                        updateItem.update.novelTitle.contains(searchQuery!!, ignoreCase = true)
+                    }.toPersistentList(),
+                )
+            }
             NovelUpdateScreen(
-                state = state,
+                state = filteredState,
                 snackbarHostState = screenModel.snackbarHostState,
                 lastUpdated = screenModel.lastUpdated,
                 onClickCover = { item -> navigator.push(NovelScreen(item.update.novelId)) },

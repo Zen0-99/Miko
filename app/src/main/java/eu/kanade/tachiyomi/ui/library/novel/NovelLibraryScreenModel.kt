@@ -47,10 +47,10 @@ import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.category.novel.interactor.GetNovelCategories
-import tachiyomi.domain.category.novel.interactor.GetVisibleNovelCategories
-import tachiyomi.domain.category.novel.interactor.SetNovelCategories
+import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
+import tachiyomi.domain.collection.novel.interactor.GetVisibleNovelCollections
+import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
 import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.model.Novel
@@ -66,12 +66,12 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.random.Random
 
-typealias NovelLibraryMap = Map<Category, List<NovelLibraryItem>>
+typealias NovelLibraryMap = Map<Collection, List<NovelLibraryItem>>
 
 class NovelLibraryScreenModel(
     private val getLibraryNovels: GetLibraryNovels = Injekt.get(),
-    private val getCategories: GetVisibleNovelCategories = Injekt.get(),
-    private val setNovelCategories: SetNovelCategories = Injekt.get(),
+    private val getCollections: GetVisibleNovelCollections = Injekt.get(),
+    private val setNovelCollections: SetNovelCollections = Injekt.get(),
     private val preferences: BasePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
@@ -81,10 +81,10 @@ class NovelLibraryScreenModel(
     private val getNovelWithChapters: GetNovelWithChapters = Injekt.get(),
     private val setReadStatus: SetNovelReadStatus = Injekt.get(),
     private val updateNovel: UpdateNovel = Injekt.get(),
-    private val getNovelCategories: GetNovelCategories = Injekt.get(),
+    private val getNovelCollections: GetNovelCollections = Injekt.get(),
 ) : StateScreenModel<NovelLibraryScreenModel.State>(State()) {
 
-    var activeCategoryIndex: Int by libraryPreferences.lastUsedNovelCategory().asState(
+    var activeCollectionIndex: Int by libraryPreferences.lastUsedNovelCollection().asState(
         screenModelScope,
     )
 
@@ -118,14 +118,14 @@ class NovelLibraryScreenModel(
         }
 
         combine(
-            libraryPreferences.categoryTabs().changes(),
-            libraryPreferences.categoryNumberOfItems().changes(),
+            libraryPreferences.collectionTabs().changes(),
+            libraryPreferences.collectionNumberOfItems().changes(),
             libraryPreferences.showContinueViewingButton().changes(),
         ) { a, b, c -> arrayOf(a, b, c) }
-            .onEach { (showCategoryTabs, showNovelCount, showNovelContinueButton) ->
+            .onEach { (showCollectionTabs, showNovelCount, showNovelContinueButton) ->
                 mutableState.update { state ->
                     state.copy(
-                        showCategoryTabs = showCategoryTabs,
+                        showCollectionTabs = showCollectionTabs,
                         showNovelCount = showNovelCount,
                         showNovelContinueButton = showNovelContinueButton,
                     )
@@ -305,17 +305,17 @@ class NovelLibraryScreenModel(
                         },
                     )
                 }
-                .groupBy { it.libraryNovel.category }
+                .groupBy { it.libraryNovel.collection }
         }
 
-        return combine(getCategories.subscribe(), libraryNovelsFlow) { categories, libraryNovel ->
-            val displayCategories = if (libraryNovel.isNotEmpty() && !libraryNovel.containsKey(0)) {
-                categories.fastFilterNot { it.isSystemCategory }
+        return combine(getCollections.subscribe(), libraryNovelsFlow) { collections, libraryNovel ->
+            val displayCollections = if (libraryNovel.isNotEmpty() && !libraryNovel.containsKey(0)) {
+                collections.fastFilterNot { it.isSystemCollection }
             } else {
-                categories
+                collections
             }
 
-            displayCategories.associateWith { libraryNovel[it.id].orEmpty() }
+            displayCollections.associateWith { libraryNovel[it.id].orEmpty() }
         }
     }
 
@@ -380,11 +380,11 @@ class NovelLibraryScreenModel(
         )
     }
 
-    suspend fun getRandomLibraryItemForCurrentCategory(): NovelLibraryItem? {
-        if (state.value.categories.isEmpty()) return null
+    suspend fun getRandomLibraryItemForCurrentCollection(): NovelLibraryItem? {
+        if (state.value.collections.isEmpty()) return null
         return withIOContext {
             state.value
-                .getLibraryItemsByCategoryId(state.value.categories[activeCategoryIndex].id)
+                .getLibraryItemsByCollectionId(state.value.collections[activeCollectionIndex].id)
                 ?.randomOrNull()
         }
     }
@@ -414,12 +414,12 @@ class NovelLibraryScreenModel(
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
                 val lastSelected = list.lastOrNull()
-                if (lastSelected?.category != novel.category) {
+                if (lastSelected?.collection != novel.collection) {
                     list.add(novel)
                     return@mutate
                 }
 
-                val items = state.getLibraryItemsByCategoryId(novel.category)
+                val items = state.getLibraryItemsByCollectionId(novel.collection)
                     ?.fastMap { it.libraryNovel }.orEmpty()
                 val lastNovelIndex = items.indexOf(lastSelected)
                 val curNovelIndex = items.indexOf(novel)
@@ -442,9 +442,9 @@ class NovelLibraryScreenModel(
     fun selectAll(index: Int) {
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
-                val categoryId = state.categories.getOrNull(index)?.id ?: -1
+                val collectionId = state.collections.getOrNull(index)?.id ?: -1
                 val selectedIds = list.fastMap { it.id }
-                state.getLibraryItemsByCategoryId(categoryId)
+                state.getLibraryItemsByCollectionId(collectionId)
                     ?.fastMapNotNull { item ->
                         item.libraryNovel.takeUnless { it.id in selectedIds }
                     }
@@ -457,8 +457,8 @@ class NovelLibraryScreenModel(
     fun invertSelection(index: Int) {
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
-                val categoryId = state.categories[index].id
-                val items = state.getLibraryItemsByCategoryId(categoryId)?.fastMap { it.libraryNovel }.orEmpty()
+                val collectionId = state.collections[index].id
+                val items = state.getLibraryItemsByCollectionId(collectionId)?.fastMap { it.libraryNovel }.orEmpty()
                 val selectedIds = list.fastMap { it.id }
                 val (toRemove, toAdd) = items.fastPartition { it.id in selectedIds }
                 val toRemoveIds = toRemove.fastMap { it.id }
@@ -473,14 +473,14 @@ class NovelLibraryScreenModel(
         mutableState.update { it.copy(searchQuery = query) }
     }
 
-    fun openChangeCategoryDialog() {
+    fun openChangeCollectionDialog() {
         screenModelScope.launchIO {
             val novelList = state.value.selection.map { it.novel }
-            val categories = state.value.categories.filter { it.id != 0L }
-            val preselected = categories
+            val collections = state.value.collections.filter { it.id != 0L }
+            val preselected = collections
                 .map { CheckboxState.State.None(it) }
                 .toImmutableList()
-            mutableState.update { it.copy(dialog = Dialog.ChangeCategory(novelList, preselected)) }
+            mutableState.update { it.copy(dialog = Dialog.ChangeCollection(novelList, preselected)) }
         }
     }
 
@@ -514,20 +514,20 @@ class NovelLibraryScreenModel(
         }
     }
 
-    fun setNovelCategories(
+    fun setNovelCollections(
         novelList: List<Novel>,
-        addCategories: List<Long>,
-        removeCategories: List<Long>,
+        addCollections: List<Long>,
+        removeCollections: List<Long>,
     ) {
         screenModelScope.launchNonCancellable {
             novelList.forEach { novel ->
-                val categoryIds = getNovelCategories.await(novel.id)
+                val collectionIds = getNovelCollections.await(novel.id)
                     .map { it.id }
-                    .subtract(removeCategories.toSet())
-                    .plus(addCategories)
+                    .subtract(removeCollections.toSet())
+                    .plus(addCollections)
                     .toList()
 
-                setNovelCategories.await(novel.id, categoryIds)
+                setNovelCollections.await(novel.id, collectionIds)
             }
         }
     }
@@ -538,9 +538,9 @@ class NovelLibraryScreenModel(
 
     sealed interface Dialog {
         data object SettingsSheet : Dialog
-        data class ChangeCategory(
+        data class ChangeCollection(
             val novels: List<Novel>,
-            val initialSelection: ImmutableList<CheckboxState<Category>>,
+            val initialSelection: ImmutableList<CheckboxState<Collection>>,
         ) : Dialog
         data class DeleteNovel(val novels: List<Novel>) : Dialog
     }
@@ -566,7 +566,7 @@ class NovelLibraryScreenModel(
         val searchQuery: String? = null,
         val selection: PersistentList<LibraryNovel> = persistentListOf(),
         val hasActiveFilters: Boolean = false,
-        val showCategoryTabs: Boolean = false,
+        val showCollectionTabs: Boolean = false,
         val showNovelCount: Boolean = false,
         val showNovelContinueButton: Boolean = false,
         val dialog: Dialog? = null,
@@ -582,35 +582,35 @@ class NovelLibraryScreenModel(
 
         val selectionMode = selection.isNotEmpty()
 
-        val categories = library.keys.toList()
+        val collections = library.keys.toList()
 
-        fun getLibraryItemsByCategoryId(categoryId: Long): List<NovelLibraryItem>? {
-            return library.firstNotNullOfOrNull { (k, v) -> v.takeIf { k.id == categoryId } }
+        fun getLibraryItemsByCollectionId(collectionId: Long): List<NovelLibraryItem>? {
+            return library.firstNotNullOfOrNull { (k, v) -> v.takeIf { k.id == collectionId } }
         }
 
         fun getLibraryItemsByPage(page: Int): List<NovelLibraryItem> {
             return library.values.toTypedArray().getOrNull(page).orEmpty()
         }
 
-        fun getNovelCountForCategory(category: Category): Int? {
-            return if (showNovelCount || !searchQuery.isNullOrEmpty()) library[category]?.size else null
+        fun getNovelCountForCollection(collection: Collection): Int? {
+            return if (showNovelCount || !searchQuery.isNullOrEmpty()) library[collection]?.size else null
         }
 
         fun getToolbarTitle(
             defaultTitle: String,
-            defaultCategoryTitle: String,
+            defaultCollectionTitle: String,
             page: Int,
         ): LibraryToolbarTitle {
-            val category = categories.getOrNull(page) ?: return LibraryToolbarTitle(defaultTitle)
-            val categoryName = category.let {
-                if (it.isSystemCategory) defaultCategoryTitle else it.name
+            val collection = collections.getOrNull(page) ?: return LibraryToolbarTitle(defaultTitle)
+            val collectionName = collection.let {
+                if (it.isSystemCollection) defaultCollectionTitle else it.name
             }
-            // Title is always "Library"; subtitle is the current category name
-            // only shown when there is more than one category.
-            val subtitle = if (categories.size > 1) categoryName else null
+            // Title is always "Library"; subtitle is the current collection name
+            // only shown when there is more than one collection.
+            val subtitle = if (collections.size > 1) collectionName else null
             val count = when {
                 !showNovelCount -> null
-                !showCategoryTabs -> getNovelCountForCategory(category)
+                !showCollectionTabs -> getNovelCountForCollection(collection)
                 else -> libraryCount
             }
 

@@ -5,10 +5,14 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -22,7 +26,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -46,7 +54,9 @@ import eu.kanade.presentation.novel.reader.NovelReaderSettingsScreenModel
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.reader.novel.dictionary.DictionaryBottomSheet
 import eu.kanade.tachiyomi.util.system.hasDisplayCutout
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 class NovelReaderScreen(
@@ -71,7 +81,11 @@ class NovelReaderScreen(
 
         DisposableEffect(Unit) {
             onDispose {
-                screenModel.saveCurrentPosition()
+                // Save position synchronously — the screen model's scope is
+                // about to be cancelled, so launchIO might not complete.
+                kotlinx.coroutines.runBlocking {
+                    screenModel.saveCurrentPositionBlocking()
+                }
                 screenModel.stopTtsPlayback()
                 screenModel.unbindTtsService()
                 screenModel.shutdownTts()
@@ -144,13 +158,58 @@ class NovelReaderScreen(
                     is NovelReaderEvent.ScrollToPosition -> {
                         val rv = recyclerViewRef
                         if (rv != null) {
+                            val transitionStyle = screenModel.preferences.pageTransitionStyle().get()
                             rv.post {
-                                if (event.position == 0) {
-                                    rv.scrollToPosition(0)
-                                } else if (event.position == -1) {
-                                    val lm = rv.layoutManager as? LinearLayoutManager
-                                    lm?.scrollToPosition(rv.adapter?.itemCount?.minus(1) ?: 0)
-                                    rv.post { rv.scrollBy(0, Int.MAX_VALUE / 2) }
+                                // Apply chapter transition animation based on preference
+                                when (transitionStyle) {
+                                    NovelPageTransitionStyle.INSTANT -> {
+                                        scrollToChapterPosition(rv, event.position)
+                                    }
+                                    NovelPageTransitionStyle.SLIDE -> {
+                                        // Fade out, scroll, fade in
+                                        rv.animate().alpha(0f).setDuration(150).withEndAction {
+                                            scrollToChapterPosition(rv, event.position)
+                                            rv.post { rv.animate().alpha(1f).setDuration(200).start() }
+                                        }.start()
+                                    }
+                                    NovelPageTransitionStyle.DEPTH -> {
+                                        // Scale down + fade out, scroll, scale up + fade in
+                                        rv.animate()
+                                            .alpha(0f)
+                                            .scaleX(0.85f)
+                                            .scaleY(0.85f)
+                                            .setDuration(200)
+                                            .withEndAction {
+                                                scrollToChapterPosition(rv, event.position)
+                                                rv.post {
+                                                    rv.scaleX = 0.85f
+                                                    rv.scaleY = 0.85f
+                                                    rv.animate()
+                                                        .alpha(1f)
+                                                        .scaleX(1f)
+                                                        .scaleY(1f)
+                                                        .setDuration(250)
+                                                        .start()
+                                                }
+                                            }.start()
+                                    }
+                                    NovelPageTransitionStyle.BOOK,
+                                    NovelPageTransitionStyle.CURL,
+                                    NovelPageTransitionStyle.BOOK_FLIP -> {
+                                        // These 3D page-curl effects require a pager architecture.
+                                        // Fallback to a cross-fade with a slight horizontal shift.
+                                        val direction = if (event.position == 0) 1f else -1f
+                                        rv.translationX = direction * rv.width * 0.15f
+                                        rv.alpha = 0f
+                                        scrollToChapterPosition(rv, event.position)
+                                        rv.post {
+                                            rv.animate()
+                                                .alpha(1f)
+                                                .translationX(0f)
+                                                .setDuration(300)
+                                                .start()
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -159,10 +218,10 @@ class NovelReaderScreen(
                         val rv = recyclerViewRef
                         if (rv != null && event.characterPosition > 0) {
                             // submitList is async, so the adapter may not have
-                            // items yet. Retry a few times with increasing delay.
+                            // items yet. Retry several times with increasing delay.
                             val targetPos = event.characterPosition
                             var attempts = 0
-                            val maxAttempts = 5
+                            val maxAttempts = 10
                             fun tryScroll() {
                                 val adapter = rv.adapter as? TextAdapter
                                 val items = adapter?.currentList
@@ -179,6 +238,9 @@ class NovelReaderScreen(
                                     }
                                     return
                                 }
+                                // The saved position is per-chapter (0-based).
+                                // The paragraph startCharIndex/endCharIndex are
+                                // also per-chapter (each chapter starts at 0).
                                 val target = paragraphs.find { p ->
                                     targetPos >= p.startCharIndex &&
                                         targetPos <= p.endCharIndex
@@ -189,9 +251,26 @@ class NovelReaderScreen(
                                         val lm = rv.layoutManager as? LinearLayoutManager
                                         lm?.scrollToPositionWithOffset(adapterPos, 1)
                                     }
-                                } else if (++attempts < maxAttempts) {
-                                    // Target paragraph not found yet — may still be loading.
-                                    rv.postDelayed(::tryScroll, 100L * attempts)
+                                } else {
+                                    // Fallback: find the closest paragraph by
+                                    // startCharIndex (the one just before targetPos).
+                                    val closest = paragraphs.minByOrNull { p ->
+                                        if (p.startCharIndex <= targetPos) {
+                                            targetPos - p.startCharIndex
+                                        } else {
+                                            p.startCharIndex - targetPos + 10000
+                                        }
+                                    }
+                                    if (closest != null) {
+                                        val adapterPos = items.indexOf(closest)
+                                        if (adapterPos >= 0) {
+                                            val lm = rv.layoutManager as? LinearLayoutManager
+                                            lm?.scrollToPositionWithOffset(adapterPos, 1)
+                                        }
+                                    }
+                                    if (++attempts < maxAttempts) {
+                                        rv.postDelayed(::tryScroll, 100L * attempts)
+                                    }
                                 }
                             }
                             rv.post(::tryScroll)
@@ -218,6 +297,79 @@ class NovelReaderScreen(
 
         val bgColor = Color(textConfig.backgroundColor)
 
+        // Auto-scroll: coroutine loop that scrolls the RecyclerView.
+        // Two modes:
+        //  - Stepped: scrolls by a fixed pixel step at a fixed interval
+        //  - Smooth: scrolls continuously pixel-by-pixel at a configurable speed
+        // Both modes pause when controls are visible. Smooth mode also pauses
+        // when the user manually scrolls, then resumes after 1 second.
+        val autoScrollEnabled by screenModel.preferences.autoScroll().collectAsState()
+        val smoothAutoScroll by screenModel.preferences.smoothAutoScroll().collectAsState()
+        val autoScrollInterval by screenModel.preferences.autoScrollInterval().collectAsState()
+        val autoScrollOffset by screenModel.preferences.autoScrollOffset().collectAsState()
+        val smoothSpeed by screenModel.preferences.smoothAutoScrollSpeed().collectAsState()
+
+        // Track whether the user is currently touching/dragging the list.
+        // Auto-scroll does NOT resume until the finger is lifted.
+        var isUserTouching by remember { mutableStateOf(false) }
+
+        // Track window focus — when the user pulls down the notification shade
+        // or opens the Android app bar, the activity loses window focus.
+        var hasWindowFocus by remember { mutableStateOf(true) }
+        DisposableEffect(activity) {
+            val view = activity?.window?.decorView
+            val listener = android.view.ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+                hasWindowFocus = hasFocus
+            }
+            view?.viewTreeObserver?.addOnWindowFocusChangeListener(listener)
+            onDispose {
+                view?.viewTreeObserver?.removeOnWindowFocusChangeListener(listener)
+            }
+        }
+
+        // Auto-scroll should only run when the user is in full focus of the text —
+        // not when any overlay (settings, chapters, comments, dictionary, TTS
+        // controls, translation dialog) is open, not while the user is
+        // actively touching the screen, and not when the window lost focus
+        // (notification shade pulled down).
+        val isOverlayActive = isControlsVisible || isSettingsVisible ||
+            isChaptersSheetVisible || isCommentsDialogVisible ||
+            dictionaryQuery != null || !hasWindowFocus
+
+        LaunchedEffect(autoScrollEnabled, smoothAutoScroll, autoScrollInterval, autoScrollOffset, smoothSpeed, isOverlayActive, isUserTouching) {
+            if (!autoScrollEnabled) return@LaunchedEffect
+            if (smoothAutoScroll) {
+                // Smooth mode: scroll continuously using frame timing.
+                // speed is in pixels/second. We use a fractional pixel
+                // accumulator so low speeds (1px/s) scroll at the correct rate
+                // instead of rounding to 0 or jumping to 60px/s.
+                val frameIntervalMs = 16L
+                val pixelsPerFrame = smoothSpeed.toFloat() / 60f
+                var pixelAccumulator = 0f
+                while (isActive) {
+                    delay(frameIntervalMs)
+                    val rv = recyclerViewRef
+                    if (rv != null && !isOverlayActive && !isUserTouching) {
+                        pixelAccumulator += pixelsPerFrame
+                        val pixelsToScroll = pixelAccumulator.toInt()
+                        if (pixelsToScroll > 0) {
+                            pixelAccumulator -= pixelsToScroll
+                            rv.post { rv.scrollBy(0, pixelsToScroll) }
+                        }
+                    }
+                }
+            } else {
+                // Stepped mode: scroll by fixed offset at fixed interval
+                while (isActive) {
+                    delay(autoScrollInterval.toLong())
+                    val rv = recyclerViewRef
+                    if (rv != null && !isOverlayActive && !isUserTouching) {
+                        rv.post { rv.scrollBy(0, autoScrollOffset) }
+                    }
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -232,13 +384,151 @@ class NovelReaderScreen(
                 accentColor = accentColor,
                 bottomPaddingDp = if (screenModel.preferences.showBatteryAndTime().get()) 28 else 0,
                 onToggleControls = { screenModel.toggleControls() },
-                onRecyclerViewReady = { rv -> recyclerViewRef = rv },
+                onRecyclerViewReady = { rv ->
+                    recyclerViewRef = rv
+                    // Track user-initiated scrolls for smooth auto-scroll pause/resume.
+                    // SCROLL_STATE_DRAGGING is only set when the user is physically
+                    // dragging the list — programmatic scrollBy stays IDLE.
+                    rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                        override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                            // Track touch state for auto-scroll pause/resume.
+                            // DRAGGING = user is physically touching and dragging.
+                            // SETTLING = fling in progress (finger lifted).
+                            // IDLE = fully stopped.
+                            isUserTouching = newState == RecyclerView.SCROLL_STATE_DRAGGING
+                        }
+                    })
+
+                    // Apply pending scroll restoration (Tadami-style).
+                    // The saved item index + pixel offset are applied before
+                    // the RecyclerView becomes visible, so the user never sees
+                    // content at position 0 — no visual jump.
+                    // The RV alpha is set to 0 (invisible) until the scroll is
+                    // applied, then set back to 1. This doesn't block the UI
+                    // thread — the rest of the app renders normally while the
+                    // RV waits for its adapter to have items.
+                    val pending = screenModel.pendingScrollRestore
+                    if (pending != null) {
+                        screenModel.pendingScrollRestore = null
+                        val (targetIndex, targetOffset) = pending
+                        if (targetIndex > 0 || targetOffset > 0) {
+                            // Hide the RV until we've scrolled to the saved position.
+                            rv.alpha = 0f
+                            var attempts = 0
+                            val maxAttempts = 15
+                            fun tryRestoreScroll() {
+                                val adapter = rv.adapter as? TextAdapter
+                                val items = adapter?.currentList
+                                if (items.isNullOrEmpty() || items.size <= targetIndex) {
+                                    if (++attempts < maxAttempts) {
+                                        rv.postDelayed(::tryRestoreScroll, 50L)
+                                    } else {
+                                        // Give up — show content at default position.
+                                        rv.alpha = 1f
+                                    }
+                                    return
+                                }
+                                val lm = rv.layoutManager as? LinearLayoutManager
+                                if (lm == null) {
+                                    rv.alpha = 1f
+                                    return
+                                }
+                                // Scroll to exact saved position: item index + pixel offset.
+                                // This is the key difference from the old approach —
+                                // we restore the EXACT pixel offset, not just the
+                                // paragraph start, eliminating position drift.
+                                lm.scrollToPositionWithOffset(targetIndex, targetOffset)
+                                // Make the RV visible on the next frame, after
+                                // the scroll has been applied and laid out.
+                                rv.post { rv.alpha = 1f }
+                            }
+                            // Start trying on the next frame.
+                            rv.post(::tryRestoreScroll)
+                        }
+                    }
+                },
             )
+
+            // Background texture overlay — drawn ON TOP of the RecyclerView but
+            // with low alpha so text remains readable. Uses programmatic noise
+            // patterns (no bitmap assets needed).
+            if (textConfig.backgroundTexture != NovelReaderBackgroundTexture.NONE) {
+                NovelTextureOverlay(
+                    texture = textConfig.backgroundTexture,
+                    strength = textConfig.textureStrength,
+                    isDark = textConfig.backgroundColor != android.graphics.Color.WHITE,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            // OLED edge gradient: subtle dark gradient at screen edges for
+            // OLED displays to reduce burn-in perception.
+            if (textConfig.oledEdgeGradient) {
+                Canvas(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    val edgeWidth = size.width * 0.04f
+                    val edgeHeight = size.height * 0.04f
+                    // Left edge
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            0f to Color.Black.copy(alpha = 0.15f),
+                            edgeWidth to Color.Transparent,
+                        ),
+                    )
+                    // Right edge
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            (size.width - edgeWidth) to Color.Transparent,
+                            size.width to Color.Black.copy(alpha = 0.15f),
+                        ),
+                    )
+                    // Top edge
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.15f),
+                            edgeHeight to Color.Transparent,
+                        ),
+                    )
+                    // Bottom edge
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            (size.height - edgeHeight) to Color.Transparent,
+                            size.height to Color.Black.copy(alpha = 0.15f),
+                        ),
+                    )
+                }
+            }
+
+            // Page edge shadow: subtle inner shadow at page edges for depth.
+            if (textConfig.pageEdgeShadowEnabled) {
+                Canvas(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    val alpha = textConfig.pageEdgeShadowAlpha.coerceIn(0f, 1f)
+                    val edgeWidth = size.width * 0.03f
+                    // Left edge shadow
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            0f to Color.Black.copy(alpha = alpha),
+                            edgeWidth to Color.Transparent,
+                        ),
+                    )
+                    // Right edge shadow
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            (size.width - edgeWidth) to Color.Transparent,
+                            size.width to Color.Black.copy(alpha = alpha),
+                        ),
+                    )
+                }
+            }
 
             NovelReaderChrome(
                 isMenuVisible = isControlsVisible,
                 title = currentChapter?.name ?: "Loading...",
                 subtitle = novel?.title ?: "",
+                accentColor = accentColor,
                 progressPercent = if (screenModel.preferences.showScrollPercentage().get()) progressPercent else -1,
                 estimatedReadingTime = if (screenModel.preferences.showEstimatedReadingTime().get()) {
                     screenModel.positionTracker.getEstimatedReadingTime()
@@ -340,7 +630,16 @@ class NovelReaderScreen(
                     screenModel.loadChapterById(chapter.id)
                 },
                 onDismiss = { screenModel.dismissChapters() },
+                accentColor = accentColor,
             )
+        }
+
+        // Reload comments when the current chapter changes during infinite scroll
+        // and the comments dialog is open.
+        LaunchedEffect(currentChapter?.id, isCommentsDialogVisible) {
+            if (isCommentsDialogVisible && currentChapter != null) {
+                screenModel.refreshComments()
+            }
         }
 
         if (isCommentsDialogVisible) {
@@ -351,6 +650,7 @@ class NovelReaderScreen(
                 onDismiss = { screenModel.dismissComments() },
                 onRefresh = { screenModel.refreshComments() },
                 accentColor = accentColor,
+                chapterTitle = currentChapter?.name,
             )
         }
 
@@ -361,6 +661,67 @@ class NovelReaderScreen(
                 selectedText = query,
                 onDismiss = { screenModel.dismissDictionary() },
             )
+        }
+
+        // Translation dialog — shown when the user taps "Translate" in the
+        // selection popup and the translation preference is enabled.
+        val translationState by screenModel.translationState.collectAsStateWithLifecycle()
+        when (val ts = translationState) {
+            is TranslationState.Loading -> {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { screenModel.dismissTranslation() },
+                    title = { Text("Translating...") },
+                    text = {
+                        Text(
+                            text = ts.originalText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(top = 8.dp),
+                            color = accentColor ?: MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    confirmButton = {},
+                )
+            }
+            is TranslationState.Result -> {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { screenModel.dismissTranslation() },
+                    title = { Text("Translation (${ts.targetLang})") },
+                    text = {
+                        Text(
+                            text = ts.translatedText,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Original: ${ts.originalText}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = { screenModel.dismissTranslation() }) {
+                            Text("Close")
+                        }
+                    },
+                )
+            }
+            is TranslationState.Error -> {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { screenModel.dismissTranslation() },
+                    title = { Text("Translation Error") },
+                    text = { Text(ts.message) },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = { screenModel.dismissTranslation() }) {
+                            Text("OK")
+                        }
+                    },
+                )
+            }
+            TranslationState.Idle -> {}
         }
 
         // The highlight color picker is now inline in the selection popup
@@ -484,6 +845,9 @@ class NovelReaderScreen(
                     onReadAloud = { selectedText ->
                         screenModel.readAloud(selectedText)
                     },
+                    onTranslate = { selectedText ->
+                        screenModel.translateText(selectedText)
+                    },
                     getHighlightManager = { screenModel.highlightManager },
                     getNovelTitle = { screenModel.novel.value?.title ?: "" },
                     getNovelId = { screenModel.novel.value?.id },
@@ -555,11 +919,14 @@ class NovelReaderScreen(
                                     charPos = item.endCharIndex + 1
                                 }
                                 val firstView = lm.findViewByPosition(firstVisiblePos)
+                                // Capture the exact pixel offset for Tadami-style
+                                // scroll restoration (no drift on resume).
+                                var pixelOffset = 0
                                 if (firstView != null) {
-                                    val scrollOffset = -firstView.top
+                                    pixelOffset = -firstView.top
                                     val totalHeight = firstView.height
                                     if (totalHeight > 0) {
-                                        val scrollPct = (scrollOffset.toFloat() / totalHeight).coerceIn(0f, 1f)
+                                        val scrollPct = (pixelOffset.toFloat() / totalHeight).coerceIn(0f, 1f)
                                         val visibleItem = items.getOrNull(firstVisiblePos) as? TextItem.Paragraph
                                         if (visibleItem != null && visibleItem.chapterId == currentChapterId) {
                                             val paraChars = visibleItem.endCharIndex - visibleItem.startCharIndex
@@ -567,7 +934,12 @@ class NovelReaderScreen(
                                         }
                                     }
                                 }
-                                screenModel.updateCharacterPosition(charPos)
+                                // Pass item index + pixel offset for exact save/restore.
+                                screenModel.updateCharacterPosition(
+                                    characterPosition = charPos,
+                                    itemIndex = firstVisiblePos,
+                                    pixelOffset = pixelOffset,
+                                )
                             }
 
                             // Debounced save.
@@ -649,4 +1021,126 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+/**
+ * Scroll the RecyclerView to the start (position 0) or end (position -1) of
+ * the chapter content. Used by chapter navigation transitions.
+ */
+private fun scrollToChapterPosition(rv: RecyclerView, position: Int) {
+    if (position == 0) {
+        rv.scrollToPosition(0)
+    } else if (position == -1) {
+        val lm = rv.layoutManager as? LinearLayoutManager
+        lm?.scrollToPosition(rv.adapter?.itemCount?.minus(1) ?: 0)
+        rv.post { rv.scrollBy(0, Int.MAX_VALUE / 2) }
+    }
+}
+
+/**
+ * Draws a background texture overlay using programmatic noise patterns.
+ * No bitmap assets needed — textures are generated via Canvas drawing commands.
+ *
+ * - PAPER_GRAIN: fine dot noise, warm tint
+ * - LINEN: crosshatch lines, cool tint
+ * - PARCHMENT: irregular blotches, warm sepia tint
+ *
+ * Alpha is controlled by [strength] (0–100, where 50 = moderate, 100 = strong).
+ * Drawn on top of the content but with low alpha so text remains readable.
+ */
+@Composable
+private fun NovelTextureOverlay(
+    texture: NovelReaderBackgroundTexture,
+    strength: Int,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val alpha = (strength / 100f).coerceIn(0f, 1f) * 0.35f
+    val baseColor = when (texture) {
+        NovelReaderBackgroundTexture.PAPER_GRAIN -> if (isDark) Color(0xFF8B7355) else Color(0xFFD4B896)
+        NovelReaderBackgroundTexture.LINEN -> if (isDark) Color(0xFF7A8B9F) else Color(0xFFB8C4D4)
+        NovelReaderBackgroundTexture.PARCHMENT -> if (isDark) Color(0xFF9B8060) else Color(0xFFE8D5B7)
+        NovelReaderBackgroundTexture.NONE -> return
+    }
+    val seed = remember(texture) { texture.ordinal * 1000 }
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        when (texture) {
+            NovelReaderBackgroundTexture.PAPER_GRAIN -> {
+                // Fine dot noise — small circles at pseudo-random positions
+                val cellSize = 6f
+                val cols = (w / cellSize).toInt() + 1
+                val rows = (h / cellSize).toInt() + 1
+                for (y in 0..rows) {
+                    for (x in 0..cols) {
+                        val hash = ((x * 73856093) xor (y * 19349663) xor seed) and 0xFFFF
+                        val rand = hash.toFloat() / 0xFFFFf
+                        if (rand > 0.6f) {
+                            val cx = x * cellSize + (rand * cellSize)
+                            val cy = y * cellSize + ((1f - rand) * cellSize)
+                            drawCircle(
+                                color = baseColor.copy(alpha = alpha * rand.coerceIn(0.3f, 1f)),
+                                radius = 0.8f + rand * 0.7f,
+                                center = Offset(cx, cy),
+                            )
+                        }
+                    }
+                }
+            }
+            NovelReaderBackgroundTexture.LINEN -> {
+                // Crosshatch — diagonal lines in two directions
+                val spacing = 4f
+                drawLine(
+                    color = baseColor.copy(alpha = alpha * 0.5f),
+                    start = Offset(0f, 0f),
+                    end = Offset(w, h),
+                    strokeWidth = 0.5f,
+                )
+                var offset = spacing
+                while (offset < w + h) {
+                    drawLine(
+                        color = baseColor.copy(alpha = alpha * 0.3f),
+                        start = Offset(offset, 0f),
+                        end = Offset(0f, offset),
+                        strokeWidth = 0.5f,
+                    )
+                    offset += spacing
+                }
+                offset = spacing
+                while (offset < w + h) {
+                    drawLine(
+                        color = baseColor.copy(alpha = alpha * 0.3f),
+                        start = Offset(w - offset, 0f),
+                        end = Offset(w, offset),
+                        strokeWidth = 0.5f,
+                    )
+                    offset += spacing
+                }
+            }
+            NovelReaderBackgroundTexture.PARCHMENT -> {
+                // Irregular blotches — larger semi-transparent circles
+                val cellSize = 40f
+                val cols = (w / cellSize).toInt() + 2
+                val rows = (h / cellSize).toInt() + 2
+                for (y in 0..rows) {
+                    for (x in 0..cols) {
+                        val hash = ((x * 2654435761.toInt()) xor (y * 40503) xor seed) and 0xFFFF
+                        val rand = hash.toFloat() / 0xFFFFf
+                        if (rand > 0.7f) {
+                            val cx = x * cellSize + (rand * cellSize * 0.5f)
+                            val cy = y * cellSize + ((1f - rand) * cellSize * 0.5f)
+                            drawCircle(
+                                color = baseColor.copy(alpha = alpha * rand * 0.4f),
+                                radius = 8f + rand * 20f,
+                                center = Offset(cx, cy),
+                            )
+                        }
+                    }
+                }
+            }
+            NovelReaderBackgroundTexture.NONE -> {}
+        }
+    }
 }

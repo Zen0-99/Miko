@@ -30,7 +30,7 @@
         <item quantity="many">לאחר %1$s דקות</item>
         <item quantity="other">לאחר %1$s דקות</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">קטגורייה אחת</item>
         <item quantity="two">שתי קטגוריות</item>
         <item quantity="many">%d קטגוריות</item>

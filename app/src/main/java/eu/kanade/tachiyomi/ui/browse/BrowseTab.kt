@@ -1,23 +1,30 @@
-﻿package eu.kanade.tachiyomi.ui.browse
+package eu.kanade.tachiyomi.ui.browse
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.graphics.res.animatedVectorResource
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -27,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -42,6 +50,7 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBarWithSearch
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
@@ -142,12 +151,22 @@ data object BrowseTab : Tab {
         // Push search query into the active extension screen model.
         // Extensions side: search immediately as the user types (no submit
         // needed). Browse side: results only show after the user submits.
+        // When search is cancelled (query = null), we do NOT call
+        // extSM.search(null) — doing so triggers a recomposition of the
+        // extension list (which is being torn down) and causes icon
+        // produceState to restart, briefly showing placeholder/broken icons.
+        // The stale searchQuery in the SM is harmless: it's reset the next
+        // time the user opens search (search("") is called first, then the
+        // actual query).
         LaunchedEffect(searchQuery, showExtensions, contentMode) {
             if (showExtensions && searchQuery != null) {
+                val query = searchQuery!!
                 when (contentMode) {
-                    ContentMode.ANIME -> animeExtSM.search(searchQuery)
-                    ContentMode.MANGA -> mangaExtSM.search(searchQuery)
-                    ContentMode.NOVEL -> novelExtSM.search(searchQuery)
+                    ContentMode.ANIME -> animeExtSM.search(query)
+                    ContentMode.MANGA -> mangaExtSM.search(query)
+                    ContentMode.NOVEL -> {
+                        novelExtSM.search(query)
+                    }
                 }
             }
         }
@@ -206,6 +225,11 @@ data object BrowseTab : Tab {
             title = stringResource(titleRes),
             actions = allActions,
             searchEnabled = true,
+            searchPlaceholderText = if (showExtensions) {
+                stringResource(MR.strings.search_hint_extensions)
+            } else {
+                stringResource(MR.strings.search_hint_browse)
+            },
             searchQuery = searchQuery,
             onSearchQueryChange = { query ->
                 searchQuery = query
@@ -247,81 +271,97 @@ data object BrowseTab : Tab {
         Scaffold(
             topBar = {},
             snackbarHost = {
-                SnackbarHost(
-                    snackbarHostState,
-                    modifier = Modifier.padding(bottom = 80.dp),
-                )
+                AchievementStyledSnackbarHost(hostState = snackbarHostState)
             },
         ) { padding ->
-            val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
-                ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            val hostPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+            val hostTop = hostPadding?.calculateTopPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            val hostBottom = hostPadding?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
             val resolvedPadding = androidx.compose.foundation.layout.PaddingValues(
-                top = padding.calculateTopPadding(),
+                top = padding.calculateTopPadding() + hostTop,
                 bottom = padding.calculateBottomPadding() + hostBottom,
             )
 
-            val currentQuery = searchQuery
-            if (currentQuery != null) {
-                // Search mode
-                if (showExtensions) {
-                    // Extensions side: show results immediately as the user
-                    // types — no submit needed. Use card design when enabled.
-                    if (cardDesign) {
-                        BrowseExtensionCardSearchResults(
-                            contentMode = contentMode,
-                            contentPadding = resolvedPadding,
-                            cardColumns = cardColumns,
-                            animeExtSM = animeExtSM,
-                            mangaExtSM = mangaExtSM,
-                            novelExtSM = novelExtSM,
-                            onInstallExtension = { ext ->
-                                when (ext) {
-                                    is NovelExtension.Available -> novelExtSM.installExtension(ext)
-                                    is MangaExtension.Available -> mangaExtSM.installExtension(ext)
-                                    is AnimeExtension.Available -> animeExtSM.installExtension(ext)
-                                }
-                            },
-                        )
-                    } else {
-                        val extTab = when (contentMode) {
-                            ContentMode.ANIME -> animeExtensionsTab(animeExtSM)
-                            ContentMode.MANGA -> mangaExtensionsTab(mangaExtSM)
-                            ContentMode.NOVEL -> novelExtensionsTab(novelExtSM)
-                        }
-                        extTab.content(resolvedPadding, snackbarHostState)
-                    }
-                } else if (searchSubmitted) {
-                    // Browse side: only show source search results after the
-                    // user submits (presses enter/search on IME).
-                    BrowseSourceSearchResults(
-                        contentMode = contentMode,
-                        searchQuery = currentQuery,
-                        contentPadding = resolvedPadding,
-                        animeSourceManager = animeSourceManager,
-                        mangaSourceManager = mangaSourceManager,
-                        novelSourceManager = novelSourceManager,
-                        onSourceClick = { sourceId ->
-                            when (contentMode) {
-                                ContentMode.ANIME -> navigator.push(
-                                    BrowseAnimeSourceScreen(sourceId, GetRemoteAnime.QUERY_POPULAR),
-                                )
-                                ContentMode.MANGA -> navigator.push(
-                                    BrowseMangaSourceScreen(sourceId, GetRemoteManga.QUERY_POPULAR),
-                                )
-                                ContentMode.NOVEL -> navigator.push(
-                                    BrowseNovelSourceScreen(sourceId, GetRemoteNovel.QUERY_POPULAR),
-                                )
-                            }
-                        },
-                    )
-                } else {
-                    // Browse side, typing but not submitted yet: show normal
-                    // source tab content underneath.
-                    sourceTab.content(resolvedPadding, snackbarHostState)
-                }
-            } else {
-                // Normal mode: show source tab
+            // The source tab is ALWAYS composed underneath, even when search
+            // is active. This keeps its icons alive (remembered bitmaps, GPU
+            // textures intact) so that when search is closed (X pressed), the
+            // source tab is simply revealed — no recomposition from scratch,
+            // no icon re-decode, no placeholder flash. Search content is
+            // overlaid on top with an opaque background to hide the source
+            // tab beneath.
+            Box(
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                // Source tab — always mounted, never torn down by search.
                 sourceTab.content(resolvedPadding, snackbarHostState)
+
+                // Search overlay — only present when there is actual search
+                // content to show. When typing on the Browse side (not yet
+                // submitted), no overlay is shown and the source tab is
+                // visible underneath (same behavior as before).
+                val currentQuery = searchQuery
+                val showSearchOverlay = currentQuery != null && (showExtensions || searchSubmitted)
+                if (showSearchOverlay) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                    ) {
+                        if (showExtensions) {
+                            // Extensions side: show results immediately as the
+                            // user types — no submit needed.
+                            if (cardDesign) {
+                                BrowseExtensionCardSearchResults(
+                                    contentMode = contentMode,
+                                    contentPadding = resolvedPadding,
+                                    cardColumns = cardColumns,
+                                    animeExtSM = animeExtSM,
+                                    mangaExtSM = mangaExtSM,
+                                    novelExtSM = novelExtSM,
+                                    onInstallExtension = { ext ->
+                                        when (ext) {
+                                            is NovelExtension.Available -> novelExtSM.installExtension(ext)
+                                            is MangaExtension.Available -> mangaExtSM.installExtension(ext)
+                                            is AnimeExtension.Available -> animeExtSM.installExtension(ext)
+                                        }
+                                    },
+                                )
+                            } else {
+                                val extTab = when (contentMode) {
+                                    ContentMode.ANIME -> animeExtensionsTab(animeExtSM)
+                                    ContentMode.MANGA -> mangaExtensionsTab(mangaExtSM)
+                                    ContentMode.NOVEL -> novelExtensionsTab(novelExtSM)
+                                }
+                                extTab.content(resolvedPadding, snackbarHostState)
+                            }
+                            // JS plugins are now merged into the novel extensions
+                            // list (Not Installed section) via NovelExtensionsScreenModel.
+                        } else {
+                            // Browse side: source search results after submit.
+                            BrowseSourceSearchResults(
+                                contentMode = contentMode,
+                                searchQuery = currentQuery ?: "",
+                                contentPadding = resolvedPadding,
+                                animeSourceManager = animeSourceManager,
+                                mangaSourceManager = mangaSourceManager,
+                                novelSourceManager = novelSourceManager,
+                                onSourceClick = { sourceId ->
+                                    when (contentMode) {
+                                        ContentMode.ANIME -> navigator.push(
+                                            BrowseAnimeSourceScreen(sourceId, GetRemoteAnime.QUERY_POPULAR),
+                                        )
+                                        ContentMode.MANGA -> navigator.push(
+                                            BrowseMangaSourceScreen(sourceId, GetRemoteManga.QUERY_POPULAR),
+                                        )
+                                        ContentMode.NOVEL -> navigator.push(
+                                            BrowseNovelSourceScreen(sourceId, GetRemoteNovel.QUERY_POPULAR),
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -332,9 +372,9 @@ data object BrowseTab : Tab {
 }
 
 /**
- * Segmented pill toggle: Browse | Extensions.
- * Uses Material3 SingleChoiceSegmentedButtonRow — same component as the
- * Settings > Appearance content mode toggle.
+ * Combined pill toggle: Browse | Extensions.
+ * A single rounded container with two segments — the selected segment gets
+ * a filled pill background, the unselected one is transparent.
  * Only shown while search is active.
  */
 @Composable
@@ -347,18 +387,45 @@ private fun BrowseSearchPill(
         stringResource(MR.strings.browse) to false,
         stringResource(MR.strings.label_extensions) to true,
     )
-    SingleChoiceSegmentedButtonRow(
+    val containerShape = RoundedCornerShape(999.dp)
+    val segmentShape = RoundedCornerShape(999.dp)
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(containerShape)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        options.forEachIndexed { index, (label, isExt) ->
-            SegmentedButton(
-                selected = showExtensions == isExt,
-                onClick = { onToggle(isExt) },
-                shape = SegmentedButtonDefaults.itemShape(index, options.size),
+        options.forEach { (label, isExt) ->
+            val isSelected = showExtensions == isExt
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(segmentShape)
+                    .then(
+                        if (isSelected) {
+                            Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable { onToggle(isExt) }
+                    .padding(vertical = 7.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(label)
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    maxLines = 1,
+                )
             }
         }
     }
@@ -481,7 +548,15 @@ private fun BrowseExtensionCardSearchResults(
             contentPadding = contentPadding,
         ) {
             rows.forEachIndexed { rowIndex, rowItems ->
-                item(key = "ext-card-$rowIndex") {
+                val rowKey = rowItems.joinToString(",") { ext ->
+                    when (ext) {
+                        is AnimeExtension -> ext.pkgName
+                        is MangaExtension -> ext.pkgName
+                        is NovelExtension -> ext.pkgName
+                        else -> ext.toString()
+                    }
+                }
+                item(key = "ext-card-$rowKey") {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

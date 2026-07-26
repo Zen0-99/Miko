@@ -48,7 +48,7 @@ fun EntryToolbar(
     onClickFilter: (() -> Unit)?,
     onClickShare: (() -> Unit)?,
     onClickDownload: ((DownloadAction) -> Unit)?,
-    onClickEditCategory: (() -> Unit)?,
+    onClickEditCollection: (() -> Unit)?,
     onClickRefresh: (() -> Unit)?,
     onClickMigrate: (() -> Unit)?,
     onClickSettings: (() -> Unit)?,
@@ -208,11 +208,11 @@ fun EntryToolbar(
                         )
                     }
 
-                    if (onClickEditCategory != null) {
+                    if (onClickEditCollection != null) {
                         add(
                             AppBar.OverflowAction(
                                 title = stringResource(MR.strings.action_edit),
-                                onClick = onClickEditCategory,
+                                onClick = onClickEditCollection,
                             ),
                         )
                     }

@@ -14,9 +14,9 @@
     <string name="action_enable_all">گشتی چالاک بکە</string>
     <string name="action_disable_all">گشتی ناچالاک بکە</string>
     <string name="action_add">زیادکردن</string>
-    <string name="action_add_category">زیادکردنی کاتیگۆری</string>
-    <string name="action_edit_categories">دەستکاریکردنی کاتیگۆری</string>
-    <string name="action_rename_category">ناونانەوەی کاتیگۆری</string>
+    <string name="action_add_collection">زیادکردنی کاتیگۆری</string>
+    <string name="action_edit_collections">دەستکاریکردنی کاتیگۆری</string>
+    <string name="action_rename_collection">ناونانەوەی کاتیگۆری</string>
     <string name="label_library">کۆکراوەکان</string>
     <string name="label_recent_updates">نوێکارییەکان</string>
     <string name="label_backup">یەدەگ کردن و گەڕانەوە بۆ باری سەرەکی</string>
@@ -26,7 +26,7 @@
     <string name="manga">مانگا</string>
     <string name="chapters">چاپتەرەکان</string>
     <string name="track">بەدواداچوون</string>
-    <string name="categories">کاتیگۆرییەکان</string>
+    <string name="collections">کاتیگۆرییەکان</string>
     <string name="action_settings">سازکارییەکان</string>
     <string name="action_menu">لیست</string>
     <string name="action_filter_bookmarked">نیشانکراو</string>
@@ -48,7 +48,7 @@
     <string name="action_sort_date_added">بەرواری بەردەست بوون</string>
     <string name="action_search">گەڕان</string>
     <string name="action_download">داونلۆد</string>
-    <string name="information_empty_category">هیچ کاتیگۆرییەکت نییە. دەست بنێ بە دوگمەی زیادە تا کاتیگۆرییەک بۆ ڕێکخستنی تۆماری ڕابردووت درووست بکەیت.</string>
+    <string name="information_empty_collection">هیچ کاتیگۆرییەکت نییە. دەست بنێ بە دوگمەی زیادە تا کاتیگۆرییەک بۆ ڕێکخستنی تۆماری ڕابردووت درووست بکەیت.</string>
     <string name="action_delete">سڕینەوە</string>
     <string name="information_no_recent">هێج نوێکارییەک نییە لەم دواییانەدا</string>
     <string name="label_sources">سەرچاوەکان</string>
@@ -88,7 +88,7 @@
     <string name="action_start_downloading_now">ئێستا دەست بکە بە داونلۆد کردن</string>
     <string name="action_show_errors">وردەکاری هەموو ئیرۆرەکان ببینە</string>
     <string name="action_desc">بە پلە نزم بوونەوە</string>
-    <string name="action_move_category">دیاریکردنی کاتیگۆرییەکان</string>
+    <string name="action_move_collection">دیاریکردنی کاتیگۆرییەکان</string>
     <string name="action_edit_cover">گۆڕینی وێنەی بەرگەکە</string>
     <string name="action_view_chapters">بینینی چاپتەرەکان</string>
     <string name="action_previous_chapter">چاپتەری پێشوو</string>
@@ -231,8 +231,8 @@
     <string name="action_show_manga">نیشاندانی مانگا</string>
     <string name="action_sort_last_manga_update">کۆتانوێکردنەوەی مانگا</string>
     <string name="action_sort_unread_count">ژمارەی نەخوێندراوە</string>
-    <string name="delete_category">ڕەشکردنەوەی بەش</string>
+    <string name="delete_collection">ڕەشکردنەوەی بەش</string>
     <string name="action_remove_everything">لادانی هەمووشتێك</string>
     <string name="action_search_hint">گەڕان…</string>
-    <string name="delete_category_confirmation">\?ڕەشبکەیتەوە \"%s\"ئایا ئەتەوێ کە بەشی</string>
+    <string name="delete_collection_confirmation">\?ڕەشبکەیتەوە \"%s\"ئایا ئەتەوێ کە بەشی</string>
 </resources>

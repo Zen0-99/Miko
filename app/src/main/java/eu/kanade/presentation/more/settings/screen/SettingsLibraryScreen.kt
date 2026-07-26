@@ -15,21 +15,21 @@ import androidx.core.content.ContextCompat
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.presentation.category.visualName
+import eu.kanade.presentation.collection.visualName
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.PreferenceItem
 import eu.kanade.presentation.more.settings.widget.TriStateListDialog
 import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
 import eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.launch
-import tachiyomi.domain.category.anime.interactor.GetAnimeCategories
-import tachiyomi.domain.category.manga.interactor.GetMangaCategories
-import tachiyomi.domain.category.manga.interactor.ResetMangaCategoryFlags
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
+import tachiyomi.domain.collection.manga.interactor.ResetMangaCollectionFlags
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_CHARGING
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_NETWORK_NOT_METERED
@@ -62,23 +62,23 @@ object SettingsLibraryScreen : SearchableSettings {
 
     @Composable
     override fun getPreferences(): List<Preference> {
-        val getCategories = remember { Injekt.get<GetMangaCategories>() }
-        val allCategories by getCategories.subscribe().collectAsState(initial = emptyList())
-        val getAnimeCategories = remember { Injekt.get<GetAnimeCategories>() }
-        val allAnimeCategories by getAnimeCategories.subscribe().collectAsState(initial = emptyList())
-        val getNovelCategories = remember { Injekt.get<tachiyomi.domain.category.novel.interactor.GetNovelCategories>() }
-        val allNovelCategories by getNovelCategories.subscribe().collectAsState(initial = emptyList())
+        val getCollections = remember { Injekt.get<GetMangaCollections>() }
+        val allCollections by getCollections.subscribe().collectAsState(initial = emptyList())
+        val getAnimeCollections = remember { Injekt.get<GetAnimeCollections>() }
+        val allAnimeCollections by getAnimeCollections.subscribe().collectAsState(initial = emptyList())
+        val getNovelCollections = remember { Injekt.get<tachiyomi.domain.collection.novel.interactor.GetNovelCollections>() }
+        val allNovelCollections by getNovelCollections.subscribe().collectAsState(initial = emptyList())
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
 
         return listOf(
-            getCategoriesGroup(
+            getCollectionsGroup(
                 LocalNavigator.currentOrThrow,
-                allCategories,
-                allAnimeCategories,
-                allNovelCategories,
+                allCollections,
+                allAnimeCollections,
+                allNovelCollections,
                 libraryPreferences,
             ),
-            getGlobalUpdateGroup(allCategories, allAnimeCategories, allNovelCategories, libraryPreferences),
+            getGlobalUpdateGroup(allCollections, allAnimeCollections, allNovelCollections, libraryPreferences),
             getSeasonBehaviorGroup(libraryPreferences),
             getAnimeBehaviorGroup(libraryPreferences),
             getBehaviorGroup(libraryPreferences),
@@ -86,81 +86,81 @@ object SettingsLibraryScreen : SearchableSettings {
     }
 
     @Composable
-    private fun getCategoriesGroup(
+    private fun getCollectionsGroup(
         navigator: Navigator,
-        allCategories: List<Category>,
-        allAnimeCategories: List<Category>,
-        allNovelCategories: List<Category>,
+        allCollections: List<Collection>,
+        allAnimeCollections: List<Collection>,
+        allNovelCollections: List<Collection>,
         libraryPreferences: LibraryPreferences,
     ): Preference.PreferenceGroup {
         val scope = rememberCoroutineScope()
-        val userCategoriesCount = allCategories.filterNot(Category::isSystemCategory).size
-        val userAnimeCategoriesCount = allAnimeCategories.filterNot(Category::isSystemCategory).size
-        val userNovelCategoriesCount = allNovelCategories.filterNot(Category::isSystemCategory).size
+        val userCollectionsCount = allCollections.filterNot(Collection::isSystemCollection).size
+        val userAnimeCollectionsCount = allAnimeCollections.filterNot(Collection::isSystemCollection).size
+        val userNovelCollectionsCount = allNovelCollections.filterNot(Collection::isSystemCollection).size
 
-        // For default category
-        val mangaIds = listOf(libraryPreferences.defaultMangaCategory().defaultValue()) +
-            allCategories.fastMap { it.id.toInt() }
-        val animeIds = listOf(libraryPreferences.defaultAnimeCategory().defaultValue()) +
-            allAnimeCategories.fastMap { it.id.toInt() }
-        val novelIds = listOf(libraryPreferences.defaultNovelCategory().defaultValue()) +
-            allNovelCategories.fastMap { it.id.toInt() }
+        // For default collection
+        val mangaIds = listOf(libraryPreferences.defaultMangaCollection().defaultValue()) +
+            allCollections.fastMap { it.id.toInt() }
+        val animeIds = listOf(libraryPreferences.defaultAnimeCollection().defaultValue()) +
+            allAnimeCollections.fastMap { it.id.toInt() }
+        val novelIds = listOf(libraryPreferences.defaultNovelCollection().defaultValue()) +
+            allNovelCollections.fastMap { it.id.toInt() }
 
-        val mangaLabels = listOf(stringResource(MR.strings.default_category_summary)) +
-            allCategories.fastMap { it.visualName }
-        val animeLabels = listOf(stringResource(MR.strings.default_category_summary)) +
-            allAnimeCategories.fastMap { it.visualName }
-        val novelLabels = listOf(stringResource(MR.strings.default_category_summary)) +
-            allNovelCategories.fastMap { it.visualName }
+        val mangaLabels = listOf(stringResource(MR.strings.default_collection_summary)) +
+            allCollections.fastMap { it.visualName }
+        val animeLabels = listOf(stringResource(MR.strings.default_collection_summary)) +
+            allAnimeCollections.fastMap { it.visualName }
+        val novelLabels = listOf(stringResource(MR.strings.default_collection_summary)) +
+            allNovelCollections.fastMap { it.visualName }
 
         return Preference.PreferenceGroup(
-            title = stringResource(AYMR.strings.general_categories),
+            title = stringResource(AYMR.strings.general_collections),
             preferenceItems = persistentListOf(
                 Preference.PreferenceItem.TextPreference(
-                    title = stringResource(AYMR.strings.action_edit_anime_categories),
+                    title = stringResource(AYMR.strings.action_edit_anime_collections),
                     subtitle = pluralStringResource(
-                        MR.plurals.num_categories,
-                        count = userAnimeCategoriesCount,
-                        userAnimeCategoriesCount,
+                        MR.plurals.num_collections,
+                        count = userAnimeCollectionsCount,
+                        userAnimeCollectionsCount,
                     ),
-                    onClick = { navigator.push(CategoriesTab) },
+                    onClick = { navigator.push(CollectionsTab) },
                 ),
                 Preference.PreferenceItem.ListPreference(
-                    preference = libraryPreferences.defaultAnimeCategory(),
+                    preference = libraryPreferences.defaultAnimeCollection(),
                     entries = animeIds.zip(animeLabels).toMap().toImmutableMap(),
-                    title = stringResource(AYMR.strings.default_anime_category),
+                    title = stringResource(AYMR.strings.default_anime_collection),
                 ),
                 Preference.PreferenceItem.TextPreference(
-                    title = stringResource(AYMR.strings.action_edit_manga_categories),
+                    title = stringResource(AYMR.strings.action_edit_manga_collections),
                     subtitle = pluralStringResource(
-                        MR.plurals.num_categories,
-                        count = userCategoriesCount,
-                        userCategoriesCount,
+                        MR.plurals.num_collections,
+                        count = userCollectionsCount,
+                        userCollectionsCount,
                     ),
                     onClick = {
-                        navigator.push(CategoriesTab)
-                        CategoriesTab.showMangaCategory()
+                        navigator.push(CollectionsTab)
+                        CollectionsTab.showMangaCollection()
                     },
                 ),
                 Preference.PreferenceItem.ListPreference(
-                    preference = libraryPreferences.defaultMangaCategory(),
+                    preference = libraryPreferences.defaultMangaCollection(),
                     entries = mangaIds.zip(mangaLabels).toMap().toImmutableMap(),
-                    title = stringResource(AYMR.strings.default_manga_category),
+                    title = stringResource(AYMR.strings.default_manga_collection),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = libraryPreferences.categorizedDisplaySettings(),
-                    title = stringResource(MR.strings.categorized_display_settings),
+                    preference = libraryPreferences.perCollectionDisplaySettings(),
+                    title = stringResource(MR.strings.per_collection_display_settings),
                     onValueChanged = {
                         if (!it) {
                             scope.launch {
-                                Injekt.get<ResetMangaCategoryFlags>().await()
+                                Injekt.get<ResetMangaCollectionFlags>().await()
                             }
                         }
                         true
                     },
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = libraryPreferences.hideHiddenCategoriesSettings(),
+                    preference = libraryPreferences.hideHiddenCollectionsSettings(),
                     title = stringResource(AYMR.strings.pref_category_hide_hidden),
                 ),
             ),
@@ -169,9 +169,9 @@ object SettingsLibraryScreen : SearchableSettings {
 
     @Composable
     private fun getGlobalUpdateGroup(
-        allMangaCategories: List<Category>,
-        allAnimeCategories: List<Category>,
-        allNovelCategories: List<Category>,
+        allMangaCollections: List<Collection>,
+        allAnimeCollections: List<Collection>,
+        allNovelCollections: List<Collection>,
         libraryPreferences: LibraryPreferences,
     ): Preference.PreferenceGroup {
         val context = LocalContext.current
@@ -179,83 +179,83 @@ object SettingsLibraryScreen : SearchableSettings {
         val autoUpdateIntervalPref = libraryPreferences.autoUpdateInterval()
         val autoUpdateInterval by autoUpdateIntervalPref.collectAsState()
 
-        val animeAutoUpdateCategoriesPref = libraryPreferences.animeUpdateCategories()
-        val animeAutoUpdateCategoriesExcludePref =
-            libraryPreferences.animeUpdateCategoriesExclude()
+        val animeAutoUpdateCollectionsPref = libraryPreferences.animeUpdateCollections()
+        val animeAutoUpdateCollectionsExcludePref =
+            libraryPreferences.animeUpdateCollectionsExclude()
 
-        val includedAnime by animeAutoUpdateCategoriesPref.collectAsState()
-        val excludedAnime by animeAutoUpdateCategoriesExcludePref.collectAsState()
-        var showAnimeCategoriesDialog by rememberSaveable { mutableStateOf(false) }
-        if (showAnimeCategoriesDialog) {
+        val includedAnime by animeAutoUpdateCollectionsPref.collectAsState()
+        val excludedAnime by animeAutoUpdateCollectionsExcludePref.collectAsState()
+        var showAnimeCollectionsDialog by rememberSaveable { mutableStateOf(false) }
+        if (showAnimeCollectionsDialog) {
             TriStateListDialog(
-                title = stringResource(AYMR.strings.anime_categories),
-                message = stringResource(AYMR.strings.pref_anime_library_update_categories_details),
-                items = allAnimeCategories,
-                initialChecked = includedAnime.mapNotNull { id -> allAnimeCategories.find { it.id.toString() == id } },
-                initialInversed = excludedAnime.mapNotNull { id -> allAnimeCategories.find { it.id.toString() == id } },
+                title = stringResource(AYMR.strings.anime_collections),
+                message = stringResource(AYMR.strings.pref_anime_library_update_collections_details),
+                items = allAnimeCollections,
+                initialChecked = includedAnime.mapNotNull { id -> allAnimeCollections.find { it.id.toString() == id } },
+                initialInversed = excludedAnime.mapNotNull { id -> allAnimeCollections.find { it.id.toString() == id } },
                 itemLabel = { it.visualName },
-                onDismissRequest = { showAnimeCategoriesDialog = false },
+                onDismissRequest = { showAnimeCollectionsDialog = false },
                 onValueChanged = { newIncluded, newExcluded ->
-                    animeAutoUpdateCategoriesPref.set(newIncluded.map { it.id.toString() }.toSet())
-                    animeAutoUpdateCategoriesExcludePref.set(
+                    animeAutoUpdateCollectionsPref.set(newIncluded.map { it.id.toString() }.toSet())
+                    animeAutoUpdateCollectionsExcludePref.set(
                         newExcluded.map { it.id.toString() }
                             .toSet(),
                     )
-                    showAnimeCategoriesDialog = false
+                    showAnimeCollectionsDialog = false
                 },
             )
         }
 
-        val autoUpdateCategoriesPref = libraryPreferences.mangaUpdateCategories()
-        val autoUpdateCategoriesExcludePref =
-            libraryPreferences.mangaUpdateCategoriesExclude()
+        val autoUpdateCollectionsPref = libraryPreferences.mangaUpdateCollections()
+        val autoUpdateCollectionsExcludePref =
+            libraryPreferences.mangaUpdateCollectionsExclude()
 
-        val includedManga by autoUpdateCategoriesPref.collectAsState()
-        val excludedManga by autoUpdateCategoriesExcludePref.collectAsState()
-        var showMangaCategoriesDialog by rememberSaveable { mutableStateOf(false) }
-        if (showMangaCategoriesDialog) {
+        val includedManga by autoUpdateCollectionsPref.collectAsState()
+        val excludedManga by autoUpdateCollectionsExcludePref.collectAsState()
+        var showMangaCollectionsDialog by rememberSaveable { mutableStateOf(false) }
+        if (showMangaCollectionsDialog) {
             TriStateListDialog(
-                title = stringResource(AYMR.strings.manga_categories),
-                message = stringResource(AYMR.strings.pref_manga_library_update_categories_details),
-                items = allMangaCategories,
-                initialChecked = includedManga.mapNotNull { id -> allMangaCategories.find { it.id.toString() == id } },
-                initialInversed = excludedManga.mapNotNull { id -> allMangaCategories.find { it.id.toString() == id } },
+                title = stringResource(AYMR.strings.manga_collections),
+                message = stringResource(AYMR.strings.pref_manga_library_update_collections_details),
+                items = allMangaCollections,
+                initialChecked = includedManga.mapNotNull { id -> allMangaCollections.find { it.id.toString() == id } },
+                initialInversed = excludedManga.mapNotNull { id -> allMangaCollections.find { it.id.toString() == id } },
                 itemLabel = { it.visualName },
-                onDismissRequest = { showMangaCategoriesDialog = false },
+                onDismissRequest = { showMangaCollectionsDialog = false },
                 onValueChanged = { newIncluded, newExcluded ->
-                    autoUpdateCategoriesPref.set(newIncluded.map { it.id.toString() }.toSet())
-                    autoUpdateCategoriesExcludePref.set(
+                    autoUpdateCollectionsPref.set(newIncluded.map { it.id.toString() }.toSet())
+                    autoUpdateCollectionsExcludePref.set(
                         newExcluded.map { it.id.toString() }
                             .toSet(),
                     )
-                    showMangaCategoriesDialog = false
+                    showMangaCollectionsDialog = false
                 },
             )
         }
 
-        val novelAutoUpdateCategoriesPref = libraryPreferences.novelUpdateCategories()
-        val novelAutoUpdateCategoriesExcludePref =
-            libraryPreferences.novelUpdateCategoriesExclude()
+        val novelAutoUpdateCollectionsPref = libraryPreferences.novelUpdateCollections()
+        val novelAutoUpdateCollectionsExcludePref =
+            libraryPreferences.novelUpdateCollectionsExclude()
 
-        val includedNovel by novelAutoUpdateCategoriesPref.collectAsState()
-        val excludedNovel by novelAutoUpdateCategoriesExcludePref.collectAsState()
-        var showNovelCategoriesDialog by rememberSaveable { mutableStateOf(false) }
-        if (showNovelCategoriesDialog) {
+        val includedNovel by novelAutoUpdateCollectionsPref.collectAsState()
+        val excludedNovel by novelAutoUpdateCollectionsExcludePref.collectAsState()
+        var showNovelCollectionsDialog by rememberSaveable { mutableStateOf(false) }
+        if (showNovelCollectionsDialog) {
             TriStateListDialog(
-                title = stringResource(AYMR.strings.novel_categories),
-                message = stringResource(AYMR.strings.pref_novel_library_update_categories_details),
-                items = allNovelCategories,
-                initialChecked = includedNovel.mapNotNull { id -> allNovelCategories.find { it.id.toString() == id } },
-                initialInversed = excludedNovel.mapNotNull { id -> allNovelCategories.find { it.id.toString() == id } },
+                title = stringResource(AYMR.strings.novel_collections),
+                message = stringResource(AYMR.strings.pref_novel_library_update_collections_details),
+                items = allNovelCollections,
+                initialChecked = includedNovel.mapNotNull { id -> allNovelCollections.find { it.id.toString() == id } },
+                initialInversed = excludedNovel.mapNotNull { id -> allNovelCollections.find { it.id.toString() == id } },
                 itemLabel = { it.visualName },
-                onDismissRequest = { showNovelCategoriesDialog = false },
+                onDismissRequest = { showNovelCollectionsDialog = false },
                 onValueChanged = { newIncluded, newExcluded ->
-                    novelAutoUpdateCategoriesPref.set(newIncluded.map { it.id.toString() }.toSet())
-                    novelAutoUpdateCategoriesExcludePref.set(
+                    novelAutoUpdateCollectionsPref.set(newIncluded.map { it.id.toString() }.toSet())
+                    novelAutoUpdateCollectionsExcludePref.set(
                         newExcluded.map { it.id.toString() }
                             .toSet(),
                     )
-                    showNovelCategoriesDialog = false
+                    showNovelCollectionsDialog = false
                 },
             )
         }
@@ -302,31 +302,31 @@ object SettingsLibraryScreen : SearchableSettings {
                     },
                 ),
                 Preference.PreferenceItem.TextPreference(
-                    title = stringResource(AYMR.strings.anime_categories),
-                    subtitle = getCategoriesLabel(
-                        allCategories = allAnimeCategories,
+                    title = stringResource(AYMR.strings.anime_collections),
+                    subtitle = getCollectionsLabel(
+                        allCollections = allAnimeCollections,
                         included = includedAnime,
                         excluded = excludedAnime,
                     ),
-                    onClick = { showAnimeCategoriesDialog = true },
+                    onClick = { showAnimeCollectionsDialog = true },
                 ),
                 Preference.PreferenceItem.TextPreference(
-                    title = stringResource(AYMR.strings.manga_categories),
-                    subtitle = getCategoriesLabel(
-                        allCategories = allMangaCategories,
+                    title = stringResource(AYMR.strings.manga_collections),
+                    subtitle = getCollectionsLabel(
+                        allCollections = allMangaCollections,
                         included = includedManga,
                         excluded = excludedManga,
                     ),
-                    onClick = { showMangaCategoriesDialog = true },
+                    onClick = { showMangaCollectionsDialog = true },
                 ),
                 Preference.PreferenceItem.TextPreference(
-                    title = stringResource(AYMR.strings.novel_categories),
-                    subtitle = getCategoriesLabel(
-                        allCategories = allNovelCategories,
+                    title = stringResource(AYMR.strings.novel_collections),
+                    subtitle = getCollectionsLabel(
+                        allCollections = allNovelCollections,
                         included = includedNovel,
                         excluded = excludedNovel,
                     ),
-                    onClick = { showNovelCategoriesDialog = true },
+                    onClick = { showNovelCollectionsDialog = true },
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.autoUpdateMetadata(),

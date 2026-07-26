@@ -113,6 +113,12 @@ class NovelReaderPreferences(
     /** Auto-scroll: enables automatic scrolling of the reader content. */
     fun autoScroll() = preferenceStore.getBoolean("pref_novel_auto_scroll", false)
 
+    /** Smooth auto-scroll: uses continuous pixel-by-pixel scrolling instead of stepped intervals. */
+    fun smoothAutoScroll() = preferenceStore.getBoolean("pref_novel_smooth_auto_scroll", false)
+
+    /** Smooth auto-scroll speed (pixels per second). Range 1-200. Lower = slower. */
+    fun smoothAutoScrollSpeed() = preferenceStore.getInt("pref_novel_smooth_auto_scroll_speed", 30)
+
     /** Auto-scroll interval (milliseconds between scroll steps). */
     fun autoScrollInterval() = preferenceStore.getInt("pref_novel_auto_scroll_interval", 3000)
 

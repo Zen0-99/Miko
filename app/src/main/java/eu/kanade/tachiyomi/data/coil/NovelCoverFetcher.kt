@@ -15,7 +15,11 @@ import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.data.cache.NovelCoverCache
 import eu.kanade.tachiyomi.data.coil.NovelCoverFetcher.Companion.USE_CUSTOM_COVER_KEY
 import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
+import eu.kanade.tachiyomi.source.novel.NovelImageRequestSource
+import eu.kanade.tachiyomi.source.novel.NovelPluginImageSource
+import eu.kanade.tachiyomi.source.novel.NovelSiteSource
 import logcat.LogPriority
 import okhttp3.CacheControl
 import okhttp3.Call
@@ -52,7 +56,7 @@ class NovelCoverFetcher(
     private val coverFileLazy: Lazy<File?>,
     private val customCoverFileLazy: Lazy<File>,
     private val diskCacheKeyLazy: Lazy<String>,
-    private val sourceLazy: Lazy<NovelHttpSource?>,
+    private val sourceLazy: Lazy<NovelSource?>,
     private val callFactoryLazy: Lazy<Call.Factory>,
     private val imageLoader: ImageLoader,
 ) : Fetcher {
@@ -131,7 +135,18 @@ class NovelCoverFetcher(
                 )
             }
 
-            // Fetch from network
+            // Fetch from plugin's fetchImage() when available (LNReader JS plugins).
+            // This uses the plugin's own fetch logic (dynamic headers, Referer, etc.)
+            // instead of a raw HTTP request with only static headers.
+            val source = sourceLazy.value
+            if (source is NovelPluginImageSource) {
+                val pluginResult = pluginImageFetch(source, libraryCoverCacheFile)
+                if (pluginResult != null) {
+                    return pluginResult
+                }
+            }
+
+            // Fall back to direct HTTP request (APK extensions or plugin without fetchImage)
             val response = executeNetworkRequest()
             val responseBody = checkNotNull(response.body) { "Null response source" }
             try {
@@ -167,9 +182,86 @@ class NovelCoverFetcher(
         }
     }
 
+    /**
+     * Fetch cover image via the plugin's [fetchImage] method. This uses the plugin's
+     * own HTTP client and header logic (e.g. Referer, User-Agent), which may differ
+     * from a raw OkHttp request with only static [getImageRequestHeaders] headers.
+     * Returns null if the plugin doesn't support fetchImage or the fetch fails, so
+     * the caller can fall back to a direct HTTP request.
+     */
+    private suspend fun pluginImageFetch(
+        source: NovelPluginImageSource,
+        libraryCoverCacheFile: File?,
+    ): FetchResult? {
+        val payload = source.fetchImage(url!!) ?: return null
+        return try {
+            // Write to cover cache if library item
+            val coverCacheFile = writeBytesToCoverCache(payload.bytes, libraryCoverCacheFile)
+            if (coverCacheFile != null) {
+                return fileLoader(coverCacheFile)
+            }
+
+            // Write to disk cache
+            val snapshot = writeBytesToDiskCache(payload.bytes)
+            if (snapshot != null) {
+                return SourceFetchResult(
+                    source = snapshot.toImageSource(),
+                    mimeType = payload.mimeType.ifBlank { "image/*" },
+                    dataSource = DataSource.NETWORK,
+                )
+            }
+
+            // Read directly from bytes if cache is unused or unusable
+            SourceFetchResult(
+                source = ImageSource(
+                    source = okio.Buffer().write(payload.bytes),
+                    fileSystem = FileSystem.SYSTEM,
+                ),
+                mimeType = payload.mimeType.ifBlank { "image/*" },
+                dataSource = DataSource.NETWORK,
+            )
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to process plugin image for $url" }
+            null
+        }
+    }
+
+    private fun writeBytesToCoverCache(bytes: ByteArray, cacheFile: File?): File? {
+        if (cacheFile == null || !options.diskCachePolicy.writeEnabled) return null
+        return try {
+            okio.Buffer().write(bytes).use { input ->
+                writeSourceToCoverCache(input, cacheFile)
+            }
+            cacheFile.takeIf { it.exists() }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to write plugin image to cover cache ${cacheFile.name}" }
+            null
+        }
+    }
+
+    private fun writeBytesToDiskCache(bytes: ByteArray): DiskCache.Snapshot? {
+        val diskCache = imageLoader.diskCache ?: return null
+        val editor = diskCache.openEditor(diskCacheKey) ?: return null
+        try {
+            diskCache.fileSystem.write(editor.data) {
+                val buffer = okio.Buffer()
+                buffer.write(bytes)
+                buffer.readAll(this)
+            }
+            return editor.commitAndOpenSnapshot()
+        } catch (e: Exception) {
+            try {
+                editor.abort()
+            } catch (ignored: Exception) {
+            }
+            return null
+        }
+    }
+
     private suspend fun executeNetworkRequest(): Response {
-        val client = sourceLazy.value?.client ?: callFactoryLazy.value
-        val response = client.newCall(newRequest()).await()
+        val source = sourceLazy.value
+        val client = (source as? NovelHttpSource)?.client ?: callFactoryLazy.value
+        val response = client.newCall(newRequest(source)).await()
         if (!response.isSuccessful && response.code != HTTP_NOT_MODIFIED) {
             response.close()
             throw IOException(response.message)
@@ -177,13 +269,35 @@ class NovelCoverFetcher(
         return response
     }
 
-    private fun newRequest(): Request {
+    private suspend fun newRequest(source: NovelSource? = sourceLazy.value): Request {
         val request = Request.Builder().apply {
             url(url!!)
 
-            val sourceHeaders = sourceLazy.value?.headers
-            if (sourceHeaders != null) {
-                headers(sourceHeaders)
+            // Use headers from NovelHttpSource if available
+            val httpSource = source as? NovelHttpSource
+            if (httpSource != null) {
+                val sourceHeaders = httpSource.headers
+                if (sourceHeaders != null) {
+                    headers(sourceHeaders)
+                }
+            } else if (source is NovelImageRequestSource) {
+                // JS plugin sources provide image request headers asynchronously
+                val imageHeaders = source.getImageRequestHeaders().toMutableMap()
+                // Match the JS runtime's fetch behavior: if no Referer is set,
+                // add the plugin's site URL as Referer. Many image servers
+                // serve different (smaller/watermarked) images without a Referer.
+                if (imageHeaders.keys.none { it.equals("Referer", ignoreCase = true) }) {
+                    val siteSource = source as? NovelSiteSource
+                    val siteUrl = siteSource?.siteUrl
+                    if (!siteUrl.isNullOrBlank()) {
+                        imageHeaders["Referer"] = "$siteUrl/"
+                    }
+                }
+                if (imageHeaders.isNotEmpty()) {
+                    val headerBuilder = okhttp3.Headers.Builder()
+                    imageHeaders.forEach { (key, value) -> headerBuilder.add(key, value) }
+                    headers(headerBuilder.build())
+                }
             }
         }
 
@@ -310,7 +424,7 @@ class NovelCoverFetcher(
                 coverFileLazy = lazy { coverCache.getCoverFile(data.thumbnailUrl) },
                 customCoverFileLazy = lazy { coverCache.getCustomCoverFile(data.id) },
                 diskCacheKeyLazy = lazy { imageLoader.components.key(data, options)!! },
-                sourceLazy = lazy { sourceManager.get(data.source) as? NovelHttpSource },
+                sourceLazy = lazy { sourceManager.get(data.source) },
                 callFactoryLazy = callFactoryLazy,
                 imageLoader = imageLoader,
             )
@@ -332,7 +446,7 @@ class NovelCoverFetcher(
                 coverFileLazy = lazy { coverCache.getCoverFile(data.url) },
                 customCoverFileLazy = lazy { coverCache.getCustomCoverFile(data.novelId) },
                 diskCacheKeyLazy = lazy { imageLoader.components.key(data, options)!! },
-                sourceLazy = lazy { sourceManager.get(data.sourceId) as? NovelHttpSource },
+                sourceLazy = lazy { sourceManager.get(data.sourceId) },
                 callFactoryLazy = callFactoryLazy,
                 imageLoader = imageLoader,
             )

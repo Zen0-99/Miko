@@ -24,7 +24,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.R
-import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.domain.achievement.model.Achievement
 import kotlin.math.cos
 import kotlin.math.sin
@@ -48,7 +47,6 @@ fun AchievementIcon(
 ) {
     val context = LocalContext.current
     val iconResId = getIconResourceId(icon, context)
-    val colors = AuroraTheme.colors
 
     // Note: Pulsing animation removed for compatibility - can be added back with proper infinite transition setup
     val pulseScale = 1f

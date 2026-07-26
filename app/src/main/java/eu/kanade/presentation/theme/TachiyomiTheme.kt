@@ -1,6 +1,6 @@
 package eu.kanade.presentation.theme
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.ripple.RippleAlpha
@@ -8,9 +8,14 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RippleConfiguration
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.AppTheme
@@ -36,6 +41,7 @@ import eu.kanade.presentation.theme.colorscheme.TealTurqoiseColorScheme
 import eu.kanade.presentation.theme.colorscheme.TidalWaveColorScheme
 import eu.kanade.presentation.theme.colorscheme.YinYangColorScheme
 import eu.kanade.presentation.theme.colorscheme.YotsubaColorScheme
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -60,8 +66,11 @@ fun TachiyomiTheme(
 /**
  * Mode-aware theme: resolves the light/dark theme and amoled setting for the given
  * [ContentMode] from [UiPreferences.lightThemeFor] / [UiPreferences.darkThemeFor].
- * Colors animate smoothly via [animateColors] when the mode changes — no Activity recreate
- * or screenshot-wipe needed since Compose recomposes natively.
+ *
+ * Theme preferences are read reactively via [collectAsState] so that changing a theme
+ * in Settings triggers a smooth animated transition instead of an Activity recreate.
+ * Colors animate via a single synchronized [Animatable] progress value that drives
+ * [lerp] across every color slot — all colors reach their target simultaneously.
  */
 @Composable
 fun TachiyomiTheme(
@@ -70,14 +79,15 @@ fun TachiyomiTheme(
 ) {
     val uiPreferences = Injekt.get<UiPreferences>()
     val isDark = isSystemInDarkTheme()
-    val resolvedTheme = if (isDark) {
-        uiPreferences.darkThemeFor(contentMode).get()
-    } else {
-        uiPreferences.lightThemeFor(contentMode).get()
-    }
+    // Read theme preferences reactively so changes in Settings animate smoothly
+    // without requiring ActivityCompat.recreate().
+    val lightTheme by uiPreferences.lightThemeFor(contentMode).collectAsState()
+    val darkTheme by uiPreferences.darkThemeFor(contentMode).collectAsState()
+    val amoled by uiPreferences.amoledFor(contentMode).collectAsState()
+    val resolvedTheme = if (isDark) darkTheme else lightTheme
     BaseTachiyomiTheme(
         appTheme = resolvedTheme,
-        isAmoled = uiPreferences.amoledFor(contentMode).get(),
+        isAmoled = amoled,
         isDark = isDark,
         content = content,
     )
@@ -121,62 +131,90 @@ private fun BaseTachiyomiTheme(
     content: @Composable () -> Unit,
 ) {
     val targetScheme = getThemeColorScheme(appTheme, isAmoled, isDark)
-    val colorScheme = if (animate) targetScheme.animateColors() else targetScheme
-    // Provide AuroraColors derived from the actual selected color scheme so that
-    // AuroraTheme-based components (achievements, etc.) follow the user's theme
-    // instead of falling back to the hardcoded AuroraColors.Dark default.
-    val auroraColors = AuroraColors.fromColorScheme(colorScheme, isDark, isAmoled)
-    CompositionLocalProvider(LocalAuroraColors provides auroraColors) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            content = content,
-        )
-    }
+    val colorScheme = if (animate) animatedColorScheme(targetScheme) else targetScheme
+    MaterialTheme(
+        colorScheme = colorScheme,
+        content = content,
+    )
 }
 
-private const val THEME_ANIMATION_DURATION_MS = 300
+private const val THEME_ANIMATION_DURATION_MS = 400
 
+/**
+ * Synchronized theme color transition using a single [Animatable] progress value.
+ *
+ * Inspired by Wakely's Reanimated SharedValue pattern: instead of animating each
+ * color slot independently (28+ separate [animateColorAsState] instances), a single
+ * progress float (0→1) drives [lerp] across every color in the [ColorScheme].
+ *
+ * The animation fires whenever the [target] ColorScheme changes — detected by
+ * comparing the primary color value, which is unique per theme and changes on
+ * any theme/mode/amoled/contentMode switch.
+ */
 @Composable
-private fun ColorScheme.animateColors(): ColorScheme {
-    val spec = tween<Color>(durationMillis = THEME_ANIMATION_DURATION_MS)
+private fun animatedColorScheme(target: ColorScheme): ColorScheme {
+    val fromScheme = remember { mutableStateOf(target) }
+    val toScheme = remember { mutableStateOf(target) }
+    val progress = remember { Animatable(1f) }
+    // Use the primary color value as the change-detection key. This is unique
+    // per theme+mode+amoled combination and changes on any theme switch.
+    val targetKey = target.primary.value to target.background.value
+    val lastKey = remember { mutableStateOf(targetKey) }
 
-    @Composable
-    fun anim(target: Color) = animateColorAsState(
-        targetValue = target,
-        animationSpec = spec,
-        label = "themeColor",
-    ).value
+    LaunchedEffect(targetKey) {
+        if (lastKey.value != targetKey) {
+            // Capture the current interpolated state as the new "from" so that
+            // changing the target mid-transition doesn't jump to the old start.
+            val currentProgress = progress.value
+            fromScheme.value = lerpScheme(fromScheme.value, toScheme.value, currentProgress)
+            toScheme.value = target
+            lastKey.value = targetKey
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(THEME_ANIMATION_DURATION_MS))
+        }
+    }
 
-    return copy(
-        primary = anim(primary),
-        onPrimary = anim(onPrimary),
-        primaryContainer = anim(primaryContainer),
-        onPrimaryContainer = anim(onPrimaryContainer),
-        inversePrimary = anim(inversePrimary),
-        secondary = anim(secondary),
-        onSecondary = anim(onSecondary),
-        secondaryContainer = anim(secondaryContainer),
-        onSecondaryContainer = anim(onSecondaryContainer),
-        tertiary = anim(tertiary),
-        onTertiary = anim(onTertiary),
-        tertiaryContainer = anim(tertiaryContainer),
-        onTertiaryContainer = anim(onTertiaryContainer),
-        background = anim(background),
-        onBackground = anim(onBackground),
-        surface = anim(surface),
-        onSurface = anim(onSurface),
-        surfaceVariant = anim(surfaceVariant),
-        onSurfaceVariant = anim(onSurfaceVariant),
-        surfaceTint = anim(surfaceTint),
-        inverseSurface = anim(inverseSurface),
-        inverseOnSurface = anim(inverseOnSurface),
-        error = anim(error),
-        onError = anim(onError),
-        errorContainer = anim(errorContainer),
-        onErrorContainer = anim(onErrorContainer),
-        outline = anim(outline),
-        outlineVariant = anim(outlineVariant),
-        scrim = anim(scrim),
+    val p = progress.value
+    return lerpScheme(fromScheme.value, toScheme.value, p)
+}
+
+/**
+ * Linearly interpolate every color slot between [from] and [to] by [progress].
+ * Uses [Color.lerp] (RGB space) for each color — same as Compose's built-in lerp.
+ */
+private fun lerpScheme(from: ColorScheme, to: ColorScheme, progress: Float): ColorScheme {
+    if (progress >= 1f) return to
+    if (progress <= 0f) return from
+    return to.copy(
+        primary = lerp(from.primary, to.primary, progress),
+        onPrimary = lerp(from.onPrimary, to.onPrimary, progress),
+        primaryContainer = lerp(from.primaryContainer, to.primaryContainer, progress),
+        onPrimaryContainer = lerp(from.onPrimaryContainer, to.onPrimaryContainer, progress),
+        inversePrimary = lerp(from.inversePrimary, to.inversePrimary, progress),
+        secondary = lerp(from.secondary, to.secondary, progress),
+        onSecondary = lerp(from.onSecondary, to.onSecondary, progress),
+        secondaryContainer = lerp(from.secondaryContainer, to.secondaryContainer, progress),
+        onSecondaryContainer = lerp(from.onSecondaryContainer, to.onSecondaryContainer, progress),
+        tertiary = lerp(from.tertiary, to.tertiary, progress),
+        onTertiary = lerp(from.onTertiary, to.onTertiary, progress),
+        tertiaryContainer = lerp(from.tertiaryContainer, to.tertiaryContainer, progress),
+        onTertiaryContainer = lerp(from.onTertiaryContainer, to.onTertiaryContainer, progress),
+        background = lerp(from.background, to.background, progress),
+        onBackground = lerp(from.onBackground, to.onBackground, progress),
+        surface = lerp(from.surface, to.surface, progress),
+        onSurface = lerp(from.onSurface, to.onSurface, progress),
+        surfaceVariant = lerp(from.surfaceVariant, to.surfaceVariant, progress),
+        onSurfaceVariant = lerp(from.onSurfaceVariant, to.onSurfaceVariant, progress),
+        surfaceTint = lerp(from.surfaceTint, to.surfaceTint, progress),
+        inverseSurface = lerp(from.inverseSurface, to.inverseSurface, progress),
+        inverseOnSurface = lerp(from.inverseOnSurface, to.inverseOnSurface, progress),
+        error = lerp(from.error, to.error, progress),
+        onError = lerp(from.onError, to.onError, progress),
+        errorContainer = lerp(from.errorContainer, to.errorContainer, progress),
+        onErrorContainer = lerp(from.onErrorContainer, to.onErrorContainer, progress),
+        outline = lerp(from.outline, to.outline, progress),
+        outlineVariant = lerp(from.outlineVariant, to.outlineVariant, progress),
+        scrim = lerp(from.scrim, to.scrim, progress),
     )
 }
 

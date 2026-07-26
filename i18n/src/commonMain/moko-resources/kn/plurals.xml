@@ -8,7 +8,7 @@
         <item quantity="one">%2$s ದೋಷದೊಂದಿಗೆ %1$s ನಲ್ಲಿ ಮುಗಿದಿದೆ</item>
         <item quantity="other">%2$s ದೋಷಗಳೊಂದಿಗೆ %1$s ನಲ್ಲಿ ಮುಗಿದಿದೆ</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d ವರ್ಗ</item>
         <item quantity="other">%d ವರ್ಗಗಳು</item>
     </plurals>

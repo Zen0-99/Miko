@@ -4,12 +4,12 @@ import eu.kanade.domain.entries.anime.interactor.UpdateAnime
 import eu.kanade.tachiyomi.data.backup.models.BackupAnime
 import eu.kanade.tachiyomi.data.backup.models.BackupAnimeHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupAnimeTracking
-import eu.kanade.tachiyomi.data.backup.models.BackupCategory
+import eu.kanade.tachiyomi.data.backup.models.BackupCollection
 import eu.kanade.tachiyomi.data.backup.models.BackupEpisode
 import tachiyomi.data.AnimeUpdateStrategyColumnAdapter
 import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
-import tachiyomi.domain.category.anime.interactor.GetAnimeCategories
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
 import tachiyomi.domain.entries.anime.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.anime.interactor.GetAnimeByUrlAndSourceId
 import tachiyomi.domain.entries.anime.model.Anime
@@ -26,7 +26,7 @@ import kotlin.math.max
 
 class AnimeRestorer(
     private val handler: AnimeDatabaseHandler = Injekt.get(),
-    private val getCategories: GetAnimeCategories = Injekt.get(),
+    private val getCollections: GetAnimeCollections = Injekt.get(),
     private val getAnimeByUrlAndSourceId: GetAnimeByUrlAndSourceId = Injekt.get(),
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
     private val updateAnime: UpdateAnime = Injekt.get(),
@@ -64,7 +64,7 @@ class AnimeRestorer(
 
     suspend fun restore(
         backupAnime: BackupAnime,
-        backupCategories: List<BackupCategory>,
+        backupCollections: List<BackupCollection>,
         backupSeasons: List<BackupAnime>,
     ) {
         handler.await(inTransaction = true) {
@@ -92,8 +92,8 @@ class AnimeRestorer(
             restoreAnimeDetails(
                 anime = restoredAnime,
                 episodes = backupAnime.episodes,
-                categories = backupAnime.categories,
-                backupCategories = backupCategories,
+                collections = backupAnime.collections,
+                backupCollections = backupCollections,
                 history = backupAnime.history,
                 tracks = backupAnime.tracking,
             )
@@ -317,12 +317,12 @@ class AnimeRestorer(
     private suspend fun restoreAnimeDetails(
         anime: Anime,
         episodes: List<BackupEpisode>,
-        categories: List<Long>,
-        backupCategories: List<BackupCategory>,
+        collections: List<Long>,
+        backupCollections: List<BackupCollection>,
         history: List<BackupAnimeHistory>,
         tracks: List<BackupAnimeTracking>,
     ): Anime {
-        restoreCategories(anime, categories, backupCategories)
+        restoreCollections(anime, collections, backupCollections)
         restoreEpisodes(anime, episodes)
         restoreTracking(anime, tracks)
         restoreHistory(history)
@@ -331,34 +331,34 @@ class AnimeRestorer(
     }
 
     /**
-     * Restores the categories a anime is in.
+     * Restores the collections a anime is in.
      *
-     * @param anime the anime whose categories have to be restored.
-     * @param categories the categories to restore.
+     * @param anime the anime whose collections have to be restored.
+     * @param collections the collections to restore.
      */
-    private suspend fun restoreCategories(
+    private suspend fun restoreCollections(
         anime: Anime,
-        categories: List<Long>,
-        backupCategories: List<BackupCategory>,
+        collections: List<Long>,
+        backupCollections: List<BackupCollection>,
     ) {
-        val dbCategories = getCategories.await()
-        val dbCategoriesByName = dbCategories.associateBy { it.name }
+        val dbCollections = getCollections.await()
+        val dbCollectionsByName = dbCollections.associateBy { it.name }
 
-        val backupCategoriesByOrder = backupCategories.associateBy { it.order }
+        val backupCollectionsByOrder = backupCollections.associateBy { it.order }
 
-        val animeCategoriesToUpdate = categories.mapNotNull { backupCategoryOrder ->
-            backupCategoriesByOrder[backupCategoryOrder]?.let { backupCategory ->
-                dbCategoriesByName[backupCategory.name]?.let { dbCategory ->
-                    Pair(anime.id, dbCategory.id)
+        val animeCollectionsToUpdate = collections.mapNotNull { backupCollectionOrder ->
+            backupCollectionsByOrder[backupCollectionOrder]?.let { backupCollection ->
+                dbCollectionsByName[backupCollection.name]?.let { dbCollection ->
+                    Pair(anime.id, dbCollection.id)
                 }
             }
         }
 
-        if (animeCategoriesToUpdate.isNotEmpty()) {
+        if (animeCollectionsToUpdate.isNotEmpty()) {
             handler.await(true) {
                 animes_categoriesQueries.deleteAnimeCategoryByAnimeId(anime.id)
-                animeCategoriesToUpdate.forEach { (animeId, categoryId) ->
-                    animes_categoriesQueries.insert(animeId, categoryId)
+                animeCollectionsToUpdate.forEach { (animeId, collectionId) ->
+                    animes_categoriesQueries.insert(animeId, collectionId)
                 }
             }
         }

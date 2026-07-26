@@ -7,8 +7,8 @@
     <string name="track">Sekimas</string>
     <string name="chapters">Skyriai</string>
     <string name="manga">Bibliotekos įrašai</string>
-    <string name="categories">Kategorijos</string>
-    <string name="information_empty_category">Neturite jokių kategorijų. Paspauskite pliuso simbolį, kad sukurtumėte kategoriją jūsų bibliotekos organizavimui.</string>
+    <string name="collections">Kategorijos</string>
+    <string name="information_empty_collection">Neturite jokių kategorijų. Paspauskite pliuso simbolį, kad sukurtumėte kategoriją jūsų bibliotekos organizavimui.</string>
     <string name="information_empty_library">Jūsų biblioteka tuščia</string>
     <string name="information_no_recent_manga">Nėra neseniai skaitytų</string>
     <string name="information_no_recent">Naujinių nėra</string>
@@ -26,8 +26,8 @@
     <string name="label_settings">Nustatymai</string>
     <string name="label_more">Daugiau</string>
     <string name="name">Vardas</string>
-    <string name="default_category_summary">Visada klausti</string>
-    <string name="default_category">Numatyta kategorija</string>
+    <string name="default_collection_summary">Visada klausti</string>
+    <string name="default_collection">Numatyta kategorija</string>
     <string name="pref_library_update_refresh_metadata_summary">Tikrinti naujus viršelius ir informaciją kai biblioteka naujinama</string>
     <string name="pref_library_update_refresh_metadata">Automatiškai naujinti metaduomenis</string>
     <string name="pref_update_only_non_completed">Kai yra \"Perskaityta\" statusas</string>
@@ -132,10 +132,10 @@
     <string name="action_pause">Pristabdyti</string>
     <string name="action_view_chapters">Rodyti skyrius</string>
     <string name="action_edit_cover">Keisti viršelį</string>
-    <string name="action_move_category">Perkelti kategorijas</string>
-    <string name="action_rename_category">Pervardinti kategoriją</string>
-    <string name="action_edit_categories">Redaguoti kategorijas</string>
-    <string name="action_add_category">Pridėti kategorija</string>
+    <string name="action_move_collection">Perkelti kategorijas</string>
+    <string name="action_rename_collection">Pervardinti kategoriją</string>
+    <string name="action_edit_collections">Redaguoti kategorijas</string>
+    <string name="action_add_collection">Pridėti kategorija</string>
     <string name="action_add">Pridėti</string>
     <string name="action_edit">Redaguoti</string>
     <string name="action_disable_all">Išjungti visus</string>
@@ -165,7 +165,7 @@
     <string name="action_filter_bookmarked">Žymės</string>
     <string name="confirm_lock_change">Autentifikuokitės, kad patvirtintumėte pakeitimus</string>
     <string name="label_default">Numatytas</string>
-    <string name="categorized_display_settings">Rūšiavimo ir vaizdavimo nustatymai kiekvienai kategorijai</string>
+    <string name="per_collection_display_settings">Rūšiavimo ir vaizdavimo nustatymai kiekvienai kategorijai</string>
     <string name="pref_custom_brightness">Pasirinktinis ryškumas</string>
     <string name="off">Išjungta</string>
     <string name="on">Įjungta</string>
@@ -205,7 +205,7 @@
     <string name="include">Įtraukti: %s</string>
     <string name="none">Nėra</string>
     <string name="all">Visi</string>
-    <string name="pref_library_update_categories_details">Įrašai, kurie yra įtraukti į neįtraukiamas kategorijas, nebus atnaujinami, net jei yra įtraukti į įtrauktąsias kategorijas.</string>
+    <string name="pref_library_update_collections_details">Įrašai, kurie yra įtraukti į neįtraukiamas kategorijas, nebus atnaujinami, net jei yra įtraukti į įtrauktąsias kategorijas.</string>
     <string name="update_check_notification_download_error">Atsiuntimo klaida</string>
     <string name="update_check_notification_update_available">Nauja versija pasiekiama!</string>
     <string name="scale_type_fit_height">Pagal aukštį talpinimas</string>
@@ -326,9 +326,9 @@
     <string name="pref_highest">Aukščiausias</string>
     <string name="pref_create_backup">Kurti atsarginę kopiją</string>
     <string name="pref_restore_backup">Atkurti atsarginę kopiją</string>
-    <string name="pref_remove_exclude_categories">Neįtrauktos kategorijos</string>
+    <string name="pref_remove_exclude_collections">Neįtrauktos kategorijos</string>
     <string name="last_read_chapter">Paskiausiai skaitytas skyrius</string>
-    <string name="pref_download_new_categories_details">Įrašai neįtrauktose kategorijose nebus atsisiųsti, net jei jie taip pat yra įtraukti į kategorijas.</string>
+    <string name="pref_download_new_collections_details">Įrašai neįtrauktose kategorijose nebus atsisiųsti, net jei jie taip pat yra įtraukti į kategorijas.</string>
     <string name="learn_more">Palieskite, kad sužinotumėte daugiau</string>
     <string name="file_select_backup">Pasirinkti atsarginės kopijos failą</string>
     <string name="transition_pages_loading">Įkeliami puslapiai…</string>
@@ -369,7 +369,7 @@
     <string name="skipped_reason_not_caught_up">Praleista, nes yra neperskaitytų skyrių</string>
     <string name="update_check_notification_download_in_progress">Atsiunčiama…</string>
     <string name="file_select_cover">Pasirinkti viršelio vaizdą</string>
-    <string name="information_empty_category_dialog">Jūs dar neturite jokių kategorijų.</string>
+    <string name="information_empty_collection_dialog">Jūs dar neturite jokių kategorijų.</string>
     <string name="transition_no_previous">Ankstesnio skyriaus nėra</string>
     <string name="skipped_reason_completed">Praleista, nes leidinys nebeleidžiamas</string>
     <string name="pref_clear_history">Išvalyti istoriją</string>
@@ -404,10 +404,10 @@
     <string name="logout_title">Atsijungti nuo %1$s?</string>
     <string name="source_unsupported">Šaltinis nepalaikomas</string>
     <string name="logout">Atsijungti</string>
-    <string name="delete_category">Ištrinti kategoriją</string>
+    <string name="delete_collection">Ištrinti kategoriją</string>
     <string name="action_sort_unread_count">Neskaitytų skaičius</string>
     <string name="action_sort_last_manga_update">Paskutinis atnaujinimo patikrinimas</string>
-    <string name="delete_category_confirmation">Ar tikrai norite ištrinti kategoriją \"%s\"?</string>
+    <string name="delete_collection_confirmation">Ar tikrai norite ištrinti kategoriją \"%s\"?</string>
     <string name="theme_lavender">Levandos</string>
     <string name="action_close">Uždaryti</string>
     <string name="pref_app_language">Programos kalba</string>
@@ -536,7 +536,7 @@
     <string name="sort_by_upload_date">Pagal įkėlimo datą</string>
     <string name="manga_download">Atsisiųsti</string>
     <string name="date">Data</string>
-    <string name="updating_category">Kategorijos atnaujinimas</string>
+    <string name="updating_collection">Kategorijos atnaujinimas</string>
     <string name="updated_version">Atnaujinta į v%1$s</string>
     <string name="login_title">Prisijunkite prie %1$s</string>
     <string name="no_results_found">Rezultatų nerasta</string>
@@ -600,8 +600,8 @@
     <string name="error_saving_picture">Klaidą išsaugojant paveikslą</string>
     <string name="status">Būsena</string>
     <string name="score">Rezultatas</string>
-    <string name="error_category_exists">Kategorija su šiuo pavadinimu jau egzistuoja!</string>
-    <string name="snack_categories_deleted">Kategorijos ištrintos</string>
+    <string name="error_collection_exists">Kategorija su šiuo pavadinimu jau egzistuoja!</string>
+    <string name="snack_collections_deleted">Kategorijos ištrintos</string>
     <string name="custom_filter">Pasirinktinas filtras</string>
     <string name="picture_saved">Viršelis išsaugotas</string>
     <string name="track_status">Būsena</string>
@@ -677,7 +677,7 @@
     <string name="label_local">Vietiniai</string>
     <string name="minute_short">%d min.</string>
     <string name="action_not_now">Ne dabar</string>
-    <string name="information_no_manga_category">Kategorija yra tuščia</string>
+    <string name="information_no_manga_collection">Kategorija yra tuščia</string>
     <string name="copied_to_clipboard_plain">Nukopijuota į iškarpinę</string>
     <string name="enhanced_services_not_installed">Turima, bet šaltinis nėra įdiegtas: %s</string>
     <string name="pref_library_update_show_tab_badge">Rodyti neperskaitytų skaičių ant Naujienų piktogramos</string>

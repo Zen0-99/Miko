@@ -1,5 +1,6 @@
 package mihon.domain.extensionrepo.novel.interactor
 
+import eu.kanade.tachiyomi.util.lang.Hash
 import logcat.LogPriority
 import mihon.domain.extensionrepo.exception.SaveExtensionRepoException
 import mihon.domain.extensionrepo.novel.repository.NovelExtensionRepoRepository
@@ -27,7 +28,23 @@ class CreateNovelExtensionRepo(
             .removeSuffix("/index.pb")
             .removeSuffix("/index.pb.gz")
             .removeSuffix("/repo.json")
-        return service.fetchRepoDetails(baseUrl)?.let { insert(it) } ?: Result.InvalidUrl
+            .removeSuffix("/plugins.min.json")
+            .removeSuffix("/plugins.json")
+            .removeSuffix("/index.json")
+        // Try to fetch repo metadata (repo.json or index.pb). If neither exists
+        // (e.g. LNReader plugin repos that only have plugins.min.json), create
+        // a minimal repo entry with a unique synthetic fingerprint so multiple
+        // metadata-less repos can coexist without violating the UNIQUE
+        // constraint on signing_key_fingerprint.
+        val repo = service.fetchRepoDetails(baseUrl)
+            ?: ExtensionRepo(
+                baseUrl = baseUrl,
+                name = deriveRepoName(baseUrl),
+                shortName = null,
+                website = "",
+                signingKeyFingerprint = "NOFINGERPRINT-${Hash.sha256(baseUrl)}",
+            )
+        return insert(repo)
     }
 
     private suspend fun insert(repo: ExtensionRepo): Result {
@@ -56,6 +73,36 @@ class CreateNovelExtensionRepo(
             return Result.DuplicateFingerprint(matchingFingerprintRepo, repo)
         }
         return Result.Error
+    }
+
+    /**
+     * Derives a human-readable repo name from the base URL.
+     *
+     * For GitHub raw URLs (e.g. `.../lnreader/lnreader-plugins/plugins/v3.0.0`),
+     * extracts the repository name (`lnreader-plugins`) rather than the version
+     * segment. Falls back to the last path segment, then the full URL.
+     */
+    private fun deriveRepoName(baseUrl: String): String {
+        val segments = baseUrl.trimEnd('/').split("/").filter { it.isNotBlank() }
+        if (segments.isEmpty()) return baseUrl
+
+        // For raw.githubusercontent.com URLs: /user/repo/branch/...path
+        // The repo name is the 3rd-to-last meaningful segment from the host.
+        val hostIndex = segments.indexOfFirst { it.contains(".") }
+        if (hostIndex >= 0 && hostIndex + 2 < segments.size) {
+            // segments[hostIndex+1] = user, segments[hostIndex+2] = repo
+            return segments[hostIndex + 2]
+        }
+
+        // Fallback: last segment, but skip version-like segments
+        for (segment in segments.reversed()) {
+            // Skip segments that look like version numbers (e.g. "v3.0.0", "1.0")
+            if (!segment.matches(Regex("^v?\\d+(\\.\\d+)*.*$", RegexOption.IGNORE_CASE))) {
+                return segment
+            }
+        }
+
+        return segments.last()
     }
 
     sealed interface Result {

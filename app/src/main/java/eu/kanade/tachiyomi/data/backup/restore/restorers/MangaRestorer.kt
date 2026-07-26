@@ -1,14 +1,14 @@
 package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import eu.kanade.domain.entries.manga.interactor.UpdateManga
-import eu.kanade.tachiyomi.data.backup.models.BackupCategory
+import eu.kanade.tachiyomi.data.backup.models.BackupCollection
 import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupTracking
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
-import tachiyomi.domain.category.manga.interactor.GetMangaCategories
+import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.entries.manga.interactor.GetMangaByUrlAndSourceId
 import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
 import tachiyomi.domain.entries.manga.model.Manga
@@ -25,7 +25,7 @@ import kotlin.math.max
 
 class MangaRestorer(
     private val handler: MangaDatabaseHandler = Injekt.get(),
-    private val getCategories: GetMangaCategories = Injekt.get(),
+    private val getCollections: GetMangaCollections = Injekt.get(),
     private val getMangaByUrlAndSourceId: GetMangaByUrlAndSourceId = Injekt.get(),
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     private val updateManga: UpdateManga = Injekt.get(),
@@ -63,7 +63,7 @@ class MangaRestorer(
 
     suspend fun restore(
         backupManga: BackupManga,
-        backupCategories: List<BackupCategory>,
+        backupCollections: List<BackupCollection>,
     ) {
         handler.await(inTransaction = true) {
             val dbManga = findExistingManga(backupManga)
@@ -77,8 +77,8 @@ class MangaRestorer(
             restoreMangaDetails(
                 manga = restoredManga,
                 chapters = backupManga.chapters,
-                categories = backupManga.categories,
-                backupCategories = backupCategories,
+                collections = backupManga.collections,
+                backupCollections = backupCollections,
                 history = backupManga.history,
                 tracks = backupManga.tracking,
                 excludedScanlators = backupManga.excludedScanlators,
@@ -278,13 +278,13 @@ class MangaRestorer(
     private suspend fun restoreMangaDetails(
         manga: Manga,
         chapters: List<BackupChapter>,
-        categories: List<Long>,
-        backupCategories: List<BackupCategory>,
+        collections: List<Long>,
+        backupCollections: List<BackupCollection>,
         history: List<BackupHistory>,
         tracks: List<BackupTracking>,
         excludedScanlators: List<String>,
     ): Manga {
-        restoreCategories(manga, categories, backupCategories)
+        restoreCollections(manga, collections, backupCollections)
         restoreChapters(manga, chapters)
         restoreTracking(manga, tracks)
         restoreHistory(history)
@@ -294,34 +294,34 @@ class MangaRestorer(
     }
 
     /**
-     * Restores the categories a manga is in.
+     * Restores the collections a manga is in.
      *
-     * @param manga the manga whose categories have to be restored.
-     * @param categories the categories to restore.
+     * @param manga the manga whose collections have to be restored.
+     * @param collections the collections to restore.
      */
-    private suspend fun restoreCategories(
+    private suspend fun restoreCollections(
         manga: Manga,
-        categories: List<Long>,
-        backupCategories: List<BackupCategory>,
+        collections: List<Long>,
+        backupCollections: List<BackupCollection>,
     ) {
-        val dbCategories = getCategories.await()
-        val dbCategoriesByName = dbCategories.associateBy { it.name }
+        val dbCollections = getCollections.await()
+        val dbCollectionsByName = dbCollections.associateBy { it.name }
 
-        val backupCategoriesByOrder = backupCategories.associateBy { it.order }
+        val backupCollectionsByOrder = backupCollections.associateBy { it.order }
 
-        val mangaCategoriesToUpdate = categories.mapNotNull { backupCategoryOrder ->
-            backupCategoriesByOrder[backupCategoryOrder]?.let { backupCategory ->
-                dbCategoriesByName[backupCategory.name]?.let { dbCategory ->
-                    Pair(manga.id, dbCategory.id)
+        val mangaCollectionsToUpdate = collections.mapNotNull { backupCollectionOrder ->
+            backupCollectionsByOrder[backupCollectionOrder]?.let { backupCollection ->
+                dbCollectionsByName[backupCollection.name]?.let { dbCollection ->
+                    Pair(manga.id, dbCollection.id)
                 }
             }
         }
 
-        if (mangaCategoriesToUpdate.isNotEmpty()) {
+        if (mangaCollectionsToUpdate.isNotEmpty()) {
             handler.await(true) {
                 mangas_categoriesQueries.deleteMangaCategoryByMangaId(manga.id)
-                mangaCategoriesToUpdate.forEach { (mangaId, categoryId) ->
-                    mangas_categoriesQueries.insert(mangaId, categoryId)
+                mangaCollectionsToUpdate.forEach { (mangaId, collectionId) ->
+                    mangas_categoriesQueries.insert(mangaId, collectionId)
                 }
             }
         }

@@ -18,7 +18,7 @@
     <plurals name="download_queue_summary">
         <item quantity="other">剩余 %1$s 章</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="other">%d 个分类</item>
     </plurals>
     <plurals name="restore_completed_message">

@@ -12,7 +12,7 @@
     <plurals name="restore_completed_message">
         <item quantity="other">%1$sで完了しました (%2$s件のエラー)</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="other">%d件のカテゴリー</item>
     </plurals>
     <plurals name="update_check_notification_ext_updates">

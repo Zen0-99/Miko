@@ -96,7 +96,7 @@ fun getComicInfo(
     manga: Manga,
     chapter: Chapter,
     urls: List<String>,
-    categories: List<String>?,
+    collections: List<String>?,
     sourceName: String,
 ) = ComicInfo(
     title = ComicInfo.Title(chapter.name),
@@ -117,7 +117,7 @@ fun getComicInfo(
     publishingStatus = ComicInfo.PublishingStatusTachiyomi(
         ComicInfoPublishingStatus.toComicInfoValue(manga.status),
     ),
-    categories = categories?.let { ComicInfo.CategoriesTachiyomi(it.joinToString()) },
+    categories = collections?.let { ComicInfo.CategoriesTachiyomi(it.joinToString()) },
     source = ComicInfo.SourceAniyomi(sourceName),
     inker = null,
     colorist = null,

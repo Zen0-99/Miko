@@ -6,24 +6,24 @@ import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.backup.BackupFileValidator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeBackupCreator
-import eu.kanade.tachiyomi.data.backup.create.creators.AnimeCategoriesBackupCreator
+import eu.kanade.tachiyomi.data.backup.create.creators.AnimeCollectionsBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeExtensionRepoBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeSourcesBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.CustomButtonBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.ExtensionsBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.MangaBackupCreator
-import eu.kanade.tachiyomi.data.backup.create.creators.MangaCategoriesBackupCreator
+import eu.kanade.tachiyomi.data.backup.create.creators.MangaCollectionsBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.MangaExtensionRepoBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.MangaSourcesBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.NovelBackupCreator
-import eu.kanade.tachiyomi.data.backup.create.creators.NovelCategoriesBackupCreator
+import eu.kanade.tachiyomi.data.backup.create.creators.NovelCollectionsBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.NovelSourcesBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.NovelLinksBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.PreferenceBackupCreator
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupAnime
 import eu.kanade.tachiyomi.data.backup.models.BackupAnimeSource
-import eu.kanade.tachiyomi.data.backup.models.BackupCategory
+import eu.kanade.tachiyomi.data.backup.models.BackupCollection
 import eu.kanade.tachiyomi.data.backup.models.BackupCustomButtons
 import eu.kanade.tachiyomi.data.backup.models.BackupExtension
 import eu.kanade.tachiyomi.data.backup.models.BackupExtensionRepos
@@ -73,9 +73,9 @@ class BackupCreator(
     private val animeRepository: AnimeRepository = Injekt.get(),
     private val novelRepository: NovelRepository = Injekt.get(),
 
-    private val animeCategoriesBackupCreator: AnimeCategoriesBackupCreator = AnimeCategoriesBackupCreator(),
-    private val mangaCategoriesBackupCreator: MangaCategoriesBackupCreator = MangaCategoriesBackupCreator(),
-    private val novelCategoriesBackupCreator: NovelCategoriesBackupCreator = NovelCategoriesBackupCreator(),
+    private val animeCollectionsBackupCreator: AnimeCollectionsBackupCreator = AnimeCollectionsBackupCreator(),
+    private val mangaCollectionsBackupCreator: MangaCollectionsBackupCreator = MangaCollectionsBackupCreator(),
+    private val novelCollectionsBackupCreator: NovelCollectionsBackupCreator = NovelCollectionsBackupCreator(),
     private val animeBackupCreator: AnimeBackupCreator = AnimeBackupCreator(),
     private val mangaBackupCreator: MangaBackupCreator = MangaBackupCreator(),
     private val novelBackupCreator: NovelBackupCreator = NovelBackupCreator(),
@@ -129,7 +129,7 @@ class BackupCreator(
 
             val backup = Backup(
                 backupManga = backupManga,
-                backupCategories = backupMangaCategories(options),
+                backupCollections = backupMangaCollections(options),
                 backupSources = backupMangaSources(backupManga),
                 backupPreferences = backupAppPreferences(options),
                 backupSourcePreferences = backupSourcePreferences(options),
@@ -137,14 +137,14 @@ class BackupCreator(
 
                 isLegacy = false,
                 backupAnime = backupAnime,
-                backupAnimeCategories = backupAnimeCategories(options),
+                backupAnimeCollections = backupAnimeCollections(options),
                 backupAnimeSources = backupAnimeSources(backupAnime),
                 backupExtensions = backupExtensions(options),
                 backupAnimeExtensionRepo = backupAnimeExtensionRepos(options),
                 backupCustomButton = backupCustomButtons(options),
 
                 backupNovels = backupNovel,
-                backupNovelCategory = backupNovelCategories(options),
+                backupNovelCollection = backupNovelCollections(options),
                 backupNovelSources = backupNovelSources(backupNovel),
                 backupNovelLinks = backupNovelLinks(),
             )
@@ -179,16 +179,16 @@ class BackupCreator(
         }
     }
 
-    private suspend fun backupAnimeCategories(options: BackupOptions): List<BackupCategory> {
-        if (!options.categories) return emptyList()
+    private suspend fun backupAnimeCollections(options: BackupOptions): List<BackupCollection> {
+        if (!options.collections) return emptyList()
 
-        return animeCategoriesBackupCreator()
+        return animeCollectionsBackupCreator()
     }
 
-    private suspend fun backupMangaCategories(options: BackupOptions): List<BackupCategory> {
-        if (!options.categories) return emptyList()
+    private suspend fun backupMangaCollections(options: BackupOptions): List<BackupCollection> {
+        if (!options.collections) return emptyList()
 
-        return mangaCategoriesBackupCreator()
+        return mangaCollectionsBackupCreator()
     }
 
     private suspend fun backupMangas(mangas: List<Manga>, options: BackupOptions): List<BackupManga> {
@@ -209,10 +209,10 @@ class BackupCreator(
         return novelBackupCreator(novels, options)
     }
 
-    private suspend fun backupNovelCategories(options: BackupOptions): List<BackupCategory> {
-        if (!options.categories) return emptyList()
+    private suspend fun backupNovelCollections(options: BackupOptions): List<BackupCollection> {
+        if (!options.collections) return emptyList()
 
-        return novelCategoriesBackupCreator()
+        return novelCollectionsBackupCreator()
     }
 
     private fun backupAnimeSources(animes: List<BackupAnime>): List<BackupAnimeSource> {

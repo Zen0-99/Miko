@@ -55,7 +55,7 @@ import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.core.metadata.comicinfo.COMIC_INFO_FILE
 import tachiyomi.core.metadata.comicinfo.ComicInfo
-import tachiyomi.domain.category.manga.interactor.GetMangaCategories
+import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.items.chapter.model.Chapter
@@ -85,7 +85,7 @@ class MangaDownloader(
     private val chapterCache: ChapterCache = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
     private val xml: XML = Injekt.get(),
-    private val getCategories: GetMangaCategories = Injekt.get(),
+    private val getCollections: GetMangaCollections = Injekt.get(),
     private val getMangaTracks: GetMangaTracks = Injekt.get(),
     // SY -->
     private val sourcePreferences: SourcePreferences = Injekt.get(),
@@ -655,7 +655,7 @@ class MangaDownloader(
         chapter: Chapter,
         source: HttpSource,
     ) {
-        val categories = getCategories.await(manga.id).map { it.name.trim() }.takeUnless { it.isEmpty() }
+        val collections = getCollections.await(manga.id).map { it.name.trim() }.takeUnless { it.isEmpty() }
         val urls = getMangaTracks.await(manga.id)
             .mapNotNull { track ->
                 track.remoteUrl.takeUnless { url -> url.isBlank() }?.trim()
@@ -667,7 +667,7 @@ class MangaDownloader(
             manga,
             chapter,
             urls,
-            categories,
+            collections,
             source.name,
         )
 

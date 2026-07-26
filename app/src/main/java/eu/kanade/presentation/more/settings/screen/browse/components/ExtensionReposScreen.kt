@@ -15,7 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import eu.kanade.presentation.category.components.CategoryFloatingActionButton
+import eu.kanade.presentation.collection.components.CollectionFloatingActionButton
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.more.settings.screen.browse.RepoScreenState
 import mihon.domain.extensionrepo.model.ExtensionRepo
@@ -54,7 +54,7 @@ fun ExtensionReposScreen(
             )
         },
         floatingActionButton = {
-            CategoryFloatingActionButton(
+            CollectionFloatingActionButton(
                 lazyListState = lazyListState,
                 onCreate = onClickCreate,
             )

@@ -72,7 +72,7 @@ class BackupDecoder(
             } else {
                 backup.copy(
                     backupNovels = mikoBackup.backupNovels.map { it.toBackupNovel() },
-                    backupNovelCategory = mikoBackup.backupNovelCategories.map { it.toBackupCategory() },
+                    backupNovelCollection = mikoBackup.backupNovelCollections.map { it.toBackupCollection() },
                     backupNovelSources = mikoBackup.backupNovelSources.map { BackupNovelSource(it.name, it.sourceId, it.baseUrl) },
                 )
             }

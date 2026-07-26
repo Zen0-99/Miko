@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,7 +54,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import eu.kanade.presentation.theme.AuroraTheme
 import kotlinx.coroutines.delay
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.i18n.aniyomi.AYMR
@@ -340,8 +340,6 @@ private fun AchievementBannerItem(
     isRare: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
     // Glow animation for rare achievements
     var glowScale by remember { mutableFloatStateOf(1f) }
     LaunchedEffect(isRare) {
@@ -361,13 +359,15 @@ private fun AchievementBannerItem(
         label = "glow",
     )
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
     Box(
         modifier = modifier
             .graphicsLayer {
                 if (isRare) {
                     shadowElevation = AchievementPopupSizeTokens.unlockRareShadowElevationPx
-                    spotShadowColor = colors.accent.copy(alpha = 0.6f)
-                    ambientShadowColor = colors.progressCyan.copy(alpha = 0.4f)
+                    spotShadowColor = primaryColor.copy(alpha = 0.6f)
+                    ambientShadowColor = secondaryColor.copy(alpha = 0.4f)
                 }
             }
             .shadow(
@@ -377,24 +377,24 @@ private fun AchievementBannerItem(
                     AchievementPopupSizeTokens.unlockNormalShadowElevation
                 },
                 shape = RoundedCornerShape(AchievementPopupSizeTokens.unlockContainerCornerRadius),
-                ambientColor = if (isRare) colors.accent.copy(alpha = 0.6f) else colors.accent.copy(alpha = 0.3f),
+                ambientColor = if (isRare) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                 spotColor = if (isRare) {
-                    colors.progressCyan.copy(
+                    MaterialTheme.colorScheme.secondary.copy(
                         alpha = 0.5f,
                     )
                 } else {
-                    colors.progressCyan.copy(alpha = 0.2f)
+                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
                 },
             )
             .clip(RoundedCornerShape(AchievementPopupSizeTokens.unlockContainerCornerRadius))
-            .background(colors.surface)
+            .background(MaterialTheme.colorScheme.surface)
             .border(
                 width = if (isRare) {
                     AchievementPopupSizeTokens.unlockRareBorderWidth
                 } else {
                     AchievementPopupSizeTokens.unlockNormalBorderWidth
                 },
-                color = colors.accent,
+                color = MaterialTheme.colorScheme.primary,
                 shape = RoundedCornerShape(AchievementPopupSizeTokens.unlockContainerCornerRadius),
             )
             .padding(AchievementPopupSizeTokens.unlockContentPadding),
@@ -482,7 +482,7 @@ private fun AchievementBannerItem(
                     Icon(
                         imageVector = Icons.Default.EmojiEvents,
                         contentDescription = null,
-                        tint = colors.accent,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(AchievementPopupSizeTokens.unlockHeaderIconSize),
                     )
                     Text(
@@ -491,7 +491,7 @@ private fun AchievementBannerItem(
                         } else {
                             stringResource(AYMR.strings.achievement_banner_unlocked_title)
                         },
-                        color = colors.accent,
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = if (isRare) {
                             AchievementPopupSizeTokens.unlockLabelRareFontSize
                         } else {
@@ -511,7 +511,7 @@ private fun AchievementBannerItem(
                 // Achievement title with bold typography
                 Text(
                     text = achievement.title,
-                    color = colors.textPrimary,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = if (isRare) {
                         AchievementPopupSizeTokens.unlockTitleRareFontSize
                     } else {
@@ -526,7 +526,7 @@ private fun AchievementBannerItem(
                     Spacer(modifier = Modifier.height(AchievementPopupSizeTokens.unlockDescriptionTopSpacing))
                     Text(
                         text = description,
-                        color = colors.textSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = AchievementPopupSizeTokens.unlockDescriptionFontSize,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -543,13 +543,13 @@ private fun AchievementBannerItem(
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
-                            tint = colors.accent,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(AchievementPopupSizeTokens.unlockRarePointsIconSize),
                         )
                     }
                     Text(
                         text = stringResource(AYMR.strings.achievement_points_reward, achievement.points),
-                        color = colors.accent,
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = if (isRare) {
                             AchievementPopupSizeTokens.unlockPointsRareFontSize
                         } else {

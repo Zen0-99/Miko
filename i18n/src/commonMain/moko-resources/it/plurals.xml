@@ -35,7 +35,7 @@
         <item quantity="many">Completato in %1$s con %2$s errori</item>
         <item quantity="other">Completato in %1$s con %2$s errori</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d categoria</item>
         <item quantity="many">%d categorie</item>
         <item quantity="other">%d categorie</item>

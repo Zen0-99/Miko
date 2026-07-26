@@ -34,9 +34,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.category.novel.interactor.GetNovelCategories
-import tachiyomi.domain.category.novel.interactor.SetNovelCategories
+import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
+import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.model.Novel
@@ -57,11 +57,11 @@ class BrowseNovelSourceScreenModel(
     sourcePreferences: SourcePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val getRemoteNovel: GetRemoteNovel = Injekt.get(),
-    private val getCategories: GetNovelCategories = Injekt.get(),
+    private val getCollections: GetNovelCollections = Injekt.get(),
     private val getNovel: GetNovel = Injekt.get(),
     private val networkToLocalNovel: NetworkToLocalNovel = Injekt.get(),
     private val updateNovel: UpdateNovel = Injekt.get(),
-    private val setNovelCategories: SetNovelCategories = Injekt.get(),
+    private val setNovelCollections: SetNovelCollections = Injekt.get(),
     private val getSavedSearches: GetNovelSavedSearches = Injekt.get(),
     private val insertSavedSearch: InsertNovelSavedSearch = Injekt.get(),
     private val deleteSavedSearch: DeleteNovelSavedSearch = Injekt.get(),
@@ -235,7 +235,7 @@ class BrowseNovelSourceScreenModel(
     fun addFavorite(novel: Novel) {
         screenModelScope.launchIO {
             updateNovel.await(NovelUpdate(id = novel.id, favorite = true))
-            setNovelCategories.await(novel.id, emptyList())
+            setNovelCollections.await(novel.id, emptyList())
         }
     }
 
@@ -263,9 +263,9 @@ class BrowseNovelSourceScreenModel(
         data object SavedSearches : Dialog
         data class RemoveNovel(val novel: Novel) : Dialog
         data class AddDuplicateNovel(val novel: Novel, val duplicate: Novel) : Dialog
-        data class ChangeNovelCategory(
+        data class ChangeNovelCollection(
             val novel: Novel,
-            val initialSelection: ImmutableList<CheckboxState.State<Category>>,
+            val initialSelection: ImmutableList<CheckboxState.State<Collection>>,
         ) : Dialog
         data class Migrate(val newNovel: Novel, val oldNovel: Novel) : Dialog
     }

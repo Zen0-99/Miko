@@ -28,8 +28,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -142,6 +145,7 @@ private fun FetchingScreenContent(
                         entry = entry,
                         onMigrate = { onMigrate(entry) },
                         onDismiss = { onDismissEntry(entry.id) },
+                        modifier = Modifier.animateItem(),
                     )
                 }
                 item { Spacer(Modifier.height(12.dp)) }
@@ -259,49 +263,86 @@ private fun FailedEntryRow(
     entry: FailedFetchUi,
     onMigrate: () -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onMigrate() },
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-    ) {
-        Row(
-            modifier = Modifier.padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ItemCover.Book(
-                data = entry.cover,
-                modifier = Modifier.size(48.dp, 72.dp),
-                contentDescription = entry.title,
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = entry.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = entry.sourceName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+    // Swipe-to-dismiss: swipe right to remove the entry from the fetching tab.
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = {
+            if (it == SwipeToDismissBoxValue.EndToStart || it == SwipeToDismissBoxValue.StartToEnd) {
+                onDismiss()
+                true
+            } else {
+                false
             }
-            IconButton(onClick = onMigrate) {
+        },
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
+                    Alignment.CenterStart
+                } else {
+                    Alignment.CenterEnd
+                },
+            ) {
                 Icon(
-                    Icons.Outlined.SwapHoriz,
-                    contentDescription = stringResource(AYMR.strings.action_migrate_entry),
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(AYMR.strings.action_dismiss),
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(AYMR.strings.action_dismiss))
+        },
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onMigrate() },
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ItemCover.Book(
+                    data = entry.cover,
+                    modifier = Modifier.size(48.dp, 72.dp),
+                    contentDescription = entry.title,
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = entry.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = entry.sourceName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = onMigrate) {
+                    Icon(
+                        Icons.Outlined.SwapHoriz,
+                        contentDescription = stringResource(AYMR.strings.action_migrate_entry),
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(AYMR.strings.action_dismiss))
+                }
             }
         }
     }

@@ -31,7 +31,7 @@ interface MangaRepository {
 
     suspend fun resetMangaViewerFlags(): Boolean
 
-    suspend fun setMangaCategories(mangaId: Long, categoryIds: List<Long>)
+    suspend fun setMangaCollections(mangaId: Long, collectionIds: List<Long>)
 
     suspend fun insertManga(manga: Manga): Long?
 

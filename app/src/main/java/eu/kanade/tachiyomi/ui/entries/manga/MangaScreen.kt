@@ -27,7 +27,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifMangaSourcesLoaded
 import eu.kanade.domain.entries.manga.model.hasCustomCover
 import eu.kanade.domain.entries.manga.model.toSManga
-import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.collection.components.ChangeCollectionDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
@@ -54,7 +54,7 @@ import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialogSc
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.browse.BrowseMangaSourceScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.manga.track.MangaTrackInfoDialogHomeScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.domain.ui.UiPreferences
@@ -178,7 +178,7 @@ class MangaScreen(
             onCoverClicked = screenModel::showCoverDialog,
             onShareClicked = { shareManga(context, screenModel.manga, screenModel.source) }.takeIf { isHttpSource },
             onDownloadActionClicked = screenModel::runDownloadAction.takeIf { !successState.source.isLocalOrStub() },
-            onEditCategoryClicked = screenModel::showChangeCategoryDialog.takeIf { successState.manga.favorite },
+            onEditCollectionClicked = screenModel::showChangeCollectionDialog.takeIf { successState.manga.favorite },
             onEditFetchIntervalClicked = screenModel::showSetMangaFetchIntervalDialog.takeIf {
                 successState.manga.favorite
             },
@@ -227,23 +227,23 @@ class MangaScreen(
 
         val onDismissRequest = {
             screenModel.dismissDialog()
-            if (screenModel.autoOpenTrack && screenModel.isFromChangeCategory) {
-                screenModel.isFromChangeCategory = false
+            if (screenModel.autoOpenTrack && screenModel.isFromChangeCollection) {
+                screenModel.isFromChangeCollection = false
                 screenModel.showTrackDialog()
             }
         }
         when (val dialog = successState.dialog) {
             null -> {}
-            is MangaScreenModel.Dialog.ChangeCategory -> {
-                ChangeCategoryDialog(
+            is MangaScreenModel.Dialog.ChangeCollection -> {
+                ChangeCollectionDialog(
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
-                    onEditCategories = {
-                        navigator.push(CategoriesTab)
-                        CategoriesTab.showMangaCategory()
+                    onEditCollections = {
+                        navigator.push(CollectionsTab)
+                        CollectionsTab.showMangaCollection()
                     },
                     onConfirm = { include, _ ->
-                        screenModel.moveMangaToCategoriesAndAddToLibrary(dialog.manga, include)
+                        screenModel.moveMangaToCollectionsAndAddToLibrary(dialog.manga, include)
                     },
                 )
             }

@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupNovelTracking
 import eu.kanade.tachiyomi.data.backup.models.backupNovelChapterMapper
 import eu.kanade.tachiyomi.data.backup.models.backupNovelTrackMapper
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
-import tachiyomi.domain.category.novel.interactor.GetNovelCategories
+import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.history.novel.interactor.GetNovelHistory
 import uy.kohesive.injekt.Injekt
@@ -16,7 +16,7 @@ import uy.kohesive.injekt.api.get
 
 class NovelBackupCreator(
     private val handler: NovelDatabaseHandler = Injekt.get(),
-    private val getCategories: GetNovelCategories = Injekt.get(),
+    private val getCollections: GetNovelCollections = Injekt.get(),
     private val getHistory: GetNovelHistory = Injekt.get(),
 ) {
 
@@ -40,10 +40,10 @@ class NovelBackupCreator(
                 ?.let { novelObject.chapters = it }
         }
 
-        if (options.categories) {
-            val categoriesForNovel = getCategories.await(novel.id)
-            if (categoriesForNovel.isNotEmpty()) {
-                novelObject.categories = categoriesForNovel.map { it.order }
+        if (options.collections) {
+            val collectionsForNovel = getCollections.await(novel.id)
+            if (collectionsForNovel.isNotEmpty()) {
+                novelObject.collections = collectionsForNovel.map { it.order }
             }
         }
 

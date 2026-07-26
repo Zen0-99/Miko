@@ -47,8 +47,8 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withUIContext
-import tachiyomi.domain.category.anime.interactor.GetAnimeCategories
-import tachiyomi.domain.category.anime.interactor.SetAnimeCategories
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.anime.interactor.SetAnimeCollections
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.AnimeUpdate
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
@@ -205,8 +205,8 @@ internal class MigrateAnimeDialogScreenModel(
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
     private val syncEpisodesWithSource: SyncEpisodesWithSource = Injekt.get(),
     private val updateEpisode: UpdateEpisode = Injekt.get(),
-    private val getCategories: GetAnimeCategories = Injekt.get(),
-    private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
+    private val getCollections: GetAnimeCollections = Injekt.get(),
+    private val setAnimeCollections: SetAnimeCollections = Injekt.get(),
     private val getTracks: GetAnimeTracks = Injekt.get(),
     private val insertTrack: InsertAnimeTrack = Injekt.get(),
     private val coverCache: AnimeCoverCache = Injekt.get(),
@@ -263,7 +263,7 @@ internal class MigrateAnimeDialogScreenModel(
         flags: Int,
     ) {
         val migrateEpisodes = AnimeMigrationFlags.hasEpisodes(flags)
-        val migrateCategories = AnimeMigrationFlags.hasCategories(flags)
+        val migrateCollections = AnimeMigrationFlags.hasCollections(flags)
         val migrateCustomCover = AnimeMigrationFlags.hasCustomCover(flags)
         val migrateCustomBackground = AnimeMigrationFlags.hasCustomBackground(flags)
         val deleteDownloaded = AnimeMigrationFlags.hasDeleteDownloaded(flags)
@@ -308,10 +308,10 @@ internal class MigrateAnimeDialogScreenModel(
             updateEpisode.awaitAll(episodeUpdates)
         }
 
-        // Update categories
-        if (migrateCategories) {
-            val categoryIds = getCategories.await(oldAnime.id).map { it.id }
-            setAnimeCategories.await(newAnime.id, categoryIds)
+        // Update collections
+        if (migrateCollections) {
+            val collectionIds = getCollections.await(oldAnime.id).map { it.id }
+            setAnimeCollections.await(newAnime.id, collectionIds)
         }
 
         // Update track

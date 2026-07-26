@@ -5,7 +5,7 @@ import android.net.Uri
 import eu.kanade.tachiyomi.data.backup.BackupDecoder
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
 import eu.kanade.tachiyomi.data.backup.models.BackupAnime
-import eu.kanade.tachiyomi.data.backup.models.BackupCategory
+import eu.kanade.tachiyomi.data.backup.models.BackupCollection
 import eu.kanade.tachiyomi.data.backup.models.BackupCustomButtons
 import eu.kanade.tachiyomi.data.backup.models.BackupExtension
 import eu.kanade.tachiyomi.data.backup.models.BackupExtensionRepos
@@ -14,15 +14,15 @@ import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelLink
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
-import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeCategoriesRestorer
+import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeCollectionsRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeExtensionRepoRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.CustomButtonRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionsRestorer
-import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaCategoriesRestorer
+import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaCollectionsRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaExtensionRepoRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
-import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelCategoriesRestorer
+import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelCollectionsRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelLinksRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
@@ -49,9 +49,9 @@ class BackupRestorer(
     private val notifier: BackupNotifier,
     private val isSync: Boolean,
 
-    private val animeCategoriesRestorer: AnimeCategoriesRestorer = AnimeCategoriesRestorer(),
-    private val mangaCategoriesRestorer: MangaCategoriesRestorer = MangaCategoriesRestorer(),
-    private val novelCategoriesRestorer: NovelCategoriesRestorer = NovelCategoriesRestorer(),
+    private val animeCollectionsRestorer: AnimeCollectionsRestorer = AnimeCollectionsRestorer(),
+    private val mangaCollectionsRestorer: MangaCollectionsRestorer = MangaCollectionsRestorer(),
+    private val novelCollectionsRestorer: NovelCollectionsRestorer = NovelCollectionsRestorer(),
     private val preferenceRestorer: PreferenceRestorer = PreferenceRestorer(context),
     private val animeExtensionRepoRestorer: AnimeExtensionRepoRestorer = AnimeExtensionRepoRestorer(),
     private val mangaExtensionRepoRestorer: MangaExtensionRepoRestorer = MangaExtensionRepoRestorer(),
@@ -129,8 +129,8 @@ class BackupRestorer(
         if (options.libraryEntries) {
             restoreAmount += backup.backupManga.size + backup.backupAnime.size + backup.backupNovels.size
         }
-        if (options.categories) {
-            restoreAmount += 3 // +3 for anime, manga, and novel categories
+        if (options.collections) {
+            restoreAmount += 3 // +3 for anime, manga, and novel collections
         }
         if (options.appSettings) {
             restoreAmount += 1
@@ -149,23 +149,23 @@ class BackupRestorer(
         }
 
         coroutineScope {
-            if (options.categories) {
-                restoreCategories(
-                    backupAnimeCategories = backup.backupAnimeCategories,
-                    backupMangaCategories = backup.backupCategories,
-                    backupNovelCategories = backup.backupNovelCategory,
+            if (options.collections) {
+                restoreCollections(
+                    backupAnimeCollections = backup.backupAnimeCollections,
+                    backupMangaCollections = backup.backupCollections,
+                    backupNovelCollections = backup.backupNovelCollection,
                 )
             }
             if (options.appSettings) {
-                restoreAppPreferences(backup.backupPreferences, backup.backupCategories.takeIf { options.categories })
+                restoreAppPreferences(backup.backupPreferences, backup.backupCollections.takeIf { options.collections })
             }
             if (options.sourceSettings) {
                 restoreSourcePreferences(backup.backupSourcePreferences)
             }
             if (options.libraryEntries) {
-                restoreAnime(backup.backupAnime, if (options.categories) backup.backupAnimeCategories else emptyList())
-                restoreManga(backup.backupManga, if (options.categories) backup.backupCategories else emptyList())
-                restoreNovel(backup.backupNovels, if (options.categories) backup.backupNovelCategory else emptyList())
+                restoreAnime(backup.backupAnime, if (options.collections) backup.backupAnimeCollections else emptyList())
+                restoreManga(backup.backupManga, if (options.collections) backup.backupCollections else emptyList())
+                restoreNovel(backup.backupNovels, if (options.collections) backup.backupNovelCollection else emptyList())
                 // Restore novel source links after novels are inserted
                 restoreNovelLinks(backup.backupNovelLinks)
             }
@@ -183,19 +183,19 @@ class BackupRestorer(
         }
     }
 
-    private fun CoroutineScope.restoreCategories(
-        backupAnimeCategories: List<BackupCategory>,
-        backupMangaCategories: List<BackupCategory>,
-        backupNovelCategories: List<BackupCategory>,
+    private fun CoroutineScope.restoreCollections(
+        backupAnimeCollections: List<BackupCollection>,
+        backupMangaCollections: List<BackupCollection>,
+        backupNovelCollections: List<BackupCollection>,
     ) = launch {
         ensureActive()
-        animeCategoriesRestorer(backupAnimeCategories)
-        mangaCategoriesRestorer(backupMangaCategories)
-        novelCategoriesRestorer(backupNovelCategories)
+        animeCollectionsRestorer(backupAnimeCollections)
+        mangaCollectionsRestorer(backupMangaCollections)
+        novelCollectionsRestorer(backupNovelCollections)
 
         restoreProgress += 1
         notifier.showRestoreProgress(
-            context.stringResource(MR.strings.categories),
+            context.stringResource(MR.strings.collections),
             restoreProgress,
             restoreAmount,
             isSync,
@@ -204,7 +204,7 @@ class BackupRestorer(
 
     private fun CoroutineScope.restoreAnime(
         backupAnimes: List<BackupAnime>,
-        backupAnimeCategories: List<BackupCategory>,
+        backupAnimeCollections: List<BackupCollection>,
     ) = launch {
         animeRestorer.sortByNew(backupAnimes)
             .forEach {
@@ -212,7 +212,7 @@ class BackupRestorer(
 
                 val seasons = backupAnimes.filter { s -> s.parentId == it.id }
                 try {
-                    animeRestorer.restore(it, backupAnimeCategories, seasons)
+                    animeRestorer.restore(it, backupAnimeCollections, seasons)
                 } catch (e: Exception) {
                     val sourceName = animeSourceMapping[it.source] ?: it.source.toString()
                     errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")
@@ -225,14 +225,14 @@ class BackupRestorer(
 
     private fun CoroutineScope.restoreManga(
         backupMangas: List<BackupManga>,
-        backupMangaCategories: List<BackupCategory>,
+        backupMangaCollections: List<BackupCollection>,
     ) = launch {
         mangaRestorer.sortByNew(backupMangas)
             .forEach {
                 ensureActive()
 
                 try {
-                    mangaRestorer.restore(it, backupMangaCategories)
+                    mangaRestorer.restore(it, backupMangaCollections)
                 } catch (e: Exception) {
                     val sourceName = mangaSourceMapping[it.source] ?: it.source.toString()
                     errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")
@@ -245,14 +245,14 @@ class BackupRestorer(
 
     private fun CoroutineScope.restoreNovel(
         backupNovels: List<BackupNovel>,
-        backupNovelCategories: List<BackupCategory>,
+        backupNovelCollections: List<BackupCollection>,
     ) = launch {
         novelRestorer.sortByNew(backupNovels)
             .forEach {
                 ensureActive()
 
                 try {
-                    novelRestorer.restore(it, backupNovelCategories)
+                    novelRestorer.restore(it, backupNovelCollections)
                 } catch (e: Exception) {
                     val sourceName = novelSourceMapping[it.source] ?: it.source.toString()
                     errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")
@@ -277,12 +277,12 @@ class BackupRestorer(
 
     private fun CoroutineScope.restoreAppPreferences(
         preferences: List<BackupPreference>,
-        categories: List<BackupCategory>?,
+        collections: List<BackupCollection>?,
     ) = launch {
         ensureActive()
         preferenceRestorer.restoreApp(
             preferences,
-            categories,
+            collections,
         )
 
         restoreProgress += 1

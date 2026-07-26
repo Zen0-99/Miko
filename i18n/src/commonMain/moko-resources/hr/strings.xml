@@ -20,8 +20,8 @@
     <string name="ext_update">Aktualiziraj</string>
     <string name="ext_updates_pending">Aktualiziranja na čekanju</string>
     <string name="all">Sve</string>
-    <string name="default_category_summary">Uvijek pitaj</string>
-    <string name="default_category">Standardna kategorija</string>
+    <string name="default_collection_summary">Uvijek pitaj</string>
+    <string name="default_collection">Standardna kategorija</string>
     <string name="pref_update_only_non_completed">Preskoči unose sa stanjem „Završeno“</string>
     <string name="charging">Kad se puni</string>
     <string name="pref_library_update_restriction">Ograničenja uređaja za automatska aktualiziranja</string>
@@ -61,8 +61,8 @@
     <string name="action_webview_forward">Naprijed</string>
     <string name="action_webview_back">Natrag</string>
     <string name="chapters">Poglavlja</string>
-    <string name="categories">Kategorije</string>
-    <string name="information_empty_category">Nemaš kategorija. Za stvaranje kategorije i organiziranje biblioteke dodirni gumb plus.</string>
+    <string name="collections">Kategorije</string>
+    <string name="information_empty_collection">Nemaš kategorija. Za stvaranje kategorije i organiziranje biblioteke dodirni gumb plus.</string>
     <string name="information_empty_library">Tvoja je biblioteka prazna</string>
     <string name="information_no_recent_manga">Ništa nije nedavno čitano</string>
     <string name="information_no_recent">Nema nedavnih aktualiziranja</string>
@@ -111,10 +111,10 @@
     <string name="action_pause">Zaustavi</string>
     <string name="action_view_chapters">Pogledaj poglavlja</string>
     <string name="action_edit_cover">Uredi naslovnicu</string>
-    <string name="action_move_category">Postavi kategorije</string>
-    <string name="action_rename_category">Preimenuj kategoriju</string>
-    <string name="action_edit_categories">Uredi kategorije</string>
-    <string name="action_add_category">Dodaj kategoriju</string>
+    <string name="action_move_collection">Postavi kategorije</string>
+    <string name="action_rename_collection">Preimenuj kategoriju</string>
+    <string name="action_edit_collections">Uredi kategorije</string>
+    <string name="action_add_collection">Dodaj kategoriju</string>
     <string name="action_add">Dodaj</string>
     <string name="action_edit">Uredi</string>
     <string name="action_update_library">Aktualiziraj biblioteku</string>
@@ -259,8 +259,8 @@
     <string name="picture_saved">Slika spremljena</string>
     <string name="dialog_with_checkbox_reset">Obnovi sva poglavlja za ovaj unos</string>
     <string name="dialog_with_checkbox_remove_description">Ovo će ukloniti datum čitanja ovog poglavlja. Je li to stvarno želiš?</string>
-    <string name="snack_categories_deleted">Izbrisane kategorije</string>
-    <string name="error_category_exists">Kategorija s ovim imenom već postoji!</string>
+    <string name="snack_collections_deleted">Izbrisane kategorije</string>
+    <string name="error_collection_exists">Kategorija s ovim imenom već postoji!</string>
     <string name="track_type">Vrsta</string>
     <string name="track_status">Stanje</string>
     <string name="status">Stanje</string>
@@ -311,7 +311,7 @@
     <string name="local_source">Lokalni izvor</string>
     <string name="no_results_found">Nema rezultata</string>
     <string name="no_more_results">Nema daljnjih rezultata</string>
-    <string name="updating_category">Ažuriranje kategorije</string>
+    <string name="updating_collection">Ažuriranje kategorije</string>
     <string name="unknown_error">Nepoznata greška</string>
     <string name="logout_success">Odjava uspjela</string>
     <string name="logout">Odjava</string>
@@ -460,11 +460,11 @@
     <string name="pref_show_navigation_mode">Prikaži raspored navigacije</string>
     <string name="pref_dns_over_https">DNS preko HTTPS-a (DoH)</string>
     <string name="none">Ništa</string>
-    <string name="pref_download_new_categories_details">Unosi u isključenim kategorijama neće se ažurirati čak i ako su također u uključenim kategorijama.</string>
+    <string name="pref_download_new_collections_details">Unosi u isključenim kategorijama neće se ažurirati čak i ako su također u uključenim kategorijama.</string>
     <string name="pref_category_auto_download">Automatsko preuzimanje</string>
     <string name="exclude">Isključi: %s</string>
     <string name="include">Uključi: %s</string>
-    <string name="pref_library_update_categories_details">Unosi u isključenim kategorijama neće se aktualizirati čak i ako su u uključenim kategorijama.</string>
+    <string name="pref_library_update_collections_details">Unosi u isključenim kategorijama neće se aktualizirati čak i ako su u uključenim kategorijama.</string>
     <string name="action_sort_chapter_fetch_date">Datum preuzimanja poglavlja</string>
     <string name="action_show_errors">Dodirni za prikaz detalja</string>
     <string name="update_check_eol">Ove se Android verzija više ne podržava</string>
@@ -485,7 +485,7 @@
     <string name="error_sharing_cover">Greška tijekom dijeljenja naslovnice</string>
     <string name="error_saving_cover">Greška tijekom spremanja naslovnice</string>
     <string name="cover_saved">Naslovnica spremljena</string>
-    <string name="information_empty_category_dialog">Još nemaš kategorija.</string>
+    <string name="information_empty_collection_dialog">Još nemaš kategorija.</string>
     <string name="error_no_match">Ništa nije pronađeno</string>
     <string name="source_unsupported">Izvor nije podržan</string>
     <string name="manga_cover">Naslovnica</string>
@@ -495,7 +495,7 @@
     <string name="tracking_guide">Vodič za praćenje</string>
     <string name="off">Isključeno</string>
     <string name="on">Uključeno</string>
-    <string name="categorized_display_settings">Postavke kategorija za sortiranje</string>
+    <string name="per_collection_display_settings">Postavke kategorija za sortiranje</string>
     <string name="restrictions">Ograničenja: %s</string>
     <string name="action_start_downloading_now">Pokreni preuzimanje sada</string>
     <string name="about_dont_kill_my_app">Neki proizvođači imaju dodatna ograničenja za aplikaciju koja onemogućuju usluge u pozadini. Ova web-stranica sadrži daljnje informacije o tome kako to popraviti.</string>
@@ -549,7 +549,7 @@
     <string name="ext_installer_pref">Instalacijski program</string>
     <string name="ext_installer_legacy">Stari način</string>
     <string name="pref_highest">Najviša</string>
-    <string name="pref_remove_exclude_categories">Isključene kategorije</string>
+    <string name="pref_remove_exclude_collections">Isključene kategorije</string>
     <string name="pref_high">Visoka</string>
     <string name="pref_lowest">Najniža</string>
     <string name="publishing_finished">Objavljivanje završeno</string>
@@ -584,8 +584,8 @@
     <string name="action_sort_last_manga_update">Zadnja provjera aktualiziranja</string>
     <string name="network_not_metered">Samo na mrežom bez ograničenja</string>
     <string name="action_sort_unread_count">Broj nepročitanih</string>
-    <string name="delete_category">Izbriši kategoriju</string>
-    <string name="delete_category_confirmation">Želiš li izbrisati kategoriju „%s”?</string>
+    <string name="delete_collection">Izbriši kategoriju</string>
+    <string name="delete_collection_confirmation">Želiš li izbrisati kategoriju „%s”?</string>
     <string name="auto_download_while_reading">Automatski preuzmi tijekom čitanja</string>
     <string name="internal_error">Interna greška: Provjeri zapisnike o prekidu aplikacije za daljnje informacije</string>
     <string name="pref_app_language">Jezik aplikacije</string>
@@ -674,7 +674,7 @@
     <string name="download_notifier_split_page_path_not_found">Nije moguće pronaći putanju datoteke stranice %d</string>
     <string name="action_not_now">Ne sada</string>
     <string name="pref_library_update_show_tab_badge">Prikaži broj nepročitanih na ikoni aktualiziranja</string>
-    <string name="information_no_manga_category">Kategorija je prazna</string>
+    <string name="information_no_manga_collection">Kategorija je prazna</string>
     <string name="copied_to_clipboard_plain">Kopirano u međuspremnik</string>
     <string name="enhanced_services_not_installed">Dostupne, ali izvor nije instaliran: %s</string>
     <string name="confirm_add_duplicate_manga">U tvojoj biblioteci imaš unos s istim imenom.
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*obavezno</string>
     <string name="pref_hide_in_library_items">Sakrij unose koji se već nalaze u biblioteci</string>
     <string name="action_copy_to_clipboard">Kopiraj u međuspremnik</string>
-    <string name="action_update_category">Aktualiziraj katogoriju</string>
+    <string name="action_update_collection">Aktualiziraj katogoriju</string>
     <string name="split_tall_images">Rastavi visoke slike</string>
     <string name="overlay_header">Oznake</string>
     <string name="pref_page_rotate">Prilagodi prikaz širokih stranica okretanjem</string>

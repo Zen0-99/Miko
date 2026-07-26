@@ -20,7 +20,7 @@ import eu.kanade.presentation.library.components.LibraryTabs
 import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.presentation.core.components.material.PullRefresh
@@ -28,7 +28,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun NovelLibraryContent(
-    categories: List<Category>,
+    collections: List<Collection>,
     searchQuery: String?,
     selection: List<LibraryNovel>,
     contentPadding: PaddingValues,
@@ -40,9 +40,9 @@ fun NovelLibraryContent(
     onContinueReadingClicked: ((LibraryNovel) -> Unit)?,
     onToggleSelection: (LibraryNovel) -> Unit,
     onToggleRangeSelection: (LibraryNovel) -> Unit,
-    onRefresh: (Category?) -> Boolean,
+    onRefresh: (Collection?) -> Boolean,
     onGlobalSearchClicked: () -> Unit,
-    getNumberOfNovelsForCategory: (Category) -> Int?,
+    getNumberOfNovelsForCollection: (Collection) -> Int?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
     getLibraryForPage: (Int) -> List<NovelLibraryItem>,
@@ -54,22 +54,22 @@ fun NovelLibraryContent(
             end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         ),
     ) {
-        val coercedCurrentPage = remember { currentPage().coerceAtMost(categories.lastIndex) }
-        val pagerState = rememberPagerState(coercedCurrentPage) { categories.size }
+        val coercedCurrentPage = remember { currentPage().coerceAtMost(collections.lastIndex) }
+        val pagerState = rememberPagerState(coercedCurrentPage) { collections.size }
 
         val scope = rememberCoroutineScope()
         var isRefreshing by remember(pagerState.currentPage) { mutableStateOf(false) }
 
-        if (showPageTabs && categories.size > 1) {
-            LaunchedEffect(categories) {
-                if (categories.size <= pagerState.currentPage) {
-                    pagerState.scrollToPage(categories.size - 1)
+        if (showPageTabs && collections.size > 1) {
+            LaunchedEffect(collections) {
+                if (collections.size <= pagerState.currentPage) {
+                    pagerState.scrollToPage(collections.size - 1)
                 }
             }
             LibraryTabs(
-                categories = categories,
+                collections = collections,
                 pagerState = pagerState,
-                getNumberOfItemsForCategory = getNumberOfNovelsForCategory,
+                getNumberOfItemsForCollection = getNumberOfNovelsForCollection,
             ) { scope.launch { pagerState.animateScrollToPage(it) } }
         }
 
@@ -85,7 +85,7 @@ fun NovelLibraryContent(
         PullRefresh(
             refreshing = isRefreshing,
             onRefresh = {
-                val started = onRefresh(categories[currentPage()])
+                val started = onRefresh(collections[currentPage()])
                 if (!started) return@PullRefresh
                 scope.launch {
                     isRefreshing = true

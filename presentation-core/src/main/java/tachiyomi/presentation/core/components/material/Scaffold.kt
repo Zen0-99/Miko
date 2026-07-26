@@ -34,6 +34,7 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -115,6 +116,17 @@ fun Scaffold(
 ) {
     // Tachiyomi: Handle consumed window insets
     val remainingWindowInsets = remember { MutableWindowInsets() }
+    // Pull-refresh overlay slot — allows PullRefresh (in the body content) to
+    // register its indicator so it can be drawn AFTER the topBar, on top of
+    // the floating glass top bar, without using a touch-blocking Popup.
+    //
+    // Reuse an existing slot from a parent Scaffold if one is already
+    // provided via CompositionLocal. This prevents nested Scaffolds (e.g.
+    // BrowseTab's inner Scaffold inside HomeScreen's outer Scaffold) from
+    // shadowing the overlay slot — the indicator must register with the
+    // OUTERMOST Scaffold (the one that actually renders the topBar).
+    val parentOverlay = LocalPullRefreshOverlay.current
+    val pullRefreshOverlay = parentOverlay ?: remember { PullRefreshOverlaySlot() }
     androidx.compose.material3.Surface(
         modifier = Modifier
             .nestedScroll(topBarScrollBehavior.nestedScrollConnection)
@@ -127,16 +139,21 @@ fun Scaffold(
         color = containerColor,
         contentColor = contentColor,
     ) {
-        ScaffoldLayout(
-            fabPosition = floatingActionButtonPosition,
-            topBar = { topBar(topBarScrollBehavior) },
-            startBar = startBar,
-            bottomBar = bottomBar,
-            content = content,
-            snackbar = snackbarHost,
-            contentWindowInsets = remainingWindowInsets,
-            fab = floatingActionButton,
-        )
+        CompositionLocalProvider(
+            LocalPullRefreshOverlay provides pullRefreshOverlay,
+        ) {
+            ScaffoldLayout(
+                fabPosition = floatingActionButtonPosition,
+                topBar = { topBar(topBarScrollBehavior) },
+                startBar = startBar,
+                bottomBar = bottomBar,
+                content = content,
+                snackbar = snackbarHost,
+                contentWindowInsets = remainingWindowInsets,
+                fab = floatingActionButton,
+                pullRefreshOverlay = pullRefreshOverlay.takeIf { parentOverlay == null },
+            )
+        }
     }
 }
 
@@ -163,12 +180,20 @@ private fun ScaffoldLayout(
     fab: @Composable () -> Unit,
     contentWindowInsets: WindowInsets,
     bottomBar: @Composable () -> Unit,
+    pullRefreshOverlay: PullRefreshOverlaySlot?,
 ) {
     SubcomposeLayout { constraints ->
         val layoutWidth = constraints.maxWidth
         val layoutHeight = constraints.maxHeight
 
         val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+
+        // Clear the pull-refresh overlay slot before composing the body
+        // content. PullRefresh (in the body content) will set it during
+        // composition. If no PullRefresh is present, the overlay stays empty.
+        // Only the owning Scaffold (the one that created the slot) clears
+        // and renders it; nested Scaffolds pass null.
+        pullRefreshOverlay?.clear()
 
         /**
          * Tachiyomi: Remove height constraint for expanded app bar
@@ -283,6 +308,19 @@ private fun ScaffoldLayout(
                 content(innerPadding)
             }.fastMap { it.measure(looseConstraints) }
 
+            // Pull-refresh overlay — composed after body content so the
+            // PullRefreshOverlaySlot has been populated. Drawn after topBar
+            // so the indicator appears above the floating glass top bar.
+            // Only the owning Scaffold renders the overlay; nested Scaffolds
+            // pass null for pullRefreshOverlay.
+            val overlayPlaceables = if (pullRefreshOverlay != null) {
+                subcompose(ScaffoldLayoutContent.Overlay) {
+                    pullRefreshOverlay.content?.invoke()
+                }.fastMap { it.measure(looseConstraints) }
+            } else {
+                emptyList()
+            }
+
             // Placing to control drawing order to match default elevation of each placeable
 
             bodyContentPlaceables.fastForEach {
@@ -292,6 +330,12 @@ private fun ScaffoldLayout(
                 it.placeRelative(0, 0)
             }
             topBarPlaceables.fastForEach {
+                it.place(0, 0)
+            }
+            // Overlay drawn after topBar so pull-refresh indicator appears
+            // above the floating glass top bar. This is part of the same
+            // Compose tree (not a Popup), so it does NOT block touch events.
+            overlayPlaceables.fastForEach {
                 it.place(0, 0)
             }
             snackbarPlaceables.fastForEach {
@@ -358,4 +402,4 @@ internal class FabPlacement(
 // FAB spacing above the bottom bar / bottom of the Scaffold
 private val FabSpacing = 16.dp
 
-private enum class ScaffoldLayoutContent { TopBar, MainContent, Snackbar, Fab, BottomBar, StartBar }
+private enum class ScaffoldLayoutContent { TopBar, MainContent, Snackbar, Fab, BottomBar, StartBar, Overlay }

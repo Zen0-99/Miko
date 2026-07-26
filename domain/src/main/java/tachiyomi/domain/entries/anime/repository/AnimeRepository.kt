@@ -33,7 +33,7 @@ interface AnimeRepository {
 
     suspend fun resetAnimeViewerFlags(): Boolean
 
-    suspend fun setAnimeCategories(animeId: Long, categoryIds: List<Long>)
+    suspend fun setAnimeCollections(animeId: Long, collectionIds: List<Long>)
 
     suspend fun insertAnime(anime: Anime): Long?
 

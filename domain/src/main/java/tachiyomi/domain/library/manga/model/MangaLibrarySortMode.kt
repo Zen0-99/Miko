@@ -1,6 +1,6 @@
 package tachiyomi.domain.library.manga.model
 
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.model.FlagWithMask
 import tachiyomi.domain.library.model.plus
 
@@ -137,5 +137,5 @@ data class MangaLibrarySort(
     }
 }
 
-val Category?.sort: MangaLibrarySort
+val Collection?.sort: MangaLibrarySort
     get() = MangaLibrarySort.valueOf(this?.flags)

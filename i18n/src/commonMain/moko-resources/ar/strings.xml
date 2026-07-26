@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">الاسم</string>
-    <string name="categories">الفئات</string>
+    <string name="collections">الفئات</string>
     <string name="manga">إدخالات المكتبة</string>
     <string name="chapters">الفصول</string>
     <string name="track">التعقب</string>
@@ -32,10 +32,10 @@
     <string name="action_update_library">تحديث المكتبة</string>
     <string name="action_edit">تعديل</string>
     <string name="action_add">أضف</string>
-    <string name="action_add_category">إضافة فئة</string>
-    <string name="action_edit_categories">تعديل الفئات</string>
-    <string name="action_rename_category">إعادة تسمية الفئة</string>
-    <string name="action_move_category">حدد الفئات</string>
+    <string name="action_add_collection">إضافة فئة</string>
+    <string name="action_edit_collections">تعديل الفئات</string>
+    <string name="action_rename_collection">إعادة تسمية الفئة</string>
+    <string name="action_move_collection">حدد الفئات</string>
     <string name="action_edit_cover">تعديل صورة الغلاف</string>
     <string name="action_pause">إيقاف موقت</string>
     <string name="action_previous_chapter">الفصل السابق</string>
@@ -80,8 +80,8 @@
     <string name="charging">عند الشحن</string>
     <string name="pref_update_only_non_completed">حالها «تمَّت»</string>
     <string name="pref_auto_update_manga_sync">تحديث تقدّم الفصول بعد القراءة</string>
-    <string name="default_category">الفئة المبدئية</string>
-    <string name="default_category_summary">السؤال دائماً</string>
+    <string name="default_collection">الفئة المبدئية</string>
+    <string name="default_collection_summary">السؤال دائماً</string>
     <string name="pref_fullscreen">وضع الشاشة الكاملة</string>
     <string name="pref_page_transitions">مؤثرات الانتقال بين الصفحات</string>
     <string name="pref_show_page_number">عرض رقم الصفحة</string>
@@ -160,7 +160,7 @@
     <string name="login">تسجيل الدخول</string>
     <string name="login_success">تم تسجيل الدخول</string>
     <string name="unknown_error">خطأ غير معروف</string>
-    <string name="updating_category">جار تحديث الفئة</string>
+    <string name="updating_collection">جار تحديث الفئة</string>
     <string name="no_more_results">لا توجد نتائج أخرى</string>
     <string name="local_source">مصدر محلِّي</string>
     <string name="other_source">أخرى</string>
@@ -192,8 +192,8 @@
     <string name="score">التقييم</string>
     <string name="title">العنوان</string>
     <string name="status">الحال</string>
-    <string name="error_category_exists">توجد بالفعل فئة بهذا الاسم!</string>
-    <string name="snack_categories_deleted">تم حذف الفئات</string>
+    <string name="error_collection_exists">توجد بالفعل فئة بهذا الاسم!</string>
+    <string name="snack_collections_deleted">تم حذف الفئات</string>
     <string name="dialog_with_checkbox_remove_description">سيؤدي هذا إلى إزالة تاريخ قراءة هذا الفصل. هل أنت متأكد؟</string>
     <string name="dialog_with_checkbox_reset">إعادة تعيين جميع الفصول لهذا الإدخال</string>
     <string name="snack_add_to_library">إضافة إلى المكتبة؟</string>
@@ -261,7 +261,7 @@
     <string name="migration_dialog_what_to_include">اختر بيانات لتضمينها</string>
     <string name="migrate">نقل</string>
     <string name="copy">نسخ</string>
-    <string name="information_empty_category">ليست لديك أيّة فئات، اضغط زر اﻹضافة لإنشاء واحدة لتنظيم مكتبتك.</string>
+    <string name="information_empty_collection">ليست لديك أيّة فئات، اضغط زر اﻹضافة لإنشاء واحدة لتنظيم مكتبتك.</string>
     <string name="transition_finished">تمَّ الانتهاء من:</string>
     <string name="transition_current">الحالي:</string>
     <string name="transition_next">التّالي:</string>
@@ -471,10 +471,10 @@
     <string name="exclude">إستثناء: %s</string>
     <string name="include">تضمين: %s</string>
     <string name="none">لا شيء</string>
-    <string name="pref_library_update_categories_details">الإدخالات في الفئات المستبعدة لن يتم تحديثها حتى و ان كانت أيضا في الفئات المضمنة.</string>
+    <string name="pref_library_update_collections_details">الإدخالات في الفئات المستبعدة لن يتم تحديثها حتى و ان كانت أيضا في الفئات المضمنة.</string>
     <string name="action_show_errors">اضغط لإظهار التفاصيل</string>
     <string name="pref_category_auto_download">التنزيل التلقائي</string>
-    <string name="pref_download_new_categories_details">لن يتم تنزيل الإدخالات في الفئات المستبعدة حتى إذا كانت موجودة أيضًا في الفئات المضمنة.</string>
+    <string name="pref_download_new_collections_details">لن يتم تنزيل الإدخالات في الفئات المستبعدة حتى إذا كانت موجودة أيضًا في الفئات المضمنة.</string>
     <string name="notification_incognito_text">إلغاء تفعيل الوضع الخفي</string>
     <string name="clipboard_copy_error">فشل النسخ إلى الحافظة</string>
     <string name="update_check_eol">نسخة الاندرويد هذه اصبحت غير مدعومة</string>
@@ -493,10 +493,10 @@
     <string name="manga_cover">غُلاف</string>
     <string name="local_invalid_format">تنسيق الفصل غير صالح</string>
     <string name="tracking_guide">تعليمات التعقب</string>
-    <string name="categorized_display_settings">إعدادات فرز كل صنف</string>
+    <string name="per_collection_display_settings">إعدادات فرز كل صنف</string>
     <string name="cancel_all_for_series">إلغاء الكل لهذه السلسلة</string>
     <string name="action_display_local_badge">مصدر محلّي</string>
-    <string name="information_empty_category_dialog">ليس لديك اي قوائم بعد.</string>
+    <string name="information_empty_collection_dialog">ليس لديك اي قوائم بعد.</string>
     <string name="action_start_downloading_now">ابدأ التحميل الآن</string>
     <string name="theme_strawberrydaiquiri">أحمر</string>
     <string name="theme_midnightdusk">منتصف الليل</string>
@@ -527,7 +527,7 @@
     <string name="getting_started_guide">دليل البدء</string>
     <string name="help_translate">ساعد بالترجمة</string>
     <string name="pref_tablet_ui_mode">واجهة مستخدم الجهاز اللوحي</string>
-    <string name="pref_remove_exclude_categories">الفئات المستثناة</string>
+    <string name="pref_remove_exclude_collections">الفئات المستثناة</string>
     <string name="ext_installer_pref">المثبِّت</string>
     <string name="action_sort_count">إجمالي الإدخالات</string>
     <string name="label_warning">تحذير</string>
@@ -601,11 +601,11 @@
     <string name="cant_open_last_read_chapter">غير قادر على فتح آخر فصل تم قراءته</string>
     <string name="not_installed">غير مثبت</string>
     <string name="pref_app_language">لغة تطبيق</string>
-    <string name="delete_category_confirmation">هل تُريد محو هذه الفئة \"%s\"؟</string>
+    <string name="delete_collection_confirmation">هل تُريد محو هذه الفئة \"%s\"؟</string>
     <string name="internal_error">خطأ داخلي: تحقق من سجل الاعطال لمزيداً من المعلومات</string>
     <string name="pref_reset_user_agent_string">اعادة ضبط وتر وكيل ألمستخدم الإفتراضي</string>
     <string name="pref_user_agent_string">وتر وكيل المستخدم الافتراضي</string>
-    <string name="delete_category">مسح الفئة</string>
+    <string name="delete_collection">مسح الفئة</string>
     <string name="description_placeholder">لا وصف</string>
     <string name="theme_lavender">أُرجواني</string>
     <string name="appwidget_unavailable_locked">لا تتاح الأداة حال تمكين قفل التطبيق</string>
@@ -672,7 +672,7 @@
     <string name="hour_short">%d س</string>
     <string name="minute_short">%d د</string>
     <string name="seconds_short">%d ث</string>
-    <string name="information_no_manga_category">الفئة فارغة</string>
+    <string name="information_no_manga_collection">الفئة فارغة</string>
     <string name="action_not_now">ليس الان</string>
     <string name="pref_library_update_show_tab_badge">إظهار عدد الادخالات غير المقروءة في ايقونة التحديثات</string>
     <string name="pref_skip_dupe_chapters">تجاوز الفصول المكررة</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*مطلوب</string>
     <string name="action_copy_to_clipboard">نسخ إلى الحافظة</string>
     <string name="pref_hide_in_library_items">إخفاء الإدخالات الموجودة بالفعل في المكتبة</string>
-    <string name="action_update_category">تحديث الفئة</string>
+    <string name="action_update_collection">تحديث الفئة</string>
     <string name="split_tall_images">افصل الصور الطويلة</string>
     <string name="overlay_header">التراكب</string>
     <string name="pref_page_rotate">دوِّر الصفحات العريضة لتلائم الشاشة</string>

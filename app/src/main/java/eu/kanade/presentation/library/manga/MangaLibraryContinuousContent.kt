@@ -22,19 +22,19 @@ import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.presentation.core.components.material.PullRefresh
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Continuous scroll library content — all categories in a single scroll
+ * Continuous scroll library content — all collections in a single scroll
  * with section headers, as an alternative to the tabbed pager.
  */
 @Composable
 fun MangaLibraryContinuousContent(
-    categories: List<Category>,
+    collections: List<Collection>,
     searchQuery: String?,
     selection: List<LibraryManga>,
     contentPadding: PaddingValues,
@@ -43,9 +43,9 @@ fun MangaLibraryContinuousContent(
     onContinueReadingClicked: ((LibraryManga) -> Unit)?,
     onToggleSelection: (LibraryManga) -> Unit,
     onToggleRangeSelection: (LibraryManga) -> Unit,
-    onRefresh: (Category?) -> Boolean,
+    onRefresh: (Collection?) -> Boolean,
     onGlobalSearchClicked: () -> Unit,
-    getNumberOfMangaForCategory: (Category) -> Int?,
+    getNumberOfMangaForCollection: (Collection) -> Int?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
     getLibraryForPage: (Int) -> List<MangaLibraryItem>,
@@ -89,15 +89,15 @@ fun MangaLibraryContinuousContent(
                 ),
             contentPadding = PaddingValues(top = contentPadding.calculateTopPadding()),
         ) {
-            categories.forEachIndexed { index, category ->
+            collections.forEachIndexed { index, collection ->
                 val items = getLibraryForPage(index)
                 if (items.isEmpty()) return@forEachIndexed
 
-                item(key = "header_${category.id}") {
+                item(key = "header_${collection.id}") {
                     Text(
                         text = buildString {
-                            append(category.visualName)
-                            val count = getNumberOfMangaForCategory(category)
+                            append(collection.visualName)
+                            val count = getNumberOfMangaForCollection(collection)
                             if (count != null) append(" ($count)")
                         },
                         style = MaterialTheme.typography.titleMedium,
@@ -152,5 +152,5 @@ private fun MangaLibraryItemRow(
     }
 }
 
-private val Category.visualName: String
+private val Collection.visualName: String
     get() = if (name.isBlank()) "Default" else name

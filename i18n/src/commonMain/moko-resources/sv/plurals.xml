@@ -24,7 +24,7 @@
         <item quantity="one">%1$s återstående</item>
         <item quantity="other">%1$s återstående</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategori</item>
         <item quantity="other">%d kategorier</item>
     </plurals>

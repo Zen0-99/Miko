@@ -7,7 +7,7 @@ import tachiyomi.i18n.aniyomi.AYMR
 
 data class RestoreOptions(
     val libraryEntries: Boolean = true,
-    val categories: Boolean = true,
+    val collections: Boolean = true,
     val appSettings: Boolean = true,
     val extensionRepoSettings: Boolean = true,
     val customButtons: Boolean = true,
@@ -17,7 +17,7 @@ data class RestoreOptions(
 
     fun asBooleanArray() = booleanArrayOf(
         libraryEntries,
-        categories,
+        collections,
         appSettings,
         extensionRepoSettings,
         customButtons,
@@ -26,7 +26,7 @@ data class RestoreOptions(
     )
 
     fun canRestore() = libraryEntries ||
-        categories ||
+        collections ||
         appSettings ||
         extensionRepoSettings ||
         customButtons ||
@@ -41,9 +41,9 @@ data class RestoreOptions(
                 setter = { options, enabled -> options.copy(libraryEntries = enabled) },
             ),
             Entry(
-                label = MR.strings.categories,
-                getter = RestoreOptions::categories,
-                setter = { options, enabled -> options.copy(categories = enabled) },
+                label = MR.strings.collections,
+                getter = RestoreOptions::collections,
+                setter = { options, enabled -> options.copy(collections = enabled) },
             ),
             Entry(
                 label = MR.strings.app_settings,
@@ -74,7 +74,7 @@ data class RestoreOptions(
 
         fun fromBooleanArray(array: BooleanArray) = RestoreOptions(
             libraryEntries = array[0],
-            categories = array[1],
+            collections = array[1],
             appSettings = array[2],
             extensionRepoSettings = array[3],
             customButtons = array[4],

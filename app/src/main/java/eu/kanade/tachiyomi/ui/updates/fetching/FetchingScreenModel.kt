@@ -45,8 +45,18 @@ class FetchingScreenModel(
                 LibraryUpdateProgressBus.state,
             ) { failed, progress ->
                 val enriched = mutableListOf<FailedFetchUi>()
+                // Persisted failures from the database
                 for (ff in failed) {
                     enrich(ff)?.let { enriched.add(it) }
+                }
+                // Live failures from the current run (not yet persisted to DB).
+                // These appear in the fetching tab in real-time as they fail.
+                if (progress is LibraryUpdateProgress.Running) {
+                    val existingEntryIds = enriched.map { it.entryId }.toHashSet()
+                    for (fe in progress.failedSoFar) {
+                        if (fe.entry.id in existingEntryIds) continue
+                        enrichLive(fe)?.let { enriched.add(it) }
+                    }
                 }
                 FetchingState.Ready(
                     failedFetches = enriched,
@@ -72,6 +82,25 @@ class FetchingScreenModel(
             sourceName = ff.sourceName,
             reason = ff.reason,
             timestamp = ff.timestamp,
+        )
+    }
+
+    private suspend fun enrichLive(fe: eu.kanade.tachiyomi.data.library.FailedEntry): FailedFetchUi? {
+        val cover: EntryCover? = when (fe.entry.kind) {
+            EntryKind.MANGA -> getManga.await(fe.entry.id)?.asMangaCover()
+            EntryKind.ANIME -> getAnime.await(fe.entry.id)?.asAnimeCover()
+            EntryKind.NOVEL -> getNovel.await(fe.entry.id)?.asNovelCover()
+        }
+        return FailedFetchUi(
+            id = -(fe.entry.id), // Negative ID to distinguish live entries from DB ones
+            entryId = fe.entry.id,
+            entryKind = fe.entry.kind,
+            title = fe.entry.title,
+            cover = cover,
+            sourceId = fe.entry.sourceId,
+            sourceName = fe.sourceName,
+            reason = fe.reason,
+            timestamp = System.currentTimeMillis(),
         )
     }
 

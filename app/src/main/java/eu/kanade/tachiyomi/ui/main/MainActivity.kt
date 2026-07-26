@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
@@ -72,7 +73,6 @@ import eu.kanade.presentation.components.IndexingBannerBackgroundColor
 import eu.kanade.presentation.achievement.components.AchievementUnlockBanner
 import eu.kanade.presentation.achievement.components.AchievementGroupNotification
 import eu.kanade.presentation.achievement.screen.AchievementScreenVoyager
-import eu.kanade.presentation.library.LibraryUpdateProgressOverlay
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.util.AssistContentScreen
@@ -83,7 +83,6 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadCache
-import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
@@ -301,26 +300,21 @@ class MainActivity : BaseActivity() {
                                 .padding(contentPadding)
                                 .consumeWindowInsets(contentPadding),
                         )
-                        // Achievement unlock banners (overlaid on top center)
+                        // Achievement unlock banners (overlaid on top center,
+                        // positioned below the status bar so they don't overlap
+                        // the time/battery/wifi indicators)
                         AchievementUnlockBanner(
-                            modifier = Modifier.align(Alignment.TopCenter),
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .windowInsetsPadding(WindowInsets.statusBars),
                         )
                         AchievementGroupNotification(
-                            modifier = Modifier.align(Alignment.TopCenter),
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .windowInsetsPadding(WindowInsets.statusBars),
                             onViewAll = {
                                 navigator?.push(AchievementScreenVoyager)
                             },
-                        )
-                        // Library update progress overlay (mirrors achievement banner placement)
-                        LibraryUpdateProgressOverlay(
-                            onViewFailures = {
-                                // Emit a command that HomeScreen observes to switch to the
-                                // Updates tab (which renders the Fetching sub-tab). We can't use
-                                // LocalTabNavigator here because this composable is outside the
-                                // TabNavigator provider scope.
-                                LibraryUpdateProgressBus.requestViewFailures()
-                            },
-                            modifier = Modifier.align(Alignment.TopCenter),
                         )
                         // Draw navigation bar scrim when needed
                         if (remember { isNavigationBarNeedsScrim() }) {

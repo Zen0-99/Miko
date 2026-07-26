@@ -24,7 +24,7 @@
         <item quantity="one">%1$s verbleibend</item>
         <item quantity="other">%1$s verbleibend</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d Kategorie</item>
         <item quantity="other">%d Kategorien</item>
     </plurals>

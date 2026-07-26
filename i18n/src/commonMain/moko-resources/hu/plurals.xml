@@ -8,7 +8,7 @@
         <item quantity="one">%1$s perc múlva</item>
         <item quantity="other">%1$s perc múlva</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategória</item>
         <item quantity="other">%d kategória</item>
     </plurals>

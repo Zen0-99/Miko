@@ -12,7 +12,7 @@
     <plurals name="manga_num_chapters">
         <item quantity="other">共 %1$s 章</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="other">%d 個類別</item>
     </plurals>
     <plurals name="restore_completed_message">

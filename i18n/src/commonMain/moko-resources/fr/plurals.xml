@@ -30,7 +30,7 @@
         <item quantity="many">%1$s restants</item>
         <item quantity="other">%1$s restants</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d catégorie</item>
         <item quantity="many">%d catégories</item>
         <item quantity="other">%d catégories</item>

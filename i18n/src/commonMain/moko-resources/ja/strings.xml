@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">名前</string>
-    <string name="categories">カテゴリー</string>
+    <string name="collections">カテゴリー</string>
     <string name="manga">ライブラリの項目</string>
     <string name="chapters">章</string>
     <string name="history">履歴</string>
@@ -37,8 +37,8 @@
     <string name="action_delete">削除する</string>
     <string name="action_update_library">ライブラリを更新</string>
     <string name="action_edit">編集</string>
-    <string name="action_add_category">カテゴリを追加</string>
-    <string name="action_edit_categories">カテゴリを編集</string>
+    <string name="action_add_collection">カテゴリを追加</string>
+    <string name="action_edit_collections">カテゴリを編集</string>
     <string name="action_edit_cover">表紙を編集</string>
     <string name="action_pause">一時停止</string>
     <string name="action_previous_chapter">前の章</string>
@@ -75,8 +75,8 @@
     <string name="charging">充電中</string>
     <string name="pref_update_only_non_completed">ステータスが「完結済み」の作品をスキップ</string>
     <string name="pref_auto_update_manga_sync">読んだ後に読書進捗を更新</string>
-    <string name="default_category">デフォルトカテゴリー</string>
-    <string name="default_category_summary">毎回尋ねる</string>
+    <string name="default_collection">デフォルトカテゴリー</string>
+    <string name="default_collection_summary">毎回尋ねる</string>
     <string name="ext_update">更新</string>
     <string name="ext_install">インストール</string>
     <string name="ext_pending">保留</string>
@@ -148,8 +148,8 @@
     <string name="login">ログイン</string>
     <string name="login_success">ログインしました</string>
     <string name="action_add">追加</string>
-    <string name="action_rename_category">カテゴリー名を編集</string>
-    <string name="action_move_category">カテゴリーを設定</string>
+    <string name="action_rename_collection">カテゴリー名を編集</string>
+    <string name="action_move_collection">カテゴリーを設定</string>
     <string name="action_remove">削除</string>
     <string name="action_install">インストール</string>
     <string name="action_undo">取り消し</string>
@@ -183,7 +183,7 @@
     <string name="clear_database_completed">エントリーを削除しました</string>
     <string name="pref_acra_summary">バグの修正などに役立ちます。個人情報を送信しません</string>
     <string name="unknown_error">不明なエラー</string>
-    <string name="updating_category">カテゴリーを更新中</string>
+    <string name="updating_collection">カテゴリーを更新中</string>
     <string name="no_more_results">これ以上の結果はありません</string>
     <string name="action_global_search_hint">グローバル検索…</string>
     <string name="latest">最近の更新</string>
@@ -219,8 +219,8 @@
     <string name="status">ステータス</string>
     <string name="track_status">ステータス</string>
     <string name="track_type">タイプ</string>
-    <string name="error_category_exists">この名前が既に存在しています！</string>
-    <string name="snack_categories_deleted">カテゴリーが削除されました</string>
+    <string name="error_collection_exists">この名前が既に存在しています！</string>
+    <string name="snack_collections_deleted">カテゴリーが削除されました</string>
     <string name="dialog_with_checkbox_remove_description">この章の読書日時を削除してもよろしいですか？</string>
     <string name="dialog_with_checkbox_reset">この項目の章をすべてリセット</string>
     <string name="snack_add_to_library">ライブラリに追加しますか？</string>
@@ -251,7 +251,7 @@
     <string name="information_no_recent">最近の更新はありません</string>
     <string name="information_no_recent_manga">最近は何も読んでいません</string>
     <string name="information_empty_library">ライブラリは空です</string>
-    <string name="information_empty_category">カテゴリーがありません。「+」をタップしてカテゴリーを追加し、ライブラリを整理できます。</string>
+    <string name="information_empty_collection">カテゴリーがありません。「+」をタップしてカテゴリーを追加し、ライブラリを整理できます。</string>
     <string name="download_notifier_downloader_title">ダウンロード</string>
     <string name="download_notifier_title_error">エラー</string>
     <string name="download_notifier_unknown_error">予期せぬエラーが発生したため、ダウンロードは失敗しました</string>
@@ -459,15 +459,15 @@
     <string name="pref_show_navigation_mode_summary">ビューアが立ち上がるとしばらく表示します</string>
     <string name="pref_show_navigation_mode">タップ可能なゾーンを表示</string>
     <string name="pref_dns_over_https">DNS over HTTPS (DoH)</string>
-    <string name="pref_download_new_categories_details">含まれているカテゴリーに入っていても、除外対象カテゴリーにある項目は更新されません。</string>
+    <string name="pref_download_new_collections_details">含まれているカテゴリーに入っていても、除外対象カテゴリーにある項目は更新されません。</string>
     <string name="pref_category_auto_download">自動ダウンロード</string>
     <string name="exclude">下記を除外: %s</string>
     <string name="include">下記を含む: %s</string>
     <string name="none">なし</string>
-    <string name="pref_library_update_categories_details">含まれているカテゴリーに入っていても、除外対象カテゴリーにある項目は更新されません。</string>
+    <string name="pref_library_update_collections_details">含まれているカテゴリーに入っていても、除外対象カテゴリーにある項目は更新されません。</string>
     <string name="action_show_errors">タップで詳細を表示</string>
     <string name="action_sort_chapter_fetch_date">章の取得された日付順</string>
-    <string name="information_empty_category_dialog">まだカテゴリを登録していません。</string>
+    <string name="information_empty_collection_dialog">まだカテゴリを登録していません。</string>
     <string name="update_check_eol">このAndroidはもうサポートされていません</string>
     <string name="error_no_match">結果が見つかりませんでした</string>
     <string name="source_unsupported">非対応ソースです</string>
@@ -491,7 +491,7 @@
     <string name="pref_grayscale">グレースケール</string>
     <string name="off">オフ</string>
     <string name="on">オン</string>
-    <string name="categorized_display_settings">カテゴリ別のソート設定</string>
+    <string name="per_collection_display_settings">カテゴリ別のソート設定</string>
     <string name="restrictions">制限: %s</string>
     <string name="cancel_all_for_series">このシリーズの全項目をキャンセル</string>
     <string name="action_display_local_badge">ローカル ソース</string>
@@ -520,7 +520,7 @@
     <string name="getting_started_guide">入門ガイド</string>
     <string name="pref_tablet_ui_mode">タブレットUI</string>
     <string name="action_track">追跡</string>
-    <string name="pref_remove_exclude_categories">除外されるカテゴリー</string>
+    <string name="pref_remove_exclude_collections">除外されるカテゴリー</string>
     <string name="pref_hide_threshold">メニューを自動非表示するスクロール量</string>
     <string name="theme_tealturquoise">ティール &amp; ターコイズ</string>
     <string name="pref_category_appearance">外観</string>
@@ -603,8 +603,8 @@
     <string name="pref_app_language">アプリ言語</string>
     <string name="theme_lavender">ラベンダー</string>
     <string name="description_placeholder">説明がありません</string>
-    <string name="delete_category_confirmation">カテゴリー「%s」を削除しますか？</string>
-    <string name="delete_category">カテゴリーを削除</string>
+    <string name="delete_collection_confirmation">カテゴリー「%s」を削除しますか？</string>
+    <string name="delete_collection">カテゴリーを削除</string>
     <string name="internal_error">InternalError: 詳しくはクラッシュ ログをご参照ください</string>
     <string name="pref_user_agent_string">デフォルトのユーザーエージェント文字列</string>
     <string name="pref_reset_user_agent_string">デフォルトのユーザーエージェント文字列をリセットする</string>
@@ -673,7 +673,7 @@
     <string name="label_mean_score">平均</string>
     <string name="day_short">%d日</string>
     <string name="action_not_now">後で</string>
-    <string name="information_no_manga_category">カテゴリが空です</string>
+    <string name="information_no_manga_collection">カテゴリが空です</string>
     <string name="pref_library_update_show_tab_badge">アップデートアイコンに未読メッセージの件数を表示</string>
     <string name="copied_to_clipboard_plain">クリップボードにコピーしました</string>
     <string name="enhanced_services_not_installed">利用可能ですが未インストールのソース: %s</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*必須</string>
     <string name="action_copy_to_clipboard">クリップボードにコピー</string>
     <string name="pref_hide_in_library_items">ライブラリにある項目を非表示</string>
-    <string name="action_update_category">カテゴリを更新</string>
+    <string name="action_update_collection">カテゴリを更新</string>
     <string name="split_tall_images">長い画像を分割</string>
     <string name="overlay_header">オーバーレイ</string>
     <string name="pref_page_rotate">画面に合わせるように幅広いページを回転</string>

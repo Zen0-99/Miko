@@ -25,7 +25,7 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.novel.interactor.GetNovelCategories
+import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.items.chapter.model.NovelChapter
@@ -39,7 +39,7 @@ class NovelDownloader(
     private val cache: NovelDownloadCache,
     private val sourceManager: NovelSourceManager = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
-    private val getCategories: GetNovelCategories = Injekt.get(),
+    private val getCollections: GetNovelCollections = Injekt.get(),
 ) {
 
     private val store = NovelDownloadStore(context)

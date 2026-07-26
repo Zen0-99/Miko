@@ -46,17 +46,6 @@ class MigrateNovelAllScreen(
                     screenModel.markMigrated(oldNovel.id)
                 }
             },
-            onCopyNow = { oldNovel: Novel, newNovel: Novel ->
-                scope.launchIO {
-                    dialogScreenModel.migrateNovel(
-                        oldNovel = oldNovel,
-                        newNovel = newNovel,
-                        replace = false,
-                        flags = dialogScreenModel.migrateFlags.get(),
-                    )
-                    screenModel.markMigrated(oldNovel.id)
-                }
-            },
             onSearchManually = { novelId ->
                 navigator.push(MigrateNovelSearchScreen(novelId))
             },

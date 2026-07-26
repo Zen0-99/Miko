@@ -14,18 +14,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import eu.kanade.presentation.category.visualName
-import tachiyomi.domain.category.model.Category
+import eu.kanade.presentation.collection.visualName
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.presentation.core.components.material.TabText
 
 @Composable
 internal fun LibraryTabs(
-    categories: List<Category>,
+    collections: List<Collection>,
     pagerState: PagerState,
-    getNumberOfItemsForCategory: (Category) -> Int?,
+    getNumberOfItemsForCollection: (Collection) -> Int?,
     onTabItemClick: (Int) -> Unit,
 ) {
-    val currentPageIndex = pagerState.currentPage.coerceAtMost(categories.lastIndex)
+    val currentPageIndex = pagerState.currentPage.coerceAtMost(collections.lastIndex)
     Column(
         modifier = Modifier.zIndex(1f),
     ) {
@@ -58,14 +58,14 @@ internal fun LibraryTabs(
                 )
             },
         ) {
-            categories.forEachIndexed { index, category ->
+            collections.forEachIndexed { index, collection ->
                 Tab(
                     selected = currentPageIndex == index,
                     onClick = { onTabItemClick(index) },
                     text = {
                         TabText(
-                            text = category.visualName,
-                            badgeCount = getNumberOfItemsForCategory(category),
+                            text = collection.visualName,
+                            badgeCount = getNumberOfItemsForCollection(collection),
                         )
                     },
                     unselectedContentColor = MaterialTheme.colorScheme.onSurface,

@@ -5,10 +5,10 @@
     <string name="pref_library_update_show_tab_badge">अपडेट आइकन पर अपठित संख्या दिखाएं</string>
     <string name="action_hide">छुपाएँ</string>
     <string name="label_all">सभी</string>
-    <string name="label_category">श्रेणी</string>
-    <string name="manga_categories">मंगा श्रेणियां</string>
-    <string name="general_categories">श्रेणियाँ</string>
-    <string name="anime_categories">एनीमे श्रेणियाँ</string>
+    <string name="label_collection">श्रेणी</string>
+    <string name="manga_collections">मंगा श्रेणियां</string>
+    <string name="general_collections">श्रेणियाँ</string>
+    <string name="anime_collections">एनीमे श्रेणियाँ</string>
     <string name="entries">लाइब्रेरी प्रविष्टियों</string>
     <string name="chapters_episodes">अध्याय और एपिसोड</string>
     <string name="episodes">एपिसोड</string>
@@ -36,9 +36,9 @@
     <string name="action_sort_unseen_count">अनदेखे की संख्या</string>
     <string name="action_sort_episode_fetch_date">एपिसोड लाने की तारीख</string>
     <string name="action_display_local_badge_manga">स्थानीय स्रोत</string>
-    <string name="default_manga_category">डिफ़ॉल्ट श्रेणी</string>
-    <string name="pref_manga_library_update_categories_details">बहिष्कृत श्रेणियों की पुस्तकें अपडेट नहीं की जाएंगी, भले ही वे भी शामिल श्रेणियों में हों।</string>
-    <string name="pref_remove_exclude_categories_manga">बहिष्कृत श्रेणियां</string>
+    <string name="default_manga_collection">डिफ़ॉल्ट श्रेणी</string>
+    <string name="pref_manga_library_update_collections_details">बहिष्कृत श्रेणियों की पुस्तकें अपडेट नहीं की जाएंगी, भले ही वे भी शामिल श्रेणियों में हों।</string>
+    <string name="pref_remove_exclude_collections_manga">बहिष्कृत श्रेणियां</string>
     <string name="pref_clear_manga_database">डेटाबेस साफ़ करें</string>
     <string name="pref_clear_manga_database_summary">मैंगा जो आपकी लाइब्रेरी में सहेजे नहीं हैं उनका इतिहास हटाएं</string>
     <string name="snack_add_to_manga_library">लाइब्रेरी में मंगा जोड़ें?</string>

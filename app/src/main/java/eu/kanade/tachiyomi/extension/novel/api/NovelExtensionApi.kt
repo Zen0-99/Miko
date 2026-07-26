@@ -72,7 +72,10 @@ internal class NovelExtensionApi {
             }
             .map {
                 NovelExtension.Available(
-                    name = it.name,
+                    name = it.name
+                        .substringAfter("Tachiyomi: ")
+                        .substringAfter("Miko: ")
+                        .substringAfter("Yokai: "),
                     pkgName = it.pkgName,
                     versionName = it.versionName,
                     versionCode = it.versionCode,

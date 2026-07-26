@@ -138,7 +138,7 @@ private fun LibraryRegularToolbar(
                         onClick = onClickGlobalUpdate,
                     ))
                     add(AppBar.OverflowAction(
-                        title = stringResource(MR.strings.action_update_category),
+                        title = stringResource(MR.strings.action_update_collection),
                         onClick = onClickRefresh,
                     ))
                     add(AppBar.OverflowAction(

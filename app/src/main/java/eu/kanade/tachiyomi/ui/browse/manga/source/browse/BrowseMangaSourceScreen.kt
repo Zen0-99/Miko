@@ -39,14 +39,23 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifMangaSourcesLoaded
 import eu.kanade.presentation.browse.RemoveEntryDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.manga.BrowseSourceContent
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.manga.MissingSourceScreen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.manga.components.BrowseMangaSourceToolbar
-import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
+import eu.kanade.presentation.collection.components.ChangeCollectionDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.manga.DuplicateMangaDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.more.components.SavedSearchesDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.util.AssistContentScreen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.util.Screen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -54,7 +63,7 @@ import eu.kanade.tachiyomi.ui.browse.manga.extension.details.MangaSourcePreferen
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialog
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.manga.source.browse.BrowseMangaSourceScreenModel.Listing
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.coroutines.channels.Channel
@@ -224,7 +233,7 @@ data class BrowseMangaSourceScreen(
                     HorizontalDivider()
                 }
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
             BrowseSourceContent(
                 source = screenModel.source,
@@ -315,17 +324,17 @@ data class BrowseMangaSourceScreen(
                     entryToRemove = dialog.manga.title,
                 )
             }
-            is BrowseMangaSourceScreenModel.Dialog.ChangeMangaCategory -> {
-                ChangeCategoryDialog(
+            is BrowseMangaSourceScreenModel.Dialog.ChangeMangaCollection -> {
+                ChangeCollectionDialog(
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
-                    onEditCategories = {
-                        navigator.push(CategoriesTab)
-                        CategoriesTab.showMangaCategory()
+                    onEditCollections = {
+                        navigator.push(CollectionsTab)
+                        CollectionsTab.showMangaCollection()
                     },
                     onConfirm = { include, _ ->
                         screenModel.changeMangaFavorite(dialog.manga)
-                        screenModel.moveMangaToCategories(dialog.manga, include)
+                        screenModel.moveMangaToCollections(dialog.manga, include)
                     },
                 )
             }

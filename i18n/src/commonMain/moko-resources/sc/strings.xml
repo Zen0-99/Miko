@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Nùmene</string>
-    <string name="categories">Categorias</string>
+    <string name="collections">Categorias</string>
     <string name="manga">Elementos de sa biblioteca</string>
     <string name="chapters">Capìtulos</string>
     <string name="track">Arrastamentu</string>
@@ -36,10 +36,10 @@
     <string name="action_update_library">Agiorna sa biblioteca</string>
     <string name="action_edit">Modìfica</string>
     <string name="action_add">Annanghe</string>
-    <string name="action_add_category">Annanghe una categoria</string>
-    <string name="action_edit_categories">Modìfica sas categorias</string>
-    <string name="action_rename_category">Cambia su nùmene de sa categoria</string>
-    <string name="action_move_category">Imposta sas categorias</string>
+    <string name="action_add_collection">Annanghe una categoria</string>
+    <string name="action_edit_collections">Modìfica sas categorias</string>
+    <string name="action_rename_collection">Cambia su nùmene de sa categoria</string>
+    <string name="action_move_collection">Imposta sas categorias</string>
     <string name="action_edit_cover">Muda sa cobertedda</string>
     <string name="action_pause">Pone in pàusa</string>
     <string name="action_previous_chapter">Capìtulu antepostu</string>
@@ -85,8 +85,8 @@
     <string name="charging">Durante sa càrriga</string>
     <string name="pref_update_only_non_completed">Cun s\'istadu \"acabbada\"</string>
     <string name="pref_auto_update_manga_sync">Agiorna su progressu a pustis de sa leghidura</string>
-    <string name="default_category">Categoria predefinida</string>
-    <string name="default_category_summary">Pedi semper</string>
+    <string name="default_collection">Categoria predefinida</string>
+    <string name="default_collection_summary">Pedi semper</string>
     <string name="ext_update">Agiorna</string>
     <string name="ext_install">Installa</string>
     <string name="ext_pending">Isetende</string>
@@ -181,7 +181,7 @@
     <string name="login">Intra</string>
     <string name="login_success">Ses intradu</string>
     <string name="unknown_error">Errore disconnotu</string>
-    <string name="updating_category">Agiornende sa categoria</string>
+    <string name="updating_collection">Agiornende sa categoria</string>
     <string name="no_more_results">Non bi sunt àteros risultados</string>
     <string name="local_source">Fonte locale</string>
     <string name="other_source">Àteru</string>
@@ -221,8 +221,8 @@
     <string name="status">Istadu</string>
     <string name="track_status">Istadu</string>
     <string name="track_type">Casta</string>
-    <string name="error_category_exists">Esistit giai una categoria cun custu nùmene!</string>
-    <string name="snack_categories_deleted">Categorias iscantzelladas</string>
+    <string name="error_collection_exists">Esistit giai una categoria cun custu nùmene!</string>
+    <string name="snack_collections_deleted">Categorias iscantzelladas</string>
     <string name="dialog_with_checkbox_remove_description">Custu at a bogare sa data de leghidura de custu capìtulu. Seguru ses?</string>
     <string name="dialog_with_checkbox_reset">Reseta totu sos capìtulos pro custu elementu</string>
     <string name="snack_add_to_library">Annànghere a sa biblioteca?</string>
@@ -261,7 +261,7 @@
     <string name="information_no_recent">Perunu agiornamentu reghente</string>
     <string name="information_no_recent_manga">Nudda de lèghidu dae pagu</string>
     <string name="information_empty_library">Sa biblioteca tua est bòida</string>
-    <string name="information_empty_category">Non tenes categorias. Incarca su butone de su \"prus\" pro nde creare una pro organizare sa biblioteca tua.</string>
+    <string name="information_empty_collection">Non tenes categorias. Incarca su butone de su \"prus\" pro nde creare una pro organizare sa biblioteca tua.</string>
     <string name="download_notifier_downloader_title">Iscarrigadore</string>
     <string name="download_notifier_title_error">Errore</string>
     <string name="download_notifier_unknown_error">Iscarrigamentu de su capìtulu fallidu pro more de un\'errore imprevistu</string>
@@ -461,9 +461,9 @@
     <string name="include">Include: %s</string>
     <string name="none">Perunu</string>
     <string name="action_sort_chapter_fetch_date">Data de recùperu de su capìtulu</string>
-    <string name="pref_download_new_categories_details">Sos elementos in sas categorias esclùdidas non s\'ant a iscarrigare nemmancu si sunt fintzas in categorias inclùdidas.</string>
+    <string name="pref_download_new_collections_details">Sos elementos in sas categorias esclùdidas non s\'ant a iscarrigare nemmancu si sunt fintzas in categorias inclùdidas.</string>
     <string name="pref_category_auto_download">Iscarrigamentu automàticu</string>
-    <string name="pref_library_update_categories_details">Sos elementos in sas categorias esclùdidas non s\'ant a agiornare nemmancu si sunt fintzas in categorias inclùdidas.</string>
+    <string name="pref_library_update_collections_details">Sos elementos in sas categorias esclùdidas non s\'ant a agiornare nemmancu si sunt fintzas in categorias inclùdidas.</string>
     <string name="action_show_errors">Toca pro bìdere sos detàllios</string>
     <string name="clipboard_copy_error">Còpia in punta de billete fallida</string>
     <string name="update_check_eol">Custa versione de Android no est prus suportada</string>
@@ -493,8 +493,8 @@
     <string name="cover_saved">Cobertedda sarvada</string>
     <string name="manga_cover">Cobertedda</string>
     <string name="tracking_guide">Ghia pro s\'arrastamentu</string>
-    <string name="categorized_display_settings">Impostatziones de ordinamentu pro categoria</string>
-    <string name="information_empty_category_dialog">Non tenes galu peruna categoria.</string>
+    <string name="per_collection_display_settings">Impostatziones de ordinamentu pro categoria</string>
+    <string name="information_empty_collection_dialog">Non tenes galu peruna categoria.</string>
     <string name="action_start_downloading_now">Incumintza a iscarrigare como</string>
     <string name="theme_tako">Tako</string>
     <string name="restore_miui_warning">Sa còpia de seguresa e su riprìstinu diant pòdere non funtzionare comente si tocat si s\'otimizatzione MIUI est disabilitada.</string>
@@ -525,7 +525,7 @@
     <string name="getting_started_guide">Ghia pro incumintzare</string>
     <string name="pref_tablet_ui_mode">Modalidade pro tauleddas</string>
     <string name="help_translate">Agiuda a bortare</string>
-    <string name="pref_remove_exclude_categories">Categorias esclùdidas</string>
+    <string name="pref_remove_exclude_collections">Categorias esclùdidas</string>
     <string name="ext_app_info">Informatziones de s\'aplicatzione</string>
     <string name="ext_installer_shizuku_unavailable_dialog">Installa e avia Shizuku pro l\'impreare comente installadore de estensiones.</string>
     <string name="ext_installer_shizuku_stopped">Shizuku no est in esecutzione</string>
@@ -601,9 +601,9 @@
     <string name="pref_app_language">Limba de s\'aplicatzione</string>
     <string name="description_placeholder">Peruna descritzione</string>
     <string name="theme_lavender">Archemissa</string>
-    <string name="delete_category_confirmation">Boles iscantzellare sa categoria \"%s\"?</string>
+    <string name="delete_collection_confirmation">Boles iscantzellare sa categoria \"%s\"?</string>
     <string name="internal_error">Errore internu: verìfica sos registros de sas serradas improvisas pro àteras informatziones</string>
-    <string name="delete_category">Iscantzella sa categoria</string>
+    <string name="delete_collection">Iscantzella sa categoria</string>
     <string name="pref_user_agent_string">Istringa de agente de utente predefinida</string>
     <string name="pref_reset_user_agent_string">Reseta s\'istringa de agente de utente predefinida</string>
     <string name="action_remove_everything">Boga totu</string>
@@ -671,7 +671,7 @@
     <string name="label_tracker_section">Arrastadores</string>
     <string name="day_short">%dd</string>
     <string name="action_not_now">Como nono</string>
-    <string name="information_no_manga_category">Sa categoria est bòida</string>
+    <string name="information_no_manga_collection">Sa categoria est bòida</string>
     <string name="pref_library_update_show_tab_badge">Ammustra su nùmeru de non lèghidos in s\'icona de agiornamentu</string>
     <string name="copied_to_clipboard_plain">Copiadu in punta de billete</string>
     <string name="confirm_add_duplicate_manga">Tenes giai un\'elementu in sa biblioteca tua cun su matessi nùmene.
@@ -683,7 +683,7 @@
     <string name="information_required_plain">*netzessàriu</string>
     <string name="pref_hide_in_library_items">Cua sos elementos giai in sa biblioteca</string>
     <string name="action_copy_to_clipboard">Còpia in punta de billete</string>
-    <string name="action_update_category">Agiorna sa categoria</string>
+    <string name="action_update_collection">Agiorna sa categoria</string>
     <string name="split_tall_images">Partzi sas immàgines artas</string>
     <string name="overlay_header">Istratu superiore</string>
     <string name="pref_page_rotate">Gira sas pàginas largas pro las adatare</string>

@@ -19,7 +19,7 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.util.isTabletUi
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.screens.LoadingScreen
 import kotlin.random.Random
@@ -30,7 +30,7 @@ fun StorageScreenContent(
     isManga: Boolean,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues,
-    onCategorySelected: (Category) -> Unit,
+    onCollectionSelected: (Collection) -> Unit,
     onDelete: (Long) -> Unit,
 ) {
     when (state) {
@@ -46,10 +46,10 @@ fun StorageScreenContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                     content = {
-                        SelectStorageCategory(
-                            selectedCategory = state.selectedCategory,
-                            categories = state.categories,
-                            onCategorySelected = onCategorySelected,
+                        SelectStorageCollection(
+                            selectedCollection = state.selectedCollection,
+                            collections = state.collections,
+                            onCollectionSelected = onCollectionSelected,
                         )
                         CumulativeStorage(
                             modifier = Modifier
@@ -117,11 +117,11 @@ fun StorageScreenContent(
 @Composable
 private fun StorageScreenContentPreview() {
     val random = remember { Random(0) }
-    val categories = remember {
+    val collections = remember {
         List(10) {
-            Category(
+            Collection(
                 id = it.toLong(),
-                name = "Category $it",
+                name = "Collection $it",
                 0L,
                 0L,
                 false,
@@ -144,12 +144,12 @@ private fun StorageScreenContentPreview() {
                     ),
                 )
             },
-            categories = categories,
-            selectedCategory = categories[0],
+            collections = collections,
+            selectedCollection = collections[0],
         ),
         isManga = true,
         contentPadding = PaddingValues(0.dp),
-        onCategorySelected = {},
+        onCollectionSelected = {},
         onDelete = {},
     )
 }
@@ -158,11 +158,11 @@ private fun StorageScreenContentPreview() {
 @Composable
 private fun StorageTabletUiScreenContentPreview() {
     val random = remember { Random(0) }
-    val categories = remember {
+    val collections = remember {
         List(10) {
-            Category(
+            Collection(
                 id = it.toLong(),
-                name = "Category $it",
+                name = "Collection $it",
                 0L,
                 0L,
                 false,
@@ -185,12 +185,12 @@ private fun StorageTabletUiScreenContentPreview() {
                     ),
                 )
             },
-            categories = categories,
-            selectedCategory = categories[0],
+            collections = collections,
+            selectedCollection = collections[0],
         ),
         isManga = true,
         contentPadding = PaddingValues(0.dp),
-        onCategorySelected = {},
+        onCollectionSelected = {},
         onDelete = {},
     )
 }

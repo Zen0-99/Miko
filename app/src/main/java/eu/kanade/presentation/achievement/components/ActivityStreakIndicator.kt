@@ -42,7 +42,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.AchievementColors
+import eu.kanade.presentation.theme.achievementInactiveBarColor
+import eu.kanade.presentation.theme.achievementLabelColor
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -52,7 +54,6 @@ fun ActivityStreakIndicator(
     currentStreak: Int,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
     val today = java.time.LocalDate.now()
     val days = (0..4).map { offset ->
         today.plusDays((offset - 3).toLong())
@@ -86,6 +87,7 @@ fun ActivityStreakIndicator(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 1.dp,
     ) {
+        val dividerColor = MaterialTheme.colorScheme.outlineVariant
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -100,7 +102,7 @@ fun ActivityStreakIndicator(
                     .drawBehind {
                         val strokeWidth = 1.dp.toPx()
                         drawLine(
-                            color = colors.divider,
+                            color = dividerColor,
                             start = Offset(size.width, 0f),
                             end = Offset(size.width, size.height),
                             strokeWidth = strokeWidth,
@@ -111,12 +113,12 @@ fun ActivityStreakIndicator(
                 Icon(
                     imageVector = Icons.Default.LocalFireDepartment,
                     contentDescription = null,
-                    tint = colors.achievementGold,
+                    tint = AchievementColors.Gold,
                     modifier = Modifier
                         .size(28.dp)
                         .drawBehind {
                             drawCircle(
-                                color = colors.achievementGold.copy(alpha = 0.25f),
+                                color = AchievementColors.Gold.copy(alpha = 0.25f),
                                 radius = size.width * 0.7f,
                             )
                         },
@@ -127,14 +129,14 @@ fun ActivityStreakIndicator(
                         text = "$currentStreak",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = colors.textPrimary,
+                        color = MaterialTheme.colorScheme.onBackground,
                         letterSpacing = 0.5.sp,
                     )
                     Text(
                         text = stringResource(AYMR.strings.achievement_days_unit).uppercase(),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
-                        color = colors.textSecondary.copy(alpha = 0.6f),
+                        color = achievementLabelColor(),
                         letterSpacing = 1.sp,
                     )
                 }
@@ -156,8 +158,8 @@ fun ActivityStreakIndicator(
                                 .height(32.dp)
                                 .widthIn(min = 32.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(colors.accent.copy(alpha = 0.15f))
-                                .border(1.dp, colors.accent.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
                                 .padding(horizontal = 8.dp),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -165,13 +167,13 @@ fun ActivityStreakIndicator(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .scale(pulseScale)
-                                    .border(1.dp, colors.accent.copy(alpha = pulseAlpha), RoundedCornerShape(16.dp)),
+                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha), RoundedCornerShape(16.dp)),
                             )
                             Text(
                                 text = stringResource(MR.strings.relative_time_today).uppercase(),
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = colors.accent,
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
                     } else {
@@ -186,14 +188,14 @@ fun ActivityStreakIndicator(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(colors.accent.copy(alpha = 0.12f))
-                                    .border(1.dp, colors.accent.copy(alpha = 0.3f), CircleShape),
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
-                                    tint = colors.accent,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp),
                                 )
                             }
@@ -206,15 +208,15 @@ fun ActivityStreakIndicator(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(colors.divider.copy(alpha = 0.3f))
-                                    .border(1.dp, colors.divider, CircleShape),
+                                    .background(achievementInactiveBarColor())
+                                    .border(1.dp, achievementInactiveBarColor(), CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = dayName,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = colors.textSecondary.copy(alpha = 0.4f),
+                                    color = achievementLabelColor(),
                                 )
                             }
                         }

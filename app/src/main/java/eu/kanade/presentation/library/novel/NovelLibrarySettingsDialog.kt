@@ -23,7 +23,7 @@ import eu.kanade.presentation.components.TabbedDialogPaddings
 import eu.kanade.tachiyomi.ui.library.novel.NovelLibrarySettingsScreenModel
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.preference.TriState
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.novel.model.NovelLibrarySort
 import tachiyomi.domain.library.novel.model.sort
@@ -44,7 +44,7 @@ import tachiyomi.presentation.core.util.collectAsState
 fun NovelLibrarySettingsDialog(
     onDismissRequest: () -> Unit,
     screenModel: NovelLibrarySettingsScreenModel,
-    category: Category?,
+    collection: Collection?,
 ) {
     TabbedDialog(
         onDismissRequest = onDismissRequest,
@@ -61,7 +61,7 @@ fun NovelLibrarySettingsDialog(
         ) {
             when (page) {
                 0 -> FilterPage(screenModel = screenModel)
-                1 -> SortPage(category = category, screenModel = screenModel)
+                1 -> SortPage(collection = collection, screenModel = screenModel)
                 2 -> DisplayPage(screenModel = screenModel)
             }
         }
@@ -113,11 +113,11 @@ private fun ColumnScope.FilterPage(
 
 @Composable
 private fun ColumnScope.SortPage(
-    category: Category?,
+    collection: Collection?,
     screenModel: NovelLibrarySettingsScreenModel,
 ) {
-    val sortingMode = category?.sort?.type ?: NovelLibrarySort.Type.Alphabetical
-    val sortDescending = !(category?.sort?.isAscending ?: true)
+    val sortingMode = collection?.sort?.type ?: NovelLibrarySort.Type.Alphabetical
+    val sortDescending = !(collection?.sort?.isAscending ?: true)
 
     val options = remember {
         listOfNotNull(
@@ -140,7 +140,7 @@ private fun ColumnScope.SortPage(
                 icon = Icons.Default.Refresh
                     .takeIf { sortingMode == NovelLibrarySort.Type.Random },
                 onClick = {
-                    screenModel.setSort(category, mode, NovelLibrarySort.Direction.Ascending)
+                    screenModel.setSort(collection, mode, NovelLibrarySort.Direction.Ascending)
                 },
             )
             return@map
@@ -162,7 +162,7 @@ private fun ColumnScope.SortPage(
                         NovelLibrarySort.Direction.Ascending
                     }
                 }
-                screenModel.setSort(category, mode, direction)
+                screenModel.setSort(collection, mode, direction)
             },
         )
     }
@@ -253,10 +253,10 @@ private fun ColumnScope.DisplayPage(
     HeadingItem(MR.strings.tabs_header)
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_tabs),
-        pref = screenModel.libraryPreferences.categoryTabs(),
+        pref = screenModel.libraryPreferences.collectionTabs(),
     )
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_number_of_items),
-        pref = screenModel.libraryPreferences.categoryNumberOfItems(),
+        pref = screenModel.libraryPreferences.collectionNumberOfItems(),
     )
 }

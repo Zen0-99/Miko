@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -38,8 +39,9 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
-import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.collection.components.ChangeCollectionDialog
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBar
 import eu.kanade.presentation.components.useSharedTopBarWithSearch
@@ -54,7 +56,7 @@ import tachiyomi.presentation.core.theme.active
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
@@ -67,7 +69,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.library.anime.LibraryAnime
@@ -117,13 +119,8 @@ data object AnimeLibraryTab : Tab {
 
         val snackbarHostState = remember { SnackbarHostState() }
 
-        val onClickRefresh: (Category?) -> Boolean = { category ->
-            val started = AnimeLibraryUpdateJob.startNow(context, category)
-            scope.launch {
-                val msgRes = if (started) MR.strings.updating_category else MR.strings.update_already_running
-                snackbarHostState.showSnackbar(context.stringResource(msgRes))
-            }
-            started
+        val onClickRefresh: (Collection?) -> Boolean = { collection ->
+            AnimeLibraryUpdateJob.startNow(context, collection)
         }
 
         suspend fun openEpisode(episode: Episode) {
@@ -137,8 +134,8 @@ data object AnimeLibraryTab : Tab {
         // Register with shared top bar
         val title = state.getToolbarTitle(
             defaultTitle = defaultTitle,
-            defaultCategoryTitle = stringResource(MR.strings.label_default),
-            page = screenModel.activeCategoryIndex,
+            defaultCollectionTitle = stringResource(MR.strings.label_default),
+            page = screenModel.activeCollectionIndex,
         )
         if (state.selectionMode) {
             useSharedTopBar(
@@ -147,12 +144,12 @@ data object AnimeLibraryTab : Tab {
                     AppBar.Action(
                         title = stringResource(MR.strings.action_select_all),
                         icon = Icons.Outlined.SelectAll,
-                        onClick = { screenModel.selectAll(screenModel.activeCategoryIndex) },
+                        onClick = { screenModel.selectAll(screenModel.activeCollectionIndex) },
                     ),
                     AppBar.Action(
                         title = stringResource(MR.strings.action_select_inverse),
                         icon = Icons.Outlined.FlipToBack,
-                        onClick = { screenModel.invertSelection(screenModel.activeCategoryIndex) },
+                        onClick = { screenModel.invertSelection(screenModel.activeCollectionIndex) },
                     ),
                 ),
                 navigateUp = screenModel::clearSelection,
@@ -170,14 +167,14 @@ data object AnimeLibraryTab : Tab {
                     onClick = { onClickRefresh(null) },
                 ))
                 add(AppBar.OverflowAction(
-                    title = stringResource(MR.strings.action_update_category),
-                    onClick = { onClickRefresh(state.categories[screenModel.activeCategoryIndex]) },
+                    title = stringResource(MR.strings.action_update_collection),
+                    onClick = { onClickRefresh(state.collections[screenModel.activeCollectionIndex]) },
                 ))
                 add(AppBar.OverflowAction(
                     title = stringResource(MR.strings.action_open_random_manga),
                     onClick = {
                         scope.launch {
-                            val randomItem = screenModel.getRandomAnimelibItemForCurrentCategory()
+                            val randomItem = screenModel.getRandomAnimelibItemForCurrentCollection()
                             if (randomItem != null) {
                                 navigator.push(AnimeScreen(randomItem.libraryAnime.anime.id))
                             } else {
@@ -194,6 +191,7 @@ data object AnimeLibraryTab : Tab {
                 title = title.text,
                 actions = libraryActions,
                 searchEnabled = true,
+                searchPlaceholderText = stringResource(MR.strings.search_hint_library),
                 searchQuery = state.searchQuery,
                 onSearchQueryChange = { query ->
                     if (query == null) {
@@ -206,11 +204,12 @@ data object AnimeLibraryTab : Tab {
         }
 
         Scaffold(
+            containerColor = Color.Transparent,
             topBar = {},
             bottomBar = {
                 LibraryBottomActionMenu(
                     visible = state.selectionMode,
-                    onChangeCategoryClicked = screenModel::openChangeCategoryDialog,
+                    onChangeCollectionClicked = screenModel::openChangeCollectionDialog,
                     onMarkAsViewedClicked = { screenModel.markSeenSelection(true) },
                     onMarkAsUnviewedClicked = { screenModel.markSeenSelection(false) },
                     onDownloadClicked = screenModel::runDownloadActionSelection
@@ -220,18 +219,14 @@ data object AnimeLibraryTab : Tab {
                 )
             },
             snackbarHost = {
-                SnackbarHost(
-                    hostState = snackbarHostState,
-                    modifier = Modifier
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = 86.dp),
-                )
+                AchievementStyledSnackbarHost(hostState = snackbarHostState)
             },
         ) { contentPadding ->
-            val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
-                ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            val hostPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+            val hostTop = hostPadding?.calculateTopPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            val hostBottom = hostPadding?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
             val resolvedContentPadding = androidx.compose.foundation.layout.PaddingValues(
-                top = contentPadding.calculateTopPadding(),
+                top = contentPadding.calculateTopPadding() + hostTop,
                 bottom = contentPadding.calculateBottomPadding() + hostBottom,
             )
             when {
@@ -252,14 +247,14 @@ data object AnimeLibraryTab : Tab {
                 }
                 else -> {
                     AnimeLibraryContent(
-                        categories = state.categories,
+                        collections = state.collections,
                         searchQuery = state.searchQuery,
                         selection = state.selection,
                         contentPadding = resolvedContentPadding,
-                        currentPage = { screenModel.activeCategoryIndex },
+                        currentPage = { screenModel.activeCollectionIndex },
                         hasActiveFilters = state.hasActiveFilters,
-                        showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
-                        onChangeCurrentPage = { screenModel.activeCategoryIndex = it },
+                        showPageTabs = state.showCollectionTabs || !state.searchQuery.isNullOrEmpty(),
+                        onChangeCurrentPage = { screenModel.activeCollectionIndex = it },
                         onAnimeClicked = { navigator.push(AnimeScreen(it)) },
                         onContinueWatchingClicked = { it: LibraryAnime ->
                             scope.launchIO {
@@ -279,7 +274,7 @@ data object AnimeLibraryTab : Tab {
                                 GlobalAnimeSearchScreen(screenModel.state.value.searchQuery ?: ""),
                             )
                         },
-                        getNumberOfAnimeForCategory = { state.getAnimeCountForCategory(it) },
+                        getNumberOfAnimeForCollection = { state.getAnimeCountForCollection(it) },
                         getDisplayMode = { screenModel.getDisplayMode() },
                         getColumnsForOrientation = {
                             screenModel.getColumnsPreferenceForCurrentOrientation(
@@ -294,28 +289,28 @@ data object AnimeLibraryTab : Tab {
         val onDismissRequest = screenModel::closeDialog
         when (val dialog = state.dialog) {
             is AnimeLibraryScreenModel.Dialog.SettingsSheet -> run {
-                val category = state.categories.getOrNull(screenModel.activeCategoryIndex)
-                if (category == null) {
+                val collection = state.collections.getOrNull(screenModel.activeCollectionIndex)
+                if (collection == null) {
                     onDismissRequest()
                     return@run
                 }
                 AnimeLibrarySettingsDialog(
                     onDismissRequest = onDismissRequest,
                     screenModel = settingsScreenModel,
-                    category = category,
+                    collection = collection,
                 )
             }
-            is AnimeLibraryScreenModel.Dialog.ChangeCategory -> {
-                ChangeCategoryDialog(
+            is AnimeLibraryScreenModel.Dialog.ChangeCollection -> {
+                ChangeCollectionDialog(
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
-                    onEditCategories = {
+                    onEditCollections = {
                         screenModel.clearSelection()
-                        navigator.push(CategoriesTab)
+                        navigator.push(CollectionsTab)
                     },
                     onConfirm = { include, exclude ->
                         screenModel.clearSelection()
-                        screenModel.setAnimeCategories(dialog.anime, include, exclude)
+                        screenModel.setAnimeCollections(dialog.anime, include, exclude)
                     },
                 )
             }

@@ -39,9 +39,9 @@ import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.manga.interactor.GetMangaCategories
-import tachiyomi.domain.category.manga.interactor.SetMangaCategories
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
+import tachiyomi.domain.collection.manga.interactor.SetMangaCollections
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
@@ -69,8 +69,8 @@ class BrowseMangaSourceScreenModel(
     private val coverCache: MangaCoverCache = Injekt.get(),
     private val getRemoteManga: GetRemoteManga = Injekt.get(),
     private val getDuplicateLibraryManga: GetDuplicateLibraryManga = Injekt.get(),
-    private val getCategories: GetMangaCategories = Injekt.get(),
-    private val setMangaCategories: SetMangaCategories = Injekt.get(),
+    private val getCollections: GetMangaCollections = Injekt.get(),
+    private val setMangaCollections: SetMangaCollections = Injekt.get(),
     private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val networkToLocalManga: NetworkToLocalManga = Injekt.get(),
@@ -266,32 +266,32 @@ class BrowseMangaSourceScreenModel(
 
     fun addFavorite(manga: Manga) {
         screenModelScope.launch {
-            val categories = getCategories()
-            val defaultCategoryId = libraryPreferences.defaultMangaCategory().get()
-            val defaultCategory = categories.find { it.id == defaultCategoryId.toLong() }
+            val collections = getCollections()
+            val defaultCollectionId = libraryPreferences.defaultMangaCollection().get()
+            val defaultCollection = collections.find { it.id == defaultCollectionId.toLong() }
 
             when {
-                // Default category set
-                defaultCategory != null -> {
-                    moveMangaToCategories(manga, defaultCategory)
+                // Default collection set
+                defaultCollection != null -> {
+                    moveMangaToCollections(manga, defaultCollection)
 
                     changeMangaFavorite(manga)
                 }
 
-                // Automatic 'Default' or no categories
-                defaultCategoryId == 0 || categories.isEmpty() -> {
-                    moveMangaToCategories(manga)
+                // Automatic 'Default' or no collections
+                defaultCollectionId == 0 || collections.isEmpty() -> {
+                    moveMangaToCollections(manga)
 
                     changeMangaFavorite(manga)
                 }
 
-                // Choose a category
+                // Choose a collection
                 else -> {
-                    val preselectedIds = getCategories.await(manga.id).map { it.id }
+                    val preselectedIds = getCollections.await(manga.id).map { it.id }
                     setDialog(
-                        Dialog.ChangeMangaCategory(
+                        Dialog.ChangeMangaCollection(
                             manga,
-                            categories.mapAsCheckboxState { it.id in preselectedIds }.toImmutableList(),
+                            collections.mapAsCheckboxState { it.id in preselectedIds }.toImmutableList(),
                         ),
                     )
                 }
@@ -300,14 +300,14 @@ class BrowseMangaSourceScreenModel(
     }
 
     /**
-     * Get user categories.
+     * Get user collections.
      *
-     * @return List of categories, not including the default category
+     * @return List of collections, not including the default collection
      */
-    suspend fun getCategories(): List<Category> {
-        return getCategories.subscribe()
+    suspend fun getCollections(): List<Collection> {
+        return getCollections.subscribe()
             .firstOrNull()
-            ?.filterNot { it.isSystemCategory }
+            ?.filterNot { it.isSystemCollection }
             .orEmpty()
     }
 
@@ -315,15 +315,15 @@ class BrowseMangaSourceScreenModel(
         return getDuplicateLibraryManga.await(manga).getOrNull(0)
     }
 
-    private fun moveMangaToCategories(manga: Manga, vararg categories: Category) {
-        moveMangaToCategories(manga, categories.filter { it.id != 0L }.map { it.id })
+    private fun moveMangaToCollections(manga: Manga, vararg collections: Collection) {
+        moveMangaToCollections(manga, collections.filter { it.id != 0L }.map { it.id })
     }
 
-    fun moveMangaToCategories(manga: Manga, categoryIds: List<Long>) {
+    fun moveMangaToCollections(manga: Manga, collectionIds: List<Long>) {
         screenModelScope.launchIO {
-            setMangaCategories.await(
+            setMangaCollections.await(
                 mangaId = manga.id,
-                categoryIds = categoryIds.toList(),
+                collectionIds = collectionIds.toList(),
             )
         }
     }
@@ -389,9 +389,9 @@ class BrowseMangaSourceScreenModel(
         data object SavedSearches : Dialog
         data class RemoveManga(val manga: Manga) : Dialog
         data class AddDuplicateManga(val manga: Manga, val duplicate: Manga) : Dialog
-        data class ChangeMangaCategory(
+        data class ChangeMangaCollection(
             val manga: Manga,
-            val initialSelection: ImmutableList<CheckboxState.State<Category>>,
+            val initialSelection: ImmutableList<CheckboxState.State<Collection>>,
         ) : Dialog
         data class Migrate(val newManga: Manga, val oldManga: Manga) : Dialog
     }

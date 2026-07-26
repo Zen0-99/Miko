@@ -39,10 +39,10 @@
     <string name="action_pause">Ihinto</string>
     <string name="action_view_chapters">Tingnan ang mga kabanata</string>
     <string name="action_edit_cover">I-edit ang pabalat</string>
-    <string name="action_move_category">I-set ang kategorya</string>
-    <string name="action_add_category">Magdagdag ng kategorya</string>
-    <string name="action_edit_categories">Ayusin ang kategorya</string>
-    <string name="action_rename_category">Palitan ang pangalan ng kategorya</string>
+    <string name="action_move_collection">I-set ang kategorya</string>
+    <string name="action_add_collection">Magdagdag ng kategorya</string>
+    <string name="action_edit_collections">Ayusin ang kategorya</string>
+    <string name="action_rename_collection">Palitan ang pangalan ng kategorya</string>
     <string name="action_add">Magdagdag</string>
     <string name="action_edit">Isaayos</string>
     <string name="action_disable_all">Di-paganahin lahat</string>
@@ -73,8 +73,8 @@
     <string name="track">Tina-track</string>
     <string name="chapters">Mga Kabanata</string>
     <string name="manga">Mga nilalaman ng aklatan</string>
-    <string name="categories">Kategorya</string>
-    <string name="information_empty_category">Wala ka pang kategorya. Pindutin ang plus button para gumawa ng isa para sa pag-aayos ng iyong aklatan.</string>
+    <string name="collections">Kategorya</string>
+    <string name="information_empty_collection">Wala ka pang kategorya. Pindutin ang plus button para gumawa ng isa para sa pag-aayos ng iyong aklatan.</string>
     <string name="information_empty_library">Walang laman ang iyong aklatan</string>
     <string name="information_no_recent_manga">Walang binasa kamakailan</string>
     <string name="information_no_recent">Walang kamakailang update</string>
@@ -193,8 +193,8 @@
     <string name="ext_update">I-update</string>
     <string name="ext_updates_pending">Nakabinbin ang mga update</string>
     <string name="all">Lahat</string>
-    <string name="default_category_summary">Palaging tanungin</string>
-    <string name="default_category">Default na kategorya</string>
+    <string name="default_collection_summary">Palaging tanungin</string>
+    <string name="default_collection">Default na kategorya</string>
     <string name="pref_library_update_refresh_metadata_summary">Maghanap ng mga bagong pabalat at detalye kapag nag-a-update ng aklatan</string>
     <string name="pref_library_update_refresh_metadata">Awtomatikong i-refresh ang metadata</string>
     <string name="pref_update_only_non_completed">Laktawan ang mga entry na may katayuang \"Nakumpleto\"</string>
@@ -295,8 +295,8 @@
     <string name="picture_saved">Na-save na ang larawan</string>
     <string name="dialog_with_checkbox_reset">I-reset ang lahat ng kabanata sa entry na ito</string>
     <string name="dialog_with_checkbox_remove_description">Tatanggalin nito ang petsa ng pagbasa sa kabanatang ito. Sigurado ka ba?</string>
-    <string name="snack_categories_deleted">Binura na ang mga kategorya</string>
-    <string name="error_category_exists">Mayroong kapangalan ang kategoryang ito!</string>
+    <string name="snack_collections_deleted">Binura na ang mga kategorya</string>
+    <string name="error_collection_exists">Mayroong kapangalan ang kategoryang ito!</string>
     <string name="track_type">Uri</string>
     <string name="track_status">Estado</string>
     <string name="status">Estado</string>
@@ -352,7 +352,7 @@
     <string name="no_results_found">Walang nakitang resulta</string>
     <string name="no_more_results">Wala na\'ng resulta</string>
     <string name="tabs_header">Mga Tab</string>
-    <string name="updating_category">Ina-update ang kategorya</string>
+    <string name="updating_collection">Ina-update ang kategorya</string>
     <string name="unknown_error">Di matukoy na error</string>
     <string name="logout_success">Naka-logout ka na</string>
     <string name="logout">Mag-logout</string>
@@ -453,7 +453,7 @@
     <string name="pref_dual_page_invert">Baligtarin ang paghahati sa pahina</string>
     <string name="backup_restore_content_full">Kailangan mong i-install muli ang mga nawawalang extension at mag-login muli sa mga tracker pagkatapos para magamit ang mga ito.</string>
     <string name="pref_dns_over_https">DNS kesa HTTPS (DoH)</string>
-    <string name="pref_download_new_categories_details">Ang mga entry sa mga ibinukod na kategorya ay hindi mada-download kahit na sila ay kasama rin sa mga kategoryang kasama.</string>
+    <string name="pref_download_new_collections_details">Ang mga entry sa mga ibinukod na kategorya ay hindi mada-download kahit na sila ay kasama rin sa mga kategoryang kasama.</string>
     <string name="pref_category_auto_download">Awtomatikong pag-download</string>
     <string name="nav_zone_right">Kanan</string>
     <string name="nav_zone_left">Kaliwa</string>
@@ -464,7 +464,7 @@
     <string name="exclude">Di-isali: %s</string>
     <string name="include">Kasali ang: %s</string>
     <string name="none">Wala</string>
-    <string name="pref_library_update_categories_details">Hindi ia-update ang mga entry na nasa mga di kasamang kategorya kahit na nasa mga kasamang kategorya rin sila.</string>
+    <string name="pref_library_update_collections_details">Hindi ia-update ang mga entry na nasa mga di kasamang kategorya kahit na nasa mga kasamang kategorya rin sila.</string>
     <string name="action_sort_chapter_fetch_date">Petsa ng pagkuha ng kabanata</string>
     <string name="action_show_errors">I-tap para makita ang detalye</string>
     <string name="update_check_eol">Di na suportado ang bersyong ito ng Android</string>
@@ -494,8 +494,8 @@
     <string name="off">Naka-off</string>
     <string name="on">Naka-on</string>
     <string name="action_display_local_badge">Lokal na source</string>
-    <string name="categorized_display_settings">Mga setting ng bawat kategorya para sa pagbubukod-bukod</string>
-    <string name="information_empty_category_dialog">Wala ka pang kategorya.</string>
+    <string name="per_collection_display_settings">Mga setting ng bawat kategorya para sa pagbubukod-bukod</string>
+    <string name="information_empty_collection_dialog">Wala ka pang kategorya.</string>
     <string name="tracking_guide">Gabay sa pag-track</string>
     <string name="action_start_downloading_now">Simulan ang pag-download ngayon</string>
     <string name="about_dont_kill_my_app">May dagdag na mga restriksyon sa app ang ilang mga modelo ng phone na pumapatay sa mga serbisyo sa background. May impormasyon sa site na ito para maayos ang naturang problema.</string>
@@ -527,7 +527,7 @@
     <string name="getting_started_guide">Gabay sa Pagsisimula</string>
     <string name="pref_tablet_ui_mode">Pang-tablet na UI</string>
     <string name="help_translate">Tumulong sa pagsalin</string>
-    <string name="pref_remove_exclude_categories">Mga hindi kasamang kategorya</string>
+    <string name="pref_remove_exclude_collections">Mga hindi kasamang kategorya</string>
     <string name="ext_app_info">Tungkol sa app</string>
     <string name="ext_installer_shizuku_unavailable_dialog">I-Install at buksan ang Shizuku para magamit ito bilang taga-install ng extension.</string>
     <string name="ext_installer_shizuku_stopped">Di tumatakbo ang Shizuku</string>
@@ -603,9 +603,9 @@
     <string name="pref_app_language">Wika ng app</string>
     <string name="theme_lavender">Lila</string>
     <string name="description_placeholder">Walang paglalarawan</string>
-    <string name="delete_category">Burahin ang kategorya</string>
+    <string name="delete_collection">Burahin ang kategorya</string>
     <string name="internal_error">InternalError: Tingnan ang mga crash log para sa karagdagang impormasyon</string>
-    <string name="delete_category_confirmation">Gusto mo bang burahin ang kategoryang \"%s\"?</string>
+    <string name="delete_collection_confirmation">Gusto mo bang burahin ang kategoryang \"%s\"?</string>
     <string name="pref_reset_user_agent_string">I-reset ang default na string ng user agent</string>
     <string name="pref_user_agent_string">Default na string ng user agent</string>
     <string name="action_remove_everything">Burahin lahat</string>
@@ -667,7 +667,7 @@
     <string name="label_read_duration">Tagal ng binasa</string>
     <string name="label_tracked_titles">Mga na-track na entry</string>
     <string name="pref_library_update_show_tab_badge">Ipakita ang bilang ng di pa nababasa sa Bago na icon</string>
-    <string name="information_no_manga_category">Walang laman ang kategoryang ito</string>
+    <string name="information_no_manga_collection">Walang laman ang kategoryang ito</string>
     <string name="action_not_now">Hindi muna ngayon</string>
     <string name="not_applicable">N/A</string>
     <string name="label_stats">Istatistika</string>
@@ -685,7 +685,7 @@
     <string name="seconds_short">%ds</string>
     <string name="action_copy_to_clipboard">Kopyahin sa clipboard</string>
     <string name="pref_hide_in_library_items">Itago ang mga entry na nasa aklatan na</string>
-    <string name="action_update_category">I-update ang kategorya</string>
+    <string name="action_update_collection">I-update ang kategorya</string>
     <string name="pref_page_rotate">I-rotate ang malalawak na pahina upang magkasya</string>
     <string name="pref_page_rotate_invert">I-flip ang oryentasyon ng mga pinaikot na malalawak na pahina</string>
     <string name="overlay_header">Nakapatong (Overlay)</string>

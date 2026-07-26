@@ -40,8 +40,8 @@
     <string name="picture_saved">عکس ذخیره شد</string>
     <string name="dialog_with_checkbox_reset">ریست اطلاعات همه قسمت های این مانگا</string>
     <string name="dialog_with_checkbox_remove_description">با این کار تاریخ خواندن این قسمت حذف می شود. مطمئنید؟</string>
-    <string name="snack_categories_deleted">دسته بندی ها حذف شدند</string>
-    <string name="error_category_exists">دسته بندی با این نام قبلا ساخته شده است!</string>
+    <string name="snack_collections_deleted">دسته بندی ها حذف شدند</string>
+    <string name="error_collection_exists">دسته بندی با این نام قبلا ساخته شده است!</string>
     <string name="track_type">نوع</string>
     <string name="track_status">وضعیت</string>
     <string name="status">وضعیت</string>
@@ -85,8 +85,8 @@
     <string name="filter_mode_darken">Burn / Darken</string>
     <string name="filter_mode_lighten">Dodge / Lighten</string>
     <string name="update_12hour">هر ۱۲ ساعت یکبار</string>
-    <string name="action_move_category">انتخاب دسته بندی</string>
-    <string name="information_empty_category">هیچ دسته بندی وجود ندارد. با زدن دکمه به علاوه دسته بندی جدیدی بسازید.</string>
+    <string name="action_move_collection">انتخاب دسته بندی</string>
+    <string name="information_empty_collection">هیچ دسته بندی وجود ندارد. با زدن دکمه به علاوه دسته بندی جدیدی بسازید.</string>
     <string name="information_empty_library">کتابخانه شما خالی است</string>
     <string name="information_no_recent_manga">هیچ چیز مانگاای به تازگی خوانده شده</string>
     <string name="information_no_recent">هیچ قسمت جدیدی یافت نشد</string>
@@ -224,8 +224,8 @@
     <string name="ext_update">آپدیت</string>
     <string name="ext_updates_pending">آپدیت‌های در انتظار</string>
     <string name="all">همه</string>
-    <string name="default_category_summary">همیشه بپرس</string>
-    <string name="default_category">دسته بندی پیشفرض</string>
+    <string name="default_collection_summary">همیشه بپرس</string>
+    <string name="default_collection">دسته بندی پیشفرض</string>
     <string name="pref_library_update_refresh_metadata_summary">هنگام آپدیت عکس روی جلد و اطلاعات مانگا ها (در صورت تغییر) آپدیت شوند</string>
     <string name="pref_library_update_refresh_metadata">متادیتا فقط به صورت خودکار آپدیت شود</string>
     <string name="pref_update_only_non_completed">با وضعیت \"کامل‌شده\"</string>
@@ -301,7 +301,7 @@
     <string name="action_previous_chapter">قسمت قبل</string>
     <string name="action_pause">مکث</string>
     <string name="action_view_chapters">مشاهده قسمت ها</string>
-    <string name="updating_category">درحال به روز رسانی دسته بندی ها</string>
+    <string name="updating_collection">درحال به روز رسانی دسته بندی ها</string>
     <string name="unknown_error">خطای ناشناخته</string>
     <string name="logout_success">شما خارج شدید</string>
     <string name="logout">خروج</string>
@@ -351,9 +351,9 @@
     <string name="invalid_backup_file">فایل پشتیبان نامعتبر است</string>
     <string name="backup_created">نسخه پشتیبان ایجاد شد</string>
     <string name="action_edit_cover">ویرایش عکس روی جلد</string>
-    <string name="action_rename_category">تغییر نام دسته</string>
-    <string name="action_edit_categories">ویرایش دسته ها</string>
-    <string name="action_add_category">افزودن دسته</string>
+    <string name="action_rename_collection">تغییر نام دسته</string>
+    <string name="action_edit_collections">ویرایش دسته ها</string>
+    <string name="action_add_collection">افزودن دسته</string>
     <string name="action_add">افزودن</string>
     <string name="action_edit">ویرایش</string>
     <string name="action_disable_all">غیر فعال کردن همه</string>
@@ -382,7 +382,7 @@
     <string name="history">تاریخچه</string>
     <string name="chapters">قسمت ها</string>
     <string name="manga">کتابخانه ورودی‌ها</string>
-    <string name="categories">دسته بندی ها</string>
+    <string name="collections">دسته بندی ها</string>
     <string name="channel_errors">خطاها</string>
     <string name="channel_complete">تکمیل شده</string>
     <string name="channel_progress">پیشرفت</string>
@@ -454,7 +454,7 @@
     <string name="update_check_eol">این نسخه آندروید دیگر پشتیبانی نمی‌شود</string>
     <string name="update_check_open">بازکردن در گیت هاب</string>
     <string name="getting_started_guide">راهنمای شروع</string>
-    <string name="information_empty_category_dialog">شما هنوز هیچ دسته‌بندی ندارید.</string>
+    <string name="information_empty_collection_dialog">شما هنوز هیچ دسته‌بندی ندارید.</string>
     <string name="channel_app_updates">بروزرسانی برنامه</string>
     <string name="pref_navigate_pan">هنگام ضربه زدن تصاویر را عریض کنید</string>
     <string name="pref_landscape_zoom">بزرگنمایی تصویر چشم انداز</string>
@@ -492,7 +492,7 @@
     <string name="relative_time_today">امروز</string>
     <string name="update_72hour">هر 3 روز</string>
     <string name="connected_to_wifi">فقط روی Wi-Fi</string>
-    <string name="categorized_display_settings">تنظیمات بر اساس دسته‌بندی برای ترتیب و نمایش</string>
+    <string name="per_collection_display_settings">تنظیمات بر اساس دسته‌بندی برای ترتیب و نمایش</string>
     <string name="ext_app_info">اطلاعات برنامه</string>
     <string name="pref_dual_page_invert">معکوس کردن جای دو صفحه‌ی تقسیم شده</string>
     <string name="nav_zone_next">بعدی</string>
@@ -506,7 +506,7 @@
     <string name="rotation_reverse_portrait">عمودی معکوس</string>
     <string name="pref_hide_threshold">حساسیت مخفی کردن منو هنگام بالا و پایین بردن صفحه</string>
     <string name="pref_highest">بالاترین</string>
-    <string name="pref_remove_exclude_categories">دسته‌بندی‌های محذوف</string>
+    <string name="pref_remove_exclude_collections">دسته‌بندی‌های محذوف</string>
     <string name="pref_high">بالا</string>
     <string name="pref_dual_page_split">تقسیم صفحات عریض</string>
     <string name="pref_dual_page_invert_summary">اگر محل قرارگیری صفحات عریض تقسیم شده با حالت خواندن مطابقت نداشته باشد</string>
@@ -534,7 +534,7 @@
     <string name="none">هیچ‌کدام</string>
     <string name="include">شامل: %s</string>
     <string name="exclude">بدون: %s</string>
-    <string name="pref_library_update_categories_details">ورودی هایی که در دسته‌بندی های حذف‌شده هستند، حتی اگر هم‌زمان در دسته‌بندی های مشمول باشند به‌روزرسانی نمی‌شوند.</string>
+    <string name="pref_library_update_collections_details">ورودی هایی که در دسته‌بندی های حذف‌شده هستند، حتی اگر هم‌زمان در دسته‌بندی های مشمول باشند به‌روزرسانی نمی‌شوند.</string>
     <string name="save_chapter_as_cbz">ذخیره به عنوان فایل آرشیو CBZ</string>
     <string name="publishing_finished">انتشار به پایان رسید</string>
     <string name="local_invalid_format">قالب فصل نامعتبر است</string>
@@ -545,14 +545,14 @@
     <string name="theme_tidalwave">تم جزر و مدی</string>
     <string name="pref_app_language">زبان برنامه</string>
     <string name="invalid_location">مکان نامعتبر: %s</string>
-    <string name="pref_download_new_categories_details">ورودی ها در دسته بندی های حذف شده حتی اگر در دسته بندی های در نظر گرفته شده نیز باشند، دانلود نخواهند شد.</string>
+    <string name="pref_download_new_collections_details">ورودی ها در دسته بندی های حذف شده حتی اگر در دسته بندی های در نظر گرفته شده نیز باشند، دانلود نخواهند شد.</string>
     <string name="pref_appearance_summary">قالب تم، تاریخ و زمان</string>
     <string name="pref_library_summary">دسته‌ها، به روز رسانی سراسری</string>
     <string name="pref_reader_summary">حالت خواندن، نمایش، نوار وضعیت</string>
     <string name="pref_tracking_summary">همگام سازی پیشرفت یک طرفه، همگام سازی پیشرفته</string>
     <string name="multi_lang">چند</string>
-    <string name="delete_category_confirmation">آیا می خواهید دسته \"%s\" را حذف کنید؟</string>
-    <string name="delete_category">حذف دسته</string>
+    <string name="delete_collection_confirmation">آیا می خواهید دسته \"%s\" را حذف کنید؟</string>
+    <string name="delete_collection">حذف دسته</string>
     <string name="download_ahead">بارگیری شود</string>
     <string name="auto_download_while_reading">دانلود خودکار در حین خواندن</string>
     <string name="action_search_hint">جستجو…</string>
@@ -583,7 +583,7 @@
     <string name="restore_miui_warning">پشتیبانی/بازگردانی ممکن است کار نکند اگر بهینه‌سازی MIUI غیر فعال باشد</string>
     <string name="enhanced_services_not_installed">در دسترس است اما افزونه منبع نصب نشده است: %s</string>
     <string name="backup_info">شما باید از پشتیبانی ها در جا های دیگر هم کپی داشته باشید.</string>
-    <string name="action_update_category">بروزرسانی دسته بندی</string>
+    <string name="action_update_collection">بروزرسانی دسته بندی</string>
     <string name="action_copy_to_clipboard">کپی کردن به کلیپ‌برد</string>
     <string name="on_hiatus">متوقف شده</string>
     <string name="unlock_app_title">باز گشایی %s</string>

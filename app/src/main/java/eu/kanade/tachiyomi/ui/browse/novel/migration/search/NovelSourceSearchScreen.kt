@@ -15,6 +15,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifNovelSourcesLoaded
 import eu.kanade.presentation.components.SearchToolbar
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreenModel
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
@@ -56,7 +57,7 @@ data class NovelSourceSearchScreen(
                 )
             },
             floatingActionButton = {},
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
             val openMigrateDialog: (Novel) -> Unit = {
                 screenModel.setDialog(BrowseNovelSourceScreenModel.Dialog.Migrate(newNovel = it, oldNovel = oldNovel))

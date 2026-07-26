@@ -1,6 +1,6 @@
 package tachiyomi.domain.library.anime.model
 
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.model.FlagWithMask
 import tachiyomi.domain.library.model.plus
 
@@ -141,5 +141,5 @@ data class AnimeLibrarySort(
     }
 }
 
-val Category?.sort: AnimeLibrarySort
+val Collection?.sort: AnimeLibrarySort
     get() = AnimeLibrarySort.valueOf(this?.flags)

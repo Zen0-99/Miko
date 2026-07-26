@@ -20,7 +20,7 @@
         <item quantity="one">কাইলৈ</item>
         <item quantity="other">%1$d দিনত</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d শিতান</item>
         <item quantity="other">%d শিতানসমূহ</item>
     </plurals>

@@ -15,9 +15,9 @@
         <item quantity="other">In %1$d days</item>
     </plurals>
 
-    <plurals name="num_categories">
-        <item quantity="one">%d category</item>
-        <item quantity="other">%d categories</item>
+    <plurals name="num_collections">
+        <item quantity="one">%d collection</item>
+        <item quantity="other">%d collections</item>
     </plurals>
 
     <plurals name="next_unread_chapters">

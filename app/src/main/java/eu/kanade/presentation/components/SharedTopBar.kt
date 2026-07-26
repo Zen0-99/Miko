@@ -28,6 +28,8 @@ class SharedTopBarState {
     var navigateUp by mutableStateOf<(() -> Unit)?>(null)
 
     // Search state
+    /** Whether this tab supports search at all. If false, no search icon or tappable area. */
+    var searchAvailable by mutableStateOf(false)
     var searchEnabled by mutableStateOf(false)
     var searchQuery by mutableStateOf<String?>(null)
     var onSearchQueryChange by mutableStateOf<(String?) -> Unit>({ })
@@ -40,6 +42,7 @@ class SharedTopBarState {
      * so stale search state from a previous tab doesn't leak.
      */
     fun resetSearch() {
+        searchAvailable = false
         searchEnabled = false
         searchQuery = null
         onSearchQueryChange = { }
@@ -67,6 +70,7 @@ fun useSharedTopBar(
         it.actions = actions
         it.navigateUp = navigateUp
         // Clear search state so it doesn't leak from a previous tab that had search
+        it.searchAvailable = false
         it.searchEnabled = false
         it.searchQuery = null
         it.onSearchQueryChange = { }
@@ -103,6 +107,7 @@ fun useSharedTopBarWithSearch(
         it.title = title
         it.actions = actions
         it.navigateUp = navigateUp
+        it.searchAvailable = true
         it.searchEnabled = searchEnabled
         // Only sync from external source if different (avoids feedback loop)
         if (it.searchQuery != searchQuery) {
@@ -115,6 +120,7 @@ fun useSharedTopBarWithSearch(
         }
         it.onSearch = onSearch
         it.searchPlaceholderText = searchPlaceholderText
+        // Always update pill content — null clears any previous tab's pill
         it.searchPillContent = searchPillContent
     }
 }

@@ -79,7 +79,7 @@ fun NovelReaderTopBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = accentColor ?: MaterialTheme.colorScheme.onSurface,
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 Column(
@@ -88,14 +88,14 @@ fun NovelReaderTopBar(
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
-                        color = accentColor ?: MaterialTheme.colorScheme.onSurface,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = (accentColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -104,7 +104,7 @@ fun NovelReaderTopBar(
                     Text(
                         text = "$progressPercent%",
                         style = MaterialTheme.typography.labelMedium,
-                        color = (accentColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         modifier = Modifier.padding(end = if (estimatedReadingTime >= 0) 4.dp else 12.dp),
                     )
                 }
@@ -117,7 +117,7 @@ fun NovelReaderTopBar(
                     Text(
                         text = timeText,
                         style = MaterialTheme.typography.labelMedium,
-                        color = (accentColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(end = if (wordCount >= 0 || timeToEnd >= 0) 4.dp else 12.dp),
                     )
                 }
@@ -130,7 +130,7 @@ fun NovelReaderTopBar(
                     Text(
                         text = wordText,
                         style = MaterialTheme.typography.labelMedium,
-                        color = (accentColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(end = if (timeToEnd >= 0) 4.dp else 12.dp),
                     )
                 }
@@ -143,7 +143,7 @@ fun NovelReaderTopBar(
                     Text(
                         text = endText,
                         style = MaterialTheme.typography.labelMedium,
-                        color = (accentColor ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(end = 12.dp),
                     )
                 }
@@ -188,14 +188,14 @@ fun NovelReaderBottomBar(
                 Icon(
                     imageVector = Icons.Outlined.FormatListNumbered,
                     contentDescription = "Chapters",
-                    tint = accentColor ?: MaterialTheme.colorScheme.onSurface,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
             IconButton(onClick = onHighlightsClick) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.MenuBook,
                     contentDescription = "Highlights",
-                    tint = accentColor ?: MaterialTheme.colorScheme.onSurface,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
             if (showCommentsButton) {
@@ -203,7 +203,7 @@ fun NovelReaderBottomBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Comment,
                         contentDescription = "Comments",
-                        tint = accentColor ?: MaterialTheme.colorScheme.onSurface,
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -214,7 +214,7 @@ fun NovelReaderBottomBar(
                     tint = if (isTtsActive) {
                         accentColor ?: MaterialTheme.colorScheme.primary
                     } else {
-                        accentColor ?: MaterialTheme.colorScheme.onSurface
+                        MaterialTheme.colorScheme.onSurface
                     },
                 )
             }
@@ -222,7 +222,7 @@ fun NovelReaderBottomBar(
                 Icon(
                     imageVector = Icons.Outlined.Settings,
                     contentDescription = "Settings",
-                    tint = accentColor ?: MaterialTheme.colorScheme.onSurface,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -311,7 +311,6 @@ fun NovelPhoneInfoOverlay(
     val context = androidx.compose.ui.platform.LocalContext.current
     val textColor = when {
         backgroundColor.luminance() > 0.5f -> androidx.compose.ui.graphics.Color.Black
-        accentColor != null -> accentColor
         else -> MaterialTheme.colorScheme.onSurface
     }
 

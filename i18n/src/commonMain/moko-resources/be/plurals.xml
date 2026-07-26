@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d катэгорыя</item>
         <item quantity="few">%d катэгорыі</item>
         <item quantity="many">%d катэгорый</item>

@@ -10,7 +10,7 @@
         <item quantity="one">Pēc %1$s minūtes</item>
         <item quantity="other">Pēc %1$s minūtēm</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="zero">%d kategoriju</item>
         <item quantity="one">%d kategorija</item>
         <item quantity="other">%d kategorijas</item>

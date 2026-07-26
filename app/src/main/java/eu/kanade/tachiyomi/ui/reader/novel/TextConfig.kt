@@ -24,4 +24,10 @@ data class TextConfig(
     val textShadowBlur: Float = 0f,
     val textShadowX: Float = 0f,
     val textShadowY: Float = 0f,
+    // --- Tier 3 additive fields (rendered as Compose overlays) ---
+    val backgroundTexture: NovelReaderBackgroundTexture = NovelReaderBackgroundTexture.NONE,
+    val textureStrength: Int = 50,
+    val oledEdgeGradient: Boolean = false,
+    val pageEdgeShadowEnabled: Boolean = false,
+    val pageEdgeShadowAlpha: Float = 0.25f,
 )

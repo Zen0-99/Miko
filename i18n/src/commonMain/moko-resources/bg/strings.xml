@@ -26,10 +26,10 @@
     <string name="action_update_library">Обнови библиотеката</string>
     <string name="action_edit">Редактирай</string>
     <string name="action_add">Добави</string>
-    <string name="action_add_category">Добави категория</string>
-    <string name="action_edit_categories">Редактирай категории</string>
-    <string name="action_rename_category">Преименувай категория</string>
-    <string name="action_move_category">Запиши в категории</string>
+    <string name="action_add_collection">Добави категория</string>
+    <string name="action_edit_collections">Редактирай категории</string>
+    <string name="action_rename_collection">Преименувай категория</string>
+    <string name="action_move_collection">Запиши в категории</string>
     <string name="action_edit_cover">Промени корица</string>
     <string name="action_pause">Паузирай</string>
     <string name="action_previous_chapter">Предишна глава</string>
@@ -135,7 +135,7 @@
     <string name="login">Влез</string>
     <string name="login_success">Влязохте</string>
     <string name="unknown_error">Неизвестна грешка</string>
-    <string name="updating_category">Обновяване на категорията</string>
+    <string name="updating_collection">Обновяване на категорията</string>
     <string name="no_more_results">Няма повече резултати</string>
     <string name="ongoing">Излизаща</string>
     <string name="unknown">Неизвестно</string>
@@ -161,8 +161,8 @@
     <string name="title">Заглавие</string>
     <string name="status">Статус</string>
     <string name="chapters">Глави</string>
-    <string name="error_category_exists">Категория със същото име вече съществува!</string>
-    <string name="snack_categories_deleted">Категориите бяха изтрити</string>
+    <string name="error_collection_exists">Категория със същото име вече съществува!</string>
+    <string name="snack_collections_deleted">Категориите бяха изтрити</string>
     <string name="dialog_with_checkbox_remove_description">Това ще премахне датата на прочитане на главата. Сигурни ли сте?</string>
     <string name="dialog_with_checkbox_reset">Изчисти всички дати за тази манга</string>
     <string name="snack_add_to_library">Добавяне на мангата към библиотеката?</string>
@@ -195,7 +195,7 @@
     <string name="download_notifier_unknown_error">Получи се неочаквана грешка при изтеглянето на главата</string>
     <string name="download_notifier_text_only_wifi">Няма налична Wi-Fi връзка</string>
     <string name="download_notifier_no_network">Няма налична мрежова връзка</string>
-    <string name="categories">Категории</string>
+    <string name="collections">Категории</string>
     <string name="manga">Манга</string>
     <string name="track">Следене</string>
     <string name="history">История</string>
@@ -204,8 +204,8 @@
     <string name="action_restore">Възстанови</string>
     <string name="app_not_available">Приложението не е достъпно</string>
     <string name="update_weekly">Ежеседмично</string>
-    <string name="default_category">Категория по подразбиране</string>
-    <string name="default_category_summary">Питай всеки път</string>
+    <string name="default_collection">Категория по подразбиране</string>
+    <string name="default_collection_summary">Питай всеки път</string>
     <string name="pref_crop_borders">Изрязвай границите</string>
     <string name="pref_read_with_volume_keys_inverted">Обърнати бутони за звука</string>
     <string name="pref_create_backup">Създай резервно копие</string>
@@ -229,7 +229,7 @@
     <string name="browse">Търсене</string>
     <string name="channel_common">Общи</string>
     <string name="action_display_download_badge">Изтеглени глави</string>
-    <string name="information_empty_category">Нямате категории. Натиснете плюса, за да създадете такава и да организирате библиотеката си.</string>
+    <string name="information_empty_collection">Нямате категории. Натиснете плюса, за да създадете такава и да организирате библиотеката си.</string>
     <string name="label_migration">Мигриране</string>
     <string name="label_extensions">Разширения</string>
     <string name="label_extension_info">Информация</string>
@@ -456,7 +456,7 @@
     <string name="nav_zone_left">Ляво</string>
     <string name="nav_zone_right">Дясно</string>
     <string name="pref_high">Висока</string>
-    <string name="information_empty_category_dialog">Нямате никакви категории.</string>
+    <string name="information_empty_collection_dialog">Нямате никакви категории.</string>
     <string name="pref_dns_over_https">DNS пред HTTPS</string>
     <string name="action_sort_count">Общ брой манга</string>
     <string name="action_sort_chapter_fetch_date">Дата на получаване</string>
@@ -479,8 +479,8 @@
     <string name="theme_yinyang">Ин и Янг</string>
     <string name="theme_yotsuba">Йоцуба</string>
     <string name="restrictions">Ограничения: %s</string>
-    <string name="categorized_display_settings">Различно сортиране и показване за всяка категоря</string>
-    <string name="pref_library_update_categories_details">Манга в изключените категории няма да бъде обновявана дори ако се намира във включените категории.</string>
+    <string name="per_collection_display_settings">Различно сортиране и показване за всяка категоря</string>
+    <string name="pref_library_update_collections_details">Манга в изключените категории няма да бъде обновявана дори ако се намира във включените категории.</string>
     <string name="none">Никоя</string>
     <string name="include">Включва: %s</string>
     <string name="exclude">Изключва: %s</string>
@@ -498,9 +498,9 @@
     <string name="rotation_portrait">Портрет</string>
     <string name="pref_low">Ниска</string>
     <string name="pref_lowest">Най-ниска</string>
-    <string name="pref_remove_exclude_categories">Изключени категории</string>
+    <string name="pref_remove_exclude_collections">Изключени категории</string>
     <string name="pref_category_auto_download">Автоматично изтегляне</string>
-    <string name="pref_download_new_categories_details">Манга в изключени категории няма да бъде изтеглена, дори да се намира във включени категории.</string>
+    <string name="pref_download_new_collections_details">Манга в изключени категории няма да бъде изтеглена, дори да се намира във включени категории.</string>
     <string name="tracking_guide">Наръчник при проследяване</string>
     <string name="enhanced_services">Подобрени услуги</string>
     <string name="enhanced_tracking_info">Услуги, предлагащи подобрени особености за определени източници. Манга се проследява автоматично, щом бъде добавена към библиотеката Ви.</string>
@@ -558,7 +558,7 @@
     <string name="download_queue_size_warning">Предупреждение: големите масови изтегляния могат да доведат до забавяне на източниците и/или блокиране на Mihon. Натиснете тук, за да научите повече.</string>
     <string name="action_show_manga">Покажи манга</string>
     <string name="action_display_cover_only_grid">Решетка само с корици</string>
-    <string name="delete_category_confirmation">Искате ли да изтриете категорията \"%s\"?</string>
+    <string name="delete_collection_confirmation">Искате ли да изтриете категорията \"%s\"?</string>
     <string name="internal_error">InternalError: Провери записите за крашове за повече информация</string>
     <string name="error_saving_picture">Грешка при запазването на изображението</string>
     <string name="update_already_running">Обновява се</string>
@@ -608,7 +608,7 @@
     <string name="action_move_to_top_all_for_series">Премести поредицата най-горе</string>
     <string name="theme_lavender">Лавандула</string>
     <string name="pref_app_language">Език на приложението</string>
-    <string name="delete_category">Изтрий категория</string>
+    <string name="delete_collection">Изтрий категория</string>
     <string name="ext_info_age_rating">Възрастово ограничение</string>
     <string name="wish_list">Списък с желания</string>
     <string name="save_chapter_as_cbz">Запази като CBZ архив</string>

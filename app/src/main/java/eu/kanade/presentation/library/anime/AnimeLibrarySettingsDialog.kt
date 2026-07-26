@@ -25,7 +25,7 @@ import eu.kanade.tachiyomi.ui.library.anime.AnimeLibrarySettingsScreenModel
 import eu.kanade.tachiyomi.util.system.isReleaseBuildType
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.preference.TriState
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.anime.model.AnimeLibrarySort
 import tachiyomi.domain.library.anime.model.sort
 import tachiyomi.domain.library.model.LibraryDisplayMode
@@ -46,7 +46,7 @@ import tachiyomi.presentation.core.util.collectAsState
 fun AnimeLibrarySettingsDialog(
     onDismissRequest: () -> Unit,
     screenModel: AnimeLibrarySettingsScreenModel,
-    category: Category?,
+    collection: Collection?,
 ) {
     TabbedDialog(
         onDismissRequest = onDismissRequest,
@@ -66,7 +66,7 @@ fun AnimeLibrarySettingsDialog(
                     screenModel = screenModel,
                 )
                 1 -> SortPage(
-                    category = category,
+                    collection = collection,
                     screenModel = screenModel,
                 )
                 2 -> DisplayPage(
@@ -163,12 +163,12 @@ private fun ColumnScope.FilterPage(
 
 @Composable
 private fun ColumnScope.SortPage(
-    category: Category?,
+    collection: Collection?,
     screenModel: AnimeLibrarySettingsScreenModel,
 ) {
     val trackers by screenModel.trackersFlow.collectAsStateWithLifecycle()
-    val sortingMode = category.sort.type
-    val sortDescending = !category.sort.isAscending
+    val sortingMode = collection.sort.type
+    val sortDescending = !collection.sort.isAscending
 
     val options = remember(trackers.isEmpty()) {
         val trackerMeanPair = if (trackers.isNotEmpty()) {
@@ -198,7 +198,7 @@ private fun ColumnScope.SortPage(
                 icon = Icons.Default.Refresh
                     .takeIf { sortingMode == AnimeLibrarySort.Type.Random },
                 onClick = {
-                    screenModel.setSort(category, mode, AnimeLibrarySort.Direction.Ascending)
+                    screenModel.setSort(collection, mode, AnimeLibrarySort.Direction.Ascending)
                 },
             )
             return@map
@@ -220,7 +220,7 @@ private fun ColumnScope.SortPage(
                         AnimeLibrarySort.Direction.Ascending
                     }
                 }
-                screenModel.setSort(category, mode, direction)
+                screenModel.setSort(collection, mode, direction)
             },
         )
     }
@@ -311,10 +311,10 @@ private fun ColumnScope.DisplayPage(
     HeadingItem(MR.strings.tabs_header)
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_tabs),
-        pref = screenModel.libraryPreferences.categoryTabs(),
+        pref = screenModel.libraryPreferences.collectionTabs(),
     )
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_number_of_items),
-        pref = screenModel.libraryPreferences.categoryNumberOfItems(),
+        pref = screenModel.libraryPreferences.collectionNumberOfItems(),
     )
 }

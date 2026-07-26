@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Име</string>
-    <string name="categories">Категорије</string>
+    <string name="collections">Категорије</string>
     <string name="manga">Наслови колекције</string>
     <string name="chapters">Поглавља</string>
     <string name="track">Праћење</string>
@@ -37,10 +37,10 @@
     <string name="action_update_library">Ажурирај колекцију</string>
     <string name="action_edit">Уреди</string>
     <string name="action_add">Додај</string>
-    <string name="action_add_category">Додај категорију</string>
-    <string name="action_edit_categories">Уреди категорије</string>
-    <string name="action_rename_category">Преименуј категорију</string>
-    <string name="action_move_category">Изабери категорије</string>
+    <string name="action_add_collection">Додај категорију</string>
+    <string name="action_edit_collections">Уреди категорије</string>
+    <string name="action_rename_collection">Преименуј категорију</string>
+    <string name="action_move_collection">Изабери категорије</string>
     <string name="action_edit_cover">Промени омот</string>
     <string name="action_pause">Паузирај</string>
     <string name="action_previous_chapter">Претходно поглавље</string>
@@ -86,8 +86,8 @@
     <string name="charging">Пуњење</string>
     <string name="pref_update_only_non_completed">Прескочи уносе са статусом \"Завршено\"</string>
     <string name="pref_auto_update_manga_sync">Ажурирај пратиоца након читања</string>
-    <string name="default_category">Подразумевана категорија</string>
-    <string name="default_category_summary">Увек питај</string>
+    <string name="default_collection">Подразумевана категорија</string>
+    <string name="default_collection_summary">Увек питај</string>
     <string name="ext_update">Ажурирај</string>
     <string name="ext_install">Инсталирај</string>
     <string name="ext_pending">На чекању</string>
@@ -185,7 +185,7 @@
     <string name="login">Пријави се</string>
     <string name="login_success">Пријављени сте</string>
     <string name="unknown_error">Непозната грешка</string>
-    <string name="updating_category">Ажурирање категорије</string>
+    <string name="updating_collection">Ажурирање категорије</string>
     <string name="no_more_results">Нема више резултата</string>
     <string name="local_source">Локални извор</string>
     <string name="other_source">Остало</string>
@@ -266,7 +266,7 @@
     <string name="action_select_inverse">Изабери обрнуто</string>
     <string name="action_menu">Мени</string>
     <string name="label_downloaded_only">Само преузето</string>
-    <string name="information_empty_category">Немате категорија. Додирните дугме плус да бисте направили нову категорију за организовање колекције.</string>
+    <string name="information_empty_collection">Немате категорија. Додирните дугме плус да бисте направили нову категорију за организовање колекције.</string>
     <string name="notification_chapters_multiple">Поглавља %1$s</string>
     <string name="notification_chapters_single_and_more">Поглавље %1$s и још %2$d</string>
     <string name="notification_chapters_single">Поглавље %1$s</string>
@@ -294,8 +294,8 @@
     <string name="picture_saved">Слика је сачувана</string>
     <string name="dialog_with_checkbox_reset">Ресетуј сва поглавља овог наслова</string>
     <string name="dialog_with_checkbox_remove_description">Ово ће уклонити датум читања овог поглавља. Да ли сте сигурни да то желите?</string>
-    <string name="snack_categories_deleted">Категорије обрисане</string>
-    <string name="error_category_exists">Категорија са овим именом већ постоји!</string>
+    <string name="snack_collections_deleted">Категорије обрисане</string>
+    <string name="error_collection_exists">Категорија са овим именом већ постоји!</string>
     <string name="track_type">Врста</string>
     <string name="track_status">Статус</string>
     <string name="status">Статус</string>
@@ -494,13 +494,13 @@
     <string name="chapter_settings">Подешавања поглавља</string>
     <string name="relative_time_today">Данас</string>
     <string name="nav_zone_left">Лево</string>
-    <string name="information_empty_category_dialog">Још немате категорија.</string>
+    <string name="information_empty_collection_dialog">Још немате категорија.</string>
     <string name="ext_app_info">Информације о апликацији</string>
     <string name="update_72hour">Свака 3 дана</string>
     <string name="connected_to_wifi">Само преко Wi-Fi-а</string>
     <string name="restrictions">Ограничења: %s</string>
-    <string name="categorized_display_settings">Поставке за сортирање одвојено за сваку категорију</string>
-    <string name="pref_library_update_categories_details">Наслови у искљученим категоријама се неће ажурирати иако су такође у укљученим категоријама.</string>
+    <string name="per_collection_display_settings">Поставке за сортирање одвојено за сваку категорију</string>
+    <string name="pref_library_update_collections_details">Наслови у искљученим категоријама се неће ажурирати иако су такође у укљученим категоријама.</string>
     <string name="include">Укључи: %s</string>
     <string name="exclude">Искључи: %s</string>
     <string name="ext_install_service_notif">Инсталирање додатка…</string>
@@ -532,8 +532,8 @@
     <string name="pref_lowest">Најнижа</string>
     <string name="pref_category_delete_chapters">Избриши поглавља</string>
     <string name="pref_remove_bookmarked_chapters">Дозволи брисање забележених поглавља</string>
-    <string name="pref_remove_exclude_categories">Искључене категорије</string>
-    <string name="pref_download_new_categories_details">Наслови у искљученим категоријама неће се преузимати иако су такође у укљученим категоријама.</string>
+    <string name="pref_remove_exclude_collections">Искључене категорије</string>
+    <string name="pref_download_new_collections_details">Наслови у искљученим категоријама неће се преузимати иако су такође у укљученим категоријама.</string>
     <string name="tracking_info">Једносмерна синхронизација за ажурирање броја прочитаних поглавља у пратиоцима. За појединачно праћење наслова додирни дугме за њихово праћење.</string>
     <string name="label_data">Подаци</string>
     <string name="pref_incognito_mode">Инкогнито мод</string>
@@ -654,8 +654,8 @@
     <string name="pref_invalidate_download_cache">Поништи индекс преузимања</string>
     <string name="action_sort_unread_count">Број непрочитаних</string>
     <string name="action_sort_last_manga_update">Последња провера ажурирања</string>
-    <string name="delete_category">Обриши категорију</string>
-    <string name="delete_category_confirmation">Желиш ли обрисати категорију \"%s\"?</string>
+    <string name="delete_collection">Обриши категорију</string>
+    <string name="delete_collection_confirmation">Желиш ли обрисати категорију \"%s\"?</string>
     <string name="action_remove_everything">Уклони све</string>
     <string name="crash_screen_title">Упс!</string>
     <string name="crash_screen_restart_application">Поново покрени апликацију</string>
@@ -674,7 +674,7 @@
     <string name="action_open_random_manga">Отвори насумични наслов</string>
     <string name="download_ahead_info">Ради само ако је тренутно и следеће поглавље већ преузето.</string>
     <string name="information_no_entries_found">Нема наслова у овој категорији</string>
-    <string name="information_no_manga_category">Категорија је празна</string>
+    <string name="information_no_manga_collection">Категорија је празна</string>
     <string name="error_user_agent_string_blank">Низ корисничког агента не може бити празан</string>
     <string name="pref_reset_user_agent_string">Ресетуј подразумевани низ корисничког агента</string>
     <string name="label_tracked_titles">Праћени наслови</string>
@@ -688,7 +688,7 @@
     <string name="pref_user_agent_string">Подразумеван низ корисничког агента</string>
     <string name="track_error">%1$s грешка: %2$s</string>
     <string name="information_required_plain">*неопходно</string>
-    <string name="action_update_category">Ажурирај категорију</string>
+    <string name="action_update_collection">Ажурирај категорију</string>
     <string name="pref_hide_in_library_items">Сакри уносе који се већ налазе у колекцији</string>
     <string name="overlay_header">Прекривање</string>
     <string name="split_tall_images">Растави високе слике</string>

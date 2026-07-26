@@ -111,6 +111,12 @@ class NovelChapterRepositoryImpl(
         }
     }
 
+    override suspend fun getTotalReadCharCount(): Long {
+        return handler.awaitOne {
+            novelchaptersQueries.getTotalReadCharCount()
+        }
+    }
+
     private fun mapNovelChapter(
         id: Long,
         novelId: Long,

@@ -4,7 +4,7 @@
         <item quantity="one">Pagkatapos ng %1$s minuto</item>
         <item quantity="other">Pagkatapos ng %1$s (na) minuto</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategorya</item>
         <item quantity="other">%d (na) kategorya</item>
     </plurals>

@@ -1,5 +1,11 @@
 package eu.kanade.tachiyomi.ui.home.hub
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import tachiyomi.presentation.core.util.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,12 +58,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -76,6 +86,7 @@ import kotlinx.collections.immutable.persistentListOf
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.R
 import eu.kanade.presentation.components.AppBar
@@ -98,6 +109,8 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 data object HomeHubTab : Tab {
@@ -202,13 +215,14 @@ private fun HomeHubContent(
         Scaffold(
             topBar = {},
         ) { padding ->
-            val hostBottomPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
-                ?.calculateBottomPadding() ?: 0.dp
+            val hostPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+            val hostTopPadding = hostPadding?.calculateTopPadding() ?: 0.dp
+            val hostBottomPadding = hostPadding?.calculateBottomPadding() ?: 0.dp
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 contentPadding = PaddingValues(
-                    top = padding.calculateTopPadding(),
+                    top = padding.calculateTopPadding() + hostTopPadding,
                     bottom = padding.calculateBottomPadding() + hostBottomPadding + 24.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -338,6 +352,23 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
     val navigator = LocalNavigator.currentOrThrow
     val scope = rememberCoroutineScope()
     val playerPreferences: PlayerPreferences by injectLazy()
+    val uiPreferences = remember { Injekt.get<UiPreferences>() }
+    val panEnabled by uiPreferences.heroImagePanEnabled().collectAsState()
+
+    // Slow vertical pan with eased curve — resource efficient:
+    // a single infinite float animation driving a graphicsLayer translationY.
+    val panTransition = rememberInfiniteTransition(label = "hero_pan")
+    val panOffsetDp by panTransition.animateFloat(
+        initialValue = -16f,
+        targetValue = 16f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 14000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "hero_pan_offset",
+    )
+    val density = LocalDensity.current
+    val panOffsetPx = with(density) { panOffsetDp.dp.toPx() }
 
     val progressLabel = when (hero.mediaType) {
         HomeHubMediaType.ANIME -> stringResource(AYMR.strings.home_hero_episode_progress, hero.progressNumber.toFloat())
@@ -414,13 +445,31 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
                 }
             },
     ) {
-        // Cover image fills the card
+        // Cover image — optionally pans up/down with eased animation.
+        // When panning, the image is made taller than the card so the
+        // translation doesn't reveal empty edges.
         if (hero.coverData != null) {
             AsyncImage(
                 model = hero.coverData,
                 contentDescription = hero.title,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .then(
+                        if (panEnabled) {
+                            Modifier
+                                .fillMaxWidth()
+                                // requiredHeight (not height) so the image is forced
+                                // taller than the card's content area. A plain
+                                // .height() is coerced down to the parent's max
+                                // height, leaving no room for the translation to
+                                // reveal different parts of the image — which is
+                                // why the pan appeared to do nothing.
+                                .requiredHeight(488.dp)
+                                .graphicsLayer { translationY = panOffsetPx }
+                        } else {
+                            Modifier.fillMaxSize()
+                        },
+                    ),
             )
         }
 
@@ -542,7 +591,6 @@ private fun HomeHubHeroPlaceholder() {
             .padding(horizontal = 16.dp, vertical = 14.dp)
             .clip(placeholderShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, placeholderShape)
             .padding(32.dp),
         contentAlignment = Alignment.Center,
     ) {

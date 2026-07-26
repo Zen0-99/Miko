@@ -9,7 +9,7 @@
     <string name="label_extensions">Кеңейтпе</string>
     <string name="label_extension_info">Кеңейтпе туралы</string>
     <string name="label_help">Көмек</string>
-    <string name="categories">Санат</string>
+    <string name="collections">Санат</string>
     <string name="manga">Кітапханадағы топтама</string>
     <string name="chapters">Тарауы</string>
     <string name="track">Аңду</string>
@@ -37,7 +37,7 @@
     <string name="nav_zone_left">Сол</string>
     <string name="nav_zone_right">Оң</string>
     <string name="left_to_right_viewer">Бет (солдан оңға қарай)</string>
-    <string name="information_empty_category">Санаттарыңыз жоқ. Жаңа санат жасау үшін және кітапханаңызды ұйымдастыру үшін қосу батырмасын басыңыз.</string>
+    <string name="information_empty_collection">Санаттарыңыз жоқ. Жаңа санат жасау үшін және кітапханаңызды ұйымдастыру үшін қосу батырмасын басыңыз.</string>
     <string name="nav_zone_next">Келесі</string>
     <string name="action_sort_last_manga_update">Соңғы жаңартпа тексеруі</string>
     <string name="action_sort_unread_count">Оқылмаған тарауы</string>
@@ -110,10 +110,10 @@
     <string name="action_disable_all">Түгелін өшіру</string>
     <string name="action_edit">Өңдеу</string>
     <string name="action_add">Қосу</string>
-    <string name="action_add_category">Санат қосу</string>
-    <string name="action_edit_categories">Санаттарды өңдеу</string>
-    <string name="action_rename_category">Санаттың атын өзгерту</string>
-    <string name="action_move_category">Санаттарды орнату</string>
+    <string name="action_add_collection">Санат қосу</string>
+    <string name="action_edit_collections">Санаттарды өңдеу</string>
+    <string name="action_rename_collection">Санаттың атын өзгерту</string>
+    <string name="action_move_collection">Санаттарды орнату</string>
     <string name="action_edit_cover">Мұқабасын өзгерту</string>
     <string name="action_view_chapters">Тарауларды қарау</string>
     <string name="action_pause">Тоқтату</string>
@@ -178,9 +178,9 @@
     <string name="pref_library_update_interval">Автоматты жаңартулар</string>
     <string name="action_resume">Жалғастыру</string>
     <string name="pref_app_language">Қолданба тілі</string>
-    <string name="default_category_summary">Әрқашан сұраңыз</string>
-    <string name="default_category">Әдепкі санат</string>
-    <string name="categorized_display_settings">Сұрыптау және көрсету үшін әр санат баптауы</string>
+    <string name="default_collection_summary">Әрқашан сұраңыз</string>
+    <string name="default_collection">Әдепкі санат</string>
+    <string name="per_collection_display_settings">Сұрыптау және көрсету үшін әр санат баптауы</string>
     <string name="ext_uninstall">Жою</string>
     <string name="ext_update">Жаңарту</string>
     <string name="ext_pending">Күтілуде</string>
@@ -204,7 +204,7 @@
     <string name="action_display_comfortable_grid">Ыңғайлы кесте</string>
     <string name="action_display_cover_only_grid">Атаусыз кесте</string>
     <string name="pref_library_update_refresh_metadata">Метадеректерді автоматты түрде жаңарту</string>
-    <string name="pref_library_update_categories_details">Шығарылған санаттардағы жазбалар енгізілген санаттарда болса да жаңартылмайды.</string>
+    <string name="pref_library_update_collections_details">Шығарылған санаттардағы жазбалар енгізілген санаттарда болса да жаңартылмайды.</string>
     <string name="all">Барлығы</string>
     <string name="none">Ешқайсы</string>
     <string name="exclude">Шығару: %s</string>
@@ -254,8 +254,8 @@
     <string name="pref_category_reading">Оқылуда</string>
     <string name="recent_manga_time">Тарау %1$s - %2$s</string>
     <string name="pref_skip_read_chapters">Оқылды деп белгіленген тарауларды өткізіп жіберу</string>
-    <string name="delete_category_confirmation">«%s» деген санатты жойғыңыз келеді ме?</string>
-    <string name="delete_category">Санатты жою</string>
+    <string name="delete_collection_confirmation">«%s» деген санатты жойғыңыз келеді ме?</string>
+    <string name="delete_collection">Санатты жою</string>
     <string name="internal_error">Ішкі қателік: Қосымша ақпарат алу үшін қателіктер тіркеуін тексеріңіз</string>
     <string name="theme_lavender">Лаванда</string>
     <string name="pref_skip_filtered_chapters">Сүзілген тарауларлы өткізіп жіберу</string>
@@ -284,7 +284,7 @@
     <string name="gray_background">Сұр</string>
     <string name="pref_viewer_type">Әдепкі оқу режимі</string>
     <string name="pref_highest">Ең жоғары</string>
-    <string name="pref_remove_exclude_categories">Саналмайтын санаттар</string>
+    <string name="pref_remove_exclude_collections">Саналмайтын санаттар</string>
     <string name="pref_remove_after_marked_as_read">Қолмен оқылған деп белгіленгеннен кейін</string>
     <string name="pref_remove_after_read">Оқығаннан кейін автоматты түрде жою</string>
     <string name="pref_remove_bookmarked_chapters">Бетбелгіленген тарауларды жоюға рұқсат беру</string>
@@ -333,7 +333,7 @@
     <string name="fifth_to_last">Соңғы оқылғаннан бесінші тарау</string>
     <string name="pref_category_auto_download">Авто-жүктеу</string>
     <string name="pref_download_new">Жаңа тарауларды жүктеу</string>
-    <string name="pref_download_new_categories_details">Саналмайтын санаттардағы жазбалар саналатын санаттарда болса да жүктелмейді.</string>
+    <string name="pref_download_new_collections_details">Саналмайтын санаттардағы жазбалар саналатын санаттарда болса да жүктелмейді.</string>
     <string name="enhanced_services">Күшейтілген қызметтер</string>
     <string name="multi_lang">Көптілді</string>
     <string name="tapping_inverted_horizontal">Көлденең</string>
@@ -449,7 +449,7 @@
     <string name="password">Құпиясөз</string>
     <string name="login">Кіру</string>
     <string name="logout_success">Сіз шығып кеттіңіз</string>
-    <string name="updating_category">Санатты жаңартып жатырмыз</string>
+    <string name="updating_collection">Санатты жаңартып жатырмыз</string>
     <string name="manga_from_library">Кітапханадан</string>
     <string name="no_results_found">Нәтиже жоқ</string>
     <string name="local_source">Локал дереккөз</string>
@@ -494,7 +494,7 @@
     <string name="information_webview_required">Mihon-ны қолдану үшін WebView керек</string>
     <string name="chapter_settings_updated">Әдепкі тарау параметрлері жаңартылды</string>
     <string name="download_notifier_no_network">Желі байланысы жоқ</string>
-    <string name="information_empty_category_dialog">Сіздің кітапханаңызда санаттар жоқ.</string>
+    <string name="information_empty_collection_dialog">Сіздің кітапханаңызда санаттар жоқ.</string>
     <string name="reading">Оқылуда</string>
     <string name="no_chapters_error">Тараулар жоқ</string>
     <string name="are_you_sure">Сенімдісіз бе?</string>
@@ -553,7 +553,7 @@
     <string name="show_chapter_number">Тарау нөмірі</string>
     <string name="sort_by_number">Тарау нөмірі бойынша</string>
     <string name="track_type">Түрі</string>
-    <string name="error_category_exists">Бұндай санат атауы әлдеқашан бар!</string>
+    <string name="error_collection_exists">Бұндай санат атауы әлдеқашан бар!</string>
     <string name="picture_saved">Сурет сақталды</string>
     <string name="set_as_cover">Мұқабаға қою</string>
     <string name="pref_category_for_this_series">Осы туынды үшін</string>
@@ -564,7 +564,7 @@
     <string name="confirm_set_image_as_cover">Осы суретті мұқаба ретінде қолданайық па?</string>
     <string name="show_title">Дереккөз атауы</string>
     <string name="dialog_with_checkbox_reset">Бұл жазба үшін түгел тарауларды қалпына келтіру</string>
-    <string name="snack_categories_deleted">Санаттар жойылды</string>
+    <string name="snack_collections_deleted">Санаттар жойылды</string>
     <string name="cover_updated">Мұқаба жаңартылды</string>
     <string name="skipped_reason_not_started">Оқитын тарау болмағандықтан өткізіп жіберілді</string>
     <string name="file_select_cover">Мұқаба таңдау</string>
@@ -678,7 +678,7 @@
     <string name="label_tracked_titles">Бақыланудағы жазбалар</string>
     <string name="label_tracker_section">Бақылау қызметтері</string>
     <string name="pref_library_update_show_tab_badge">Жаңартулар белгішесінде оқылмаған тараулар санын көрсету</string>
-    <string name="information_no_manga_category">Бұл санат бос</string>
+    <string name="information_no_manga_collection">Бұл санат бос</string>
     <string name="enhanced_services_not_installed">Қолжетімді, бірақ дереккөзі орнатылған жоқ: %s</string>
     <string name="copied_to_clipboard_plain">Аралық сақтағышқа көшірілді</string>
     <string name="pref_skip_dupe_chapters">Қайталанған бөлімдерді өткізіп жіберу</string>
@@ -687,7 +687,7 @@
 \nБәрібір жалғастыра бересіз бе?</string>
     <string name="track_error">%1$s қателік: %2$s</string>
     <string name="information_required_plain">*қажетті</string>
-    <string name="action_update_category">Санатты жаңарту</string>
+    <string name="action_update_collection">Санатты жаңарту</string>
     <string name="action_copy_to_clipboard">Айырбастау буферіне көшіріп алу</string>
     <string name="pref_hide_in_library_items">Кітапханада бар туындыларды жасыру</string>
     <string name="split_tall_images">Ұзын суреттерді бөлу</string>

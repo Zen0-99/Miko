@@ -25,7 +25,7 @@ fun Screen.animeStorageTab(): TabContent {
                 state = state,
                 isManga = false,
                 contentPadding = contentPadding,
-                onCategorySelected = screenModel::setSelectedCategory,
+                onCollectionSelected = screenModel::setSelectedCollection,
                 onDelete = screenModel::deleteEntry,
             )
         },

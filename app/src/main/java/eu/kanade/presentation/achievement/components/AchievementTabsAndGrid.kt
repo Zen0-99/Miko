@@ -28,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.achievement.screenmodel.AchievementScreenState
-import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -79,8 +78,7 @@ private fun AchievementGrid(
 private fun AuroraEmptyState(
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
+    val glowColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
@@ -97,7 +95,7 @@ private fun AuroraEmptyState(
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    colors.accent.copy(alpha = 0.15f),
+                                    glowColor,
                                     Color.Transparent,
                                 ),
                             ),
@@ -109,7 +107,7 @@ private fun AuroraEmptyState(
                 Icon(
                     imageVector = Icons.Default.EmojiEvents,
                     contentDescription = null,
-                    tint = colors.textSecondary.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(40.dp),
                 )
             }
@@ -120,14 +118,14 @@ private fun AuroraEmptyState(
             ) {
                 Text(
                     text = stringResource(AYMR.strings.achievement_no_achievements),
-                    color = colors.textPrimary,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp,
                 )
                 Text(
                     text = stringResource(AYMR.strings.achievement_empty_category),
-                    color = colors.textSecondary.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     fontSize = 14.sp,
                 )
             }

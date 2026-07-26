@@ -8,7 +8,7 @@
         <item quantity="one">Dje</item>
         <item quantity="other">%1$d ditë më parë</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategori</item>
         <item quantity="other">%d kategoritë</item>
     </plurals>

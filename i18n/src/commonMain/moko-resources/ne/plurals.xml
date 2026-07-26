@@ -8,7 +8,7 @@
         <item quantity="one">%1$s मिनेट पछि</item>
         <item quantity="other">%1$s मिनेट पछि</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d वर्ग</item>
         <item quantity="other">%d वर्गहरू</item>
     </plurals>

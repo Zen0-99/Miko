@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupEpisode
 import eu.kanade.tachiyomi.data.backup.models.backupAnimeTrackMapper
 import eu.kanade.tachiyomi.data.backup.models.backupEpisodeMapper
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
-import tachiyomi.domain.category.anime.interactor.GetAnimeCategories
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.history.anime.interactor.GetAnimeHistory
 import uy.kohesive.injekt.Injekt
@@ -15,7 +15,7 @@ import uy.kohesive.injekt.api.get
 
 class AnimeBackupCreator(
     private val handler: AnimeDatabaseHandler = Injekt.get(),
-    private val getCategories: GetAnimeCategories = Injekt.get(),
+    private val getCollections: GetAnimeCollections = Injekt.get(),
     private val getHistory: GetAnimeHistory = Injekt.get(),
 ) {
 
@@ -41,11 +41,11 @@ class AnimeBackupCreator(
                 ?.let { animeObject.episodes = it }
         }
 
-        if (options.categories) {
-            // Backup categories for this anime
-            val categoriesForAnime = getCategories.await(anime.id)
-            if (categoriesForAnime.isNotEmpty()) {
-                animeObject.categories = categoriesForAnime.map { it.order }
+        if (options.collections) {
+            // Backup collections for this anime
+            val collectionsForAnime = getCollections.await(anime.id)
+            if (collectionsForAnime.isNotEmpty()) {
+                animeObject.collections = collectionsForAnime.map { it.order }
             }
         }
 

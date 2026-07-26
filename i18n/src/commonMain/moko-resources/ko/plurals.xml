@@ -15,7 +15,7 @@
     <plurals name="lock_after_mins">
         <item quantity="other">%1$s분 후</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="other">항목 %d개</item>
     </plurals>
     <plurals name="num_trackers">

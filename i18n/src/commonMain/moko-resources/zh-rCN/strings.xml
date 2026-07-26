@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">名称</string>
-    <string name="categories">分类</string>
+    <string name="collections">分类</string>
     <string name="manga">书架中的作品</string>
     <string name="chapters">章节</string>
     <string name="history">历史</string>
@@ -33,10 +33,10 @@
     <string name="action_update_library">更新书架</string>
     <string name="action_edit">编辑</string>
     <string name="action_add">添加</string>
-    <string name="action_add_category">添加分类</string>
-    <string name="action_edit_categories">编辑分类</string>
-    <string name="action_rename_category">重命名分类</string>
-    <string name="action_move_category">设置分类</string>
+    <string name="action_add_collection">添加分类</string>
+    <string name="action_edit_collections">编辑分类</string>
+    <string name="action_rename_collection">重命名分类</string>
+    <string name="action_move_collection">设置分类</string>
     <string name="action_edit_cover">编辑封面</string>
     <string name="action_pause">暂停</string>
     <string name="action_previous_chapter">上一章</string>
@@ -85,8 +85,8 @@
     <string name="charging">充电时</string>
     <string name="pref_update_only_non_completed">跳过已完结的作品</string>
     <string name="pref_auto_update_manga_sync">阅读后更新进度</string>
-    <string name="default_category">默认归入分类</string>
-    <string name="default_category_summary">每次都询问</string>
+    <string name="default_collection">默认归入分类</string>
+    <string name="default_collection_summary">每次都询问</string>
     <string name="ext_update">更新</string>
     <string name="ext_install">安装</string>
     <string name="ext_pending">等待中</string>
@@ -182,7 +182,7 @@
     <string name="login">登录</string>
     <string name="login_success">已登录</string>
     <string name="unknown_error">未知错误</string>
-    <string name="updating_category">正在更新分类</string>
+    <string name="updating_collection">正在更新分类</string>
     <string name="no_more_results">没有更多结果</string>
     <string name="local_source">本地图源</string>
     <string name="other_source">其他</string>
@@ -222,8 +222,8 @@
     <string name="status">状态</string>
     <string name="track_status">状态</string>
     <string name="track_type">类型</string>
-    <string name="error_category_exists">已存在同名分类！</string>
-    <string name="snack_categories_deleted">分类已删除</string>
+    <string name="error_collection_exists">已存在同名分类！</string>
+    <string name="snack_collections_deleted">分类已删除</string>
     <string name="dialog_with_checkbox_remove_description">将会清除此章节的阅读日期，你确定吗？</string>
     <string name="dialog_with_checkbox_reset">重置此作品的所有章节</string>
     <string name="snack_add_to_library">要添加到书架吗？</string>
@@ -262,7 +262,7 @@
     <string name="information_no_recent">最近没有更新</string>
     <string name="information_no_recent_manga">最近没有阅读</string>
     <string name="information_empty_library">书架为空</string>
-    <string name="information_empty_category">尚无分类，点击加号按钮创建分类用来管理书架。</string>
+    <string name="information_empty_collection">尚无分类，点击加号按钮创建分类用来管理书架。</string>
     <string name="download_notifier_downloader_title">下载</string>
     <string name="download_notifier_title_error">出错</string>
     <string name="download_notifier_unknown_error">下载时发生意外错误</string>
@@ -463,8 +463,8 @@
     <string name="exclude">排除：%s</string>
     <string name="include">包含：%s</string>
     <string name="action_sort_chapter_fetch_date">章节获取时间</string>
-    <string name="pref_library_update_categories_details">排除优先于包含，同时属于包含和排除分类的作品不会自动更新。</string>
-    <string name="pref_download_new_categories_details">排除优先于包含，同时属于包含和排除分类的作品不会自动下载。</string>
+    <string name="pref_library_update_collections_details">排除优先于包含，同时属于包含和排除分类的作品不会自动更新。</string>
+    <string name="pref_download_new_collections_details">排除优先于包含，同时属于包含和排除分类的作品不会自动下载。</string>
     <string name="pref_category_auto_download">自动下载</string>
     <string name="action_show_errors">点击查看详情</string>
     <string name="update_check_eol">应用不再支持此 Android 版本</string>
@@ -494,9 +494,9 @@
     <string name="error_saving_cover">保存封面时出错</string>
     <string name="cover_saved">封面已保存</string>
     <string name="manga_cover">封面</string>
-    <string name="categorized_display_settings">单独设置各个分类的排序</string>
+    <string name="per_collection_display_settings">单独设置各个分类的排序</string>
     <string name="tracking_guide">进度记录指南</string>
-    <string name="information_empty_category_dialog">还没有创建分类。</string>
+    <string name="information_empty_collection_dialog">还没有创建分类。</string>
     <string name="action_start_downloading_now">立即开始下载</string>
     <string name="about_dont_kill_my_app">部分厂商杀掉后台服务的现象比较严重，此网站提供了一些解决方法。</string>
     <string name="restore_miui_warning">如果关闭 MIUI 优化，备份与还原可能会出现问题。</string>
@@ -526,7 +526,7 @@
     <string name="action_track">记录进度</string>
     <string name="getting_started_guide">入门指南</string>
     <string name="pref_tablet_ui_mode">平板界面</string>
-    <string name="pref_remove_exclude_categories">排除的分类</string>
+    <string name="pref_remove_exclude_collections">排除的分类</string>
     <string name="help_translate">协助翻译</string>
     <string name="ext_app_info">应用信息</string>
     <string name="ext_installer_legacy">旧式安装程序</string>
@@ -603,8 +603,8 @@
     <string name="pref_app_language">应用语言</string>
     <string name="theme_lavender">薰衣草</string>
     <string name="description_placeholder">无简介</string>
-    <string name="delete_category_confirmation">确定要删除 \"%s\" 分类吗？</string>
-    <string name="delete_category">删除分类</string>
+    <string name="delete_collection_confirmation">确定要删除 \"%s\" 分类吗？</string>
+    <string name="delete_collection">删除分类</string>
     <string name="internal_error">InternalError: 内部错误，详情请见崩溃日志</string>
     <string name="pref_user_agent_string">默认 User Agent 字符串</string>
     <string name="pref_reset_user_agent_string">恢复默认 User Agent 字符串</string>
@@ -674,7 +674,7 @@
     <string name="day_short">%d 天</string>
     <string name="hour_short">%d 时</string>
     <string name="pref_library_update_show_tab_badge">在“更新”图标上显示未读章数</string>
-    <string name="information_no_manga_category">分类为空</string>
+    <string name="information_no_manga_collection">分类为空</string>
     <string name="copied_to_clipboard_plain">已复制到剪贴板</string>
     <string name="enhanced_services_not_installed">支持以下平台但图源尚未安装：%s</string>
     <string name="pref_skip_dupe_chapters">跳过重复章节</string>
@@ -685,7 +685,7 @@
     <string name="information_required_plain">*必填</string>
     <string name="pref_hide_in_library_items">隐藏已添加到书架的作品</string>
     <string name="action_copy_to_clipboard">复制到剪贴板</string>
-    <string name="action_update_category">更新分类</string>
+    <string name="action_update_collection">更新分类</string>
     <string name="split_tall_images">分割长图</string>
     <string name="overlay_header">标记和按钮</string>
     <string name="pref_page_rotate">旋转横向图片</string>

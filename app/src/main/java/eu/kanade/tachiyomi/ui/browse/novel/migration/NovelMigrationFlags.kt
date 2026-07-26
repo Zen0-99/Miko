@@ -27,7 +27,7 @@ data class NovelMigrationFlag(
 object NovelMigrationFlags {
 
     private const val CHAPTERS = 0b00001
-    private const val CATEGORIES = 0b00010
+    private const val COLLECTIONS = 0b00010
     private const val CUSTOM_COVER = 0b01000
     private const val DELETE_DOWNLOADED = 0b10000
 
@@ -38,8 +38,8 @@ object NovelMigrationFlags {
         return value and CHAPTERS != 0
     }
 
-    fun hasCategories(value: Int): Boolean {
-        return value and CATEGORIES != 0
+    fun hasCollections(value: Int): Boolean {
+        return value and COLLECTIONS != 0
     }
 
     fun hasCustomCover(value: Int): Boolean {
@@ -53,7 +53,7 @@ object NovelMigrationFlags {
     fun getFlags(novel: Novel?, defaultSelectedBitMap: Int): List<NovelMigrationFlag> {
         val flags = mutableListOf<NovelMigrationFlag>()
         flags += NovelMigrationFlag.create(CHAPTERS, defaultSelectedBitMap, MR.strings.chapters)
-        flags += NovelMigrationFlag.create(CATEGORIES, defaultSelectedBitMap, MR.strings.categories)
+        flags += NovelMigrationFlag.create(COLLECTIONS, defaultSelectedBitMap, MR.strings.collections)
 
         if (novel != null) {
             if (novel.hasCustomCover(coverCache)) {

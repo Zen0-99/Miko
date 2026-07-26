@@ -66,6 +66,7 @@ import tachiyomi.domain.source.novel.model.NovelSource
 import tachiyomi.domain.source.novel.model.LocalNovelSource
 import tachiyomi.domain.source.novel.model.Pin
 import tachiyomi.i18n.MR
+import androidx.compose.foundation.lazy.LazyColumn
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -94,18 +95,53 @@ fun NovelSourcesScreen(
     cardDesign: Boolean = false,
     cardColumns: Int = 2,
     sourceExtensionMap: Map<Long, NovelExtension.Installed> = emptyMap(),
+    jsSourcePluginMap: Map<Long, tachiyomi.domain.extension.novel.model.NovelPlugin.Installed> = emptyMap(),
     onClickUpdate: (NovelSource) -> Unit = {},
     onRefresh: () -> Unit = {},
     onClickUpdateAll: () -> Unit = {},
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
-    // Filter out available extensions when collapsed
+    // Filter out available extensions (and their language sub-headers) when
+    // the "Not Installed" section is collapsed. Language sub-headers within
+    // the Not Installed section appear after the NOT_INSTALLED_KEY header and
+    // before the next section — they must also be hidden when collapsed.
     val visibleItems = remember(state.items, notInstalledExpanded) {
         if (notInstalledExpanded) {
             state.items
         } else {
-            state.items.filterNot { it is NovelSourceUiModel.AvailableExtension }
+            // Walk the list and skip everything between NOT_INSTALLED_KEY
+            // header and the end (or next top-level section). Keep the
+            // NOT_INSTALLED_KEY header itself so the user can expand it.
+            val result = mutableListOf<NovelSourceUiModel>()
+            var inNotInstalled = false
+            for (item in state.items) {
+                if (item is NovelSourceUiModel.Header) {
+                    if (item.language == NovelSourcesScreenModel.NOT_INSTALLED_KEY) {
+                        inNotInstalled = true
+                        result.add(item)
+                        continue
+                    }
+                    // A new top-level header ends the Not Installed section.
+                    // Language sub-headers within Not Installed have language
+                    // values that are actual locale codes (e.g. "en", "all"),
+                    // not the special keys. We detect top-level headers by
+                    // checking if they're the INSTALLED_KEY or NOT_INSTALLED_KEY.
+                    if (item.language == NovelSourcesScreenModel.INSTALLED_KEY) {
+                        inNotInstalled = false
+                        result.add(item)
+                        continue
+                    }
+                }
+                if (inNotInstalled) {
+                    // Skip available extensions and language sub-headers
+                    if (item is NovelSourceUiModel.AvailableExtension) continue
+                    // Skip language sub-headers (they have non-special language values)
+                    if (item is NovelSourceUiModel.Header && item.language != NovelSourcesScreenModel.NOT_INSTALLED_KEY) continue
+                }
+                result.add(item)
+            }
+            result
         }
     }
 
@@ -130,6 +166,7 @@ fun NovelSourcesScreen(
                         cardColumns = cardColumns,
                         sourcesWithUpdates = sourcesWithUpdates,
                         sourceExtensionMap = sourceExtensionMap,
+                        jsSourcePluginMap = jsSourcePluginMap,
                         onClickItem = onClickItem,
                         onLongClickItem = onLongClickItem,
                         onClickExtension = onClickExtension,
@@ -140,7 +177,7 @@ fun NovelSourcesScreen(
                         onClickUpdateAll = onClickUpdateAll,
                     )
                 } else {
-                FastScrollLazyColumn(
+                LazyColumn(
                     contentPadding = contentPadding + topSmallPaddingValues,
                 ) {
                 items(
@@ -249,6 +286,7 @@ private fun NovelSourcesCardView(
     onClickTrustExtension: (NovelExtension.Untrusted) -> Unit,
     downloadStates: SnapshotStateMap<String, InstallStep>,
     sourceExtensionMap: Map<Long, NovelExtension.Installed>,
+    jsSourcePluginMap: Map<Long, tachiyomi.domain.extension.novel.model.NovelPlugin.Installed>,
     onClickUpdateAll: () -> Unit = {},
 ) {
     // Group items by section (header + items)
@@ -274,7 +312,7 @@ private fun NovelSourcesCardView(
         sections
     }
 
-    FastScrollLazyColumn(
+    LazyColumn(
         contentPadding = contentPadding,
     ) {
         sectionedItems.forEach { (header, sectionItems) ->
@@ -328,6 +366,7 @@ private fun NovelSourcesCardView(
                                 when (model) {
                                     is NovelSourceUiModel.Item -> {
                                         val ext = sourceExtensionMap[model.source.id]
+                                        val jsPlugin = jsSourcePluginMap[model.source.id]
                                         val hasUpdate = model.source.id in sourcesWithUpdates
                                         val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
                                             it == InstallStep.Pending || it == InstallStep.Downloading
@@ -336,8 +375,9 @@ private fun NovelSourcesCardView(
                                             modifier = Modifier.weight(1f),
                                             title = model.source.name,
                                             lang = model.source.lang.uppercase(),
-                                            version = ext?.versionName ?: "",
+                                            version = ext?.versionName ?: jsPlugin?.versionName ?: "",
                                             iconDrawable = ext?.icon,
+                                            iconUrl = if (ext == null) jsPlugin?.iconUrl ?: "" else null,
                                             hasUpdate = hasUpdate,
                                             isUpdating = isUpdating,
                                             isInstalled = true,

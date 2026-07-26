@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS failed_fetches(
+    _id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL,
+    entry_kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    cover_url TEXT,
+    source_id INTEGER NOT NULL,
+    source_name TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    timestamp INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS failed_fetches_kind_index ON failed_fetches(entry_kind);
+CREATE INDEX IF NOT EXISTS failed_fetches_reason_index ON failed_fetches(reason);
+CREATE INDEX IF NOT EXISTS failed_fetches_timestamp_index ON failed_fetches(timestamp);

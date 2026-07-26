@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="categories">Kategorie</string>
+    <string name="collections">Kategorie</string>
     <string name="chapters">Rozdziały</string>
     <string name="name">Nazwa</string>
     <string name="history">Historia</string>
@@ -28,10 +28,10 @@
     <string name="action_update_library">Aktualizuj bibliotekę</string>
     <string name="action_edit">Edytuj</string>
     <string name="action_add">Dodaj</string>
-    <string name="action_add_category">Dodaj kategorię</string>
-    <string name="action_edit_categories">Edytuj kategorie</string>
-    <string name="action_rename_category">Zmień nazwę kategorii</string>
-    <string name="action_move_category">Zmień kategorie</string>
+    <string name="action_add_collection">Dodaj kategorię</string>
+    <string name="action_edit_collections">Edytuj kategorie</string>
+    <string name="action_rename_collection">Zmień nazwę kategorii</string>
+    <string name="action_move_collection">Zmień kategorie</string>
     <string name="action_edit_cover">Edytuj okładkę</string>
     <string name="action_sort_total">Ilość rozdziałów</string>
     <string name="action_pause">Wstrzymaj</string>
@@ -74,7 +74,7 @@
     <string name="plan_to_read">Planowane</string>
     <string name="score">Ocena</string>
     <string name="title">Tytuł</string>
-    <string name="error_category_exists">Kategoria o takiej nazwie już istnieje!</string>
+    <string name="error_collection_exists">Kategoria o takiej nazwie już istnieje!</string>
     <string name="picture_saved">Obraz zapisany</string>
     <string name="set_as_cover">Ustaw jako okładkę</string>
     <string name="cover_updated">Okładka zaktualizowana</string>
@@ -102,7 +102,7 @@
     <string name="password">Hasło</string>
     <string name="login">Zaloguj się</string>
     <string name="unknown_error">Nieznany błąd</string>
-    <string name="updating_category">Aktualizowanie kategorii</string>
+    <string name="updating_collection">Aktualizowanie kategorii</string>
     <string name="no_more_results">Nie znaleziono więcej wyników</string>
     <string name="action_open_log">Otwórz log</string>
     <string name="show_title">Tytuł</string>
@@ -121,8 +121,8 @@
     <string name="charging">Podczas ładowania</string>
     <string name="pref_update_only_non_completed">Ukończone serie</string>
     <string name="pref_auto_update_manga_sync">Aktualizuj postęp po przeczytaniu rozdziału</string>
-    <string name="default_category">Domyślna kategoria</string>
-    <string name="default_category_summary">Zawsze pytaj</string>
+    <string name="default_collection">Domyślna kategoria</string>
+    <string name="default_collection_summary">Zawsze pytaj</string>
     <string name="pref_fullscreen">Pełny ekran</string>
     <string name="pref_page_transitions">Animacje przejścia stron</string>
     <string name="pref_show_page_number">Pokazuj numer strony</string>
@@ -205,7 +205,7 @@
     <string name="sort_by_number">Według numeru rozdziału</string>
     <string name="manga_tracking_tab">Śledzenie</string>
     <string name="status">Status</string>
-    <string name="snack_categories_deleted">Usunięto kategorie</string>
+    <string name="snack_collections_deleted">Usunięto kategorie</string>
     <string name="dialog_with_checkbox_remove_description">To usunie datę przeczytania tego rozdziału. Na pewno?</string>
     <string name="dialog_with_checkbox_reset">Resetuj wszystkie rozdziały dla tego wpisu</string>
     <string name="snack_add_to_library">Dodać do biblioteki?</string>
@@ -229,7 +229,7 @@
     <string name="channel_common">Zwykły</string>
     <string name="latest">Najnowsze</string>
     <string name="action_display_download_badge">Pobrane rozdziały</string>
-    <string name="information_empty_category">Nie masz żadnych kategorii. Dotknij plusa, aby je utworzyć i zorganizować swoją bibliotekę.</string>
+    <string name="information_empty_collection">Nie masz żadnych kategorii. Dotknij plusa, aby je utworzyć i zorganizować swoją bibliotekę.</string>
     <string name="label_extensions">Rozszerzenia</string>
     <string name="ext_install">Zainstaluj</string>
     <string name="ext_pending">Oczekujące</string>
@@ -468,8 +468,8 @@
     <string name="none">Brak</string>
     <string name="update_check_eol">Ta wersja Androida nie jest już wspierana</string>
     <string name="clipboard_copy_error">Nie udało się skopiować do schowka</string>
-    <string name="pref_library_update_categories_details">Tytuły w wykluczonych kategoriach nie będą aktualizowane, nawet jeśli są również w uwzględnionych kategoriach.</string>
-    <string name="pref_download_new_categories_details">Tytuły w wykluczonych kategoriach nie będą pobierane, nawet jeśli są również w uwzględnionych kategoriach.</string>
+    <string name="pref_library_update_collections_details">Tytuły w wykluczonych kategoriach nie będą aktualizowane, nawet jeśli są również w uwzględnionych kategoriach.</string>
+    <string name="pref_download_new_collections_details">Tytuły w wykluczonych kategoriach nie będą pobierane, nawet jeśli są również w uwzględnionych kategoriach.</string>
     <string name="pref_category_auto_download">Automatyczne pobieranie</string>
     <string name="rotation_landscape">Poziomo</string>
     <string name="rotation_portrait">Pionowo</string>
@@ -497,9 +497,9 @@
     <string name="tracking_guide">Przewodnik śledzenia postępu</string>
     <string name="off">Wyłączone</string>
     <string name="on">Włączone</string>
-    <string name="categorized_display_settings">Ustawienia sortowania dla każdej kategorii</string>
+    <string name="per_collection_display_settings">Ustawienia sortowania dla każdej kategorii</string>
     <string name="action_display_local_badge">Lokalne źródło</string>
-    <string name="information_empty_category_dialog">Nie masz jeszcze żadnych kategorii.</string>
+    <string name="information_empty_collection_dialog">Nie masz jeszcze żadnych kategorii.</string>
     <string name="restrictions">Ograniczenia: %s</string>
     <string name="about_dont_kill_my_app">Niektórzy producenci mają dodatkowe ograniczenia, które zabijają usługi działające w tle. Ta strona zawiera więcej informacji na ten temat.</string>
     <string name="action_start_downloading_now">Zacznij pobierać teraz</string>
@@ -521,7 +521,7 @@
     <string name="getting_started_guide">Wprowadzenie - poradnik</string>
     <string name="help_translate">Pomóż tłumaczyć</string>
     <string name="pref_tablet_ui_mode">Wymuś UI dla tabletu</string>
-    <string name="pref_remove_exclude_categories">Wykluczone kategorie</string>
+    <string name="pref_remove_exclude_collections">Wykluczone kategorie</string>
     <string name="pref_lowest">Najniższe</string>
     <string name="pref_low">Niskie</string>
     <string name="pref_high">Wysokie</string>
@@ -609,8 +609,8 @@
     <string name="download_notifier_split_page_path_not_found">Nie można było znaleźć ścieżki %d strony</string>
     <string name="pref_user_agent_string">Domyślny user agent string</string>
     <string name="pref_reset_user_agent_string">Zresetuj domyślny user agent string</string>
-    <string name="delete_category_confirmation">Czy chcesz usunąć kategorię \"%s\"?</string>
-    <string name="delete_category">Usuń kategorię</string>
+    <string name="delete_collection_confirmation">Czy chcesz usunąć kategorię \"%s\"?</string>
+    <string name="delete_collection">Usuń kategorię</string>
     <string name="internal_error">InternalError: sprawdź log błędów po więcej informacji</string>
     <string name="action_remove_everything">Usuń wszystko</string>
     <string name="error_user_agent_string_blank">Pole user agent nie może być puste</string>
@@ -678,7 +678,7 @@
     <string name="skipped_reason_not_always_update">Pominięto, ponieważ aktualizacja nie jest wymagana</string>
     <string name="information_no_entries_found">Nie znaleziono wpisów w tej kategorii</string>
     <string name="download_notifier_cache_renewal">Sprawdzanie pobranych plików</string>
-    <string name="information_no_manga_category">Kategoria jest pusta</string>
+    <string name="information_no_manga_collection">Kategoria jest pusta</string>
     <string name="copied_to_clipboard_plain">Skopiowano do schowka</string>
     <string name="confirm_add_duplicate_manga">Masz w swojej bibliotece pozycję o tej samej nazwie.
 \n
@@ -689,7 +689,7 @@
     <string name="information_required_plain">*wymagane</string>
     <string name="pref_hide_in_library_items">Ukryj pozycje znajdujące się już w bibliotece</string>
     <string name="action_copy_to_clipboard">Kopiuj do schowka</string>
-    <string name="action_update_category">Aktualizuj kategorię</string>
+    <string name="action_update_collection">Aktualizuj kategorię</string>
     <string name="split_tall_images">Dziel długie obrazy</string>
     <string name="overlay_header">Nakładka</string>
     <string name="pref_page_rotate">Dopasuj szerokie strony</string>

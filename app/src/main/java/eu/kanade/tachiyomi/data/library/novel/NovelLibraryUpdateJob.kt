@@ -36,7 +36,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NovelFetchInterval
@@ -86,9 +86,9 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
-        val categoryId = inputData.getLong(KEY_CATEGORY, -1L)
+        val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
         val isResume = inputData.getBoolean(KEY_RESUME, false)
-        addNovelsToQueue(categoryId)
+        addNovelsToQueue(collectionId)
 
         return withIOContext {
             try {
@@ -121,24 +121,24 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     /**
      * Adds list of novels to be updated.
      *
-     * @param categoryId the ID of the category to update, or -1 if no category specified.
+     * @param collectionId the ID of the collection to update, or -1 if no collection specified.
      */
-    private suspend fun addNovelsToQueue(categoryId: Long) {
+    private suspend fun addNovelsToQueue(collectionId: Long) {
         val libraryNovels = getLibraryNovels.await()
 
-        val listToUpdate = if (categoryId != -1L) {
-            libraryNovels.filter { it.category == categoryId }
+        val listToUpdate = if (collectionId != -1L) {
+            libraryNovels.filter { it.collection == collectionId }
         } else {
-            val categoriesToUpdate = libraryPreferences.novelUpdateCategories().get().map { it.toLong() }
-            val includedNovels = if (categoriesToUpdate.isNotEmpty()) {
-                libraryNovels.filter { it.category in categoriesToUpdate }
+            val collectionsToUpdate = libraryPreferences.novelUpdateCollections().get().map { it.toLong() }
+            val includedNovels = if (collectionsToUpdate.isNotEmpty()) {
+                libraryNovels.filter { it.collection in collectionsToUpdate }
             } else {
                 libraryNovels
             }
 
-            val categoriesToExclude = libraryPreferences.novelUpdateCategoriesExclude().get().map { it.toLong() }
-            val excludedNovelIds = if (categoriesToExclude.isNotEmpty()) {
-                libraryNovels.filter { it.category in categoriesToExclude }.map { it.novel.id }
+            val collectionsToExclude = libraryPreferences.novelUpdateCollectionsExclude().get().map { it.toLong() }
+            val excludedNovelIds = if (collectionsToExclude.isNotEmpty()) {
+                libraryNovels.filter { it.collection in collectionsToExclude }.map { it.novel.id }
             } else {
                 emptyList()
             }
@@ -459,12 +459,12 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val TAG = "NovelLibraryUpdateJob"
         private const val WORK_NAME_MANUAL = "NovelLibraryUpdate-$TAG-manual"
         private const val WORK_NAME_AUTO = "NovelLibraryUpdate-$TAG-auto"
-        private const val KEY_CATEGORY = "category"
+        private const val KEY_COLLECTION = "collection"
         private const val KEY_RESUME = "resume"
 
         fun startNow(
             context: Context,
-            category: Category? = null,
+            collection: Collection? = null,
             resumeFromCheckpoint: Boolean = false,
         ): Boolean {
             val wm = androidx.work.WorkManager.getInstance(context)
@@ -481,7 +481,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 .addTag(WORK_NAME_MANUAL)
                 .setInputData(
                     workDataOf(
-                        KEY_CATEGORY to (category?.id ?: -1L),
+                        KEY_COLLECTION to (collection?.id ?: -1L),
                         KEY_RESUME to resumeFromCheckpoint,
                     ),
                 )

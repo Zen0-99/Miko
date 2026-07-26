@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.runBlocking
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.novel.interactor.GetNovelCategories
+import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.items.chapter.model.NovelChapter
@@ -28,7 +28,7 @@ class NovelDownloadManager(
     private val storageManager: StorageManager = Injekt.get(),
     private val provider: NovelDownloadProvider = Injekt.get(),
     private val cache: NovelDownloadCache = Injekt.get(),
-    private val getCategories: GetNovelCategories = Injekt.get(),
+    private val getCollections: GetNovelCollections = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
 ) {
@@ -236,23 +236,23 @@ class NovelDownloadManager(
     }
 
     private suspend fun getChaptersToDelete(chapters: List<NovelChapter>, novel: Novel): List<NovelChapter> {
-        val categoriesToExclude = downloadPreferences.removeExcludeCategories().get().map(
+        val collectionsToExclude = downloadPreferences.removeExcludeCollections().get().map(
             String::toLong,
         )
 
-        val categoriesForNovel = getCategories.await(novel.id)
+        val collectionsForNovel = getCollections.await(novel.id)
             .map { it.id }
             .ifEmpty { listOf(0) }
-        val filteredCategoryNovel = if (categoriesForNovel.intersect(categoriesToExclude).isNotEmpty()) {
+        val filteredCollectionNovel = if (collectionsForNovel.intersect(collectionsToExclude).isNotEmpty()) {
             chapters.filterNot { it.read }
         } else {
             chapters
         }
 
         return if (!downloadPreferences.removeBookmarkedChapters().get()) {
-            filteredCategoryNovel.filterNot { it.bookmark }
+            filteredCollectionNovel.filterNot { it.bookmark }
         } else {
-            filteredCategoryNovel
+            filteredCollectionNovel
         }
     }
 

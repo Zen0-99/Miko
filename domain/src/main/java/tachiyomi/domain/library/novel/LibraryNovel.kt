@@ -4,7 +4,7 @@ import tachiyomi.domain.entries.novel.model.Novel
 
 data class LibraryNovel(
     val novel: Novel,
-    val category: Long,
+    val collection: Long,
     val totalChapters: Long,
     val readCount: Long,
     val bookmarkCount: Long,

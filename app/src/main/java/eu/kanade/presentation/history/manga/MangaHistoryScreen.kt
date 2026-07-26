@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import eu.kanade.presentation.components.relativeDateText
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.history.manga.components.MangaHistoryItem
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.presentation.util.animateItemFastScroll
@@ -51,10 +52,7 @@ fun MangaHistoryScreen(
 ) {
     Scaffold(
         snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = 80.dp),
-            )
+            AchievementStyledSnackbarHost(hostState = snackbarHostState)
         },
     ) { contentPadding ->
         state.list.let {

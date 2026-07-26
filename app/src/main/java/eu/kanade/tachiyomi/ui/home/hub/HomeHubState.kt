@@ -52,10 +52,10 @@ data class HomeHubState(
     val recommendations: List<HomeHubCardItem> = emptyList(),
     // --- Mode-aware filtering ---
     val currentMode: ContentMode = ContentMode.MANGA,
-    // --- Hidden categories (set of category IDs hidden from home) ---
-    val hiddenAnimeCategories: Set<Long> = emptySet(),
-    val hiddenMangaCategories: Set<Long> = emptySet(),
-    val hiddenNovelCategories: Set<Long> = emptySet(),
+    // --- Hidden collections (set of collection IDs hidden from home) ---
+    val hiddenAnimeCollections: Set<Long> = emptySet(),
+    val hiddenMangaCollections: Set<Long> = emptySet(),
+    val hiddenNovelCollections: Set<Long> = emptySet(),
     // --- Selection mode for long-press overlay ---
     val selection: Set<Long> = emptySet(),
 ) {

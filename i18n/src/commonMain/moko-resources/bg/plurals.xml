@@ -28,7 +28,7 @@
         <item quantity="one">Направено за %1$s с %2$s грешка</item>
         <item quantity="other">Направено за %1$s с %2$s грешки</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d категория</item>
         <item quantity="other">%d категории</item>
     </plurals>

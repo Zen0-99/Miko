@@ -45,6 +45,7 @@ class NovelSelectionActionModeCallback(
     private val onHighlight: ((selectedText: String, start: Int, end: Int, colorHex: String) -> Unit)? = null,
     private val onShare: ((String) -> Unit)? = null,
     private val onReadAloud: ((String) -> Unit)? = null,
+    private val onTranslate: ((String) -> Unit)? = null,
 ) : ActionMode.Callback {
 
     private val textViewRef = WeakReference(textView)
@@ -263,6 +264,14 @@ class NovelSelectionActionModeCallback(
         addIcon(R.drawable.ic_share_24dp) {
             onShare?.invoke(selectedText)
             finishSelection()
+        }
+
+        // Translate (only shown if the callback is provided)
+        if (onTranslate != null) {
+            addIcon(R.drawable.ic_translate_24dp) {
+                onTranslate.invoke(selectedText)
+                finishSelection()
+            }
         }
 
         addDivider()

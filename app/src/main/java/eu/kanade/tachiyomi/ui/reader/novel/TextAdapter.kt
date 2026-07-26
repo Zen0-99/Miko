@@ -33,6 +33,7 @@ class TextAdapter(
     private val onCopy: ((String) -> Unit)? = null,
     private val onShare: ((String) -> Unit)? = null,
     private val onReadAloud: ((String) -> Unit)? = null,
+    private val onTranslate: ((String) -> Unit)? = null,
     /**
      * Highlight colors are computed dynamically from the current background
      * color so they're theme-aware: darker colors on dark backgrounds (where
@@ -98,6 +99,7 @@ class TextAdapter(
         private val onCopy: ((String) -> Unit)?,
         private val onShare: ((String) -> Unit)?,
         private val onReadAloud: ((String) -> Unit)?,
+        private val onTranslate: ((String) -> Unit)?,
         private val highlightColors: List<Int>,
         private val onCallbackActivated: ((NovelSelectionActionModeCallback) -> Unit)?,
         private val getHighlightManager: (() -> NovelHighlightManager?)?,
@@ -146,6 +148,7 @@ class TextAdapter(
                 }
 
                 textView.setTextIsSelectable(config.isTextSelectable)
+                textView.isLongClickable = config.isTextSelectable
 
                 if (config.isTextSelectable && activity != null) {
                     val colors = if (highlightColors.isNotEmpty()) highlightColors
@@ -162,9 +165,48 @@ class TextAdapter(
                         onHighlight = onHighlightWithColor,
                         onShare = onShare,
                         onReadAloud = onReadAloud,
+                        onTranslate = onTranslate,
                     )
                     textView.customSelectionActionModeCallback = callback
                     onCallbackActivated?.invoke(callback)
+
+                    // Fix for unreliable long-press text selection in RecyclerView:
+                    // The RecyclerView intercepts touch events for scrolling before
+                    // the TextView can start text selection. We use a delayed
+                    // disallow-intercept that fires after the long-press timeout,
+                    // giving the TextView time to start selection mode while still
+                    // allowing normal scrolling.
+                    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                    val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
+                    textView.setOnTouchListener { v, event ->
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                // Schedule intercept disallow after long-press threshold.
+                                // If the user starts scrolling before this fires, the
+                                // RecyclerView will have already intercepted the move
+                                // events and the Runnable will be a no-op.
+                                handler.postDelayed({
+                                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                                }, longPressTimeout)
+                            }
+                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                handler.removeCallbacksAndMessages(null)
+                                v.parent?.requestDisallowInterceptTouchEvent(false)
+                            }
+                            MotionEvent.ACTION_MOVE -> {
+                                // If the user moves more than touch slop, cancel
+                                // the pending long-press disallow so scrolling works.
+                                val slop = ViewConfiguration.get(v.context).scaledTouchSlop
+                                val moved = kotlin.math.abs(event.x) > slop || kotlin.math.abs(event.y) > slop
+                                if (moved) {
+                                    handler.removeCallbacksAndMessages(null)
+                                }
+                            }
+                        }
+                        false // Let the TextView handle the event normally
+                    }
+                } else {
+                    textView.setOnTouchListener(null)
                 }
 
                 // Apply text alignment only if not preserving source alignment
@@ -525,6 +567,7 @@ class TextAdapter(
                 onCopy,
                 onShare,
                 onReadAloud,
+                onTranslate,
                 getHighlightColors(),
                 onCallbackActivated = { cb -> activeSelectionCallback = cb },
                 getHighlightManager = getHighlightManager,

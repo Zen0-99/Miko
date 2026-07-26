@@ -131,7 +131,7 @@ private fun NovelLibraryPagerEmptyScreen(
     val msg = when {
         !searchQuery.isNullOrEmpty() -> MR.strings.no_results_found
         hasActiveFilters -> MR.strings.error_no_match
-        else -> MR.strings.information_no_manga_category
+        else -> MR.strings.information_no_manga_collection
     }
 
     Column(

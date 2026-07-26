@@ -113,3 +113,8 @@ getTotalReadNovelChapterCount:
 SELECT COUNT(*)
 FROM novelchapters
 WHERE read = 1;
+
+getTotalReadCharCount:
+SELECT coalesce(sum(total_char_count), 0)
+FROM novelchapters
+WHERE read = 1;

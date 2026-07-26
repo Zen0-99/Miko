@@ -39,14 +39,23 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifAnimeSourcesLoaded
 import eu.kanade.presentation.browse.RemoveEntryDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.anime.BrowseAnimeSourceContent
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.anime.MissingSourceScreen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.anime.components.BrowseAnimeSourceToolbar
-import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
+import eu.kanade.presentation.collection.components.ChangeCollectionDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.anime.DuplicateAnimeDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.more.components.SavedSearchesDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.util.AssistContentScreen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.util.Screen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.core.common.Constants
@@ -55,7 +64,7 @@ import eu.kanade.tachiyomi.ui.browse.anime.migration.anime.season.MigrateSeasonS
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeDialog
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreenModel.Listing
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.coroutines.channels.Channel
@@ -225,7 +234,7 @@ data class BrowseAnimeSourceScreen(
                     HorizontalDivider()
                 }
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
             BrowseAnimeSourceContent(
                 source = screenModel.source,
@@ -317,14 +326,14 @@ data class BrowseAnimeSourceScreen(
                     entryToRemove = dialog.anime.title,
                 )
             }
-            is BrowseAnimeSourceScreenModel.Dialog.ChangeAnimeCategory -> {
-                ChangeCategoryDialog(
+            is BrowseAnimeSourceScreenModel.Dialog.ChangeAnimeCollection -> {
+                ChangeCollectionDialog(
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
-                    onEditCategories = { navigator.push(CategoriesTab) },
+                    onEditCollections = { navigator.push(CollectionsTab) },
                     onConfirm = { include, _ ->
                         screenModel.changeAnimeFavorite(dialog.anime)
-                        screenModel.moveAnimeToCategories(dialog.anime, include)
+                        screenModel.moveAnimeToCollections(dialog.anime, include)
                     },
                 )
             }

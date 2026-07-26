@@ -71,9 +71,9 @@ import tachiyomi.domain.entries.applyFilter
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.category.novel.interactor.GetNovelCategories
-import tachiyomi.domain.category.novel.interactor.SetNovelCategories
+import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
+import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
 import tachiyomi.domain.entries.novel.interactor.GetDuplicateLibraryNovel
 import tachiyomi.domain.entries.novel.interactor.GetLinkedNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovelLinkedId
@@ -116,8 +116,8 @@ class NovelScreenModel(
     private val updateNovel: UpdateNovel = Injekt.get(),
     private val updateNovelChapter: UpdateNovelChapter = Injekt.get(),
     private val setReadStatus: SetNovelReadStatus = Injekt.get(),
-    private val getCategories: GetNovelCategories = Injekt.get(),
-    private val setNovelCategories: SetNovelCategories = Injekt.get(),
+    private val getCollections: GetNovelCollections = Injekt.get(),
+    private val setNovelCollections: SetNovelCollections = Injekt.get(),
     private val novelRepository: NovelRepository = Injekt.get(),
     private val novelChapterRepository: NovelChapterRepository = Injekt.get(),
     private val getNovelChapter: GetNovelChapter = Injekt.get(),
@@ -162,7 +162,7 @@ class NovelScreenModel(
     val chapterSwipeStartAction = libraryPreferences.swipeChapterEndAction().get()
     val chapterSwipeEndAction = libraryPreferences.swipeChapterStartAction().get()
 
-    internal var isFromChangeCategory: Boolean = false
+    internal var isFromChangeCollection: Boolean = false
 
     private val selectedPositions: Array<Int> = arrayOf(-1, -1)
     private val selectedChapterIds: HashSet<Long> = HashSet()
@@ -962,59 +962,59 @@ class NovelScreenModel(
                     }
                 }
 
-                val categories = getCategories.await(novel.id)
-                val defaultCategoryId = libraryPreferences.defaultMangaCategory().get().toLong()
-                val defaultCategory = categories.find { it.id == defaultCategoryId }
+                val collections = getCollections.await(novel.id)
+                val defaultCollectionId = libraryPreferences.defaultMangaCollection().get().toLong()
+                val defaultCollection = collections.find { it.id == defaultCollectionId }
                 when {
-                    defaultCategory != null -> {
+                    defaultCollection != null -> {
                         val result = updateNovel.awaitUpdateFavorite(novel.id, true)
                         if (!result) return@launchIO
-                        moveNovelToCategory(defaultCategory)
+                        moveNovelToCollection(defaultCollection)
                     }
-                    defaultCategoryId == 0L || categories.isEmpty() -> {
+                    defaultCollectionId == 0L || collections.isEmpty() -> {
                         val result = updateNovel.awaitUpdateFavorite(novel.id, true)
                         if (!result) return@launchIO
-                        moveNovelToCategory(null)
+                        moveNovelToCollection(null)
                     }
                     else -> {
-                        isFromChangeCategory = true
-                        showChangeCategoryDialog()
+                        isFromChangeCollection = true
+                        showChangeCollectionDialog()
                     }
                 }
             }
         }
     }
 
-    fun showChangeCategoryDialog() {
+    fun showChangeCollectionDialog() {
         val novel = successState?.novel ?: return
         screenModelScope.launch {
-            val categories = getCategories.await(novel.id)
-            val selection = getNovelCategoryIds(novel)
+            val collections = getCollections.await(novel.id)
+            val selection = getNovelCollectionIds(novel)
             updateSuccessState { successState ->
                 successState.copy(
-                    dialog = Dialog.ChangeCategory(
+                    dialog = Dialog.ChangeCollection(
                         novel = novel,
-                        initialSelection = categories.mapAsCheckboxState { it.id in selection }.toImmutableList(),
+                        initialSelection = collections.mapAsCheckboxState { it.id in selection }.toImmutableList(),
                     ),
                 )
             }
         }
     }
 
-    private suspend fun getNovelCategoryIds(novel: Novel): Set<Long> {
-        return getCategories.await(novel.id).map { it.id }.toSet()
+    private suspend fun getNovelCollectionIds(novel: Novel): Set<Long> {
+        return getCollections.await(novel.id).map { it.id }.toSet()
     }
 
-    fun moveNovelToCategory(category: Category?) {
+    fun moveNovelToCollection(collection: Collection?) {
         val novel = successState?.novel ?: return
         screenModelScope.launchIO {
-            setNovelCategories.await(novel.id, listOfNotNull(category?.id))
+            setNovelCollections.await(novel.id, listOfNotNull(collection?.id))
         }
     }
 
-    fun moveNovelToCategoriesAndAddToLibrary(novel: Novel, categoryIds: List<Long>) {
+    fun moveNovelToCollectionsAndAddToLibrary(novel: Novel, collectionIds: List<Long>) {
         screenModelScope.launchIO {
-            setNovelCategories.await(novel.id, categoryIds)
+            setNovelCollections.await(novel.id, collectionIds)
             updateNovel.awaitUpdateFavorite(novel.id, true)
         }
     }
@@ -1535,7 +1535,11 @@ class NovelScreenModel(
             }
 
             val readProgress = if (!chapter.read && chapter.lastCharRead > 0 && chapter.totalCharCount > 0) {
-                ((chapter.lastCharRead.toFloat() / chapter.totalCharCount) * 100)
+                // Decode character position from packed Long (new format
+                // packs charPos + itemIndex + pixelOffset into lastCharRead).
+                val charPos = eu.kanade.tachiyomi.ui.reader.novel.NovelScrollPositionCodec
+                    .decodeCharacterPosition(chapter.lastCharRead)
+                ((charPos.toFloat() / chapter.totalCharCount) * 100)
                     .toInt()
                     .coerceIn(1, 99)
             } else {
@@ -1637,9 +1641,9 @@ class NovelScreenModel(
     }
 
     sealed interface Dialog {
-        data class ChangeCategory(
+        data class ChangeCollection(
             val novel: Novel,
-            val initialSelection: ImmutableList<CheckboxState<Category>>,
+            val initialSelection: ImmutableList<CheckboxState<Collection>>,
         ) : Dialog
         data class DeleteChapters(val chapters: List<NovelChapter>) : Dialog
         data class DuplicateNovel(val novel: Novel, val duplicate: Novel) : Dialog

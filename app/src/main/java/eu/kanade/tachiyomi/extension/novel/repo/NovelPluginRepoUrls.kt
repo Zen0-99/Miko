@@ -8,9 +8,12 @@ internal fun resolveNovelPluginRepoIndexUrls(baseUrl: String): List<String> {
         listOf(normalized)
     } else {
         listOf(
-            "$normalized/index.min.json",
             "$normalized/plugins.min.json",
             "$normalized/plugins.json",
+            "$normalized/.dist/plugins.min.json",
+            "$normalized/.dist/plugins.json",
+            "$normalized/index.min.json",
+            "$normalized/index.json",
         )
     }
 }

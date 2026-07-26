@@ -30,7 +30,7 @@
         <item quantity="many">%d розширень мають оновлення</item>
         <item quantity="other">%d розширень мають оновлення</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d категорія</item>
         <item quantity="few">%d категорії</item>
         <item quantity="many">%d категорій</item>

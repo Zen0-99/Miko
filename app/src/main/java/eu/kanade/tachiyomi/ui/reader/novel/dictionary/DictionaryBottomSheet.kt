@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -60,18 +60,21 @@ fun DictionaryBottomSheet(
         isLoading = false
     }
 
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val maxSheetHeight = (configuration.screenHeightDp * 0.85f).dp
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         // No drag handle — sheet still drags but no visual handle bar.
         dragHandle = null,
     ) {
-        // Use fillMaxHeight so the sheet takes most of the screen,
-        // preventing content from being cut off.
+        // Wrap content height so the sheet only takes as much space as needed.
+        // Capped at 85% of screen to prevent overflow on very long entries.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f)
+                .heightIn(max = maxSheetHeight)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {

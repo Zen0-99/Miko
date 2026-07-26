@@ -102,9 +102,29 @@ class ExtensionRepoService(
      * Probes a repo URL and determines its content type based on the package
      * names of the extensions in its index. Returns one of "anime", "manga",
      * or "novel". Falls back to "manga" if the type cannot be determined.
+     *
+     * Also checks for LNReader plugin repos (plugins.min.json / plugins.json)
+     * and routes them to "novel" since LNReader plugins are novel plugins.
      */
     suspend fun probeRepoType(repo: String): String {
-        val entries = fetchExtensionIndex(repo) ?: return "manga"
+        // Normalize: strip known index file suffixes so probing works
+        // regardless of whether the user pasted a bare repo URL or a
+        // full path to an index file (e.g. .../v3.0.0/.dist/plugins.min.json).
+        val baseUrl = repo.trim().trimEnd('/')
+            .removeSuffix("/index.min.json")
+            .removeSuffix("/index.pb")
+            .removeSuffix("/index.pb.gz")
+            .removeSuffix("/repo.json")
+            .removeSuffix("/plugins.min.json")
+            .removeSuffix("/plugins.json")
+            .removeSuffix("/index.json")
+
+        // First, check if this is an LNReader plugin repo (plugins.min.json)
+        if (hasLnReaderPluginIndex(baseUrl)) {
+            return "novel"
+        }
+
+        val entries = fetchExtensionIndex(baseUrl) ?: return "manga"
         if (entries.isEmpty()) return "manga"
 
         var animeScore = 0
@@ -126,6 +146,32 @@ class ExtensionRepoService(
             novelScore > animeScore && novelScore > mangaScore -> "novel"
             animeScore > mangaScore && animeScore > novelScore -> "anime"
             else -> "manga"
+        }
+    }
+
+    /**
+     * Checks whether the repo has an LNReader plugin index file
+     * (plugins.min.json or plugins.json, including inside a .dist directory).
+     * Returns true if found.
+     */
+    private suspend fun hasLnReaderPluginIndex(repo: String): Boolean {
+        val baseUrl = repo.trim().trimEnd('/')
+        val candidates = listOf(
+            "$baseUrl/plugins.min.json",
+            "$baseUrl/plugins.json",
+            "$baseUrl/.dist/plugins.min.json",
+            "$baseUrl/.dist/plugins.json",
+        )
+        return withIOContext {
+            for (candidate in candidates) {
+                try {
+                    client.newCall(GET(candidate)).awaitSuccess()
+                    return@withIOContext true
+                } catch (_: Exception) {
+                    // try next candidate
+                }
+            }
+            false
         }
     }
 }

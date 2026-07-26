@@ -28,7 +28,7 @@
         <item quantity="one">დასრულების დრო %1$s. %2$s შეცდომა</item>
         <item quantity="other">დასრულების დრო %1$s. %2$s შეცდომა</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d კატეგორია</item>
         <item quantity="other">%d კატეგორიები</item>
     </plurals>

@@ -27,7 +27,7 @@ data class MangaMigrationFlag(
 object MangaMigrationFlags {
 
     private const val CHAPTERS = 0b00001
-    private const val CATEGORIES = 0b00010
+    private const val COLLECTIONS = 0b00010
     private const val CUSTOM_COVER = 0b01000
     private const val DELETE_DOWNLOADED = 0b10000
 
@@ -38,8 +38,8 @@ object MangaMigrationFlags {
         return value and CHAPTERS != 0
     }
 
-    fun hasCategories(value: Int): Boolean {
-        return value and CATEGORIES != 0
+    fun hasCollections(value: Int): Boolean {
+        return value and COLLECTIONS != 0
     }
 
     fun hasCustomCover(value: Int): Boolean {
@@ -54,7 +54,7 @@ object MangaMigrationFlags {
     fun getFlags(manga: Manga?, defaultSelectedBitMap: Int): List<MangaMigrationFlag> {
         val flags = mutableListOf<MangaMigrationFlag>()
         flags += MangaMigrationFlag.create(CHAPTERS, defaultSelectedBitMap, MR.strings.chapters)
-        flags += MangaMigrationFlag.create(CATEGORIES, defaultSelectedBitMap, MR.strings.categories)
+        flags += MangaMigrationFlag.create(COLLECTIONS, defaultSelectedBitMap, MR.strings.collections)
 
         if (manga != null) {
             if (manga.hasCustomCover(coverCache)) {

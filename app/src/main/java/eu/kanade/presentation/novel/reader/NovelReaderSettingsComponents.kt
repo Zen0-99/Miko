@@ -1,5 +1,7 @@
 package eu.kanade.presentation.novel.reader
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +13,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -123,6 +127,39 @@ internal fun CheckboxItem(
 }
 
 /**
+ * Checkbox item with explicit state — for preferences that aren't simple
+ * booleans (e.g. enum-backed toggles like reading mode).
+ */
+@Composable
+internal fun ColumnScope.CheckboxItem(
+    label: String,
+    isChecked: () -> Boolean,
+    accentColor: Color? = null,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+        val accent = accentColor ?: MaterialTheme.colorScheme.primary
+        Switch(
+            checked = isChecked(),
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.surface,
+                checkedTrackColor = accent,
+                checkedBorderColor = accent,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+            ),
+        )
+    }
+}
+
+/**
  * Slider item with label + value on top, slider below.
  * Uses 8dp vertical padding for breathing room.
  */
@@ -163,6 +200,13 @@ internal fun ColumnScope.SliderItem(
                 valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
                 onValueChange = { onChange(it.toInt()) },
                 steps = steps,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = accent,
+                    activeTrackColor = accent,
+                    activeTickColor = accent,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    inactiveTickColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
             )
         }
     }
@@ -205,6 +249,13 @@ internal fun ColumnScope.FloatSliderItem(
                 valueRange = valueRange,
                 onValueChange = { onChange(it) },
                 steps = steps,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = accent,
+                    activeTrackColor = accent,
+                    activeTickColor = accent,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    inactiveTickColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
             )
         }
     }
@@ -288,6 +339,69 @@ internal fun ColumnScope.SettingsDropdown(
                         },
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Color picker button — shows a colored circle that opens a dropdown with
+ * preset colors. Used for custom theme colors.
+ */
+@Composable
+internal fun ColorPickerButton(
+    color: Color,
+    onColorSelected: (Color) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clickable { expanded = true }
+                .background(color, CircleShape)
+                .border(
+                    width = 2.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = CircleShape,
+                ),
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            // Preset colors
+            val presets = listOf(
+                Color.White to "White",
+                Color.Black to "Black",
+                Color(0xFF202020) to "Dark gray",
+                Color(0xFFF5F0E8) to "Cream",
+                Color(0xFFE8D5B7) to "Parchment",
+                Color(0xFF1A1A2E) to "Midnight blue",
+                Color(0xFF2D4A3E) to "Forest green",
+                Color(0xFF3B2D4A) to "Plum",
+            )
+            presets.forEach { (presetColor, label) ->
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .background(presetColor, CircleShape),
+                            )
+                            Text(label)
+                        }
+                    },
+                    onClick = {
+                        onColorSelected(presetColor)
+                        expanded = false
+                    },
+                )
             }
         }
     }

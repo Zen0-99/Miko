@@ -26,7 +26,7 @@ import uy.kohesive.injekt.api.get
  * MangaUpdates recommendation source.
  *
  * Uses the public MangaUpdates API to search for the seed title, then fetches
- * the recommendations (both user-submitted and category-based) for the
+ * the recommendations (both user-submitted and collection-based) for the
  * best-matching series.
  *
  * Enabled for both MANGA and NOVEL media types — MangaUpdates has a large

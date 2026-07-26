@@ -10,7 +10,7 @@ import tachiyomi.domain.library.service.LibraryPreferences
 class MigrateSortingModeMigration : Migration {
     override val version = 64f
 
-    // Switch to sort per category
+    // Switch to sort per collection
     override suspend fun invoke(migrationContext: MigrationContext): Boolean {
         val context = migrationContext.get<Application>() ?: return false
         val libraryPreferences = migrationContext.get<LibraryPreferences>() ?: return false

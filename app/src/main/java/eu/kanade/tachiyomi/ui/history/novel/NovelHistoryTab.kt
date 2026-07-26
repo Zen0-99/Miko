@@ -77,6 +77,10 @@ fun Screen.novelHistoryTab(
     return TabContent(
         titleRes = AYMR.strings.label_history,
         searchEnabled = true,
+        searchAvailable = true,
+        searchPlaceholderText = MR.strings.search_hint_history,
+        searchQuery = searchQuery,
+        onSearchQueryChange = { screenModel.search(it) },
         content = { contentPadding, _ ->
             NovelHistoryScreen(
                 state = state,

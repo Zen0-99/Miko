@@ -20,7 +20,7 @@
         <item quantity="few">Dokončeno za %1$s s %2$s chybami</item>
         <item quantity="other">Dokončeno za %1$s s %2$s chybami</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategorie</item>
         <item quantity="few">%d kategorie</item>
         <item quantity="other">%d kategorií</item>

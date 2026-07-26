@@ -8,7 +8,7 @@
         <item quantity="one">Efter %1$s minut</item>
         <item quantity="other">Efter %1$s minutter</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategori</item>
         <item quantity="other">%d kategorier</item>
     </plurals>

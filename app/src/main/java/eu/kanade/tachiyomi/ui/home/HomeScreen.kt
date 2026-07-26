@@ -3,30 +3,54 @@ package eu.kanade.tachiyomi.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import tachiyomi.presentation.core.util.runOnEnterKeyPressed
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
@@ -44,9 +68,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
@@ -61,16 +86,25 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import kotlinx.collections.immutable.toPersistentList
 import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.components.LocalSharedTopBar
 import eu.kanade.presentation.components.SharedTopBarState
 import eu.kanade.presentation.home.ModePill
+import eu.kanade.presentation.library.LibraryUpdateProgressOverlay
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
@@ -92,6 +126,7 @@ import soup.compose.material.motion.animation.materialFadeThroughIn
 import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.components.material.FloatingGlassNavigationBar
 import tachiyomi.presentation.core.components.material.FloatingGlassNavigationBarWithModes
 import tachiyomi.presentation.core.components.material.NavigationBar
@@ -129,6 +164,9 @@ object HomeScreen : Screen() {
         val sharedTopBarState = remember { SharedTopBarState() }
         val showAnime by uiPreferences.showAnimeMode().collectAsStateWithLifecycle()
         val showNovel by uiPreferences.showNovelMode().collectAsStateWithLifecycle()
+        // Unified glass tint — shared by nav bar, top bar, and update overlay.
+        val glassTint = eu.kanade.presentation.components.GlassTintController.resolvedTint()
+        val floatingGlassTopBar by uiPreferences.floatingGlassTopBar().collectAsStateWithLifecycle()
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
 
@@ -163,10 +201,15 @@ object HomeScreen : Screen() {
                 val topBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(
                     rememberTopAppBarState(),
                 )
-                // Reset top bar visibility when switching tabs
+                // Reset top bar visibility when switching tabs.
+                // Also close any active search so it doesn't leak into the
+                // new tab — each tab starts with search closed.
                 val currentTabKey = tabNavigator.current.key
                 LaunchedEffect(currentTabKey) {
                     topBarScrollBehavior.state.heightOffset = 0f
+                    if (sharedTopBarState.searchQuery != null) {
+                        sharedTopBarState.onSearchQueryChange(null)
+                    }
                 }
                 // Observe "view failures" commands from the library update progress
                 // overlay (which lives outside the TabNavigator scope in MainActivity)
@@ -179,53 +222,37 @@ object HomeScreen : Screen() {
                     }
                 }
                 Scaffold(
-                    modifier = Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection),
-                    containerColor = MaterialTheme.colorScheme.background,
+                    modifier = if (floatingGlassTopBar) {
+                        Modifier
+                    } else {
+                        Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection)
+                    },
+                    containerColor = if (floatingGlassTopBar) Color.Transparent else MaterialTheme.colorScheme.background,
                     topBar = {
-                        Column {
-                            SearchToolbar(
-                                searchQuery = if (sharedTopBarState.searchEnabled) sharedTopBarState.searchQuery else null,
-                                onChangeSearchQuery = sharedTopBarState.onSearchQueryChange,
-                                searchEnabled = sharedTopBarState.searchEnabled,
-                                placeholderText = sharedTopBarState.searchPlaceholderText,
-                                onSearch = sharedTopBarState.onSearch,
-                                titleContent = {
-                                    AnimatedContent(
-                                        targetState = sharedTopBarState.title,
-                                        transitionSpec = {
-                                            fadeIn(animationSpec = tween(200)) togetherWith
-                                                fadeOut(animationSpec = tween(200))
-                                        },
-                                        label = "topbar_title",
-                                    ) { title ->
-                                        Text(title)
-                                    }
-                                },
-                                actions = {
-                                    // Fade between action sets on tab change.
-                                    // Wrapped in a Box so old/new overlap cleanly during fade.
-                                    Box {
-                                        AnimatedContent(
-                                            targetState = sharedTopBarState.actions,
-                                            transitionSpec = {
-                                                fadeIn(animationSpec = tween(150)) togetherWith
-                                                    fadeOut(animationSpec = tween(150))
-                                            },
-                                            contentKey = { it.hashCode() },
-                                            label = "topbar_actions",
-                                        ) { actions ->
-                                            Row {
-                                                AppBarActions(actions)
-                                            }
-                                        }
-                                    }
-                                },
-                                navigateUp = sharedTopBarState.navigateUp,
-                                scrollBehavior = topBarScrollBehavior,
+                        if (floatingGlassTopBar) {
+                            FloatingGlassTopBar(
+                                hazeState = hazeState,
+                                sharedTopBarState = sharedTopBarState,
+                                tint = glassTint,
                             )
-                            // Optional pill content shown below search bar while search is active
-                            if (sharedTopBarState.searchEnabled && sharedTopBarState.searchQuery != null) {
-                                sharedTopBarState.searchPillContent?.invoke()
+                        } else {
+                            // Standard (non-glass) top bar — same search-first design
+                            // but with a solid surface background.
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            val density = androidx.compose.ui.platform.LocalDensity.current
+                            val statusBarHeight = remember {
+                                val res = context.resources
+                                val id = res.getIdentifier("status_bar_height", "dimen", "android")
+                                if (id > 0) with(density) { res.getDimensionPixelSize(id).toDp() } else 0.dp
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .padding(top = statusBarHeight),
+                            ) {
+                                SearchFirstTopBarContent(
+                                    sharedTopBarState = sharedTopBarState,
+                                )
                             }
                         }
                     },
@@ -251,12 +278,15 @@ object HomeScreen : Screen() {
                                     enter = expandVertically(),
                                     exit = shrinkVertically(),
                                 ) {
-                                    val navBottomPadding = if (navBarIconsOnly) 8.dp else 14.dp
+                                    val navBottomPadding = if (navBarIconsOnly) 6.dp else 14.dp
                                     val navRowHeight = if (navBarIconsOnly) 52.dp else 72.dp
+                                    val navTopPadding = if (navBarIconsOnly) 10.dp else 10.dp
                                     if (navBarAppearance == eu.kanade.domain.ui.model.NavBarAppearance.FLOATING_GLASS) {
                                         if (modeCount > 1) {
                                             FloatingGlassNavigationBarWithModes(
                                                 hazeState = hazeState,
+                                                tint = glassTint,
+                                                topPadding = navTopPadding,
                                                 bottomPadding = navBottomPadding,
                                                 navRowHeight = navRowHeight,
                                                 modeRow = {
@@ -272,6 +302,7 @@ object HomeScreen : Screen() {
                                         } else {
                                             FloatingGlassNavigationBar(
                                                 hazeState = hazeState,
+                                                tint = glassTint,
                                                 bottomPadding = navBottomPadding,
                                                 navRowHeight = navRowHeight,
                                             ) {
@@ -304,30 +335,68 @@ object HomeScreen : Screen() {
                         contentWindowInsets = WindowInsets(0),
                     ) { contentPadding ->
                         val fadeDuration = tabFadeDuration()
-                        Box(
-                            modifier = Modifier
-                                .padding(top = contentPadding.calculateTopPadding())
-                                .consumeWindowInsets(contentPadding)
-                                .hazeSource(hazeState),
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            eu.kanade.presentation.components.LocalHostScaffoldContentPadding provides contentPadding,
                         ) {
-                            androidx.compose.runtime.CompositionLocalProvider(
-                                eu.kanade.presentation.components.LocalHostScaffoldContentPadding provides contentPadding,
+                            // Outer Box: contains hazeSource and overlay as siblings.
+                            // Haze cannot blur a source it lives inside, so the overlay
+                            // must be a sibling of the hazeSource Box, not a child.
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(
+                                        if (floatingGlassTopBar) Modifier
+                                        else Modifier.padding(top = contentPadding.calculateTopPadding()),
+                                    )
+                                    .consumeWindowInsets(contentPadding),
                             ) {
-                                AnimatedContent(
-                                    targetState = tabNavigator.current,
-                                    transitionSpec = {
-                                        materialFadeThroughIn(
-                                            initialScale = 1f,
-                                            durationMillis = fadeDuration,
-                                        ) togetherWith
-                                            materialFadeThroughOut(durationMillis = fadeDuration)
-                                    },
-                                    label = "tabContent",
+                                // hazeSource: tab content
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .hazeSource(hazeState),
                                 ) {
-                                    tabNavigator.saveableState(key = "currentTab", it) {
-                                        it.Content()
+                                    // Tab content — extends behind the floating glass top
+                                    // bar so the haze blur can sample it (same pattern as
+                                    // the floating glass nav bar). Each tab reads
+                                    // LocalHostScaffoldContentPadding to pad its own
+                                    // scrollable content so items aren't hidden.
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        AnimatedContent(
+                                            targetState = tabNavigator.current,
+                                            transitionSpec = {
+                                                materialFadeThroughIn(
+                                                    initialScale = 1f,
+                                                    durationMillis = fadeDuration,
+                                                ) togetherWith
+                                                    materialFadeThroughOut(durationMillis = fadeDuration)
+                                            },
+                                            label = "tabContent",
+                                        ) {
+                                            tabNavigator.saveableState(key = "currentTab", it) {
+                                                it.Content()
+                                            }
+                                        }
                                     }
                                 }
+                                // Library update progress overlay — sibling of the
+                                // hazeSource so its glass blur samples the tab
+                                // content behind it. Sits above the nav bar via
+                                // LocalHostScaffoldContentPadding.
+                                LibraryUpdateProgressOverlay(
+                                    onViewFailures = {
+                                        tabNavigator.current = UpdatesTab
+                                    },
+                                    hazeState = hazeState,
+                                    tint = glassTint,
+                                    modifier = Modifier.align(Alignment.BottomCenter),
+                                )
+                                // No click-outside-to-close scrim: when search is
+                                // active, the user should be able to scroll through
+                                // the results list without the search closing.
+                                // Search is closed via the X button or back press.
                             }
                         }
                     }
@@ -440,13 +509,11 @@ object HomeScreen : Screen() {
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDark) 0.82f else 0.92f)
         }
-        val iconBackgroundBrush = if (selected) {
-            Brush.verticalGradient(
-                listOf(
-                    if (isDark) accent.copy(alpha = 0.28f) else accent.copy(alpha = 0.18f),
-                    if (isDark) accent.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.78f),
-                ),
-            )
+        val iconBackgroundColor = if (selected) {
+            // Solid color pill — no gradient. Uses the primary color at a
+            // moderate alpha so it reads as a selection indicator without
+            // overwhelming the icon.
+            accent.copy(alpha = if (isDark) 0.22f else 0.15f)
         } else {
             null
         }
@@ -457,7 +524,7 @@ object HomeScreen : Screen() {
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 1.dp)
-                .padding(top = if (showLabel) 8.dp else 4.dp, bottom = if (showLabel) 4.dp else 4.dp)
+                .padding(top = if (showLabel) 8.dp else 6.dp, bottom = if (showLabel) 4.dp else 6.dp)
                 .selectable(
                     selected = selected,
                     role = Role.Tab,
@@ -481,9 +548,9 @@ object HomeScreen : Screen() {
                 Box(
                     modifier = Modifier
                         .then(
-                            if (selected && iconBackgroundBrush != null) {
+                            if (selected && iconBackgroundColor != null) {
                                 Modifier
-                                    .background(iconBackgroundBrush, iconShape)
+                                    .background(iconBackgroundColor, iconShape)
                             } else {
                                 Modifier
                             },
@@ -636,4 +703,346 @@ private fun Color.luminance(): Float {
     val g = green * 0.587f
     val b = blue * 0.114f
     return r + g + b
+}
+
+/**
+ * Floating glassmorphic top bar — mirrors the [FloatingGlassNavigationBar] design.
+ *
+ * Design:
+ * - No title text. The bar is a search-first design.
+ * - Left: search icon (if search is available for this tab) or back arrow (if navigateUp is set).
+ * - Center: tappable search area showing hint text. Tapping activates search mode.
+ *   When search is active, this becomes a text input field.
+ * - Right: action icons.
+ * - Narrower than the old design — just icon height + padding.
+ * - No solid background — the glass surface is transparent so Haze can blur
+ *   the content scrolling behind it.
+ */
+@Composable
+private fun FloatingGlassTopBar(
+    hazeState: HazeState,
+    sharedTopBarState: SharedTopBarState,
+    tint: Color,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val resolvedTint = tint
+    val shape: Shape = RoundedCornerShape(20.dp)
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val statusBarHeight = remember {
+        val res = context.resources
+        val id = res.getIdentifier("status_bar_height", "dimen", "android")
+        if (id > 0) with(density) { res.getDimensionPixelSize(id).toDp() } else 0.dp
+    }
+
+    val glassModifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp)
+        .padding(top = statusBarHeight + 6.dp, bottom = 6.dp)
+        .shadow(elevation = 8.dp, shape = shape)
+        .clip(shape)
+        .hazeEffect(
+            state = hazeState,
+            style = HazeStyle(
+                backgroundColor = colorScheme.background,
+                tint = HazeTint(resolvedTint),
+                blurRadius = 24.dp,
+                noiseFactor = 0.12f,
+            ),
+        )
+
+    Box(
+        modifier = Modifier.then(glassModifier),
+    ) {
+        Column {
+            SearchFirstTopBarContent(
+                sharedTopBarState = sharedTopBarState,
+            )
+        }
+    }
+}
+
+/**
+ * Search-first top bar content — used by both the floating glass top bar
+ * and the standard (non-glass) top bar.
+ *
+ * Layout: [back/search icon] [search field or hint area] [action icons]
+ */
+@Composable
+private fun SearchFirstTopBarContent(
+    sharedTopBarState: SharedTopBarState,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    // Search is active when the user has opened the search field (query is non-null).
+    // Does NOT require searchEnabled — that field is inconsistently set across tabs.
+    val isSearchActive = sharedTopBarState.searchAvailable && sharedTopBarState.searchQuery != null
+    val canSearch = sharedTopBarState.searchAvailable
+    val hasNavigateUp = sharedTopBarState.navigateUp != null
+
+    // Fixed small slide offsets — just a few dp, never the full icon width.
+    val slidePx = with(LocalDensity.current) { 8.dp.roundToPx() }
+    // Hint and icon-swap use a smaller slide.
+    val hintSlidePx = with(LocalDensity.current) { 4.dp.roundToPx() }
+
+    Column {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // ── Left slot (48dp): back arrow or search icon ──
+        // Static between main tabs — only animates when entering/leaving
+        // a search-capable or navigateUp context. Small fixed-dp slide + fade.
+        Box(
+            modifier = Modifier.size(48.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Back arrow — visible on sub-screens with navigateUp
+            androidx.compose.animation.AnimatedVisibility(
+                visible = hasNavigateUp,
+                enter = slideInHorizontally(animationSpec = tween(300), initialOffsetX = { -slidePx }) +
+                    fadeIn(animationSpec = tween(300)),
+                exit = slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { -slidePx }) +
+                    fadeOut(animationSpec = tween(220)),
+            ) {
+                IconButton(onClick = sharedTopBarState.navigateUp!!) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "Back",
+                    )
+                }
+            }
+            // Search icon — visible on search-capable tabs without navigateUp.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = canSearch && !hasNavigateUp,
+                enter = slideInHorizontally(animationSpec = tween(300), initialOffsetX = { -slidePx }) +
+                    fadeIn(animationSpec = tween(300)),
+                exit = slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { -slidePx }) +
+                    fadeOut(animationSpec = tween(220)),
+            ) {
+                IconButton(
+                    onClick = { sharedTopBarState.onSearchQueryChange("") },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = "Search",
+                    )
+                }
+            }
+        }
+
+        // ── Center slot: search field or tappable hint ──
+        // Both use the same horizontal padding so the hint text stays in the
+        // same position when transitioning between hint and active search.
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            // Use the tab's placeholder text, or fall back to "Search..." only
+            // when search is active (for the text field placeholder). When the
+            // tab doesn't support search, fullHint is null and the hint box
+            // shows nothing — avoiding the "Search..." flash during fade-out.
+            val fullHint = sharedTopBarState.searchPlaceholderText
+                ?: if (isSearchActive) stringResource(MR.strings.action_search_hint) else null
+
+            if (isSearchActive) {
+                // Active search field — auto-focused on appearance.
+                val focusRequester = remember { FocusRequester() }
+                val keyboardController = LocalSoftwareKeyboardController.current
+                LaunchedEffect(Unit) {
+                    try { focusRequester.requestFocus() } catch (_: Exception) {}
+                }
+                val submitSearch: () -> Unit = {
+                    val query = sharedTopBarState.searchQuery
+                    if (!query.isNullOrBlank()) {
+                        sharedTopBarState.onSearch(query)
+                        keyboardController?.hide()
+                    }
+                }
+                BasicTextField(
+                    value = sharedTopBarState.searchQuery ?: "",
+                    onValueChange = { sharedTopBarState.onSearchQueryChange(it) },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                        color = colorScheme.onSurface,
+                    ),
+                    cursorBrush = SolidColor(colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { submitSearch() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .focusRequester(focusRequester)
+                        .runOnEnterKeyPressed(action = submitSearch),
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (sharedTopBarState.searchQuery.isNullOrBlank()) {
+                                // Placeholder — single Text with the full hint,
+                                // same padding as the tappable hint so text
+                                // doesn't shift when search opens.
+                                Text(
+                                    text = fullHint ?: stringResource(MR.strings.action_search_hint),
+                                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                )
+                            }
+                            innerTextField()
+                        }
+                    },
+                )
+            } else {
+                // Tappable hint or empty (non-search tab).
+                // AnimatedVisibility keyed on canSearch: fades the hint in/out
+                // when entering/leaving a search-capable tab. No size animation
+                // — the hint text stays in place and just fades.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = canSearch,
+                    enter = fadeIn(animationSpec = tween(300)),
+                    exit = fadeOut(animationSpec = tween(220)),
+                ) {
+                    // Keep the last non-null hint text during exit animation
+                    // so the text doesn't flash to "Search..." when switching
+                    // to a non-search tab.
+                    var lastHint by remember { mutableStateOf(fullHint) }
+                    if (fullHint != null) lastHint = fullHint
+                    val displayHint = fullHint ?: lastHint ?: ""
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) {
+                                sharedTopBarState.onSearchQueryChange("")
+                            }
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        // Hint text — instant swap between search-capable tabs.
+                        Text(
+                            text = displayHint,
+                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Right slot: action icons + X close button (overlaid) ──
+        // Visible icons use per-slot AnimatedVisibility (no AnimatedContent,
+        // no container size animation, no arch). Three-dot overflow is static.
+        // The X close button is overlaid at the end so it doesn't shift while
+        // action icons are fading out.
+        Box {
+            // Action icons — visible when search is NOT active.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !isSearchActive,
+                enter = slideInHorizontally(animationSpec = tween(300), initialOffsetX = { slidePx }) +
+                    fadeIn(animationSpec = tween(300)),
+                exit = slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { -slidePx }) +
+                    fadeOut(animationSpec = tween(220)),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Tab-specific visible icons — per-slot approach.
+                    // Outer AnimatedVisibility handles appear/disappear (slot
+                    // becomes empty/non-empty). Inner AnimatedContent handles
+                    // icon swaps within the same slot (filter → calendar).
+                    // Each slot is a fixed 48dp IconButton, so AnimatedContent's
+                    // size animation is a no-op — no arch.
+                    val visibleActions = sharedTopBarState.actions
+                        .filterIsInstance<AppBar.Action>()
+                    val maxSlots = 4
+                    for (i in 0 until maxSlots) {
+                        val action = visibleActions.getOrNull(i)
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = action != null,
+                            enter = slideInHorizontally(animationSpec = tween(300), initialOffsetX = { slidePx }) +
+                                fadeIn(animationSpec = tween(300)),
+                            exit = slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { -slidePx }) +
+                                fadeOut(animationSpec = tween(220)),
+                        ) {
+                            // Icon swap within the same slot is instant — no
+                            // slide/fade animation when the icon changes (e.g.
+                            // filter → calendar between tabs).
+                            if (action != null) {
+                                TooltipBox(
+                                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                                    tooltip = {
+                                        PlainTooltip { Text(action.title) }
+                                    },
+                                    state = rememberTooltipState(),
+                                ) {
+                                    IconButton(
+                                        onClick = action.onClick,
+                                        enabled = action.enabled,
+                                    ) {
+                                        Icon(
+                                            imageVector = action.icon,
+                                            tint = action.iconTint ?: LocalContentColor.current,
+                                            contentDescription = action.title,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Three-dot overflow — static between tabs.
+                    val overflowActions = sharedTopBarState.actions
+                        .filter { it !is AppBar.Action }
+                        .toPersistentList()
+                    if (overflowActions.isNotEmpty()) {
+                        AppBarActions(overflowActions)
+                    }
+                }
+            }
+            // X close button — overlaid at the end so it doesn't shift.
+            // Takes longer to come in (delayed + longer duration) so action
+            // icons have time to fade out first.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isSearchActive,
+                enter = slideInHorizontally(
+                    animationSpec = tween(450, delayMillis = 200),
+                    initialOffsetX = { slidePx },
+                ) + fadeIn(animationSpec = tween(450, delayMillis = 200)),
+                exit = slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { slidePx }) +
+                    fadeOut(animationSpec = tween(220)),
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
+                IconButton(
+                    onClick = { sharedTopBarState.onSearchQueryChange(null) },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "Close search",
+                    )
+                }
+            }
+        }
+    }
+
+    // Optional pill content shown below the search bar while search is active.
+    // Fades + expands/collapses vertically when search opens/closes.
+    androidx.compose.animation.AnimatedVisibility(
+        visible = isSearchActive,
+        enter = fadeIn(animationSpec = tween(300)) + expandVertically(
+            animationSpec = tween(300),
+            expandFrom = Alignment.Top,
+        ),
+        exit = fadeOut(animationSpec = tween(220)) + shrinkVertically(
+            animationSpec = tween(220),
+            shrinkTowards = Alignment.Top,
+        ),
+    ) {
+        sharedTopBarState.searchPillContent?.invoke()
+    }
+    } // Column
 }

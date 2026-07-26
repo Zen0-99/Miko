@@ -1,6 +1,6 @@
 package tachiyomi.domain.library.novel.model
 
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.model.FlagWithMask
 import tachiyomi.domain.library.model.plus
 
@@ -137,5 +137,5 @@ data class NovelLibrarySort(
     }
 }
 
-val Category?.sort: NovelLibrarySort
+val Collection?.sort: NovelLibrarySort
     get() = NovelLibrarySort.valueOf(this?.flags)

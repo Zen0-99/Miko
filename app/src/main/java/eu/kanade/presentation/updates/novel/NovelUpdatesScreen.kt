@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.relativeDateText
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.components.DotSeparatorText
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.ItemCover
@@ -88,10 +89,7 @@ fun NovelUpdateScreen(
             )
         },
         snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = 80.dp),
-            )
+            AchievementStyledSnackbarHost(hostState = snackbarHostState)
         },
     ) { contentPadding ->
         val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
@@ -122,7 +120,9 @@ fun NovelUpdateScreen(
                         }
                     },
                     enabled = !state.selectionMode,
-                    indicatorPadding = resolvedContentPadding,
+                    indicatorPadding = androidx.compose.foundation.layout.PaddingValues(
+                        bottom = resolvedContentPadding.calculateBottomPadding(),
+                    ),
                 ) {
                     FastScrollLazyColumn(
                         contentPadding = resolvedContentPadding,

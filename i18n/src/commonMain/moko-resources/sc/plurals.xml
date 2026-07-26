@@ -24,7 +24,7 @@
         <item quantity="one">Nd\'abarrat %1$s</item>
         <item quantity="other">Nd\'abarrant %1$s</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d categoria</item>
         <item quantity="other">%d categorias</item>
     </plurals>

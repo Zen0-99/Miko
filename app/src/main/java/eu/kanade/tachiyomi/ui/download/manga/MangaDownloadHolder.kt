@@ -28,9 +28,9 @@ class MangaDownloadHolder(private val view: View, val adapter: MangaDownloadAdap
     private lateinit var download: MangaDownload
 
     /**
-     * Binds this holder with the given category.
+     * Binds this holder with the given collection.
      *
-     * @param category The category to bind.
+     * @param collection The collection to bind.
      */
     fun bind(download: MangaDownload) {
         this.download = download

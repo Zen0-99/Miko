@@ -43,8 +43,11 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.size.Size
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.AppBarActions
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.DropdownMenu
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import kotlinx.collections.immutable.persistentListOf
@@ -72,7 +75,7 @@ fun MangaCoverDialog(
         ),
     ) {
         Scaffold(
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
             containerColor = Color.Transparent,
             bottomBar = {
                 Row(

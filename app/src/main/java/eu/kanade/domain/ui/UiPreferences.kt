@@ -128,6 +128,23 @@ class UiPreferences(
 
     fun navBarIconsOnly() = preferenceStore.getBoolean("nav_bar_icons_only", false)
 
+    fun floatingGlassTopBar() = preferenceStore.getBoolean("pref_floating_glass_top_bar", true)
+
+    /**
+     * Unified glass tint alpha for all glassmorphic surfaces (nav bar, top bar,
+     * library update overlay). Changing this updates all glass surfaces together.
+     * Range: 0.0 (fully transparent) to 1.0 (fully opaque tint).
+     * Default: 0.2 (dark) / 0.95 (light) — stored as the dark-mode alpha;
+     * light-mode alpha is derived as (1.0 - darkAlpha) + 0.15 for readability.
+     */
+    fun glassTintAlpha() = preferenceStore.getFloat("pref_glass_tint_alpha", 0.2f)
+
+    /**
+     * Whether the home hero card cover image slowly pans up and down with
+     * an eased animation. Default: false (off).
+     */
+    fun heroImagePanEnabled() = preferenceStore.getBoolean("pref_hero_image_pan", false)
+
     /**
      * The currently active content mode shown across mode-aware tabs (Library, Updates,
      * History). One global mode is shared by all mode-aware tabs so the user sees a single

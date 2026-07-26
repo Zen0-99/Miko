@@ -49,9 +49,11 @@ fun Screen.novelSourcesTab(): TabContent {
     val screenModel = rememberScreenModel { NovelSourcesScreenModel() }
     val state by screenModel.state.collectAsState()
     val extensionManager = remember { Injekt.get<NovelExtensionManager>() }
+    val jsPluginManager = remember { Injekt.get<eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager>() }
 
     // Track which source IDs have extension updates available + extension info for cards
     val installedExtensions by extensionManager.installedExtensionsFlow.collectAsState(emptyList())
+    val jsInstalledPlugins by jsPluginManager.installedPluginsFlow.collectAsState(emptyList())
     val sourcesWithUpdates by remember(installedExtensions) {
         derivedStateOf {
             installedExtensions.filter { it.hasUpdate }
@@ -60,12 +62,18 @@ fun Screen.novelSourcesTab(): TabContent {
                 .toSet()
         }
     }
-    // Map source ID → extension info for card rendering
+    // Map source ID → extension info for card rendering (APK extensions)
     val sourceExtensionMap by remember(installedExtensions) {
         derivedStateOf {
             installedExtensions.flatMap { ext ->
                 ext.sources.map { source -> source.id to ext }
             }.toMap()
+        }
+    }
+    // Map source ID → JS plugin info for card rendering (JS plugins)
+    val jsSourcePluginMap by remember(jsInstalledPlugins) {
+        derivedStateOf {
+            jsInstalledPlugins.associateBy { eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginId.toSourceId(it.id) }
         }
     }
 
@@ -91,6 +99,7 @@ fun Screen.novelSourcesTab(): TabContent {
                 cardDesign = cardDesign,
                 cardColumns = cardColumns,
                 sourceExtensionMap = sourceExtensionMap,
+                jsSourcePluginMap = jsSourcePluginMap,
                 onRefresh = screenModel::findAvailableExtensions,
                 onClickUpdateAll = {
                     installedExtensions.filter { it.hasUpdate }.forEach { ext ->
@@ -116,6 +125,16 @@ fun Screen.novelSourcesTab(): TabContent {
                     val pkgName = sourceExtensionMap[source.id]?.pkgName
                     if (pkgName != null) {
                         navigator.push(NovelExtensionDetailsScreen(pkgName))
+                    } else {
+                        // JS plugin — navigate to the plugin details screen
+                        val jsPlugin = jsSourcePluginMap[source.id]
+                        if (jsPlugin != null) {
+                            navigator.push(
+                                eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelPluginDetailsScreen(
+                                    pluginId = jsPlugin.id,
+                                ),
+                            )
+                        }
                     }
                 },
                 onClickUpdate = { source ->
@@ -132,12 +151,27 @@ fun Screen.novelSourcesTab(): TabContent {
                     }
                 },
                 onClickInstallExtension = { extension ->
-                    scope.launch {
-                        downloadStates[extension.pkgName] = InstallStep.Pending
-                        extensionManager.installExtension(extension).collect { step ->
-                            downloadStates[extension.pkgName] = step
-                            if (step == InstallStep.Error) {
-                                context.toast("Extension installation failed")
+                    // Route JS plugins (pkgName prefixed with "js_") to the JS
+                    // plugin manager via the screen model. APK extensions go
+                    // through the extension manager as before.
+                    if (extension.pkgName.startsWith(NovelSourcesScreenModel.JS_PLUGIN_PKG_PREFIX)) {
+                        scope.launch {
+                            downloadStates[extension.pkgName] = InstallStep.Pending
+                            screenModel.installJsPlugin(extension) { step ->
+                                downloadStates[extension.pkgName] = step
+                                if (step == InstallStep.Installed || step == InstallStep.Error) {
+                                    downloadStates.remove(extension.pkgName)
+                                }
+                            }
+                        }
+                    } else {
+                        scope.launch {
+                            downloadStates[extension.pkgName] = InstallStep.Pending
+                            extensionManager.installExtension(extension).collect { step ->
+                                downloadStates[extension.pkgName] = step
+                                if (step == InstallStep.Error) {
+                                    context.toast("Extension installation failed")
+                                }
                             }
                         }
                     }

@@ -64,12 +64,13 @@ fun NovelExtensionIcon(
     extension: NovelExtension,
     modifier: Modifier = Modifier,
     density: Int = DisplayMetrics.DENSITY_DEFAULT,
+    showCommentsBadge: Boolean = true,
 ) {
-    val supportsComments = when (extension) {
+    val supportsComments = (showCommentsBadge && when (extension) {
         is NovelExtension.Installed -> extension.supportsComments()
         is NovelExtension.Available -> extension.supportsComments()
         else -> false
-    }
+    })
 
     Box(modifier = modifier) {
         when (extension) {

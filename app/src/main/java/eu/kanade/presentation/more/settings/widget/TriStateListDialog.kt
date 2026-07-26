@@ -130,11 +130,11 @@ fun <T> TriStateListDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    val included = items.mapIndexedNotNull { index, category ->
-                        if (selected[index] == State.CHECKED) category else null
+                    val included = items.mapIndexedNotNull { index, collection ->
+                        if (selected[index] == State.CHECKED) collection else null
                     }
-                    val excluded = items.mapIndexedNotNull { index, category ->
-                        if (selected[index] == State.INVERSED) category else null
+                    val excluded = items.mapIndexedNotNull { index, collection ->
+                        if (selected[index] == State.INVERSED) collection else null
                     }
                     onValueChanged(included, excluded)
                 },

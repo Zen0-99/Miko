@@ -28,8 +28,8 @@
     <string name="action_filter_bookmarked">बुकमार्क आहे</string>
     <string name="track">ट्रॅकिंग</string>
     <string name="manga">लायब्ररी इंत्रिज</string>
-    <string name="categories">श्रेण्या</string>
-    <string name="information_empty_category">तुम्ही श्रेण्या बनविल्या नाही आहेत, प्लस वर दाबून तुम्ही श्रेणी बनवू शकता.</string>
+    <string name="collections">श्रेण्या</string>
+    <string name="information_empty_collection">तुम्ही श्रेण्या बनविल्या नाही आहेत, प्लस वर दाबून तुम्ही श्रेणी बनवू शकता.</string>
     <string name="information_empty_library">तुमची संग्रहालय खाली आहे</string>
     <string name="information_no_recent_manga">अलीकडे काहीही वाचले नाही</string>
     <string name="information_no_recent">कोणतेही अलीकडील अद्यतने नाही</string>
@@ -72,10 +72,10 @@
     <string name="action_pause">विराम द्या</string>
     <string name="action_view_chapters">अध्याय बघा</string>
     <string name="action_edit_cover">कव्हर बदलवा</string>
-    <string name="action_move_category">श्रेणी सेट करा</string>
-    <string name="action_rename_category">श्रेणी पुन्हा नामांकित करा</string>
-    <string name="action_edit_categories">श्रेणी संपादन</string>
-    <string name="action_add_category">श्रेणी जोडा</string>
+    <string name="action_move_collection">श्रेणी सेट करा</string>
+    <string name="action_rename_collection">श्रेणी पुन्हा नामांकित करा</string>
+    <string name="action_edit_collections">श्रेणी संपादन</string>
+    <string name="action_add_collection">श्रेणी जोडा</string>
     <string name="action_add">जोडा</string>
     <string name="action_edit">सुधहरण</string>
     <string name="action_update_library">संग्रहालय अध्यातानित करा</string>
@@ -132,8 +132,8 @@
     <string name="ext_update">अध्यातणीत करा</string>
     <string name="ext_updates_pending">प्रलंबित अध्यातणे</string>
     <string name="all">सगडे</string>
-    <string name="default_category_summary">नेहमी विचारायचे</string>
-    <string name="default_category">मूलभूत श्रेणी</string>
+    <string name="default_collection_summary">नेहमी विचारायचे</string>
+    <string name="default_collection">मूलभूत श्रेणी</string>
     <string name="pref_update_only_non_completed">फक्त चालू असलेल्याच मांगा आधीतणीत करायचे</string>
     <string name="charging">चार्ज होत आहे</string>
     <string name="pref_library_update_restriction">लायब्ररी अद्ययावत प्रतिबंधी</string>

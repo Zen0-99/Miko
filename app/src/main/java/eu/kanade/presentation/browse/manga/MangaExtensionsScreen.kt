@@ -60,6 +60,7 @@ import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.launchRequestPackageInstallsPermission
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import androidx.compose.foundation.lazy.LazyColumn
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.padding
@@ -152,7 +153,7 @@ private fun ExtensionContent(
     var trustState by remember { mutableStateOf<MangaExtension.Untrusted?>(null) }
     val installGranted = rememberRequestPackageInstallsPermissionState(initialValue = true)
 
-    FastScrollLazyColumn(
+    LazyColumn(
         contentPadding = contentPadding + topSmallPaddingValues,
     ) {
         if (!installGranted && state.installer?.requiresSystemPermission == true) {

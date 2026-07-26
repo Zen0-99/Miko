@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">নাম</string>
-    <string name="categories">বিভাগসমূহ</string>
+    <string name="collections">বিভাগসমূহ</string>
     <string name="manga">পুস্তক সংগ্রহ</string>
     <string name="chapters">অধ্যায়সমূহ</string>
     <string name="track">ট্র্যাকিং</string>
@@ -33,10 +33,10 @@
     <string name="action_update_library">সংগ্রহশালা হালনাগাদ</string>
     <string name="action_edit">সম্পাদন করুন</string>
     <string name="action_add">যোগ করুন</string>
-    <string name="action_add_category">বিভাগ যোগ করুন</string>
-    <string name="action_edit_categories">বিভাগ সম্পাদন করুন</string>
-    <string name="action_rename_category">বিভাগের নতুন নামকরণ করুন</string>
-    <string name="action_move_category">বিভাগ নির্বাচন করুন</string>
+    <string name="action_add_collection">বিভাগ যোগ করুন</string>
+    <string name="action_edit_collections">বিভাগ সম্পাদন করুন</string>
+    <string name="action_rename_collection">বিভাগের নতুন নামকরণ করুন</string>
+    <string name="action_move_collection">বিভাগ নির্বাচন করুন</string>
     <string name="action_edit_cover">মোড়ক সম্পাদনা করুন</string>
     <string name="action_pause">বিরতি দিন</string>
     <string name="action_previous_chapter">পূর্ববর্তী অধ্যায়</string>
@@ -82,8 +82,8 @@
     <string name="charging">চার্জ হচ্ছে</string>
     <string name="pref_update_only_non_completed">\"সম্পূর্ন\" শর্তসহিত</string>
     <string name="pref_auto_update_manga_sync">পড়ার পরে অগ্রগতি আপডেট করুন</string>
-    <string name="default_category">সাধারণ বিভাগ</string>
-    <string name="default_category_summary">সর্বদা জিজ্ঞাসা করুন</string>
+    <string name="default_collection">সাধারণ বিভাগ</string>
+    <string name="default_collection_summary">সর্বদা জিজ্ঞাসা করুন</string>
     <string name="pref_fullscreen">সম্পূর্ণ পর্দা</string>
     <string name="pref_page_transitions">পৃষ্ঠা পালটানো এনিমেট করুন</string>
     <string name="pref_show_page_number">পৃষ্ঠা নম্বর দেখান</string>
@@ -161,7 +161,7 @@
     <string name="login">প্রবেশ করুন</string>
     <string name="login_success">প্রবেশ হয়েছে</string>
     <string name="unknown_error">অজানা ত্রুটি</string>
-    <string name="updating_category">বিভাগের হালনাগাদ হচ্ছে</string>
+    <string name="updating_collection">বিভাগের হালনাগাদ হচ্ছে</string>
     <string name="no_more_results">আর কোনও ফলাফল নেই</string>
     <string name="local_source">স্থানীয় উৎস</string>
     <string name="other_source">অন্যান্য</string>
@@ -193,8 +193,8 @@
     <string name="score">স্কোর</string>
     <string name="title">শিরোনাম</string>
     <string name="status">স্থিতি</string>
-    <string name="error_category_exists">এই নামের একটি বিভাগ ইতিমধ্যে বিদ্যমান!</string>
-    <string name="snack_categories_deleted">বিভাগগুলি মোছা হয়েছে</string>
+    <string name="error_collection_exists">এই নামের একটি বিভাগ ইতিমধ্যে বিদ্যমান!</string>
+    <string name="snack_collections_deleted">বিভাগগুলি মোছা হয়েছে</string>
     <string name="dialog_with_checkbox_remove_description">এটা এই অধ্যায়ের পড়ার সময়কাল সরিয়ে ফেলবে। আপনি নিশ্চিত?</string>
     <string name="dialog_with_checkbox_reset">এই মাংগার জন্য সব অধ্যায় পুনঃবিন্যাস করুন</string>
     <string name="snack_add_to_library">সংগ্রহশালায় মাঙ্গা যোগ করবেন?</string>
@@ -222,7 +222,7 @@
     <string name="information_no_recent">কোন নতুন হালনাগাদ নেই</string>
     <string name="information_no_recent_manga">সম্প্রতি কিছু পড়া হয়নি</string>
     <string name="information_empty_library">আপনার সংগ্রহশালা খালি</string>
-    <string name="information_empty_category">আপনার কোন বিভাগ নেই। আপনার সংগ্রহশালা সাজাতে যোগ চিহ্ন বাটনে চেপে একটি বিভাগ তৈরী করুন।</string>
+    <string name="information_empty_collection">আপনার কোন বিভাগ নেই। আপনার সংগ্রহশালা সাজাতে যোগ চিহ্ন বাটনে চেপে একটি বিভাগ তৈরী করুন।</string>
     <string name="download_notifier_downloader_title">ডাউনলোডার</string>
     <string name="download_notifier_title_error">ত্রুটি</string>
     <string name="download_notifier_unknown_error">অপ্রত্যাশিত ত্রুটির কারণে অধ্যায় ডাউনলোড করা যায়নি</string>
@@ -474,7 +474,7 @@
     <string name="enhanced_tracking_info">নির্দিষ্ট উৎসের জন্য উন্নত বৈশিষ্ট্য প্রদান করে এমন পরিষেবা। আপনার লাইব্রেরিতে যোগ করা হলে মাঙ্গা স্বয়ংক্রিয়ভাবে ট্র্যাক করা হয়।</string>
     <string name="enhanced_services">উন্নত সেবা</string>
     <string name="tracking_guide">ট্র্যাকিং গাইড</string>
-    <string name="pref_download_new_categories_details">বাদ দেওয়া ক্যাটাগরিতে থাকা মঙ্গা ডাউনলোড করা হবে না, যদিও সেগুলি অন্তর্ভুক্ত ক্যাটাগরিতেও আছে।</string>
+    <string name="pref_download_new_collections_details">বাদ দেওয়া ক্যাটাগরিতে থাকা মঙ্গা ডাউনলোড করা হবে না, যদিও সেগুলি অন্তর্ভুক্ত ক্যাটাগরিতেও আছে।</string>
     <string name="pref_category_auto_download">স্বয়ংক্রিয়ভাবে ডাউনলোড</string>
     <string name="pref_lowest">সর্বনিম্ন</string>
     <string name="pref_low">নিম্ম</string>
@@ -504,8 +504,8 @@
     <string name="exclude">বাদ দিন: %s</string>
     <string name="include">অন্তর্ভুক্ত করুন: %s</string>
     <string name="none">শূন্য</string>
-    <string name="pref_library_update_categories_details">বাদ দেওয়া ক্যাটাগরিতে মঙ্গা আপডেট করা হবে না যদিও সেগুলি অন্তর্ভুক্ত ক্যাটাগরিতেও থাকে।</string>
-    <string name="categorized_display_settings">সাজানোর এবং প্রদর্শনের জন্য প্রতি শ্রেণীর সেটিংস</string>
+    <string name="pref_library_update_collections_details">বাদ দেওয়া ক্যাটাগরিতে মঙ্গা আপডেট করা হবে না যদিও সেগুলি অন্তর্ভুক্ত ক্যাটাগরিতেও থাকে।</string>
+    <string name="per_collection_display_settings">সাজানোর এবং প্রদর্শনের জন্য প্রতি শ্রেণীর সেটিংস</string>
     <string name="restrictions">বিধিনিষেধ: %s</string>
     <string name="relative_time_today">সম্প্রতি</string>
     <string name="pref_dark_theme_pure_black">বিশুদ্ধ কালো অন্ধকার মোড</string>
@@ -523,12 +523,12 @@
     <string name="action_show_errors">সকল ত্রুটি দেখুন</string>
     <string name="cancel_all_for_series">এই সিরিজের সব বাতিল করুন</string>
     <string name="action_display_local_badge">স্থানীয় উৎস</string>
-    <string name="information_empty_category_dialog">আপনার এখনও কোন বিভাগ নেই |</string>
+    <string name="information_empty_collection_dialog">আপনার এখনও কোন বিভাগ নেই |</string>
     <string name="update_check_eol">এই অ্যান্ড্রয়েড সংস্করণটি আর সমর্থিত নয়</string>
     <string name="confirm_lock_change">পরিবর্তন নিশ্চিত করতে প্রমাণীকরণ করুন</string>
     <string name="action_sort_chapter_fetch_date">প্রাপ্তির তারিখ</string>
     <string name="label_default">সাধারণ</string>
-    <string name="pref_remove_exclude_categories">বর্জিত বিভাগ গুলি</string>
+    <string name="pref_remove_exclude_collections">বর্জিত বিভাগ গুলি</string>
     <string name="ext_app_info">অ্যাপের তথ্য</string>
     <string name="ext_update_all">শব উপদাতে কর</string>
     <string name="backup_info">স্বয়ংক্রিয় ব্যাকআপ অত্যন্ত সুপারিশময়. আপনি অন্যান্য জায়গায়ও কপি রাখা উচিত।</string>
@@ -561,13 +561,13 @@
     <string name="notification_update_error">%1$d আপডেট(গুলি) ব্যর্থ হয়েছে</string>
     <string name="publishing_finished">সম্পূর্ণ প্রকাশিত</string>
     <string name="action_sort_last_manga_update">সর্বশেষ হালনাগাদ চেক</string>
-    <string name="delete_category_confirmation">আপনি কি \"%s\" বিভাগটি মুছে ফেলতে চান?</string>
+    <string name="delete_collection_confirmation">আপনি কি \"%s\" বিভাগটি মুছে ফেলতে চান?</string>
     <string name="appwidget_updates_description">সম্প্রতি আপনার হালনাগাদকৃত মাঙ্গা দেখুন</string>
     <string name="are_you_sure">আপনি কি নিশ্চিত?</string>
     <string name="action_sort_unread_count">অপঠিত সংখ্যা</string>
     <string name="action_remove_everything">সবকিছু মুছুন</string>
     <string name="action_show_manga">লেখা দেখান</string>
-    <string name="delete_category">বিভাগ মুছুন</string>
+    <string name="delete_collection">বিভাগ মুছুন</string>
     <string name="theme_lavender">ল্যাভেণ্ডার</string>
     <string name="action_search_hint">খুঁজুন…</string>
     <string name="action_display_cover_only_grid">শুধু প্রচ্ছদসহ গ্রিড</string>
@@ -597,7 +597,7 @@
     <string name="label_downloaded">ডাউনলোড হয়েছে</string>
     <string name="label_started">শুরু হয়েছে</string>
     <string name="appwidget_unavailable_locked">অ্যাপ লক চালু থাকলে Widget পাওয়া যায় না</string>
-    <string name="action_update_category">বিভাগ আপডেট করুন</string>
+    <string name="action_update_collection">বিভাগ আপডেট করুন</string>
     <string name="action_open_random_manga">এলোমেলো এন্ট্রি খুলুন</string>
     <string name="action_display_show_continue_reading_button">পড়া চালিয়ে যান বোতাম</string>
     <string name="download_notifier_cache_renewal">ডাউনলোড চেক করা হচ্ছে</string>

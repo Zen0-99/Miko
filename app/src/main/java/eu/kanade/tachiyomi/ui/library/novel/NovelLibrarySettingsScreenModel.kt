@@ -10,8 +10,8 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.category.novel.interactor.SetSortModeForNovelCategory
+import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.collection.novel.interactor.SetSortModeForNovelCollection
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.novel.model.NovelLibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -22,7 +22,7 @@ import kotlin.time.Duration.Companion.seconds
 class NovelLibrarySettingsScreenModel(
     val preferences: BasePreferences = Injekt.get(),
     val libraryPreferences: LibraryPreferences = Injekt.get(),
-    private val setSortModeForCategory: SetSortModeForNovelCategory = Injekt.get(),
+    private val setSortModeForCollection: SetSortModeForNovelCollection = Injekt.get(),
     trackerManager: TrackerManager = Injekt.get(),
 ) : ScreenModel {
 
@@ -48,12 +48,12 @@ class NovelLibrarySettingsScreenModel(
     }
 
     fun setSort(
-        category: Category?,
+        collection: Collection?,
         mode: NovelLibrarySort.Type,
         direction: NovelLibrarySort.Direction,
     ) {
         screenModelScope.launchIO {
-            setSortModeForCategory.await(category, mode, direction)
+            setSortModeForCollection.await(collection, mode, direction)
         }
     }
 }

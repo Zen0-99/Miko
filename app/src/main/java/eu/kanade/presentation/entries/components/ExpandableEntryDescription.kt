@@ -20,11 +20,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -71,6 +73,12 @@ fun ExpandableEntryDescription(
         var isOverflowing by remember { mutableStateOf(false) }
         var collapsedTextHeight by remember { mutableStateOf<Int?>(null) }
         var hasInitialized by rememberSaveable { mutableStateOf(false) }
+        // Skip animation on first composition (including restoration from saver)
+        // to prevent the description from flashing during collapse when returning
+        // from the reader. The animation is enabled only after the height constraint
+        // has been applied for one full frame without animation, so the initial
+        // sizing is instant but subsequent expand/collapse toggles animate.
+        var hasLaidOut by remember { mutableStateOf(false) }
         val density = LocalDensity.current
         val desc = description.takeIf { !it.isNullOrBlank() }
             ?: stringResource(MR.strings.description_placeholder)
@@ -90,13 +98,22 @@ fun ExpandableEntryDescription(
 
         val canExpand = isOverflowing
 
+        // Enable animation one frame after the height constraint is first applied,
+        // so the initial collapse (including state restoration) is instant.
+        LaunchedEffect(collapsedTextHeight) {
+            if (collapsedTextHeight != null && !hasLaidOut) {
+                withFrameNanos { }
+                hasLaidOut = true
+            }
+        }
+
         Box(
             modifier = Modifier
                 .padding(horizontal = 16.dp)
                 .fillMaxWidth()
                 .clipToBounds()
                 .then(
-                    if (hasInitialized) {
+                    if (hasInitialized && hasLaidOut) {
                         Modifier.animateContentSize(animationSpec = spring(dampingRatio = 0.85f, stiffness = 350f))
                     } else {
                         Modifier

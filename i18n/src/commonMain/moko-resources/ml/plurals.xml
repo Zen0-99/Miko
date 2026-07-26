@@ -28,7 +28,7 @@
         <item quantity="one">%1$s മിനിറ്റിന് ശേഷം</item>
         <item quantity="other">%1$s മിനിറ്റിന് ശേഷം</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d വിഭാഗം</item>
         <item quantity="other">%d വിഭാഗങ്ങൾ</item>
     </plurals>

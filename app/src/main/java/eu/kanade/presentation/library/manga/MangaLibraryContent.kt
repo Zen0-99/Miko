@@ -20,16 +20,16 @@ import eu.kanade.presentation.library.components.LibraryTabs
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.manga.LibraryManga
-import tachiyomi.domain.library.model.LibraryCategoryDisplay
+import tachiyomi.domain.library.model.LibraryCollectionDisplay
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.presentation.core.components.material.PullRefresh
 import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun MangaLibraryContent(
-    categories: List<Category>,
+    collections: List<Collection>,
     searchQuery: String?,
     selection: List<LibraryManga>,
     contentPadding: PaddingValues,
@@ -41,19 +41,19 @@ fun MangaLibraryContent(
     onContinueReadingClicked: ((LibraryManga) -> Unit)?,
     onToggleSelection: (LibraryManga) -> Unit,
     onToggleRangeSelection: (LibraryManga) -> Unit,
-    onRefresh: (Category?) -> Boolean,
+    onRefresh: (Collection?) -> Boolean,
     onGlobalSearchClicked: () -> Unit,
-    getNumberOfMangaForCategory: (Category) -> Int?,
+    getNumberOfMangaForCollection: (Collection) -> Int?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
-    categoryDisplayMode: LibraryCategoryDisplay = LibraryCategoryDisplay.TABBED,
+    collectionDisplayMode: LibraryCollectionDisplay = LibraryCollectionDisplay.TABBED,
     getLibraryForPage: (Int) -> List<MangaLibraryItem>,
     onTogglePinned: ((MangaLibraryItem) -> Unit)? = null,
     onSeriesClicked: ((Long) -> Unit)? = null,
 ) {
-    if (categoryDisplayMode == LibraryCategoryDisplay.CONTINUOUS && categories.size > 1) {
+    if (collectionDisplayMode == LibraryCollectionDisplay.CONTINUOUS && collections.size > 1) {
         MangaLibraryContinuousContent(
-            categories = categories,
+            collections = collections,
             searchQuery = searchQuery,
             selection = selection,
             contentPadding = contentPadding,
@@ -64,7 +64,7 @@ fun MangaLibraryContent(
             onToggleRangeSelection = onToggleRangeSelection,
             onRefresh = onRefresh,
             onGlobalSearchClicked = onGlobalSearchClicked,
-            getNumberOfMangaForCategory = getNumberOfMangaForCategory,
+            getNumberOfMangaForCollection = getNumberOfMangaForCollection,
             getDisplayMode = getDisplayMode,
             getColumnsForOrientation = getColumnsForOrientation,
             getLibraryForPage = getLibraryForPage,
@@ -79,22 +79,22 @@ fun MangaLibraryContent(
             end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         ),
     ) {
-        val coercedCurrentPage = remember { currentPage().coerceAtMost(categories.lastIndex) }
-        val pagerState = rememberPagerState(coercedCurrentPage) { categories.size }
+        val coercedCurrentPage = remember { currentPage().coerceAtMost(collections.lastIndex) }
+        val pagerState = rememberPagerState(coercedCurrentPage) { collections.size }
 
         val scope = rememberCoroutineScope()
         var isRefreshing by remember(pagerState.currentPage) { mutableStateOf(false) }
 
-        if (showPageTabs && categories.size > 1) {
-            LaunchedEffect(categories) {
-                if (categories.size <= pagerState.currentPage) {
-                    pagerState.scrollToPage(categories.size - 1)
+        if (showPageTabs && collections.size > 1) {
+            LaunchedEffect(collections) {
+                if (collections.size <= pagerState.currentPage) {
+                    pagerState.scrollToPage(collections.size - 1)
                 }
             }
             LibraryTabs(
-                categories = categories,
+                collections = collections,
                 pagerState = pagerState,
-                getNumberOfItemsForCategory = getNumberOfMangaForCategory,
+                getNumberOfItemsForCollection = getNumberOfMangaForCollection,
             ) { scope.launch { pagerState.animateScrollToPage(it) } }
         }
 
@@ -110,7 +110,7 @@ fun MangaLibraryContent(
         PullRefresh(
             refreshing = isRefreshing,
             onRefresh = {
-                val started = onRefresh(categories[currentPage()])
+                val started = onRefresh(collections[currentPage()])
                 if (!started) return@PullRefresh
                 scope.launch {
                     // Fake refresh status but hide it after a second as it's a long running task

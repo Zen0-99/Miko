@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -49,7 +50,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import eu.kanade.presentation.theme.AuroraTheme
 import kotlinx.coroutines.delay
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.i18n.aniyomi.AYMR
@@ -154,12 +154,14 @@ private fun AchievementGroupBannerItem(
     onViewAll: (List<Achievement>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-    val mutedGradient = remember(colors.accent, colors.progressCyan, colors.surface) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val mutedGradient = remember(primaryColor, secondaryColor, surfaceColor) {
         mutedGroupBannerGradient(
-            accent = colors.accent,
-            secondary = colors.progressCyan,
-            surface = colors.surface,
+            accent = primaryColor,
+            secondary = secondaryColor,
+            surface = surfaceColor,
         )
     }
 
@@ -167,14 +169,14 @@ private fun AchievementGroupBannerItem(
         modifier = modifier
             .graphicsLayer {
                 shadowElevation = AchievementPopupSizeTokens.groupShadowElevationPx
-                spotShadowColor = colors.accent.copy(alpha = 0.35f)
-                ambientShadowColor = colors.progressCyan.copy(alpha = 0.24f)
+                spotShadowColor = primaryColor.copy(alpha = 0.35f)
+                ambientShadowColor = secondaryColor.copy(alpha = 0.24f)
             }
             .shadow(
                 elevation = AchievementPopupSizeTokens.groupShadowElevation,
                 shape = RoundedCornerShape(AchievementPopupSizeTokens.groupContainerCornerRadius),
-                ambientColor = colors.accent.copy(alpha = 0.32f),
-                spotColor = colors.progressCyan.copy(alpha = 0.24f),
+                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
+                spotColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f),
             )
             .clip(RoundedCornerShape(AchievementPopupSizeTokens.groupContainerCornerRadius))
             .background(

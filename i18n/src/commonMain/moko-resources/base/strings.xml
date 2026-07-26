@@ -12,7 +12,7 @@
 
     <!-- Models -->
     <string name="name">Name</string>
-    <string name="categories">Categories</string>
+    <string name="collections">Collections</string>
     <string name="manga">Library entries</string>
     <string name="chapters">Chapters</string>
     <string name="track">Tracking</string>
@@ -76,6 +76,13 @@
     <string name="action_sort_random">Random</string>
     <string name="action_search">Search</string>
     <string name="action_search_hint">Search…</string>
+    <string name="search_hint_library">Search title, tags, source</string>
+    <string name="search_hint_updates">Search updates…</string>
+    <string name="search_hint_history">Search history…</string>
+    <string name="search_hint_downloads">Search downloads…</string>
+    <string name="search_hint_fetching">Search fetching…</string>
+    <string name="search_hint_browse">Search sources…</string>
+    <string name="search_hint_extensions">Search extensions…</string>
     <string name="action_search_settings">Search settings</string>
     <string name="action_global_search">Global search</string>
     <string name="action_select_all">Select all</string>
@@ -100,14 +107,14 @@
     <string name="action_disable_all">Disable all</string>
     <string name="action_edit">Edit</string>
     <string name="action_add">Add</string>
-    <string name="action_update_category">Update category</string>
+    <string name="action_update_collection">Update collection</string>
     <string name="action_open_random_manga">Open random entry</string>
-    <string name="action_add_category">Add category</string>
-    <string name="action_edit_categories">Edit categories</string>
-    <string name="action_rename_category">Rename category</string>
-    <string name="action_move_category">Set categories</string>
-    <string name="delete_category_confirmation">Do you wish to delete the category \"%s\"?</string>
-    <string name="delete_category">Delete category</string>
+    <string name="action_add_collection">Add collection</string>
+    <string name="action_edit_collections">Edit collections</string>
+    <string name="action_rename_collection">Rename collection</string>
+    <string name="action_move_collection">Set collections</string>
+    <string name="delete_collection_confirmation">Do you wish to delete the collection \"%s\"?</string>
+    <string name="delete_collection">Delete collection</string>
     <string name="action_edit_cover">Edit cover</string>
     <string name="action_view_chapters">View chapters</string>
     <string name="action_pause">Pause</string>
@@ -137,7 +144,7 @@
     <string name="action_display_unread_badge">Unread chapters</string>
     <string name="action_display_local_badge">Local source</string>
     <string name="action_display_language_badge">Language</string>
-    <string name="action_display_show_tabs">Show category tabs</string>
+    <string name="action_display_show_tabs">Show collection tabs</string>
     <string name="action_display_show_number_of_items">Show number of items</string>
     <string name="action_display_show_continue_reading_button">Continue reading button</string>
     <string name="action_disable">Disable</string>
@@ -228,7 +235,7 @@
     <string name="pref_category_about">About</string>
 
     <string name="pref_appearance_summary">Theme, date &amp; time format</string>
-    <string name="pref_library_summary">Categories, global update, chapter swipe</string>
+    <string name="pref_library_summary">Collections, global update, chapter swipe</string>
     <string name="pref_reader_summary">Reading mode, display, navigation</string>
     <string name="pref_downloads_summary">Automatic download, download ahead</string>
     <string name="pref_tracking_summary">One-way progress sync, enhanced sync</string>
@@ -317,10 +324,10 @@
     <string name="pref_library_update_refresh_metadata">Automatically refresh metadata</string>
     <string name="pref_library_update_refresh_metadata_summary">Check for new cover and details when updating library</string>
 
-    <string name="default_category">Default category</string>
-    <string name="default_category_summary">Always ask</string>
-    <string name="categorized_display_settings">Per-category settings for sort</string>
-    <string name="pref_library_update_categories_details">Entries in excluded categories will not be updated even if they are also in included categories.</string>
+    <string name="default_collection">Default collection</string>
+    <string name="default_collection_summary">Always ask</string>
+    <string name="per_collection_display_settings">Per-collection settings for sort</string>
+    <string name="pref_library_update_collections_details">Entries in excluded collections will not be updated even if they are also in included collections.</string>
     <string name="all">All</string>
     <string name="none">None</string>
     <string name="include">Include: %s</string>
@@ -379,7 +386,7 @@
     <string name="information_empty_repos">You have no repos set.</string>
     <string name="action_add_repo">Add repo</string>
     <string name="label_add_repo_input">Repo URL</string>
-    <string name="action_add_repo_message">Add additional repos to Mihon. This should be a URL that ends with \"index.min.json\".</string>
+    <string name="action_add_repo_message">Add an extension repository. Paste the repo URL (anime, manga, or LNReader novel plugin repos are all supported).</string>
     <string name="error_repo_exists">This repo already exists!</string>
     <string name="action_delete_repo">Delete repo</string>
     <string name="invalid_repo_name">Invalid repo URL</string>
@@ -465,7 +472,7 @@
     <string name="bionic_reading">Bionic reading</string>
     <string name="reading_mode_default">Default (Single Chapter)</string>
     <string name="reading_mode_infinite_scroll">Infinite Scroll</string>
-    <string name="reading_mode_overscroll">Overscroll Navigation</string>
+    <string name="reading_mode_overscroll">Overscroll</string>
     <string name="smart_by_page">Smart (by page)</string>
     <string name="smart_by_theme">Smart (by theme)</string>
     <string name="novel_orientation">Orientation</string>
@@ -540,7 +547,7 @@
     <string name="pref_remove_after_marked_as_read">After manually marked as read</string>
     <string name="pref_remove_after_read">After reading automatically delete</string>
     <string name="pref_remove_bookmarked_chapters">Allow deleting bookmarked chapters</string>
-    <string name="pref_remove_exclude_categories">Excluded categories</string>
+    <string name="pref_remove_exclude_collections">Excluded collections</string>
     <string name="no_location_set">No storage location set</string>
     <string name="invalid_location">Invalid location: %s</string>
     <string name="disabled">Disabled</string>
@@ -552,7 +559,7 @@
     <string name="pref_category_auto_download">Auto-download</string>
     <string name="pref_download_new">Download new chapters</string>
     <string name="pref_download_new_unread_chapters_only">Skip downloading duplicate read chapters</string>
-    <string name="pref_download_new_categories_details">Entries in excluded categories will not be downloaded even if they are also in included categories.</string>
+    <string name="pref_download_new_collections_details">Entries in excluded collections will not be downloaded even if they are also in included collections.</string>
     <string name="download_ahead">Download ahead</string>
     <string name="auto_download_while_reading">Auto download while reading</string>
     <string name="download_ahead_info">Only works if the current chapter + the next one are already downloaded.</string>
@@ -706,7 +713,7 @@
     <string name="unknown_error">Unknown error</string>
 
     <!-- Library -->
-    <string name="updating_category">Updating category</string>
+    <string name="updating_collection">Updating collection</string>
     <string name="manga_from_library">From library</string>
     <string name="downloaded_chapters">Downloaded chapters</string>
     <string name="intervals_header">Intervals</string>
@@ -841,9 +848,9 @@
     <string name="track_delete_remote_text">Also remove from %s</string>
 
     <!-- Category activity -->
-    <string name="error_category_exists">A category with this name already exists!</string>
+    <string name="error_collection_exists">A collection with this name already exists!</string>
     <!-- missing undo feature after Compose rewrite #7454 -->
-    <string name="snack_categories_deleted">Categories deleted</string>
+    <string name="snack_collections_deleted">Collections deleted</string>
 
     <!-- Dialog option with checkbox view -->
     <string name="dialog_with_checkbox_remove_description">This will remove the read date of this chapter. Are you sure?</string>
@@ -984,11 +991,11 @@
     <string name="information_no_recent">No recent updates</string>
     <string name="information_no_recent_manga">Nothing read recently</string>
     <string name="information_empty_library">Your library is empty</string>
-    <string name="information_no_manga_category">Category is empty</string>
-    <string name="information_no_entries_found">No entries found in this category</string>
+    <string name="information_no_manga_collection">Collection is empty</string>
+    <string name="information_no_entries_found">No entries found in this collection</string>
     <string name="getting_started_guide">Getting started guide</string>
-    <string name="information_empty_category">You have no categories. Tap the plus button to create one for organizing your library.</string>
-    <string name="information_empty_category_dialog">You don\'t have any categories yet.</string>
+    <string name="information_empty_collection">You have no collections. Tap the plus button to create one for organizing your library.</string>
+    <string name="information_empty_collection_dialog">You don\'t have any collections yet.</string>
     <string name="information_cloudflare_bypass_failure">Failed to bypass Cloudflare</string>
     <string name="information_cloudflare_interactive_challenge">Cloudflare interactive challenge detected. Please solve it manually in the WebView.</string>
     <string name="information_cloudflare_help">Tap here for help with Cloudflare</string>

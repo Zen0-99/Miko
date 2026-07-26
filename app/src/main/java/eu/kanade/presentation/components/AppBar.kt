@@ -144,6 +144,10 @@ fun AppBar(
     onCancelActionMode: () -> Unit = {},
 
     scrollBehavior: TopAppBarScrollBehavior? = null,
+    // When true, AppBar skips adding status-bar top padding — the caller is
+    // responsible for positioning the bar below the status bar (e.g. the
+    // floating glass top bar adds its own top padding before the glass surface).
+    skipStatusBarPadding: Boolean = false,
 ) {
     // Use a fixed status-bar height so the app bar height does not change
     // when system bars are hidden/shown (e.g. leaving fullscreen reader).
@@ -163,7 +167,7 @@ fun AppBar(
     Column(
         modifier = modifier
             .background(resolvedBg)
-            .padding(top = statusBarHeight),
+            .then(if (skipStatusBarPadding) Modifier else Modifier.padding(top = statusBarHeight)),
     ) {
         TopAppBar(
             navigationIcon = {
@@ -403,7 +407,9 @@ fun SearchToolbar(
     onSearch: (String) -> Unit = {},
     onClickCloseSearch: () -> Unit = { onChangeSearchQuery(null) },
     actions: @Composable RowScope.() -> Unit = {},
+    backgroundColor: Color? = null,
     scrollBehavior: TopAppBarScrollBehavior? = null,
+    skipStatusBarPadding: Boolean = false,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
@@ -411,6 +417,8 @@ fun SearchToolbar(
 
     AppBar(
         modifier = modifier,
+        backgroundColor = backgroundColor,
+        skipStatusBarPadding = skipStatusBarPadding,
         titleContent = {
             if (searchQuery == null) return@AppBar titleContent()
 

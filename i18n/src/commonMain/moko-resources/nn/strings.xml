@@ -5,7 +5,7 @@
     <string name="label_settings">Innstillingar</string>
     <string name="label_recent_updates">Oppdateringar</string>
     <string name="label_help">Hjelp</string>
-    <string name="categories">Kategoriar</string>
+    <string name="collections">Kategoriar</string>
     <string name="manga">Manga</string>
     <string name="chapters">Kapittel</string>
     <string name="track">Sporing</string>
@@ -33,8 +33,8 @@
     <string name="action_disable_all">Deaktiver alle</string>
     <string name="action_edit">Rediger</string>
     <string name="action_add">Legg til</string>
-    <string name="action_add_category">Legg til kategori</string>
-    <string name="action_edit_categories">Rediger kategoriar</string>
+    <string name="action_add_collection">Legg til kategori</string>
+    <string name="action_edit_collections">Rediger kategoriar</string>
     <string name="action_edit_cover">Rediger omslag</string>
     <string name="action_view_chapters">Vis kapittel</string>
     <string name="action_pause">Pause</string>
@@ -87,8 +87,8 @@
     <string name="label_sources">Kjelder</string>
     <string name="action_settings">Innstillingar</string>
     <string name="action_menu">Meny</string>
-    <string name="action_move_category">Sett kategoriar</string>
-    <string name="action_rename_category">Gi kategori nytt namn</string>
+    <string name="action_move_collection">Sett kategoriar</string>
+    <string name="action_rename_collection">Gi kategori nytt namn</string>
     <string name="action_previous_chapter">Førre kapittel</string>
     <string name="action_asc">Stigande</string>
     <string name="action_desc">Søkkande</string>
@@ -111,9 +111,9 @@
     <string name="connected_to_wifi">Berre på Wi-Fi</string>
     <string name="restrictions">Avgrensingar: %s</string>
     <string name="pref_library_update_refresh_metadata_summary">Sjå etter nye omslag og detaljar ved oppdatering av bibliotek</string>
-    <string name="default_category">Standard kategori</string>
-    <string name="default_category_summary">Alltid spør</string>
-    <string name="pref_library_update_categories_details">Manga i utelatne kategoriar vil ikkje bli oppdatert sjølv om dei òg er i inkluderte kategoriar.</string>
+    <string name="default_collection">Standard kategori</string>
+    <string name="default_collection_summary">Alltid spør</string>
+    <string name="pref_library_update_collections_details">Manga i utelatne kategoriar vil ikkje bli oppdatert sjølv om dei òg er i inkluderte kategoriar.</string>
     <string name="all">Alle</string>
     <string name="none">Ingen</string>
     <string name="include">Inkluder: %s</string>
@@ -179,7 +179,7 @@
     <string name="pref_high">Høg</string>
     <string name="pref_low">Låg</string>
     <string name="pref_lowest">Lågaste</string>
-    <string name="pref_remove_exclude_categories">Utelatne kategoriar</string>
+    <string name="pref_remove_exclude_collections">Utelatne kategoriar</string>
     <string name="save_chapter_as_cbz">Lagra som CBZ-arkiv</string>
     <string name="services">Tenester</string>
     <string name="enhanced_services">Forbetra tenester</string>
@@ -211,7 +211,7 @@
     <string name="email">E-postadresse</string>
     <string name="password">Passord</string>
     <string name="unknown_error">Ukjend feil</string>
-    <string name="updating_category">Oppdaterer kategori</string>
+    <string name="updating_collection">Oppdaterer kategori</string>
     <string name="manga_from_library">Manga frå biblioteket</string>
     <string name="tabs_header">Faner</string>
     <string name="local_source">Lokal kjelde</string>
@@ -237,7 +237,7 @@
     <string name="obsolete_extension_message">Denne utvidinga er ikkje lengre tilgjengeleg.</string>
     <string name="ext_nsfw_warning">Kan innehalda NSFW (18+) innhald</string>
     <string name="pref_category_delete_chapters">Slett kapittel</string>
-    <string name="pref_download_new_categories_details">Manga i utelatne kategoriar vil ikkje bli nedlasta sjølv om dei òg er i inkluderte kategoriar.</string>
+    <string name="pref_download_new_collections_details">Manga i utelatne kategoriar vil ikkje bli nedlasta sjølv om dei òg er i inkluderte kategoriar.</string>
     <string name="pref_backup_interval">Reservekopifrekvens</string>
     <string name="restoring_backup_canceled">Avbroten gjenoppretting</string>
     <string name="backup_restore_missing_sources">Manglande kjelder:</string>

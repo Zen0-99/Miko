@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -38,8 +39,9 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
-import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.collection.components.ChangeCollectionDialog
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBar
 import eu.kanade.presentation.components.useSharedTopBarWithSearch
@@ -54,7 +56,7 @@ import tachiyomi.presentation.core.theme.active
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
-import eu.kanade.tachiyomi.ui.category.CategoriesTab
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
@@ -67,7 +69,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.i18n.MR
@@ -113,13 +115,8 @@ data object MangaLibraryTab : Tab {
 
         val snackbarHostState = remember { SnackbarHostState() }
 
-        val onClickRefresh: (Category?) -> Boolean = { category ->
-            val started = MangaLibraryUpdateJob.startNow(context, category)
-            scope.launch {
-                val msgRes = if (started) MR.strings.updating_category else MR.strings.update_already_running
-                snackbarHostState.showSnackbar(context.stringResource(msgRes))
-            }
-            started
+        val onClickRefresh: (Collection?) -> Boolean = { collection ->
+            MangaLibraryUpdateJob.startNow(context, collection)
         }
 
         val navigateUp: (() -> Unit)? = null
@@ -129,8 +126,8 @@ data object MangaLibraryTab : Tab {
         // Register with shared top bar
         val title = state.getToolbarTitle(
             defaultTitle = defaultTitle,
-            defaultCategoryTitle = stringResource(MR.strings.label_default),
-            page = screenModel.activeCategoryIndex,
+            defaultCollectionTitle = stringResource(MR.strings.label_default),
+            page = screenModel.activeCollectionIndex,
         )
         if (state.selectionMode) {
             useSharedTopBar(
@@ -139,12 +136,12 @@ data object MangaLibraryTab : Tab {
                     AppBar.Action(
                         title = stringResource(MR.strings.action_select_all),
                         icon = Icons.Outlined.SelectAll,
-                        onClick = { screenModel.selectAll(screenModel.activeCategoryIndex) },
+                        onClick = { screenModel.selectAll(screenModel.activeCollectionIndex) },
                     ),
                     AppBar.Action(
                         title = stringResource(MR.strings.action_select_inverse),
                         icon = Icons.Outlined.FlipToBack,
-                        onClick = { screenModel.invertSelection(screenModel.activeCategoryIndex) },
+                        onClick = { screenModel.invertSelection(screenModel.activeCollectionIndex) },
                     ),
                 ),
                 navigateUp = screenModel::clearSelection,
@@ -162,14 +159,14 @@ data object MangaLibraryTab : Tab {
                     onClick = { onClickRefresh(null) },
                 ))
                 add(AppBar.OverflowAction(
-                    title = stringResource(MR.strings.action_update_category),
-                    onClick = { onClickRefresh(state.categories[screenModel.activeCategoryIndex]) },
+                    title = stringResource(MR.strings.action_update_collection),
+                    onClick = { onClickRefresh(state.collections[screenModel.activeCollectionIndex]) },
                 ))
                 add(AppBar.OverflowAction(
                     title = stringResource(MR.strings.action_open_random_manga),
                     onClick = {
                         scope.launch {
-                            val randomItem = screenModel.getRandomLibraryItemForCurrentCategory()
+                            val randomItem = screenModel.getRandomLibraryItemForCurrentCollection()
                             if (randomItem != null) {
                                 navigator.push(MangaScreen(randomItem.libraryManga.manga.id))
                             } else {
@@ -187,6 +184,7 @@ data object MangaLibraryTab : Tab {
                 actions = libraryActions,
                 navigateUp = navigateUp,
                 searchEnabled = true,
+                searchPlaceholderText = stringResource(MR.strings.search_hint_library),
                 searchQuery = state.searchQuery,
                 onSearchQueryChange = { query ->
                     screenModel.search(query)
@@ -195,11 +193,12 @@ data object MangaLibraryTab : Tab {
         }
 
         Scaffold(
+            containerColor = Color.Transparent,
             topBar = {},
             bottomBar = {
                 LibraryBottomActionMenu(
                     visible = state.selectionMode,
-                    onChangeCategoryClicked = screenModel::openChangeCategoryDialog,
+                    onChangeCollectionClicked = screenModel::openChangeCollectionDialog,
                     onMarkAsViewedClicked = { screenModel.markReadSelection(true) },
                     onMarkAsUnviewedClicked = { screenModel.markReadSelection(false) },
                     onDownloadClicked = screenModel::runDownloadActionSelection
@@ -209,18 +208,14 @@ data object MangaLibraryTab : Tab {
                 )
             },
             snackbarHost = {
-                SnackbarHost(
-                    hostState = snackbarHostState,
-                    modifier = Modifier
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = 86.dp),
-                )
+                AchievementStyledSnackbarHost(hostState = snackbarHostState)
             },
         ) { contentPadding ->
-            val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
-                ?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            val hostPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+            val hostTop = hostPadding?.calculateTopPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            val hostBottom = hostPadding?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
             val resolvedContentPadding = androidx.compose.foundation.layout.PaddingValues(
-                top = contentPadding.calculateTopPadding(),
+                top = contentPadding.calculateTopPadding() + hostTop,
                 bottom = contentPadding.calculateBottomPadding() + hostBottom,
             )
             when {
@@ -241,14 +236,14 @@ data object MangaLibraryTab : Tab {
                 }
                 else -> {
                     MangaLibraryContent(
-                        categories = state.categories,
+                        collections = state.collections,
                         searchQuery = state.searchQuery,
                         selection = state.selection,
                         contentPadding = resolvedContentPadding,
-                        currentPage = { screenModel.activeCategoryIndex },
+                        currentPage = { screenModel.activeCollectionIndex },
                         hasActiveFilters = state.hasActiveFilters,
-                        showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
-                        onChangeCurrentPage = { screenModel.activeCategoryIndex = it },
+                        showPageTabs = state.showCollectionTabs || !state.searchQuery.isNullOrEmpty(),
+                        onChangeCurrentPage = { screenModel.activeCollectionIndex = it },
                         onMangaClicked = { navigator.push(MangaScreen(it)) },
                         onContinueReadingClicked = { it: LibraryManga ->
                             scope.launchIO {
@@ -280,14 +275,14 @@ data object MangaLibraryTab : Tab {
                                 GlobalMangaSearchScreen(screenModel.state.value.searchQuery ?: ""),
                             )
                         },
-                        getNumberOfMangaForCategory = { state.getMangaCountForCategory(it) },
+                        getNumberOfMangaForCollection = { state.getMangaCountForCollection(it) },
                         getDisplayMode = { screenModel.getDisplayMode() },
                         getColumnsForOrientation = {
                             screenModel.getColumnsPreferenceForCurrentOrientation(
                                 it,
                             )
                         },
-                        categoryDisplayMode = state.categoryDisplayMode,
+                        collectionDisplayMode = state.collectionDisplayMode,
                         getLibraryForPage = { state.getLibraryItemsByPage(it) },
                     )
                 }
@@ -297,29 +292,29 @@ data object MangaLibraryTab : Tab {
         val onDismissRequest = screenModel::closeDialog
         when (val dialog = state.dialog) {
             is MangaLibraryScreenModel.Dialog.SettingsSheet -> run {
-                val category = state.categories.getOrNull(screenModel.activeCategoryIndex)
-                if (category == null) {
+                val collection = state.collections.getOrNull(screenModel.activeCollectionIndex)
+                if (collection == null) {
                     onDismissRequest()
                     return@run
                 }
                 MangaLibrarySettingsDialog(
                     onDismissRequest = onDismissRequest,
                     screenModel = settingsScreenModel,
-                    category = category,
+                    collection = collection,
                 )
             }
-            is MangaLibraryScreenModel.Dialog.ChangeCategory -> {
-                ChangeCategoryDialog(
+            is MangaLibraryScreenModel.Dialog.ChangeCollection -> {
+                ChangeCollectionDialog(
                     initialSelection = dialog.initialSelection,
                     onDismissRequest = onDismissRequest,
-                    onEditCategories = {
+                    onEditCollections = {
                         screenModel.clearSelection()
-                        navigator.push(CategoriesTab)
-                        CategoriesTab.showMangaCategory()
+                        navigator.push(CollectionsTab)
+                        CollectionsTab.showMangaCollection()
                     },
                     onConfirm = { include, exclude ->
                         screenModel.clearSelection()
-                        screenModel.setMangaCategories(dialog.manga, include, exclude)
+                        screenModel.setMangaCollections(dialog.manga, include, exclude)
                     },
                 )
             }

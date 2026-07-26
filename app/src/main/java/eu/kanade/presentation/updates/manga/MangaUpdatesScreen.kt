@@ -16,7 +16,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
 import eu.kanade.tachiyomi.ui.updates.manga.MangaUpdatesItem
 import eu.kanade.tachiyomi.ui.updates.manga.MangaUpdatesScreenModel
@@ -60,10 +62,7 @@ fun MangaUpdateScreen(
             )
         },
         snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = 80.dp),
-            )
+            AchievementStyledSnackbarHost(hostState = snackbarHostState)
         },
     ) { contentPadding ->
         val hostBottom = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
@@ -95,7 +94,9 @@ fun MangaUpdateScreen(
                         }
                     },
                     enabled = !state.selectionMode,
-                    indicatorPadding = resolvedContentPadding,
+                    indicatorPadding = androidx.compose.foundation.layout.PaddingValues(
+                        bottom = resolvedContentPadding.calculateBottomPadding(),
+                    ),
                 ) {
                     FastScrollLazyColumn(
                         contentPadding = resolvedContentPadding,

@@ -74,6 +74,7 @@ fun NovelCommentsDialog(
     onDismiss: () -> Unit,
     onRefresh: () -> Unit,
     accentColor: Color? = null,
+    chapterTitle: String? = null,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
 
@@ -129,11 +130,20 @@ fun NovelCommentsDialog(
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Comments (${comments.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Column {
+                        Text(
+                            text = "Comments (${comments.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (chapterTitle != null) {
+                            Text(
+                                text = chapterTitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                     Spacer(Modifier.weight(1f))
                     // Sort icon with dropdown menu
                     Box {

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -173,8 +175,8 @@ private fun NovelExtensionDetails(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     text = stringResource(MR.strings.label_migration),
@@ -183,18 +185,20 @@ private fun NovelExtensionDetails(
                 )
                 if (migrateItems.isNotEmpty()) {
                     Row(
-                        modifier = Modifier.clickable(onClick = onClickMigrateAll),
                         verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(onClick = onClickMigrateAll),
                     ) {
                         Text(
                             text = stringResource(AYMR.strings.action_migrate_all),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            text = " >",
+                            text = ">",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 4.dp),
                         )
                     }
                 }
@@ -285,6 +289,7 @@ private fun DetailsHeader(
                     .then(if (!isExtensionEnabled) Modifier.alpha(0.4f) else Modifier),
                 extension = extension,
                 density = DisplayMetrics.DENSITY_XXXHIGH,
+                showCommentsBadge = false,
             )
 
             Spacer(modifier = Modifier.width(MaterialTheme.padding.medium))
@@ -306,6 +311,7 @@ private fun DetailsHeader(
                 // Version and language inline, separated by a dot
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
                         text = extension.versionName,
@@ -317,11 +323,36 @@ private fun DetailsHeader(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    // APK badge — distinguishes APK extensions from JS plugins
+                    Text(
+                        text = "APK",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = " • ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Text(
                         text = LocaleHelper.getSourceDisplayName(extension.lang, context),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (extension is NovelExtension.Installed && extension.sources.any { it.supportsComments }) {
+                        Text(
+                            text = " • ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Comment,
+                            contentDescription = "Supports comments",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
                     if (extension.isNsfw) {
                         Text(
                             text = " • ",

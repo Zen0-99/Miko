@@ -36,8 +36,8 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withUIContext
-import tachiyomi.domain.category.manga.interactor.GetMangaCategories
-import tachiyomi.domain.category.manga.interactor.SetMangaCategories
+import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
+import tachiyomi.domain.collection.manga.interactor.SetMangaCollections
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.model.MangaUpdate
 import tachiyomi.domain.items.chapter.interactor.GetChaptersByMangaId
@@ -154,8 +154,8 @@ internal class MigrateMangaDialogScreenModel(
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     private val syncChaptersWithSource: SyncChaptersWithSource = Injekt.get(),
     private val updateChapter: UpdateChapter = Injekt.get(),
-    private val getCategories: GetMangaCategories = Injekt.get(),
-    private val setMangaCategories: SetMangaCategories = Injekt.get(),
+    private val getCollections: GetMangaCollections = Injekt.get(),
+    private val setMangaCollections: SetMangaCollections = Injekt.get(),
     private val getTracks: GetMangaTracks = Injekt.get(),
     private val insertTrack: InsertMangaTrack = Injekt.get(),
     private val coverCache: MangaCoverCache = Injekt.get(),
@@ -211,7 +211,7 @@ internal class MigrateMangaDialogScreenModel(
         flags: Int,
     ) {
         val migrateChapters = MangaMigrationFlags.hasChapters(flags)
-        val migrateCategories = MangaMigrationFlags.hasCategories(flags)
+        val migrateCollections = MangaMigrationFlags.hasCollections(flags)
         val migrateCustomCover = MangaMigrationFlags.hasCustomCover(flags)
         val deleteDownloaded = MangaMigrationFlags.hasDeleteDownloaded(flags)
 
@@ -255,10 +255,10 @@ internal class MigrateMangaDialogScreenModel(
             updateChapter.awaitAll(chapterUpdates)
         }
 
-        // Update categories
-        if (migrateCategories) {
-            val categoryIds = getCategories.await(oldManga.id).map { it.id }
-            setMangaCategories.await(newManga.id, categoryIds)
+        // Update collections
+        if (migrateCollections) {
+            val collectionIds = getCollections.await(oldManga.id).map { it.id }
+            setMangaCollections.await(newManga.id, collectionIds)
         }
 
         // Update track

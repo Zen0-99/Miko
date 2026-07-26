@@ -1,4 +1,4 @@
-﻿package eu.kanade.presentation.achievement.components
+package eu.kanade.presentation.achievement.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.achievement.screenmodel.AchievementScreenState
-import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
@@ -43,8 +42,6 @@ fun AchievementContent(
     onAchievementClick: (achievement: tachiyomi.domain.achievement.model.Achievement) -> Unit = {},
     onDialogDismiss: () -> Unit = {},
 ) {
-    val colors = AuroraTheme.colors
-
     when (state) {
         is AchievementScreenState.Loading -> {
             AuroraLoadingState(modifier = modifier)
@@ -76,8 +73,7 @@ fun AchievementContent(
 private fun AuroraLoadingState(
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
+    val glowColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
@@ -95,7 +91,7 @@ private fun AuroraLoadingState(
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    colors.accent.copy(alpha = 0.2f),
+                                    glowColor,
                                     Color.Transparent,
                                 ),
                             ),
@@ -105,7 +101,7 @@ private fun AuroraLoadingState(
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(
-                    color = colors.accent,
+                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 3.dp,
                     modifier = Modifier.size(48.dp),
                 )
@@ -113,7 +109,7 @@ private fun AuroraLoadingState(
 
             Text(
                 text = stringResource(AYMR.strings.achievement_loading),
-                color = colors.textSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 0.5.sp,
@@ -131,7 +127,6 @@ private fun AchievementGrid(
     modifier: Modifier = Modifier,
     onAchievementClick: (achievement: tachiyomi.domain.achievement.model.Achievement) -> Unit,
 ) {
-    val colors = AuroraTheme.colors
     val filteredAchievements = state.filteredAchievements
 
     if (filteredAchievements.isEmpty()) {
@@ -172,8 +167,7 @@ private fun AchievementGrid(
 private fun AuroraEmptyState(
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
+    val glowColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
@@ -191,7 +185,7 @@ private fun AuroraEmptyState(
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    colors.accent.copy(alpha = 0.15f),
+                                    glowColor,
                                     Color.Transparent,
                                 ),
                             ),
@@ -203,7 +197,7 @@ private fun AuroraEmptyState(
                 Icon(
                     imageVector = Icons.Default.EmojiEvents,
                     contentDescription = null,
-                    tint = colors.textSecondary.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(40.dp),
                 )
             }
@@ -214,14 +208,14 @@ private fun AuroraEmptyState(
             ) {
                 Text(
                     text = stringResource(AYMR.strings.achievement_empty_title),
-                    color = colors.textPrimary,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp,
                 )
                 Text(
                     text = stringResource(AYMR.strings.achievement_empty_description),
-                    color = colors.textSecondary.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     fontSize = 14.sp,
                 )
             }

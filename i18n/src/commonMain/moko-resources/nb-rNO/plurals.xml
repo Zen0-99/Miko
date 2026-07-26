@@ -4,7 +4,7 @@
         <item quantity="one">Etter %1$s minutt</item>
         <item quantity="other">Etter %1$s minutter</item>
     </plurals>
-    <plurals name="num_categories">
+    <plurals name="num_collections">
         <item quantity="one">%d kategori</item>
         <item quantity="other">%d kateogrier</item>
     </plurals>

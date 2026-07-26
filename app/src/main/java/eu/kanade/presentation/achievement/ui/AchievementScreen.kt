@@ -47,8 +47,10 @@ import eu.kanade.presentation.achievement.components.AchievementCategoryTabs
 import eu.kanade.presentation.achievement.components.AchievementContent
 import eu.kanade.presentation.achievement.components.AchievementStatsComparison
 import eu.kanade.presentation.achievement.screenmodel.AchievementScreenState
-import eu.kanade.presentation.theme.AuroraTheme
-import eu.kanade.presentation.theme.AuroraTopBarLayout
+import eu.kanade.presentation.theme.AchievementColors
+import eu.kanade.presentation.theme.achievementInactiveBarColor
+import eu.kanade.presentation.theme.achievementLabelColor
+import eu.kanade.presentation.components.SimpleTopBarLayout
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.i18n.aniyomi.AYMR
@@ -69,7 +71,6 @@ fun AchievementScreen(
     onTestAchievement: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
     val title = stringResource(AYMR.strings.label_achievements)
     val localeTags = LocalConfiguration.current.locales.toLanguageTags()
 
@@ -79,7 +80,7 @@ fun AchievementScreen(
 
     Scaffold(
         topBar = {
-            AuroraTopBarLayout(
+            SimpleTopBarLayout(
                 title = title,
                 titleContent = null,
                 onNavigateUp = onClickBack,
@@ -88,25 +89,26 @@ fun AchievementScreen(
                         Icon(
                             imageVector = Icons.Outlined.BugReport,
                             contentDescription = "Test achievement popup",
-                            tint = colors.accent,
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                 },
             )
         },
-        containerColor = colors.background,
+        containerColor = MaterialTheme.colorScheme.background,
     ) { paddingValues ->
+        val ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
         Box(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
-                .background(colors.background)
+                .background(MaterialTheme.colorScheme.background)
                 .drawBehind {
                     // Subtle ambient gradient
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                colors.accent.copy(alpha = 0.03f),
+                                ambientColor,
                                 Color.Transparent,
                             ),
                             center = Offset(size.width * 0.5f, size.height * 0.3f),
@@ -265,8 +267,6 @@ private fun BentoLevelCard(
     levelInfo: eu.kanade.presentation.achievement.screenmodel.UserLevelInfo,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
     // Single surface — matches ExtensionCard style (no double border)
     Surface(
         modifier = modifier,
@@ -285,7 +285,7 @@ private fun BentoLevelCard(
                 fontSize = 90.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = FontFamily.Monospace,
-                color = colors.accent.copy(alpha = 0.06f),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .offset(x = 10.dp, y = 20.dp),
@@ -300,7 +300,7 @@ private fun BentoLevelCard(
                         text = stringResource(AYMR.strings.achievement_bento_rank),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = colors.textSecondary.copy(alpha = 0.4f),
+                        color = achievementLabelColor(),
                         letterSpacing = 0.5.sp,
                     )
                     Spacer(modifier = Modifier.height(2.dp))
@@ -315,7 +315,7 @@ private fun BentoLevelCard(
                         text = stringResource(rankRes).uppercase(),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary,
+                        color = MaterialTheme.colorScheme.onBackground,
                         letterSpacing = 0.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -332,13 +332,13 @@ private fun BentoLevelCard(
                             text = stringResource(AYMR.strings.achievement_bento_level, levelInfo.level),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = colors.accent,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
                             text = "${levelInfo.currentXp}/${levelInfo.requiredXpForNext} XP",
                             fontSize = 8.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = colors.textSecondary.copy(alpha = 0.6f),
+                            color = achievementLabelColor(),
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -347,7 +347,7 @@ private fun BentoLevelCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(2.dp)
-                            .background(colors.divider),
+                            .background(achievementInactiveBarColor()),
                     ) {
                         val progressFraction = levelInfo.progressFraction.coerceIn(0f, 1f)
                         if (progressFraction > 0f) {
@@ -355,7 +355,7 @@ private fun BentoLevelCard(
                                 modifier = Modifier
                                     .fillMaxWidth(progressFraction)
                                     .fillMaxHeight()
-                                    .background(colors.accent),
+                                    .background(MaterialTheme.colorScheme.primary),
                             )
                         }
                     }
@@ -375,8 +375,6 @@ private fun BentoStatsCard(
     totalCount: Int,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
     // Single surface — matches ExtensionCard style (no double border)
     Surface(
         modifier = modifier,
@@ -399,14 +397,14 @@ private fun BentoStatsCard(
                         text = stringResource(AYMR.strings.achievement_bento_xp_points),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = colors.textSecondary.copy(alpha = 0.4f),
+                        color = achievementLabelColor(),
                         letterSpacing = 0.5.sp,
                     )
                     Text(
                         text = totalPoints.toString(),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = colors.achievementGold,
+                        color = AchievementColors.Gold,
                     )
                 }
 
@@ -419,14 +417,14 @@ private fun BentoStatsCard(
                         text = stringResource(AYMR.strings.achievement_bento_unlocked),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = colors.textSecondary.copy(alpha = 0.4f),
+                        color = achievementLabelColor(),
                         letterSpacing = 0.5.sp,
                     )
                     Text(
                         text = "$unlockedCount/$totalCount",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = colors.accent,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -441,8 +439,6 @@ private fun BentoStreakCard(
     currentStreak: Int,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
     // Single surface — matches ExtensionCard style (no double border)
     Surface(
         modifier = modifier,
@@ -462,7 +458,7 @@ private fun BentoStreakCard(
                     text = stringResource(AYMR.strings.achievement_bento_streak),
                     fontSize = 8.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = colors.textSecondary.copy(alpha = 0.4f),
+                    color = achievementLabelColor(),
                     letterSpacing = 0.5.sp,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
@@ -470,7 +466,7 @@ private fun BentoStreakCard(
                     text = stringResource(AYMR.strings.achievement_bento_days, currentStreak),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = colors.accent,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
 
@@ -486,7 +482,7 @@ private fun BentoStreakCard(
                             .size(width = 4.dp, height = 14.dp)
                             .clip(RoundedCornerShape(1.dp))
                             .background(
-                                if (isActive) colors.accent else colors.divider,
+                                if (isActive) MaterialTheme.colorScheme.primary else achievementInactiveBarColor(),
                             ),
                     )
                 }

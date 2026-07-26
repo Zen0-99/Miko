@@ -10,9 +10,9 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.manga.interactor.SetMangaDisplayMode
-import tachiyomi.domain.category.manga.interactor.SetSortModeForMangaCategory
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.manga.interactor.SetMangaDisplayMode
+import tachiyomi.domain.collection.manga.interactor.SetSortModeForMangaCollection
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -24,7 +24,7 @@ class MangaLibrarySettingsScreenModel(
     val preferences: BasePreferences = Injekt.get(),
     val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val setMangaDisplayMode: SetMangaDisplayMode = Injekt.get(),
-    private val setSortModeForCategory: SetSortModeForMangaCategory = Injekt.get(),
+    private val setSortModeForCollection: SetSortModeForMangaCollection = Injekt.get(),
     trackerManager: TrackerManager = Injekt.get(),
 ) : ScreenModel {
 
@@ -50,12 +50,12 @@ class MangaLibrarySettingsScreenModel(
     }
 
     fun setSort(
-        category: Category?,
+        collection: Collection?,
         mode: MangaLibrarySort.Type,
         direction: MangaLibrarySort.Direction,
     ) {
         screenModelScope.launchIO {
-            setSortModeForCategory.await(category, mode, direction)
+            setSortModeForCollection.await(collection, mode, direction)
         }
     }
 }

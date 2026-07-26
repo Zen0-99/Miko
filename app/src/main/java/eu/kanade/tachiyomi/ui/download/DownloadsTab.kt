@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -22,10 +23,13 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.SnackbarHostState
@@ -48,6 +52,9 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -103,9 +110,32 @@ data object DownloadsTab : Tab {
         val animeScreenModel = rememberScreenModel { AnimeDownloadQueueScreenModel() }
         val mangaScreenModel = rememberScreenModel { MangaDownloadQueueScreenModel() }
         val novelScreenModel = rememberScreenModel { NovelDownloadQueueScreenModel() }
-        val animeDownloadList by animeScreenModel.state.collectAsState()
-        val mangaDownloadList by mangaScreenModel.state.collectAsState()
-        val novelDownloadList by novelScreenModel.state.collectAsState()
+        val animeDownloadListRaw by animeScreenModel.state.collectAsState()
+        val mangaDownloadListRaw by mangaScreenModel.state.collectAsState()
+        val novelDownloadListRaw by novelScreenModel.state.collectAsState()
+        var searchQuery by remember { mutableStateOf<String?>(null) }
+        val isSearchActive = searchQuery != null
+        val animeDownloadList by remember(animeDownloadListRaw, searchQuery) {
+            derivedStateOf {
+                val q = searchQuery
+                if (q.isNullOrBlank()) animeDownloadListRaw
+                else animeDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+            }
+        }
+        val mangaDownloadList by remember(mangaDownloadListRaw, searchQuery) {
+            derivedStateOf {
+                val q = searchQuery
+                if (q.isNullOrBlank()) mangaDownloadListRaw
+                else mangaDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+            }
+        }
+        val novelDownloadList by remember(novelDownloadListRaw, searchQuery) {
+            derivedStateOf {
+                val q = searchQuery
+                if (q.isNullOrBlank()) novelDownloadListRaw
+                else novelDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+            }
+        }
         val animeDownloadCount by remember {
             derivedStateOf { animeDownloadList.sumOf { it.subItems.size } }
         }
@@ -147,32 +177,77 @@ data object DownloadsTab : Tab {
             topBar = {
                 AppBar(
                     titleContent = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = stringResource(MR.strings.label_download_queue),
-                                maxLines = 1,
-                                modifier = Modifier.weight(1f, false),
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        if (isSearchActive) {
+                            BasicTextField(
+                                value = searchQuery ?: "",
+                                onValueChange = { searchQuery = it },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.titleMedium.copy(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp),
+                                decorationBox = { innerTextField ->
+                                    Box {
+                                        if (searchQuery.isNullOrBlank()) {
+                                            Text(
+                                                text = stringResource(MR.strings.search_hint_downloads),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                maxLines = 1,
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                },
                             )
-                            if (animeDownloadCount > 0) {
-                                val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
-                                Pill(
-                                    text = "$animeDownloadCount",
-                                    modifier = Modifier.padding(start = 4.dp),
-                                    color = MaterialTheme.colorScheme.onBackground
-                                        .copy(alpha = pillAlpha),
-                                    fontSize = 14.sp,
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(MR.strings.label_download_queue),
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f, false),
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                 )
+                                if (animeDownloadCount > 0) {
+                                    val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
+                                    Pill(
+                                        text = "$animeDownloadCount",
+                                        modifier = Modifier.padding(start = 4.dp),
+                                        color = MaterialTheme.colorScheme.onBackground
+                                            .copy(alpha = pillAlpha),
+                                        fontSize = 14.sp,
+                                    )
+                                }
                             }
                         }
                     },
                     navigateUp = navigator::pop,
                     actions = {
-                        when (state.currentPage) {
-                            0 -> AnimeActions(animeScreenModel, animeDownloadList)
-                            1 -> MangaActions(mangaScreenModel, mangaDownloadList)
-                            2 -> NovelActions(novelScreenModel, novelDownloadList)
+                        if (isSearchActive) {
+                            IconButton(onClick = { searchQuery = null }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = stringResource(MR.strings.action_cancel),
+                                )
+                            }
+                        } else {
+                            Row {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Search,
+                                        contentDescription = stringResource(MR.strings.action_search),
+                                    )
+                                }
+                                when (state.currentPage) {
+                                    0 -> AnimeActions(animeScreenModel, animeDownloadList)
+                                    1 -> MangaActions(mangaScreenModel, mangaDownloadList)
+                                    2 -> NovelActions(novelScreenModel, novelDownloadList)
+                                }
+                            }
                         }
                     },
                     scrollBehavior = scrollBehavior,
@@ -261,9 +336,11 @@ data object DownloadsTab : Tab {
                 }
             },
         ) { contentPadding ->
+            val hostTop = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+                ?.calculateTopPadding() ?: 0.dp
             Column(
                 modifier = Modifier.padding(
-                    top = contentPadding.calculateTopPadding(),
+                    top = contentPadding.calculateTopPadding() + hostTop,
                     start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
                     end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
                 ),

@@ -35,10 +35,10 @@
     <string name="action_pause">Паўза</string>
     <string name="action_view_chapters">Прагляд частак</string>
     <string name="action_edit_cover">Рэдагаваць вокладку</string>
-    <string name="action_move_category">Дадаць у катэгорыі</string>
-    <string name="action_rename_category">Перайменаваць катэгорыю</string>
-    <string name="action_edit_categories">Рэдагаваць катэгорыі</string>
-    <string name="action_add_category">Дадаць катэгорыю</string>
+    <string name="action_move_collection">Дадаць у катэгорыі</string>
+    <string name="action_rename_collection">Перайменаваць катэгорыю</string>
+    <string name="action_edit_collections">Рэдагаваць катэгорыі</string>
+    <string name="action_add_collection">Дадаць катэгорыю</string>
     <string name="action_add">Дадаць</string>
     <string name="action_edit">Рэдагаваць</string>
     <string name="action_disable_all">Адключыць усе</string>
@@ -86,7 +86,7 @@
     <string name="track">Адсочванне</string>
     <string name="chapters">Часткi</string>
     <string name="manga">Манга</string>
-    <string name="categories">Катэгорыі</string>
+    <string name="collections">Катэгорыі</string>
     <string name="ext_uninstall">Выдаліць</string>
     <string name="ext_untrusted">Ненадзейны</string>
     <string name="ext_trust">Надзейны</string>
@@ -102,10 +102,10 @@
     <string name="include">Уключаць: %s</string>
     <string name="none">Ніхто</string>
     <string name="all">Усе</string>
-    <string name="pref_library_update_categories_details">Манга ў выключаных катэгорыях не будзе абнаўляцца, нават калі яны таксама знаходзяцца ў уключаных катэгорыях.</string>
-    <string name="categorized_display_settings">Налады для кожнай катэгорыі для сартавання і адлюстравання</string>
-    <string name="default_category_summary">Заўсёды пытацца</string>
-    <string name="default_category">Катэгорыя па змаўчанні</string>
+    <string name="pref_library_update_collections_details">Манга ў выключаных катэгорыях не будзе абнаўляцца, нават калі яны таксама знаходзяцца ў уключаных катэгорыях.</string>
+    <string name="per_collection_display_settings">Налады для кожнай катэгорыі для сартавання і адлюстравання</string>
+    <string name="default_collection_summary">Заўсёды пытацца</string>
+    <string name="default_collection">Катэгорыя па змаўчанні</string>
     <string name="pref_library_update_refresh_metadata_summary">Правераць наяўнасць новай вокладкі і дэталяў пры абнаўленні бібліятэкі</string>
     <string name="pref_library_update_refresh_metadata">Аўтаматычнае абнаўленне метададзеных</string>
     <string name="pref_update_only_non_completed">Абнаўляць толькі незавершаную мангу</string>
@@ -264,7 +264,7 @@
     <string name="pref_category_appearance">Знешнасць</string>
     <string name="confirm_lock_change">Аўтэнтыфікацыя для пацверджання змяненняў</string>
     <string name="label_default">Па змаўчанні</string>
-    <string name="information_empty_category">У вас няма катэгорый. Націсніце кнопку \"Плюс\", каб стварыць яе для арганізацыі вашай бібліятэкі.</string>
+    <string name="information_empty_collection">У вас няма катэгорый. Націсніце кнопку \"Плюс\", каб стварыць яе для арганізацыі вашай бібліятэкі.</string>
     <string name="information_empty_library">Ваша бібліятэка пустая</string>
     <string name="information_no_recent_manga">У апошні час нічога не прачытана</string>
     <string name="action_track">Адсочваць</string>
@@ -274,7 +274,7 @@
     <string name="services">Паслугi</string>
     <string name="pref_auto_update_manga_sync">Абнаўляць прагрэс пасля чытання</string>
     <string name="tracking_guide">Кіраўніцтва па адсочванні</string>
-    <string name="pref_download_new_categories_details">Манга ў выключаных катэгорыях не будзе загружана, нават калі яны таксама знаходзяцца ў уключаных катэгорыях.</string>
+    <string name="pref_download_new_collections_details">Манга ў выключаных катэгорыях не будзе загружана, нават калі яны таксама знаходзяцца ў уключаных катэгорыях.</string>
     <string name="pref_download_new">Спампаваць новыя часткi</string>
     <string name="pref_category_auto_download">Аўтаматычная загрузка</string>
     <string name="fifth_to_last">Пятая ад прачытанай часткi</string>
@@ -308,8 +308,8 @@
     <string name="rotation_type">Тып арыентацыі</string>
     <string name="pref_rotation_type">Тып арыентацыі па змаўчанні</string>
     <string name="label_warning">папярэджанне</string>
-    <string name="delete_category">Выдаліць катэгорыю</string>
-    <string name="delete_category_confirmation">Вы хочаце выдаліць катэгорыю \"%s\"?</string>
+    <string name="delete_collection">Выдаліць катэгорыю</string>
+    <string name="delete_collection_confirmation">Вы хочаце выдаліць катэгорыю \"%s\"?</string>
     <string name="internal_error">InternalError: Праверце журнал збояў для атрымання дадатковай інфармацыі</string>
     <string name="ext_update_all">Абнавіць усё</string>
     <string name="ext_info_age_rating">Узроставае абмежаванне</string>

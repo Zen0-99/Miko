@@ -66,6 +66,7 @@ import tachiyomi.domain.source.manga.model.Pin
 import tachiyomi.domain.source.manga.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
+import androidx.compose.foundation.lazy.LazyColumn
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -141,7 +142,7 @@ fun MangaSourcesScreen(
                         onClickUpdateAll = onClickUpdateAll,
                     )
                 } else {
-                FastScrollLazyColumn(
+                LazyColumn(
                     contentPadding = contentPadding + topSmallPaddingValues,
                 ) {
                 items(
@@ -275,7 +276,7 @@ private fun MangaSourcesCardView(
         sections
     }
 
-    FastScrollLazyColumn(
+    LazyColumn(
         contentPadding = contentPadding,
     ) {
         sectionedItems.forEach { (header, sectionItems) ->

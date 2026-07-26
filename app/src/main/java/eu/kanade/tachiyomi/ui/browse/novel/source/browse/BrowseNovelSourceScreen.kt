@@ -40,13 +40,21 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifNovelSourcesLoaded
 import eu.kanade.presentation.browse.RemoveEntryDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.novel.BrowseNovelSourceContent
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.novel.MissingNovelSourceScreen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.novel.components.BrowseNovelSourceToolbar
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.novel.DuplicateNovelDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.more.components.SavedSearchesDialog
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.util.AssistContentScreen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.util.Screen
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
@@ -219,7 +227,7 @@ data class BrowseNovelSourceScreen(
                     HorizontalDivider()
                 }
             },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
             BrowseNovelSourceContent(
                 source = screenModel.source,
@@ -311,7 +319,7 @@ data class BrowseNovelSourceScreen(
                     entryToRemove = dialog.novel.title,
                 )
             }
-            is BrowseNovelSourceScreenModel.Dialog.ChangeNovelCategory -> {}
+            is BrowseNovelSourceScreenModel.Dialog.ChangeNovelCollection -> {}
             null -> {}
         }
 

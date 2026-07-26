@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="name">Nimi</string>
-    <string name="categories">Kategoriat</string>
+    <string name="collections">Kategoriat</string>
     <string name="manga">Manga</string>
     <string name="track">Seuranta</string>
     <string name="history">Historia</string>
@@ -23,7 +23,7 @@
     <string name="action_mark_previous_as_read">Merkitse aiemmat luetuiksi</string>
     <string name="action_bookmark">Kirjanmerkitse luku</string>
     <string name="action_remove_bookmark">Poista kirjanmerkitty luku</string>
-    <string name="action_move_category">Aseta kategoriat</string>
+    <string name="action_move_collection">Aseta kategoriat</string>
     <string name="action_edit_cover">Muokkaa kantta</string>
     <string name="custom_filter">Mukautettu suodatus</string>
     <string name="set_as_cover">Aseta kansikuvaksi</string>
@@ -59,7 +59,7 @@
     <string name="information_no_recent">Ei viimeisimpiä päivityksiä</string>
     <string name="information_no_recent_manga">Ei mitään luettu viime aikoina</string>
     <string name="information_empty_library">Kirjastosi on tyhjä</string>
-    <string name="information_empty_category">Sinulla ei ole kategorioita. Napauta pluspainiketta, jos haluat luoda sellaisen kirjaston järjestämistä varten.</string>
+    <string name="information_empty_collection">Sinulla ei ole kategorioita. Napauta pluspainiketta, jos haluat luoda sellaisen kirjaston järjestämistä varten.</string>
     <string name="download_notifier_downloader_title">Lataaja</string>
     <string name="download_notifier_title_error">Virhe</string>
     <string name="download_notifier_unknown_error">Lukua ei voitu ladata odottamattoman virheen vuoksi</string>
@@ -82,9 +82,9 @@
     <string name="action_update_library">Päivitä kirjasto</string>
     <string name="action_edit">Muokkaa</string>
     <string name="action_add">Lisää</string>
-    <string name="action_add_category">Lisää kategoria</string>
-    <string name="action_edit_categories">Muokkaa kategorioita</string>
-    <string name="action_rename_category">Nimeä kategoria uudelleen</string>
+    <string name="action_add_collection">Lisää kategoria</string>
+    <string name="action_edit_collections">Muokkaa kategorioita</string>
+    <string name="action_rename_collection">Nimeä kategoria uudelleen</string>
     <string name="action_retry">Yritä uudelleen</string>
     <string name="action_pause">Pysäytä</string>
     <string name="action_previous_chapter">Aiempi luku</string>
@@ -129,8 +129,8 @@
     <string name="charging">Latauksessa</string>
     <string name="pref_update_only_non_completed">Sarja on päättynyt</string>
     <string name="pref_auto_update_manga_sync">Päivitä luvun edistyminen lukemisen jälkeen</string>
-    <string name="default_category">Oletus kategoria</string>
-    <string name="default_category_summary">Kysy aina</string>
+    <string name="default_collection">Oletus kategoria</string>
+    <string name="default_collection_summary">Kysy aina</string>
     <string name="ext_update">Päivitä</string>
     <string name="ext_install">Asenna</string>
     <string name="ext_pending">Odotetaan</string>
@@ -226,7 +226,7 @@
     <string name="login">Kirjaudu</string>
     <string name="login_success">Kirjauduttu sisään</string>
     <string name="unknown_error">Tuntematon virhe</string>
-    <string name="updating_category">Päivitetään kategoriaa</string>
+    <string name="updating_collection">Päivitetään kategoriaa</string>
     <string name="no_more_results">Ei enempää tuloksia</string>
     <string name="action_global_search_hint">Globaali haku…</string>
     <string name="delete_downloads_for_manga">Poista ladatut luvut?</string>
@@ -250,8 +250,8 @@
     <string name="status">Tila</string>
     <string name="track_status">Tila</string>
     <string name="track_type">Tyyppi</string>
-    <string name="error_category_exists">Tämän niminen kategoria on jo olemassa!</string>
-    <string name="snack_categories_deleted">Kategoriat poistettu</string>
+    <string name="error_collection_exists">Tämän niminen kategoria on jo olemassa!</string>
+    <string name="snack_collections_deleted">Kategoriat poistettu</string>
     <string name="pref_create_backup">Luo varmuuskopio</string>
     <string name="pref_restore_backup">Palauta varmuuskopio</string>
     <string name="local_source">Paikalliset lähteet</string>
@@ -465,9 +465,9 @@
     <string name="include">Sisällytä: %s</string>
     <string name="none">Ei mitään</string>
     <string name="action_sort_chapter_fetch_date">Haettu päivämäärä</string>
-    <string name="pref_download_new_categories_details">Poissuljettuihin kategorioihin kuuluvia mangoja ei ladata, vaikka ne olisivat myös sisällytetyissä kategorioissa.</string>
+    <string name="pref_download_new_collections_details">Poissuljettuihin kategorioihin kuuluvia mangoja ei ladata, vaikka ne olisivat myös sisällytetyissä kategorioissa.</string>
     <string name="pref_category_auto_download">Automaattinen lataus</string>
-    <string name="pref_library_update_categories_details">Poissuljettuihin kategorioihin sisältyvää mangaa ei päivitetä, vaikka ne olisivat myös sisällytetyissä kategorioissa.</string>
+    <string name="pref_library_update_collections_details">Poissuljettuihin kategorioihin sisältyvää mangaa ei päivitetä, vaikka ne olisivat myös sisällytetyissä kategorioissa.</string>
     <string name="action_show_errors">Näytä lisätiedot</string>
     <string name="update_check_eol">Tätä Android-versiota ei enää tueta</string>
     <string name="clipboard_copy_error">Kopiointi leikepöydälle epäonnistui</string>
@@ -522,7 +522,7 @@
     <string name="ext_app_info">Sovelluksen tiedot</string>
     <string name="ext_installer_legacy">Perinteinen</string>
     <string name="rotation_reverse_portrait">Käänteinen kuva</string>
-    <string name="categorized_display_settings">Kategoria kohtaiset asetukset lajittelulle ja näytölle</string>
+    <string name="per_collection_display_settings">Kategoria kohtaiset asetukset lajittelulle ja näytölle</string>
     <string name="ext_installer_shizuku_stopped">Shizuku on pysähtynyt</string>
     <string name="disabled_nav">Poistettu käytöstä</string>
     <string name="ext_installer_shizuku_unavailable_dialog">Asenna ja aja Shizuku käyttääksesi Shizukua laajennusten asentamiseen.</string>
@@ -533,10 +533,10 @@
     <string name="action_remove_everything">Poista kaikki</string>
     <string name="action_sort_last_manga_update">Viimeisin manga päivitys</string>
     <string name="action_sort_unread_count">Lukemattomien määrä</string>
-    <string name="delete_category">Poista kategoria</string>
+    <string name="delete_collection">Poista kategoria</string>
     <string name="action_track">Seuraa</string>
     <string name="pref_low">Alhainen</string>
-    <string name="pref_remove_exclude_categories">Poissuljetut kategoriat</string>
+    <string name="pref_remove_exclude_collections">Poissuljetut kategoriat</string>
     <string name="pref_lowest">Alhaisin</string>
     <string name="empty_backup_error">Ei varmuuskopioitavia sarjoja kirjastossa</string>
     <string name="multi_lang">Useampi</string>
@@ -555,7 +555,7 @@
     <string name="download_ahead">Etukäteen lataus</string>
     <string name="auto_download_while_reading">Automaattinen lataus luetessa</string>
     <string name="split_tall_images_summary">Parantaa lukijan suorituskykyä</string>
-    <string name="delete_category_confirmation">Haluatko poistaa kategorian \"%s\"?</string>
+    <string name="delete_collection_confirmation">Haluatko poistaa kategorian \"%s\"?</string>
     <string name="download_ahead_info">Toimii vain kirjastossa oleville sarjoille joissa nykyinen ja seuraava luku on jo ladattu</string>
     <string name="restore_miui_warning">Varmuuskopiointi/palautus ei välttämättä toimi oikein, jos MIUI-optimointi on poistettu käytöstä.</string>
     <string name="popular">Suositut</string>
@@ -574,7 +574,7 @@
     <string name="updates_last_update_info">Kirjasto päivitetty viimeksi: %1$s</string>
     <string name="notification_update_error">%1$d päivitys(tä) epäonnistui</string>
     <string name="skipped_reason_completed">Ohitettu, koska sarja on päättynyt</string>
-    <string name="information_empty_category_dialog">Sinulla ei vielä ole kategorioita.</string>
+    <string name="information_empty_collection_dialog">Sinulla ei vielä ole kategorioita.</string>
     <string name="on_hiatus">Tauolla</string>
     <string name="not_installed">Ei asennettu</string>
     <string name="skipped_reason_not_started">Ohitettu, koska yhtään lukua ei ole luettu sarjasta</string>
@@ -616,7 +616,7 @@
     <string name="label_downloaded">Ladattu</string>
     <string name="action_sort_next_updated">Seuraava odotettu päivitys</string>
     <string name="action_sort_tracker_score">Seurannan pisteytys</string>
-    <string name="action_update_category">Päivitä kategoria</string>
+    <string name="action_update_collection">Päivitä kategoria</string>
     <string name="action_display_show_continue_reading_button">Jatka lukemista painike</string>
     <string name="action_apply">Käytä</string>
     <string name="action_ok">OK</string>

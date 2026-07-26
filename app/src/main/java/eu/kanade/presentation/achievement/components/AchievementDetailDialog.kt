@@ -11,25 +11,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,12 +37,14 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.achievement.utils.AchievementRevealHelper
 import eu.kanade.presentation.components.AdaptiveSheet
-import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.achievementLabelColor
 import tachiyomi.data.achievement.UnlockableManager
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.model.AchievementProgress
@@ -60,8 +57,14 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Aurora-themed Achievement Detail Dialog with professional UI design
- * Fixed spacing, centering, and proper button styling
+ * Aurora-themed Achievement Detail Dialog.
+ *
+ * Layout:
+ * - Header: badge on left, title + XP on right (like the list card detail view)
+ * - Description
+ * - Progress section: goal text, x/y left + % right, progress bar below
+ * - Unlock date (if unlocked)
+ * - Close button
  */
 @Composable
 fun AchievementDetailDialog(
@@ -71,11 +74,9 @@ fun AchievementDetailDialog(
     modifier: Modifier = Modifier,
     unlockableManager: UnlockableManager = Injekt.get(),
 ) {
-    val colors = AuroraTheme.colors
     val isUnlocked = progress?.isUnlocked == true
     val scrollState = rememberScrollState()
 
-    // Animated glow intensity
     val glowIntensity by animateFloatAsState(
         targetValue = if (isUnlocked) 1f else 0.3f,
         animationSpec = spring(
@@ -87,25 +88,24 @@ fun AchievementDetailDialog(
 
     AdaptiveSheet(
         onDismissRequest = onDismiss,
-        modifier = modifier,
+        modifier = modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.85f),
     ) {
+        val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+        val backgroundColor = MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
+        val glowColor = MaterialTheme.colorScheme.primary
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
                     brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.surface.copy(alpha = 0.98f),
-                            colors.background.copy(alpha = 0.95f),
-                        ),
+                        colors = listOf(surfaceColor, backgroundColor),
                     ),
                 )
                 .drawBehind {
-                    // Ambient glow at top
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                colors.accent.copy(alpha = 0.15f * glowIntensity),
+                                glowColor.copy(alpha = 0.15f * glowIntensity),
                                 Color.Transparent,
                             ),
                             center = Offset(size.width / 2, 0f),
@@ -113,7 +113,7 @@ fun AchievementDetailDialog(
                         ),
                     )
                 }
-                .padding(top = 12.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                .padding(top = 24.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -121,105 +121,79 @@ fun AchievementDetailDialog(
                     .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                // Close button
+                // Header: badge on left, title + XP on right
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.05f)),
+                    // Badge with glow
+                    Box(
+                        modifier = Modifier.size(64.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = colors.textSecondary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-                }
-
-                // Large Holographic Badge with centered glow
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    // Glow effect behind badge - FIXED: same size as badge
-                    if (isUnlocked) {
-                        Box(
-                            modifier = Modifier
-                                .size(120.dp) // FIXED: matches badge size
-                                .drawBehind {
-                                    drawCircle(
-                                        brush = Brush.radialGradient(
-                                            colors = listOf(
-                                                colors.accent.copy(alpha = 0.4f),
-                                                colors.progressCyan.copy(alpha = 0.2f),
-                                                Color.Transparent,
+                        if (isUnlocked) {
+                            val primaryGlow = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            val secondaryGlow = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .drawBehind {
+                                        drawCircle(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(primaryGlow, secondaryGlow, Color.Transparent),
                                             ),
-                                        ),
-                                        radius = size.minDimension / 2,
-                                    )
-                                },
-                        )
+                                            radius = size.minDimension / 2,
+                                        )
+                                    },
+                            )
+                        }
+                        if (achievement.isHidden && !isUnlocked) {
+                            HiddenBadgeLarge()
+                        } else {
+                            AchievementIcon(
+                                achievement = achievement,
+                                isUnlocked = isUnlocked,
+                                modifier = Modifier.size(64.dp),
+                                size = 64.dp,
+                                useHexagonShape = true,
+                            )
+                        }
                     }
 
-                    // Badge
-                    if (achievement.isHidden && !isUnlocked) {
-                        HiddenBadgeLarge()
-                    } else {
-                        AchievementIcon(
-                            achievement = achievement,
-                            isUnlocked = isUnlocked,
-                            modifier = Modifier.size(120.dp),
-                            size = 120.dp,
-                            useHexagonShape = true,
-                        )
-                    }
-                }
+                    Spacer(modifier = Modifier.width(16.dp))
 
-                // Title section with proper spacing
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = AchievementRevealHelper.getDisplayName(achievement, progress),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isUnlocked) colors.textPrimary else colors.textSecondary,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-
-                    // Points info
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.accent.copy(alpha = 0.1f))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    // Title + XP
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
-                            tint = colors.accent,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = stringResource(AYMR.strings.achievement_points, achievement.points),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.accent,
+                            text = AchievementRevealHelper.getDisplayName(achievement, progress),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isUnlocked) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
+                        if (achievement.points > 0) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(AYMR.strings.achievement_points, achievement.points),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -246,38 +220,15 @@ fun AchievementDetailDialog(
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color.White.copy(alpha = 0.03f))
                             .padding(12.dp),
-                        color = colors.textSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 22.sp,
                     )
                 }
 
-                // Progress Section with animated visualization
+                // Progress section (only if locked and has progress)
                 if (progress != null && !progress.isUnlocked) {
-                    AnimatedProgressSection(progress, achievement.threshold, colors)
+                    ProgressSection(progress, achievement)
                 }
-
-                // Divider with gradient - compact spacing
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    colors.accent.copy(alpha = 0.5f),
-                                    Color.Transparent,
-                                ),
-                            ),
-                        ),
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Rewards Section with compact spacing
-                AuroraRewardSection(achievement, isUnlocked, unlockableManager, colors)
 
                 // Unlock date
                 val unlockedAt = progress?.unlockedAt
@@ -285,9 +236,8 @@ fun AchievementDetailDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .align(Alignment.CenterHorizontally)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(colors.accent.copy(alpha = 0.08f))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                     ) {
                         Row(
@@ -308,57 +258,84 @@ fun AchievementDetailDialog(
                                 ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = colors.textSecondary.copy(alpha = 0.9f),
-                            )
-                        }
-                    }
-                }
-
-                // Spacer before close button for proper touch target
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Glowing Close Button - FIXED: proper rounded shape, clean styling
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                ) {
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(),
-                        shape = RoundedCornerShape(28.dp), // FIXED: more rounded
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent,
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(0.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(28.dp))
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(
-                                            colors.accent.copy(alpha = 0.9f),
-                                            colors.progressCyan.copy(alpha = 0.8f),
-                                        ),
-                                    ),
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = stringResource(AYMR.strings.achievement_action_close).uppercase(),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
                             )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Progress section with goal text, x/y + % layout, and progress bar.
+ */
+@Composable
+private fun ProgressSection(
+    progress: AchievementProgress,
+    achievement: Achievement,
+) {
+    val max = achievement.threshold ?: progress.maxProgress
+    val progressFraction = (progress.progress.toFloat() / max).coerceIn(0f, 1f)
+    val percentText = "${(progressFraction * 100).toInt()}%"
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        // Progress label
+        Text(
+            text = stringResource(AYMR.strings.achievement_progress_label),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            letterSpacing = 2.sp,
+        )
+
+        // x/y left, % right — in-line
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${progress.progress} / $max",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = percentText,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        // Progress bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(12.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.White.copy(alpha = 0.05f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progressFraction)
+                    .fillMaxHeight()
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.secondary,
+                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f),
+                            ),
+                        ),
+                    )
+                    .clip(RoundedCornerShape(6.dp)),
+            )
         }
     }
 }
@@ -370,28 +347,25 @@ fun AchievementDetailDialog(
 private fun HiddenBadgeLarge(
     modifier: Modifier = Modifier,
 ) {
-    val colors = AuroraTheme.colors
-
     Box(
         modifier = modifier
-            .size(120.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .size(64.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.03f))
             .border(
                 width = 2.dp,
                 color = Color.White.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(16.dp),
             ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.Default.Lock,
             contentDescription = null,
-            tint = colors.textSecondary.copy(alpha = 0.4f),
-            modifier = Modifier.size(56.dp),
+            tint = achievementLabelColor(),
+            modifier = Modifier.size(32.dp),
         )
 
-        // Scanline effect
         Column(
             modifier = Modifier.matchParentSize(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -415,258 +389,6 @@ private fun HiddenBadgeLarge(
     }
 }
 
-/**
- * Animated progress section with circular visualization
- * FIXED: proper spacing and alignment
- */
-@Composable
-private fun AnimatedProgressSection(
-    progress: AchievementProgress,
-    threshold: Int?,
-    colors: eu.kanade.presentation.theme.AuroraColors,
-) {
-    val max = threshold ?: progress.maxProgress
-    val progressFraction = (progress.progress.toFloat() / max).coerceIn(0f, 1f)
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        // Header
-        Text(
-            text = stringResource(AYMR.strings.achievement_progress_label),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = colors.textSecondary.copy(alpha = 0.7f),
-            letterSpacing = 2.sp,
-        )
-
-        // Progress card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.White.copy(alpha = 0.03f))
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.08f),
-                    shape = RoundedCornerShape(16.dp),
-                )
-                .padding(20.dp),
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                // Circular progress indicator
-                Box(
-                    modifier = Modifier.size(100.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    // Background circle
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.05f)),
-                    )
-
-                    // Progress arc (simplified as percentage text)
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = "${(progressFraction * 100).toInt()}%",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.accent,
-                        )
-                        Text(
-                            text = "${progress.progress} / $max",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.textSecondary,
-                        )
-                    }
-                }
-
-                // Linear progress bar with proper styling
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(16.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.05f)),
-                ) {
-                    // Progress fill
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(progressFraction)
-                            .fillMaxHeight()
-                            .background(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        colors.accent,
-                                        colors.progressCyan,
-                                        colors.gradientPurple.copy(alpha = 0.8f),
-                                    ),
-                                ),
-                            )
-                            .clip(RoundedCornerShape(8.dp)),
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Aurora-styled reward section
- * FIXED: proper spacing and consistent styling
- */
-@Composable
-private fun AuroraRewardSection(
-    achievement: Achievement,
-    isUnlocked: Boolean,
-    unlockableManager: UnlockableManager,
-    colors: eu.kanade.presentation.theme.AuroraColors,
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            text = stringResource(AYMR.strings.achievement_rewards_label),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = colors.textSecondary.copy(alpha = 0.7f),
-            letterSpacing = 2.sp,
-        )
-
-        // Points reward
-        AuroraRewardItem(
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = colors.accent,
-                    modifier = Modifier.size(20.dp),
-                )
-            },
-            title = stringResource(AYMR.strings.achievement_points_reward, achievement.points),
-            subtitle = null,
-            isUnlocked = isUnlocked,
-        )
-
-        // Unlockable reward
-        val unlockableId = achievement.unlockableId
-        if (unlockableId != null) {
-            val isUnlockableUnlocked = unlockableManager.isUnlockableUnlocked(unlockableId)
-            val unlockableNameRes = unlockableManager.getUnlockableNameRes(unlockableId)
-            val unlockableName = if (unlockableNameRes != null) {
-                unlockableNameRes
-            } else {
-                unlockableManager.getUnlockableName(unlockableId)
-            }
-
-            AuroraRewardItem(
-                icon = {
-                    Icon(
-                        imageVector = if (isUnlockableUnlocked) Icons.Default.Check else Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = if (isUnlockableUnlocked) Color(0xFF4CAF50) else colors.textSecondary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                title = unlockableName,
-                subtitle = if (!isUnlockableUnlocked) {
-                    stringResource(AYMR.strings.achievement_unlockable_locked_subtitle)
-                } else {
-                    stringResource(AYMR.strings.achievement_unlockable_unlocked_subtitle)
-                },
-                isUnlocked = isUnlockableUnlocked,
-            )
-        }
-    }
-}
-
-/**
- * Individual reward item with Aurora styling
- * FIXED: proper padding and consistent spacing
- */
-@Composable
-private fun AuroraRewardItem(
-    icon: @Composable () -> Unit,
-    title: String,
-    subtitle: String?,
-    isUnlocked: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val colors = AuroraTheme.colors
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (isUnlocked) {
-                    colors.accent.copy(alpha = 0.12f)
-                } else {
-                    Color.White.copy(alpha = 0.05f)
-                },
-            )
-            .then(
-                if (!isUnlocked) {
-                    Modifier.border(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(16.dp),
-                    )
-                } else {
-                    Modifier
-                },
-            )
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isUnlocked) {
-                        colors.accent.copy(alpha = 0.2f)
-                    } else {
-                        Color.White.copy(alpha = 0.08f)
-                    },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            icon()
-        }
-
-        Column(
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (isUnlocked) colors.textPrimary else colors.textSecondary,
-                fontWeight = if (isUnlocked) FontWeight.SemiBold else FontWeight.Normal,
-            )
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary.copy(alpha = 0.7f),
-                )
-            }
-        }
-    }
-}
-
 private fun formatDate(timestamp: Long): String {
-    val formatter = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.forLanguageTag("ru"))
-    return formatter.format(Date(timestamp))
+    return SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(timestamp))
 }

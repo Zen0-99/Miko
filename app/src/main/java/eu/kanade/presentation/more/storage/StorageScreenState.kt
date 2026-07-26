@@ -1,7 +1,7 @@
 package eu.kanade.presentation.more.storage
 
 import androidx.compose.runtime.Immutable
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 
 sealed class StorageScreenState {
     @Immutable
@@ -9,8 +9,8 @@ sealed class StorageScreenState {
 
     @Immutable
     data class Success(
-        val selectedCategory: Category,
+        val selectedCollection: Collection,
         val items: List<StorageItem>,
-        val categories: List<Category>,
+        val collections: List<Collection>,
     ) : StorageScreenState()
 }

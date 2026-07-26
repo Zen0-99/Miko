@@ -25,7 +25,7 @@ import eu.kanade.tachiyomi.ui.library.manga.MangaLibrarySettingsScreenModel
 import eu.kanade.tachiyomi.util.system.isReleaseBuildType
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.preference.TriState
-import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.manga.model.sort
 import tachiyomi.domain.library.model.LibraryDisplayMode
@@ -48,7 +48,7 @@ import tachiyomi.presentation.core.util.collectAsState
 fun MangaLibrarySettingsDialog(
     onDismissRequest: () -> Unit,
     screenModel: MangaLibrarySettingsScreenModel,
-    category: Category?,
+    collection: Collection?,
 ) {
     TabbedDialog(
         onDismissRequest = onDismissRequest,
@@ -68,7 +68,7 @@ fun MangaLibrarySettingsDialog(
                     screenModel = screenModel,
                 )
                 1 -> SortPage(
-                    category = category,
+                    collection = collection,
                     screenModel = screenModel,
                 )
                 2 -> DisplayPage(
@@ -166,12 +166,12 @@ private fun ColumnScope.FilterPage(
 
 @Composable
 private fun ColumnScope.SortPage(
-    category: Category?,
+    collection: Collection?,
     screenModel: MangaLibrarySettingsScreenModel,
 ) {
     val trackers by screenModel.trackersFlow.collectAsStateWithLifecycle()
-    val sortingMode = category.sort.type
-    val sortDescending = !category.sort.isAscending
+    val sortingMode = collection.sort.type
+    val sortDescending = !collection.sort.isAscending
 
     val options = remember(trackers.isEmpty()) {
         val trackerMeanPair = if (trackers.isNotEmpty()) {
@@ -200,7 +200,7 @@ private fun ColumnScope.SortPage(
                 icon = Icons.Default.Refresh
                     .takeIf { sortingMode == MangaLibrarySort.Type.Random },
                 onClick = {
-                    screenModel.setSort(category, mode, MangaLibrarySort.Direction.Ascending)
+                    screenModel.setSort(collection, mode, MangaLibrarySort.Direction.Ascending)
                 },
             )
             return@map
@@ -222,7 +222,7 @@ private fun ColumnScope.SortPage(
                         MangaLibrarySort.Direction.Ascending
                     }
                 }
-                screenModel.setSort(category, mode, direction)
+                screenModel.setSort(collection, mode, direction)
             },
         )
     }
@@ -313,28 +313,28 @@ private fun ColumnScope.DisplayPage(
     HeadingItem(MR.strings.tabs_header)
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_tabs),
-        pref = screenModel.libraryPreferences.categoryTabs(),
+        pref = screenModel.libraryPreferences.collectionTabs(),
     )
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_number_of_items),
-        pref = screenModel.libraryPreferences.categoryNumberOfItems(),
+        pref = screenModel.libraryPreferences.collectionNumberOfItems(),
     )
-    val categoryDisplayMode by screenModel.libraryPreferences.categoryDisplayMode().collectAsStateWithLifecycle()
+    val collectionDisplayMode by screenModel.libraryPreferences.collectionDisplayMode().collectAsStateWithLifecycle()
     RadioItem(
         label = "Tabbed pages (swipeable)",
-        selected = categoryDisplayMode == tachiyomi.domain.library.model.LibraryCategoryDisplay.TABBED,
+        selected = collectionDisplayMode == tachiyomi.domain.library.model.LibraryCollectionDisplay.TABBED,
         onClick = {
-            screenModel.libraryPreferences.categoryDisplayMode().set(
-                tachiyomi.domain.library.model.LibraryCategoryDisplay.TABBED,
+            screenModel.libraryPreferences.collectionDisplayMode().set(
+                tachiyomi.domain.library.model.LibraryCollectionDisplay.TABBED,
             )
         },
     )
     RadioItem(
         label = "Continuous scroll (section headers)",
-        selected = categoryDisplayMode == tachiyomi.domain.library.model.LibraryCategoryDisplay.CONTINUOUS,
+        selected = collectionDisplayMode == tachiyomi.domain.library.model.LibraryCollectionDisplay.CONTINUOUS,
         onClick = {
-            screenModel.libraryPreferences.categoryDisplayMode().set(
-                tachiyomi.domain.library.model.LibraryCategoryDisplay.CONTINUOUS,
+            screenModel.libraryPreferences.collectionDisplayMode().set(
+                tachiyomi.domain.library.model.LibraryCollectionDisplay.CONTINUOUS,
             )
         },
     )

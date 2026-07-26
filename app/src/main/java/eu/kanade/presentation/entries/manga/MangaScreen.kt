@@ -48,6 +48,7 @@ import androidx.compose.ui.util.fastMap
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.relativeDateTimeText
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
@@ -116,7 +117,7 @@ fun MangaScreen(
     // For top action menu
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditFetchIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
 
@@ -180,7 +181,7 @@ fun MangaScreen(
             onCoverClicked = onCoverClicked,
             onShareClicked = onShareClicked,
             onDownloadActionClicked = onDownloadActionClicked,
-            onEditCategoryClicked = onEditCategoryClicked,
+            onEditCollectionClicked = onEditCollectionClicked,
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onMigrateClicked = onMigrateClicked,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
@@ -225,7 +226,7 @@ fun MangaScreen(
             onCoverClicked = onCoverClicked,
             onShareClicked = onShareClicked,
             onDownloadActionClicked = onDownloadActionClicked,
-            onEditCategoryClicked = onEditCategoryClicked,
+            onEditCollectionClicked = onEditCollectionClicked,
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onMigrateClicked = onMigrateClicked,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
@@ -280,7 +281,7 @@ private fun MangaScreenSmallImpl(
     // For top action menu
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onSettingsClicked: (() -> Unit)?,
@@ -354,7 +355,7 @@ private fun MangaScreenSmallImpl(
                 onClickFilter = null,
                 onClickShare = onShareClicked,
                 onClickDownload = onDownloadActionClicked,
-                onClickEditCategory = onEditCategoryClicked,
+                onClickEditCollection = onEditCollectionClicked,
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
                 onClickSettings = onSettingsClicked,
@@ -389,7 +390,7 @@ private fun MangaScreenSmallImpl(
                 fillFraction = 1f,
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
     ) { contentPadding ->
         val topPadding = contentPadding.calculateTopPadding()
 
@@ -402,6 +403,7 @@ private fun MangaScreenSmallImpl(
             val layoutDirection = LocalLayoutDirection.current
             VerticalFastScroller(
                 listState = chapterListState,
+                thumbAllowed = { false },
                 topContentPadding = topPadding,
                 endContentPadding = contentPadding.calculateEndPadding(layoutDirection),
             ) {
@@ -444,7 +446,7 @@ private fun MangaScreenSmallImpl(
                             onWebViewLongClicked = onWebViewLongClicked,
                             onTrackingClicked = onTrackingClicked,
                             onEditIntervalClicked = onEditIntervalClicked,
-                            onEditCategory = onEditCategoryClicked,
+                            onEditCollection = onEditCollectionClicked,
                             accentColor = state.accentColor,
                         )
                     }
@@ -481,16 +483,17 @@ private fun MangaScreenSmallImpl(
                         )
                     }
 
-                    item(key = "SUGGESTIONS", contentType = "SUGGESTIONS") {
-                        AuroraSuggestionsRow(
-                            state = state.suggestions,
-                            onSuggestionClick = onSuggestionClick,
-                            onOpenSuggestions = onOpenSuggestions,
-                            onRetryClick = onRetrySuggestions,
-                            modifier = Modifier.fillMaxWidth(),
-                            accentColor = state.accentColor,
-                        )
-                    }
+                    // Similar titles — temporarily disabled
+//                    item(key = "SUGGESTIONS", contentType = "SUGGESTIONS") {
+//                        AuroraSuggestionsRow(
+//                            state = state.suggestions,
+//                            onSuggestionClick = onSuggestionClick,
+//                            onOpenSuggestions = onOpenSuggestions,
+//                            onRetryClick = onRetrySuggestions,
+//                            modifier = Modifier.fillMaxWidth(),
+//                            accentColor = state.accentColor,
+//                        )
+//                    }
 
                     item(
                         key = EntryScreenItem.ITEM_HEADER,
@@ -560,7 +563,7 @@ fun MangaScreenLargeImpl(
     // For top action menu
     onShareClicked: (() -> Unit)?,
     onDownloadActionClicked: ((DownloadAction) -> Unit)?,
-    onEditCategoryClicked: (() -> Unit)?,
+    onEditCollectionClicked: (() -> Unit)?,
     onEditIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onSettingsClicked: (() -> Unit)?,
@@ -627,7 +630,7 @@ fun MangaScreenLargeImpl(
                 onClickFilter = null,
                 onClickShare = onShareClicked,
                 onClickDownload = onDownloadActionClicked,
-                onClickEditCategory = onEditCategoryClicked,
+                onClickEditCollection = onEditCollectionClicked,
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
                 onCancelActionMode = { onAllChapterSelected(false) },
@@ -667,7 +670,7 @@ fun MangaScreenLargeImpl(
                 )
             }
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
     ) { contentPadding ->
         PullRefresh(
             refreshing = state.isRefreshingData,
@@ -710,7 +713,7 @@ fun MangaScreenLargeImpl(
                             onWebViewLongClicked = onWebViewLongClicked,
                             onTrackingClicked = onTrackingClicked,
                             onEditIntervalClicked = onEditIntervalClicked,
-                            onEditCategory = onEditCategoryClicked,
+                            onEditCollection = onEditCollectionClicked,
                             accentColor = state.accentColor,
                         )
                         ExpandableMangaDescription(
@@ -721,19 +724,21 @@ fun MangaScreenLargeImpl(
                             onCopyTagToClipboard = onCopyTagToClipboard,
                             accentColor = state.accentColor,
                         )
-                        AuroraSuggestionsRow(
-                            state = state.suggestions,
-                            onSuggestionClick = onSuggestionClick,
-                            onOpenSuggestions = onOpenSuggestions,
-                            onRetryClick = onRetrySuggestions,
-                            modifier = Modifier.fillMaxWidth(),
-                            accentColor = state.accentColor,
-                        )
+                        // Similar titles — temporarily disabled
+//                        AuroraSuggestionsRow(
+//                            state = state.suggestions,
+//                            onSuggestionClick = onSuggestionClick,
+//                            onOpenSuggestions = onOpenSuggestions,
+//                            onRetryClick = onRetrySuggestions,
+//                            modifier = Modifier.fillMaxWidth(),
+//                            accentColor = state.accentColor,
+//                        )
                     }
                 },
                 endContent = {
                     VerticalFastScroller(
                         listState = chapterListState,
+                        thumbAllowed = { false },
                         topContentPadding = contentPadding.calculateTopPadding(),
                     ) {
                         LazyColumn(

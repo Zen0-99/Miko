@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tachiyomi.domain.items.chapter.model.NovelChapter
@@ -27,6 +28,7 @@ fun NovelChaptersSheet(
     currentChapterId: Long?,
     onChapterClick: (NovelChapter) -> Unit,
     onDismiss: () -> Unit,
+    accentColor: Color? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val listState = rememberLazyListState()
@@ -76,7 +78,7 @@ fun NovelChaptersSheet(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
+                                accentColor ?: MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurface
                             },
@@ -91,7 +93,7 @@ fun NovelChaptersSheet(
                             text = "Ch. ${chapter.chapterNumber}",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
+                                accentColor ?: MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
