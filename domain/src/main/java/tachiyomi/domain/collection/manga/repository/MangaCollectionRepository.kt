@@ -37,4 +37,10 @@ interface MangaCollectionRepository {
     suspend fun getMangaCustomOrder(collectionId: Long): List<Long>
 
     suspend fun setMangaCustomOrder(collectionId: Long, mangaIds: List<Long>)
+
+    suspend fun getMangaIdsByCollection(collectionId: Long): List<Long>
+
+    suspend fun addMangaToCollection(mangaId: Long, collectionId: Long)
+
+    suspend fun removeMangaFromCollection(mangaId: Long, collectionId: Long)
 }

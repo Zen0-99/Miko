@@ -118,6 +118,24 @@ class MangaCollectionRepositoryImpl(
         }
     }
 
+    override suspend fun getMangaIdsByCollection(collectionId: Long): List<Long> {
+        return handler.awaitList {
+            mangas_categoriesQueries.getMangaIdsByCategoryId(collectionId)
+        }
+    }
+
+    override suspend fun addMangaToCollection(mangaId: Long, collectionId: Long) {
+        handler.await {
+            mangas_categoriesQueries.insertMangaCategory(mangaId, collectionId)
+        }
+    }
+
+    override suspend fun removeMangaFromCollection(mangaId: Long, collectionId: Long) {
+        handler.await {
+            mangas_categoriesQueries.deleteMangaCategoryByMangaIdAndCategoryId(mangaId, collectionId)
+        }
+    }
+
     private fun mapCollection(
         id: Long,
         name: String,

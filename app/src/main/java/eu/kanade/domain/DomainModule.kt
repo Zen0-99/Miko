@@ -151,11 +151,13 @@ import tachiyomi.domain.collection.anime.interactor.UpdateAnimeCollection
 import tachiyomi.domain.collection.anime.repository.AnimeCollectionRepository
 import tachiyomi.domain.collection.manga.interactor.CreateMangaCollectionWithName
 import tachiyomi.domain.collection.manga.interactor.DeleteMangaCollection
+import tachiyomi.domain.collection.manga.interactor.ExportMangaCollection
 import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.collection.manga.interactor.GetMangaCustomOrder
 import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.collection.manga.interactor.GetVisibleMangaCollections
 import tachiyomi.domain.collection.manga.interactor.HideMangaCollection
+import tachiyomi.domain.collection.manga.interactor.ImportMangaCollection
 import tachiyomi.domain.collection.manga.interactor.RenameMangaCollection
 import tachiyomi.domain.collection.manga.interactor.ReorderMangaCollection
 import tachiyomi.domain.collection.manga.interactor.ResetMangaCollectionFlags
@@ -416,6 +418,8 @@ class DomainModule : InjektModule {
         addFactory { UpdateManga(get(), get()) }
         addFactory { SetMangaCollections(get()) }
         addFactory { SetMangaCustomOrder(get()) }
+        addFactory { ExportMangaCollection(get(), get()) }
+        addFactory { ImportMangaCollection(get(), get()) }
         addFactory { GetExcludedScanlators(get()) }
         addFactory { SetExcludedScanlators(get()) }
 

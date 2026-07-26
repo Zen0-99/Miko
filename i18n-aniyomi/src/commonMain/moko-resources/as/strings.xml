@@ -23,6 +23,14 @@
     <string name="reading_order_entry_completed">Completed</string>
     <string name="reading_order_entry_locked">Locked</string>
     <string name="reading_order_prerequisites">Prerequisites</string>
+    <string name="collection_export">Export collection</string>
+    <string name="collection_import">Import collection</string>
+    <string name="collection_export_success">Exported %1 manga to %2</string>
+    <string name="collection_export_failed">Export failed: %1</string>
+    <string name="collection_import_success">Imported "%1" with %2 manga matched, %3 unmatched</string>
+    <string name="collection_import_failed">Import failed: %1</string>
+    <string name="collection_import_unmatched">Unmatched manga</string>
+    <string name="collection_import_unmatched_detail">These manga could not be found in your library and were skipped:</string>
     <string name="action_reorganize_by">পুনৰ সজোৱা</string>
     <string name="relative_time_now">এতিয়া</string>
     <string name="pref_library_summary">শ্ৰেণীসমূহ, বিশ্বজনীন আপডেট, অধ্যায়/পৰ্ব সোঁৱৰণ</string>
