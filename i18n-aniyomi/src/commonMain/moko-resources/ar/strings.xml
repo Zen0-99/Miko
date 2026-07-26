@@ -3,6 +3,7 @@
     <string name="confirm_exit">اضغط مرة أخرى للخروج</string>
     <string name="action_filter_started">بدأت</string>
     <string name="action_sort_airing_time">وقت البث</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">اعد الترتيب</string>
     <string name="relative_time_now">الآن</string>
     <string name="pref_library_summary">الفئات، التحديث الشامل، عند سحب الحلقة/الفصل</string>

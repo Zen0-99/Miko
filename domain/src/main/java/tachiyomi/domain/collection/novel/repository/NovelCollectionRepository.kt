@@ -27,4 +27,8 @@ interface NovelCollectionRepository {
     suspend fun updateAllNovelCollectionFlags(flags: Long?)
 
     suspend fun delete(collectionId: Long)
+
+    suspend fun getNovelCustomOrder(collectionId: Long): List<Long>
+
+    suspend fun setNovelCustomOrder(collectionId: Long, novelIds: List<Long>)
 }

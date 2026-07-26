@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
@@ -15,6 +18,8 @@ import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.components.shouldShowContinueViewingAction
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryItem
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
@@ -33,7 +38,26 @@ internal fun MangaLibraryList(
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
     onSeriesClicked: ((Long) -> Unit)? = null,
+    onReorder: ((List<Long>) -> Unit)? = null,
 ) {
+    if (onReorder != null) {
+        ReorderableMangaLibraryList(
+            items = items,
+            entries = entries,
+            containerHeight = containerHeight,
+            contentPadding = contentPadding,
+            selection = selection,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onClickContinueReading = onClickContinueReading,
+            searchQuery = searchQuery,
+            onGlobalSearchClicked = onGlobalSearchClicked,
+            onSeriesClicked = onSeriesClicked,
+            onReorder = onReorder,
+        )
+        return
+    }
+
     FastScrollLazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding + PaddingValues(vertical = 8.dp),
@@ -87,6 +111,98 @@ internal fun MangaLibraryList(
                 entries = entries,
                 containerHeight = containerHeight,
             )
+        }
+    }
+}
+
+@Composable
+private fun ReorderableMangaLibraryList(
+    items: List<MangaLibraryItem>,
+    entries: Int,
+    containerHeight: Int,
+    contentPadding: PaddingValues,
+    selection: List<LibraryManga>,
+    onClick: (LibraryManga) -> Unit,
+    onLongClick: (LibraryManga) -> Unit,
+    onClickContinueReading: ((LibraryManga) -> Unit)?,
+    searchQuery: String?,
+    onGlobalSearchClicked: () -> Unit,
+    onSeriesClicked: ((Long) -> Unit)?,
+    onReorder: (List<Long>) -> Unit,
+) {
+    val listState = remember { androidx.compose.foundation.lazy.LazyListState() }
+    val itemState = remember { items.toMutableStateList() }
+
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        val item = itemState.removeAt(from.index)
+        itemState.add(to.index, item)
+        onReorder(itemState.map { it.libraryManga.manga.id })
+    }
+
+    LaunchedEffect(items) {
+        if (!reorderableState.isAnyItemDragging) {
+            itemState.clear()
+            itemState.addAll(items)
+        }
+    }
+
+    FastScrollLazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        contentPadding = contentPadding + PaddingValues(vertical = 8.dp),
+    ) {
+        item(key = "global_search") {
+            if (!searchQuery.isNullOrEmpty()) {
+                GlobalSearchItem(
+                    modifier = Modifier.fillMaxWidth(),
+                    searchQuery = searchQuery,
+                    onClick = onGlobalSearchClicked,
+                )
+            }
+        }
+
+        items(
+            items = itemState,
+            key = { it.libraryManga.manga.id },
+            contentType = { "manga_library_list_item" },
+        ) { libraryItem ->
+            ReorderableItem(reorderableState, libraryItem.libraryManga.manga.id) {
+                val manga = libraryItem.libraryManga.manga
+                EntryListItem(
+                    modifier = Modifier.longPressDraggableHandle(),
+                    isSelected = selection.fastAny { it.id == libraryItem.libraryManga.id },
+                    title = manga.title,
+                    coverData = MangaCover(
+                        mangaId = manga.id,
+                        sourceId = manga.source,
+                        isMangaFavorite = manga.favorite,
+                        url = manga.thumbnailUrl,
+                        lastModified = manga.coverLastModified,
+                    ),
+                    badge = {
+                        DownloadsBadge(count = libraryItem.downloadCount)
+                        UnviewedBadge(count = libraryItem.unreadCount)
+                        LanguageBadge(
+                            isLocal = libraryItem.isLocal,
+                            sourceLanguage = libraryItem.sourceLanguage,
+                        )
+                    },
+                    onLongClick = { onLongClick(libraryItem.libraryManga) },
+                    onClick = { onClick(libraryItem.libraryManga) },
+                    onClickContinueViewing = if (
+                        shouldShowContinueViewingAction(
+                            hasContinueAction = onClickContinueReading != null,
+                            remainingCount = libraryItem.unreadCount,
+                        )
+                    ) {
+                        { onClickContinueReading?.invoke(libraryItem.libraryManga) }
+                    } else {
+                        null
+                    },
+                    entries = entries,
+                    containerHeight = containerHeight,
+                )
+            }
         }
     }
 }

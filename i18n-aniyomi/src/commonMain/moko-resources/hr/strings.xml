@@ -3,6 +3,7 @@
     <string name="confirm_exit">Ponovo pritisni natrag za zatvarnje</string>
     <string name="action_filter_started">Započeto</string>
     <string name="action_sort_airing_time">Vrijeme emitiranja</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Promjieni redoslijed</string>
     <string name="relative_time_now">Sada</string>
     <string name="pref_library_summary">Kategorije, globalno ažuriranje, prelistavanje poglavlja</string>

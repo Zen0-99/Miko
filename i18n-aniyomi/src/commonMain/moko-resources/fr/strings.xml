@@ -3,6 +3,7 @@
     <string name="confirm_exit">Appuyez à nouveau pour quitter</string>
     <string name="action_filter_started">Commencés</string>
     <string name="action_sort_airing_time">Période de diffusion</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Réorganiser</string>
     <string name="relative_time_now">Maintenant</string>
     <string name="pref_library_summary">Catégories, mise à jour globale, faire glisser le chapitre</string>

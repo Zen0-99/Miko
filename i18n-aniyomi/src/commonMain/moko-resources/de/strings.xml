@@ -3,6 +3,7 @@
     <string name="confirm_exit">Zum Beenden erneut auf „Zurück“ drücken</string>
     <string name="action_filter_started">Gestartet</string>
     <string name="action_sort_airing_time">Sendezeit</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Sortieren nach</string>
     <string name="relative_time_now">Jetzt</string>
     <string name="pref_library_summary">Kategorien, globale Aktualisierungen, Kapitelaktionen</string>

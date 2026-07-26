@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS novel_collection_order(
+    collection_id INTEGER NOT NULL,
+    novel_id      INTEGER NOT NULL,
+    position      INTEGER NOT NULL,
+    PRIMARY KEY (collection_id, novel_id),
+    FOREIGN KEY(collection_id) REFERENCES novelcategories (_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(novel_id) REFERENCES novels (_id)
+    ON DELETE CASCADE
+);

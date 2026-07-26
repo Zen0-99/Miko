@@ -50,6 +50,7 @@ fun MangaLibraryContent(
     getLibraryForPage: (Int) -> List<MangaLibraryItem>,
     onTogglePinned: ((MangaLibraryItem) -> Unit)? = null,
     onSeriesClicked: ((Long) -> Unit)? = null,
+    onReorder: ((List<Long>) -> Unit)? = null,
 ) {
     if (collectionDisplayMode == LibraryCollectionDisplay.CONTINUOUS && collections.size > 1) {
         MangaLibraryContinuousContent(
@@ -136,6 +137,7 @@ fun MangaLibraryContent(
                 onClickContinueReading = onContinueReadingClicked,
                 onTogglePinned = onTogglePinned,
                 onSeriesClicked = onSeriesClicked,
+                onReorder = onReorder,
             )
         }
 

@@ -1,0 +1,38 @@
+CREATE TABLE novel_collection_order(
+    collection_id INTEGER NOT NULL,
+    novel_id      INTEGER NOT NULL,
+    position      INTEGER NOT NULL,
+    PRIMARY KEY (collection_id, novel_id),
+    FOREIGN KEY(collection_id) REFERENCES novelcategories (_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(novel_id) REFERENCES novels (_id)
+    ON DELETE CASCADE
+);
+
+getPositionsByCollectionId:
+SELECT novel_id AS id, position
+FROM novel_collection_order
+WHERE collection_id = :collectionId
+ORDER BY position;
+
+getPosition:
+SELECT position
+FROM novel_collection_order
+WHERE collection_id = :collectionId AND novel_id = :novelId;
+
+upsertPosition:
+INSERT INTO novel_collection_order(collection_id, novel_id, position)
+VALUES (:collectionId, :novelId, :position)
+ON CONFLICT(collection_id, novel_id) DO UPDATE SET position = excluded.position;
+
+deletePositionByCollectionIdAndNovelId:
+DELETE FROM novel_collection_order
+WHERE collection_id = :collectionId AND novel_id = :novelId;
+
+deletePositionsByCollectionId:
+DELETE FROM novel_collection_order
+WHERE collection_id = :collectionId;
+
+deletePositionsByNovelId:
+DELETE FROM novel_collection_order
+WHERE novel_id = :novelId;

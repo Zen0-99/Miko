@@ -1,0 +1,38 @@
+CREATE TABLE manga_collection_order(
+    collection_id INTEGER NOT NULL,
+    manga_id      INTEGER NOT NULL,
+    position      INTEGER NOT NULL,
+    PRIMARY KEY (collection_id, manga_id),
+    FOREIGN KEY(collection_id) REFERENCES categories (_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(manga_id) REFERENCES mangas (_id)
+    ON DELETE CASCADE
+);
+
+getPositionsByCollectionId:
+SELECT manga_id AS id, position
+FROM manga_collection_order
+WHERE collection_id = :collectionId
+ORDER BY position;
+
+getPosition:
+SELECT position
+FROM manga_collection_order
+WHERE collection_id = :collectionId AND manga_id = :mangaId;
+
+upsertPosition:
+INSERT INTO manga_collection_order(collection_id, manga_id, position)
+VALUES (:collectionId, :mangaId, :position)
+ON CONFLICT(collection_id, manga_id) DO UPDATE SET position = excluded.position;
+
+deletePositionByCollectionIdAndMangaId:
+DELETE FROM manga_collection_order
+WHERE collection_id = :collectionId AND manga_id = :mangaId;
+
+deletePositionsByCollectionId:
+DELETE FROM manga_collection_order
+WHERE collection_id = :collectionId;
+
+deletePositionsByMangaId:
+DELETE FROM manga_collection_order
+WHERE manga_id = :mangaId;

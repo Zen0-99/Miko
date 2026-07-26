@@ -3,6 +3,7 @@
     <string name="confirm_exit">Yatay Kaydırmayı Etkinleştir</string>
     <string name="action_filter_started">Başlandı</string>
     <string name="action_sort_airing_time">Yayınlama tarihi</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Yeniden sırala</string>
     <string name="relative_time_now">Şimdi</string>
     <string name="pref_library_summary">Kategoriler, genel güncelleme, bölüm kaydırma</string>

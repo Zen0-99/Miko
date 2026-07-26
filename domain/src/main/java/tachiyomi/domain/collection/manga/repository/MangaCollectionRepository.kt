@@ -33,4 +33,8 @@ interface MangaCollectionRepository {
     suspend fun updateAllMangaCollectionFlags(flags: Long?)
 
     suspend fun deleteMangaCollection(collectionId: Long)
+
+    suspend fun getMangaCustomOrder(collectionId: Long): List<Long>
+
+    suspend fun setMangaCustomOrder(collectionId: Long, mangaIds: List<Long>)
 }

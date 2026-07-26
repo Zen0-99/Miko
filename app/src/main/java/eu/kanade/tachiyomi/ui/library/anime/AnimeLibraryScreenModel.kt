@@ -53,8 +53,10 @@ import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCustomOrder
 import tachiyomi.domain.collection.anime.interactor.GetVisibleAnimeCollections
 import tachiyomi.domain.collection.anime.interactor.SetAnimeCollections
+import tachiyomi.domain.collection.anime.interactor.SetAnimeCustomOrder
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.anime.interactor.GetLibraryAnime
 import tachiyomi.domain.entries.anime.model.Anime
@@ -84,12 +86,14 @@ typealias AnimeLibraryMap = Map<Collection, List<AnimeLibraryItem>>
 class AnimeLibraryScreenModel(
     private val getLibraryAnime: GetLibraryAnime = Injekt.get(),
     private val getCollections: GetVisibleAnimeCollections = Injekt.get(),
+    private val getAnimeCustomOrder: GetAnimeCustomOrder = Injekt.get(),
     private val getTracksPerAnime: GetTracksPerAnime = Injekt.get(),
     private val getNextEpisodes: GetNextEpisodes = Injekt.get(),
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
     private val setSeenStatus: SetSeenStatus = Injekt.get(),
     private val updateAnime: UpdateAnime = Injekt.get(),
     private val setAnimeCollections: SetAnimeCollections = Injekt.get(),
+    private val setAnimeCustomOrder: SetAnimeCustomOrder = Injekt.get(),
     private val preferences: BasePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val coverCache: AnimeCoverCache = Injekt.get(),
@@ -252,7 +256,7 @@ class AnimeLibraryScreenModel(
         return mapValues { (_, value) -> value.fastFilter(filterFn) }
     }
 
-    private fun AnimeLibraryMap.applySort(
+    private suspend fun AnimeLibraryMap.applySort(
         trackMap: Map<Long, List<AnimeTrack>>,
         loggedInTrackerIds: Set<Long>,
     ): AnimeLibraryMap {
@@ -322,12 +326,32 @@ class AnimeLibraryScreenModel(
                 AnimeLibrarySort.Type.Random -> {
                     error("Why Are We Still Here? Just To Suffer?")
                 }
+                AnimeLibrarySort.Type.CustomOrder -> {
+                    error("CustomOrder is handled separately")
+                }
             }
         }
 
         return mapValues { (key, value) ->
             if (key.sort.type == AnimeLibrarySort.Type.Random) {
                 return@mapValues value.shuffled(Random(libraryPreferences.randomAnimeSortSeed().get()))
+            }
+
+            if (key.sort.type == AnimeLibrarySort.Type.CustomOrder) {
+                val order = getAnimeCustomOrder.await(key.id)
+                val positionMap = order.withIndex().associate { it.value to it.index }
+                val unorderedIndex = order.size
+                return@mapValues value.sortedWith(
+                    Comparator { i1, i2 ->
+                        val pos1 = positionMap[i1.libraryAnime.id] ?: unorderedIndex
+                        val pos2 = positionMap[i2.libraryAnime.id] ?: unorderedIndex
+                        if (pos1 != pos2) {
+                            pos1.compareTo(pos2)
+                        } else {
+                            sortAlphabetically(i1, i2)
+                        }
+                    },
+                )
             }
 
             val comparator = key.sort.comparator()
@@ -600,6 +624,10 @@ class AnimeLibraryScreenModel(
                 .getAnimelibItemsByCollectionId(state.value.collections[activeCollectionIndex].id)
                 ?.randomOrNull()
         }
+    }
+
+    suspend fun updateCustomOrder(collectionId: Long, animeIds: List<Long>) {
+        withIOContext { setAnimeCustomOrder.await(collectionId, animeIds) }
     }
 
     fun showSettingsDialog() {

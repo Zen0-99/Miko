@@ -4,6 +4,7 @@
     <string name="confirm_exit">Enable Horizontal Seek</string>
     <string name="action_filter_started">Started</string>
     <string name="action_sort_airing_time">Airing time</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_display_unseen_badge">Unseen episodes</string>
     <string name="action_reorganize_by">Reorder</string>
     <string name="relative_time_now">Now</string>

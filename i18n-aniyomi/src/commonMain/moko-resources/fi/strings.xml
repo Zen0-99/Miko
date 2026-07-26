@@ -3,6 +3,7 @@
     <string name="confirm_exit">Paina takaisin uudelleen poistuaksesi</string>
     <string name="action_filter_started">Aloitettu</string>
     <string name="action_sort_airing_time">Tuuletusaika</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Järjestä uudelleen</string>
     <string name="relative_time_now">Nyt</string>
     <string name="pref_library_update_show_tab_badge">Näytä lukemattomien määrä päivitys ikoneissa</string>

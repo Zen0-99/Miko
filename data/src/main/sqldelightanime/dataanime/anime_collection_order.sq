@@ -1,0 +1,38 @@
+CREATE TABLE anime_collection_order(
+    collection_id INTEGER NOT NULL,
+    anime_id      INTEGER NOT NULL,
+    position      INTEGER NOT NULL,
+    PRIMARY KEY (collection_id, anime_id),
+    FOREIGN KEY(collection_id) REFERENCES categories (_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(anime_id) REFERENCES animes (_id)
+    ON DELETE CASCADE
+);
+
+getPositionsByCollectionId:
+SELECT anime_id AS id, position
+FROM anime_collection_order
+WHERE collection_id = :collectionId
+ORDER BY position;
+
+getPosition:
+SELECT position
+FROM anime_collection_order
+WHERE collection_id = :collectionId AND anime_id = :animeId;
+
+upsertPosition:
+INSERT INTO anime_collection_order(collection_id, anime_id, position)
+VALUES (:collectionId, :animeId, :position)
+ON CONFLICT(collection_id, anime_id) DO UPDATE SET position = excluded.position;
+
+deletePositionByCollectionIdAndAnimeId:
+DELETE FROM anime_collection_order
+WHERE collection_id = :collectionId AND anime_id = :animeId;
+
+deletePositionsByCollectionId:
+DELETE FROM anime_collection_order
+WHERE collection_id = :collectionId;
+
+deletePositionsByAnimeId:
+DELETE FROM anime_collection_order
+WHERE anime_id = :animeId;

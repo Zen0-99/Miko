@@ -3,6 +3,7 @@
     <string name="confirm_exit">Pindutin ulit ang back para umalis</string>
     <string name="action_filter_started">Nagsimula</string>
     <string name="action_sort_airing_time">Oras ng pagpapalabas</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Muling ayusin</string>
     <string name="relative_time_now">Ngayon</string>
     <string name="pref_library_summary">Mga kategorya, panlahatang update, pag-swipe ng kabanata</string>

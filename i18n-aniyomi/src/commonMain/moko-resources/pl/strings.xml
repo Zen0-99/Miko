@@ -3,6 +3,7 @@
     <string name="confirm_exit">Naciśnij do tyłu jeszcze raz aby wyjść</string>
     <string name="action_filter_started">Zaczęte</string>
     <string name="action_sort_airing_time">Data wydania/transmisji</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Reorganizuj</string>
     <string name="relative_time_now">Teraz</string>
     <string name="pref_library_summary">Kategorie, aktualizacja globalna, przesunięcie rozdziału</string>

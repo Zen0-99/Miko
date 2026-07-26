@@ -3,6 +3,7 @@
     <string name="confirm_exit">Притисните назад поново да изађете</string>
     <string name="action_filter_started">Стартовано</string>
     <string name="action_sort_airing_time">Време емитовања</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Промени редослед</string>
     <string name="relative_time_now">Сада</string>
     <string name="pref_library_summary">Категорије, глобално ажурирање, листање поглавља</string>

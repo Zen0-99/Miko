@@ -33,4 +33,8 @@ interface AnimeCollectionRepository {
     suspend fun updateAllAnimeCollectionFlags(flags: Long?)
 
     suspend fun deleteAnimeCollection(collectionId: Long)
+
+    suspend fun getAnimeCustomOrder(collectionId: Long): List<Long>
+
+    suspend fun setAnimeCustomOrder(collectionId: Long, animeIds: List<Long>)
 }

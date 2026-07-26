@@ -3,6 +3,7 @@
     <string name="confirm_exit">종료하려면 뒤로버튼을 다시 누르세요</string>
     <string name="action_filter_started">시작됨</string>
     <string name="action_sort_airing_time">방영시간</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">재정렬</string>
     <string name="pref_library_summary">카테고리, 전역 업데이트, 회차 스와이프</string>
     <string name="pref_library_update_show_tab_badge">업데이트 아이콘에 읽지 않은 횟수 표시</string>

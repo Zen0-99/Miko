@@ -3,6 +3,7 @@
     <string name="confirm_exit">לחץ \"חזור\" שוב על מנת לצאת</string>
     <string name="action_filter_started">התחלתי</string>
     <string name="action_sort_airing_time">זמן שידור</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="pref_library_summary">קטגוריות, עדכון כללי, החלקת פרק</string>
     <string name="pref_library_update_show_tab_badge">הצג מספור של פרקים לצפייה/לקריאה שלא נצפו/נקראו באייקון ה- \"עדכונים\"</string>
     <string name="pref_progress_mark_as_seen">באיזו נקודה לסמן את הפרק כנצפה</string>

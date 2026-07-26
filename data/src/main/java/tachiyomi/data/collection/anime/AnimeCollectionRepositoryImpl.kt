@@ -103,6 +103,21 @@ class AnimeCollectionRepositoryImpl(
         }
     }
 
+    override suspend fun getAnimeCustomOrder(collectionId: Long): List<Long> {
+        return handler.awaitList {
+            anime_collection_orderQueries.getPositionsByCollectionId(collectionId) { id, _ -> id }
+        }
+    }
+
+    override suspend fun setAnimeCustomOrder(collectionId: Long, animeIds: List<Long>) {
+        handler.await(inTransaction = true) {
+            anime_collection_orderQueries.deletePositionsByCollectionId(collectionId)
+            animeIds.forEachIndexed { index, animeId ->
+                anime_collection_orderQueries.upsertPosition(collectionId, animeId, index.toLong())
+            }
+        }
+    }
+
     private fun mapCollection(
         id: Long,
         name: String,

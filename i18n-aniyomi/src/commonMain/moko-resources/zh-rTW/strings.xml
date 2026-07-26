@@ -3,6 +3,7 @@
     <string name="confirm_exit">再按一次以離開</string>
     <string name="action_filter_started">啟用</string>
     <string name="action_sort_airing_time">播放時間</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">重新排序</string>
     <string name="relative_time_now">現在</string>
     <string name="pref_library_summary">類別、全域更新、章節/劇集滑動</string>

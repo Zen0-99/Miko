@@ -129,6 +129,7 @@ private fun ColumnScope.SortPage(
             MR.strings.action_sort_latest_chapter to NovelLibrarySort.Type.LatestChapter,
             MR.strings.action_sort_chapter_fetch_date to NovelLibrarySort.Type.ChapterFetchDate,
             MR.strings.action_sort_date_added to NovelLibrarySort.Type.DateAdded,
+            AYMR.strings.action_sort_custom_order to NovelLibrarySort.Type.CustomOrder,
             MR.strings.action_sort_random to NovelLibrarySort.Type.Random,
         )
     }

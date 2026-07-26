@@ -3,6 +3,7 @@
     <string name="confirm_exit">Zmáčknete zpátky znovu aby jste odešli</string>
     <string name="action_filter_started">Začal</string>
     <string name="action_sort_airing_time">Čas vysílání</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Seřadit</string>
     <string name="relative_time_now">Teď</string>
     <string name="pref_library_summary">Kategorie, globální aktualizace, přejetí po kapitole</string>

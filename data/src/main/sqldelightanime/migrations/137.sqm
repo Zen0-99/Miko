@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS anime_collection_order(
+    collection_id INTEGER NOT NULL,
+    anime_id      INTEGER NOT NULL,
+    position      INTEGER NOT NULL,
+    PRIMARY KEY (collection_id, anime_id),
+    FOREIGN KEY(collection_id) REFERENCES categories (_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(anime_id) REFERENCES animes (_id)
+    ON DELETE CASCADE
+);

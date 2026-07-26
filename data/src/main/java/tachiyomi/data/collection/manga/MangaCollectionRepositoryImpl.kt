@@ -103,6 +103,21 @@ class MangaCollectionRepositoryImpl(
         }
     }
 
+    override suspend fun getMangaCustomOrder(collectionId: Long): List<Long> {
+        return handler.awaitList {
+            manga_collection_orderQueries.getPositionsByCollectionId(collectionId) { id, _ -> id }
+        }
+    }
+
+    override suspend fun setMangaCustomOrder(collectionId: Long, mangaIds: List<Long>) {
+        handler.await(inTransaction = true) {
+            manga_collection_orderQueries.deletePositionsByCollectionId(collectionId)
+            mangaIds.forEachIndexed { index, mangaId ->
+                manga_collection_orderQueries.upsertPosition(collectionId, mangaId, index.toLong())
+            }
+        }
+    }
+
     private fun mapCollection(
         id: Long,
         name: String,

@@ -3,6 +3,7 @@
     <string name="confirm_exit">Увімкнути горизонтальний пошук</string>
     <string name="action_filter_started">Розпочато</string>
     <string name="action_sort_airing_time">Час виходу</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Змінити порядок</string>
     <string name="relative_time_now">Зараз</string>
     <string name="pref_library_summary">Категорії, глобальне оновлення, гортання розділів</string>

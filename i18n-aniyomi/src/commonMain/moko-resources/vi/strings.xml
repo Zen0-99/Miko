@@ -3,6 +3,7 @@
     <string name="confirm_exit">Hãy nhấn lại nút quay lại để thoát</string>
     <string name="action_filter_started">Bắt đầu</string>
     <string name="action_sort_airing_time">Ngày phát hành</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Sắp xếp lại</string>
     <string name="relative_time_now">Bây giờ</string>
     <string name="pref_library_summary">Danh mục, cập nhật toàn bộ, vuốt chương</string>

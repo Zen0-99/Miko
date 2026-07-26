@@ -73,6 +73,21 @@ class NovelCollectionRepositoryImpl(
         }
     }
 
+    override suspend fun getNovelCustomOrder(collectionId: Long): List<Long> {
+        return handler.awaitList {
+            novel_collection_orderQueries.getPositionsByCollectionId(collectionId) { id, _ -> id }
+        }
+    }
+
+    override suspend fun setNovelCustomOrder(collectionId: Long, novelIds: List<Long>) {
+        handler.await(inTransaction = true) {
+            novel_collection_orderQueries.deletePositionsByCollectionId(collectionId)
+            novelIds.forEachIndexed { index, novelId ->
+                novel_collection_orderQueries.upsertPosition(collectionId, novelId, index.toLong())
+            }
+        }
+    }
+
     override suspend fun updatePartialNovelCollection(update: CollectionUpdate) {
         handler.await {
             novelcategoriesQueries.update(

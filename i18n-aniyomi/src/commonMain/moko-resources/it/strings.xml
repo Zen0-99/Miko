@@ -3,6 +3,7 @@
     <string name="confirm_exit">Premi di nuovo indietro per uscire</string>
     <string name="action_filter_started">Iniziato</string>
     <string name="action_sort_airing_time">Orario di messa in onda</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Riordina</string>
     <string name="relative_time_now">Ora</string>
     <string name="pref_library_summary">Categorie, aggiornamenti globali, azioni di scorrimento capitoli</string>

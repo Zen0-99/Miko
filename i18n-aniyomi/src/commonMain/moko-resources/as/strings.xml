@@ -3,6 +3,7 @@
     <string name="confirm_exit">বাহিৰ হ’বলৈ আকৌ পিছলৈ টিপক</string>
     <string name="action_filter_started">আৰম্ভ হৈছে</string>
     <string name="action_sort_airing_time">প্ৰচাৰৰ সময়</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">পুনৰ সজোৱা</string>
     <string name="relative_time_now">এতিয়া</string>
     <string name="pref_library_summary">শ্ৰেণীসমূহ, বিশ্বজনীন আপডেট, অধ্যায়/পৰ্ব সোঁৱৰণ</string>

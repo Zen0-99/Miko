@@ -3,6 +3,7 @@
     <string name="confirm_exit">Нажмите кнопку назад ещё раз, чтобы выйти</string>
     <string name="action_filter_started">Начато</string>
     <string name="action_sort_airing_time">По времени выпуска</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Изменение порядка</string>
     <string name="relative_time_now">Сейчас</string>
     <string name="pref_library_summary">Категории, глобальное обновление, смахивание глав/эпизодов</string>

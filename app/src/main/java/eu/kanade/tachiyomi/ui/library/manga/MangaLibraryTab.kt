@@ -72,6 +72,8 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.library.manga.LibraryManga
+import tachiyomi.domain.library.manga.model.MangaLibrarySort
+import tachiyomi.domain.library.manga.model.sort
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -284,6 +286,18 @@ data object MangaLibraryTab : Tab {
                         },
                         collectionDisplayMode = state.collectionDisplayMode,
                         getLibraryForPage = { state.getLibraryItemsByPage(it) },
+                        onReorder = { mangaIds: List<Long> ->
+                            val collection = state.collections.getOrNull(screenModel.activeCollectionIndex)
+                            if (collection != null) {
+                                scope.launchIO {
+                                    screenModel.updateCustomOrder(collection.id, mangaIds)
+                                }
+                            }
+                        }.takeIf {
+                            val collection = state.collections.getOrNull(screenModel.activeCollectionIndex)
+                            collection != null &&
+                                collection.sort.type == MangaLibrarySort.Type.CustomOrder
+                        },
                     )
                 }
             }

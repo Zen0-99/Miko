@@ -49,8 +49,10 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
+import tachiyomi.domain.collection.novel.interactor.GetNovelCustomOrder
 import tachiyomi.domain.collection.novel.interactor.GetVisibleNovelCollections
 import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
+import tachiyomi.domain.collection.novel.interactor.SetNovelCustomOrder
 import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.model.Novel
@@ -71,7 +73,9 @@ typealias NovelLibraryMap = Map<Collection, List<NovelLibraryItem>>
 class NovelLibraryScreenModel(
     private val getLibraryNovels: GetLibraryNovels = Injekt.get(),
     private val getCollections: GetVisibleNovelCollections = Injekt.get(),
+    private val getNovelCustomOrder: GetNovelCustomOrder = Injekt.get(),
     private val setNovelCollections: SetNovelCollections = Injekt.get(),
+    private val setNovelCustomOrder: SetNovelCustomOrder = Injekt.get(),
     private val preferences: BasePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
@@ -212,7 +216,7 @@ class NovelLibraryScreenModel(
         return mapValues { (_, value) -> value.fastFilter(filterFn) }
     }
 
-    private fun NovelLibraryMap.applySort(
+    private suspend fun NovelLibraryMap.applySort(
         loggedInTrackerIds: Set<Long>,
     ): NovelLibraryMap {
         val sortAlphabetically: (NovelLibraryItem, NovelLibraryItem) -> Int = { i1, i2 ->
@@ -236,12 +240,30 @@ class NovelLibraryScreenModel(
                 NovelLibrarySort.Type.DateAdded -> i1.libraryNovel.novel.dateAdded.compareTo(i2.libraryNovel.novel.dateAdded)
                 NovelLibrarySort.Type.TrackerMean -> 0
                 NovelLibrarySort.Type.Random -> error("Why Are We Still Here? Just To Suffer?")
+                NovelLibrarySort.Type.CustomOrder -> error("CustomOrder is handled separately")
             }
         }
 
         return mapValues { (key, value) ->
             if (key.sort.type == NovelLibrarySort.Type.Random) {
                 return@mapValues value.shuffled(Random(libraryPreferences.randomNovelSortSeed().get()))
+            }
+
+            if (key.sort.type == NovelLibrarySort.Type.CustomOrder) {
+                val order = getNovelCustomOrder.await(key.id)
+                val positionMap = order.withIndex().associate { it.value to it.index }
+                val unorderedIndex = order.size
+                return@mapValues value.sortedWith(
+                    Comparator { i1, i2 ->
+                        val pos1 = positionMap[i1.libraryNovel.id] ?: unorderedIndex
+                        val pos2 = positionMap[i2.libraryNovel.id] ?: unorderedIndex
+                        if (pos1 != pos2) {
+                            pos1.compareTo(pos2)
+                        } else {
+                            sortAlphabetically(i1, i2)
+                        }
+                    },
+                )
             }
 
             val comparator = key.sort.comparator()
@@ -387,6 +409,10 @@ class NovelLibraryScreenModel(
                 .getLibraryItemsByCollectionId(state.value.collections[activeCollectionIndex].id)
                 ?.randomOrNull()
         }
+    }
+
+    suspend fun updateCustomOrder(collectionId: Long, novelIds: List<Long>) {
+        withIOContext { setNovelCustomOrder.await(collectionId, novelIds) }
     }
 
     fun showSettingsDialog() {

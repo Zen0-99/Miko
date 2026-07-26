@@ -3,6 +3,7 @@
     <string name="confirm_exit">Druk opnieuw op terug om te sluiten</string>
     <string name="action_filter_started">Begonnen</string>
     <string name="action_sort_airing_time">Uitzendtijd</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="pref_library_summary">Categorieën, globaal bijwerken</string>
     <string name="pref_library_update_show_tab_badge">Geef ongelezen aantal weer op het Update icoon</string>
     <string name="manga_collections">Manga Categorieën</string>

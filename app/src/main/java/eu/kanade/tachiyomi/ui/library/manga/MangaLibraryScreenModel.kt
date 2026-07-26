@@ -51,8 +51,10 @@ import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.domain.collection.manga.interactor.GetMangaCustomOrder
 import tachiyomi.domain.collection.manga.interactor.GetVisibleMangaCollections
 import tachiyomi.domain.collection.manga.interactor.SetMangaCollections
+import tachiyomi.domain.collection.manga.interactor.SetMangaCustomOrder
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
@@ -82,12 +84,14 @@ typealias MangaLibraryMap = Map<Collection, List<MangaLibraryItem>>
 class MangaLibraryScreenModel(
     private val getLibraryManga: GetLibraryManga = Injekt.get(),
     private val getCollections: GetVisibleMangaCollections = Injekt.get(),
+    private val getMangaCustomOrder: GetMangaCustomOrder = Injekt.get(),
     private val getTracksPerManga: GetTracksPerManga = Injekt.get(),
     private val getNextChapters: GetNextChapters = Injekt.get(),
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     private val setReadStatus: SetReadStatus = Injekt.get(),
     private val updateManga: UpdateManga = Injekt.get(),
     private val setMangaCollections: SetMangaCollections = Injekt.get(),
+    private val setMangaCustomOrder: SetMangaCustomOrder = Injekt.get(),
     private val preferences: BasePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val coverCache: MangaCoverCache = Injekt.get(),
@@ -256,7 +260,7 @@ class MangaLibraryScreenModel(
         return mapValues { (_, value) -> value.fastFilter(filterFn) }
     }
 
-    private fun MangaLibraryMap.applySort(
+    private suspend fun MangaLibraryMap.applySort(
         trackMap: Map<Long, List<MangaTrack>>,
         loggedInTrackerIds: Set<Long>,
     ): MangaLibraryMap {
@@ -316,12 +320,32 @@ class MangaLibraryScreenModel(
                 MangaLibrarySort.Type.Random -> {
                     error("Why Are We Still Here? Just To Suffer?")
                 }
+                MangaLibrarySort.Type.CustomOrder -> {
+                    error("CustomOrder is handled separately")
+                }
             }
         }
 
         return mapValues { (key, value) ->
             if (key.sort.type == MangaLibrarySort.Type.Random) {
                 return@mapValues value.shuffled(Random(libraryPreferences.randomMangaSortSeed().get()))
+            }
+
+            if (key.sort.type == MangaLibrarySort.Type.CustomOrder) {
+                val order = getMangaCustomOrder.await(key.id)
+                val positionMap = order.withIndex().associate { it.value to it.index }
+                val unorderedIndex = order.size
+                return@mapValues value.sortedWith(
+                    Comparator { i1, i2 ->
+                        val pos1 = positionMap[i1.libraryManga.id] ?: unorderedIndex
+                        val pos2 = positionMap[i2.libraryManga.id] ?: unorderedIndex
+                        if (pos1 != pos2) {
+                            pos1.compareTo(pos2)
+                        } else {
+                            sortAlphabetically(i1, i2)
+                        }
+                    },
+                )
             }
 
             val comparator = key.sort.comparator()
@@ -593,6 +617,10 @@ class MangaLibraryScreenModel(
                 .getLibraryItemsByCollectionId(state.value.collections[activeCollectionIndex].id)
                 ?.randomOrNull()
         }
+    }
+
+    suspend fun updateCustomOrder(collectionId: Long, mangaIds: List<Long>) {
+        withIOContext { setMangaCustomOrder.await(collectionId, mangaIds) }
     }
 
     fun showSettingsDialog() {

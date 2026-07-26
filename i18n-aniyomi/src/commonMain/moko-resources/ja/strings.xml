@@ -3,6 +3,7 @@
     <string name="confirm_exit">もう一度戻るを押して終了します</string>
     <string name="action_filter_started">開始済み</string>
     <string name="action_sort_airing_time">放送時間</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">再注文</string>
     <string name="relative_time_now">いま</string>
     <string name="pref_library_summary">カテゴリ、グローバル アップデート、章の間のスワイプ</string>

@@ -2,6 +2,7 @@
 <resources>
     <string name="confirm_exit">Pre opustenie aplikácie, stačte znova tlačidlo späť</string>
     <string name="action_sort_airing_time">Čas vysielania</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Znovuorganizovať</string>
     <string name="pref_library_update_show_tab_badge">Zobraziť počet neprečítaných kapitol na ikone Aktualizácie</string>
     <string name="manga_collections">Kategórie Mangy</string>

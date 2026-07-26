@@ -3,6 +3,7 @@
     <string name="confirm_exit">வெளியேற மீண்டும் அழுத்தவும்</string>
     <string name="action_filter_started">தொடங்கியது</string>
     <string name="action_sort_airing_time">ஒளிபரப்பும் நேரம்</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">மறுவரிசை</string>
     <string name="relative_time_now">இப்போது</string>
     <string name="pref_library_summary">வகைகள், உலகளாவிய புதுப்பிப்பு, அத்தியாயம்/எபிசோட் ச்வைப்</string>

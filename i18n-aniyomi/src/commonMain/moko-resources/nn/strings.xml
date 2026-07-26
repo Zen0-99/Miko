@@ -3,6 +3,7 @@
     <string name="confirm_exit">Trykk tilbake igjen for å gå ut</string>
     <string name="action_filter_started">Starta</string>
     <string name="action_sort_airing_time">Kringkastingstid</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="local_source_badge">Lokal</string>
     <string name="manga_collections">Manga Kategoriar</string>
     <string name="action_edit_manga_collections">Endra manga kategoriar</string>

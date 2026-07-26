@@ -48,6 +48,7 @@
     <string name="channel_new_chapters_episodes">अध्याय अद्यतन</string>
     <string name="action_filter_started">शुरू हो गया</string>
     <string name="action_sort_airing_time">प्रसारण का समय</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_display_unseen_badge">अनदेखे एपिसोड</string>
     <string name="action_reorganize_by">पुनः क्रमित करें</string>
     <string name="action_continue">जारी रखे</string>

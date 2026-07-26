@@ -136,12 +136,14 @@ import tachiyomi.data.updates.novel.NovelUpdatesRepositoryImpl
 import tachiyomi.domain.collection.anime.interactor.CreateAnimeCollectionWithName
 import tachiyomi.domain.collection.anime.interactor.DeleteAnimeCollection
 import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.anime.interactor.GetAnimeCustomOrder
 import tachiyomi.domain.collection.anime.interactor.GetVisibleAnimeCollections
 import tachiyomi.domain.collection.anime.interactor.HideAnimeCollection
 import tachiyomi.domain.collection.anime.interactor.RenameAnimeCollection
 import tachiyomi.domain.collection.anime.interactor.ReorderAnimeCollection
 import tachiyomi.domain.collection.anime.interactor.ResetAnimeCollectionFlags
 import tachiyomi.domain.collection.anime.interactor.SetAnimeCollections
+import tachiyomi.domain.collection.anime.interactor.SetAnimeCustomOrder
 import tachiyomi.domain.collection.anime.interactor.SetAnimeDisplayMode
 import tachiyomi.domain.collection.anime.interactor.SetSortModeForAnimeCollection
 import tachiyomi.domain.collection.anime.interactor.UpdateAnimeCollection
@@ -149,6 +151,7 @@ import tachiyomi.domain.collection.anime.repository.AnimeCollectionRepository
 import tachiyomi.domain.collection.manga.interactor.CreateMangaCollectionWithName
 import tachiyomi.domain.collection.manga.interactor.DeleteMangaCollection
 import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
+import tachiyomi.domain.collection.manga.interactor.GetMangaCustomOrder
 import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.collection.manga.interactor.GetVisibleMangaCollections
 import tachiyomi.domain.collection.manga.interactor.HideMangaCollection
@@ -156,6 +159,7 @@ import tachiyomi.domain.collection.manga.interactor.RenameMangaCollection
 import tachiyomi.domain.collection.manga.interactor.ReorderMangaCollection
 import tachiyomi.domain.collection.manga.interactor.ResetMangaCollectionFlags
 import tachiyomi.domain.collection.manga.interactor.SetMangaCollections
+import tachiyomi.domain.collection.manga.interactor.SetMangaCustomOrder
 import tachiyomi.domain.collection.manga.interactor.SetMangaDisplayMode
 import tachiyomi.domain.collection.manga.interactor.SetSortModeForMangaCollection
 import tachiyomi.domain.collection.manga.interactor.UpdateMangaCollection
@@ -214,7 +218,9 @@ import tachiyomi.domain.source.novel.interactor.GetRemoteNovel
 import tachiyomi.domain.source.novel.repository.NovelSourceRepository
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.collection.novel.interactor.GetVisibleNovelCollections
+import tachiyomi.domain.collection.novel.interactor.GetNovelCustomOrder
 import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
+import tachiyomi.domain.collection.novel.interactor.SetNovelCustomOrder
 import tachiyomi.domain.collection.novel.interactor.SetSortModeForNovelCollection
 import tachiyomi.domain.history.anime.interactor.GetAnimeHistory
 import tachiyomi.domain.history.anime.interactor.GetNextEpisodes
@@ -314,6 +320,7 @@ class DomainModule : InjektModule {
     override fun InjektRegistrar.registerInjectables() {
         addSingletonFactory<AnimeCollectionRepository> { AnimeCollectionRepositoryImpl(get()) }
         addFactory { GetAnimeCollections(get()) }
+        addFactory { GetAnimeCustomOrder(get()) }
         addFactory { GetVisibleAnimeCollections(get()) }
         addFactory { ResetAnimeCollectionFlags(get(), get()) }
         addFactory { SetAnimeDisplayMode(get()) }
@@ -327,6 +334,7 @@ class DomainModule : InjektModule {
 
         addSingletonFactory<MangaCollectionRepository> { MangaCollectionRepositoryImpl(get()) }
         addFactory { GetMangaCollections(get()) }
+        addFactory { GetMangaCustomOrder(get()) }
         addFactory { GetVisibleMangaCollections(get()) }
         addFactory { ResetMangaCollectionFlags(get(), get()) }
         addFactory { SetMangaDisplayMode(get()) }
@@ -365,6 +373,7 @@ class DomainModule : InjektModule {
         addFactory { NetworkToLocalAnime(get(), get()) }
         addFactory { UpdateAnime(get(), get()) }
         addFactory { SetAnimeCollections(get()) }
+        addFactory { SetAnimeCustomOrder(get()) }
         addFactory { ShouldUpdateDbSeason() }
         addFactory { SyncSeasonsWithSource(get(), get(), get(), get(), get()) }
 
@@ -391,6 +400,7 @@ class DomainModule : InjektModule {
         addFactory { NetworkToLocalManga(get()) }
         addFactory { UpdateManga(get(), get()) }
         addFactory { SetMangaCollections(get()) }
+        addFactory { SetMangaCustomOrder(get()) }
         addFactory { GetExcludedScanlators(get()) }
         addFactory { SetExcludedScanlators(get()) }
 
@@ -547,6 +557,7 @@ class DomainModule : InjektModule {
         addFactory { GetNovelChaptersByNovelId(get()) }
         addFactory { GetTotalReadNovelCharCount(get()) }
         addFactory { GetNovelCollections(get()) }
+        addFactory { GetNovelCustomOrder(get()) }
         addFactory { GetLinkedNovels(get()) }
         addFactory { GetNovelLinks(get()) }
         addFactory { GetNovelLinkedId(get()) }
@@ -559,6 +570,7 @@ class DomainModule : InjektModule {
         addFactory { GetLibraryNovels(get()) }
         addFactory { GetVisibleNovelCollections(get()) }
         addFactory { SetNovelCollections(get()) }
+        addFactory { SetNovelCustomOrder(get()) }
         addFactory { SetSortModeForNovelCollection(get(), get()) }
         addFactory { NetworkToLocalNovel(get()) }
         addFactory { GetRemoteNovel(get()) }

@@ -3,6 +3,7 @@
     <string name="confirm_exit">Presione Atrás nuevamente para salir</string>
     <string name="action_filter_started">Iniciado</string>
     <string name="action_sort_airing_time">Fecha de retransmisión</string>
+    <string name="action_sort_custom_order">Custom order</string>
     <string name="action_reorganize_by">Reordenar</string>
     <string name="relative_time_now">Ahora</string>
     <string name="pref_library_summary">Categorías, actualizaciones generales y acciones al deslizar el dedo</string>
