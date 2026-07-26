@@ -61,12 +61,14 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.launch
+import tachiyomi.core.common.util.lang.launchIO
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.withIOContext
@@ -101,6 +103,9 @@ class MangaScreen(
         val lifecycleOwner = LocalLifecycleOwner.current
         val screenModel =
             rememberScreenModel { MangaScreenModel(context, lifecycleOwner.lifecycle, mangaId, fromSource) }
+
+        val getLockedReadingOrders: tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders = uy.kohesive.injekt.Injekt.get()
+        var lockDialog by remember { androidx.compose.runtime.mutableStateOf<List<tachiyomi.domain.readingorder.model.ReadingOrder>>(emptyList()) }
 
         val state by screenModel.state.collectAsStateWithLifecycle()
 
@@ -143,7 +148,11 @@ class MangaScreen(
             chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
             chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
             navigateUp = navigator::pop,
-            onChapterClicked = { openChapter(context, it) },
+            onChapterClicked = {
+                openChapterWithLockCheck(context, it, scope, getLockedReadingOrders) { lockedOrders ->
+                    lockDialog = lockedOrders
+                }
+            },
             onDownloadChapter = screenModel::runChapterDownloadActions.takeIf { !successState.source.isLocalOrStub() },
             onAddToLibraryClicked = {
                 screenModel.toggleFavorite()
@@ -351,6 +360,17 @@ class MangaScreen(
                 onConfirm = screenModel::setExcludedScanlators,
             )
         }
+
+        if (lockDialog.isNotEmpty()) {
+            ReadingOrderLockDialog(
+                lockedOrders = lockDialog,
+                onDismiss = { lockDialog = emptyList() },
+                onViewOrder = { orderId ->
+                    lockDialog = emptyList()
+                    navigator.push(eu.kanade.tachiyomi.ui.readingorder.ReadingOrderEditorScreen(orderId))
+                },
+            )
+        }
     }
 
     private fun continueReading(context: Context, unreadChapter: Chapter?) {
@@ -359,6 +379,23 @@ class MangaScreen(
 
     private fun openChapter(context: Context, chapter: Chapter) {
         context.startActivity(ReaderActivity.newIntent(context, chapter.mangaId, chapter.id))
+    }
+
+    private fun openChapterWithLockCheck(
+        context: Context,
+        chapter: Chapter,
+        scope: kotlinx.coroutines.CoroutineScope,
+        getLockedReadingOrders: tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders,
+        onLocked: (List<tachiyomi.domain.readingorder.model.ReadingOrder>) -> Unit,
+    ) {
+        scope.launchIO {
+            val lockedOrders = getLockedReadingOrders.await(chapter.mangaId)
+            if (lockedOrders.isNotEmpty()) {
+                onLocked(lockedOrders)
+            } else {
+                openChapter(context, chapter)
+            }
+        }
     }
 
     private fun getMangaUrl(manga_: Manga?, source_: MangaSource?): String? {

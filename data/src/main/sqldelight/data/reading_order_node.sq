@@ -1,0 +1,46 @@
+CREATE TABLE reading_order_node(
+    _id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    manga_id INTEGER NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(order_id, manga_id),
+    FOREIGN KEY(order_id) REFERENCES reading_order(_id) ON DELETE CASCADE,
+    FOREIGN KEY(manga_id) REFERENCES mangas(_id) ON DELETE CASCADE
+);
+
+getNodesByOrderId:
+SELECT _id AS id, order_id, manga_id, position
+FROM reading_order_node
+WHERE order_id = :orderId
+ORDER BY position;
+
+getNodeByMangaId:
+SELECT _id AS id, order_id, manga_id, position
+FROM reading_order_node
+WHERE order_id = :orderId AND manga_id = :mangaId;
+
+insertNode:
+INSERT INTO reading_order_node(order_id, manga_id, position)
+VALUES (:orderId, :mangaId, :position);
+
+deleteNode:
+DELETE FROM reading_order_node
+WHERE order_id = :orderId AND manga_id = :mangaId;
+
+deleteNodesByOrderId:
+DELETE FROM reading_order_node
+WHERE order_id = :orderId;
+
+updateNodePosition:
+UPDATE reading_order_node
+SET position = :position
+WHERE order_id = :orderId AND manga_id = :mangaId;
+
+getMaxPosition:
+SELECT MAX(position) FROM reading_order_node WHERE order_id = :orderId;
+
+getNodeCount:
+SELECT COUNT(*) FROM reading_order_node WHERE order_id = :orderId;
+
+selectLastInsertedRowId:
+SELECT last_insert_rowid();

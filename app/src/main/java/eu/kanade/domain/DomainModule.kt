@@ -99,6 +99,7 @@ import mihon.domain.upcoming.novel.interactor.GetUpcomingNovel
 import tachiyomi.data.collection.anime.AnimeCollectionRepositoryImpl
 import tachiyomi.data.collection.manga.MangaCollectionRepositoryImpl
 import tachiyomi.data.library.FailedFetchRepositoryImpl
+import tachiyomi.data.readingorder.ReadingOrderRepositoryImpl
 import tachiyomi.domain.library.interactor.ClearFailedFetches
 import tachiyomi.domain.library.interactor.DeleteFailedFetch
 import tachiyomi.domain.library.interactor.GetFailedFetches
@@ -194,6 +195,20 @@ import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.entries.manga.interactor.ResetMangaViewerFlags
 import tachiyomi.domain.entries.manga.interactor.SetMangaChapterFlags
 import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
+import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
+import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
+import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
+import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderProgress
+import tachiyomi.domain.readingorder.interactor.GetReadingOrders
+import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderEdge
+import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderNode
+import tachiyomi.domain.readingorder.interactor.SetReadingOrderProgress
+import tachiyomi.domain.readingorder.interactor.UpdateReadingOrder
+import tachiyomi.domain.readingorder.repository.ReadingOrderRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
 import tachiyomi.domain.entries.novel.interactor.GetNovelByUrlAndSourceId
@@ -403,6 +418,21 @@ class DomainModule : InjektModule {
         addFactory { SetMangaCustomOrder(get()) }
         addFactory { GetExcludedScanlators(get()) }
         addFactory { SetExcludedScanlators(get()) }
+
+        addSingletonFactory<ReadingOrderRepository> { ReadingOrderRepositoryImpl(get()) }
+        addFactory { GetReadingOrders(get()) }
+        addFactory { CreateReadingOrder(get()) }
+        addFactory { UpdateReadingOrder(get()) }
+        addFactory { DeleteReadingOrder(get()) }
+        addFactory { GetReadingOrderNodes(get()) }
+        addFactory { AddReadingOrderNode(get()) }
+        addFactory { RemoveReadingOrderNode(get()) }
+        addFactory { GetReadingOrderEdges(get()) }
+        addFactory { AddReadingOrderEdge(get()) }
+        addFactory { RemoveReadingOrderEdge(get()) }
+        addFactory { GetReadingOrderProgress(get()) }
+        addFactory { SetReadingOrderProgress(get()) }
+        addFactory { GetLockedReadingOrders(get()) }
 
         addSingletonFactory<ReleaseService> { ReleaseServiceImpl(get(), get()) }
         addFactory { GetApplicationRelease(get(), get()) }
