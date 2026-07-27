@@ -201,11 +201,13 @@ import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
 import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
 import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
+import tachiyomi.domain.readingorder.interactor.ExportReadingOrder
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderProgress
 import tachiyomi.domain.readingorder.interactor.GetReadingOrders
+import tachiyomi.domain.readingorder.interactor.ImportReadingOrder
 import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderEdge
 import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderNode
 import tachiyomi.domain.readingorder.interactor.SetReadingOrderProgress
@@ -437,6 +439,8 @@ class DomainModule : InjektModule {
         addFactory { GetReadingOrderProgress(get()) }
         addFactory { SetReadingOrderProgress(get()) }
         addFactory { GetLockedReadingOrders(get()) }
+        addFactory { ExportReadingOrder(get(), get()) }
+        addFactory { ImportReadingOrder(get(), get()) }
 
         addSingletonFactory<ReleaseService> { ReleaseServiceImpl(get(), get()) }
         addFactory { GetApplicationRelease(get(), get()) }

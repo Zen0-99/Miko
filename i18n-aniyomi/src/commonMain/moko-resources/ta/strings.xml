@@ -31,6 +31,12 @@
     <string name="collection_import_failed">Import failed: %1</string>
     <string name="collection_import_unmatched">Unmatched manga</string>
     <string name="collection_import_unmatched_detail">These manga could not be found in your library and were skipped:</string>
+    <string name="reading_order_export">Export reading order</string>
+    <string name="reading_order_import">Import reading order</string>
+    <string name="reading_order_export_success">Exported %1 entries to %2</string>
+    <string name="reading_order_export_failed">Export failed: %1</string>
+    <string name="reading_order_import_success">Imported "%1" with %2 entries matched, %3 unmatched, %4 edges, %5 progress entries</string>
+    <string name="reading_order_import_failed">Import failed: %1</string>
     <string name="action_reorganize_by">மறுவரிசை</string>
     <string name="relative_time_now">இப்போது</string>
     <string name="pref_library_summary">வகைகள், உலகளாவிய புதுப்பிப்பு, அத்தியாயம்/எபிசோட் ச்வைப்</string>

@@ -32,6 +32,12 @@
     <string name="collection_import_failed">Import failed: %1$s</string>
     <string name="collection_import_unmatched">Unmatched manga</string>
     <string name="collection_import_unmatched_detail">These manga could not be found in your library and were skipped:</string>
+    <string name="reading_order_export">Export reading order</string>
+    <string name="reading_order_import">Import reading order</string>
+    <string name="reading_order_export_success">Exported %1$d entries to %2$s</string>
+    <string name="reading_order_export_failed">Export failed: %1$s</string>
+    <string name="reading_order_import_success">Imported \"%1$s\" with %2$d entries matched, %3$d unmatched, %4$d edges, %5$d progress entries</string>
+    <string name="reading_order_import_failed">Import failed: %1$s</string>
     <string name="action_display_unseen_badge">Unseen episodes</string>
     <string name="action_reorganize_by">Reorder</string>
     <string name="relative_time_now">Now</string>
