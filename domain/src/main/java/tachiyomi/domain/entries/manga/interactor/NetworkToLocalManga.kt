@@ -2,6 +2,7 @@ package tachiyomi.domain.entries.manga.interactor
 
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.repository.MangaRepository
+import java.util.UUID
 
 class NetworkToLocalManga(
     private val mangaRepository: MangaRepository,
@@ -30,6 +31,11 @@ class NetworkToLocalManga(
     }
 
     private suspend fun insertManga(manga: Manga): Long? {
-        return mangaRepository.insertManga(manga)
+        val mangaWithUuid = if (manga.uuid.isNullOrBlank()) {
+            manga.copy(uuid = UUID.randomUUID().toString())
+        } else {
+            manga
+        }
+        return mangaRepository.insertManga(mangaWithUuid)
     }
 }

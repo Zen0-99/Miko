@@ -39,6 +39,12 @@ class MangaRepositoryImpl(
         }
     }
 
+    override suspend fun getMangaByUuid(uuid: String): Manga? {
+        return handler.awaitOneOrNull {
+            mangasQueries.getMangaByUuid(uuid, MangaMapper::mapManga)
+        }
+    }
+
     override fun getMangaByUrlAndSourceIdAsFlow(url: String, sourceId: Long): Flow<Manga?> {
         return handler.subscribeToOneOrNull {
             mangasQueries.getMangaByUrlAndSource(
@@ -124,6 +130,7 @@ class MangaRepositoryImpl(
                 dateAdded = manga.dateAdded,
                 updateStrategy = manga.updateStrategy,
                 version = manga.version,
+                uuid = manga.uuid,
             )
             mangasQueries.selectLastInsertedRowId()
         }

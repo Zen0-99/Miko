@@ -190,6 +190,7 @@ import tachiyomi.domain.entries.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.GetMangaByUrlAndSourceId
+import tachiyomi.domain.entries.manga.interactor.GetMangaByUuid
 import tachiyomi.domain.entries.manga.interactor.GetMangaFavorites
 import tachiyomi.domain.entries.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
@@ -198,16 +199,15 @@ import tachiyomi.domain.entries.manga.interactor.ResetMangaViewerFlags
 import tachiyomi.domain.entries.manga.interactor.SetMangaChapterFlags
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
+import tachiyomi.domain.readingorder.interactor.CheckReadingOrderCycle
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
 import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
 import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
-import tachiyomi.domain.readingorder.interactor.ExportReadingOrder
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderProgress
 import tachiyomi.domain.readingorder.interactor.GetReadingOrders
-import tachiyomi.domain.readingorder.interactor.ImportReadingOrder
 import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderEdge
 import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderNode
 import tachiyomi.domain.readingorder.interactor.SetReadingOrderProgress
@@ -402,6 +402,7 @@ class DomainModule : InjektModule {
         addFactory { GetLibraryManga(get()) }
         addFactory { GetMangaWithChapters(get(), get()) }
         addFactory { GetMangaByUrlAndSourceId(get()) }
+        addFactory { GetMangaByUuid(get()) }
         addFactory { GetManga(get()) }
         addFactory { GetNextChapters(get(), get(), get()) }
         addFactory { GetUpcomingManga(get()) }
@@ -420,8 +421,8 @@ class DomainModule : InjektModule {
         addFactory { UpdateManga(get(), get()) }
         addFactory { SetMangaCollections(get()) }
         addFactory { SetMangaCustomOrder(get()) }
-        addFactory { ExportMangaCollection(get(), get()) }
-        addFactory { ImportMangaCollection(get(), get()) }
+        addFactory { ExportMangaCollection(get(), get(), get(), get()) }
+        addFactory { ImportMangaCollection(get(), get(), get(), get(), get()) }
         addFactory { GetExcludedScanlators(get()) }
         addFactory { SetExcludedScanlators(get()) }
 
@@ -434,13 +435,12 @@ class DomainModule : InjektModule {
         addFactory { AddReadingOrderNode(get()) }
         addFactory { RemoveReadingOrderNode(get()) }
         addFactory { GetReadingOrderEdges(get()) }
-        addFactory { AddReadingOrderEdge(get()) }
+        addFactory { CheckReadingOrderCycle(get()) }
+        addFactory { AddReadingOrderEdge(get(), get()) }
         addFactory { RemoveReadingOrderEdge(get()) }
         addFactory { GetReadingOrderProgress(get()) }
         addFactory { SetReadingOrderProgress(get()) }
         addFactory { GetLockedReadingOrders(get()) }
-        addFactory { ExportReadingOrder(get(), get()) }
-        addFactory { ImportReadingOrder(get(), get()) }
 
         addSingletonFactory<ReleaseService> { ReleaseServiceImpl(get(), get()) }
         addFactory { GetApplicationRelease(get(), get()) }

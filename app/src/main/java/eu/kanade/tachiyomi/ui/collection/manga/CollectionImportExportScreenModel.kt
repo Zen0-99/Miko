@@ -23,7 +23,11 @@ class CollectionImportExportScreenModel(
     @Immutable
     data class State(
         val collections: List<Collection> = emptyList(),
-        val pendingExportCollectionId: Long? = null,
+        val selectedCollectionIds: Set<Long> = emptySet(),
+        val includeReadingOrders: Boolean = false,
+        val crossCollectionWarnings: List<ExportMangaCollection.CrossCollectionWarning>? = null,
+        val warningShown: Boolean = false,
+        val pendingExport: Boolean = false,
         val resultMessage: String? = null,
         val unmatchedTitles: List<String>? = null,
     )
@@ -36,27 +40,86 @@ class CollectionImportExportScreenModel(
         }
     }
 
-    fun setPendingExport(collectionId: Long) {
-        mutableState.update { it.copy(pendingExportCollectionId = collectionId) }
+    fun toggleCollection(collectionId: Long) {
+        mutableState.update {
+            val newSelection = if (collectionId in it.selectedCollectionIds) {
+                it.selectedCollectionIds - collectionId
+            } else {
+                it.selectedCollectionIds + collectionId
+            }
+            it.copy(
+                selectedCollectionIds = newSelection,
+                crossCollectionWarnings = null,
+                warningShown = false,
+            )
+        }
     }
 
-    fun exportCollection(context: Context, uri: Uri, collectionId: Long) {
+    fun setIncludeReadingOrders(include: Boolean) {
+        mutableState.update {
+            it.copy(
+                includeReadingOrders = include,
+                crossCollectionWarnings = null,
+                warningShown = false,
+            )
+        }
+    }
+
+    /**
+     * Called when the user taps export. Checks for cross-collection warnings
+     * first; if there are warnings, the UI shows a dialog. Otherwise proceeds
+     * directly to export.
+     */
+    fun startExport() {
+        val selectedIds = state.value.selectedCollectionIds
+        if (selectedIds.isEmpty()) return
+
+        screenModelScope.launchIO {
+            if (state.value.includeReadingOrders) {
+                val warnings = exportMangaCollection.checkCrossCollection(selectedIds)
+                if (warnings.isNotEmpty()) {
+                    mutableState.update {
+                        it.copy(crossCollectionWarnings = warnings, warningShown = false)
+                    }
+                    return@launchIO
+                }
+            }
+            // No warnings — proceed to export
+            mutableState.update { it.copy(pendingExport = true) }
+        }
+    }
+
+    fun dismissWarning() {
+        mutableState.update { it.copy(warningShown = true) }
+    }
+
+    fun clearPendingExport() {
+        mutableState.update { it.copy(pendingExport = false) }
+    }
+
+    fun exportCollection(context: Context, uri: Uri) {
+        val selectedIds = state.value.selectedCollectionIds
+        val includeRO = state.value.includeReadingOrders
+        if (selectedIds.isEmpty()) return
+
         screenModelScope.launchIO {
             try {
                 val count = context.contentResolver.openOutputStream(uri)?.use { stream ->
-                    exportMangaCollection.await(collectionId, stream)
+                    exportMangaCollection.await(selectedIds, includeRO, stream)
                 } ?: error("Could not open output stream")
 
                 mutableState.update {
                     it.copy(
-                        pendingExportCollectionId = null,
+                        pendingExport = false,
+                        crossCollectionWarnings = null,
+                        warningShown = false,
                         resultMessage = "Exported $count manga",
                     )
                 }
             } catch (e: Exception) {
                 mutableState.update {
                     it.copy(
-                        pendingExportCollectionId = null,
+                        pendingExport = false,
                         resultMessage = "Export failed: ${e.message}",
                     )
                 }
@@ -71,7 +134,16 @@ class CollectionImportExportScreenModel(
                     importMangaCollection.await(stream)
                 } ?: error("Could not open input stream")
 
-                val message = "Imported \"${result.collectionName}\" with ${result.matchedManga} manga matched, ${result.unmatchedManga} unmatched"
+                val message = buildString {
+                    append("Imported ${result.collectionsCreated} collection(s): ${result.collectionNames.joinToString()}")
+                    if (result.readingOrdersCreated > 0) {
+                        append(", ${result.readingOrdersCreated} reading order(s)")
+                    }
+                    append(", ${result.mangaMatched} manga matched, ${result.mangaInserted} inserted")
+                    if (result.unmatchedTitles.isNotEmpty()) {
+                        append(", ${result.unmatchedTitles.size} unmatched")
+                    }
+                }
                 mutableState.update {
                     it.copy(
                         resultMessage = message,

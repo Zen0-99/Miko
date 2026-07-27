@@ -17,21 +17,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,8 +38,6 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Screen
-import kotlinx.coroutines.launch
-import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -55,7 +49,6 @@ class CollectionImportExportScreen : Screen() {
         val screenModel = rememberScreenModel { CollectionImportExportScreenModel() }
         val state by screenModel.state.collectAsState()
         val context = LocalContext.current
-        val scope = rememberCoroutineScope()
         val navigator = LocalNavigator.currentOrThrow
 
         val importLauncher = rememberLauncherForActivityResult(
@@ -69,18 +62,27 @@ class CollectionImportExportScreen : Screen() {
         val exportLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.CreateDocument("application/json"),
         ) { uri ->
-            val pendingId = state.pendingExportCollectionId
-            if (uri != null && pendingId != null) {
-                screenModel.exportCollection(context, uri, pendingId)
+            if (uri != null) {
+                screenModel.exportCollection(context, uri)
             }
         }
 
         Scaffold(
             topBar = {
                 AppBar(
-                    title = stringResource(AYMR.strings.collection_export) + " / " + stringResource(AYMR.strings.collection_import),
+                    title = stringResource(AYMR.strings.collection_export) + " / " +
+                        stringResource(AYMR.strings.collection_import),
                     navigateUp = { navigator.pop() },
                 )
+            },
+            floatingActionButton = {
+                if (state.selectedCollectionIds.isNotEmpty()) {
+                    androidx.compose.material3.ExtendedFloatingActionButton(
+                        text = { Text(stringResource(AYMR.strings.collection_export)) },
+                        icon = { Icon(Icons.Default.FileUpload, contentDescription = null) },
+                        onClick = { screenModel.startExport() },
+                    )
+                }
             },
         ) { padding ->
             Column(
@@ -101,8 +103,24 @@ class CollectionImportExportScreen : Screen() {
                     )
                 }
 
+                // Reading order toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(AYMR.strings.collection_include_reading_orders),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = state.includeReadingOrders,
+                        onCheckedChange = { screenModel.setIncludeReadingOrders(it) },
+                    )
+                }
+
                 Text(
-                    text = "Collections",
+                    text = stringResource(AYMR.strings.collection_select_to_export),
                     style = MaterialTheme.typography.titleMedium,
                 )
 
@@ -113,16 +131,62 @@ class CollectionImportExportScreen : Screen() {
                     items(state.collections, key = { it.id }) { collection ->
                         CollectionExportRow(
                             collection = collection,
-                            onExport = {
-                                screenModel.setPendingExport(collection.id)
-                                exportLauncher.launch(collection.name + ".mcoll")
-                            },
+                            isSelected = collection.id in state.selectedCollectionIds,
+                            onToggle = { screenModel.toggleCollection(collection.id) },
                         )
                     }
                 }
             }
         }
 
+        // Export button (FAB-like at bottom or as part of the column)
+        if (state.selectedCollectionIds.isNotEmpty()) {
+            val pendingWarnings = state.crossCollectionWarnings
+            if (pendingWarnings != null && pendingWarnings.isNotEmpty() && !state.warningShown) {
+                // Cross-collection warning dialog
+                AlertDialog(
+                    onDismissRequest = {
+                        screenModel.dismissWarning()
+                    },
+                    title = { Text(stringResource(AYMR.strings.collection_cross_collection_warning_title)) },
+                    text = {
+                        Column {
+                            Text(stringResource(AYMR.strings.collection_cross_collection_warning_body))
+                            pendingWarnings.forEach { warning ->
+                                Text(
+                                    text = "\n• ${warning.readingOrderName}: ${warning.orphanedMangaTitles.joinToString()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            screenModel.dismissWarning()
+                            exportLauncher.launch(generateExportFileName(state.selectedCollectionIds, state.collections))
+                        }) {
+                            Text(stringResource(AYMR.strings.collection_export_anyway))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { screenModel.dismissWarning() }) {
+                            Text(stringResource(tachiyomi.i18n.MR.strings.action_cancel))
+                        }
+                    },
+                )
+            } else if (state.warningShown || pendingWarnings == null) {
+                // No warnings or already dismissed — proceed directly
+                androidx.compose.runtime.LaunchedEffect(state.pendingExport) {
+                    if (state.pendingExport) {
+                        exportLauncher.launch(generateExportFileName(state.selectedCollectionIds, state.collections))
+                        screenModel.clearPendingExport()
+                    }
+                }
+            }
+        }
+
+        // Result dialog
         state.resultMessage?.let { message ->
             AlertDialog(
                 onDismissRequest = { screenModel.clearResult() },
@@ -136,6 +200,7 @@ class CollectionImportExportScreen : Screen() {
             )
         }
 
+        // Unmatched titles dialog
         state.unmatchedTitles?.let { titles ->
             AlertDialog(
                 onDismissRequest = { screenModel.clearResult() },
@@ -162,18 +227,32 @@ class CollectionImportExportScreen : Screen() {
     }
 }
 
+private fun generateExportFileName(
+    selectedIds: Set<Long>,
+    collections: List<Collection>,
+): String {
+    val names = collections.filter { it.id in selectedIds }.map { it.name }
+    val base = if (names.size == 1) names.first() else "collections"
+    return base.replace(Regex("[^a-zA-Z0-9-_]"), "_") + ".mcoll"
+}
+
 @Composable
 private fun CollectionExportRow(
     collection: Collection,
-    onExport: () -> Unit,
+    isSelected: Boolean,
+    onToggle: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onExport)
+            .clickable(onClick = onToggle)
             .padding(vertical = 12.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Checkbox(
+            checked = isSelected,
+            onCheckedChange = { onToggle() },
+        )
         Text(
             text = collection.name,
             modifier = Modifier.weight(1f),

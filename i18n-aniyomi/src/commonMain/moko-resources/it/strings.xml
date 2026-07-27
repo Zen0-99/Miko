@@ -37,6 +37,11 @@
     <string name="reading_order_export_failed">Export failed: %1</string>
     <string name="reading_order_import_success">Imported "%1" with %2 entries matched, %3 unmatched, %4 edges, %5 progress entries</string>
     <string name="reading_order_import_failed">Import failed: %1</string>
+    <string name="collection_include_reading_orders">Include reading orders</string>
+    <string name="collection_select_to_export">Select collections to export</string>
+    <string name="collection_cross_collection_warning_title">Reading order spans multiple collections</string>
+    <string name="collection_cross_collection_warning_body">Some reading orders contain manga from collections you haven't selected. Exporting without those collections will include the manga data but the reading order may reference entries you didn't intend to share. Consider selecting all related collections.</string>
+    <string name="collection_export_anyway">Export anyway</string>
     <string name="action_reorganize_by">Riordina</string>
     <string name="relative_time_now">Ora</string>
     <string name="pref_library_summary">Categorie, aggiornamenti globali, azioni di scorrimento capitoli</string>
