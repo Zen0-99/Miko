@@ -1,7 +1,7 @@
-package aniyomi.core.common.torrent
+package miko.core.common.torrent
 
-import aniyomi.core.common.torrent.model.Torrent
-import aniyomi.core.common.torrent.model.TorrentRequest
+import miko.core.common.torrent.model.Torrent
+import miko.core.common.torrent.model.TorrentRequest
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.POST

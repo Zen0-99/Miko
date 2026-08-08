@@ -16,8 +16,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.net.toUri
-import aniyomi.core.common.torrent.ProxyMode
-import aniyomi.core.common.torrent.TorrentPreferences
+import miko.core.common.torrent.ProxyMode
+import miko.core.common.torrent.TorrentPreferences
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
 import eu.kanade.tachiyomi.data.torrent.service.TorrentServerService

@@ -1,3 +1,3 @@
-package aniyomi.core.common.torrent
+package miko.core.common.torrent
 
 class DisabledTorrServerException : Exception()

@@ -1,6 +1,6 @@
 package tachiyomi.data.entries.anime
 
-import aniyomi.domain.anime.SeasonAnime
+import miko.domain.anime.SeasonAnime
 import eu.kanade.tachiyomi.animesource.model.AnimeUpdateStrategy
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import tachiyomi.domain.entries.anime.model.Anime

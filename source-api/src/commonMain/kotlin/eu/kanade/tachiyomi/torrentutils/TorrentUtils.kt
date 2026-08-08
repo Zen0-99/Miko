@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.torrentutils
 
-import aniyomi.core.common.torrent.DisabledTorrServerException
-import aniyomi.core.common.torrent.TorrentServerApi
+import miko.core.common.torrent.DisabledTorrServerException
+import miko.core.common.torrent.TorrentServerApi
 import eu.kanade.tachiyomi.torrentutils.model.DeadTorrentException
 import eu.kanade.tachiyomi.torrentutils.model.TorrentFile
 import eu.kanade.tachiyomi.torrentutils.model.TorrentInfo

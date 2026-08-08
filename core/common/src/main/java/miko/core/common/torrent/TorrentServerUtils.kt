@@ -1,6 +1,6 @@
-package aniyomi.core.common.torrent
+package miko.core.common.torrent
 
-import aniyomi.core.common.torrent.model.Torrent
+import miko.core.common.torrent.model.Torrent
 import xyz.secozzi.torrserver.TorrServer
 import java.io.File
 import java.net.URLEncoder

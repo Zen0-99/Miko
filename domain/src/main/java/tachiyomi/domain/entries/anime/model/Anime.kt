@@ -1,7 +1,7 @@
 package tachiyomi.domain.entries.anime.model
 
 import androidx.compose.runtime.Immutable
-import aniyomi.domain.anime.SeasonDisplayMode
+import miko.domain.anime.SeasonDisplayMode
 import eu.kanade.tachiyomi.animesource.model.AnimeUpdateStrategy
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.SAnime

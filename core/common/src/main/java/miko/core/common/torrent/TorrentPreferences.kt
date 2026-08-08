@@ -1,4 +1,4 @@
-package aniyomi.core.common.torrent
+package miko.core.common.torrent
 
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum

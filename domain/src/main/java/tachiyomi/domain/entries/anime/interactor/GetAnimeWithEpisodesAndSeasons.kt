@@ -1,6 +1,6 @@
 package tachiyomi.domain.entries.anime.interactor
 
-import aniyomi.domain.anime.SeasonAnime
+import miko.domain.anime.SeasonAnime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import tachiyomi.domain.entries.anime.model.Anime

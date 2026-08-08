@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.ui.entries.anime
 
-import aniyomi.domain.anime.SeasonAnime
+import miko.domain.anime.SeasonAnime
 
 data class AnimeSeasonItem(
     val seasonAnime: SeasonAnime,

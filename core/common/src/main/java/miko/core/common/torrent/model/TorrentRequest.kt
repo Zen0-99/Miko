@@ -1,4 +1,4 @@
-package aniyomi.core.common.torrent.model
+package miko.core.common.torrent.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

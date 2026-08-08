@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.loader
 
-import aniyomi.util.DataSaver
-import aniyomi.util.DataSaver.Companion.getImage
+import miko.util.DataSaver
+import miko.util.DataSaver.Companion.getImage
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.database.models.manga.toDomainChapter

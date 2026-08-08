@@ -1,6 +1,6 @@
 package tachiyomi.data.entries.anime
 
-import aniyomi.domain.anime.SeasonAnime
+import miko.domain.anime.SeasonAnime
 import kotlinx.coroutines.flow.Flow
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat

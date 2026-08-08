@@ -1,6 +1,6 @@
 package tachiyomi.domain.items.season.service
 
-import aniyomi.domain.anime.SeasonAnime
+import miko.domain.anime.SeasonAnime
 import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.domain.entries.anime.model.Anime
 

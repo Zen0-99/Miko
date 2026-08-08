@@ -1,6 +1,6 @@
 package tachiyomi.domain.entries.anime.interactor
 
-import aniyomi.domain.anime.SeasonDisplayMode
+import miko.domain.anime.SeasonDisplayMode
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.AnimeUpdate
 import tachiyomi.domain.entries.anime.repository.AnimeRepository

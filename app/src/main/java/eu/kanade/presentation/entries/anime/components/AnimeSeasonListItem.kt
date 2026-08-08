@@ -2,8 +2,8 @@ package eu.kanade.presentation.entries.anime.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import aniyomi.domain.anime.SeasonAnime
-import aniyomi.domain.anime.SeasonDisplayMode
+import miko.domain.anime.SeasonAnime
+import miko.domain.anime.SeasonDisplayMode
 import eu.kanade.presentation.library.components.DownloadsBadge
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.EntryCompactGridItem

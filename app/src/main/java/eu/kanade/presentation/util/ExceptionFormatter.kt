@@ -1,7 +1,7 @@
 package eu.kanade.presentation.util
 
 import android.content.Context
-import aniyomi.core.common.torrent.DisabledTorrServerException
+import miko.core.common.torrent.DisabledTorrServerException
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.util.system.isOnline
 import tachiyomi.core.common.i18n.stringResource

@@ -84,6 +84,17 @@
                 <data android:host="add-repo" />
             </intent-filter>
 
+            <!-- Deep link to add manga repos (Miko scheme) -->
+            <intent-filter android:label="@string/action_add_repo">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="miko" />
+                <data android:host="add-repo" />
+            </intent-filter>
+
             <!-- Open backup files -->
             <intent-filter android:label="@string/pref_restore_backup">
                 <action android:name="android.intent.action.VIEW" />

@@ -1,6 +1,6 @@
 package tachiyomi.domain.entries.anime.repository
 
-import aniyomi.domain.anime.SeasonAnime
+import miko.domain.anime.SeasonAnime
 import kotlinx.coroutines.flow.Flow
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.AnimeUpdate

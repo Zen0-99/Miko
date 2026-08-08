@@ -42,9 +42,9 @@ class AppUpdateChecker {
 
 val GITHUB_REPO: String by lazy {
     if (isPreviewBuildType) {
-        "aniyomiorg/aniyomi-preview"
+        "Zen0-99/Miko"
     } else {
-        "aniyomiorg/aniyomi"
+        "Zen0-99/Miko"
     }
 }
 

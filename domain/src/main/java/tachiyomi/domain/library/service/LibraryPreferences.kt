@@ -1,6 +1,6 @@
 package tachiyomi.domain.library.service
 
-import aniyomi.domain.anime.SeasonDisplayMode
+import miko.domain.anime.SeasonDisplayMode
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState

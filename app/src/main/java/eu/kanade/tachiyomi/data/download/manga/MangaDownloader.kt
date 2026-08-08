@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.data.download.manga
 
 import android.content.Context
-import aniyomi.util.DataSaver
-import aniyomi.util.DataSaver.Companion.getImage
+import miko.util.DataSaver
+import miko.util.DataSaver.Companion.getImage
 import com.hippo.unifile.UniFile
 import eu.kanade.domain.entries.manga.model.getComicInfo
 import eu.kanade.domain.items.chapter.model.toSChapter
