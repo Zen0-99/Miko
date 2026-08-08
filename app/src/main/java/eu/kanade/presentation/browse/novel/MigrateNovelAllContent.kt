@@ -77,23 +77,32 @@ fun MigrateNovelAllContent(
     onClickOldNovel: (Long) -> Unit,
     onClickRecommendedNovel: (Long) -> Unit,
 ) {
+    // Single-entry migration: use "Migrate [name]" as the title and hide
+    // the progress bar / counter (not needed for one entry).
+    val isSingle = state.total <= 1
     Scaffold(
         topBar = { scrollBehavior ->
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            text = stringResource(AYMR.strings.action_migrate_all),
+                            text = if (isSingle) {
+                                stringResource(MR.strings.action_migrate) + " " + title
+                            } else {
+                                stringResource(AYMR.strings.action_migrate_all)
+                            },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        if (!isSingle) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 },
                 navigationIcon = {
@@ -112,29 +121,32 @@ fun MigrateNovelAllContent(
                 .fillMaxSize()
                 .padding(paddingValues),
         ) {
-            if (state.total > 0 && !state.allDone) {
-                LinearProgressIndicator(
-                    progress = { if (state.total > 0) state.processed / state.total.toFloat() else 0f },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = stringResource(AYMR.strings.migrate_all_progress, state.processed, state.total),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
-                )
-            } else if (state.allDone) {
-                Text(
-                    text = stringResource(AYMR.strings.migrate_all_done),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
-                )
+            // Only show progress bar and counter for multi-entry migration
+            if (!isSingle) {
+                if (state.total > 0 && !state.allDone) {
+                    LinearProgressIndicator(
+                        progress = { if (state.total > 0) state.processed / state.total.toFloat() else 0f },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = stringResource(AYMR.strings.migrate_all_progress, state.processed, state.total),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+                    )
+                } else if (state.allDone) {
+                    Text(
+                        text = stringResource(AYMR.strings.migrate_all_done),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+                    )
+                }
             }
 
             if (state.items.isEmpty()) {
@@ -239,7 +251,9 @@ private fun MigrationCard(
                         PlaceholderColumn { }
                     }
                 }
-                MigrateNovelAllScreenModel.MigrationStatus.Searching -> PlaceholderColumn {
+                MigrateNovelAllScreenModel.MigrationStatus.Searching -> PlaceholderColumn(
+                    phaseText = item.searchPhase,
+                ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
@@ -267,20 +281,19 @@ private fun MigrationCard(
             }
 
             // ── Overflow menu, centered against the cover art ──
+            // Always visible — "Migrate Now" is grayed out when not found yet,
+            // but "Search Manually" and "Skip" are always available.
             Box(
                 modifier = Modifier.height(CoverHeight),
                 contentAlignment = Alignment.Center,
             ) {
-                if (item.status == MigrateNovelAllScreenModel.MigrationStatus.Found) {
-                    MoreOptionsButton(
-                        onSkip = onSkip,
-                        onMigrateNow = onMigrateNow,
-                        onSearchManually = onSearchManually,
-                    )
-                } else {
-                    // Keep the row width stable across states.
-                    Box(modifier = Modifier.width(40.dp))
-                }
+                val canMigrateNow = item.status == MigrateNovelAllScreenModel.MigrationStatus.Found &&
+                    item.recommendedNovel != null
+                MoreOptionsButton(
+                    onSkip = onSkip,
+                    onMigrateNow = onMigrateNow.takeIf { canMigrateNow },
+                    onSearchManually = onSearchManually,
+                )
             }
         }
     }
@@ -369,10 +382,15 @@ private fun CoverColumn(
 
 /**
  * Cover-sized placeholder used while searching or when no match was found, so
- * the row keeps the same footprint as a real cover.
+ * the row keeps the same footprint as a real cover. When [phaseText] is
+ * provided, it's shown underneath the placeholder where the chapter count
+ * would normally appear.
  */
 @Composable
-private fun PlaceholderColumn(content: @Composable () -> Unit) {
+private fun PlaceholderColumn(
+    phaseText: String = "",
+    content: @Composable () -> Unit,
+) {
     Column(
         modifier = Modifier.width(CoverWidth),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -387,12 +405,19 @@ private fun PlaceholderColumn(content: @Composable () -> Unit) {
         ) {
             content()
         }
-        // Matches the chapter-count line height on real covers so both columns
-        // occupy the same vertical space.
+        // Show phase text (e.g. "Searching 15 sources...") where the chapter
+        // count would normally appear, so the user knows what's happening.
         Text(
-            text = "",
+            text = phaseText,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(top = 4.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp)
+                .padding(horizontal = 2.dp),
         )
     }
 }
@@ -418,7 +443,8 @@ private fun StatusText(
 @Composable
 private fun MoreOptionsButton(
     onSkip: () -> Unit,
-    onMigrateNow: () -> Unit,
+    /** When null, "Migrate Now" is shown but disabled (grayed out). */
+    onMigrateNow: (() -> Unit)?,
     onSearchManually: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -436,10 +462,20 @@ private fun MoreOptionsButton(
             onDismissRequest = { expanded = false },
         ) {
             DropdownMenuItem(
-                text = { Text(stringResource(AYMR.strings.migrate_all_migrate_now)) },
+                text = {
+                    Text(
+                        text = stringResource(AYMR.strings.migrate_all_migrate_now),
+                        color = if (onMigrateNow != null) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        },
+                    )
+                },
+                enabled = onMigrateNow != null,
                 onClick = {
                     expanded = false
-                    onMigrateNow()
+                    onMigrateNow?.invoke()
                 },
             )
             DropdownMenuItem(

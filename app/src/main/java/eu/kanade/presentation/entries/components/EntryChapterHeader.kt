@@ -44,6 +44,7 @@ fun EntryChapterHeader(
     onFetchNew: (() -> Unit)? = null,
     onFetchAll: (() -> Unit)? = null,
     intervalDays: Int? = null,
+    showInterval: Boolean = true,
 ) {
     val iconTint = accentColor ?: MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA)
 
@@ -64,32 +65,36 @@ fun EntryChapterHeader(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            // Always show the interval badge — "N/A" when interval can't be calculated
-            val label = if (intervalDays == null || intervalDays == 0) "N/A" else intervalDays.toString()
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = "·",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = iconTint,
-                )
-                Icon(
-                    imageVector = Icons.Outlined.HourglassEmpty,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                )
+            // Show the interval badge only when showInterval is true.
+            // Hidden when the series is completed or the last update is
+            // older than 2 months (stale schedule).
+            if (showInterval) {
+                val label = if (intervalDays == null || intervalDays == 0) "N/A" else intervalDays.toString()
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = "·",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = iconTint,
+                    )
+                    Icon(
+                        imageVector = Icons.Outlined.HourglassEmpty,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                    )
+                }
             }
         }
 

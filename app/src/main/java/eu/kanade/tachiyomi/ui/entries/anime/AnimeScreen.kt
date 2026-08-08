@@ -54,6 +54,7 @@ import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
 import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
 import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
+import eu.kanade.tachiyomi.ui.browse.anime.migration.all.MigrateAnimeAllScreen
 import eu.kanade.tachiyomi.ui.browse.anime.migration.anime.season.MigrateSeasonSelectScreen
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeDialog
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeDialogScreenModel
@@ -217,7 +218,7 @@ class AnimeScreen(
                 successState.anime.favorite
             },
             onMigrateClicked = {
-                navigator.push(MigrateAnimeSearchScreen(successState.anime.id))
+                navigator.push(MigrateAnimeAllScreen(listOf(successState.anime.id), successState.anime.title))
             }.takeIf { successState.anime.favorite },
             changeAnimeSkipIntro = screenModel::showAnimeSkipIntroDialog
                 .takeIf { successState.anime.favorite && successState.anime.fetchType == FetchType.Episodes },

@@ -6,6 +6,7 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.tachiyomi.ui.reader.novel.ChapterHideManager
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -155,11 +156,15 @@ class HomeHubScreenModel(
                 val streak = calculateCurrentStreak(data.activityData)
 
                 mutableState.update {
+                    // Filter out hidden chapters from novel history
+                    val filteredNovelHistory = data.novelHistory.filter { h ->
+                        h.chapterId !in ChapterHideManager.getHiddenChapterIds(context, h.novelId)
+                    }
                     it.copy(
                         isLoading = false,
                         recentAnime = data.animeHistory.take(10),
                         recentManga = data.mangaHistory.take(10),
-                        recentNovels = data.novelHistory.take(10),
+                        recentNovels = filteredNovelHistory.take(10),
                         recentlyAddedAnime = data.animeLib
                             .sortedByDescending { it.anime.dateAdded }
                             .take(10)
@@ -282,6 +287,8 @@ class HomeHubScreenModel(
         val currentMode = uiPreferences.contentMode().get()
         return when (currentMode) {
             ContentMode.ANIME -> data.animeHistory.firstOrNull()?.let {
+                val allRead = data.animeLib.find { lib -> lib.anime.id == it.animeId }
+                    ?.let { lib -> lib.unseenCount == 0L && lib.totalCount > 0 } ?: false
                 HomeHubHero(
                     entryId = it.animeId,
                     title = it.title,
@@ -289,9 +296,12 @@ class HomeHubScreenModel(
                     coverData = it.coverData,
                     subId = it.episodeId,
                     mediaType = HomeHubMediaType.ANIME,
+                    allRead = allRead,
                 )
             }
             ContentMode.MANGA -> data.mangaHistory.firstOrNull()?.let {
+                val allRead = data.mangaLib.find { lib -> lib.manga.id == it.mangaId }
+                    ?.let { lib -> lib.unreadCount == 0L && lib.totalChapters > 0 } ?: false
                 HomeHubHero(
                     entryId = it.mangaId,
                     title = it.title,
@@ -299,16 +309,24 @@ class HomeHubScreenModel(
                     coverData = it.coverData,
                     subId = it.chapterId,
                     mediaType = HomeHubMediaType.MANGA,
+                    allRead = allRead,
                 )
             }
             ContentMode.NOVEL -> data.novelHistory.firstOrNull()?.let {
+                // Skip if this chapter is hidden
+                val hiddenIds = ChapterHideManager.getHiddenChapterIds(context, it.novelId)
+                if (it.chapterId in hiddenIds) return@let null
+                val allRead = data.novelLib.find { lib -> lib.novel.id == it.novelId }
+                    ?.let { lib -> lib.unreadCount == 0L && lib.totalChapters > 0 } ?: false
                 HomeHubHero(
                     entryId = it.novelId,
                     title = it.title,
                     progressNumber = it.chapterNumber,
+                    chapterTitle = it.chapterName,
                     coverData = it.coverData,
                     subId = it.chapterId,
                     mediaType = HomeHubMediaType.NOVEL,
+                    allRead = allRead,
                 )
             }
         }

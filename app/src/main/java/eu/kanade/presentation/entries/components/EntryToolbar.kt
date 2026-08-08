@@ -59,6 +59,7 @@ fun EntryToolbar(
     onClickRemoveNonBookmarkedDownloads: (() -> Unit)? = null,
     onClickRemoveReadDownloads: (() -> Unit)? = null,
     onClickLinkedSources: (() -> Unit)? = null,
+    onClickUnhideChapters: (() -> Unit)? = null,
     // Anime only
     changeAnimeSkipIntro: (() -> Unit)?,
     // For action mode
@@ -232,11 +233,11 @@ fun EntryToolbar(
                             ),
                         )
                     }
-                    if (onClickShare != null) {
+                    if (onClickUnhideChapters != null) {
                         add(
                             AppBar.OverflowAction(
-                                title = stringResource(MR.strings.action_share),
-                                onClick = onClickShare,
+                                title = "Unhide chapters",
+                                onClick = onClickUnhideChapters,
                             ),
                         )
                     }

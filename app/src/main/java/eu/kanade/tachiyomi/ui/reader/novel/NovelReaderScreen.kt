@@ -3,24 +3,53 @@ package eu.kanade.tachiyomi.ui.reader.novel
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.util.Log
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import android.view.GestureDetector
+import android.view.ViewConfiguration
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -28,10 +57,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -40,6 +77,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
 import tachiyomi.presentation.core.util.collectAsState
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -52,8 +90,10 @@ import eu.kanade.presentation.novel.reader.NovelReaderSettingsDialog
 import eu.kanade.presentation.novel.reader.NovelTtsControlsBar
 import eu.kanade.presentation.novel.reader.NovelReaderSettingsScreenModel
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.ui.reader.novel.NovelAutoScrollChapterEndBehavior
 import eu.kanade.tachiyomi.ui.reader.novel.dictionary.DictionaryBottomSheet
 import eu.kanade.tachiyomi.util.system.hasDisplayCutout
+import kotlin.math.hypot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
@@ -156,63 +196,12 @@ class NovelReaderScreen(
                     is NovelReaderEvent.ShowMessage -> {}
                     is NovelReaderEvent.ChapterChanged -> {}
                     is NovelReaderEvent.ScrollToPosition -> {
-                        val rv = recyclerViewRef
-                        if (rv != null) {
-                            val transitionStyle = screenModel.preferences.pageTransitionStyle().get()
-                            rv.post {
-                                // Apply chapter transition animation based on preference
-                                when (transitionStyle) {
-                                    NovelPageTransitionStyle.INSTANT -> {
-                                        scrollToChapterPosition(rv, event.position)
-                                    }
-                                    NovelPageTransitionStyle.SLIDE -> {
-                                        // Fade out, scroll, fade in
-                                        rv.animate().alpha(0f).setDuration(150).withEndAction {
-                                            scrollToChapterPosition(rv, event.position)
-                                            rv.post { rv.animate().alpha(1f).setDuration(200).start() }
-                                        }.start()
-                                    }
-                                    NovelPageTransitionStyle.DEPTH -> {
-                                        // Scale down + fade out, scroll, scale up + fade in
-                                        rv.animate()
-                                            .alpha(0f)
-                                            .scaleX(0.85f)
-                                            .scaleY(0.85f)
-                                            .setDuration(200)
-                                            .withEndAction {
-                                                scrollToChapterPosition(rv, event.position)
-                                                rv.post {
-                                                    rv.scaleX = 0.85f
-                                                    rv.scaleY = 0.85f
-                                                    rv.animate()
-                                                        .alpha(1f)
-                                                        .scaleX(1f)
-                                                        .scaleY(1f)
-                                                        .setDuration(250)
-                                                        .start()
-                                                }
-                                            }.start()
-                                    }
-                                    NovelPageTransitionStyle.BOOK,
-                                    NovelPageTransitionStyle.CURL,
-                                    NovelPageTransitionStyle.BOOK_FLIP -> {
-                                        // These 3D page-curl effects require a pager architecture.
-                                        // Fallback to a cross-fade with a slight horizontal shift.
-                                        val direction = if (event.position == 0) 1f else -1f
-                                        rv.translationX = direction * rv.width * 0.15f
-                                        rv.alpha = 0f
-                                        scrollToChapterPosition(rv, event.position)
-                                        rv.post {
-                                            rv.animate()
-                                                .alpha(1f)
-                                                .translationX(0f)
-                                                .setDuration(300)
-                                                .start()
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        // Store the transition position — it will be applied in the
+                        // AndroidView's update callback after submitList completes.
+                        // This ensures the adapter has the new items before the
+                        // animation runs, and avoids postDelayed which can cause
+                        // system bars to flash.
+                        screenModel.pendingTransitionPosition = event.position
                     }
                     is NovelReaderEvent.ScrollToCharacter -> {
                         val rv = recyclerViewRef
@@ -313,6 +302,10 @@ class NovelReaderScreen(
         // Auto-scroll does NOT resume until the finger is lifted.
         var isUserTouching by remember { mutableStateOf(false) }
 
+        // Track whether text selection is active — auto-scroll pauses during
+        // text selection so the user can select text without it scrolling away.
+        var isTextSelectionActive by remember { mutableStateOf(false) }
+
         // Track window focus — when the user pulls down the notification shade
         // or opens the Android app bar, the activity loses window focus.
         var hasWindowFocus by remember { mutableStateOf(true) }
@@ -334,10 +327,12 @@ class NovelReaderScreen(
         // (notification shade pulled down).
         val isOverlayActive = isControlsVisible || isSettingsVisible ||
             isChaptersSheetVisible || isCommentsDialogVisible ||
-            dictionaryQuery != null || !hasWindowFocus
+            dictionaryQuery != null || !hasWindowFocus || isTextSelectionActive
 
-        LaunchedEffect(autoScrollEnabled, smoothAutoScroll, autoScrollInterval, autoScrollOffset, smoothSpeed, isOverlayActive, isUserTouching) {
+        LaunchedEffect(autoScrollEnabled, smoothAutoScroll, autoScrollInterval, autoScrollOffset, smoothSpeed, isOverlayActive, isUserTouching, isLoading) {
             if (!autoScrollEnabled) return@LaunchedEffect
+            // Chapter end behavior: what to do when auto-scroll reaches bottom
+            val endBehavior = screenModel.preferences.autoScrollChapterEndBehavior().get()
             if (smoothAutoScroll) {
                 // Smooth mode: scroll continuously using frame timing.
                 // speed is in pixels/second. We use a fractional pixel
@@ -349,7 +344,30 @@ class NovelReaderScreen(
                 while (isActive) {
                     delay(frameIntervalMs)
                     val rv = recyclerViewRef
-                    if (rv != null && !isOverlayActive && !isUserTouching) {
+                    if (rv != null && !isOverlayActive && !isUserTouching && !isLoading) {
+                        // Check if we've reached the bottom
+                        if (!rv.canScrollVertically(1)) {
+                            when (endBehavior) {
+                                NovelAutoScrollChapterEndBehavior.StopAtEnd -> {
+                                    screenModel.preferences.autoScroll().set(false)
+                                    return@LaunchedEffect
+                                }
+                                NovelAutoScrollChapterEndBehavior.AdvanceAndStop -> {
+                                    val advanced = screenModel.advanceToNextChapter()
+                                    screenModel.preferences.autoScroll().set(false)
+                                    if (!advanced) return@LaunchedEffect
+                                    return@LaunchedEffect
+                                }
+                                NovelAutoScrollChapterEndBehavior.ContinuousReading -> {
+                                    if (!screenModel.advanceToNextChapter()) {
+                                        screenModel.preferences.autoScroll().set(false)
+                                        return@LaunchedEffect
+                                    }
+                                    // Wait for the new chapter to load before continuing
+                                    delay(1500)
+                                }
+                            }
+                        }
                         pixelAccumulator += pixelsPerFrame
                         val pixelsToScroll = pixelAccumulator.toInt()
                         if (pixelsToScroll > 0) {
@@ -363,11 +381,42 @@ class NovelReaderScreen(
                 while (isActive) {
                     delay(autoScrollInterval.toLong())
                     val rv = recyclerViewRef
-                    if (rv != null && !isOverlayActive && !isUserTouching) {
+                    if (rv != null && !isOverlayActive && !isUserTouching && !isLoading) {
+                        // Check if we've reached the bottom
+                        if (!rv.canScrollVertically(1)) {
+                            when (endBehavior) {
+                                NovelAutoScrollChapterEndBehavior.StopAtEnd -> {
+                                    screenModel.preferences.autoScroll().set(false)
+                                    return@LaunchedEffect
+                                }
+                                NovelAutoScrollChapterEndBehavior.AdvanceAndStop -> {
+                                    screenModel.advanceToNextChapter()
+                                    screenModel.preferences.autoScroll().set(false)
+                                    return@LaunchedEffect
+                                }
+                                NovelAutoScrollChapterEndBehavior.ContinuousReading -> {
+                                    if (!screenModel.advanceToNextChapter()) {
+                                        screenModel.preferences.autoScroll().set(false)
+                                        return@LaunchedEffect
+                                    }
+                                    delay(1500)
+                                }
+                            }
+                        }
                         rv.post { rv.scrollBy(0, autoScrollOffset) }
                     }
                 }
             }
+        }
+
+        // Tap-to-scroll and swipe gesture state
+        // Collect tap-to-navigate as state so it updates live when the user
+        // toggles it in settings. The AndroidView factory captures a holder
+        // that gets refreshed in the update callback.
+        val tapToScrollEnabled by screenModel.preferences.tapToScroll().collectAsState()
+        val tapToScrollHolder = remember { mutableStateOf(tapToScrollEnabled) }
+        LaunchedEffect(tapToScrollEnabled) {
+            tapToScrollHolder.value = tapToScrollEnabled
         }
 
         Box(
@@ -383,21 +432,13 @@ class NovelReaderScreen(
                 isLoading = isLoading,
                 accentColor = accentColor,
                 bottomPaddingDp = if (screenModel.preferences.showBatteryAndTime().get()) 28 else 0,
+                tapToScrollEnabled = tapToScrollHolder.value,
+                tapToScrollEnabledGetter = { tapToScrollHolder.value },
+                onScrollStateChanged = { isDragging -> isUserTouching = isDragging },
                 onToggleControls = { screenModel.toggleControls() },
+                onSelectionActiveChange = { active -> isTextSelectionActive = active },
                 onRecyclerViewReady = { rv ->
                     recyclerViewRef = rv
-                    // Track user-initiated scrolls for smooth auto-scroll pause/resume.
-                    // SCROLL_STATE_DRAGGING is only set when the user is physically
-                    // dragging the list — programmatic scrollBy stays IDLE.
-                    rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                        override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
-                            // Track touch state for auto-scroll pause/resume.
-                            // DRAGGING = user is physically touching and dragging.
-                            // SETTLING = fling in progress (finger lifted).
-                            // IDLE = fully stopped.
-                            isUserTouching = newState == RecyclerView.SCROLL_STATE_DRAGGING
-                        }
-                    })
 
                     // Apply pending scroll restoration (Tadami-style).
                     // The saved item index + pixel offset are applied before
@@ -411,6 +452,7 @@ class NovelReaderScreen(
                     if (pending != null) {
                         screenModel.pendingScrollRestore = null
                         val (targetIndex, targetOffset) = pending
+                        Log.d("NovelReader", "onRecyclerViewReady: pendingScrollRestore targetIndex=$targetIndex targetOffset=$targetOffset")
                         if (targetIndex > 0 || targetOffset > 0) {
                             // Hide the RV until we've scrolled to the saved position.
                             rv.alpha = 0f
@@ -419,17 +461,29 @@ class NovelReaderScreen(
                             fun tryRestoreScroll() {
                                 val adapter = rv.adapter as? TextAdapter
                                 val items = adapter?.currentList
-                                if (items.isNullOrEmpty() || items.size <= targetIndex) {
+                                if (items.isNullOrEmpty()) {
+                                    Log.d("NovelReader", "tryRestoreScroll: attempt=$attempts items=null targetIndex=$targetIndex — waiting")
                                     if (++attempts < maxAttempts) {
                                         rv.postDelayed(::tryRestoreScroll, 50L)
                                     } else {
-                                        // Give up — show content at default position.
+                                        Log.w("NovelReader", "tryRestoreScroll: GAVE UP (no items) after $maxAttempts attempts")
                                         rv.alpha = 1f
                                     }
                                     return
                                 }
+                                // If the target index is beyond the list size, the
+                                // saved position was from infinite-scroll mode where
+                                // multiple chapters were appended. Clamp to the last
+                                // available item instead of giving up at position 0.
+                                val effectiveIndex = if (targetIndex >= items.size) {
+                                    Log.w("NovelReader", "tryRestoreScroll: targetIndex=$targetIndex > items.size=${items.size}, clamping to last item")
+                                    items.size - 1
+                                } else {
+                                    targetIndex
+                                }
                                 val lm = rv.layoutManager as? LinearLayoutManager
                                 if (lm == null) {
+                                    Log.w("NovelReader", "tryRestoreScroll: layoutManager is null, showing at default")
                                     rv.alpha = 1f
                                     return
                                 }
@@ -437,66 +491,67 @@ class NovelReaderScreen(
                                 // This is the key difference from the old approach —
                                 // we restore the EXACT pixel offset, not just the
                                 // paragraph start, eliminating position drift.
-                                lm.scrollToPositionWithOffset(targetIndex, targetOffset)
+                                Log.d("NovelReader", "tryRestoreScroll: scrolling to index=$effectiveIndex offset=$targetOffset (items=${items.size})")
+                                lm.scrollToPositionWithOffset(effectiveIndex, targetOffset)
                                 // Make the RV visible on the next frame, after
                                 // the scroll has been applied and laid out.
                                 rv.post { rv.alpha = 1f }
                             }
                             // Start trying on the next frame.
                             rv.post(::tryRestoreScroll)
+                        } else {
+                            Log.d("NovelReader", "onRecyclerViewReady: targetIndex=0 offset=0, no restore needed")
                         }
+                    } else {
+                        Log.d("NovelReader", "onRecyclerViewReady: no pendingScrollRestore")
                     }
                 },
             )
 
-            // Background texture overlay — drawn ON TOP of the RecyclerView but
-            // with low alpha so text remains readable. Uses programmatic noise
-            // patterns (no bitmap assets needed).
+            // Background texture overlay — drawn ON TOP of the RecyclerView.
+            // Uses bitmap textures (WebP) with ShaderBrush tiling for paper grain
+            // and linen, and radial gradients for parchment. Textures are
+            // grayscale/color-agnostic and blend with any background via alpha.
             if (textConfig.backgroundTexture != NovelReaderBackgroundTexture.NONE) {
                 NovelTextureOverlay(
                     texture = textConfig.backgroundTexture,
-                    strength = textConfig.textureStrength,
-                    isDark = textConfig.backgroundColor != android.graphics.Color.WHITE,
+                    strengthPercent = textConfig.textureStrength,
+                    backgroundColor = bgColor,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
 
-            // OLED edge gradient: subtle dark gradient at screen edges for
-            // OLED displays to reduce burn-in perception.
+            // OLED edge gradient: radial vignette from center to edges.
+            // Only active in dark theme — creates a subtle darkening at screen
+            // edges using a radial gradient (transparent center → black edges).
+            // Uses farthest-corner radius so the gradient reaches all corners.
             if (textConfig.oledEdgeGradient) {
-                Canvas(
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    val edgeWidth = size.width * 0.04f
-                    val edgeHeight = size.height * 0.04f
-                    // Left edge
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            0f to Color.Black.copy(alpha = 0.15f),
-                            edgeWidth to Color.Transparent,
-                        ),
-                    )
-                    // Right edge
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            (size.width - edgeWidth) to Color.Transparent,
-                            size.width to Color.Black.copy(alpha = 0.15f),
-                        ),
-                    )
-                    // Top edge
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.15f),
-                            edgeHeight to Color.Transparent,
-                        ),
-                    )
-                    // Bottom edge
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            (size.height - edgeHeight) to Color.Transparent,
-                            size.height to Color.Black.copy(alpha = 0.15f),
-                        ),
-                    )
+                val bgLum = 0.299f * bgColor.red + 0.587f * bgColor.green + 0.114f * bgColor.blue
+                val isDarkTheme = bgLum < 0.5f
+                if (isDarkTheme) {
+                    Canvas(
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        val center = Offset(size.width * 0.5f, size.height * 0.5f)
+                        // Farthest-corner radius: distance from center to the
+                        // farthest screen corner, so the gradient covers everything.
+                        val tl = hypot(center.x.toDouble(), center.y.toDouble()).toFloat()
+                        val tr = hypot((size.width - center.x).toDouble(), center.y.toDouble()).toFloat()
+                        val bl = hypot(center.x.toDouble(), (size.height - center.y).toDouble()).toFloat()
+                        val br = hypot((size.width - center.x).toDouble(), (size.height - center.y).toDouble()).toFloat()
+                        val radius = maxOf(tl, tr, bl, br)
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colorStops = arrayOf(
+                                    0f to Color.Transparent,
+                                    0.38f to Color.Transparent,
+                                    1f to Color.Black.copy(alpha = 0.36f),
+                                ),
+                                center = center,
+                                radius = radius,
+                            ),
+                        )
+                    }
                 }
             }
 
@@ -524,24 +579,39 @@ class NovelReaderScreen(
                 }
             }
 
+            // Edge fade: gradient fade at top/bottom that makes text fade out
+            // as it scrolls under the edges. Draws the background color (with
+            // texture) as a vertical gradient — opaque at the very top/bottom
+            // edges, transparent towards the center. The NovelReaderChrome
+            // (including the phone info overlay) is drawn on top of this,
+            // so the bottom info overlay is NOT affected by the fade.
+            if (textConfig.edgeFadeEnabled) {
+                NovelEdgeFadeOverlay(
+                    backgroundColor = bgColor,
+                    texture = textConfig.backgroundTexture,
+                    textureStrength = textConfig.textureStrength,
+                    fadeHeightFraction = 0.06f,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
             NovelReaderChrome(
                 isMenuVisible = isControlsVisible,
                 title = currentChapter?.name ?: "Loading...",
                 subtitle = novel?.title ?: "",
                 accentColor = accentColor,
                 progressPercent = if (screenModel.preferences.showScrollPercentage().get()) progressPercent else -1,
-                estimatedReadingTime = if (screenModel.preferences.showEstimatedReadingTime().get()) {
-                    screenModel.positionTracker.getEstimatedReadingTime()
-                } else -1,
                 wordCount = if (screenModel.preferences.showWordCount().get()) {
                     screenModel.positionTracker.getTotalWordCount()
                 } else -1,
-                timeToEnd = if (screenModel.preferences.showTimeToEnd().get()) {
-                    screenModel.positionTracker.getTimeToEnd()
-                } else -1,
                 fullscreen = screenModel.preferences.fullscreen().get(),
                 showPhoneInfo = screenModel.preferences.showBatteryAndTime().get(),
+                estimatedReadingTime = if (screenModel.preferences.showEstimatedReadingTime().get()) {
+                    screenModel.positionTracker.getEstimatedReadingTime()
+                } else -1,
                 readerBackgroundColor = bgColor,
+                backgroundTexture = textConfig.backgroundTexture,
+                textureStrength = textConfig.textureStrength,
                 showCommentsButton = screenModel.supportsComments,
                 isTtsActive = screenModel.isTtsActive,
                 onBackClick = { navigator.pop() },
@@ -577,6 +647,137 @@ class NovelReaderScreen(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = if (isControlsVisible) 72.dp else 0.dp),
                 )
+            }
+
+            // Auto-scroll floating button — quick toggle when enabled in settings.
+            // Only visible when auto-scroll is enabled (it's a pause/resume button,
+            // not an enable button). Positioned above the phone info area and the
+            // bottom controls bar. Animates position when overlay appears/disappears.
+            val autoScrollEnabled by screenModel.preferences.autoScroll().collectAsState()
+            if (screenModel.preferences.showAutoScrollFloatingButton().get() && autoScrollEnabled) {
+                val showPhoneInfo = screenModel.preferences.showBatteryAndTime().get()
+                // Target bottom padding: phone info bar (28dp) + controls bar (72dp when visible)
+                val targetBottomPadding = when {
+                    isControlsVisible -> 72.dp + if (showPhoneInfo) 28.dp else 0.dp
+                    showPhoneInfo -> 28.dp
+                    else -> 0.dp
+                }
+                // Animate the padding change for smooth movement
+                val animatedBottomPadding by animateDpAsState(
+                    targetValue = targetBottomPadding,
+                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
+                    label = "fab_bottom_padding",
+                )
+                FloatingActionButton(
+                    onClick = {
+                        screenModel.preferences.autoScroll().set(false)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                        .padding(bottom = animatedBottomPadding),
+                    containerColor = accentColor ?: MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Pause,
+                        contentDescription = "Pause auto-scroll",
+                    )
+                }
+            }
+
+            // Vertical seekbar — scroll position slider on the right edge.
+            // Thinner and taller, with auto-fade after inactivity.
+            // Value is inverted (100 - progress) so the thumb moves DOWN as the
+            // user scrolls down, matching natural scroll position expectation.
+            if (screenModel.preferences.verticalSeekbar().get()) {
+                val rv = recyclerViewRef
+                if (rv != null && contentItems.isNotEmpty()) {
+                    val seekbarAccent = accentColor ?: MaterialTheme.colorScheme.primary
+                    // Track whether the user is actively dragging the seekbar
+                    var isDragging by remember { mutableStateOf(false) }
+                    // Inverted: 100 = top, 0 = bottom (thumb at bottom = scrolled to end)
+                    val seekbarValue = remember { mutableFloatStateOf(100f - progressPercent.toFloat()) }
+                    // Only sync from scroll position when NOT dragging — prevents jitter
+                    LaunchedEffect(progressPercent) {
+                        if (!isDragging) {
+                            seekbarValue.floatValue = 100f - progressPercent.toFloat()
+                        }
+                    }
+
+                    // Auto-fade: track user interaction and fade out after inactivity.
+                    // Use animateFloatAsState for smooth fade transitions.
+                    var seekbarVisible by remember { mutableStateOf(true) }
+                    var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                    // Update interaction time on any scroll or drag
+                    LaunchedEffect(progressPercent, isDragging) {
+                        lastInteractionTime = System.currentTimeMillis()
+                        seekbarVisible = true
+                    }
+                    // Fade out after 3 seconds of inactivity
+                    LaunchedEffect(lastInteractionTime) {
+                        kotlinx.coroutines.delay(3000)
+                        if (!isDragging && System.currentTimeMillis() - lastInteractionTime >= 3000) {
+                            seekbarVisible = false
+                        }
+                    }
+                    val animatedAlpha by animateFloatAsState(
+                        targetValue = if (seekbarVisible) 1f else 0f,
+                        animationSpec = tween(durationMillis = 300),
+                        label = "seekbar_alpha",
+                    )
+
+                    // The Slider is laid out horizontally then rotated -90°.
+                    // After rotation: width becomes visual height, height becomes visual width.
+                    // We use requiredWidth/requiredHeight to override the Box's constraints,
+                    // otherwise the Box's small width would clamp the Slider's width.
+                    val sliderLength = 320.dp
+                    val sliderThickness = 20.dp
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 4.dp)
+                            .height(sliderLength)
+                            .width(sliderThickness)
+                            .graphicsLayer { alpha = animatedAlpha },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Slider(
+                            value = seekbarValue.floatValue,
+                            onValueChange = { newValue ->
+                                isDragging = true
+                                seekbarVisible = true
+                                lastInteractionTime = System.currentTimeMillis()
+                                // Calculate pixel delta from PREVIOUS position.
+                                // MUST capture prevValue BEFORE updating seekbarValue.
+                                val prevValue = seekbarValue.floatValue
+                                seekbarValue.floatValue = newValue
+                                // Invert: slider value 100 = top (0% progress), 0 = bottom (100% progress)
+                                val prevProgress = 100f - prevValue
+                                val newProgress = 100f - newValue
+                                val totalRange = rv.computeVerticalScrollRange()
+                                val pixelDelta = ((newProgress - prevProgress) / 100f * totalRange).toInt()
+                                if (pixelDelta != 0) {
+                                    rv.scrollBy(0, pixelDelta)
+                                }
+                            },
+                            onValueChangeFinished = {
+                                isDragging = false
+                                lastInteractionTime = System.currentTimeMillis()
+                            },
+                            valueRange = 0f..100f,
+                            modifier = Modifier
+                                .graphicsLayer(rotationZ = -90f)
+                                .requiredWidth(sliderLength)
+                                .requiredHeight(sliderThickness),
+                            colors = SliderDefaults.colors(
+                                thumbColor = seekbarAccent,
+                                activeTrackColor = seekbarAccent,
+                                inactiveTrackColor = seekbarAccent.copy(alpha = 0.2f),
+                            ),
+                        )
+                    }
+                }
             }
         }
 
@@ -663,65 +864,16 @@ class NovelReaderScreen(
             )
         }
 
-        // Translation dialog — shown when the user taps "Translate" in the
-        // selection popup and the translation preference is enabled.
+        // Translation bottom sheet — shown when the user taps "Translate" in
+        // the selection popup and the translation preference is enabled.
+        // Uses a ModalBottomSheet (same design as the dictionary lookup).
         val translationState by screenModel.translationState.collectAsStateWithLifecycle()
-        when (val ts = translationState) {
-            is TranslationState.Loading -> {
-                androidx.compose.material3.AlertDialog(
-                    onDismissRequest = { screenModel.dismissTranslation() },
-                    title = { Text("Translating...") },
-                    text = {
-                        Text(
-                            text = ts.originalText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(top = 8.dp),
-                            color = accentColor ?: MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    confirmButton = {},
-                )
-            }
-            is TranslationState.Result -> {
-                androidx.compose.material3.AlertDialog(
-                    onDismissRequest = { screenModel.dismissTranslation() },
-                    title = { Text("Translation (${ts.targetLang})") },
-                    text = {
-                        Text(
-                            text = ts.translatedText,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Original: ${ts.originalText}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                    confirmButton = {
-                        androidx.compose.material3.TextButton(onClick = { screenModel.dismissTranslation() }) {
-                            Text("Close")
-                        }
-                    },
-                )
-            }
-            is TranslationState.Error -> {
-                androidx.compose.material3.AlertDialog(
-                    onDismissRequest = { screenModel.dismissTranslation() },
-                    title = { Text("Translation Error") },
-                    text = { Text(ts.message) },
-                    confirmButton = {
-                        androidx.compose.material3.TextButton(onClick = { screenModel.dismissTranslation() }) {
-                            Text("OK")
-                        }
-                    },
-                )
-            }
-            TranslationState.Idle -> {}
+        if (translationState !is TranslationState.Idle) {
+            TranslationBottomSheet(
+                state = translationState,
+                accentColor = accentColor,
+                onDismiss = { screenModel.dismissTranslation() },
+            )
         }
 
         // The highlight color picker is now inline in the selection popup
@@ -736,10 +888,11 @@ class NovelReaderScreen(
         if (activity == null) return
 
         val fullscreen by screenModel.preferences.fullscreen().collectAsState()
-        val keepScreenOn by screenModel.readerPreferences.keepScreenOn().collectAsState()
+        val keepScreenOn by screenModel.preferences.keepScreenOn().collectAsState()
         val readerTheme by screenModel.readerPreferences.readerTheme().collectAsState()
+        val cutoutShort by screenModel.preferences.cutoutShort().collectAsState()
 
-        DisposableEffect(fullscreen, keepScreenOn, readerTheme, activity) {
+        DisposableEffect(fullscreen, keepScreenOn, readerTheme, cutoutShort, activity) {
             val window = activity.window
             val controller = WindowInsetsControllerCompat(window, window.decorView)
 
@@ -747,8 +900,21 @@ class NovelReaderScreen(
             if (fullscreen) {
                 controller.hide(WindowInsetsCompat.Type.systemBars())
                 controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                // cutoutShort: extend content into the display cutout area
+                if (cutoutShort) {
+                    window.attributes = window.attributes.apply {
+                        layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    }
+                }
             } else {
                 controller.show(WindowInsetsCompat.Type.systemBars())
+                if (cutoutShort) {
+                    window.attributes = window.attributes.apply {
+                        layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+                    }
+                }
             }
 
             if (keepScreenOn) {
@@ -771,6 +937,11 @@ class NovelReaderScreen(
                 WindowCompat.setDecorFitsSystemWindows(window, false)
                 controller.show(WindowInsetsCompat.Type.systemBars())
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                // Restore default cutout mode
+                window.attributes = window.attributes.apply {
+                    layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+                }
             }
         }
     }
@@ -784,17 +955,89 @@ class NovelReaderScreen(
         isLoading: Boolean,
         accentColor: Color?,
         bottomPaddingDp: Int = 0,
+        tapToScrollEnabled: Boolean = false,
+        tapToScrollEnabledGetter: () -> Boolean = { tapToScrollEnabled },
+        onScrollStateChanged: (Boolean) -> Unit = {},
         onToggleControls: () -> Unit,
         onRecyclerViewReady: (RecyclerView) -> Unit,
+        onSelectionActiveChange: (Boolean) -> Unit = {},
     ) {
         var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
+
+        // Create the adapter ONCE and persist it across recompositions.
+        // The old implementation (Miko-Yokai-Old) used a by-lazy singleton
+        // adapter that lived for the activity's entire lifetime. We must
+        // do the same — if the adapter is recreated (e.g. when the
+        // AndroidView's factory runs again after onRelease), all
+        // ViewHolders are recreated and the Editor's selection controllers
+        // are not properly initialized, breaking long-press text selection.
         var adapter by remember { mutableStateOf<TextAdapter?>(null) }
+        if (adapter == null) {
+            val textAdapter = TextAdapter(
+                getConfig = { screenModel.textConfigValue },
+                activity = activity,
+                onNavigationClick = { direction ->
+                    when (direction) {
+                        TextItem.LoadDirection.PREVIOUS -> screenModel.navigateToPreviousChapter()
+                        TextItem.LoadDirection.NEXT -> screenModel.navigateToNextChapter()
+                    }
+                },
+                onTextSelected = { selectedText ->
+                    screenModel.showDictionary(selectedText)
+                },
+                onHighlightWithColor = { selectedText, _, _, colorHex ->
+                    screenModel.saveHighlightWithColor(selectedText, colorHex)
+                },
+                onCopy = { selectedText ->
+                    screenModel.copyToClipboard(selectedText)
+                },
+                onShare = { selectedText ->
+                    screenModel.shareText(selectedText)
+                },
+                onReadAloud = { selectedText ->
+                    screenModel.readAloud(selectedText)
+                },
+                onTranslate = { selectedText ->
+                    screenModel.translateText(selectedText)
+                },
+                getHighlightManager = { screenModel.highlightManager },
+                getNovelTitle = { screenModel.novel.value?.title ?: "" },
+                getNovelId = { screenModel.novel.value?.id },
+                getChapterNumber = { screenModel.currentChapter.value?.chapterNumber ?: 0.0 },
+                onHighlightDeleted = {
+                    // Refresh the list to re-apply remaining highlights.
+                    adapter?.notifyDataSetChanged()
+                },
+                getAccentColor = {
+                    accentColor?.toArgb()
+                },
+                onSelectionActiveChange = { active ->
+                    onSelectionActiveChange(active)
+                },
+            )
+            // Wire up multi-paragraph range selection callbacks.
+            textAdapter.onRangeSelectComplete = { combinedText ->
+                screenModel.copyToClipboard(combinedText)
+            }
+            textAdapter.onShowMessage = { msg ->
+                screenModel.showMessage(msg)
+            }
+            textAdapter.onRangeSelectModeChange = { active ->
+                android.util.Log.d("NovelTextSelect", "Range selection mode: $active")
+            }
+            adapter = textAdapter
+        }
 
         AndroidView(
             factory = { ctx ->
                 val rv = RecyclerView(ctx).apply {
                     layoutManager = LinearLayoutManager(ctx)
                     setHasFixedSize(false)
+                    // Disable item animations — they interfere with touch dispatching
+                    // after submitList (e.g. during infinite scroll). The animation
+                    // holds onto views and prevents the TextView from receiving the
+                    // full touch sequence needed for long-press text selection.
+                    itemAnimator = null
                     if (bottomPaddingDp > 0) {
                         val density = ctx.resources.displayMetrics.density
                         setPadding(0, 0, 0, (bottomPaddingDp * density).toInt())
@@ -802,75 +1045,201 @@ class NovelReaderScreen(
                     }
                 }
 
-                val gestureDetector = GestureDetector(
-                    ctx,
-                    object : GestureDetector.SimpleOnGestureListener() {
-                        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                            onToggleControls()
-                            return true
-                        }
-                    },
-                )
-                // Use addOnItemTouchListener (Miko's approach) — more reliable
-                // than setOnTouchListener which can be intercepted by the
-                // RecyclerView's own touch handling.
+                // Tap zone detection: manually track touch down/up to detect taps.
+                // This is more reliable than GestureDetector in a RecyclerView context
+                // where child views may consume touch events.
+                val touchSlop = ViewConfiguration.get(ctx).scaledTouchSlop
+                var tapDownX = 0f
+                var tapDownY = 0f
+                var tapDownTime = 0L
+                val tapTimeout = ViewConfiguration.getTapTimeout() + ViewConfiguration.getLongPressTimeout()
+
+                // Swipe-to-change-chapter: detect vertical swipes
+                val swipeThreshold = 200 // px — minimum swipe distance to trigger
+                var swipeStartY = 0f
+                val swipeToNextEnabled = screenModel.preferences.swipeToNextChapter().get()
+                val swipeToPrevEnabled = screenModel.preferences.swipeToPrevChapter().get()
+
                 rv.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
                     override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
-                        gestureDetector.onTouchEvent(e)
+                        when (e.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                tapDownX = e.x
+                                tapDownY = e.y
+                                tapDownTime = System.currentTimeMillis()
+                                swipeStartY = e.y
+                            }
+                            MotionEvent.ACTION_UP -> {
+                                val dx = kotlin.math.abs(e.x - tapDownX)
+                                val dy = kotlin.math.abs(e.y - tapDownY)
+                                val elapsed = System.currentTimeMillis() - tapDownTime
+                                // Detect tap: small movement, within timeout
+                                val isTap = dx < touchSlop && dy < touchSlop && elapsed < tapTimeout
+
+                                // Swipe gesture detection (takes priority over tap)
+                                if (swipeToNextEnabled || swipeToPrevEnabled) {
+                                    val deltaY = e.y - swipeStartY
+                                    if (kotlin.math.abs(deltaY) > swipeThreshold) {
+                                        if (deltaY < 0 && swipeToNextEnabled) {
+                                            screenModel.navigateToNextChapter()
+                                            return false
+                                        } else if (deltaY > 0 && swipeToPrevEnabled) {
+                                            screenModel.navigateToPreviousChapter()
+                                            return false
+                                        }
+                                    }
+                                }
+
+                                if (isTap) {
+                                    val mode = screenModel.readingMode
+                                    // Scale: 100% slider = 10% viewport scroll.
+                                    // The slider value (0-100) maps to 0-10% of viewport height.
+                                    val tapAmountPct = screenModel.preferences.tapToScrollAmount().get() * 0.1f
+                                    val x = e.x
+                                    val y = e.y
+                                    val screenWidth = rv.width
+                                    val screenHeight = rv.height
+                                    val zoneThreshold = 0.30f
+                                    val tapScrollOn = tapToScrollEnabledGetter()
+
+                                    if (mode == NovelReadingMode.INFINITE_SCROLL) {
+                                        // Infinite scroll: top/bottom zones for scrolling (if tap-to-scroll enabled)
+                                        // No left/right chapter navigation zones.
+                                        if (tapScrollOn) {
+                                            val isTopZone = y < screenHeight * zoneThreshold
+                                            val isBottomZone = y > screenHeight * (1f - zoneThreshold)
+                                            if (isBottomZone || isTopZone) {
+                                                val visibleHeight = rv.height - rv.paddingTop - rv.paddingBottom
+                                                val scrollDist = (visibleHeight * tapAmountPct / 100).toInt()
+                                                val direction = if (isBottomZone) scrollDist else -scrollDist
+                                                smoothScrollByAnimated(rv, direction)
+                                                return false
+                                            }
+                                        }
+                                    } else {
+                                        // Page mode (DEFAULT):
+                                        // Left/right 30% = chapter navigation (always active)
+                                        val isLeftZone = x < screenWidth * zoneThreshold
+                                        val isRightZone = x > screenWidth * (1f - zoneThreshold)
+                                        if (isRightZone) {
+                                            screenModel.navigateToNextChapter()
+                                            return false
+                                        } else if (isLeftZone) {
+                                            screenModel.navigateToPreviousChapter()
+                                            return false
+                                        }
+                                        // Top/bottom 30% in the center area = tap-to-scroll (if enabled)
+                                        if (tapScrollOn) {
+                                            val isTopZone = y < screenHeight * zoneThreshold
+                                            val isBottomZone = y > screenHeight * (1f - zoneThreshold)
+                                            if (isBottomZone || isTopZone) {
+                                                val visibleHeight = rv.height - rv.paddingTop - rv.paddingBottom
+                                                val scrollDist = (visibleHeight * tapAmountPct / 100).toInt()
+                                                val direction = if (isBottomZone) scrollDist else -scrollDist
+                                                smoothScrollByAnimated(rv, direction)
+                                                return false
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // If it was a tap but not in a zone, toggle controls
+                                if (isTap) {
+                                    onToggleControls()
+                                }
+                            }
+                        }
                         return false
                     }
                 })
 
-                val textAdapter = TextAdapter(
-                    getConfig = { screenModel.textConfigValue },
-                    activity = activity,
-                    onNavigationClick = { direction ->
-                        when (direction) {
-                            TextItem.LoadDirection.PREVIOUS -> screenModel.navigateToPreviousChapter()
-                            TextItem.LoadDirection.NEXT -> screenModel.navigateToNextChapter()
-                        }
-                    },
-                    onTextSelected = { selectedText ->
-                        screenModel.showDictionary(selectedText)
-                    },
-                    onHighlightWithColor = { selectedText, _, _, colorHex ->
-                        screenModel.saveHighlightWithColor(selectedText, colorHex)
-                    },
-                    onCopy = { selectedText ->
-                        screenModel.copyToClipboard(selectedText)
-                    },
-                    onShare = { selectedText ->
-                        screenModel.shareText(selectedText)
-                    },
-                    onReadAloud = { selectedText ->
-                        screenModel.readAloud(selectedText)
-                    },
-                    onTranslate = { selectedText ->
-                        screenModel.translateText(selectedText)
-                    },
-                    getHighlightManager = { screenModel.highlightManager },
-                    getNovelTitle = { screenModel.novel.value?.title ?: "" },
-                    getNovelId = { screenModel.novel.value?.id },
-                    getChapterNumber = { screenModel.currentChapter.value?.chapterNumber ?: 0.0 },
-                    onHighlightDeleted = {
-                        // Refresh the list to re-apply remaining highlights.
-                        adapter?.notifyDataSetChanged()
-                    },
-                )
-                rv.adapter = textAdapter
-                adapter = textAdapter
-                textAdapter.submitList(contentItems)
+                // Use the persistent adapter (created via remember above).
+                // Don't create a new one — that breaks text selection.
+                val ad = adapter!!
+                rv.adapter = ad
+                ad.submitList(contentItems)
 
                 // Scroll listener: dismiss selection popup + infinite-scroll loading
                 // + character-position tracking.
                 var lastPositionSaveTime = 0L
                 val positionSaveIntervalMs = 2000L
+                // Cooldown for infinite-scroll chapter loading — prevents chain
+                // reactions where prepending a chapter shifts scroll position
+                // and immediately triggers another load.
+                var lastInfiniteLoadTime = 0L
+                val infiniteLoadCooldownMs = 1500L
+                // Track the last scroll direction so we know which way the user
+                // was scrolling when they stopped (for infinite-scroll triggers).
+                var lastScrollDirection = 0 // 1 = down, -1 = up, 0 = none
                 rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                    override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+                        // Notify outer scope for auto-scroll pause/resume.
+                        onScrollStateChanged(newState == RecyclerView.SCROLL_STATE_DRAGGING)
+
+                        // --- Infinite-scroll loading ---
+                        // Trigger when the scroll settles to IDLE (finger lifted
+                        // or fling finished). This is the reliable trigger point —
+                        // onScrolled fires during DRAGGING/SETTLING but not after
+                        // IDLE, so checking IDLE inside onScrolled never fires.
+                        // Checking here when transitioning TO IDLE ensures we
+                        // always evaluate the trigger after the user stops.
+                        if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                            val mode = screenModel.readingMode
+                            if (mode == NovelReadingMode.INFINITE_SCROLL) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastInfiniteLoadTime >= infiniteLoadCooldownMs) {
+                                    val lm = rv.layoutManager as? LinearLayoutManager
+                                    if (lm != null) {
+                                        val totalItemCount = lm.itemCount
+                                        if (totalItemCount > 0) {
+                                            // Guard: don't trigger infinite-scroll loading
+                                            // when the current content has no paragraphs
+                                            // (empty/corrupt chapter). A non-scrollable RV
+                                            // would falsely trigger both directions.
+                                            val hasParagraphs = ad.currentList.any { it is TextItem.Paragraph }
+                                            if (hasParagraphs) {
+                                                // Check if near the bottom (load next)
+                                                val lastVisible = lm.findLastVisibleItemPosition()
+                                                val scrollPctDown = (lastVisible + 1).toFloat() / totalItemCount.toFloat()
+                                                val atBottom = !rv.canScrollVertically(1)
+                                                if ((scrollPctDown >= 0.80f || atBottom) &&
+                                                    !screenModel.isLoadingNext &&
+                                                    lastScrollDirection >= 0
+                                                ) {
+                                                    lastInfiniteLoadTime = now
+                                                    screenModel.loadNextChapterInBackground()
+                                                }
+                                                // Check if near the top (load previous)
+                                                val firstVisible = lm.findFirstVisibleItemPosition()
+                                                val scrollPctUp = firstVisible.toFloat() / totalItemCount.toFloat()
+                                                val atTop = !rv.canScrollVertically(-1)
+                                                if ((scrollPctUp <= 0.20f || atTop) &&
+                                                    !screenModel.isLoadingPrevious &&
+                                                    lastScrollDirection <= 0
+                                                ) {
+                                                    lastInfiniteLoadTime = now
+                                                    screenModel.loadPreviousChapterInBackground()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // Reset direction after processing — the next
+                                // scroll gesture will set it again.
+                                lastScrollDirection = 0
+                            }
+                        }
+                    }
+
                     override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
-                        textAdapter.dismissActiveSelectionPopup()
+                        ad.dismissActiveSelectionPopup()
+
+                        // Track scroll direction for infinite-scroll trigger
+                        if (dy > 0) lastScrollDirection = 1
+                        else if (dy < 0) lastScrollDirection = -1
 
                         val lm = rv.layoutManager as? LinearLayoutManager ?: return
-                        val items = textAdapter.currentList
+                        val items = ad.currentList
                         if (items.isEmpty()) return
 
                         // --- Update current chapter from scroll position FIRST ---
@@ -902,9 +1271,18 @@ class NovelReaderScreen(
                             // For infinite scroll: rely on chapter detection + per-chapter
                             // progress, so we don't force 100% (the next chapter header
                             // being visible means we're starting a new chapter at 0%).
+                            // EXCEPTION: if this is the last chapter (no next chapter),
+                            // force 100% at the bottom so the user can mark it as read.
                             val mode = screenModel.readingMode
                             val atBottom = !rv.canScrollVertically(1)
-                            if (atBottom && mode != NovelReadingMode.INFINITE_SCROLL) {
+                            val isLastChapter = screenModel.isLastChapter()
+                            // Guard: only force-complete when the current chapter
+                            // actually has paragraph content. A chapter with only
+                            // a header (empty/corrupt content) would be non-scrollable
+                            // and falsely trigger forceProgressComplete, marking the
+                            // chapter as read without the user reading it.
+                            val hasParagraphs = items.any { it is TextItem.Paragraph }
+                            if (atBottom && hasParagraphs && (mode != NovelReadingMode.INFINITE_SCROLL || isLastChapter)) {
                                 screenModel.forceProgressComplete()
                             } else {
                                 // Calculate per-chapter character position.
@@ -949,26 +1327,6 @@ class NovelReaderScreen(
                                 screenModel.saveCurrentPosition()
                             }
                         }
-
-                        // --- Infinite-scroll loading ---
-                        val mode = screenModel.readingMode
-                        if (mode == NovelReadingMode.INFINITE_SCROLL) {
-                            val totalItemCount = lm.itemCount
-                            if (totalItemCount == 0) return
-                            if (dy > 0) {
-                                val lastVisible = lm.findLastVisibleItemPosition()
-                                val scrollPct = (lastVisible + 1).toFloat() / totalItemCount.toFloat()
-                                if (scrollPct >= 0.80f && !screenModel.isLoadingNext) {
-                                    screenModel.loadNextChapterInBackground()
-                                }
-                            } else if (dy < 0) {
-                                val firstVisible = lm.findFirstVisibleItemPosition()
-                                val scrollPct = firstVisible.toFloat() / totalItemCount.toFloat()
-                                if (scrollPct <= 0.20f && !screenModel.isLoadingPrevious) {
-                                    screenModel.loadPreviousChapterInBackground()
-                                }
-                            }
-                        }
                     }
                 })
 
@@ -978,7 +1336,10 @@ class NovelReaderScreen(
             },
             update = { rv ->
                 val pending = screenModel.pendingScrollAdjustment
+                val pendingTransition = screenModel.pendingTransitionPosition
+                val pendingRestore = screenModel.pendingScrollRestore
                 if (pending != null) {
+                    Log.d("NovelReader", "update: applying pendingScrollAdjustment=$pending, contentItems=${contentItems.size}")
                     screenModel.pendingScrollAdjustment = null
                     adapter?.submitList(contentItems) {
                         rv.post {
@@ -986,21 +1347,78 @@ class NovelReaderScreen(
                             lm?.scrollToPositionWithOffset(pending, 0)
                         }
                     }
+                } else if (pendingTransition != null) {
+                    Log.d("NovelReader", "update: applying pendingTransitionPosition=$pendingTransition, contentItems=${contentItems.size}")
+                    screenModel.pendingTransitionPosition = null
+                    val transitionStyle = screenModel.preferences.pageTransitionStyle().get()
+                    adapter?.submitList(contentItems) {
+                        rv.post { applyChapterTransition(rv, pendingTransition, transitionStyle) }
+                    }
+                } else if (pendingRestore != null && contentItems.isNotEmpty()) {
+                    // Apply pending scroll restoration when content arrives.
+                    // This handles the case where the RecyclerView was created
+                    // before the content was loaded (e.g. downloaded chapters
+                    // that don't show a loading indicator but still need time
+                    // to read and parse the file).
+                    Log.d("NovelReader", "update: applying pendingScrollRestore in update callback, contentItems=${contentItems.size}")
+                    screenModel.pendingScrollRestore = null
+                    val (targetIndex, targetOffset) = pendingRestore
+                    adapter?.submitList(contentItems) {
+                        rv.post {
+                            val lm = rv.layoutManager as? LinearLayoutManager
+                            if (lm != null) {
+                                // Clamp targetIndex to available items (same fix as
+                                // tryRestoreScroll — handles infinite-scroll positions).
+                                val effectiveIdx = if (targetIndex >= contentItems.size) {
+                                    Log.w("NovelReader", "update: targetIndex=$targetIndex > contentSize=${contentItems.size}, clamping")
+                                    contentItems.size - 1
+                                } else {
+                                    targetIndex
+                                }
+                                Log.d("NovelReader", "update: scrollToPositionWithOffset index=$effectiveIdx offset=$targetOffset")
+                                lm.scrollToPositionWithOffset(effectiveIdx, targetOffset)
+                            } else {
+                                Log.w("NovelReader", "update: cannot restore — lm is null")
+                            }
+                        }
+                    }
                 } else {
                     adapter?.submitList(contentItems)
                 }
             },
             modifier = Modifier.fillMaxSize(),
+            onRelease = { rv ->
+                // Save the current scroll position before the RecyclerView is
+                // destroyed. When the user returns to the reader (without a new
+                // chapter load), pendingScrollRestore will be set so the new
+                // RecyclerView can restore the exact position.
+                val lm = rv.layoutManager as? LinearLayoutManager
+                val firstVisible = lm?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
+                if (firstVisible != RecyclerView.NO_POSITION) {
+                    val view = lm?.findViewByPosition(firstVisible)
+                    val offset = view?.top ?: 0
+                    Log.d("NovelReader", "onRelease: saving scroll position firstVisible=$firstVisible offset=$offset")
+                    screenModel.saveCurrentScrollPosition(firstVisible, offset)
+                } else {
+                    Log.w("NovelReader", "onRelease: firstVisible=NO_POSITION, cannot save scroll position")
+                }
+                // Don't null the adapter — it's persisted via remember and
+                // will be re-attached to the new RecyclerView when factory
+                // runs again. Nulling it forces a new adapter creation which
+                // breaks text selection (Editor's selection controllers are
+                // not properly initialized on new ViewHolders).
+            },
         )
 
-        DisposableEffect(Unit) {
-            onDispose {
-                recyclerView?.adapter = null
-            }
-        }
-
         DisposableEffect(textConfig) {
-            adapter?.notifyDataSetChanged()
+            // Force re-bind of all visible items so they pick up the new config
+            // (bold/italic/alignment/etc). notifyDataSetChanged() alone doesn't
+            // reliably re-bind on ListAdapter, so we use notifyItemRangeChanged
+            // with a payload to force onBindViewHolder to run on every visible item.
+            val a = adapter
+            if (a != null) {
+                a.notifyItemRangeChanged(0, a.itemCount, "config")
+            }
             onDispose {}
         }
 
@@ -1024,6 +1442,19 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 /**
+ * Smooth scroll with a custom duration and decelerate interpolator for
+ * a smoother feel than the default smoothScrollBy.
+ */
+private fun smoothScrollByAnimated(rv: RecyclerView, dy: Int) {
+    if (dy == 0) return
+    val animator = android.animation.ValueAnimator.ofInt(0, dy)
+    animator.duration = 450
+    animator.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
+    animator.addUpdateListener { rv.scrollBy(0, it.animatedValue as Int) }
+    animator.start()
+}
+
+/**
  * Scroll the RecyclerView to the start (position 0) or end (position -1) of
  * the chapter content. Used by chapter navigation transitions.
  */
@@ -1038,109 +1469,319 @@ private fun scrollToChapterPosition(rv: RecyclerView, position: Int) {
 }
 
 /**
- * Draws a background texture overlay using programmatic noise patterns.
- * No bitmap assets needed — textures are generated via Canvas drawing commands.
+ * Apply the chapter transition animation based on the user's preference.
+ * Called after submitList completes so the adapter has the new items.
+ * position == 0 → next chapter (scroll to top)
+ * position == -1 → previous chapter (scroll to bottom)
+ */
+private fun applyChapterTransition(rv: RecyclerView, position: Int, transitionStyle: NovelPageTransitionStyle) {
+    val isNext = position == 0
+    rv.cameraDistance = rv.width * 12f
+
+    when (transitionStyle) {
+        NovelPageTransitionStyle.INSTANT -> {
+            scrollToChapterPosition(rv, position)
+        }
+        NovelPageTransitionStyle.SLIDE -> {
+            // Next chapter: old slides LEFT, new enters from RIGHT
+            // Prev chapter: old slides RIGHT, new enters from LEFT
+            val slideOut = if (isNext) -rv.width.toFloat() else rv.width.toFloat()
+            rv.animate().translationX(slideOut).setDuration(200).withEndAction {
+                scrollToChapterPosition(rv, position)
+                rv.translationX = -slideOut
+                rv.post { rv.animate().translationX(0f).setDuration(250).start() }
+            }.start()
+        }
+        NovelPageTransitionStyle.DEPTH -> {
+            // Zoom out + slide slightly in direction of travel, then zoom in
+            val slideOut = if (isNext) -rv.width * 0.3f else rv.width * 0.3f
+            rv.animate()
+                .scaleX(0.8f)
+                .scaleY(0.8f)
+                .translationX(slideOut)
+                .setDuration(200)
+                .withEndAction {
+                    scrollToChapterPosition(rv, position)
+                    rv.translationX = -slideOut
+                    rv.post {
+                        rv.animate()
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .translationX(0f)
+                            .setDuration(250)
+                            .start()
+                    }
+                }.start()
+        }
+        NovelPageTransitionStyle.BOOK -> {
+            // Book page turn: rotate around the binding edge.
+            // Next chapter: pivot at LEFT edge, page rotates from right to left (forward turn)
+            // Prev chapter: pivot at RIGHT edge, page rotates from left to right (backward turn)
+            val pivotX = if (isNext) rv.width.toFloat() else 0f
+            rv.pivotX = pivotX
+            val direction = if (isNext) 90f else -90f
+            rv.animate()
+                .rotationY(direction)
+                .setDuration(300)
+                .withEndAction {
+                    scrollToChapterPosition(rv, position)
+                    rv.rotationY = -direction
+                    rv.pivotX = if (isNext) 0f else rv.width.toFloat()
+                    rv.post {
+                        rv.animate()
+                            .rotationY(0f)
+                            .setDuration(300)
+                            .start()
+                    }
+                }.start()
+        }
+    }
+}
+
+/**
+ * Draws a background texture overlay using bitmap textures with ShaderBrush tiling.
  *
- * - PAPER_GRAIN: fine dot noise, warm tint
- * - LINEN: crosshatch lines, cool tint
- * - PARCHMENT: irregular blotches, warm sepia tint
+ * All textures are WebP bitmaps tiled seamlessly via ImageShader + TileMode.Repeated.
+ * Textures are RGBA with low alpha — the pattern is in the alpha channel, making
+ * them color-agnostic and naturally subtle.
  *
- * Alpha is controlled by [strength] (0–100, where 50 = moderate, 100 = strong).
- * Drawn on top of the content but with low alpha so text remains readable.
+ * [strengthPercent] range is 0–100 (100 = maximum). Alpha scales linearly.
  */
 @Composable
 private fun NovelTextureOverlay(
     texture: NovelReaderBackgroundTexture,
-    strength: Int,
-    isDark: Boolean,
+    strengthPercent: Int,
+    backgroundColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val alpha = (strength / 100f).coerceIn(0f, 1f) * 0.35f
-    val baseColor = when (texture) {
-        NovelReaderBackgroundTexture.PAPER_GRAIN -> if (isDark) Color(0xFF8B7355) else Color(0xFFD4B896)
-        NovelReaderBackgroundTexture.LINEN -> if (isDark) Color(0xFF7A8B9F) else Color(0xFFB8C4D4)
-        NovelReaderBackgroundTexture.PARCHMENT -> if (isDark) Color(0xFF9B8060) else Color(0xFFE8D5B7)
+    if (texture == NovelReaderBackgroundTexture.NONE) return
+
+    // Linear alpha: 0% = 0, 100% = 1.0
+    val alpha = (strengthPercent.coerceIn(0, 100) / 100f)
+
+    val imageRes = when (texture) {
+        NovelReaderBackgroundTexture.PAPER_GRAIN -> eu.kanade.tachiyomi.R.drawable.texture_paper
+        NovelReaderBackgroundTexture.LINEN -> eu.kanade.tachiyomi.R.drawable.texture_linen
+        NovelReaderBackgroundTexture.CANVAS -> eu.kanade.tachiyomi.R.drawable.texture_canvas
+        NovelReaderBackgroundTexture.KRAFT -> eu.kanade.tachiyomi.R.drawable.texture_kraft
+        NovelReaderBackgroundTexture.DOTTED -> eu.kanade.tachiyomi.R.drawable.texture_dotted
         NovelReaderBackgroundTexture.NONE -> return
     }
-    val seed = remember(texture) { texture.ordinal * 1000 }
+
+    val imageBitmap = ImageBitmap.imageResource(id = imageRes)
+    val brush = remember(imageBitmap) {
+        ShaderBrush(
+            ImageShader(
+                image = imageBitmap,
+                tileModeX = TileMode.Repeated,
+                tileModeY = TileMode.Repeated,
+            ),
+        )
+    }
+    Canvas(modifier = modifier) {
+        if (alpha > 0f) {
+            drawRect(brush = brush, alpha = alpha)
+        }
+    }
+}
+
+/**
+ * Translation bottom sheet — same design as the dictionary lookup sheet.
+ * Shows the translated text, original text, loading state, or error.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TranslationBottomSheet(
+    state: TranslationState,
+    accentColor: Color?,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val maxSheetHeight = (configuration.screenHeightDp * 0.6f).dp
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxSheetHeight)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            // Header row — close button + title
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = when (state) {
+                        is TranslationState.Loading -> "Translating..."
+                        is TranslationState.Result -> "Translation (${state.targetLang})"
+                        is TranslationState.Error -> "Translation Error"
+                        TranslationState.Idle -> ""
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close")
+                }
+            }
+
+            when (state) {
+                is TranslationState.Loading -> {
+                    Text(
+                        text = state.originalText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CircularProgressIndicator(
+                        color = accentColor ?: MaterialTheme.colorScheme.primary,
+                    )
+                }
+                is TranslationState.Result -> {
+                    Text(
+                        text = state.translatedText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        text = "Original",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = state.originalText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                is TranslationState.Error -> {
+                    Text(
+                        text = state.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
+                TranslationState.Idle -> {}
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+/**
+ * Edge fade overlay: draws a smooth gradient fade at the top and bottom of
+ * the reader that makes text appear to fade out as it scrolls under the edges.
+ *
+ * Uses stacked semi-transparent layers (Wakely-style) to produce a smooth
+ * gradient without color interpolation artifacts. Each layer has the
+ * background color with decreasing alpha, creating a natural fade.
+ *
+ * The [fadeHeightFraction] controls how much of the screen height the fade
+ * covers at each edge (e.g. 0.08 = 8% of screen height at top and bottom).
+ */
+@Composable
+private fun NovelEdgeFadeOverlay(
+    backgroundColor: Color,
+    texture: NovelReaderBackgroundTexture,
+    textureStrength: Int,
+    fadeHeightFraction: Float = 0.08f,
+    modifier: Modifier = Modifier,
+) {
+    // Build the texture brush if a texture is enabled, so the fade area
+    // also shows the texture pattern (matching the rest of the background).
+    val textureBrush: ShaderBrush? = if (texture != NovelReaderBackgroundTexture.NONE) {
+        val imageRes = when (texture) {
+            NovelReaderBackgroundTexture.PAPER_GRAIN -> eu.kanade.tachiyomi.R.drawable.texture_paper
+            NovelReaderBackgroundTexture.LINEN -> eu.kanade.tachiyomi.R.drawable.texture_linen
+            NovelReaderBackgroundTexture.CANVAS -> eu.kanade.tachiyomi.R.drawable.texture_canvas
+            NovelReaderBackgroundTexture.KRAFT -> eu.kanade.tachiyomi.R.drawable.texture_kraft
+            NovelReaderBackgroundTexture.DOTTED -> eu.kanade.tachiyomi.R.drawable.texture_dotted
+            NovelReaderBackgroundTexture.NONE -> null
+        }
+        if (imageRes != null) {
+            val imageBitmap = ImageBitmap.imageResource(id = imageRes)
+            remember(imageBitmap) {
+                ShaderBrush(
+                    ImageShader(
+                        image = imageBitmap,
+                        tileModeX = TileMode.Repeated,
+                        tileModeY = TileMode.Repeated,
+                    ),
+                )
+            }
+        } else {
+            null
+        }
+    } else {
+        null
+    }
+
+    val textureAlpha = (textureStrength.coerceIn(0, 100) / 100f)
 
     Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        when (texture) {
-            NovelReaderBackgroundTexture.PAPER_GRAIN -> {
-                // Fine dot noise — small circles at pseudo-random positions
-                val cellSize = 6f
-                val cols = (w / cellSize).toInt() + 1
-                val rows = (h / cellSize).toInt() + 1
-                for (y in 0..rows) {
-                    for (x in 0..cols) {
-                        val hash = ((x * 73856093) xor (y * 19349663) xor seed) and 0xFFFF
-                        val rand = hash.toFloat() / 0xFFFFf
-                        if (rand > 0.6f) {
-                            val cx = x * cellSize + (rand * cellSize)
-                            val cy = y * cellSize + ((1f - rand) * cellSize)
-                            drawCircle(
-                                color = baseColor.copy(alpha = alpha * rand.coerceIn(0.3f, 1f)),
-                                radius = 0.8f + rand * 0.7f,
-                                center = Offset(cx, cy),
-                            )
-                        }
-                    }
-                }
-            }
-            NovelReaderBackgroundTexture.LINEN -> {
-                // Crosshatch — diagonal lines in two directions
-                val spacing = 4f
-                drawLine(
-                    color = baseColor.copy(alpha = alpha * 0.5f),
-                    start = Offset(0f, 0f),
-                    end = Offset(w, h),
-                    strokeWidth = 0.5f,
+        val fadeHeight = size.height * fadeHeightFraction.coerceIn(0.01f, 0.3f)
+        val layerCount = 24
+        val layerHeight = fadeHeight / layerCount
+
+        // Top fade: opaque at the very top → transparent towards center.
+        // Use backgroundColor.copy(alpha = ...) to avoid Color.Transparent
+        // (transparent black) interpolation artifacts.
+        for (i in 0 until layerCount) {
+            val fraction = i.toFloat() / (layerCount - 1)
+            // Wakely-style: opacity = fromOpacity * (1 - along)
+            val alpha = 1f - fraction
+            drawRect(
+                color = backgroundColor.copy(alpha = alpha),
+                topLeft = androidx.compose.ui.geometry.Offset(0f, i * layerHeight),
+                size = androidx.compose.ui.geometry.Size(size.width, layerHeight + 1f),
+            )
+        }
+
+        // Bottom fade: transparent towards center → opaque at the very bottom.
+        for (i in 0 until layerCount) {
+            val fraction = i.toFloat() / (layerCount - 1)
+            val alpha = fraction
+            drawRect(
+                color = backgroundColor.copy(alpha = alpha),
+                topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - fadeHeight + i * layerHeight),
+                size = androidx.compose.ui.geometry.Size(size.width, layerHeight + 1f),
+            )
+        }
+
+        // Draw texture in the fade areas with matching alpha gradient
+        if (textureBrush != null && textureAlpha > 0f) {
+            for (i in 0 until layerCount) {
+                val fraction = i.toFloat() / (layerCount - 1)
+                // Top: full texture alpha at top → 0 at bottom of fade
+                val topAlpha = textureAlpha * (1f - fraction)
+                drawRect(
+                    brush = textureBrush,
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, i * layerHeight),
+                    size = androidx.compose.ui.geometry.Size(size.width, layerHeight + 1f),
+                    alpha = topAlpha,
                 )
-                var offset = spacing
-                while (offset < w + h) {
-                    drawLine(
-                        color = baseColor.copy(alpha = alpha * 0.3f),
-                        start = Offset(offset, 0f),
-                        end = Offset(0f, offset),
-                        strokeWidth = 0.5f,
-                    )
-                    offset += spacing
-                }
-                offset = spacing
-                while (offset < w + h) {
-                    drawLine(
-                        color = baseColor.copy(alpha = alpha * 0.3f),
-                        start = Offset(w - offset, 0f),
-                        end = Offset(w, offset),
-                        strokeWidth = 0.5f,
-                    )
-                    offset += spacing
-                }
+                // Bottom: 0 at top of fade → full texture alpha at bottom
+                val bottomAlpha = textureAlpha * fraction
+                drawRect(
+                    brush = textureBrush,
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - fadeHeight + i * layerHeight),
+                    size = androidx.compose.ui.geometry.Size(size.width, layerHeight + 1f),
+                    alpha = bottomAlpha,
+                )
             }
-            NovelReaderBackgroundTexture.PARCHMENT -> {
-                // Irregular blotches — larger semi-transparent circles
-                val cellSize = 40f
-                val cols = (w / cellSize).toInt() + 2
-                val rows = (h / cellSize).toInt() + 2
-                for (y in 0..rows) {
-                    for (x in 0..cols) {
-                        val hash = ((x * 2654435761.toInt()) xor (y * 40503) xor seed) and 0xFFFF
-                        val rand = hash.toFloat() / 0xFFFFf
-                        if (rand > 0.7f) {
-                            val cx = x * cellSize + (rand * cellSize * 0.5f)
-                            val cy = y * cellSize + ((1f - rand) * cellSize * 0.5f)
-                            drawCircle(
-                                color = baseColor.copy(alpha = alpha * rand * 0.4f),
-                                radius = 8f + rand * 20f,
-                                center = Offset(cx, cy),
-                            )
-                        }
-                    }
-                }
-            }
-            NovelReaderBackgroundTexture.NONE -> {}
         }
     }
 }

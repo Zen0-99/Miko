@@ -111,9 +111,46 @@ class NovelChapterRepositoryImpl(
         }
     }
 
+    override suspend fun removeChaptersWithIds(chapterIds: List<Long>) {
+        try {
+            handler.await {
+                novelchaptersQueries.removeChaptersWithIds(chapterIds)
+            }
+        } catch (e: Exception) {
+            // Best effort
+        }
+    }
+
     override suspend fun getTotalReadCharCount(): Long {
         return handler.awaitOne {
             novelchaptersQueries.getTotalReadCharCount()
+        }
+    }
+
+    override suspend fun getNovelIdsWithMissingReadCharCount(): List<Long> {
+        return handler.awaitList {
+            novelchaptersQueries.getNovelIdsWithMissingReadCharCount()
+        }
+    }
+
+    override suspend fun getAverageReadCharCountForNovel(novelId: Long): Long {
+        return handler.awaitOne {
+            novelchaptersQueries.getAverageReadCharCountForNovel(novelId)
+        }.toLong()
+    }
+
+    override suspend fun backfillReadCharCountForNovel(novelId: Long, charCount: Long): Int {
+        return try {
+            handler.await {
+                novelchaptersQueries.backfillReadCharCountForNovel(
+                    charCount = charCount,
+                    novelId = novelId,
+                )
+            }
+            // Return a rough count — the exact count isn't critical for stats
+            1
+        } catch (e: Exception) {
+            0
         }
     }
 

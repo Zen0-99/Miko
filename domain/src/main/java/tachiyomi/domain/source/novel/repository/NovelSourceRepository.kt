@@ -21,4 +21,11 @@ interface NovelSourceRepository {
     fun getPopularNovels(sourceId: Long): NovelSourcePagingSourceType
 
     fun getLatestNovels(sourceId: Long): NovelSourcePagingSourceType
+
+    /**
+     * Incremental search: returns a Flow that emits cumulative result lists
+     * as they're parsed by the source. Only sources with
+     * [NovelCatalogueSource.supportsIncrementalSearch] = true use this path.
+     */
+    fun searchNovelsFlow(sourceId: Long, query: String): Flow<List<SNovel>>
 }

@@ -8,6 +8,7 @@ data class NovelHistoryWithRelations(
     val chapterId: Long,
     val novelId: Long,
     val title: String,
+    val chapterName: String? = null,
     val chapterNumber: Double,
     val readAt: Date?,
     val readDuration: Long,

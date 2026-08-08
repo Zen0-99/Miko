@@ -400,20 +400,20 @@ private fun AnimeScreenSmallImpl(
                 val selectedEpisodeCount: Int = remember(episodes) {
                     episodes.count { it.selected }
                 }
-                val isFirstItemVisible by remember {
-                    derivedStateOf { itemListState.firstVisibleItemIndex == 0 }
+                // Scroll-dependent alpha: top-bar opacity gradually increases as the user
+                // scrolls down, proportional to how far the first item has scrolled.
+                val titleAlpha by remember {
+                    derivedStateOf {
+                        if (itemListState.firstVisibleItemIndex == 0) {
+                            val offset = itemListState.firstVisibleItemScrollOffset
+                            val itemHeight = itemListState.layoutInfo.visibleItemsInfo.firstOrNull()?.size?.height ?: 1
+                            (offset.toFloat() / itemHeight.toFloat()).coerceIn(0f, 1f)
+                        } else {
+                            1f
+                        }
+                    }
                 }
-                val isFirstItemScrolled by remember {
-                    derivedStateOf { itemListState.firstVisibleItemScrollOffset > 0 }
-                }
-                val titleAlpha by animateFloatAsState(
-                    if (!isFirstItemVisible) 1f else 0f,
-                    label = "Top Bar Title",
-                )
-                val backgroundAlpha by animateFloatAsState(
-                    if (!isFirstItemVisible || isFirstItemScrolled) 1f else 0f,
-                    label = "Top Bar Background",
-                )
+                val backgroundAlpha = titleAlpha
                 EntryToolbar(
                     title = state.anime.title,
                     hasFilters = hasFilters,
@@ -605,6 +605,7 @@ private fun AnimeScreenSmallImpl(
                             onClick = onFilterClicked,
                             accentColor = state.accentColor,
                             intervalDays = state.intervalDays,
+                            showInterval = state.showInterval,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                         )
                         MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
@@ -948,6 +949,7 @@ fun AnimeScreenLargeImpl(
                                     onClick = onFilterButtonClicked,
                                     accentColor = state.accentColor,
                                     intervalDays = state.intervalDays,
+                                    showInterval = state.showInterval,
                                     modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                                 )
                                 MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))

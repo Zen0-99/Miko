@@ -20,6 +20,7 @@ fun NovelChapterHeader(
     onFetchNewChapters: (() -> Unit)? = null,
     onFetchAllChapters: (() -> Unit)? = null,
     intervalDays: Int? = null,
+    showInterval: Boolean = true,
 ) {
     EntryChapterHeader(
         itemCountText = pluralStringResource(MR.plurals.manga_num_chapters, count = itemCount, itemCount),
@@ -29,5 +30,6 @@ fun NovelChapterHeader(
         onFetchNew = onFetchNewChapters,
         onFetchAll = onFetchAllChapters,
         intervalDays = intervalDays,
+        showInterval = showInterval,
     )
 }

@@ -295,10 +295,39 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                     return@forEach
                                 }
 
+                                val publishState: () -> Unit = {
+                                    LibraryUpdateProgressBus.updateProgress(
+                                        processed = progressCount.get(),
+                                        currentlyUpdating = currentlyUpdatingManga.map {
+                                            eu.kanade.tachiyomi.data.library.EntryRef(
+                                                id = it.id,
+                                                title = it.title,
+                                                sourceId = it.source,
+                                                kind = tachiyomi.domain.library.model.EntryKind.MANGA,
+                                            )
+                                        },
+                                        failedSoFar = failedUpdates.map { (m, reason) ->
+                                            eu.kanade.tachiyomi.data.library.FailedEntry(
+                                                entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                                                    id = m.id,
+                                                    title = m.title,
+                                                    sourceId = m.source,
+                                                    kind = tachiyomi.domain.library.model.EntryKind.MANGA,
+                                                ),
+                                                reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                                                sourceName = sourceManager.getOrStub(m.source).name,
+                                            )
+                                        },
+                                        totalEntries = mangaToUpdate.size,
+                                        source = "Manga",
+                                    )
+                                }
+
                                 withUpdateNotification(
                                     currentlyUpdatingManga,
                                     progressCount,
                                     manga,
+                                    publishState,
                                 ) {
                                     try {
                                         val newChapters = updateManga(manga, fetchWindow)
@@ -333,33 +362,6 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
                                 // Mark processed for resume checkpoint
                                 LibraryUpdateProgressBus.markProcessed(manga.id)
-
-                                // Publish progress to the in-app bus
-                                LibraryUpdateProgressBus.updateProgress(
-                                    processed = progressCount.get(),
-                                    currentlyUpdating = currentlyUpdatingManga.map {
-                                        eu.kanade.tachiyomi.data.library.EntryRef(
-                                            id = it.id,
-                                            title = it.title,
-                                            sourceId = it.source,
-                                            kind = tachiyomi.domain.library.model.EntryKind.MANGA,
-                                        )
-                                    },
-                                    failedSoFar = failedUpdates.map { (m, reason) ->
-                                        eu.kanade.tachiyomi.data.library.FailedEntry(
-                                            entry = eu.kanade.tachiyomi.data.library.EntryRef(
-                                                id = m.id,
-                                                title = m.title,
-                                                sourceId = m.source,
-                                                kind = tachiyomi.domain.library.model.EntryKind.MANGA,
-                                            ),
-                                            reason = reason ?: context.stringResource(MR.strings.unknown_error),
-                                            sourceName = sourceManager.getOrStub(m.source).name,
-                                        )
-                                    },
-                                    totalEntries = mangaToUpdate.size,
-                                    source = "Manga",
-                                )
                             }
                         }
                     }
@@ -434,6 +436,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         updatingManga: CopyOnWriteArrayList<Manga>,
         completed: AtomicInteger,
         manga: Manga,
+        publishState: () -> Unit,
         block: suspend () -> Unit,
     ) = coroutineScope {
         ensureActive()
@@ -444,6 +447,11 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             completed.get(),
             mangaToUpdate.size,
         )
+        // Publish to the in-app overlay immediately so the entry appears as
+        // "currently updating" while it's being fetched — not only after it
+        // completes. Without this, parallel entries that start during a slow
+        // fetch are invisible to the overlay until one of them finishes.
+        publishState()
 
         block()
 
@@ -456,6 +464,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             completed.get(),
             mangaToUpdate.size,
         )
+        publishState()
     }
 
     /**

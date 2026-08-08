@@ -116,6 +116,34 @@ class DictionaryManager private constructor(context: Context) {
     private fun generateStems(word: String): List<String> {
         val stems = mutableListOf<String>()
 
+        // 1. Irregular verb forms — check first, before suffix rules.
+        IRREGULAR_VERBS[word]?.let { stems.add(it) }
+
+        // 2. Doubled consonant patterns (e.g. "shrugged" → "shrug", "stopped" → "stop")
+        //    "shrugged" → drop "ed" → "shrugg" → not a word, but "shrug" is
+        //    Handle by checking if the letter before "ed"/"ing" is doubled
+        if (word.endsWith("ed") && word.length > 4) {
+            val withoutEd = word.dropLast(2)
+            // Check for doubled consonant: "shrugg" + ed → "shrug"
+            if (withoutEd.length >= 2 && withoutEd.last() == withoutEd.dropLast(1).last()) {
+                val consonant = withoutEd.last()
+                // Only strip if it's a consonant (not a vowel)
+                if (consonant.lowercase() !in "aeiou") {
+                    stems.add(withoutEd.dropLast(1))
+                }
+            }
+        }
+        if (word.endsWith("ing") && word.length > 5) {
+            val withoutIng = word.dropLast(3)
+            if (withoutIng.length >= 2 && withoutIng.last() == withoutIng.dropLast(1).last()) {
+                val consonant = withoutIng.last()
+                if (consonant.lowercase() !in "aeiou") {
+                    stems.add(withoutIng.dropLast(1))
+                }
+            }
+        }
+
+        // 3. Standard suffix rules
         if (word.endsWith("ies") && word.length > 4) {
             stems.add(word.dropLast(3) + "y")
         }
@@ -171,6 +199,168 @@ class DictionaryManager private constructor(context: Context) {
 
         return stems.distinct()
     }
+
+    /**
+     * Mapping of common English irregular verb forms (past tense, past
+     * participle, and present participle where it differs) to their base
+     * form (lemma). This handles cases that the suffix-stripping rules
+     * cannot — e.g. "fought" → "fight", "shrugged" → "shrug" (though
+     * "shrugged" is also handled by the doubled-consonant rule above).
+     */
+    private val IRREGULAR_VERBS = mapOf(
+        // A
+        "arose" to "arise", "arisen" to "arise",
+        "am" to "be", "is" to "be", "are" to "be", "was" to "be", "were" to "be", "been" to "be",
+        "awoke" to "awake", "awoken" to "awake",
+        // B
+        "bore" to "bear", "born" to "bear", "borne" to "bear",
+        "beat" to "beat", "beaten" to "beat",
+        "became" to "become", "become" to "become",
+        "began" to "begin", "begun" to "begin", "beginning" to "begin",
+        "bent" to "bend",
+        "bet" to "bet",
+        "bound" to "bind",
+        "bled" to "bleed",
+        "blew" to "blow", "blown" to "blow",
+        "broke" to "break", "broken" to "break", "breaking" to "break",
+        "bred" to "breed",
+        "brought" to "bring",
+        "built" to "build", "building" to "build",
+        "burnt" to "burn", "burned" to "burn",
+        "burst" to "burst",
+        "bought" to "buy", "buying" to "buy",
+        // C
+        "cast" to "cast",
+        "caught" to "catch", "catching" to "catch",
+        "chose" to "choose", "chosen" to "choose", "choosing" to "choose",
+        "clung" to "cling",
+        "came" to "come", "come" to "come", "coming" to "come",
+        "cost" to "cost",
+        "crept" to "creep",
+        "cut" to "cut",
+        // D
+        "dealt" to "deal", "dealing" to "deal",
+        "dug" to "dig", "digging" to "dig",
+        "drew" to "draw", "drawn" to "draw", "drawing" to "draw",
+        "dreamt" to "dream", "dreamed" to "dream",
+        "drank" to "drink", "drunk" to "drink", "drinking" to "drink",
+        "drove" to "drive", "driven" to "drive", "driving" to "drive",
+        "dwelt" to "dwell",
+        // E
+        "ate" to "eat", "eaten" to "eat", "eating" to "eat",
+        // F
+        "fell" to "fall", "fallen" to "fall", "falling" to "fall",
+        "fed" to "feed", "feeding" to "feed",
+        "felt" to "feel", "feeling" to "feel",
+        "fought" to "fight", "fighting" to "fight",
+        "found" to "find", "finding" to "find",
+        "fled" to "flee",
+        "flew" to "fly", "flown" to "fly", "flying" to "fly",
+        "forbade" to "forbid", "forbidden" to "forbid",
+        "forgot" to "forget", "forgotten" to "forget", "forgetting" to "forget",
+        "forgave" to "forgive", "forgiven" to "forgive",
+        "froze" to "freeze", "frozen" to "freeze", "freezing" to "freeze",
+        // G
+        "got" to "get", "gotten" to "get", "getting" to "get",
+        "gave" to "give", "given" to "give", "giving" to "give",
+        "went" to "go", "gone" to "go", "going" to "go",
+        "ground" to "grind",
+        "grew" to "grow", "grown" to "grow", "growing" to "grow",
+        // H
+        "had" to "have", "having" to "have",
+        "heard" to "hear", "hearing" to "hear",
+        "hid" to "hide", "hidden" to "hide", "hiding" to "hide",
+        "hit" to "hit",
+        "held" to "hold", "holding" to "hold",
+        "hurt" to "hurt",
+        // K
+        "kept" to "keep", "keeping" to "keep",
+        "knelt" to "kneel",
+        "knew" to "know", "known" to "know", "knowing" to "know",
+        // L
+        "laid" to "lay", "laying" to "lay",
+        "led" to "lead", "leading" to "lead",
+        "leant" to "lean",
+        "leapt" to "leap",
+        "learnt" to "learn", "learned" to "learn",
+        "left" to "leave", "leaving" to "leave",
+        "lent" to "lend",
+        "lit" to "light", "lighting" to "light",
+        // M
+        "made" to "make", "making" to "make",
+        "meant" to "mean", "meaning" to "mean",
+        "met" to "meet", "meeting" to "meet",
+        // P
+        "paid" to "pay", "paying" to "pay",
+        "put" to "put",
+        // R
+        "read" to "read",
+        "rode" to "ride", "ridden" to "ride", "riding" to "ride",
+        "rang" to "ring", "rung" to "ring", "ringing" to "ring",
+        "rose" to "rise", "risen" to "rise", "rising" to "rise",
+        "ran" to "run", "run" to "run", "running" to "run",
+        // S
+        "said" to "say", "saying" to "say",
+        "saw" to "see", "seen" to "see", "seeing" to "see",
+        "sought" to "seek", "seeking" to "seek",
+        "sold" to "sell", "selling" to "sell",
+        "sent" to "send", "sending" to "send",
+        "set" to "set",
+        "sewed" to "sew", "sewn" to "sew",
+        "shook" to "shake", "shaken" to "shake", "shaking" to "shake",
+        "shone" to "shine",
+        "shot" to "shoot", "shooting" to "shoot",
+        "showed" to "show", "shown" to "show", "showing" to "show",
+        "shrank" to "shrink", "shrunk" to "shrink", "shrinking" to "shrink",
+        "shut" to "shut",
+        "sang" to "sing", "sung" to "sing", "singing" to "sing",
+        "sank" to "sink", "sunk" to "sink", "sinking" to "sink",
+        "sat" to "sit", "sitting" to "sit",
+        "slew" to "slay", "slain" to "slay",
+        "slept" to "sleep", "sleeping" to "sleep",
+        "slid" to "slide", "sliding" to "slide",
+        "spoke" to "speak", "spoken" to "speak", "speaking" to "speak",
+        "spent" to "spend", "spending" to "spend",
+        "spilt" to "spill", "spilled" to "spill",
+        "spun" to "spin", "spinning" to "spin",
+        "spread" to "spread",
+        "sprang" to "spring", "sprung" to "spring",
+        "stood" to "stand", "standing" to "stand",
+        "stole" to "steal", "stolen" to "steal", "stealing" to "steal",
+        "stuck" to "stick", "sticking" to "stick",
+        "stung" to "sting",
+        "stank" to "stink", "stunk" to "stink",
+        "strung" to "string",
+        "struck" to "strike", "stricken" to "strike",
+        "swore" to "swear", "sworn" to "swear",
+        "swept" to "sweep", "sweeping" to "sweep",
+        "swam" to "swim", "swum" to "swim", "swimming" to "swim",
+        "swung" to "swing", "swinging" to "swing",
+        // T
+        "took" to "take", "taken" to "take", "taking" to "take",
+        "taught" to "teach", "teaching" to "teach",
+        "tore" to "tear", "torn" to "tear", "tearing" to "tear",
+        "told" to "tell", "telling" to "tell",
+        "thought" to "think", "thinking" to "think",
+        "threw" to "throw", "thrown" to "throw", "throwing" to "throw",
+        "understood" to "understand",
+        // W
+        "woke" to "wake", "woken" to "wake", "waking" to "wake",
+        "wore" to "wear", "worn" to "wear", "wearing" to "wear",
+        "wove" to "weave", "woven" to "weave",
+        "wed" to "wed",
+        "wept" to "weep", "weeping" to "weep",
+        "won" to "win", "winning" to "win",
+        "wound" to "wind",
+        "withdrew" to "withdraw", "withdrawn" to "withdraw",
+        "wrote" to "write", "written" to "write", "writing" to "write",
+        // Present tense 3rd person singular (adds 's')
+        "does" to "do", "goes" to "go", "has" to "have",
+        // Common contractions / forms
+        "couldn't" to "could", "wouldn't" to "would", "shouldn't" to "should",
+        "didn't" to "do", "doesn't" to "do", "wasn't" to "be", "weren't" to "be",
+        "hadn't" to "have", "hasn't" to "have", "haven't" to "have",
+    )
 
     private fun parseDefinitions(json: String): List<DictionaryEntry.Definition> {
         val list = mutableListOf<DictionaryEntry.Definition>()

@@ -112,6 +112,10 @@ fun NovelScreen(
     onOpenChapterInWebView: ((NovelChapter) -> Unit)? = null,
     onMarkPreviousChaptersAsRead: (NovelChapter, Boolean) -> Unit = { _, _ -> },
     onMarkChapterRangeAsRead: (NovelChapter, NovelChapter, Boolean) -> Unit = { _, _, _ -> },
+    onDownloadBook: (() -> Unit)? = null,
+    onDeleteBook: (() -> Unit)? = null,
+    onHideChapter: ((NovelChapter) -> Unit)? = null,
+    onUnhideChapters: (() -> Unit)? = null,
 ) {
     if (isTabletUi) {
         NovelScreenLargeImpl(
@@ -162,6 +166,10 @@ fun NovelScreen(
             onOpenChapterInWebView = onOpenChapterInWebView,
             onMarkPreviousChaptersAsRead = onMarkPreviousChaptersAsRead,
             onMarkChapterRangeAsRead = onMarkChapterRangeAsRead,
+            onDownloadBook = onDownloadBook,
+            onDeleteBook = onDeleteBook,
+            onHideChapter = onHideChapter,
+            onUnhideChapters = onUnhideChapters,
         )
     } else {
         NovelScreenSmallImpl(
@@ -212,6 +220,10 @@ fun NovelScreen(
             onOpenChapterInWebView = onOpenChapterInWebView,
             onMarkPreviousChaptersAsRead = onMarkPreviousChaptersAsRead,
             onMarkChapterRangeAsRead = onMarkChapterRangeAsRead,
+            onDownloadBook = onDownloadBook,
+            onDeleteBook = onDeleteBook,
+            onHideChapter = onHideChapter,
+            onUnhideChapters = onUnhideChapters,
         )
     }
 }
@@ -265,6 +277,10 @@ private fun NovelScreenSmallImpl(
     onOpenChapterInWebView: ((NovelChapter) -> Unit)? = null,
     onMarkPreviousChaptersAsRead: (NovelChapter, Boolean) -> Unit = { _, _ -> },
     onMarkChapterRangeAsRead: (NovelChapter, NovelChapter, Boolean) -> Unit = { _, _, _ -> },
+    onDownloadBook: (() -> Unit)? = null,
+    onDeleteBook: (() -> Unit)? = null,
+    onHideChapter: ((NovelChapter) -> Unit)? = null,
+    onUnhideChapters: (() -> Unit)? = null,
 ) {
     val chapterListState = rememberLazyListState()
 
@@ -310,42 +326,60 @@ private fun NovelScreenSmallImpl(
             val selectedChapterCount = remember(chapters) {
                 chapters.count { it.selected }
             }
-            val isFirstItemVisible by remember {
-                derivedStateOf { chapterListState.firstVisibleItemIndex == 0 }
+            // Scroll-dependent alpha: top-bar opacity gradually increases as the user
+            // scrolls down, proportional to how far the first item has scrolled.
+            // At the top (offset=0): alpha=0 (transparent). Past one item height: alpha=1.
+            val titleAlpha by remember {
+                derivedStateOf {
+                    if (chapterListState.firstVisibleItemIndex == 0) {
+                        // Gradually increase based on scroll offset of first item
+                        val offset = chapterListState.firstVisibleItemScrollOffset
+                        val layoutInfo = chapterListState.layoutInfo
+                        val itemHeight = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 1
+                        (offset.toFloat() / itemHeight.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        1f
+                    }
+                }
             }
-            val isFirstItemScrolled by remember {
-                derivedStateOf { chapterListState.firstVisibleItemScrollOffset > 0 }
-            }
-            val titleAlpha by androidx.compose.animation.core.animateFloatAsState(
-                if (!isFirstItemVisible) 1f else 0f,
-                label = "Top Bar Title",
-            )
-            val backgroundAlpha by androidx.compose.animation.core.animateFloatAsState(
-                if (!isFirstItemVisible || isFirstItemScrolled) 1f else 0f,
-                label = "Top Bar Background",
-            )
+            val backgroundAlpha = titleAlpha
             EntryToolbar(
                 title = state.novel.title,
                 hasFilters = state.filterActive,
                 navigateUp = navigateUp,
                 onClickFilter = null,
                 onClickShare = onShareClicked,
-                onClickDownload = onDownloadActionClicked,
+                // For book sources (Anna's Archive), the download button only
+                // shows "Delete book" when chapters exist. When empty, the
+                // Start button handles the "Download book" action.
+                onClickDownload = if (state.isBookSource && chapters.isNotEmpty()) {
+                    { _: DownloadAction ->
+                        onDeleteBook?.invoke()
+                        Unit
+                    }
+                } else if (state.isBookSource) {
+                    null // Hide download icon when book source has no chapters
+                } else {
+                    onDownloadActionClicked
+                },
                 onClickEditCollection = if (onEditNovel != null) {
                     { showEditDialog = true }
                 } else {
                     onEditCollectionClicked
                 },
-                onClickRefresh = if (state.source.isRateLimited) onRefresh else null,
+                onClickRefresh = null,
                 onClickMigrate = onMigrateClicked,
                 onClickSettings = null,
                 onClickMarkAllRead = onMarkAllReadClicked,
                 onClickMarkAllUnread = onMarkAllUnreadClicked,
                 onClickRefreshTracking = onRefreshTrackingClicked,
-                onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
-                onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
+                // For book sources, hide the "remove downloads" menu items since
+                // the download button already handles deletion.
+                onClickRemoveAllDownloads = if (state.isBookSource) null else onRemoveAllDownloadsClicked,
+                onClickRemoveNonBookmarkedDownloads = if (state.isBookSource) null else onRemoveNonBookmarkedDownloadsClicked,
                 onClickRemoveReadDownloads = onRemoveReadDownloadsClicked,
                 onClickLinkedSources = onClickLinkedSources,
+                onClickUnhideChapters = onUnhideChapters,
                 changeAnimeSkipIntro = null,
                 actionModeCounter = selectedChapterCount,
                 onCancelActionMode = { onAllChapterSelected(false) },
@@ -420,13 +454,24 @@ private fun NovelScreenSmallImpl(
                     key = EntryScreenItem.CONTINUE_BUTTON,
                     contentType = EntryScreenItem.CONTINUE_BUTTON,
                 ) {
+                    // For book sources (Anna's Archive) with no chapters, the
+                    // Start button becomes "Download book" and triggers the
+                    // EPUB download + splitting instead of opening the reader.
+                    val isBookSourceEmpty = state.isBookSource && chapters.isEmpty()
                     NovelContinueButton(
                         chapterItem = state.nextContinueChapter,
                         hasReadChapters = remember(state.chapters) {
                             state.chapters.fastAny { it.chapter.read }
                         },
+                        allChaptersRead = state.allChaptersRead,
                         accentColor = state.accentColor,
-                        onClick = onContinueReading,
+                        onClick = if (isBookSourceEmpty) {
+                            { onDownloadBook?.invoke(); Unit }
+                        } else {
+                            onContinueReading
+                        },
+                        isBookSource = state.isBookSource,
+                        isDownloadingBook = state.isBookSource && state.isRefreshingData,
                     )
                 }
 
@@ -451,6 +496,7 @@ private fun NovelScreenSmallImpl(
                         onClick = onFilterButtonClicked,
                         accentColor = state.accentColor,
                         intervalDays = state.intervalDays,
+                        showInterval = state.showInterval,
                     )
                 }
 
@@ -462,7 +508,9 @@ private fun NovelScreenSmallImpl(
                     NovelChapterListItem(
                         item = chapterItem,
                         isFromSource = state.isFromSource,
-                        downloadIndicatorEnabled = !isAnySelected && !state.source.isLocalOrStub(),
+                        // Hide per-chapter download indicators for book sources
+                        // (Anna's Archive) — the whole book is downloaded at once.
+                        downloadIndicatorEnabled = !isAnySelected && !state.source.isLocalOrStub() && !state.isBookSource,
                         date = relativeDateTimeText(chapterItem.chapter.dateUpload),
                         readProgress = chapterItem.readProgress?.let {
                             stringResource(MR.strings.novel_chapter_progress, it)
@@ -566,6 +614,7 @@ private fun NovelScreenSmallImpl(
             onMarkRangeAsUnread = {
                 rangeMarkStart = longPressChapterVal to RangeMode.Unread
             },
+            onHideChapter = onHideChapter?.let { { it(longPressChapterVal) } },
         )
     }
 }
@@ -619,6 +668,10 @@ private fun NovelScreenLargeImpl(
     onOpenChapterInWebView: ((NovelChapter) -> Unit)? = null,
     onMarkPreviousChaptersAsRead: (NovelChapter, Boolean) -> Unit = { _, _ -> },
     onMarkChapterRangeAsRead: (NovelChapter, NovelChapter, Boolean) -> Unit = { _, _, _ -> },
+    onDownloadBook: (() -> Unit)? = null,
+    onDeleteBook: (() -> Unit)? = null,
+    onHideChapter: ((NovelChapter) -> Unit)? = null,
+    onUnhideChapters: (() -> Unit)? = null,
 ) {
     NovelScreenSmallImpl(
         state = state,
@@ -668,5 +721,9 @@ private fun NovelScreenLargeImpl(
         onOpenChapterInWebView = onOpenChapterInWebView,
         onMarkPreviousChaptersAsRead = onMarkPreviousChaptersAsRead,
         onMarkChapterRangeAsRead = onMarkChapterRangeAsRead,
+        onDownloadBook = onDownloadBook,
+        onDeleteBook = onDeleteBook,
+        onHideChapter = onHideChapter,
+        onUnhideChapters = onUnhideChapters,
     )
 }

@@ -42,19 +42,25 @@ fun PullRefresh(
             ),
     ) {
         content()
+
+        // Draw the indicator directly on top of the content, aligned to
+        // the top center. This ensures the indicator is in the same
+        // composition tree as the pullToRefresh modifier and state,
+        // so it properly tracks the pull gesture and refresh state.
+        // The indicator is drawn after content so it appears on top.
+        PullToRefreshDefaults.Indicator(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(indicatorPadding),
+            isRefreshing = refreshing,
+            state = state,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 
-    // Register the indicator with the Scaffold's overlay slot so it is drawn
-    // AFTER the topBar — on top of the floating glass top bar — without using
-    // a Popup (which would intercept touch events and block navigation).
-    //
-    // The overlay slot is provided by the Scaffold via CompositionLocal. The
-    // indicator composable is set here and composed by the Scaffold's overlay
-    // slot, which is placed after the topBar in the SubcomposeLayout.
-    //
-    // If no Scaffold is present (overlaySlot is null), the indicator is not
-    // shown — the pull-to-refresh gesture still works, just without a visible
-    // indicator.
+    // Also register with the Scaffold's overlay slot so the indicator
+    // can be drawn above the floating glass top bar if needed.
     if (overlaySlot != null) {
         overlaySlot.content = {
             Box(modifier = Modifier.fillMaxSize()) {

@@ -1,5 +1,11 @@
 package eu.kanade.presentation.updates.fetching
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +42,9 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -143,7 +151,9 @@ private fun FetchingScreenContent(
                 items(items = group.entries, key = { it.id }) { entry ->
                     FailedEntryRow(
                         entry = entry,
-                        onMigrate = { onMigrate(entry) },
+                        onMigrate = {
+                            onMigrate(entry)
+                        },
                         onDismiss = { onDismissEntry(entry.id) },
                         modifier = Modifier.animateItem(),
                     )
@@ -265,83 +275,105 @@ private fun FailedEntryRow(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Swipe-to-dismiss: swipe right to remove the entry from the fetching tab.
+    // Track local dismissed state so the row collapses immediately on swipe,
+    // before the async DB deletion propagates back to the list.
+    var locallyDismissed by remember { mutableStateOf(false) }
+
+    val performMigrate = {
+        locallyDismissed = true
+        onMigrate()
+    }
+
+    // Swipe-to-dismiss: swipe sideways to remove the entry from the fetching tab.
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             if (it == SwipeToDismissBoxValue.EndToStart || it == SwipeToDismissBoxValue.StartToEnd) {
+                locallyDismissed = true
                 onDismiss()
-                true
+                false // Don't confirm — let AnimatedVisibility handle the removal
             } else {
                 false
             }
         },
     )
 
-    SwipeToDismissBox(
-        state = dismissState,
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        backgroundContent = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.errorContainer)
-                    .padding(horizontal = 20.dp),
-                contentAlignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
-                    Alignment.CenterStart
-                } else {
-                    Alignment.CenterEnd
-                },
-            ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(AYMR.strings.action_dismiss),
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            }
-        },
+    AnimatedVisibility(
+        visible = !locallyDismissed,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically(
+            animationSpec = tween(250),
+        ) + fadeOut(animationSpec = tween(200)),
+        modifier = modifier,
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .clickable { onMigrate() },
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
-        ) {
-            Row(
-                modifier = Modifier.padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ItemCover.Book(
-                    data = entry.cover,
-                    modifier = Modifier.size(48.dp, 72.dp),
-                    contentDescription = entry.title,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = entry.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = entry.sourceName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                IconButton(onClick = onMigrate) {
+        SwipeToDismissBox(
+            state = dismissState,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            backgroundContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
+                        Alignment.CenterStart
+                    } else {
+                        Alignment.CenterEnd
+                    },
+                ) {
                     Icon(
-                        Icons.Outlined.SwapHoriz,
-                        contentDescription = stringResource(AYMR.strings.action_migrate_entry),
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(AYMR.strings.action_dismiss),
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
                     )
                 }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(AYMR.strings.action_dismiss))
+            },
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { performMigrate() },
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 1.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ItemCover.Book(
+                        data = entry.cover,
+                        modifier = Modifier.size(48.dp, 72.dp),
+                        contentDescription = entry.title,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = entry.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = entry.sourceName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    IconButton(onClick = performMigrate) {
+                        Icon(
+                            Icons.Outlined.SwapHoriz,
+                            contentDescription = stringResource(AYMR.strings.action_migrate_entry),
+                        )
+                    }
+                    IconButton(onClick = {
+                        locallyDismissed = true
+                        onDismiss()
+                    }) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(AYMR.strings.action_dismiss))
+                    }
                 }
             }
         }

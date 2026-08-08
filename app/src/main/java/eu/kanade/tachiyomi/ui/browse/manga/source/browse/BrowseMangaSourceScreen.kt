@@ -40,6 +40,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifMangaSourcesLoaded
 import eu.kanade.presentation.browse.RemoveEntryDialog
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
+import eu.kanade.presentation.browse.manga.BrowseMangaSourceIncrementalContent
 import eu.kanade.presentation.browse.manga.BrowseSourceContent
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.manga.MissingSourceScreen
@@ -235,18 +236,18 @@ data class BrowseMangaSourceScreen(
             },
             snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
-            BrowseSourceContent(
-                source = screenModel.source,
-                mangaList = screenModel.mangaPagerFlowFlow.collectAsLazyPagingItems(),
+            // Always use the incremental browse flow with domino animation.
+            val incrementalState by screenModel.incrementalBrowseFlow
+                .collectAsState(initial = null)
+            val incrementalManga = incrementalState ?: emptyList()
+            val isIncrementalLoading = incrementalState == null
+
+            BrowseMangaSourceIncrementalContent(
+                mangaList = incrementalManga,
+                isLoading = isIncrementalLoading,
                 columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                entries = screenModel.getColumnsPreferenceForCurrentOrientation(LocalConfiguration.current.orientation),
-                topBarHeight = topBarHeight,
                 displayMode = screenModel.displayMode,
-                snackbarHostState = snackbarHostState,
                 contentPadding = paddingValues,
-                onWebViewClick = onWebViewClick,
-                onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                onLocalSourceHelpClick = onHelpClick,
                 onMangaClick = { navigator.push((MangaScreen(it.id, true))) },
                 onMangaLongClick = { manga ->
                     scope.launchIO {

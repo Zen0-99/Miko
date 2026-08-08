@@ -101,12 +101,36 @@ fun AnimeSourcesScreen(
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
-    // Filter out available extensions when collapsed
+    // Filter out available extensions (and their language sub-headers) when
+    // the "Not Installed" section is collapsed. Language sub-headers within
+    // the Not Installed section appear after the NOT_INSTALLED_KEY header and
+    // before the next section — they must also be hidden when collapsed.
     val visibleItems = remember(state.items, notInstalledExpanded) {
         if (notInstalledExpanded) {
             state.items
         } else {
-            state.items.filterNot { it is AnimeSourceUiModel.AvailableExtension }
+            val result = mutableListOf<AnimeSourceUiModel>()
+            var inNotInstalled = false
+            for (item in state.items) {
+                if (item is AnimeSourceUiModel.Header) {
+                    if (item.language == AnimeSourcesScreenModel.NOT_INSTALLED_KEY) {
+                        inNotInstalled = true
+                        result.add(item)
+                        continue
+                    }
+                    if (item.language == AnimeSourcesScreenModel.INSTALLED_KEY) {
+                        inNotInstalled = false
+                        result.add(item)
+                        continue
+                    }
+                }
+                if (inNotInstalled) {
+                    if (item is AnimeSourceUiModel.AvailableExtension) continue
+                    if (item is AnimeSourceUiModel.Header && item.language != AnimeSourcesScreenModel.NOT_INSTALLED_KEY) continue
+                }
+                result.add(item)
+            }
+            result
         }
     }
 

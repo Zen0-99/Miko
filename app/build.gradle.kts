@@ -322,8 +322,10 @@ dependencies {
 
     // mpv-android
     implementation(aniyomilibs.aniyomi.mpv)
-    // FFmpeg-kit
-    implementation(aniyomilibs.ffmpeg.kit)
+    // FFmpeg-kit (must match the version aniyomi-mpv-lib was built against)
+        // libffmpegkit.so/libffmpegkit_abidetect.so with p_align=4096 (not 16KB
+        implementation(aniyomilibs.ffmpeg.kit)
+    implementation(aniyomilibs.arthenica.smartexceptions)
     // TorrServer
     implementation(files("../libs/torrserver-0.1.0-16kb.aar"))
     // seeker seek bar

@@ -96,12 +96,18 @@ internal fun HeadingItem(text: String) {
 /**
  * Checkbox row with generous vertical padding (12dp) matching Miko's
  * switch rows which use 8dp+ spacing.
+ *
+ * @param onCheckedChange optional callback invoked after the preference is
+ *   updated. Use this to trigger a config refresh (e.g. `onTextSettingChange`)
+ *   so the change is reflected immediately without waiting for the next
+ *   manual refresh.
  */
 @Composable
 internal fun CheckboxItem(
     label: String,
     pref: Preference<Boolean>,
     accentColor: Color? = null,
+    onCheckedChange: ((Boolean) -> Unit)? = null,
 ) {
     val checked by pref.collectAsState()
     Row(
@@ -115,7 +121,10 @@ internal fun CheckboxItem(
         val accent = accentColor ?: MaterialTheme.colorScheme.primary
         Switch(
             checked = checked,
-            onCheckedChange = { pref.set(it) },
+            onCheckedChange = {
+                pref.set(it)
+                onCheckedChange?.invoke(it)
+            },
             colors = SwitchDefaults.colors(
                 checkedThumbColor = MaterialTheme.colorScheme.surface,
                 checkedTrackColor = accent,

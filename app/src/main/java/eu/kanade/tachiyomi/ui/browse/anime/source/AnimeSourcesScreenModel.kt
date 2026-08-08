@@ -14,6 +14,7 @@ import eu.kanade.presentation.browse.anime.AnimeSourceUiModel
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.util.system.LAST_USED_KEY
+import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.PINNED_KEY
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -126,8 +127,26 @@ class AnimeSourcesScreenModel(
         val notInstalledItems = if (notInstalled.isEmpty()) {
             emptyList()
         } else {
+            // Group by language: "all" (multi) at top, then "en" (english),
+            // then the rest sorted by display name.
+            val grouped = notInstalled
+                .groupBy { it.lang }
+                .toSortedMap { a, b ->
+                    when {
+                        a == "all" -> -1
+                        b == "all" -> 1
+                        a == "en" -> -1
+                        b == "en" -> 1
+                        else -> LocaleHelper.getLocalizedDisplayName(a)
+                            .compareTo(LocaleHelper.getLocalizedDisplayName(b))
+                    }
+                }
+
             listOf(AnimeSourceUiModel.Header(NOT_INSTALLED_KEY)) +
-                notInstalled.map { AnimeSourceUiModel.AvailableExtension(it) }
+                grouped.flatMap { (lang, exts) ->
+                    listOf(AnimeSourceUiModel.Header(lang)) +
+                        exts.map { AnimeSourceUiModel.AvailableExtension(it) }
+                }
         }
 
         return (installedItems + untrustedItems + notInstalledItems).toImmutableList()

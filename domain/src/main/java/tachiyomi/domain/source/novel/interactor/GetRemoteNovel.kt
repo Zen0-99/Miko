@@ -2,6 +2,8 @@ package tachiyomi.domain.source.novel.interactor
 
 import android.util.Log
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
+import eu.kanade.tachiyomi.novelsource.model.SNovel
+import kotlinx.coroutines.flow.Flow
 import tachiyomi.domain.source.novel.repository.NovelSourcePagingSourceType
 import tachiyomi.domain.source.novel.repository.NovelSourceRepository
 
@@ -25,6 +27,15 @@ class GetRemoteNovel(
                 repository.searchNovels(sourceId, query, filterList)
             }
         }
+    }
+
+    /**
+     * Incremental search: returns a Flow that emits cumulative result lists.
+     * Used by sources that set [NovelCatalogueSource.supportsIncrementalSearch].
+     */
+    fun subscribeFlow(sourceId: Long, query: String): Flow<List<SNovel>> {
+        Log.d("NovelSearch", "[GetRemoteNovel] subscribeFlow - sourceId=$sourceId, query='$query'")
+        return repository.searchNovelsFlow(sourceId, query)
     }
 
     fun popular(sourceId: Long): NovelSourcePagingSourceType {

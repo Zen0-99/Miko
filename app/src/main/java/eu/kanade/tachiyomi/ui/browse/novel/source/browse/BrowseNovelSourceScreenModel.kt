@@ -23,14 +23,18 @@ import tachiyomi.domain.entries.novel.model.NovelUpdate
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
+import eu.kanade.tachiyomi.novelsource.model.SNovel
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.util.lang.launchIO
@@ -124,6 +128,97 @@ class BrowseNovelSourceScreenModel(
                 .cachedIn(ioCoroutineScope)
         }
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyFlow())
+
+    /**
+     * Whether this source supports incremental search results.
+     * When true, [incrementalBrowseFlow] uses [NovelCatalogueSource.searchFlow]
+     * for search listings (batch-level incremental). All other listings use
+     * page-by-page fetching.
+     */
+    val supportsIncrementalSearch: Boolean
+        get() = source is NovelCatalogueSource && source.supportsIncrementalSearch
+
+    /**
+     * Unified incremental browse flow for ALL listings (Popular, Latest, Search).
+     *
+     * Emits cumulative lists of novels, one novel at a time, as they're fetched
+     * and converted. This drives the domino-style reveal animation in the UI.
+     *
+     * - **Search on incremental sources**: uses [NovelCatalogueSource.searchFlow]
+     *   which emits batches as they're parsed from the response.
+     * - **Everything else** (Popular, Latest, non-incremental search): calls the
+     *   source's page-by-page methods directly, fetching one page at a time and
+     *   converting each novel on that page one-by-one.
+     *
+     * In both cases, each novel is converted through [networkToLocalNovel] and
+     * emitted individually, providing a steady stream to the animation.
+     */
+    val incrementalBrowseFlow = state
+        .map { it.listing }
+        .distinctUntilChanged()
+        .debounce(300L)
+        .transform { listing ->
+            Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] incrementalBrowseFlow - listing=$listing")
+            val convertedNovels = mutableMapOf<String, Novel>()
+            val accumulated = mutableListOf<Novel>()
+            val catSource = source as? NovelCatalogueSource
+
+            suspend fun convertAndEmit(sNovel: SNovel) {
+                val novel = convertedNovels.getOrPut(sNovel.url) {
+                    networkToLocalNovel.await(sNovel.toDomainNovel(sourceId))
+                }
+                if (accumulated.none { it.id == novel.id }) {
+                    accumulated.add(novel)
+                    emit(accumulated.toList())
+                }
+            }
+
+            try {
+                when {
+                    // Search on incremental source: use searchFlow for batch-level incremental
+                    listing is Listing.Search && !listing.query.isNullOrEmpty() && supportsIncrementalSearch -> {
+                        getRemoteNovel.subscribeFlow(sourceId, listing.query!!).collect { batch ->
+                            Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] incrementalBrowseFlow - batch size=${batch.size}")
+                            for (sNovel in batch) convertAndEmit(sNovel)
+                        }
+                    }
+                    // Search on regular source: page-by-page
+                    listing is Listing.Search && !listing.query.isNullOrEmpty() -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getSearchNovels(page, listing.query!!, listing.filters)
+                            for (sNovel in result.novels) convertAndEmit(sNovel)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                    // Popular: page-by-page
+                    listing is Listing.Popular -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getPopularNovels(page)
+                            for (sNovel in result.novels) convertAndEmit(sNovel)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                    // Latest: page-by-page
+                    listing is Listing.Latest -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getLatestUpdates(page)
+                            for (sNovel in result.novels) convertAndEmit(sNovel)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("NovelSearch", "[BrowseNovelSourceScreenModel] incrementalBrowseFlow - error", e)
+                if (accumulated.isEmpty()) emit(emptyList())
+            }
+        }
+        .stateIn(ioCoroutineScope, SharingStarted.Lazily, null)
 
     fun setListing(listing: Listing) {
         mutableState.update { it.copy(listing = listing, toolbarQuery = null) }

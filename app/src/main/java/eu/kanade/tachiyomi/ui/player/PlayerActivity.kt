@@ -121,6 +121,14 @@ class PlayerActivity : BaseActivity() {
     val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     private var mediaSession: MediaSession? = null
+
+    /**
+     * Whether MPV native libraries loaded successfully. When false, all
+     * [MPVLib] calls are skipped to avoid NoClassDefFoundError (which occurs
+     * after the static initializer fails with UnsatisfiedLinkError).
+     */
+    private var mpvLoaded = false
+
     private val gesturePreferences: GesturePreferences by lazy { viewModel.gesturePreferences }
     private val playerPreferences: PlayerPreferences by lazy { viewModel.playerPreferences }
     private val audioPreferences: AudioPreferences = Injekt.get()
@@ -237,7 +245,20 @@ class PlayerActivity : BaseActivity() {
         // Defer achievement unlock banners while in the player
         AchievementBannerManager.setInReaderOrPlayer(true)
 
-        setupPlayerMPV()
+        // Guard against missing native libraries (e.g., when FFmpeg-kit doesn't
+        // ship libs for the device's ABI). Instead of crashing with
+        // UnsatisfiedLinkError, show a user-friendly error and finish.
+        try {
+            setupPlayerMPV()
+        } catch (e: UnsatisfiedLinkError) {
+            logcat(LogPriority.ERROR, e) { "Failed to load MPV native libraries" }
+            showNativeLibraryErrorDialog()
+            return
+        } catch (e: SecurityException) {
+            logcat(LogPriority.ERROR, e) { "Failed to load MPV native libraries" }
+            showNativeLibraryErrorDialog()
+            return
+        }
         setupPlayerAudio()
         setupMediaSession()
         setupPlayerOrientation()
@@ -313,8 +334,10 @@ class PlayerActivity : BaseActivity() {
             noisyReceiver.initialized = false
         }
 
-        MPVLib.removeLogObserver(playerObserver)
-        MPVLib.removeObserver(playerObserver)
+        if (mpvLoaded) {
+            MPVLib.removeLogObserver(playerObserver)
+            MPVLib.removeObserver(playerObserver)
+        }
         player.destroy()
         viewModel.stopHttpServer()
 
@@ -335,7 +358,7 @@ class PlayerActivity : BaseActivity() {
         player.isExiting = true
         if (isFinishing) {
             viewModel.deletePendingEpisodes()
-            MPVLib.command(arrayOf("stop"))
+            if (mpvLoaded) MPVLib.command(arrayOf("stop"))
         } else {
             viewModel.pause()
         }
@@ -412,7 +435,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun executeMPVCommand(commands: Array<String>) {
-        if (!player.isExiting) {
+        if (mpvLoaded && !player.isExiting) {
             MPVLib.command(commands)
         }
     }
@@ -435,7 +458,6 @@ class PlayerActivity : BaseActivity() {
 
         copyUserFiles(mpvDir)
         copyAssets(mpvDir)
-        copyFontsDirectory(mpvDir)
 
         MPVLib.setOptionString("sub-ass-force-margins", "yes")
         MPVLib.setOptionString("sub-use-margins", "yes")
@@ -447,6 +469,31 @@ class PlayerActivity : BaseActivity() {
         )
         MPVLib.addLogObserver(playerObserver)
         MPVLib.addObserver(playerObserver)
+
+        // Only copy fonts (which launches a coroutine referencing MPVLib)
+        // after MPV has successfully loaded.
+        mpvLoaded = true
+        copyFontsDirectory(mpvDir)
+    }
+
+    /**
+     * Shows an error dialog when MPV native libraries cannot be loaded.
+     * This happens on ABIs that FFmpeg-kit doesn't support (x86, x86_64).
+     * The user is informed that video playback isn't available on their
+     * device's architecture, instead of the app crashing with
+     * UnsatisfiedLinkError.
+     */
+    private fun showNativeLibraryErrorDialog() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Video playback unavailable")
+            .setMessage(
+                "The video player's native libraries (MPV/FFmpeg) are not " +
+                    "available for this device's CPU architecture. " +
+                    "Video playback is only supported on ARM devices (arm64-v8a, armeabi-v7a).",
+            )
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ -> finish() }
+            .show()
     }
 
     private fun copyUserFiles(mpvDir: UniFile) {
@@ -529,6 +576,7 @@ class PlayerActivity : BaseActivity() {
                 }
             }
 
+            if (!mpvLoaded) return@launchIO
             MPVLib.setPropertyString("sub-fonts-dir", fontsDirectory.filePath!!)
             MPVLib.setPropertyString("osd-fonts-dir", fontsDirectory.filePath!!)
         }
@@ -578,7 +626,7 @@ class PlayerActivity : BaseActivity() {
             }
 
             file?.let {
-                MPVLib.command(arrayOf("load-script", it.filePath))
+                if (mpvLoaded) MPVLib.command(arrayOf("load-script", it.filePath))
             }
         }
     }
@@ -753,7 +801,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     internal fun event(eventId: Int) {
-        if (player.isExiting) return
+        if (!mpvLoaded || player.isExiting) return
         when (eventId) {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
                 viewModel.viewModelScope.launchIO { fileLoaded() }

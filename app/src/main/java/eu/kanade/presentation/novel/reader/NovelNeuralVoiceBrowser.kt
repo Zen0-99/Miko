@@ -118,7 +118,7 @@ fun ColumnScope.NeuralVoiceBrowser(
 }
 
 @Composable
-private fun VoiceRow(
+internal fun VoiceRow(
     entry: NeuralVoiceEntry,
     isInstalled: Boolean,
     isSelected: Boolean,

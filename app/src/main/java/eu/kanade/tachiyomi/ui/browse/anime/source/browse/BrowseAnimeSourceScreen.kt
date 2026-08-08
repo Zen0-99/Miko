@@ -41,6 +41,7 @@ import eu.kanade.core.util.ifAnimeSourcesLoaded
 import eu.kanade.presentation.browse.RemoveEntryDialog
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.anime.BrowseAnimeSourceContent
+import eu.kanade.presentation.browse.anime.BrowseAnimeSourceIncrementalContent
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.anime.MissingSourceScreen
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
@@ -236,18 +237,18 @@ data class BrowseAnimeSourceScreen(
             },
             snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
-            BrowseAnimeSourceContent(
-                source = screenModel.source,
-                animeList = screenModel.animePagerFlowFlow.collectAsLazyPagingItems(),
+            // Always use the incremental browse flow with domino animation.
+            val incrementalState by screenModel.incrementalBrowseFlow
+                .collectAsState(initial = null)
+            val incrementalAnime = incrementalState ?: emptyList()
+            val isIncrementalLoading = incrementalState == null
+
+            BrowseAnimeSourceIncrementalContent(
+                animeList = incrementalAnime,
+                isLoading = isIncrementalLoading,
                 columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                entries = screenModel.getColumnsPreferenceForCurrentOrientation(LocalConfiguration.current.orientation),
-                topBarHeight = topBarHeight,
                 displayMode = screenModel.displayMode,
-                snackbarHostState = snackbarHostState,
                 contentPadding = paddingValues,
-                onWebViewClick = onWebViewClick,
-                onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                onLocalAnimeSourceHelpClick = onHelpClick,
                 onAnimeClick = { navigator.push((AnimeScreen(it.id, true))) },
                 onAnimeLongClick = { anime ->
                     scope.launchIO {

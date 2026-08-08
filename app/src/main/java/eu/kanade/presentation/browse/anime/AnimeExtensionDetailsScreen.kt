@@ -62,6 +62,7 @@ import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.entries.anime.model.AnimeCover
 import kotlinx.collections.immutable.ImmutableList
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
@@ -80,6 +81,7 @@ fun AnimeExtensionDetailsScreen(
     onClickSource: (sourceId: Long) -> Unit,
     onClickIncognito: (Boolean) -> Unit,
     onClickMigrate: (animeId: Long) -> Unit = {},
+    onClickMigrateAll: () -> Unit = {},
 ) {
     Scaffold(
         topBar = { scrollBehavior ->
@@ -111,6 +113,7 @@ fun AnimeExtensionDetailsScreen(
             onClickSource = onClickSource,
             onClickIncognito = onClickIncognito,
             onClickMigrate = onClickMigrate,
+            onClickMigrateAll = onClickMigrateAll,
         )
     }
 }
@@ -129,6 +132,7 @@ private fun AnimeExtensionDetails(
     onClickSource: (sourceId: Long) -> Unit,
     onClickIncognito: (Boolean) -> Unit,
     onClickMigrate: (animeId: Long) -> Unit = {},
+    onClickMigrateAll: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var showNsfwWarning by remember { mutableStateOf(false) }
@@ -190,14 +194,38 @@ private fun AnimeExtensionDetails(
 
         // Migration section — show actual favorite titles from this extension's sources
         item {
-            Text(
-                text = stringResource(MR.strings.label_migration),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
-            )
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(MR.strings.label_migration),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (migrateItems.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(onClick = onClickMigrateAll),
+                    ) {
+                        Text(
+                            text = stringResource(AYMR.strings.action_migrate_all),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = ">",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
+                }
+            }
         }
         if (migrateItems.isEmpty()) {
             item {

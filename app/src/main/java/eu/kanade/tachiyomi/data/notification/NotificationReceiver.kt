@@ -940,6 +940,19 @@ class NotificationReceiver : BroadcastReceiver() {
             )
         }
 
+        internal fun openNovelExtensionsPendingActivity(context: Context): PendingIntent {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                action = Constants.SHORTCUT_NOVELEXTENSIONS
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            return PendingIntent.getActivity(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
         /**
          * Returns [PendingIntent] that starts a share activity for a backup file.
          *

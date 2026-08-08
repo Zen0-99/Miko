@@ -419,8 +419,12 @@ object HomeScreen : Screen() {
                 }
                 launch {
                     openTabEvent.receiveAsFlow().collectLatest {
-                        // Set content mode if specified (e.g. from a deep link).
+                        // Set content mode if specified (e.g. from a deep link
+                        // or extension update notification).
                         if (it is Tab.Library && it.mode != null) {
+                            uiPreferences.contentMode().set(it.mode)
+                        }
+                        if (it is Tab.Browse && it.mode != null) {
                             uiPreferences.contentMode().set(it.mode)
                         }
 
@@ -693,7 +697,7 @@ object HomeScreen : Screen() {
         data object History : Tab
         /** Opens the Updates tab and switches to the Fetching sub-tab. */
         data object Fetching : Tab
-        data class Browse(val toExtensions: Boolean = false, val anime: Boolean = false) : Tab
+        data class Browse(val mode: ContentMode? = null) : Tab
         data class More(val toDownloads: Boolean) : Tab
     }
 }
@@ -808,7 +812,7 @@ private fun SearchFirstTopBarContent(
                 exit = slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { -slidePx }) +
                     fadeOut(animationSpec = tween(220)),
             ) {
-                IconButton(onClick = sharedTopBarState.navigateUp!!) {
+                IconButton(onClick = { sharedTopBarState.navigateUp?.invoke() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = "Back",

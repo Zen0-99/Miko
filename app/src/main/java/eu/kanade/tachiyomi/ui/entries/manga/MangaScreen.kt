@@ -49,6 +49,7 @@ import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
 import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
 import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
+import eu.kanade.tachiyomi.ui.browse.manga.migration.all.MigrateMangaAllScreen
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialog
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaSearchScreen
@@ -192,7 +193,7 @@ class MangaScreen(
                 successState.manga.favorite
             },
             onMigrateClicked = {
-                navigator.push(MigrateMangaSearchScreen(successState.manga.id))
+                navigator.push(MigrateMangaAllScreen(listOf(successState.manga.id), successState.manga.title))
             }.takeIf { successState.manga.favorite },
             onMultiBookmarkClicked = screenModel::bookmarkChapters,
             onMultiMarkAsReadClicked = screenModel::markChaptersRead,

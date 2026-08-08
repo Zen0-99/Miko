@@ -24,16 +24,20 @@ import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.data.cache.MangaCoverCache
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.CheckboxState
@@ -135,6 +139,70 @@ class BrowseMangaSourceScreenModel(
                 .cachedIn(ioCoroutineScope)
         }
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyFlow())
+
+    /**
+     * Incremental browse flow for ALL listings (Popular, Latest, Search).
+     *
+     * Emits cumulative lists of manga, one manga at a time, as they're fetched
+     * and converted. This drives the domino-style reveal animation in the UI.
+     *
+     * Calls the source's page-by-page methods directly, fetching one page at a
+     * time and converting each manga on that page one-by-one.
+     */
+    val incrementalBrowseFlow = state
+        .map { it.listing }
+        .distinctUntilChanged()
+        .debounce(300L)
+        .transform { listing ->
+            val convertedManga = mutableMapOf<String, Manga>()
+            val accumulated = mutableListOf<Manga>()
+            val catSource = source as? CatalogueSource
+
+            suspend fun convertAndEmit(sManga: SManga) {
+                val manga = convertedManga.getOrPut(sManga.url) {
+                    networkToLocalManga.await(sManga.toDomainManga(sourceId))
+                }
+                if (accumulated.none { it.id == manga.id }) {
+                    accumulated.add(manga)
+                    emit(accumulated.toList())
+                }
+            }
+
+            try {
+                when {
+                    listing is Listing.Search && !listing.query.isNullOrEmpty() -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getSearchManga(page, listing.query!!, listing.filters)
+                            for (sManga in result.mangas) convertAndEmit(sManga)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                    listing is Listing.Popular -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getPopularManga(page)
+                            for (sManga in result.mangas) convertAndEmit(sManga)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                    listing is Listing.Latest -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getLatestUpdates(page)
+                            for (sManga in result.mangas) convertAndEmit(sManga)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (accumulated.isEmpty()) emit(emptyList())
+            }
+        }
+        .stateIn(ioCoroutineScope, SharingStarted.Lazily, null)
 
     fun getColumnsPreference(orientation: Int): GridCells {
         val isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE

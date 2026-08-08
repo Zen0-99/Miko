@@ -483,6 +483,8 @@
     <string name="action_play_externally">Play externally</string>
     <string name="action_download_unread">Download unread chapters</string>
     <string name="action_download_unseen">Download unseen episodes</string>
+    <string name="action_download_book">Download book</string>
+    <string name="action_delete_book">Delete book</string>
     <string name="action_bookmark_episode">Bookmark episode</string>
     <string name="action_remove_bookmark_episode">Unbookmark episode</string>
     <string name="action_edit_anime_collections">Edit anime collections</string>

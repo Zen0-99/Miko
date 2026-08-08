@@ -49,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -74,7 +75,6 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clearFocusOnSoftKeyboardHide
 import tachiyomi.presentation.core.util.runOnEnterKeyPressed
 import tachiyomi.presentation.core.util.secondaryItemAlpha
-import tachiyomi.presentation.core.util.showSoftKeyboard
 
 const val SEARCH_DEBOUNCE_MILLIS = 250L
 
@@ -424,6 +424,18 @@ fun SearchToolbar(
 
             val keyboardController = LocalSoftwareKeyboardController.current
 
+            // Request focus (and show the soft keyboard) when the search field
+            // first appears with an empty query. We use the SAME FocusRequester
+            // as the BasicTextField below — chaining a second .focusRequester()
+            // via showSoftKeyboard() was creating a conflicting FocusRequester
+            // that could prevent IME actions (KeyboardActions.onSearch) from
+            // firing on certain devices/keyboards.
+            LaunchedEffect(focusRequester) {
+                if (searchQuery.isEmpty()) {
+                    try { focusRequester.requestFocus() } catch (_: Exception) {}
+                }
+            }
+
             val searchAndClearFocus: () -> Unit = f@{
                 android.util.Log.d("NovelSearch", "[SearchToolbar] searchAndClearFocus called - searchQuery='$searchQuery', isBlank=${searchQuery.isBlank()}")
                 if (searchQuery.isBlank()) return@f
@@ -440,7 +452,6 @@ fun SearchToolbar(
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
                     .runOnEnterKeyPressed(action = searchAndClearFocus)
-                    .showSoftKeyboard(remember { searchQuery.isEmpty() })
                     .clearFocusOnSoftKeyboardHide(),
                 textStyle = MaterialTheme.typography.titleMedium.copy(
                     color = MaterialTheme.colorScheme.onBackground,

@@ -22,15 +22,21 @@ import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.model.NovelUpdateStrategy
+import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.util.system.isRunning
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
@@ -48,12 +54,15 @@ import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_HAS_UNVIEWED
+import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_NON_COMPLETED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_NON_VIEWED
+import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_OUTSIDE_RELEASE_PERIOD
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.Instant
+import java.time.ZonedDateTime
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -125,6 +134,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      */
     private suspend fun addNovelsToQueue(collectionId: Long) {
         val libraryNovels = getLibraryNovels.await()
+        android.util.Log.i("NovelUpdateJob", "addNovelsToQueue: ${libraryNovels.size} library novels, collectionId=$collectionId")
 
         val listToUpdate = if (collectionId != -1L) {
             libraryNovels.filter { it.collection == collectionId }
@@ -143,6 +153,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 emptyList()
             }
 
+            android.util.Log.i("NovelUpdateJob", "  Collections to update: $collectionsToUpdate")
+            android.util.Log.i("NovelUpdateJob", "  Collections to exclude: $collectionsToExclude")
+            android.util.Log.i("NovelUpdateJob", "  After collection filter: ${includedNovels.size} included, ${excludedNovelIds.size} excluded")
+
             includedNovels
                 .filterNot { it.novel.id in excludedNovelIds }
                 .distinctBy { it.novel.id }
@@ -150,18 +164,35 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
         val restrictions = libraryPreferences.autoUpdateItemRestrictions().get()
         val skippedUpdates = mutableListOf<Pair<Novel, String?>>()
+        // Compute fetch window for ENTRY_OUTSIDE_RELEASE_PERIOD check
+        val now = ZonedDateTime.now()
+        val today = now.toLocalDate().atStartOfDay(now.zone)
+        val fetchWindowUpperBound = today.plusDays(7).toEpochSecond() * 1000 - 1
+
+        android.util.Log.i("NovelUpdateJob", "  Restrictions: $restrictions")
+        android.util.Log.i("NovelUpdateJob", "  Fetch window upper bound: $fetchWindowUpperBound")
 
         novelsToUpdate = listToUpdate
             .filter {
                 when {
                     it.novel.updateStrategy != NovelUpdateStrategy.ALWAYS_UPDATE -> {
+                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': updateStrategy=${it.novel.updateStrategy}")
                         skippedUpdates.add(
                             it.novel to context.stringResource(MR.strings.skipped_reason_not_always_update),
                         )
                         false
                     }
 
+                    ENTRY_NON_COMPLETED in restrictions && it.novel.status == SNovel.COMPLETED.toLong() -> {
+                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': COMPLETED")
+                        skippedUpdates.add(
+                            it.novel to context.stringResource(MR.strings.skipped_reason_completed),
+                        )
+                        false
+                    }
+
                     ENTRY_HAS_UNVIEWED in restrictions && it.unreadCount != 0L -> {
+                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': has unviewed (unreadCount=${it.unreadCount})")
                         skippedUpdates.add(
                             it.novel to context.stringResource(MR.strings.skipped_reason_not_caught_up),
                         )
@@ -169,16 +200,30 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     }
 
                     ENTRY_NON_VIEWED in restrictions && it.totalChapters > 0L && !it.hasStarted -> {
+                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': not started (totalChapters=${it.totalChapters})")
                         skippedUpdates.add(
                             it.novel to context.stringResource(MR.strings.skipped_reason_not_started),
                         )
                         false
                     }
 
-                    else -> true
+                    ENTRY_OUTSIDE_RELEASE_PERIOD in restrictions && it.novel.nextUpdate > fetchWindowUpperBound -> {
+                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': outside release period (nextUpdate=${it.novel.nextUpdate})")
+                        skippedUpdates.add(
+                            it.novel to context.stringResource(MR.strings.skipped_reason_not_in_release_period),
+                        )
+                        false
+                    }
+
+                    else -> {
+                        android.util.Log.i("NovelUpdateJob", "  INCLUDE '${it.novel.title}': status=${it.novel.status}, unreadCount=${it.unreadCount}, hasStarted=${it.hasStarted}")
+                        true
+                    }
                 }
             }
             .sortedBy { it.novel.title }
+
+        android.util.Log.i("NovelUpdateJob", "  Final: ${novelsToUpdate.size} novels to update out of ${libraryNovels.size} library novels")
 
         if (skippedUpdates.isNotEmpty()) {
             logcat {
@@ -207,115 +252,131 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             progressCount.set(LibraryUpdateProgressBus.checkpoint.size)
         }
 
-        coroutineScope {
-            novelsToUpdate.groupBy { it.novel.source }.values
-                .map { novelsInSource ->
-                    async {
-                        semaphore.withPermit {
-                            novelsInSource.forEach { libraryNovel ->
-                                val novel = libraryNovel.novel
-                                ensureActive()
+        try {
+            coroutineScope {
+                novelsToUpdate.groupBy { it.novel.source }.values
+                    .map { novelsInSource ->
+                        async {
+                            semaphore.withPermit {
+                                novelsInSource.forEach { libraryNovel ->
+                                    val novel = libraryNovel.novel
+                                    ensureActive()
 
-                                // Cooperative pause/cancel check
-                                if (LibraryUpdateProgressBus.isCancelRequested()) {
-                                    throw CancellationException("User cancelled library update")
-                                }
-                                if (LibraryUpdateProgressBus.isPauseRequested()) {
-                                    throw CancellationException("User paused library update")
-                                }
-
-                                // Don't continue to update if novel is not in library
-                                if (getNovel.await(novel.id)?.favorite != true) {
-                                    return@forEach
-                                }
-
-                                // Skip entries already processed in a prior (paused) run
-                                if (novel.id in LibraryUpdateProgressBus.checkpoint) {
-                                    progressCount.incrementAndGet()
-                                    return@forEach
-                                }
-
-                                withUpdateNotification(
-                                    currentlyUpdatingNovels,
-                                    progressCount,
-                                    novel,
-                                ) {
-                                    try {
-                                        val newChapters = updateNovel(novel)
-                                            .sortedByDescending { it.sourceOrder }
-
-                                        if (newChapters.isNotEmpty()) {
-                                            libraryPreferences.newNovelUpdatesCount()
-                                                .getAndSet { it + newChapters.size }
-                                            newUpdates.add(novel to newChapters)
-                                        }
-                                    } catch (e: Throwable) {
-                                        val errorMessage = e.message
-                                        failedUpdates.add(novel to errorMessage)
+                                    // Cooperative pause/cancel check
+                                    if (LibraryUpdateProgressBus.isCancelRequested()) {
+                                        throw CancellationException("User cancelled library update")
                                     }
+                                    if (LibraryUpdateProgressBus.isPauseRequested()) {
+                                        throw CancellationException("User paused library update")
+                                    }
+
+                                    // Don't continue to update if novel is not in library
+                                    if (getNovel.await(novel.id)?.favorite != true) {
+                                        return@forEach
+                                    }
+
+                                    // Skip entries already processed in a prior (paused) run
+                                    if (novel.id in LibraryUpdateProgressBus.checkpoint) {
+                                        progressCount.incrementAndGet()
+                                        return@forEach
+                                    }
+
+                                    val publishState: () -> Unit = {
+                                        LibraryUpdateProgressBus.updateProgress(
+                                            processed = progressCount.get(),
+                                            currentlyUpdating = currentlyUpdatingNovels.map {
+                                                eu.kanade.tachiyomi.data.library.EntryRef(
+                                                    id = it.id,
+                                                    title = it.title,
+                                                    sourceId = it.source,
+                                                    kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
+                                                )
+                                            },
+                                            failedSoFar = failedUpdates.map { (n, reason) ->
+                                                eu.kanade.tachiyomi.data.library.FailedEntry(
+                                                    entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                                                        id = n.id,
+                                                        title = n.title,
+                                                        sourceId = n.source,
+                                                        kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
+                                                    ),
+                                                    reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                                                    sourceName = sourceManager.getOrStub(n.source).name,
+                                                )
+                                            },
+                                            totalEntries = novelsToUpdate.size,
+                                            source = "Novel",
+                                        )
+                                    }
+
+                                    withUpdateNotification(
+                                        currentlyUpdatingNovels,
+                                        progressCount,
+                                        novel,
+                                        publishState,
+                                    ) {
+                                        try {
+                                            // 1-minute hard timeout per novel — uses
+                                            // CompletableDeferred race so blocking I/O
+                                            // can't overrun the timeout.
+                                            val newChapters = hardTimeoutNovel(PER_NOVEL_TIMEOUT_MS) {
+                                                updateNovel(novel)
+                                            }?.sortedByDescending { it.sourceOrder }
+
+                                            if (newChapters != null && newChapters.isNotEmpty()) {
+                                                libraryPreferences.newNovelUpdatesCount()
+                                                    .getAndSet { it + newChapters.size }
+                                                newUpdates.add(novel to newChapters)
+                                            } else if (newChapters == null) {
+                                                // Timed out
+                                                failedUpdates.add(
+                                                    novel to "Timeout after ${PER_NOVEL_TIMEOUT_MS / 1000}s",
+                                                )
+                                            }
+                                        } catch (e: Throwable) {
+                                            val errorMessage = e.message
+                                            failedUpdates.add(novel to errorMessage)
+                                        }
+                                    }
+
+                                    // Mark processed for resume checkpoint
+                                    LibraryUpdateProgressBus.markProcessed(novel.id)
                                 }
-
-                                // Mark processed for resume checkpoint
-                                LibraryUpdateProgressBus.markProcessed(novel.id)
-
-                                // Publish progress to the in-app bus
-                                LibraryUpdateProgressBus.updateProgress(
-                                    processed = progressCount.get(),
-                                    currentlyUpdating = currentlyUpdatingNovels.map {
-                                        eu.kanade.tachiyomi.data.library.EntryRef(
-                                            id = it.id,
-                                            title = it.title,
-                                            sourceId = it.source,
-                                            kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
-                                        )
-                                    },
-                                    failedSoFar = failedUpdates.map { (n, reason) ->
-                                        eu.kanade.tachiyomi.data.library.FailedEntry(
-                                            entry = eu.kanade.tachiyomi.data.library.EntryRef(
-                                                id = n.id,
-                                                title = n.title,
-                                                sourceId = n.source,
-                                                kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
-                                            ),
-                                            reason = reason ?: context.stringResource(MR.strings.unknown_error),
-                                            sourceName = sourceManager.getOrStub(n.source).name,
-                                        )
-                                    },
-                                    totalEntries = novelsToUpdate.size,
-                                    source = "Novel",
-                                )
                             }
                         }
                     }
+                    .awaitAll()
+            }
+        } finally {
+            // Ensure completeRun is ALWAYS called, even if the coroutineScope
+            // throws (e.g., due to cancellation or an uncaught exception).
+            // Without this, the overlay would stay stuck at "X/Y" forever.
+            val notifier = NovelLibraryUpdateNotifier(context)
+            notifier.cancelProgressNotification()
+
+            if (newUpdates.isNotEmpty()) {
+                notifier.showUpdateNotifications(newUpdates)
+            }
+
+            // Publish completion + persist failures to the FailedFetch table
+            val failedEntries = failedUpdates.map { (n, reason) ->
+                eu.kanade.tachiyomi.data.library.FailedEntry(
+                    entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                        id = n.id,
+                        title = n.title,
+                        sourceId = n.source,
+                        kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
+                    ),
+                    reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                    sourceName = sourceManager.getOrStub(n.source).name,
+                )
+            }
+            LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Novel")
+            if (failedEntries.isNotEmpty()) {
+                FailedFetchStore.insert(failedEntries)
+                logcat(LogPriority.ERROR) {
+                    "Failed updates: ${failedUpdates.joinToString { "${it.first.title}: ${it.second}" }}"
                 }
-                .awaitAll()
-        }
-
-        val notifier = NovelLibraryUpdateNotifier(context)
-        notifier.cancelProgressNotification()
-
-        if (newUpdates.isNotEmpty()) {
-            notifier.showUpdateNotifications(newUpdates)
-        }
-
-        // Publish completion + persist failures to the FailedFetch table
-        val failedEntries = failedUpdates.map { (n, reason) ->
-            eu.kanade.tachiyomi.data.library.FailedEntry(
-                entry = eu.kanade.tachiyomi.data.library.EntryRef(
-                    id = n.id,
-                    title = n.title,
-                    sourceId = n.source,
-                    kind = tachiyomi.domain.library.model.EntryKind.NOVEL,
-                ),
-                reason = reason ?: context.stringResource(MR.strings.unknown_error),
-                sourceName = sourceManager.getOrStub(n.source).name,
-            )
-        }
-        LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Novel")
-        if (failedEntries.isNotEmpty()) {
-            FailedFetchStore.insert(failedEntries)
-            logcat(LogPriority.ERROR) {
-                "Failed updates: ${failedUpdates.joinToString { "${it.first.title}: ${it.second}" }}"
             }
         }
     }
@@ -439,20 +500,36 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         updatingNovels: CopyOnWriteArrayList<Novel>,
         progressCount: AtomicInteger,
         novel: Novel,
+        publishState: () -> Unit,
         block: suspend () -> Unit,
-    ) {
+    ) = coroutineScope {
+        ensureActive()
+
         updatingNovels.add(novel)
         val notifier = NovelLibraryUpdateNotifier(context)
         notifier.showProgressNotification(
             updatingNovels,
-            progressCount.incrementAndGet(),
+            progressCount.get(),
             novelsToUpdate.size,
         )
-        try {
-            block()
-        } finally {
-            updatingNovels.remove(novel)
-        }
+        // Publish to the in-app overlay immediately so the entry appears as
+        // "currently updating" while it's being fetched — not only after it
+        // completes. Without this, parallel entries that start during a slow
+        // fetch are invisible to the overlay until one of them finishes.
+        publishState()
+
+        block()
+
+        ensureActive()
+
+        updatingNovels.remove(novel)
+        progressCount.getAndIncrement()
+        notifier.showProgressNotification(
+            updatingNovels,
+            progressCount.get(),
+            novelsToUpdate.size,
+        )
+        publishState()
     }
 
     companion object {
@@ -461,6 +538,30 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val WORK_NAME_AUTO = "NovelLibraryUpdate-$TAG-auto"
         private const val KEY_COLLECTION = "collection"
         private const val KEY_RESUME = "resume"
+        // 1-minute hard timeout per novel fetch
+        private const val PER_NOVEL_TIMEOUT_MS = 60_000L
+
+        /**
+         * Hard timeout that works even with blocking I/O. The blocking I/O runs
+         * in a fire-and-forget coroutine; we race `await()` against
+         * `withTimeoutOrNull`. When the timeout fires, we return null and the
+         * background I/O is discarded.
+         */
+        private suspend fun <T> hardTimeoutNovel(timeoutMs: Long, block: suspend () -> T): T? {
+            val result = CompletableDeferred<T?>()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    result.complete(block())
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    result.complete(null)
+                }
+            }
+            return withTimeoutOrNull(timeoutMs) {
+                result.await()
+            }
+        }
 
         fun startNow(
             context: Context,

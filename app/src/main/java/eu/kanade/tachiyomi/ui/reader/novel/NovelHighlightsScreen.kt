@@ -21,7 +21,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -30,10 +30,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,6 +65,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.model.asNovelCover
+import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
@@ -222,7 +225,7 @@ class NovelHighlightsScreen(
         }
 
         showActionsFor?.let { (entry, chapterNumber) ->
-            HighlightActionsDialog(
+            HighlightActionsBottomSheet(
                 entry = entry,
                 onDismiss = { showActionsFor = null },
                 onCopy = {
@@ -248,6 +251,18 @@ class NovelHighlightsScreen(
                         }
                     }
                     showActionsFor = null
+                },
+                onNavigateToHighlight = {
+                    scope.launch {
+                        val chapters = withContext(Dispatchers.IO) {
+                            Injekt.get<GetNovelChaptersByNovelId>().await(novelId)
+                        }
+                        val chapter = chapters.find { it.chapterNumber == chapterNumber }
+                        if (chapter != null) {
+                            showActionsFor = null
+                            navigator.push(NovelReaderScreen(novelId, chapter.id))
+                        }
+                    }
                 },
             )
         }
@@ -311,41 +326,75 @@ class NovelHighlightsScreen(
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    private fun HighlightActionsDialog(
+    private fun HighlightActionsBottomSheet(
         entry: NovelHighlightManager.HighlightEntry,
         onDismiss: () -> Unit,
         onCopy: () -> Unit,
         onShare: () -> Unit,
         onDelete: () -> Unit,
+        onNavigateToHighlight: () -> Unit,
     ) {
-        AlertDialog(
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
             onDismissRequest = onDismiss,
-            title = { Text("Highlight") },
-            text = { Text("\"${entry.text}\"") },
-            confirmButton = {
-                Column {
-                    TextButton(onClick = onCopy) {
-                        Icon(Icons.Filled.ContentCopy, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Copy text")
-                    }
-                    TextButton(onClick = onShare) {
-                        Icon(Icons.Filled.Share, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Share")
-                    }
-                    TextButton(onClick = onDelete) {
-                        Icon(Icons.Filled.Delete, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Delete")
-                    }
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+            ) {
+                // Highlight text preview
+                Text(
+                    text = "\"${entry.text}\"",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+
+                // Navigate to highlight
+                TextButton(
+                    onClick = onNavigateToHighlight,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.MenuBook, contentDescription = null)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Go to highlight")
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-            },
-        )
+
+                // Copy
+                TextButton(
+                    onClick = onCopy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.ContentCopy, contentDescription = null)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Copy text")
+                }
+
+                // Share
+                TextButton(
+                    onClick = onShare,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Share, contentDescription = null)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Share")
+                }
+
+                // Delete
+                TextButton(
+                    onClick = onDelete,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = null)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Delete")
+                }
+            }
+        }
     }
 
     private fun buildHighlightItems(data: NovelHighlightManager.NovelHighlightsData): List<HighlightListItem> {

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.history.novel.interactor.GetTotalNovelReadDuration
+import tachiyomi.domain.items.chapter.interactor.BackfillNovelCharCounts
 import tachiyomi.domain.items.chapter.interactor.GetTotalReadNovelCharCount
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
@@ -25,6 +26,7 @@ class NovelStatsScreenModel(
     private val getLibraryNovels: GetLibraryNovels = Injekt.get(),
     private val getTotalReadDuration: GetTotalNovelReadDuration = Injekt.get(),
     private val getTotalReadCharCount: GetTotalReadNovelCharCount = Injekt.get(),
+    private val backfillCharCounts: BackfillNovelCharCounts = Injekt.get(),
     private val getTracks: GetNovelTracks = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
 ) : StateScreenModel<StatsScreenState>(StatsScreenState.Loading) {
@@ -33,6 +35,11 @@ class NovelStatsScreenModel(
 
     init {
         screenModelScope.launchIO {
+            // Backfill char counts for read chapters that were marked as read
+            // before char count tracking was implemented. This estimates the
+            // char count from the average of chapters that DO have one.
+            backfillCharCounts.await()
+
             val libraryNovels = getLibraryNovels.await()
 
             val distinctLibraryNovels = libraryNovels.fastDistinctBy { it.id }

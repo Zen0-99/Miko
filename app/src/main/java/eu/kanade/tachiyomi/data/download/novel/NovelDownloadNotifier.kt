@@ -55,9 +55,12 @@ internal class NovelDownloadNotifier(private val context: Context) {
             }
 
             setContentTitle(download.novel.title.chop(30))
-            setContentText(context.stringResource(MR.strings.chapter_downloading_progress, 0, 1))
+            setContentText(download.chapter.name.chop(40))
 
-            setProgress(1, 0, false)
+            // Indeterminate progress — novel chapter downloads are atomic
+            // (the whole chapter text is fetched in one request), so we
+            // can't show byte-level progress. Show an indeterminate spinner.
+            setProgress(0, 0, true)
             setOngoing(true)
 
             show(Notifications.ID_DOWNLOAD_CHAPTER_PROGRESS)

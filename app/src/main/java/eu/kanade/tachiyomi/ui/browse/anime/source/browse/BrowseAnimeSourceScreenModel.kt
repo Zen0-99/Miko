@@ -23,6 +23,8 @@ import eu.kanade.domain.track.anime.interactor.AddAnimeTracks
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.data.cache.AnimeBackgroundCache
 import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
 import eu.kanade.tachiyomi.util.removeBackgrounds
@@ -30,12 +32,14 @@ import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.CheckboxState
@@ -138,6 +142,67 @@ class BrowseAnimeSourceScreenModel(
                 .cachedIn(ioCoroutineScope)
         }
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyFlow())
+
+    /**
+     * Incremental browse flow for ALL listings (Popular, Latest, Search).
+     *
+     * Emits cumulative lists of anime, one anime at a time, as they're fetched
+     * and converted. This drives the domino-style reveal animation in the UI.
+     */
+    val incrementalBrowseFlow = state
+        .map { it.listing }
+        .distinctUntilChanged()
+        .debounce(300L)
+        .transform { listing ->
+            val convertedAnime = mutableMapOf<String, Anime>()
+            val accumulated = mutableListOf<Anime>()
+            val catSource = source as? AnimeCatalogueSource
+
+            suspend fun convertAndEmit(sAnime: SAnime) {
+                val anime = convertedAnime.getOrPut(sAnime.url) {
+                    networkToLocalAnime.await(sAnime.toDomainAnime(sourceId))
+                }
+                if (accumulated.none { it.id == anime.id }) {
+                    accumulated.add(anime)
+                    emit(accumulated.toList())
+                }
+            }
+
+            try {
+                when {
+                    listing is Listing.Search && !listing.query.isNullOrEmpty() -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getSearchAnime(page, listing.query!!, listing.filters)
+                            for (sAnime in result.animes) convertAndEmit(sAnime)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                    listing is Listing.Popular -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getPopularAnime(page)
+                            for (sAnime in result.animes) convertAndEmit(sAnime)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                    listing is Listing.Latest -> {
+                        var page = 1
+                        while (true) {
+                            val result = catSource!!.getLatestUpdates(page)
+                            for (sAnime in result.animes) convertAndEmit(sAnime)
+                            if (!result.hasNextPage) break
+                            page++
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (accumulated.isEmpty()) emit(emptyList())
+            }
+        }
+        .stateIn(ioCoroutineScope, SharingStarted.Lazily, null)
 
     fun getColumnsPreference(orientation: Int): GridCells {
         val isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE

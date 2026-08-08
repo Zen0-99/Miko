@@ -42,6 +42,7 @@ import eu.kanade.core.util.ifNovelSourcesLoaded
 import eu.kanade.presentation.browse.RemoveEntryDialog
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.novel.BrowseNovelSourceContent
+import eu.kanade.presentation.browse.novel.BrowseNovelSourceIncrementalContent
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.browse.novel.MissingNovelSourceScreen
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
@@ -229,17 +230,20 @@ data class BrowseNovelSourceScreen(
             },
             snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
-            BrowseNovelSourceContent(
-                source = screenModel.source,
-                novelList = screenModel.novelPagerFlowFlow.collectAsLazyPagingItems(),
+            // Always use the incremental browse flow with domino animation.
+            // The flow handles all listings (Popular, Latest, Search) and emits
+            // novels one-by-one for the staggered reveal animation.
+            val incrementalState by screenModel.incrementalBrowseFlow
+                .collectAsState(initial = null)
+            val incrementalNovels = incrementalState ?: emptyList()
+            val isIncrementalLoading = incrementalState == null
+
+            BrowseNovelSourceIncrementalContent(
+                novels = incrementalNovels,
+                isLoading = isIncrementalLoading,
                 columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                entries = screenModel.getColumnsPreferenceForCurrentOrientation(LocalConfiguration.current.orientation),
-                topBarHeight = topBarHeight,
                 displayMode = screenModel.displayMode,
-                snackbarHostState = snackbarHostState,
                 contentPadding = paddingValues,
-                onWebViewClick = onWebViewClick,
-                onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
                 onNovelClick = {
                     Log.d("NovelSearch", "[BrowseNovelSourceScreen] onNovelClick - '${it.title}' (id=${it.id}), pushing NovelScreen")
                     navigator.push(NovelScreen(it.id, true))

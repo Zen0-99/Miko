@@ -46,6 +46,10 @@ class NovelSelectionActionModeCallback(
     private val onShare: ((String) -> Unit)? = null,
     private val onReadAloud: ((String) -> Unit)? = null,
     private val onTranslate: ((String) -> Unit)? = null,
+    /** Called when the user taps "Select range" — enters multi-paragraph selection mode. */
+    var onSelectRange: (() -> Unit)? = null,
+    /** Called when selection action mode starts (true) or ends (false). */
+    var onSelectionActiveChange: ((Boolean) -> Unit)? = null,
 ) : ActionMode.Callback {
 
     private val textViewRef = WeakReference(textView)
@@ -75,6 +79,7 @@ class NovelSelectionActionModeCallback(
         if (!txt.isNullOrBlank()) {
             showPopup(tv, txt)
         }
+        onSelectionActiveChange?.invoke(true)
         return true
     }
 
@@ -93,6 +98,7 @@ class NovelSelectionActionModeCallback(
         tts?.stop()
         tts?.shutdown()
         tts = null
+        onSelectionActiveChange?.invoke(false)
     }
 
     // ---------------------------------------------------------------------=
@@ -115,7 +121,7 @@ class NovelSelectionActionModeCallback(
     // Popup construction
     // ---------------------------------------------------------------------=
 
-    private fun showPopup(textView: TextView, selectedText: String) {
+    fun showPopup(textView: TextView, selectedText: String) {
         dismissPopup()
         currentMode = PopupMode.MAIN
         pendingSelectedText = selectedText
@@ -128,7 +134,7 @@ class NovelSelectionActionModeCallback(
         val container = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding((18 * density).toInt(), (12 * density).toInt(), (18 * density).toInt(), (12 * density).toInt())
+            setPadding((22 * density).toInt(), (16 * density).toInt(), (22 * density).toInt(), (16 * density).toInt())
             background = createPopupBackground(density)
         }
         popupContainer = container
@@ -215,8 +221,8 @@ class NovelSelectionActionModeCallback(
         container.removeAllViews()
         currentMode = PopupMode.MAIN
 
-        val iconSize = (22 * density).toInt()
-        val iconPadding = (14 * density).toInt()
+        val iconSize = (28 * density).toInt()
+        val iconPadding = (18 * density).toInt()
         val tint = Color.WHITE
 
         fun addIcon(iconRes: Int, isMore: Boolean = false, onClick: () -> Unit) {
@@ -227,7 +233,7 @@ class NovelSelectionActionModeCallback(
                 setImageResource(iconRes)
                 setColorFilter(tint)
                 scaleType = if (isMore) ImageView.ScaleType.FIT_XY else ImageView.ScaleType.FIT_CENTER
-                setPadding(if (isMore) (2 * density).toInt() else 0, 0, if (isMore) (2 * density).toInt() else 0, 0)
+                setPadding(if (isMore) (3 * density).toInt() else 0, 0, if (isMore) (3 * density).toInt() else 0, 0)
                 setOnClickListener { onClick() }
             }
             container.addView(iv)
@@ -270,6 +276,14 @@ class NovelSelectionActionModeCallback(
         if (onTranslate != null) {
             addIcon(R.drawable.ic_translate_24dp) {
                 onTranslate.invoke(selectedText)
+                finishSelection()
+            }
+        }
+
+        // Select range (multi-paragraph selection)
+        if (onSelectRange != null) {
+            addIcon(R.drawable.ic_book_24dp) {
+                onSelectRange?.invoke()
                 finishSelection()
             }
         }
@@ -317,10 +331,10 @@ class NovelSelectionActionModeCallback(
 
         // Color circles
         highlightColors.forEach { color ->
-            val circleSize = (28 * density).toInt()
+            val circleSize = (32 * density).toInt()
             val circle = View(container.context).apply {
                 layoutParams = LinearLayout.LayoutParams(circleSize, circleSize).apply {
-                    marginEnd = (10 * density).toInt()
+                    marginEnd = (12 * density).toInt()
                 }
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
@@ -328,7 +342,19 @@ class NovelSelectionActionModeCallback(
                     setStroke((2 * density).toInt(), Color.WHITE)
                 }
                 setOnClickListener {
-                    applyHighlight(textView, selectedText, textView.selectionStart, textView.selectionEnd, color)
+                    // Re-read the CURRENT selection from the TextView — the
+                    // user may have expanded the selection after the popup
+                    // was created (e.g. long-pressed one word, then dragged
+                    // to select the whole paragraph). Using the stale
+                    // selectedText from showPopup would only save one word.
+                    val currentStart = textView.selectionStart
+                    val currentEnd = textView.selectionEnd
+                    val currentText = if (currentStart >= 0 && currentEnd > currentStart) {
+                        textView.text?.subSequence(currentStart, currentEnd)?.toString() ?: selectedText
+                    } else {
+                        selectedText
+                    }
+                    applyHighlight(textView, currentText, currentStart, currentEnd, color)
                     finishSelection()
                 }
             }

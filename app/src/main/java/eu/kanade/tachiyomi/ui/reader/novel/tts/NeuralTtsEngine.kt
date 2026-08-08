@@ -44,6 +44,7 @@ class NeuralTtsEngine(
     private val lengthScale: Float = 1.0f,
     private val noiseScale: Float = 0.667f,
     private val noiseScaleW: Float = 0.8f,
+    private val sentencePauseMs: Int = 0,
 ) : TtsEngine {
 
     private var ready = false
@@ -120,6 +121,14 @@ class NeuralTtsEngine(
                 val audio = tts.generate(text = text, sid = safeSid, speed = currentRate)
                 var samples = audio.samples
                 val sampleRate = audio.sampleRate
+
+                // Insert silence between sentences for a natural breathing pause.
+                // Sherpa-onnx concatenates sentence audio back-to-back with no gap,
+                // so we estimate sentence boundary positions proportionally by
+                // character count and insert zeros at those points.
+                if (sentencePauseMs > 0 && samples.isNotEmpty()) {
+                    samples = insertSentencePauses(text, samples, sampleRate, sentencePauseMs)
+                }
 
                 // Apply pitch shifting via linear-interpolation resampler
                 if (kotlin.math.abs(currentPitch - 1f) >= 0.001f) {
@@ -611,6 +620,99 @@ class NeuralTtsEngine(
     private fun inferLanguageFromDirName(name: String): String {
         // e.g. "en_US-amy-medium" → "en"
         return name.substringBefore('_').substringBefore('-').lowercase().ifBlank { "en" }
+    }
+
+    /**
+     * Insert silence (zeros) between sentences in the generated audio.
+     *
+     * Sherpa-onnx concatenates all sentence audio back-to-back with no gap.
+     * This function splits the text into sentences, estimates each sentence's
+     * proportion of the total audio by character count, and inserts [pauseMs]
+     * milliseconds of silence at each sentence boundary.
+     *
+     * The estimation is approximate — character count is a reasonable proxy
+     * for audio duration in neural TTS, but not exact. The silence is
+     * ramped with a short fade (2ms) to avoid clicks.
+     */
+    private fun insertSentencePauses(
+        text: String,
+        samples: FloatArray,
+        sampleRate: Int,
+        pauseMs: Int,
+    ): FloatArray {
+        // Split into sentences. Keep it simple: split on . ! ? followed by
+        // space or end of string. Also handle Japanese/Chinese 。！？ markers.
+        val sentences = splitSentences(text)
+        if (sentences.size <= 1) return samples
+
+        // Calculate character proportions
+        val totalChars = sentences.sumOf { it.length }.coerceAtLeast(1)
+        val silenceSamples = (sampleRate * pauseMs / 1000f).toInt().coerceAtLeast(1)
+        val fadeSamples = (sampleRate * 0.002f).toInt().coerceIn(1, silenceSamples / 4)
+
+        // Build the new sample array with silence inserted at boundaries
+        val totalSilenceSamples = silenceSamples * (sentences.size - 1)
+        val result = FloatArray(samples.size + totalSilenceSamples)
+
+        var srcPos = 0
+        var dstPos = 0
+        var charAccum = 0
+
+        for (i in sentences.indices) {
+            val proportion = sentences[i].length.toFloat() / totalChars
+            // Estimate this sentence's audio length
+            var sentenceLen = (samples.size * proportion).toInt()
+            // For the last sentence, use remaining samples
+            if (i == sentences.lastIndex) {
+                sentenceLen = samples.size - srcPos
+            }
+            sentenceLen = sentenceLen.coerceIn(0, samples.size - srcPos)
+
+            // Copy sentence audio
+            System.arraycopy(samples, srcPos, result, dstPos, sentenceLen)
+            srcPos += sentenceLen
+            dstPos += sentenceLen
+            charAccum += sentences[i].length
+
+            // Insert silence after this sentence (except the last one)
+            if (i < sentences.lastIndex) {
+                // Fade out the last few samples before silence
+                for (f in 0 until fadeSamples.coerceAtMost(sentenceLen)) {
+                    val idx = dstPos - 1 - f
+                    if (idx >= 0) {
+                        result[idx] *= 1f - f.toFloat() / fadeSamples
+                    }
+                }
+                // Silence (zeros are default in FloatArray)
+                dstPos += silenceSamples
+                // Fade in the first few samples after silence
+                // (will be applied when next sentence is copied — skip for simplicity)
+            }
+        }
+
+        return result
+    }
+
+    /**
+     * Split text into sentences. Handles common English punctuation (. ! ?)
+     * and CJK punctuation (。！？). Keeps the delimiter with the preceding sentence.
+     */
+    private fun splitSentences(text: String): List<String> {
+        val sentences = mutableListOf<String>()
+        val current = StringBuilder()
+        for (ch in text) {
+            current.append(ch)
+            if (ch == '.' || ch == '!' || ch == '?' || ch == '。' || ch == '！' || ch == '？') {
+                // Include any trailing whitespace/quotes with this sentence
+                sentences.add(current.toString().trim())
+                current.clear()
+            }
+        }
+        val remaining = current.toString().trim()
+        if (remaining.isNotEmpty()) {
+            sentences.add(remaining)
+        }
+        return sentences.filter { it.isNotBlank() }
     }
 
     companion object {

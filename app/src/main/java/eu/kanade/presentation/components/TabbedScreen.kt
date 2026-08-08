@@ -61,7 +61,11 @@ fun TabbedScreen(
 
     // Register with shared top bar — update title/actions when sub-tab changes
     if (titleRes != null) {
-        val tab = tabs[state.currentPage]
+        // Clamp the page index to avoid IndexOutOfBoundsException when tabs
+        // are added/removed (e.g., the fetching tab appearing/disappearing)
+        // and the pager state hasn't yet updated its current page.
+        val pageIndex = state.currentPage.coerceIn(0, tabs.lastIndex)
+        val tab = tabs[pageIndex]
         val allActions = if (onClickSettings != null) {
             (tab.actions + globalOverflowActions(onClickSettings = onClickSettings)).toImmutableList()
         } else {

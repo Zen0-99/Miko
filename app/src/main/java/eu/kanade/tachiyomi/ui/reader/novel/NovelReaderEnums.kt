@@ -10,7 +10,6 @@ enum class TextAlignment(val value: Int) {
 enum class NovelReadingMode(val prefValue: Int) {
     DEFAULT(0),
     INFINITE_SCROLL(1),
-    OVERSCROLL(3),
 }
 
 /**
@@ -57,7 +56,9 @@ enum class NovelReaderBackgroundTexture {
     NONE,
     PAPER_GRAIN,
     LINEN,
-    PARCHMENT,
+    CANVAS,
+    KRAFT,
+    DOTTED,
 }
 
 /**
@@ -77,6 +78,4 @@ enum class NovelPageTransitionStyle {
     SLIDE,
     DEPTH,
     BOOK,
-    CURL,
-    BOOK_FLIP,
 }

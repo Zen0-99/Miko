@@ -372,13 +372,17 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
 
     val progressLabel = when (hero.mediaType) {
         HomeHubMediaType.ANIME -> stringResource(AYMR.strings.home_hero_episode_progress, hero.progressNumber.toFloat())
-        HomeHubMediaType.MANGA, HomeHubMediaType.NOVEL -> stringResource(AYMR.strings.home_hero_chapter_progress, hero.progressNumber.toFloat())
+        HomeHubMediaType.MANGA -> stringResource(AYMR.strings.home_hero_chapter_progress, hero.progressNumber.toFloat())
+        HomeHubMediaType.NOVEL -> {
+            // Prefer chapter title; fall back to "Chapter X" if no title
+            hero.chapterTitle?.takeIf { it.isNotBlank() } ?: stringResource(AYMR.strings.home_hero_chapter_progress, hero.progressNumber.toFloat())
+        }
     }
 
-    val ctaLabel = if (hero.progressNumber > 0.0) {
-        stringResource(MR.strings.action_resume)
-    } else {
-        stringResource(MR.strings.action_start)
+    val ctaLabel = when {
+        hero.allRead -> stringResource(AYMR.strings.fetching_overlay_all_up_to_date)
+        hero.progressNumber > 0.0 -> stringResource(MR.strings.action_resume)
+        else -> stringResource(MR.strings.action_start)
     }
 
     val heroCardShape = remember { RoundedCornerShape(20.dp) }
@@ -479,13 +483,15 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
         // Readability scrim
         Box(Modifier.fillMaxSize().background(readabilityScrim))
 
-        // Content at bottom — title + chapter on left, resume button on right
+        // Content at bottom — title + chapter on left, resume button on right.
+        // Use Bottom alignment so the button stays at a fixed position
+        // regardless of title length (1 line vs 2 lines).
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Bottom,
         ) {
             // Left: title (top) + chapter/episode number (below)
             Column(
@@ -524,34 +530,50 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
             Spacer(Modifier.width(16.dp))
 
             // Right: resume button
+            val ctaColor = if (hero.allRead) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            } else {
+                MaterialTheme.colorScheme.primary
+            }
+            val ctaContentColor = if (hero.allRead) {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            } else {
+                MaterialTheme.colorScheme.onPrimary
+            }
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
+                color = ctaColor,
                 modifier = Modifier
                     .height(48.dp)
-                    .clickable {
-                        when (hero.mediaType) {
-                            HomeHubMediaType.ANIME -> {
-                                val extPlayer = playerPreferences.alwaysUseExternalPlayer().get()
-                                scope.launch {
-                                    MainActivity.startPlayerActivity(
-                                        context = context,
-                                        animeId = hero.entryId,
-                                        episodeId = hero.subId,
-                                        extPlayer = extPlayer,
-                                    )
+                    .then(
+                        if (hero.allRead) {
+                            Modifier
+                        } else {
+                            Modifier.clickable {
+                                when (hero.mediaType) {
+                                    HomeHubMediaType.ANIME -> {
+                                        val extPlayer = playerPreferences.alwaysUseExternalPlayer().get()
+                                        scope.launch {
+                                            MainActivity.startPlayerActivity(
+                                                context = context,
+                                                animeId = hero.entryId,
+                                                episodeId = hero.subId,
+                                                extPlayer = extPlayer,
+                                            )
+                                        }
+                                    }
+                                    HomeHubMediaType.MANGA -> {
+                                        context.startActivity(
+                                            ReaderActivity.newIntent(context, hero.entryId, hero.subId),
+                                        )
+                                    }
+                                    HomeHubMediaType.NOVEL -> {
+                                        navigator.push(NovelReaderScreen(hero.entryId, hero.subId))
+                                    }
                                 }
                             }
-                            HomeHubMediaType.MANGA -> {
-                                context.startActivity(
-                                    ReaderActivity.newIntent(context, hero.entryId, hero.subId),
-                                )
-                            }
-                            HomeHubMediaType.NOVEL -> {
-                                navigator.push(NovelReaderScreen(hero.entryId, hero.subId))
-                            }
-                        }
-                    },
+                        },
+                    ),
             ) {
                 Row(
                     modifier = Modifier.padding(
@@ -562,16 +584,18 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
                     ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
+                    if (!hero.allRead) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = ctaContentColor,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     Text(
                         text = ctaLabel,
-                        color = MaterialTheme.colorScheme.onPrimary,
+                        color = ctaContentColor,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                     )

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,7 @@ fun NovelChapterLongPressSheet(
     onMarkPreviousAsUnread: () -> Unit,
     onMarkRangeAsRead: () -> Unit,
     onMarkRangeAsUnread: () -> Unit,
+    onHideChapter: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -84,6 +86,13 @@ fun NovelChapterLongPressSheet(
                 icon = EyeOffDots,
                 onClick = { onMarkRangeAsUnread(); onDismiss() },
             )
+            if (onHideChapter != null) {
+                SheetOption(
+                    label = "Hide chapter",
+                    icon = Icons.Outlined.VisibilityOff,
+                    onClick = { onHideChapter(); onDismiss() },
+                )
+            }
         }
     }
 }

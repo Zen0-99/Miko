@@ -132,7 +132,10 @@ internal class NovelExtensionApi {
         }
 
         if (extensionsWithUpdate.isNotEmpty()) {
-            ExtensionUpdateNotifier(context).promptUpdates(extensionsWithUpdate.map { it.name })
+            ExtensionUpdateNotifier(context).promptUpdates(
+                names = extensionsWithUpdate.map { it.name },
+                novel = true,
+            )
         }
 
         return extensionsWithUpdate

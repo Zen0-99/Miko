@@ -118,3 +118,21 @@ getTotalReadCharCount:
 SELECT coalesce(sum(total_char_count), 0)
 FROM novelchapters
 WHERE read = 1;
+
+-- Backfill support: find novels that have read chapters with missing char counts
+getNovelIdsWithMissingReadCharCount:
+SELECT DISTINCT novel_id
+FROM novelchapters
+WHERE read = 1 AND total_char_count = 0;
+
+-- Get the average char count of read chapters that HAVE a char count, for a novel
+getAverageReadCharCountForNovel:
+SELECT coalesce(avg(total_char_count), 0)
+FROM novelchapters
+WHERE read = 1 AND total_char_count > 0 AND novel_id = :novelId;
+
+-- Backfill: set char count for all read chapters with 0 char count in a novel
+backfillReadCharCountForNovel:
+UPDATE novelchapters
+SET total_char_count = :charCount
+WHERE read = 1 AND total_char_count = 0 AND novel_id = :novelId;

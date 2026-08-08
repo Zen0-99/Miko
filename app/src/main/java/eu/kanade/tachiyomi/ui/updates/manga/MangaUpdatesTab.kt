@@ -120,12 +120,11 @@ fun Screen.mangaUpdatesTab(
                             ),
                         )
                         is MangaUpdatesScreenModel.Event.LibraryUpdateTriggered -> {
-                            val msg = if (event.started) {
-                                MR.strings.updating_library
-                            } else {
-                                MR.strings.update_already_running
+                            if (!event.started) {
+                                screenModel.snackbarHostState.showSnackbar(
+                                    context.stringResource(MR.strings.update_already_running),
+                                )
                             }
-                            screenModel.snackbarHostState.showSnackbar(context.stringResource(msg))
                         }
                     }
                 }

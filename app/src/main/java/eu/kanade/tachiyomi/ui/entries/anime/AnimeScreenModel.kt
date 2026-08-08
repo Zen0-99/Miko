@@ -450,6 +450,9 @@ class AnimeScreenModel(
                 episodes.map { it.episode },
                 java.time.ZoneId.systemDefault(),
             )
+            // Hide interval badge if series is completed or last update is
+            // older than 2 months (stale schedule).
+            val showInterval = shouldShowInterval(anime.status, episodes.map { it.episode })
             mutableState.update {
                 State.Success(
                     anime = anime,
@@ -460,6 +463,7 @@ class AnimeScreenModel(
                     isRefreshingData = needRefreshInfo || needRefreshEpisode || needRefreshSeason,
                     dialog = null,
                     intervalDays = intervalDays,
+                    showInterval = showInterval,
                 )
             }
             // Start observe tracking since it only needs animeId
@@ -1866,6 +1870,7 @@ class AnimeScreenModel(
             ),
             val accentColor: Color? = null,
             val intervalDays: Int? = null,
+            val showInterval: Boolean = true,
             val suggestions: SuggestionState = SuggestionState.Idle,
         ) : State {
 
@@ -2002,4 +2007,27 @@ sealed class EpisodeList {
         val id = episode.id
         val isDownloaded = downloadState == AnimeDownload.State.DOWNLOADED
     }
+}
+
+/**
+ * Determine whether the update interval badge should be shown.
+ *
+ * Returns false when:
+ * - The series status is COMPLETED
+ * - The most recent episode upload date is more than 2 months ago (stale)
+ */
+private fun shouldShowInterval(status: Long, episodes: List<*>): Boolean {
+    if (status == eu.kanade.tachiyomi.animesource.model.SAnime.COMPLETED.toLong()) return false
+
+    val twoMonthsMs = 60L * 24L * 60L * 60L * 1000L
+    val now = System.currentTimeMillis()
+    val latestDate = episodes.maxOfOrNull { item ->
+        when (item) {
+            is Episode -> maxOf(item.dateUpload, item.dateFetch)
+            else -> 0L
+        }
+    } ?: return false
+
+    if (latestDate == 0L) return true
+    return (now - latestDate) < twoMonthsMs
 }

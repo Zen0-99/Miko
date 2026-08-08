@@ -334,20 +334,20 @@ private fun MangaScreenSmallImpl(
             val selectedChapterCount: Int = remember(chapters) {
                 chapters.count { it.selected }
             }
-            val isFirstItemVisible by remember {
-                derivedStateOf { chapterListState.firstVisibleItemIndex == 0 }
+            // Scroll-dependent alpha: top-bar opacity gradually increases as the user
+            // scrolls down, proportional to how far the first item has scrolled.
+            val titleAlpha by remember {
+                derivedStateOf {
+                    if (chapterListState.firstVisibleItemIndex == 0) {
+                        val offset = chapterListState.firstVisibleItemScrollOffset
+                        val itemHeight = chapterListState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 1
+                        (offset.toFloat() / itemHeight.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        1f
+                    }
+                }
             }
-            val isFirstItemScrolled by remember {
-                derivedStateOf { chapterListState.firstVisibleItemScrollOffset > 0 }
-            }
-            val titleAlpha by animateFloatAsState(
-                if (!isFirstItemVisible) 1f else 0f,
-                label = "Top Bar Title",
-            )
-            val backgroundAlpha by animateFloatAsState(
-                if (!isFirstItemVisible || isFirstItemScrolled) 1f else 0f,
-                label = "Top Bar Background",
-            )
+            val backgroundAlpha = titleAlpha
             EntryToolbar(
                 title = state.manga.title,
                 hasFilters = state.filterActive,
@@ -511,6 +511,7 @@ private fun MangaScreenSmallImpl(
                             onClick = onFilterClicked,
                             accentColor = state.accentColor,
                             intervalDays = state.intervalDays,
+                            showInterval = state.showInterval,
                         )
                         MissingItemCountListItem(count = missingChaptersCount)
                     }
@@ -765,6 +766,7 @@ fun MangaScreenLargeImpl(
                                     onClick = onFilterButtonClicked,
                                     accentColor = state.accentColor,
                                     intervalDays = state.intervalDays,
+                                    showInterval = state.showInterval,
                                 )
                                 MissingItemCountListItem(count = missingChaptersCount)
                             }

@@ -16,6 +16,7 @@ import eu.kanade.presentation.browse.manga.MangaSourceUiModel
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.util.system.LAST_USED_KEY
+import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.PINNED_KEY
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -142,8 +143,26 @@ class MangaSourcesScreenModel(
         val notInstalledItems = if (notInstalled.isEmpty()) {
             emptyList()
         } else {
+            // Group by language: "all" (multi) at top, then "en" (english),
+            // then the rest sorted by display name.
+            val grouped = notInstalled
+                .groupBy { it.lang }
+                .toSortedMap { a, b ->
+                    when {
+                        a == "all" -> -1
+                        b == "all" -> 1
+                        a == "en" -> -1
+                        b == "en" -> 1
+                        else -> LocaleHelper.getLocalizedDisplayName(a)
+                            .compareTo(LocaleHelper.getLocalizedDisplayName(b))
+                    }
+                }
+
             listOf(MangaSourceUiModel.Header(NOT_INSTALLED_KEY)) +
-                notInstalled.map { MangaSourceUiModel.AvailableExtension(it) }
+                grouped.flatMap { (lang, exts) ->
+                    listOf(MangaSourceUiModel.Header(lang)) +
+                        exts.map { MangaSourceUiModel.AvailableExtension(it) }
+                }
         }
 
         // Untrusted extensions (installed but not trusted — show with trust icon)

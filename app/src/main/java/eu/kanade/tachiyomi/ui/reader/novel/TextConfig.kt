@@ -30,4 +30,5 @@ data class TextConfig(
     val oledEdgeGradient: Boolean = false,
     val pageEdgeShadowEnabled: Boolean = false,
     val pageEdgeShadowAlpha: Float = 0.25f,
+    val edgeFadeEnabled: Boolean = false,
 )

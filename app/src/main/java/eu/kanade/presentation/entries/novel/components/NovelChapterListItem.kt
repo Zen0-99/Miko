@@ -127,7 +127,7 @@ fun NovelChapterListItem(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (!chapter.read) {
+                    if (item.isNew) {
                         Icon(
                             imageVector = Icons.Filled.Circle,
                             contentDescription = stringResource(MR.strings.unread),
@@ -188,14 +188,19 @@ fun NovelChapterListItem(
                 }
             }
 
-            NovelChapterDownloadIndicator(
-                enabled = downloadIndicatorEnabled,
-                modifier = Modifier.padding(start = 4.dp),
-                downloadStateProvider = { item.downloadState },
-                downloadProgressProvider = { item.downloadProgress },
-                onClick = { onDownloadClick?.invoke(it) },
-                accentColor = accentColor,
-            )
+            // Only render the download indicator if enabled. For book sources
+            // (Anna's Archive), the indicator is disabled to hide per-chapter
+            // download icons since the whole book is downloaded at once.
+            if (downloadIndicatorEnabled) {
+                NovelChapterDownloadIndicator(
+                    enabled = downloadIndicatorEnabled,
+                    modifier = Modifier.padding(start = 4.dp),
+                    downloadStateProvider = { item.downloadState },
+                    downloadProgressProvider = { item.downloadProgress },
+                    onClick = { onDownloadClick?.invoke(it) },
+                    accentColor = accentColor,
+                )
+            }
         }
     }
 }

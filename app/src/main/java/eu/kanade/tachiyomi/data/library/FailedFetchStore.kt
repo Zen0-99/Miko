@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.library
 
 import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.domain.library.interactor.ClearFailedFetches
 import tachiyomi.domain.library.interactor.InsertFailedFetch
 import tachiyomi.domain.library.model.FailedFetch
 import uy.kohesive.injekt.Injekt
@@ -36,6 +37,17 @@ object FailedFetchStore {
         }
         withIOContext {
             Injekt.get<InsertFailedFetch>().awaitAll(inserts)
+        }
+    }
+
+    /**
+     * Clear all persisted failed fetches. Called when a new library update
+     * run starts so the Fetching tab shows only the current run's failures
+     * (not accumulated failures from previous runs).
+     */
+    suspend fun clearAll() {
+        withIOContext {
+            Injekt.get<ClearFailedFetches>().await()
         }
     }
 }

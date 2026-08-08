@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.ui.reader.novel
+﻿package eu.kanade.tachiyomi.ui.reader.novel
 
 import android.app.Activity
 import android.content.ComponentName
@@ -9,7 +9,10 @@ import android.graphics.Typeface
 import android.os.IBinder
 import android.text.Spanned
 import android.text.Html
+import android.text.SpannableString
 import android.speech.tts.TextToSpeech
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
@@ -20,8 +23,13 @@ import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.entries.novel.interactor.GetNovel
@@ -63,7 +71,7 @@ class NovelReaderScreenModel(
     private var currentChapterIndex = 0
     private var currentSource: NovelCatalogueSource? = null
 
-    /** Periodic auto-save coroutine job — saves position every 15 seconds. */
+    /** Periodic auto-save coroutine job â€” saves position every 15 seconds. */
     private var periodicSaveJob: kotlinx.coroutines.Job? = null
 
     private val _events = MutableSharedFlow<NovelReaderEvent>()
@@ -72,7 +80,9 @@ class NovelReaderScreenModel(
     private val _contentItems = MutableStateFlow<List<TextItem>>(emptyList())
     val contentItems = _contentItems.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
+    // Starts true: the screen always loads its first chapter on init, so
+    // auto-scroll and other consumers should wait until content is ready.
+    private val _isLoading = MutableStateFlow(true)
     val isLoading = _isLoading.asStateFlow()
 
     private val _currentChapter = MutableStateFlow<NovelChapter?>(null)
@@ -120,8 +130,154 @@ class NovelReaderScreenModel(
     // current but the user is already partway through it, we show 0% and
     // accumulate the "hidden" offset faster so the percentage feels natural.
 
-    private val _textConfig = MutableStateFlow(buildTextConfig())
-    val textConfig = _textConfig.asStateFlow()
+    // Theme colors pushed from the Compose side (MaterialTheme.colorScheme).
+    // Updated via refreshTextConfig(themeBg, themeText) â€” kept as a StateFlow
+    // so the combined textConfig flow below reacts to theme changes too.
+    private val _themeColors = MutableStateFlow<Pair<Int?, Int?>>(null to null)
+
+    /**
+     * Flow-based TextConfig: auto-rebuilds whenever any text-affecting
+     * preference OR the theme colors change. This replaces the old manual
+     * refreshTextConfig() pattern â€” settings changes are now reflected
+     * immediately without callers needing to trigger a refresh.
+     *
+     * combine() supports max 5 flows, so we chain via flatMapLatest to
+     * handle 27 preference flows + the theme color flow.
+     */
+    val textConfig: StateFlow<TextConfig> = combine(
+        preferences.textSize().changes(),
+        preferences.lineHeight().changes(),
+        preferences.paragraphSpacing().changes(),
+        preferences.sidePadding().changes(),
+        preferences.textAlignment().changes(),
+    ) { textSize, lineHeight, paragraphSpacing, sidePadding, textAlignment ->
+        TextConfigBatch1(textSize, lineHeight, paragraphSpacing, sidePadding, textAlignment)
+    }.flatMapLatest { b1 ->
+        combine(
+            preferences.bionicReading().changes(),
+            preferences.forceBoldText().changes(),
+            preferences.forceItalicText().changes(),
+            preferences.forceParagraphIndent().changes(),
+            preferences.preserveSourceTextAlignInNative().changes(),
+        ) { bionic, bold, italic, indent, preserve ->
+            TextConfigBatch2(b1, bionic, bold, italic, indent, preserve)
+        }
+    }.flatMapLatest { b2 ->
+        combine(
+            preferences.textSelectionEnabled().changes(),
+            preferences.textShadowEnabled().changes(),
+            preferences.textShadowBlur().changes(),
+            preferences.textShadowY().changes(),
+            preferences.textShadowColor().changes(),
+        ) { selectable, shadowOn, shadowBlur, shadowY, shadowColor ->
+            TextConfigBatch3(b2, selectable, shadowOn, shadowBlur, shadowY, shadowColor)
+        }
+    }.flatMapLatest { b3 ->
+        combine(
+            preferences.backgroundColorMode().changes(),
+            preferences.backgroundColor().changes(),
+            preferences.textColor().changes(),
+            preferences.eInkBinarization().changes(),
+            preferences.smartFitMargins().changes(),
+        ) { bgMode, bgCustom, textCustom, eInk, smartFit ->
+            TextConfigBatch4(b3, bgMode, bgCustom, textCustom, eInk, smartFit)
+        }
+    }.flatMapLatest { b4 ->
+        // Nest combines: combine() supports max 5 flows.
+        combine(
+            preferences.typographyPreset().changes(),
+            preferences.customFontFamily().changes(),
+            preferences.backgroundTexture().changes(),
+            preferences.nativeTextureStrength().changes(),
+        ) { typoPreset, fontFamily, bgTexture, textureStrength ->
+            Quad(typoPreset, fontFamily, bgTexture, textureStrength)
+        }.flatMapLatest { quad ->
+            combine(
+                preferences.oledEdgeGradient().changes(),
+                preferences.edgeFadeEnabled().changes(),
+            ) { oledGrad, edgeFade ->
+                TextConfigBatch5(b4, quad.first, quad.second, quad.third, quad.fourth, oledGrad, edgeFade)
+            }
+        }
+    }.flatMapLatest { b5 ->
+        combine(
+            preferences.pageEdgeShadowEnabled().changes(),
+            preferences.pageEdgeShadowAlpha().changes(),
+            _themeColors,
+        ) { pageShadowOn, pageShadowAlpha, (themeBg, themeText) ->
+            buildTextConfigFromValues(
+                textSize = b5.b4.b3.b2.b1.textSize,
+                lineHeight = b5.b4.b3.b2.b1.lineHeight,
+                paragraphSpacing = b5.b4.b3.b2.b1.paragraphSpacing,
+                sidePadding = b5.b4.b3.b2.b1.sidePadding,
+                textAlignment = b5.b4.b3.b2.b1.textAlignment,
+                bionicReading = b5.b4.b3.b2.bionicReading,
+                forceBold = b5.b4.b3.b2.forceBold,
+                forceItalic = b5.b4.b3.b2.forceItalic,
+                forceParagraphIndent = b5.b4.b3.b2.forceParagraphIndent,
+                preserveSourceTextAlign = b5.b4.b3.b2.preserveSourceTextAlign,
+                isTextSelectable = b5.b4.b3.isTextSelectable,
+                textShadowEnabled = b5.b4.b3.textShadowEnabled,
+                textShadowBlur = b5.b4.b3.textShadowBlur,
+                textShadowY = b5.b4.b3.textShadowY,
+                textShadowColor = b5.b4.b3.textShadowColor,
+                backgroundColorMode = b5.b4.backgroundColorMode,
+                backgroundColorCustom = b5.b4.backgroundColorCustom,
+                textColorCustom = b5.b4.textColorCustom,
+                eInkBinarization = b5.b4.eInkBinarization,
+                smartFitMargins = b5.b4.smartFitMargins,
+                typographyPreset = b5.typographyPreset,
+                customFontFamily = b5.customFontFamily,
+                backgroundTexture = b5.backgroundTexture,
+                textureStrength = b5.textureStrength,
+                oledEdgeGradient = b5.oledEdgeGradient,
+                edgeFadeEnabled = b5.edgeFadeEnabled,
+                pageEdgeShadowEnabled = pageShadowOn,
+                pageEdgeShadowAlpha = pageShadowAlpha,
+                themeBackgroundColor = themeBg,
+                themeTextColor = themeText,
+            )
+        }
+    }.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = buildTextConfig(),
+    )
+
+    // Intermediate batch data classes for the chained combine pattern.
+    private data class TextConfigBatch1(
+        val textSize: Float, val lineHeight: Float,
+        val paragraphSpacing: Int, val sidePadding: Int,
+        val textAlignment: TextAlignment,
+    )
+    private data class TextConfigBatch2(
+        val b1: TextConfigBatch1,
+        val bionicReading: Boolean, val forceBold: Boolean, val forceItalic: Boolean,
+        val forceParagraphIndent: Boolean, val preserveSourceTextAlign: Boolean,
+    )
+    private data class TextConfigBatch3(
+        val b2: TextConfigBatch2,
+        val isTextSelectable: Boolean, val textShadowEnabled: Boolean,
+        val textShadowBlur: Float, val textShadowY: Float, val textShadowColor: String,
+    )
+    private data class TextConfigBatch4(
+        val b3: TextConfigBatch3,
+        val backgroundColorMode: NovelReaderBackgroundColor,
+        val backgroundColorCustom: Int, val textColorCustom: Int,
+        val eInkBinarization: Boolean, val smartFitMargins: Boolean,
+    )
+    private data class Quad<A, B, C, D>(
+        val first: A, val second: B, val third: C, val fourth: D,
+    )
+
+    private data class TextConfigBatch5(
+        val b4: TextConfigBatch4,
+        val typographyPreset: NovelReaderTypographyPreset,
+        val customFontFamily: String,
+        val backgroundTexture: NovelReaderBackgroundTexture,
+        val textureStrength: Int, val oledEdgeGradient: Boolean,
+        val edgeFadeEnabled: Boolean,
+    )
 
     private val _dictionaryQuery = MutableStateFlow<String?>(null)
     val dictionaryQuery = _dictionaryQuery.asStateFlow()
@@ -137,7 +293,7 @@ class NovelReaderScreenModel(
     /**
      * When previous chapter is prepended in infinite scroll, this holds the
      * number of items added. The screen's `update` callback reads and clears
-     * it, then scrolls after `submitList` completes — avoiding a race where
+     * it, then scrolls after `submitList` completes â€” avoiding a race where
      * the scroll runs before the adapter has the new list.
      */
     @Volatile
@@ -154,6 +310,28 @@ class NovelReaderScreenModel(
      */
     @Volatile
     var pendingScrollRestore: Pair<Int, Int>? = null
+
+    /**
+     * Save the current RecyclerView scroll position so it can be restored
+     * when the RecyclerView is recreated (e.g. when the user navigates away
+     * from the reader and returns). This is separate from [pendingScrollRestore]
+     * which is set during chapter loading — this handles the case where the
+     * chapter is already loaded but the RecyclerView is being recreated.
+     */
+    fun saveCurrentScrollPosition(itemIndex: Int, pixelOffset: Int) {
+        if (itemIndex >= 0) {
+            pendingScrollRestore = Pair(itemIndex, pixelOffset)
+        }
+    }
+
+    /**
+     * Pending chapter transition: position to scroll to after submitList completes.
+     * 0 = top (next chapter), -1 = bottom (previous chapter).
+     * Used to trigger the page transition animation at the exact moment the
+     * adapter has the new items, avoiding the need for postDelayed.
+     */
+    @Volatile
+    var pendingTransitionPosition: Int? = null
 
     fun initHighlightManager(context: Context) {
         if (highlightManager == null) {
@@ -321,6 +499,12 @@ class NovelReaderScreenModel(
         }
     }
 
+    fun showMessage(message: String) {
+        screenModelScope.launchIO {
+            _events.emit(NovelReaderEvent.ShowMessage(message))
+        }
+    }
+
     fun shareText(text: String) {
         val ctx = context ?: return
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -410,7 +594,7 @@ class NovelReaderScreenModel(
                 Context.BIND_AUTO_CREATE,
             )
         } else {
-            // Already bound — start reading directly
+            // Already bound â€” start reading directly
             ttsService?.startReading(paragraphs, startIndex, title)
         }
     }
@@ -470,6 +654,130 @@ class NovelReaderScreenModel(
         _ttsPlaybackState.value = NovelTtsPlaybackState()
     }
 
+    /**
+     * Build a TextConfig from explicit parameter values (used by the
+     * flow-based textConfig combinator). This avoids re-reading preferences
+     * on every flow emission â€” the values are already provided by the
+     * upstream preference flows.
+     */
+    @Suppress("LongParameterList")
+    private fun buildTextConfigFromValues(
+        textSize: Float,
+        lineHeight: Float,
+        paragraphSpacing: Int,
+        sidePadding: Int,
+        textAlignment: TextAlignment,
+        bionicReading: Boolean,
+        forceBold: Boolean,
+        forceItalic: Boolean,
+        forceParagraphIndent: Boolean,
+        preserveSourceTextAlign: Boolean,
+        isTextSelectable: Boolean,
+        textShadowEnabled: Boolean,
+        textShadowBlur: Float,
+        textShadowY: Float,
+        textShadowColor: String,
+        backgroundColorMode: NovelReaderBackgroundColor,
+        backgroundColorCustom: Int,
+        textColorCustom: Int,
+        eInkBinarization: Boolean,
+        smartFitMargins: Boolean,
+        typographyPreset: NovelReaderTypographyPreset,
+        customFontFamily: String,
+        backgroundTexture: NovelReaderBackgroundTexture,
+        textureStrength: Int,
+        oledEdgeGradient: Boolean,
+        edgeFadeEnabled: Boolean,
+        pageEdgeShadowEnabled: Boolean,
+        pageEdgeShadowAlpha: Float,
+        themeBackgroundColor: Int?,
+        themeTextColor: Int?,
+    ): TextConfig {
+        val (backgroundColor, textColor) = when (backgroundColorMode) {
+            NovelReaderBackgroundColor.WHITE -> android.graphics.Color.WHITE to android.graphics.Color.BLACK
+            NovelReaderBackgroundColor.BLACK -> android.graphics.Color.BLACK to android.graphics.Color.WHITE
+            NovelReaderBackgroundColor.GRAY -> android.graphics.Color.parseColor("#FF202020") to android.graphics.Color.WHITE
+            NovelReaderBackgroundColor.CUSTOM -> backgroundColorCustom to textColorCustom
+            NovelReaderBackgroundColor.SMART_THEME -> {
+                if (themeBackgroundColor != null && themeTextColor != null) {
+                    themeBackgroundColor to themeTextColor
+                } else {
+                    val ctx = context
+                    if (ctx != null && isDark(ctx)) {
+                        android.graphics.Color.parseColor("#FF202020") to android.graphics.Color.WHITE
+                    } else {
+                        android.graphics.Color.WHITE to android.graphics.Color.BLACK
+                    }
+                }
+            }
+        }
+        val effectiveTextColor = if (eInkBinarization) android.graphics.Color.BLACK else textColor
+        val effectiveBackgroundColor = if (eInkBinarization) android.graphics.Color.WHITE else backgroundColor
+
+        val effectivePadding = if (smartFitMargins) {
+            val dm = context?.resources?.displayMetrics
+            val screenWidthDp: Int = dm?.let { (it.widthPixels / it.density).toInt() } ?: 0
+            when {
+                screenWidthDp <= 360 -> 8
+                screenWidthDp <= 480 -> 16
+                screenWidthDp <= 720 -> 32
+                else -> 48
+            }
+        } else {
+            sidePadding
+        }
+
+        val (effectiveTextSize, effectiveLineSpacing) = when (typographyPreset) {
+            NovelReaderTypographyPreset.SUPERGOLDEN -> textSize to (textSize * 0.618f)
+            NovelReaderTypographyPreset.GOLDEN -> textSize to (textSize * 0.33f)
+            NovelReaderTypographyPreset.CUSTOM -> textSize to lineHeight
+        }
+
+        val customTypeface: Typeface? = if (customFontFamily.isNotBlank()) {
+            runCatching {
+                context?.assets?.let { assets ->
+                    val possiblePaths = listOf(
+                        "fonts/$customFontFamily.ttf",
+                        "fonts/$customFontFamily.otf",
+                        "fonts/$customFontFamily",
+                    )
+                    val path = possiblePaths.firstOrNull { runCatching { assets.open(it) }.isSuccess }
+                    if (path != null) Typeface.createFromAsset(assets, path) else null
+                }
+            }.getOrNull()
+        } else {
+            null
+        }
+
+        return TextConfig(
+            textSize = effectiveTextSize,
+            textColor = effectiveTextColor,
+            backgroundColor = effectiveBackgroundColor,
+            textFont = customTypeface,
+            lineSpacing = effectiveLineSpacing,
+            paragraphSpacing = paragraphSpacing,
+            horizontalPadding = effectivePadding,
+            isTextSelectable = isTextSelectable,
+            textAlignment = textAlignment,
+            bionicReading = bionicReading,
+            forceBold = forceBold,
+            forceItalic = forceItalic,
+            forceParagraphIndent = forceParagraphIndent,
+            preserveSourceTextAlign = preserveSourceTextAlign,
+            textShadowEnabled = textShadowEnabled,
+            textShadowColor = textShadowColor,
+            textShadowBlur = textShadowBlur,
+            textShadowX = preferences.textShadowX().get(),
+            textShadowY = textShadowY,
+            backgroundTexture = backgroundTexture,
+            textureStrength = textureStrength,
+            oledEdgeGradient = oledEdgeGradient,
+            edgeFadeEnabled = edgeFadeEnabled,
+            pageEdgeShadowEnabled = pageEdgeShadowEnabled,
+            pageEdgeShadowAlpha = pageEdgeShadowAlpha,
+        )
+    }
+
     private fun buildTextConfig(themeBackgroundColor: Int? = null, themeTextColor: Int? = null): TextConfig {
         val bgColorMode = preferences.backgroundColorMode().get()
         val (backgroundColor, textColor) = when (bgColorMode) {
@@ -526,13 +834,13 @@ class NovelReaderScreenModel(
         val baseLineHeight = preferences.lineHeight().get()
         val (effectiveTextSize, effectiveLineSpacing) = when (preferences.typographyPreset().get()) {
             NovelReaderTypographyPreset.SUPERGOLDEN -> {
-                // Super Golden ratio: line height = text size × 1.618
-                // lineSpacing (extra sp) = textSize × (1.618 - 1) ≈ textSize × 0.618
+                // Super Golden ratio: line height = text size Ã— 1.618
+                // lineSpacing (extra sp) = textSize Ã— (1.618 - 1) â‰ˆ textSize Ã— 0.618
                 baseTextSize to (baseTextSize * 0.618f)
             }
             NovelReaderTypographyPreset.GOLDEN -> {
-                // Golden ratio: line height = text size × 1.33
-                // lineSpacing (extra sp) = textSize × (1.33 - 1) ≈ textSize × 0.33
+                // Golden ratio: line height = text size Ã— 1.33
+                // lineSpacing (extra sp) = textSize Ã— (1.33 - 1) â‰ˆ textSize Ã— 0.33
                 baseTextSize to (baseTextSize * 0.33f)
             }
             NovelReaderTypographyPreset.CUSTOM -> {
@@ -581,13 +889,20 @@ class NovelReaderScreenModel(
             backgroundTexture = preferences.backgroundTexture().get(),
             textureStrength = preferences.nativeTextureStrength().get(),
             oledEdgeGradient = preferences.oledEdgeGradient().get(),
+            edgeFadeEnabled = preferences.edgeFadeEnabled().get(),
             pageEdgeShadowEnabled = preferences.pageEdgeShadowEnabled().get(),
             pageEdgeShadowAlpha = preferences.pageEdgeShadowAlpha().get(),
         )
     }
 
+    /**
+     * Update the theme colors used by SMART_THEME background mode.
+     * This triggers the flow-based textConfig to rebuild automatically.
+     * The old manual refresh is no longer needed â€” preference changes
+     * are collected via flows, and theme changes flow through here.
+     */
     fun refreshTextConfig(themeBackgroundColor: Int? = null, themeTextColor: Int? = null) {
-        _textConfig.value = buildTextConfig(themeBackgroundColor, themeTextColor)
+        _themeColors.value = themeBackgroundColor to themeTextColor
     }
 
     private fun isDark(context: Context): Boolean {
@@ -596,7 +911,7 @@ class NovelReaderScreenModel(
     }
 
     val textConfigValue: TextConfig
-        get() = _textConfig.value
+        get() = textConfig.value
 
     data class State(
         val loading: Boolean = true,
@@ -670,30 +985,47 @@ class NovelReaderScreenModel(
     }
 
     private suspend fun loadChapter(chapter: NovelChapter) {
+        android.util.Log.d("NovelReader", "loadChapter: '${chapter.name}' (id=${chapter.id})")
         _currentChapter.value = chapter
-        _isLoading.value = true
-        mutableState.update { it.copy(loading = true) }
+
+        // Check if the chapter is cached (loaded, downloaded, or prefetched) before
+        // showing the loading indicator. If cached, the load is instant and
+        // the loading circle would flash unnecessarily.
+        val novel = _novel.value
+        val source = currentSource
+        val isLoadedCached = loadedChapterCache.containsKey(chapter.id)
+        val isDownloaded = novel != null && source != null && downloadManager.isChapterDownloaded(
+            chapterName = chapter.name,
+            chapterScanlator = chapter.scanlator,
+            novelTitle = novel.title,
+            sourceId = source.id,
+        )
+        val isPrefetched = prefetchedChapterCache.containsKey(chapter.id)
+        val isCached = isLoadedCached || isDownloaded || isPrefetched
+        android.util.Log.d("NovelReader", "loadChapter: isCached=$isCached (loadedCached=$isLoadedCached downloaded=$isDownloaded prefetched=$isPrefetched)")
+
+        if (!isCached) {
+            _isLoading.value = true
+            mutableState.update { it.copy(loading = true) }
+        }
         upsertHistory(chapter)
 
         try {
-            val source = currentSource
             if (source == null) {
                 mutableState.update { it.copy(loading = false, error = "No source available") }
                 return
             }
 
-            val novel = _novel.value
-
-            // Try downloaded content first (offline reading / instant load)
-            var htmlContent: String? = null
-            if (novel != null) {
-                val isDownloaded = downloadManager.isChapterDownloaded(
-                    chapterName = chapter.name,
-                    chapterScanlator = chapter.scanlator,
-                    novelTitle = novel.title,
-                    sourceId = source.id,
-                )
-                if (isDownloaded) {
+            // Try loaded chapter cache first (fully parsed items, instant)
+            val wrappedItems: List<TextItem>
+            var initialBatchShown = false
+            if (isLoadedCached) {
+                android.util.Log.d("NovelReader", "loadChapter: using loadedChapterCache (instant)")
+                wrappedItems = loadedChapterCache[chapter.id]!!
+            } else {
+                // Try downloaded content first (offline reading / instant load)
+                var htmlContent: String? = null
+                if (isDownloaded && novel != null) {
                     val chapterFile = downloadProvider.findChapterDir(
                         chapterName = chapter.name,
                         chapterScanlator = chapter.scanlator,
@@ -701,58 +1033,157 @@ class NovelReaderScreenModel(
                         source = source,
                     )
                     if (chapterFile != null) {
-                        htmlContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }
+                        android.util.Log.d("NovelReader", "loadChapter: reading downloaded file ${chapterFile.name}")
+                        val fileContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }
+                        // Only use the downloaded file if it has actual content.
+                        // A blank/empty file means the download failed silently —
+                        // fall back to prefetch cache or source fetch below.
+                        htmlContent = fileContent.takeIf { it.isNotBlank() }
+                        android.util.Log.d("NovelReader", "loadChapter: downloaded file content length=${fileContent.length}, usable=${htmlContent != null}")
+                    } else {
+                        android.util.Log.w("NovelReader", "loadChapter: isDownloaded=true but findChapterDir returned null!")
                     }
                 }
-            }
 
-            // Fall back to fetching from source
-            if (htmlContent == null) {
-                val sChapter = SNovelChapterImpl().apply {
-                    url = chapter.url
-                    name = chapter.name
+                // Fall back to prefetched cache (instant load if prefetched)
+                if (htmlContent.isNullOrBlank()) {
+                    prefetchedChapterCache.remove(chapter.id)?.let { cached ->
+                        android.util.Log.d("NovelReader", "loadChapter: using prefetched cache (length=${cached.length})")
+                        htmlContent = cached
+                    }
                 }
-                htmlContent = source.getChapterText(sChapter)
+
+                // Fall back to fetching from source
+                if (htmlContent == null) {
+                    android.util.Log.d("NovelReader", "loadChapter: fetching from source (network)")
+                    val sChapter = SNovelChapterImpl().apply {
+                        url = chapter.url
+                        name = chapter.name
+                    }
+                    htmlContent = source.getChapterText(sChapter)
+                    android.util.Log.d("NovelReader", "loadChapter: source returned content length=${htmlContent?.length}")
+                }
+
+                // Progressive parsing: parse the first 30 paragraphs instantly,
+                // show them to the user, then parse the rest in the background.
+                // This makes chapter loading feel instant even for very long
+                // chapters — the user sees text within ~50ms instead of waiting
+                // for the entire chapter to be parsed.
+                val parseStart = System.currentTimeMillis()
+
+                val items = parseHtmlToParagraphsProgressive(
+                    html = htmlContent,
+                    chapterId = chapter.id,
+                    initialBatchSize = 30,
+                ) { batch ->
+                    // Phase 1 callback: show the initial batch immediately.
+                    val batchWrapped = wrapWithNavigation(batch, chapter)
+                    android.util.Log.d("NovelReader", "loadChapter: initial batch ${batch.size} items shown in ${System.currentTimeMillis() - parseStart}ms")
+                    _contentItems.value = batchWrapped
+                    resetLoadedChapters(chapter.id)
+                    mutableState.update { it.copy(loading = false, error = null) }
+                    _events.emit(NovelReaderEvent.ChapterChanged(chapter.name))
+                    initialBatchShown = true
+
+                    // Restore saved scroll position after the initial batch is shown.
+                    val saved = positionTracker.loadSavedPosition(chapter)
+                    if (saved != null && (saved.characterPosition > 0 || saved.itemIndex > 0)) {
+                        android.util.Log.d("NovelReader", "loadChapter: restoring scroll pos (progressive) itemIndex=${saved.itemIndex} pixelOffset=${saved.pixelOffset}")
+                        positionTracker.startReadingSession(saved.characterPosition)
+                        pendingScrollRestore = Pair(saved.itemIndex, saved.pixelOffset)
+                    } else {
+                        positionTracker.startReadingSession(0)
+                    }
+                }
+
+                android.util.Log.d("NovelReader", "loadChapter: full parse complete ${items.size} items in ${System.currentTimeMillis() - parseStart}ms")
+
+                // If parsing yielded no paragraphs, the content is empty/corrupt.
+                if (items.isEmpty()) {
+                    if (!initialBatchShown) {
+                        mutableState.update {
+                            it.copy(
+                                loading = false,
+                                error = "This chapter has no readable content. The download may be corrupt or the source returned empty text.",
+                            )
+                        }
+                        _events.emit(NovelReaderEvent.ShowError("Chapter content is empty"))
+                    }
+                    return
+                }
+
+                wrappedItems = wrapWithNavigation(items, chapter)
+
+                // Persist total character count so the detail screen can show "% Read".
+                val totalCharCount = items.filterIsInstance<TextItem.Paragraph>().lastOrNull()?.endCharIndex?.plus(1) ?: 0
+                if (totalCharCount > 0 && chapter.id > 0) {
+                    updateNovelChapter.await(
+                        tachiyomi.domain.items.chapter.model.NovelChapterUpdate(
+                            id = chapter.id,
+                            totalCharCount = totalCharCount.toLong(),
+                        ),
+                    )
+                }
+
+                // Cache the loaded chapter for instant navigation back
+                loadedChapterCache[chapter.id] = wrappedItems
             }
 
-            val items = parseHtmlToParagraphs(htmlContent, chapter.id)
-            val wrappedItems = wrapWithNavigation(items, chapter)
-
-            // Persist total character count so the detail screen can show "% Read".
-            val totalCharCount = items.filterIsInstance<TextItem.Paragraph>().lastOrNull()?.endCharIndex?.plus(1) ?: 0
-            if (totalCharCount > 0 && chapter.id > 0) {
-                updateNovelChapter.await(
-                    tachiyomi.domain.items.chapter.model.NovelChapterUpdate(
-                        id = chapter.id,
-                        totalCharCount = totalCharCount.toLong(),
-                    ),
-                )
-            }
-
-            _contentItems.value = wrappedItems
-            resetLoadedChapters(chapter.id)
-            mutableState.update { it.copy(loading = false, error = null) }
-            _events.emit(NovelReaderEvent.ChapterChanged(chapter.name))
-
-            // Restore saved scroll position for this chapter.
-            // Uses Tadami-style exact restoration: item index + pixel offset
-            // are saved and restored precisely, eliminating both the visual
-            // jump (content loads at 0% then scrolls) and position drift
-            // (losing a few % each session).
-            val saved = positionTracker.loadSavedPosition(chapter)
-            if (saved != null && (saved.characterPosition > 0 || saved.itemIndex > 0)) {
-                positionTracker.startReadingSession(saved.characterPosition)
-                // Store the pending scroll position — the RecyclerView may not
-                // exist yet (it's created after loading=false triggers
-                // recomposition). The screen's onRecyclerViewReady callback
-                // will apply it before the first frame is drawn.
-                pendingScrollRestore = Pair(saved.itemIndex, saved.pixelOffset)
+            if (initialBatchShown) {
+                // Phase 2: replace the partial content with the full list.
+                // DiffUtil will detect that the first 30 items are the same
+                // (same IDs) and only append the remaining items — no visual
+                // jump for items that were already visible.
+                //
+                // However, if the saved scroll position was beyond the initial
+                // batch (e.g. itemIndex=105 but only 31 items were in the batch),
+                // the onRecyclerViewReady callback clamped to item 30. Now that
+                // the full list (92 items) is available, re-set
+                // pendingScrollRestore so the update callback can scroll to the
+                // correct position.
+                android.util.Log.d("NovelReader", "loadChapter: replacing initial batch with full list (${wrappedItems.size} items)")
+                val saved = positionTracker.loadSavedPosition(chapter)
+                if (saved != null && saved.itemIndex >= wrappedItems.size) {
+                    // Saved index is beyond even the full list — it was from
+                    // infinite scroll mode. Clamp to the last item.
+                    android.util.Log.d("NovelReader", "loadChapter: saved itemIndex=${saved.itemIndex} > full list size=${wrappedItems.size}, clamping")
+                    pendingScrollRestore = Pair(wrappedItems.size - 1, saved.pixelOffset)
+                } else if (saved != null && saved.itemIndex > 0) {
+                    // Saved index is within the full list — re-set it so the
+                    // update callback scrolls to the right position.
+                    android.util.Log.d("NovelReader", "loadChapter: re-setting pendingScrollRestore for full list (index=${saved.itemIndex})")
+                    pendingScrollRestore = Pair(saved.itemIndex, saved.pixelOffset)
+                }
+                _contentItems.value = wrappedItems
             } else {
-                positionTracker.startReadingSession(0)
+                // No progressive batch was shown (loaded cache or empty content).
+                // Use the original flow: set content, restore scroll, etc.
+                _contentItems.value = wrappedItems
+                resetLoadedChapters(chapter.id)
+                mutableState.update { it.copy(loading = false, error = null) }
+                _events.emit(NovelReaderEvent.ChapterChanged(chapter.name))
+
+                // Restore saved scroll position for this chapter.
+                val saved = positionTracker.loadSavedPosition(chapter)
+                if (saved != null && (saved.characterPosition > 0 || saved.itemIndex > 0)) {
+                    android.util.Log.d("NovelReader", "loadChapter: restoring scroll pos itemIndex=${saved.itemIndex} pixelOffset=${saved.pixelOffset} charPos=${saved.characterPosition}")
+                    positionTracker.startReadingSession(saved.characterPosition)
+                    pendingScrollRestore = Pair(saved.itemIndex, saved.pixelOffset)
+                } else {
+                    android.util.Log.d("NovelReader", "loadChapter: no saved position, starting at 0")
+                    positionTracker.startReadingSession(0)
+                }
             }
 
             // Start periodic auto-save for this reading session.
             startPeriodicSave()
+
+            // Prefetch next chapter if enabled — caches the HTML content
+            // in the background so navigation to the next chapter is instant.
+            // This does NOT append to content items (no infinite scroll effect).
+            // Always prefetch nearby chapters (1 behind + 5 ahead) for
+            // smooth reading, regardless of the prefetch preference.
+            prefetchNextChapter()
         } catch (e: Exception) {
             mutableState.update { it.copy(loading = false, error = "Failed to load chapter: ${e.message}") }
             _events.emit(NovelReaderEvent.ShowError("Failed to load chapter: ${e.message}"))
@@ -761,7 +1192,7 @@ class NovelReaderScreenModel(
         }
     }
 
-    private fun parseHtmlToParagraphs(html: String, chapterId: Long): List<TextItem> {
+    private suspend fun parseHtmlToParagraphs(html: String, chapterId: Long): List<TextItem> = withContext(Dispatchers.Default) {
         @Suppress("DEPRECATION")
         fun renderHtml(source: String): Spanned {
             return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
@@ -771,9 +1202,20 @@ class NovelReaderScreenModel(
             }
         }
 
+        // Fast path: if the paragraph HTML contains no HTML tags, use plain
+        // text directly instead of calling the expensive Html.fromHtml.
+        // This skips the XML parser for the majority of novel paragraphs
+        // (which are plain text), cutting parse time by 5-10x.
+        fun renderParagraph(paragraphHtml: String): Spanned {
+            if (!paragraphHtml.contains('<')) {
+                return SpannableString(paragraphHtml)
+            }
+            return renderHtml(paragraphHtml)
+        }
+
         val items = mutableListOf<TextItem>()
         try {
-            // Clean HTML with Jsoup — removes style/script/noscript that cause
+            // Clean HTML with Jsoup â€” removes style/script/noscript that cause
             // stray "-->" artifacts and massive gaps.
             val document = Jsoup.parse(html)
             document.select("style, script, noscript").remove()
@@ -808,10 +1250,10 @@ class NovelReaderScreenModel(
                 // Skip empty paragraphs (fixes weird gaps).
                 if (paragraphHtml.isBlank()) continue
 
-                val spanned = renderHtml(paragraphHtml)
+                val spanned = renderParagraph(paragraphHtml)
                 if (spanned.isEmpty()) continue
 
-                // Inclusive endChar: text.length=5 → chars 0..4, endChar=4.
+                // Inclusive endChar: text.length=5 â†’ chars 0..4, endChar=4.
                 val startChar = charIndex
                 val endChar = charIndex + spanned.length - 1
 
@@ -845,13 +1287,160 @@ class NovelReaderScreenModel(
             }
         }
 
-        return items
+        return@withContext items
+    }
+
+    /**
+     * Progressive parse: Jsoup-preprocess the HTML, then render only the first
+     * [initialBatchSize] paragraphs and call [onInitialBatch] immediately so
+     * the UI can display content while the remaining paragraphs are parsed.
+     *
+     * The initial batch items have the same IDs and charIndex values as they
+     * will in the final list, so DiffUtil correctly identifies them and the
+     * RecyclerView doesn't jump when the full list replaces the partial one.
+     *
+     * Returns the complete list of parsed items.
+     */
+    private suspend fun parseHtmlToParagraphsProgressive(
+        html: String,
+        chapterId: Long,
+        initialBatchSize: Int = 30,
+        onInitialBatch: suspend (List<TextItem>) -> Unit,
+    ): List<TextItem> = withContext(Dispatchers.Default) {
+        @Suppress("DEPRECATION")
+        fun renderHtml(source: String): Spanned {
+            return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                Html.fromHtml(source, Html.FROM_HTML_MODE_COMPACT)
+            } else {
+                Html.fromHtml(source)
+            }
+        }
+
+        fun renderParagraph(paragraphHtml: String): Spanned {
+            if (!paragraphHtml.contains('<')) {
+                return SpannableString(paragraphHtml)
+            }
+            return renderHtml(paragraphHtml)
+        }
+
+        val items = mutableListOf<TextItem>()
+        try {
+            val document = Jsoup.parse(html)
+            document.select("style, script, noscript").remove()
+            val paragraphs = document.select("p")
+
+            val elementsToProcess = if (paragraphs.isEmpty()) {
+                val bodyText = document.body().text()
+                if (bodyText.isNotBlank()) {
+                    bodyText.split(Regex("\n\n+|\r\n\r\n+"))
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() }
+                        .map { line ->
+                            org.jsoup.nodes.Element(
+                                org.jsoup.parser.Tag.valueOf("p"),
+                                "",
+                            ).apply { html(line) }
+                        }
+                } else {
+                    emptyList()
+                }
+            } else {
+                paragraphs
+            }
+
+            // Phase 1: parse the first [initialBatchSize] non-empty paragraphs
+            // and emit them immediately so the UI can render.
+            var charIndex = 0
+            var paragraphIndex = 0
+            var emitted = 0
+            val batch = mutableListOf<TextItem>()
+            var lastProcessedElementIdx = -1
+            for ((idx, element) in elementsToProcess.withIndex()) {
+                val paragraphHtml = element.html()
+                if (paragraphHtml.isBlank()) continue
+
+                val spanned = renderParagraph(paragraphHtml)
+                if (spanned.isEmpty()) continue
+
+                val startChar = charIndex
+                val endChar = charIndex + spanned.length - 1
+
+                val item = TextItem.Paragraph(
+                    id = (chapterId * 100000) + paragraphIndex.toLong(),
+                    chapterId = chapterId,
+                    paragraphIndex = paragraphIndex,
+                    text = spanned,
+                    startCharIndex = startChar,
+                    endCharIndex = endChar,
+                )
+                batch.add(item)
+                items.add(item)
+                charIndex = endChar + 1
+                paragraphIndex++
+                emitted++
+                lastProcessedElementIdx = idx
+
+                if (emitted >= initialBatchSize) break
+            }
+
+            // Emit the initial batch — caller sets content and clears loading.
+            // Switch to Main dispatcher so UI state updates happen on the main thread.
+            if (batch.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    onInitialBatch(batch.toList())
+                }
+            }
+
+            // Phase 2: parse the remaining paragraphs.
+            for (i in (lastProcessedElementIdx + 1) until elementsToProcess.size) {
+                val element = elementsToProcess[i]
+                val paragraphHtml = element.html()
+                if (paragraphHtml.isBlank()) continue
+
+                val spanned = renderParagraph(paragraphHtml)
+                if (spanned.isEmpty()) continue
+
+                val startChar = charIndex
+                val endChar = charIndex + spanned.length - 1
+
+                items.add(
+                    TextItem.Paragraph(
+                        id = (chapterId * 100000) + paragraphIndex.toLong(),
+                        chapterId = chapterId,
+                        paragraphIndex = paragraphIndex,
+                        text = spanned,
+                        startCharIndex = startChar,
+                        endCharIndex = endChar,
+                    ),
+                )
+                charIndex = endChar + 1
+                paragraphIndex++
+            }
+        } catch (e: Exception) {
+            if (items.isEmpty()) {
+                val spanned = renderHtml(html)
+                if (spanned.isNotEmpty()) {
+                    items.add(
+                        TextItem.Paragraph(
+                            id = (chapterId * 100000),
+                            chapterId = chapterId,
+                            paragraphIndex = 0,
+                            text = spanned,
+                            startCharIndex = 0,
+                            endCharIndex = spanned.length - 1,
+                        ),
+                    )
+                }
+            }
+        }
+
+        return@withContext items
     }
 
     private fun wrapWithNavigation(items: List<TextItem>, chapter: NovelChapter): List<TextItem> {
         val result = mutableListOf<TextItem>()
 
-        // Look up chapter by id — during infinite scroll, currentChapterIndex
+        // Look up chapter by id â€” during infinite scroll, currentChapterIndex
         // may not match the chapter being wrapped.
         val chapterIndex = _chapters.value.indexOfFirst { it.id == chapter.id }
         val hasPrev = chapterIndex > 0
@@ -872,7 +1461,7 @@ class NovelReaderScreenModel(
             )
         }
 
-        // Chapter header — skip when joining chapters (infinite scroll only, not first chapter)
+        // Chapter header â€” skip when joining chapters (infinite scroll only, not first chapter)
         val isJoinMode = preferences.joinChapters().get() &&
             readingMode == NovelReadingMode.INFINITE_SCROLL &&
             hasPrev
@@ -909,9 +1498,21 @@ class NovelReaderScreenModel(
             currentChapterIndex--
             val chapter = _chapters.value[currentChapterIndex]
             screenModelScope.launchIO {
-                // In DEFAULT/OVERSCROLL modes, clear content so the scroll bar
-                // reflects only the current chapter.
-                if (preferences.readingMode().get() != NovelReadingMode.INFINITE_SCROLL) {
+                // Only clear content if the chapter is NOT cached.
+                val isCached = loadedChapterCache.containsKey(chapter.id) ||
+                    prefetchedChapterCache.containsKey(chapter.id) ||
+                    (_novel.value?.let { novel ->
+                        currentSource?.let { src ->
+                            downloadManager.isChapterDownloaded(
+                                chapterName = chapter.name,
+                                chapterScanlator = chapter.scanlator,
+                                novelTitle = novel.title,
+                                sourceId = src.id,
+                            )
+                        }
+                    } ?: false)
+
+                if (preferences.readingMode().get() != NovelReadingMode.INFINITE_SCROLL && !isCached) {
                     _contentItems.value = emptyList()
                 }
                 loadChapter(chapter)
@@ -928,7 +1529,21 @@ class NovelReaderScreenModel(
             currentChapterIndex++
             val chapter = _chapters.value[currentChapterIndex]
             screenModelScope.launchIO {
-                if (preferences.readingMode().get() != NovelReadingMode.INFINITE_SCROLL) {
+                // Only clear content if the chapter is NOT cached.
+                val isCached = loadedChapterCache.containsKey(chapter.id) ||
+                    prefetchedChapterCache.containsKey(chapter.id) ||
+                    (_novel.value?.let { novel ->
+                        currentSource?.let { src ->
+                            downloadManager.isChapterDownloaded(
+                                chapterName = chapter.name,
+                                chapterScanlator = chapter.scanlator,
+                                novelTitle = novel.title,
+                                sourceId = src.id,
+                            )
+                        }
+                    } ?: false)
+
+                if (preferences.readingMode().get() != NovelReadingMode.INFINITE_SCROLL && !isCached) {
                     _contentItems.value = emptyList()
                 }
                 loadChapter(chapter)
@@ -936,6 +1551,8 @@ class NovelReaderScreenModel(
                 if (preferences.readingMode().get() != NovelReadingMode.INFINITE_SCROLL) {
                     _events.emit(NovelReaderEvent.ScrollToPosition(0))
                 }
+                // Chain prefetch for nearby chapters
+                prefetchNextChapter()
             }
         }
     }
@@ -946,6 +1563,17 @@ class NovelReaderScreenModel(
 
     /** Chapter IDs currently loaded into the content list (for dedup). */
     private val loadedChapterIds = mutableSetOf<Long>()
+    /** Cache of prefetched chapter HTML content (chapterId → htmlContent). */
+    private val prefetchedChapterCache = mutableMapOf<Long, String>()
+    /** Cache of fully loaded chapters: chapterId → parsed TextItems. */
+    private val loadedChapterCache = mutableMapOf<Long, List<TextItem>>()
+
+    /** Max chapters to prefetch ahead (QuickNovel-style preload range). */
+    private val PREFETCH_AHEAD = 5
+    /** Max chapters to prefetch behind. */
+    private val PREFETCH_BEHIND = 1
+    /** Max entries in the prefetch cache before eviction. */
+    private val MAX_PREFETCH_CACHE_SIZE = 12
     @Volatile private var isLoadingNextChapter = false
     @Volatile private var isLoadingPreviousChapter = false
 
@@ -987,12 +1615,46 @@ class NovelReaderScreenModel(
                 _contentItems.value = currentItems
 
                 val source = currentSource ?: return@launchIO
-                val sChapter = SNovelChapterImpl().apply {
-                    url = nextChapter.url
-                    name = nextChapter.name
+                // Use prefetched cache if available (faster than re-fetching)
+                var htmlContent: String? = prefetchedChapterCache.remove(nextChapter.id)
+                // Try downloaded file next (offline reading)
+                if (htmlContent.isNullOrBlank()) {
+                    val novel = _novel.value
+                    if (novel != null && downloadManager.isChapterDownloaded(
+                            chapterName = nextChapter.name,
+                            chapterScanlator = nextChapter.scanlator,
+                            novelTitle = novel.title,
+                            sourceId = source.id,
+                        )
+                    ) {
+                        val chapterFile = downloadProvider.findChapterDir(
+                            chapterName = nextChapter.name,
+                            chapterScanlator = nextChapter.scanlator,
+                            novelTitle = novel.title,
+                            source = source,
+                        )
+                        if (chapterFile != null) {
+                            val fileContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }
+                            htmlContent = fileContent.takeIf { it.isNotBlank() }
+                        }
+                    }
                 }
-                val htmlContent = source.getChapterText(sChapter)
+                // Fall back to fetching from source
+                if (htmlContent.isNullOrBlank()) {
+                    val sChapter = SNovelChapterImpl().apply {
+                        url = nextChapter.url
+                        name = nextChapter.name
+                    }
+                    htmlContent = source.getChapterText(sChapter)
+                }
                 val nextItems = parseHtmlToParagraphs(htmlContent, nextChapter.id)
+                // Skip appending if the chapter has no content (empty/corrupt)
+                if (nextItems.isEmpty()) {
+                    val currentItems2 = _contentItems.value.toMutableList()
+                    _contentItems.value = currentItems2.dropLast(1)
+                    _events.emit(NovelReaderEvent.ShowError("Next chapter has no readable content"))
+                    return@launchIO
+                }
                 val wrappedNextItems = wrapWithNavigation(nextItems, nextChapter)
 
                 // Append (drop loading indicator).
@@ -1001,7 +1663,7 @@ class NovelReaderScreenModel(
 
                 // Do NOT mutate _currentChapter/currentChapterIndex here.
                 // The current chapter is derived from scroll position via
-                // updateCurrentChapterById() — this is what fixes the
+                // updateCurrentChapterById() â€” this is what fixes the
                 // "chapter 3 100%" progress bug.
                 loadedChapterIds.add(nextChapter.id)
             } catch (e: Exception) {
@@ -1047,12 +1709,46 @@ class NovelReaderScreenModel(
                 _contentItems.value = currentItems
 
                 val source = currentSource ?: return@launchIO
-                val sChapter = SNovelChapterImpl().apply {
-                    url = prevChapter.url
-                    name = prevChapter.name
+                // Use prefetched cache if available (faster than re-fetching)
+                var htmlContent: String? = prefetchedChapterCache.remove(prevChapter.id)
+                // Try downloaded file next (offline reading)
+                if (htmlContent.isNullOrBlank()) {
+                    val novel = _novel.value
+                    if (novel != null && downloadManager.isChapterDownloaded(
+                            chapterName = prevChapter.name,
+                            chapterScanlator = prevChapter.scanlator,
+                            novelTitle = novel.title,
+                            sourceId = source.id,
+                        )
+                    ) {
+                        val chapterFile = downloadProvider.findChapterDir(
+                            chapterName = prevChapter.name,
+                            chapterScanlator = prevChapter.scanlator,
+                            novelTitle = novel.title,
+                            source = source,
+                        )
+                        if (chapterFile != null) {
+                            val fileContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }
+                            htmlContent = fileContent.takeIf { it.isNotBlank() }
+                        }
+                    }
                 }
-                val htmlContent = source.getChapterText(sChapter)
+                // Fall back to fetching from source
+                if (htmlContent.isNullOrBlank()) {
+                    val sChapter = SNovelChapterImpl().apply {
+                        url = prevChapter.url
+                        name = prevChapter.name
+                    }
+                    htmlContent = source.getChapterText(sChapter)
+                }
                 val prevItems = parseHtmlToParagraphs(htmlContent, prevChapter.id)
+                // Skip prepending if the chapter has no content (empty/corrupt)
+                if (prevItems.isEmpty()) {
+                    val currentItems2 = _contentItems.value.toMutableList()
+                    _contentItems.value = currentItems2.drop(1)
+                    _events.emit(NovelReaderEvent.ShowError("Previous chapter has no readable content"))
+                    return@launchIO
+                }
                 val wrappedPrevItems = wrapWithNavigation(prevItems, prevChapter)
 
                 // Prepend (drop loading indicator). Preserve scroll by offsetting.
@@ -1067,7 +1763,7 @@ class NovelReaderScreenModel(
                 // Notify the screen to adjust scroll offset by the number of
                 // prepended items so the user stays at the same spot.
                 // Stored as a pending field so the screen can apply it AFTER
-                // submitList completes — avoiding a race condition that caused
+                // submitList completes â€” avoiding a race condition that caused
                 // random scroll jumps.
                 val addedCount = updatedItems.size - prevItemCount
                 pendingScrollAdjustment = addedCount
@@ -1088,9 +1784,74 @@ class NovelReaderScreenModel(
     }
 
     /**
+     * Prefetch the next chapter's HTML content into a cache â€” does NOT append
+     * to content items. Used when "Prefetch next chapter" is enabled and
+     * infinite scroll is OFF. The cached content is used by [loadChapter] for
+     * instant navigation when the user taps "next chapter".
+     * Also chains: when the user moves to the prefetched chapter, the next
+     * one is automatically prefetched.
+     */
+    fun prefetchNextChapter() {
+        val chapters = _chapters.value
+        if (chapters.isEmpty()) return
+        val source = currentSource ?: return
+        val novel = _novel.value
+
+        // Prefetch chapters ahead and behind, excluding the current chapter
+        // and any already loaded/cached chapters.
+        val indicesToPrefetch = mutableListOf<Int>()
+        // Behind
+        for (i in 1..PREFETCH_BEHIND) {
+            val idx = currentChapterIndex - i
+            if (idx >= 0) indicesToPrefetch.add(idx)
+        }
+        // Ahead
+        for (i in 1..PREFETCH_AHEAD) {
+            val idx = currentChapterIndex + i
+            if (idx < chapters.size) indicesToPrefetch.add(idx)
+        }
+
+        for (idx in indicesToPrefetch) {
+            val chapter = chapters[idx]
+            // Already cached or loaded - skip
+            if (prefetchedChapterCache.containsKey(chapter.id)) continue
+            if (loadedChapterIds.contains(chapter.id)) continue
+
+            screenModelScope.launchIO {
+                try {
+                    // Check if already downloaded (no need to prefetch)
+                    if (novel != null) {
+                        val isDownloaded = downloadManager.isChapterDownloaded(
+                            chapterName = chapter.name,
+                            chapterScanlator = chapter.scanlator,
+                            novelTitle = novel.title,
+                            sourceId = source.id,
+                        )
+                        if (isDownloaded) return@launchIO // Will load from disk instantly
+                    }
+                    val sChapter = SNovelChapterImpl().apply {
+                        url = chapter.url
+                        name = chapter.name
+                    }
+                    val htmlContent = source.getChapterText(sChapter)
+                    // Evict oldest entries if cache is full
+                    if (prefetchedChapterCache.size >= MAX_PREFETCH_CACHE_SIZE) {
+                        prefetchedChapterCache.keys.firstOrNull()?.let {
+                            prefetchedChapterCache.remove(it)
+                        }
+                    }
+                    prefetchedChapterCache[chapter.id] = htmlContent
+                } catch (e: Exception) {
+                    // Silent - prefetch is best-effort
+                }
+            }
+        }
+    }
+
+    /**
      * Update the current chapter based on which chapter is visually visible.
      * This is the ONLY method that changes the "current" chapter during
-     * infinite scroll — called from the scroll listener, not from the
+     * infinite scroll â€” called from the scroll listener, not from the
      * background loaders. Also marks the previous chapter as read.
      */
     fun updateCurrentChapterById(chapterId: Long) {
@@ -1105,7 +1866,7 @@ class NovelReaderScreenModel(
         // In infinite scroll, when the chapter changes because the user scrolled
         // When the current chapter changes (user scrolled into a new chapter's
         // header in infinite scroll), reset progress to 0% for the new chapter.
-        // The progress is purely based on the current chapter — no catchup needed.
+        // The progress is purely based on the current chapter â€” no catchup needed.
         if (preferences.readingMode().get() == NovelReadingMode.INFINITE_SCROLL) {
             _progressPercent.value = 0
         }
@@ -1117,11 +1878,15 @@ class NovelReaderScreenModel(
                     try {
                         setReadStatus.await(true, prev)
                     } catch (e: Exception) {
-                        // Silent — not critical
+                        // Silent â€” not critical
                     }
                 }
             }
         }
+
+        // Chain prefetch: when the current chapter changes, prefetch nearby
+        // chapters. This ensures continuous prefetching as the user reads.
+        prefetchNextChapter()
     }
 
     private suspend fun markPreviousChapterRead() {
@@ -1289,12 +2054,27 @@ class NovelReaderScreenModel(
         // Convert global position to per-chapter position.
         val perChapterPos = (characterPosition - chapterStart).coerceIn(0, chapterTotalChars)
 
+        // Convert global adapter itemIndex to chapter-relative itemIndex.
+        // In infinite scroll mode, the adapter contains items from multiple
+        // chapters. We need the index relative to the current chapter's first
+        // item so that scroll restoration works correctly when reopening the
+        // chapter (which loads only one chapter's items).
+        val chapterFirstItem = _contentItems.value.indexOfFirst {
+            (it is TextItem.Paragraph && it.chapterId == chapter.id) ||
+                (it is TextItem.ChapterHeader && it.chapterId == chapter.id)
+        }
+        val chapterRelativeItemIndex = if (chapterFirstItem >= 0) {
+            (itemIndex - chapterFirstItem).coerceAtLeast(0)
+        } else {
+            itemIndex
+        }
+
         positionTracker.updatePosition(
             novelId = novel.id,
             chapterId = chapter.id,
             characterPosition = perChapterPos,
             totalCharacters = chapterTotalChars,
-            itemIndex = itemIndex,
+            itemIndex = chapterRelativeItemIndex,
             pixelOffset = pixelOffset,
         )
 
@@ -1304,8 +2084,20 @@ class NovelReaderScreenModel(
             // the current chapter changes and progress starts at 0% for the new
             // chapter. When scrolling up to a previous chapter, progress shows
             // that chapter's position — it does NOT jump to 100%.
-            val pct = ((perChapterPos.toFloat() / chapterTotalChars) * 100)
+            var pct = ((perChapterPos.toFloat() / chapterTotalChars) * 100)
                 .toInt().coerceIn(0, 100)
+
+            // Accelerate progress for the LAST chapter: when there's no next
+            // chapter, boost the progress so it reaches 100% as the user
+            // approaches the bottom. Without this, the progress would stall
+            // at ~85% because the last paragraph may not fill the screen.
+            // We accelerate from 80% onward: 80%→80%, 90%→95%, 100%→100%.
+            if (isLastChapter() && pct >= 80) {
+                // Map [80, 100] → [80, 100] with acceleration
+                val accelerated = 80 + ((pct - 80) * 5 / 4)
+                pct = accelerated.coerceIn(0, 100)
+            }
+
             _progressPercent.value = pct
         }
     }
@@ -1317,7 +2109,7 @@ class NovelReaderScreenModel(
         }
     }
 
-    /** Synchronous save — for use in onDispose when the scope is being cancelled. */
+    /** Synchronous save â€” for use in onDispose when the scope is being cancelled. */
     suspend fun saveCurrentPositionBlocking() {
         positionTracker.savePosition()
     }
@@ -1367,19 +2159,25 @@ class NovelReaderScreenModel(
     }
 
     /**
-     * Force progress to 100% — called when the user reaches the absolute bottom
+     * Force progress to 100% â€” called when the user reaches the absolute bottom
      * of the scrollable content (can't scroll further down).
      */
     fun forceProgressComplete() {
-        if (preferences.showReadingProgress().get()) {
-            _progressPercent.value = 100
-        }
-        // Also save position as complete
+        // Guard: don't force-complete when the current chapter has no
+        // paragraph content. An empty/corrupt chapter is non-scrollable,
+        // which falsely triggers this method — marking the chapter as read
+        // without the user actually reading it.
         val chapter = _currentChapter.value ?: return
         val novel = _novel.value ?: return
         val chapterParagraphs = _contentItems.value
             .filterIsInstance<TextItem.Paragraph>()
             .filter { it.chapterId == chapter.id }
+        if (chapterParagraphs.isEmpty()) return
+
+        if (preferences.showReadingProgress().get()) {
+            _progressPercent.value = 100
+        }
+        // Also save position as complete
         if (chapterParagraphs.isNotEmpty()) {
             val chapterTotalChars = (chapterParagraphs.last().endCharIndex - chapterParagraphs.first().startCharIndex + 1)
                 .coerceAtLeast(1)
@@ -1389,6 +2187,17 @@ class NovelReaderScreenModel(
                 characterPosition = chapterTotalChars,
                 totalCharacters = chapterTotalChars,
             )
+        }
+        // If this is the last chapter, mark it as read since there's no
+        // next chapter to scroll into (which would normally mark it read).
+        if (isLastChapter() && !chapter.read) {
+            screenModelScope.launchIO {
+                try {
+                    setReadStatus.await(true, chapter)
+                } catch (_: Exception) {
+                    // Silent — not critical
+                }
+            }
         }
     }
 
@@ -1401,6 +2210,25 @@ class NovelReaderScreenModel(
             positionTracker.savePosition()
             loadChapter(chapter)
         }
+    }
+
+    /**
+     * Advance to the next chapter. Returns true if there is a next chapter,
+     * false if already at the last chapter. Used by auto-scroll chapter-end
+     * behavior.
+     */
+    fun advanceToNextChapter(): Boolean {
+        if (currentChapterIndex >= _chapters.value.size - 1) return false
+        navigateToNextChapter()
+        return true
+    }
+
+    /**
+     * Returns true if the current chapter is the last chapter in the list
+     * (no next chapter to scroll/navigate to).
+     */
+    fun isLastChapter(): Boolean {
+        return currentChapterIndex >= _chapters.value.size - 1
     }
 
     /**

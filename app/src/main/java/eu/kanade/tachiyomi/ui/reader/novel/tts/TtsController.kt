@@ -50,6 +50,7 @@ class TtsController(
                 lengthScale = preferences.neuralLengthScale().get(),
                 noiseScale = preferences.neuralNoiseScale().get(),
                 noiseScaleW = preferences.neuralNoiseScaleW().get(),
+                sentencePauseMs = preferences.neuralSentencePauseMs().get(),
             )
         } else {
             AndroidTtsEngine(context)

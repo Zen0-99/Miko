@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -40,6 +41,7 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import tachiyomi.presentation.core.screens.LoadingScreen
+import eu.kanade.tachiyomi.ui.browse.novel.migration.all.MigrateNovelAllScreen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialog
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelSearchScreen
@@ -117,6 +119,14 @@ class NovelScreen(
             }
         }
 
+        // Mark chapters as seen when leaving the detail screen so the "new"
+        // indicator (colored circle) is cleared on next visit.
+        DisposableEffect(Unit) {
+            onDispose {
+                screenModel.markChaptersAsSeen()
+            }
+        }
+
         NovelScreen(
             state = successState,
             snackbarHostState = screenModel.snackbarHostState,
@@ -167,7 +177,7 @@ class NovelScreen(
                 screenModel.updateNovelMetadata(title, author, desc, status, tags)
             },
             onMigrateClicked = {
-                navigator.push(MigrateNovelSearchScreen(successState.novel.id))
+                navigator.push(MigrateNovelAllScreen(listOf(successState.novel.id), successState.novel.title))
             }.takeIf { successState.novel.favorite },
             onMarkAllReadClicked = { screenModel.markAllRead() },
             onMarkAllUnreadClicked = { screenModel.markAllUnread() },
@@ -187,6 +197,9 @@ class NovelScreen(
             onChapterSelected = screenModel::toggleSelection,
             onAllChapterSelected = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
+            onHideChapter = { chapter -> screenModel.hideChapter(chapter) },
+            onUnhideChapters = { screenModel.unhideAllChapters() }
+                .takeIf { screenModel.hasHiddenChapters() },
             onFetchNewChapters = { screenModel.fetchNewChapters() }
                 .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
             onFetchAllChapters = { screenModel.fetchAllChaptersWithProgress() }
@@ -215,6 +228,10 @@ class NovelScreen(
             }.takeIf { isHttpSource },
             onMarkPreviousChaptersAsRead = screenModel::markPreviousChaptersAsRead,
             onMarkChapterRangeAsRead = screenModel::markChapterRangeAsRead,
+            onDownloadBook = { screenModel.downloadBook() }
+                .takeIf { successState.isBookSource },
+            onDeleteBook = { screenModel.deleteBook() }
+                .takeIf { successState.isBookSource },
         )
 
         val onDismissRequest = {

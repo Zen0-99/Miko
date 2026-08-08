@@ -87,19 +87,18 @@ class ConsolidatedExtensionReposScreen(
         val novelRepos = (novelState as? RepoScreenState.Success)?.repos ?: emptyList()
         val allRepoUrls = (animeRepos + mangaRepos + novelRepos).map { it.baseUrl }.toImmutableSet()
 
-        LaunchedEffect(url) {
-            url?.let { animeScreenModel.showDialog(RepoDialog.Confirm(it)) }
-        }
-
         // Probes a repo URL and routes the create to the appropriate tab.
-        suspend fun probeAndCreateRepo(repoUrl: String) {
+        // When the probe fails (e.g., network error, unsupported format), falls
+        // back to the currently selected tab instead of defaulting to manga.
+        suspend fun probeAndCreateRepo(repoUrl: String, isConfirm: Boolean = false) {
             isProbing = true
             try {
                 val type = repoService.probeRepoType(repoUrl)
                 val targetIndex = when (type) {
                     "anime" -> 0
                     "novel" -> 2
-                    else -> 1 // manga
+                    "manga" -> 1
+                    else -> pagerState.currentPage // fallback: use current tab
                 }
                 // Navigate to the target tab
                 if (pagerState.currentPage != targetIndex) {
@@ -113,6 +112,15 @@ class ConsolidatedExtensionReposScreen(
                 }
             } finally {
                 isProbing = false
+            }
+        }
+
+        LaunchedEffect(url) {
+            url?.let { repoUrl ->
+                // Probe the repo type and route to the appropriate tab, just like
+                // the FAB flow. This ensures repos added via URL intents go to the
+                // correct tab instead of always defaulting to anime.
+                scope.launch { probeAndCreateRepo(repoUrl, isConfirm = true) }
             }
         }
 

@@ -161,6 +161,9 @@ class NovelDownloader(
 
     private fun CoroutineScope.launchDownloadJob(download: NovelDownload) = launchIO {
         try {
+            // Show progress notification when a download starts
+            notifier.onProgressChange(download)
+
             downloadChapter(download)
 
             if (download.status == NovelDownload.State.DOWNLOADED) {
@@ -291,6 +294,9 @@ class NovelDownloader(
     }
 
     private fun addAllToQueue(downloads: List<NovelDownload>) {
+        // Set status to QUEUE immediately so the UI shows the spinner
+        // for all queued chapters, not just the one actively downloading.
+        downloads.forEach { it.status = NovelDownload.State.QUEUE }
         _queueState.value = queueState.value + downloads
         store.addAll(downloads)
     }

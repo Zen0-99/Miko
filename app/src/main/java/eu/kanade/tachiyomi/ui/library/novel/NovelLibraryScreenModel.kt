@@ -376,11 +376,22 @@ class NovelLibraryScreenModel(
         screenModelScope.launchNonCancellable {
             novels.forEach { novel ->
                 val chapters = getNovelWithChapters.awaitChapters(novel.id)
-                val toDownload = if (amount != null) {
-                    chapters.filter { !it.read }.take(amount)
-                } else {
-                    chapters.filter { !it.read }
-                }
+                // Sort ascending by sourceOrder so we always start from the
+                // oldest unread chapter, regardless of the user's display sort.
+                // Filter out chapters that are already downloaded or queued.
+                val toDownload = chapters
+                    .sortedBy { it.sourceOrder }
+                    .filter { !it.read }
+                    .filterNot { chapter ->
+                        downloadManager.getQueuedDownloadOrNull(chapter.id) != null ||
+                            downloadManager.isChapterDownloaded(
+                                chapter.name,
+                                chapter.scanlator,
+                                novel.title,
+                                novel.source,
+                            )
+                    }
+                    .let { if (amount != null) it.take(amount) else it }
                 downloadManager.downloadChapters(novel, toDownload)
             }
         }

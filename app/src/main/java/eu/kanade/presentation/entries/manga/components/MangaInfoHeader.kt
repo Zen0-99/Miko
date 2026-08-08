@@ -219,7 +219,7 @@ fun MangaActionRow(
         // Tracking icon action
         EntryIconAction(
             icon = if (trackingCount > 0) Icons.Outlined.Done else Icons.Outlined.Sync,
-            contentDescription = stringResource(MR.strings.manga_tracking_tab),
+            contentDescription = stringResource(MR.strings.action_track),
             tint = accent,
             onClick = onTrackingClicked,
         )

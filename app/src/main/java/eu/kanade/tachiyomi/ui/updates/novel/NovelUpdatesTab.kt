@@ -117,12 +117,16 @@ fun Screen.novelUpdatesTab(
                             ),
                         )
                         is NovelUpdatesScreenModel.Event.LibraryUpdateTriggered -> {
-                            val msg = if (event.started) {
-                                MR.strings.updating_library
-                            } else {
-                                MR.strings.update_already_running
+                            // Only show a snackbar if the update didn't start
+                            // (already running). When it does start, the
+                            // LibraryUpdateProgressOverlay at the bottom of
+                            // HomeScreen provides the visual feedback — no
+                            // need for a duplicate snackbar.
+                            if (!event.started) {
+                                screenModel.snackbarHostState.showSnackbar(
+                                    context.stringResource(MR.strings.update_already_running),
+                                )
                             }
-                            screenModel.snackbarHostState.showSnackbar(context.stringResource(msg))
                         }
                     }
                 }

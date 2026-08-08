@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.ui.entries.novel
 import android.content.Context
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import eu.kanade.tachiyomi.ui.reader.novel.ChapterHideManager
+import eu.kanade.tachiyomi.ui.reader.novel.NewChapterTracker
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
@@ -140,6 +142,9 @@ class NovelScreenModel(
     private val getTracks: GetNovelTracks = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
+
+    private val chapterHideManager = ChapterHideManager(context)
+    private val newChapterTracker = NewChapterTracker(context)
 
     private val successState: State.Success?
         get() = state.value as? State.Success
@@ -411,7 +416,12 @@ class NovelScreenModel(
                 .toNovelChapterListItems(novel)
 
             val needRefreshInfo = !novel.initialized
-            val needRefreshChapter = chapters.isEmpty()
+            // For book sources (Anna's Archive), don't auto-fetch chapters when
+            // empty — the user must manually press "Download book" to trigger
+            // the EPUB download + splitting, since it's a heavy operation.
+            val source = Injekt.get<NovelSourceManager>().getOrStub(novel.source)
+            val isBookSource = source.id == 6400L
+            val needRefreshChapter = chapters.isEmpty() && !isBookSource
 
             if (!novel.favorite) {
                 setNovelDefaultChapterFlags.await(novel)
@@ -427,17 +437,22 @@ class NovelScreenModel(
             val intervalDays = fetchInterval.calculateInterval(
                 chapters.map { it.chapter },
             )
+            // Hide interval badge if series is completed or last update is
+            // older than 2 months (stale schedule).
+            val showInterval = shouldShowInterval(novel.status, chapters.map { it.chapter })
 
             mutableState.update {
                 State.Success(
                     novel = novel,
-                    source = Injekt.get<NovelSourceManager>().getOrStub(novel.source),
+                    source = source,
                     isFromSource = isFromSource,
                     chapters = chapters,
+                    hiddenChapterIds = chapterHideManager.getHiddenChapterIds(novelId),
                     isRefreshingData = needRefreshInfo || needRefreshChapter,
                     dialog = null,
                     accentColor = cachedAccentColor,
                     intervalDays = intervalDays,
+                    showInterval = showInterval,
                 )
             }
 
@@ -520,6 +535,15 @@ class NovelScreenModel(
                 val toUpdate = mergedChapters.filter { it.id != -1L }
                     .filter { mc -> localChapters.any { it.id == mc.id && it != mc } }
 
+                // Delete stale local chapters that are no longer in the remote list.
+                // This handles cases like Anna's Archive where the chapter list changes
+                // from a single chapter to multiple split chapters — the old single
+                // chapter (with a different URL) needs to be removed.
+                val remoteUrls = newChapters.map { it.url }.toSet()
+                val toDelete = localChapters.filter { it.url !in remoteUrls }
+                    .filter { !it.read } // Don't delete read chapters (preserve reading history)
+                    .map { it.id }
+
                 if (toAdd.isNotEmpty()) {
                     novelChapterRepository.addAllNovelChapters(toAdd)
                 }
@@ -535,6 +559,9 @@ class NovelScreenModel(
                             sourceOrder = it.sourceOrder,
                         )
                     })
+                }
+                if (toDelete.isNotEmpty()) {
+                    novelChapterRepository.removeChaptersWithIds(toDelete)
                 }
                 primarySucceeded = true
             }
@@ -1117,6 +1144,55 @@ class NovelScreenModel(
         downloadManager.deleteNovel(state.novel, state.source)
     }
 
+    /**
+     * Anna's Archive "Download book" action.
+     * Triggers a chapter list refresh which downloads the EPUB and splits it
+     * into chapters, then queues all chapters for download. The UI shows a
+     * progress indicator via [State.Success.isRefreshingData] while the EPUB
+     * is being downloaded and split.
+     */
+    fun downloadBook() {
+        val state = successState ?: return
+        screenModelScope.launch {
+            updateSuccessState { it.copy(isRefreshingData = true) }
+            try {
+                fetchChaptersFromSource(manualFetch = true)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "downloadBook: fetchChaptersFromSource failed" }
+            } finally {
+                updateSuccessState { it.copy(isRefreshingData = false) }
+            }
+            // After chapters are fetched (EPUB downloaded + split), queue all
+            // chapters for download so their content is cached for offline reading.
+            val chaptersToDownload = successState?.chapters?.map { it.chapter } ?: emptyList()
+            if (chaptersToDownload.isNotEmpty()) {
+                downloadManager.downloadChapters(state.novel, chaptersToDownload)
+            }
+        }
+    }
+
+    /**
+     * Anna's Archive "Delete book" action.
+     * Deletes all downloaded chapter content AND removes all chapters from
+     * the database, bringing back the "Download book" button.
+     */
+    fun deleteBook() {
+        val state = successState ?: return
+        screenModelScope.launchNonCancellable {
+            try {
+                // Delete downloaded content
+                val chapters = state.chapters.map { it.chapter }
+                if (chapters.isNotEmpty()) {
+                    downloadManager.deleteChapters(chapters, state.novel, state.source)
+                }
+                // Remove all chapters from the database
+                novelChapterRepository.removeChaptersWithIds(chapters.map { it.id })
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+            }
+        }
+    }
+
     fun deleteNonBookmarkedDownloads() {
         val state = successState ?: return
         val chapters = state.chapters.filter { !it.chapter.bookmark }.map { it.chapter }
@@ -1220,23 +1296,27 @@ class NovelScreenModel(
 
     fun markPreviousChapterRead(chapter: NovelChapter) {
         val state = successState ?: return
+        val novel = state.novel
         val chapters = state.processedChapters
-        val chapterIndex = chapters.indexOfFirst { it.chapter.id == chapter.id }
+        val prevChapters = if (novel.sortDescending()) chapters.asReversed() else chapters
+        val chapterIndex = prevChapters.indexOfFirst { it.chapter.id == chapter.id }
         if (chapterIndex == -1) return
-        val prevChapters = chapters.take(chapterIndex).map { it.chapter }
-        if (prevChapters.isNotEmpty()) {
-            markChaptersRead(prevChapters, true)
+        val chaptersToMark = prevChapters.take(chapterIndex).map { it.chapter }
+        if (chaptersToMark.isNotEmpty()) {
+            markChaptersRead(chaptersToMark, true)
         }
     }
 
     fun markPreviousChaptersAsRead(chapter: NovelChapter, read: Boolean) {
         val state = successState ?: return
+        val novel = state.novel
         val chapters = state.processedChapters
-        val chapterIndex = chapters.indexOfFirst { it.chapter.id == chapter.id }
+        val prevChapters = if (novel.sortDescending()) chapters.asReversed() else chapters
+        val chapterIndex = prevChapters.indexOfFirst { it.chapter.id == chapter.id }
         if (chapterIndex == -1) return
-        val prevChapters = chapters.take(chapterIndex).map { it.chapter }
-        if (prevChapters.isNotEmpty()) {
-            markChaptersRead(prevChapters, read)
+        val chaptersToMark = prevChapters.take(chapterIndex).map { it.chapter }
+        if (chaptersToMark.isNotEmpty()) {
+            markChaptersRead(chaptersToMark, read)
         }
     }
 
@@ -1359,6 +1439,29 @@ class NovelScreenModel(
             ?.chapter
     }
 
+    fun hideChapter(chapter: NovelChapter) {
+        chapterHideManager.hideChapter(novelId, chapter.id)
+        refreshHiddenChapters()
+    }
+
+    fun unhideAllChapters() {
+        chapterHideManager.unhideAllChapters(novelId)
+        refreshHiddenChapters()
+    }
+
+    fun hasHiddenChapters(): Boolean {
+        return chapterHideManager.hasHiddenChapters(novelId)
+    }
+
+    fun markChaptersAsSeen() {
+        newChapterTracker.markAsSeen(novelId)
+    }
+
+    private fun refreshHiddenChapters() {
+        val hiddenIds = chapterHideManager.getHiddenChapterIds(novelId)
+        updateSuccessState { it.copy(hiddenChapterIds = hiddenIds) }
+    }
+
     private fun hasDownloads(): Boolean {
         val novel = successState?.novel ?: return false
         return downloadManager.getDownloadCount(novel) > 0
@@ -1411,16 +1514,17 @@ class NovelScreenModel(
 
     private fun getUnreadChapters(): List<NovelChapter> {
         val novel = successState?.novel ?: return emptyList()
-        val chapters = allChapters.orEmpty().map { it.chapter }
-        return chapters.filter { !it.read }
+        // Filter by unread AND not already downloaded — matches manga behavior.
+        return allChapters.orEmpty()
+            .filter { !it.chapter.read && it.downloadState == NovelDownload.State.NOT_DOWNLOADED }
+            .map { it.chapter }
     }
 
     private fun getUnreadChaptersSorted(): List<NovelChapter> {
-        val novel = successState?.novel ?: return emptyList()
-        // Always sort ascending for downloads so "next chapter" means
-        // the first unread chapter after the user's current position,
-        // regardless of the user's display sort/descending preference.
-        return getUnreadChapters().sortedWith(getNovelChapterSort(novel, sortDescending = false))
+        // Always sort by chapter number ascending so "next 5" downloads
+        // the next 5 chapters from lowest to highest chapter number,
+        // regardless of the user's display sort preference.
+        return getUnreadChapters().sortedBy { it.chapterNumber }
     }
 
     private fun startDownload(
@@ -1552,6 +1656,7 @@ class NovelScreenModel(
                 downloadProgress = activeDownload?.progress ?: 0,
                 selected = chapter.id in selectedChapterIds,
                 readProgress = readProgress,
+                isNew = !chapter.read && newChapterTracker.isNew(novel.id, chapter.dateFetch),
             )
         }
     }
@@ -1664,6 +1769,7 @@ class NovelScreenModel(
             val source: NovelSource,
             val isFromSource: Boolean,
             val chapters: List<NovelChapterList.Item>,
+            val hiddenChapterIds: Set<Long> = emptySet(),
             val trackingCount: Int = 0,
             val hasLoggedInTrackers: Boolean = false,
             val isRefreshingData: Boolean = false,
@@ -1671,6 +1777,7 @@ class NovelScreenModel(
             val hasPromptedToAddBefore: Boolean = false,
             val accentColor: Color? = null,
             val intervalDays: Int? = null,
+            val showInterval: Boolean = true,
             val suggestions: SuggestionState = SuggestionState.Idle,
         ) : State {
             val processedChapters by lazy {
@@ -1686,14 +1793,27 @@ class NovelScreenModel(
 
             val nextContinueChapter: NovelChapterList.Item?
                 get() = chapters
-                    .filter { !it.chapter.read }
+                    .filter { !it.chapter.read && it.chapter.id !in hiddenChapterIds }
                     .minByOrNull { it.chapter.chapterNumber }
-                    ?: chapters.minByOrNull { it.chapter.chapterNumber }
+
+            val allChaptersRead: Boolean
+                get() = chapters.isNotEmpty() && chapters.all { it.chapter.read }
+
+            /**
+             * True if this source provides whole books (e.g. Anna's Archive).
+             * Book sources have a different UX: a "Download book" button replaces
+             * the chapter list when empty, per-chapter download indicators are
+             * hidden, and a "Delete book" action replaces the download dropdown.
+             */
+            val isBookSource: Boolean
+                get() = source.id == 6400L
 
             private fun List<NovelChapterList.Item>.applyFilters(novel: Novel): Sequence<NovelChapterList.Item> {
                 val unreadFilter = novel.unreadFilter
                 val bookmarkedFilter = novel.bookmarkedFilter
+                val hiddenIds = hiddenChapterIds
                 return asSequence()
+                    .filter { (chapter) -> chapter.id !in hiddenIds }
                     .filter { (chapter) -> applyFilter(unreadFilter) { !chapter.read } }
                     .filter { (chapter) -> applyFilter(bookmarkedFilter) { chapter.bookmark } }
                     .sortedWith { (chapter1), (chapter2) ->
@@ -1713,7 +1833,31 @@ sealed class NovelChapterList {
         val downloadState: NovelDownload.State = NovelDownload.State.NOT_DOWNLOADED,
         val downloadProgress: Int = 0,
         val readProgress: Int? = null,
+        val isNew: Boolean = false,
     ) : NovelChapterList() {
         val id = chapter.id
     }
+}
+
+/**
+ * Determine whether the update interval badge should be shown.
+ *
+ * Returns false when:
+ * - The series status is COMPLETED
+ * - The most recent chapter upload date is more than 2 months ago (stale)
+ */
+private fun shouldShowInterval(status: Long, chapters: List<*>): Boolean {
+    if (status == eu.kanade.tachiyomi.novelsource.model.SNovel.COMPLETED.toLong()) return false
+
+    val twoMonthsMs = 60L * 24L * 60L * 60L * 1000L
+    val now = System.currentTimeMillis()
+    val latestDate = chapters.maxOfOrNull { item ->
+        when (item) {
+            is tachiyomi.domain.items.chapter.model.NovelChapter -> maxOf(item.dateUpload, item.dateFetch)
+            else -> 0L
+        }
+    } ?: return false
+
+    if (latestDate == 0L) return true
+    return (now - latestDate) < twoMonthsMs
 }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
@@ -20,6 +21,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Adapter that wraps an extension built against the `yokai.extension.novel.lib` library and
@@ -94,6 +96,14 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
 
     override val supportsLatest: Boolean
         get() = hasMainPage
+
+    /**
+     * Whether the wrapped extension source supports incremental search results.
+     * Reads `supportsIncrementalSearch` from the extension source via reflection.
+     * When true, [searchFlow] delegates to the extension's `searchFlow` method.
+     */
+    override val supportsIncrementalSearch: Boolean
+        get() = getProp(source, "supportsIncrementalSearch") as? Boolean ?: false
 
     /**
      * Check if the wrapped extension source supports chapter comments.
@@ -301,19 +311,158 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
             try {
                 val result = invokeSuspendListMethodWithStringInt("search", query, page)
                 logcat(LogPriority.DEBUG) { "$tag getSearchNovels got ${result.size} results" }
-                NovelsPage(result.filterNotNull().map { toSNovelSearch(it) }, hasNextPage = result.isNotEmpty())
+                // Heuristic: only signal hasNextPage if we got a reasonable number of
+                // results (at least 5). This prevents infinite loading for sources like
+                // Anna's Archive that return results for thousands of pages. Sources
+                // that return fewer results on the last page will naturally stop.
+                val hasNext = result.size >= 5
+                NovelsPage(result.filterNotNull().map { toSNovelSearch(it) }, hasNextPage = hasNext)
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e) { "$tag getSearchNovels failed for query='$query'" }
                 NovelsPage(emptyList(), hasNextPage = false)
             }
         }
 
+    /**
+     * Incremental search: delegates to the extension's `searchIncremental` method
+     * via reflection. The extension calls a callback with cumulative result lists
+     * as they're parsed, which we forward as Flow emissions.
+     *
+     * Uses [channelFlow] so the search runs in one coroutine while batches are
+     * collected and forwarded to the consumer concurrently.
+     *
+     * Only called when [supportsIncrementalSearch] is true.
+     */
+    override fun searchFlow(query: String, page: Int): kotlinx.coroutines.flow.Flow<List<SNovel>> {
+        return kotlinx.coroutines.flow.channelFlow {
+            logcat(LogPriority.DEBUG) { "$tag searchFlow query='$query' page=$page" }
+
+            val method = findSearchIncrementalMethod(source.javaClass)
+            if (method == null) {
+                logcat(LogPriority.WARN) { "$tag searchIncremental method not found, falling back to batch search" }
+                try {
+                    val result = getSearchNovels(page, query, NovelFilterList())
+                    send(result.novels)
+                } catch (e: Throwable) {
+                    logcat(LogPriority.ERROR, e) { "$tag fallback search failed" }
+                    send(emptyList())
+                }
+                return@channelFlow
+            }
+
+            method.isAccessible = true
+
+            // Launch the search in a separate coroutine so we can forward batches
+            // to the channel concurrently while the search is running.
+            val searchJob = launch(Dispatchers.IO) {
+                var lastBatchSize = -1
+                try {
+                    // The callback receives a List<NovelSearchResult> from the extension.
+                    // We convert it to List<SNovel> and send it through the channel.
+                    // Deduplicate: skip sending if the batch size is the same as the last
+                    // (prevents the "flash" from a double emission of the final full list).
+                    val callback = { batch: Any? ->
+                        @Suppress("UNCHECKED_CAST")
+                        val results = (batch as? List<*>)?.filterNotNull() ?: emptyList<Any>()
+                        val snovels = results.map { toSNovelSearch(it) }
+                        if (snovels.size != lastBatchSize) {
+                            lastBatchSize = snovels.size
+                            logcat(LogPriority.DEBUG) { "$tag searchFlow callback batch size=${snovels.size}" }
+                            trySend(snovels)
+                        } else {
+                            logcat(LogPriority.DEBUG) { "$tag searchFlow callback dedup skip size=${snovels.size}" }
+                        }
+                        Unit
+                    }
+
+                    val finalResult = invokeSuspendSearchIncremental(method, query, page, callback)
+                    logcat(LogPriority.DEBUG) { "$tag searchFlow search completed, finalResult type=${finalResult?.javaClass?.name}" }
+                } catch (e: Throwable) {
+                    logcat(LogPriority.ERROR, e) { "$tag searchFlow search failed" }
+                    trySend(emptyList<SNovel>())
+                } finally {
+                    close() // Close the channel to signal completion
+                }
+            }
+
+            // Wait for the search job to complete
+            searchJob.join()
+        }
+    }
+
+    /**
+     * Find the searchIncremental method on the extension source class hierarchy.
+     * The Kotlin signature is: suspend fun searchIncremental(String, Int, Function1<List<*>, Unit>): List<*>
+     * On the JVM, suspend functions have an extra Continuation parameter, so the actual
+     * parameter count is 4: (String, Int, Function1, Continuation).
+     * We also skip the synthetic `$default` method (which has a bitmask parameter).
+     */
+    private fun findSearchIncrementalMethod(clazz: Class<*>): java.lang.reflect.Method? {
+        var current: Class<*>? = clazz
+        while (current != null) {
+            for (method in current.declaredMethods) {
+                // Skip the synthetic $default method generated for default parameters
+                if (method.name.contains("\$default")) continue
+                if (method.name == "searchIncremental" && method.parameterCount == 4) {
+                    val paramTypes = method.parameterTypes
+                    if (paramTypes[0] == String::class.java &&
+                        (paramTypes[1] == Int::class.java || paramTypes[1] == java.lang.Integer.TYPE) &&
+                        kotlin.Function1::class.java.isAssignableFrom(paramTypes[2]) &&
+                        kotlin.coroutines.Continuation::class.java.isAssignableFrom(paramTypes[3])
+                    ) {
+                        return method
+                    }
+                }
+            }
+            current = current.superclass
+        }
+        return null
+    }
+
+    /**
+     * Invoke the searchIncremental suspend method via reflection.
+     * Handles the COROUTINE_SUSPENDED marker from the extension's classloader.
+     */
+    private suspend fun invokeSuspendSearchIncremental(
+        method: java.lang.reflect.Method,
+        query: String,
+        page: Int,
+        callback: kotlin.Function1<Any?, Unit>,
+    ): Any? {
+        return suspendCancellableCoroutine { cont ->
+            val continuation = object : Continuation<Any?> {
+                override val context: CoroutineContext = cont.context
+
+                override fun resumeWith(result: Result<Any?>) {
+                    if (result.isSuccess) {
+                        cont.resume(result.getOrNull())
+                    } else {
+                        cont.resumeWithException(result.exceptionOrNull() ?: RuntimeException("Unknown error"))
+                    }
+                }
+            }
+
+            try {
+                // searchIncremental(query, page, callback, continuation)
+                val result = method.invoke(source, query, page, callback, continuation)
+                if (result !== extensionCoroutineSuspended) {
+                    cont.resume(result)
+                }
+            } catch (e: java.lang.reflect.InvocationTargetException) {
+                cont.resumeWithException(e.targetException ?: e)
+            } catch (e: Throwable) {
+                cont.resumeWithException(e)
+            }
+        }
+    }
+
     override suspend fun getPopularNovels(page: Int): NovelsPage = withContext(Dispatchers.IO) {
         logcat(LogPriority.DEBUG) { "$tag getPopularNovels page=$page hasMainPage=$hasMainPage" }
         try {
             val result = invokeSuspendListMethodWithInt("getPopularNovels", page)
             logcat(LogPriority.DEBUG) { "$tag getPopularNovels got ${result.size} results" }
-            NovelsPage(result.filterNotNull().map { toSNovelSearch(it) }, hasNextPage = result.isNotEmpty())
+            val hasNext = result.size >= 5
+            NovelsPage(result.filterNotNull().map { toSNovelSearch(it) }, hasNextPage = hasNext)
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "$tag getPopularNovels failed for $name page=$page" }
             NovelsPage(emptyList(), hasNextPage = false)
@@ -325,7 +474,8 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
         try {
             val result = invokeSuspendListMethodWithInt("getLatestUpdates", page)
             logcat(LogPriority.DEBUG) { "$tag getLatestUpdates got ${result.size} results" }
-            NovelsPage(result.filterNotNull().map { toSNovelSearch(it) }, hasNextPage = result.isNotEmpty())
+            val hasNext = result.size >= 5
+            NovelsPage(result.filterNotNull().map { toSNovelSearch(it) }, hasNextPage = hasNext)
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "$tag getLatestUpdates failed for $name page=$page" }
             NovelsPage(emptyList(), hasNextPage = false)

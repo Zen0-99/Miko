@@ -62,11 +62,11 @@ fun NovelActionRow(
             EntryTogglePill(
                 checked = trackingCount > 0,
                 checkedText = if (trackingCount == 0) {
-                    stringResource(MR.strings.manga_tracking_tab)
+                    stringResource(MR.strings.action_track)
                 } else {
                     pluralStringResource(MR.plurals.num_trackers, trackingCount, trackingCount)
                 },
-                uncheckedText = stringResource(MR.strings.manga_tracking_tab),
+                uncheckedText = stringResource(MR.strings.action_track),
                 checkedIcon = Icons.Outlined.Done,
                 uncheckedIcon = Icons.Outlined.Sync,
                 accentColor = accent,

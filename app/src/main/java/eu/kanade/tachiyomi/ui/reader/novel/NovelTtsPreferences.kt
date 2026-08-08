@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.novel
 
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.getEnum
 
 /**
  * Preferences for the novel reader TTS (Text-to-Speech) system.
@@ -30,6 +31,42 @@ class NovelTtsPreferences(
 
     /** Whether to show TTS controls in the reader chrome */
     fun showTtsControls() = preferenceStore.getBoolean("pref_novel_tts_show_controls", true)
+
+    // --- TTS behavior preferences (consolidated from NovelReaderPreferences) ---
+
+    /** Whether TTS is enabled in the reader */
+    fun enabled() = preferenceStore.getBoolean("pref_novel_tts_enabled", false)
+
+    /** Word highlight mode during TTS playback */
+    fun highlightMode() =
+        preferenceStore.getEnum("pref_novel_tts_highlight_mode", NovelTtsHighlightMode.AUTO)
+
+    /** Highlight individual spoken words during playback */
+    fun wordHighlightEnabled() =
+        preferenceStore.getBoolean("pref_novel_tts_word_highlight_enabled", true)
+
+    /** Automatically advance to the next chapter when current one finishes */
+    fun autoAdvanceChapter() =
+        preferenceStore.getBoolean("pref_novel_tts_auto_advance_chapter", false)
+
+    /** Follow spoken position: keep scroll/page aligned with speech progress */
+    fun followAlong() = preferenceStore.getBoolean("pref_novel_tts_follow_along", true)
+
+    /** Pause TTS when the user manually navigates */
+    fun pauseOnManualNavigation() =
+        preferenceStore.getBoolean("pref_novel_tts_pause_on_manual_navigation", true)
+
+    /** Keep screen on during TTS playback */
+    fun keepScreenOnDuringPlayback() =
+        preferenceStore.getBoolean("pref_novel_tts_keep_screen_on_during_playback", false)
+
+    /** Prefer translated chapter text for TTS when available */
+    fun preferTranslatedText() =
+        preferenceStore.getBoolean("pref_novel_tts_prefer_translated_text", false)
+
+    /** Read the chapter title aloud before the chapter content */
+    fun readChapterTitle() =
+        preferenceStore.getBoolean("pref_novel_tts_read_chapter_title", true)
 
     // Neural TTS (sherpa-onnx) specific preferences
 
@@ -65,4 +102,14 @@ class NovelTtsPreferences(
 
     /** Noise scale W for VITS/Piper models (default 0.8) */
     fun neuralNoiseScaleW() = preferenceStore.getFloat("pref_novel_tts_neural_noise_scale_w", 0.8f)
+
+    /** Silence inserted between sentences in neural TTS, in milliseconds (default 0 = no pause) */
+    fun neuralSentencePauseMs() = preferenceStore.getInt("pref_novel_tts_neural_sentence_pause_ms", 0)
+}
+
+enum class NovelTtsHighlightMode {
+    AUTO,
+    EXACT,
+    ESTIMATED,
+    OFF,
 }

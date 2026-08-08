@@ -430,6 +430,9 @@ class MangaScreenModel(
                 chapters.map { it.chapter },
                 java.time.ZoneId.systemDefault(),
             )
+            // Hide interval badge if series is completed or last update is
+            // older than 2 months (stale schedule).
+            val showInterval = shouldShowInterval(manga.status, chapters.map { it.chapter })
             mutableState.update {
                 State.Success(
                     manga = manga,
@@ -441,6 +444,7 @@ class MangaScreenModel(
                     isRefreshingData = needRefreshInfo || needRefreshChapter,
                     dialog = null,
                     intervalDays = intervalDays,
+                    showInterval = showInterval,
                 )
             }
 
@@ -1405,6 +1409,7 @@ class MangaScreenModel(
             val hasPromptedToAddBefore: Boolean = false,
             val accentColor: Color? = null,
             val intervalDays: Int? = null,
+            val showInterval: Boolean = true,
             val suggestions: SuggestionState = SuggestionState.Idle,
         ) : State {
             val processedChapters by lazy {
@@ -1493,4 +1498,31 @@ sealed class ChapterList {
         val id = chapter.id
         val isDownloaded = downloadState == MangaDownload.State.DOWNLOADED
     }
+}
+
+/**
+ * Determine whether the update interval badge should be shown.
+ *
+ * Returns false when:
+ * - The series status is COMPLETED
+ * - The most recent chapter upload date is more than 2 months ago (stale)
+ */
+private fun shouldShowInterval(status: Long, chapters: List<*>): Boolean {
+    // Hide for completed series
+    if (status == eu.kanade.tachiyomi.source.model.SManga.COMPLETED.toLong()) return false
+
+    // Check if the latest chapter is stale (no update in 2 months)
+    val twoMonthsMs = 60L * 24L * 60L * 60L * 1000L // ~60 days in milliseconds
+    val now = System.currentTimeMillis()
+    val latestDate = chapters.maxOfOrNull { item ->
+        when (item) {
+            is Chapter -> maxOf(item.dateUpload, item.dateFetch)
+            else -> 0L
+        }
+    } ?: return false
+
+    // If the latest date is 0 (unknown), fall back to showing the interval
+    if (latestDate == 0L) return true
+
+    return (now - latestDate) < twoMonthsMs
 }

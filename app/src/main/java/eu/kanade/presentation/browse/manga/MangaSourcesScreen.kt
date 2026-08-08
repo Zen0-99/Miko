@@ -102,12 +102,36 @@ fun MangaSourcesScreen(
 ) {
     var notInstalledExpanded by remember { mutableStateOf(false) }
 
-    // Filter out available extensions when collapsed
+    // Filter out available extensions (and their language sub-headers) when
+    // the "Not Installed" section is collapsed. Language sub-headers within
+    // the Not Installed section appear after the NOT_INSTALLED_KEY header and
+    // before the next section — they must also be hidden when collapsed.
     val visibleItems = remember(state.items, notInstalledExpanded) {
         if (notInstalledExpanded) {
             state.items
         } else {
-            state.items.filterNot { it is MangaSourceUiModel.AvailableExtension }
+            val result = mutableListOf<MangaSourceUiModel>()
+            var inNotInstalled = false
+            for (item in state.items) {
+                if (item is MangaSourceUiModel.Header) {
+                    if (item.language == MangaSourcesScreenModel.NOT_INSTALLED_KEY) {
+                        inNotInstalled = true
+                        result.add(item)
+                        continue
+                    }
+                    if (item.language == MangaSourcesScreenModel.INSTALLED_KEY) {
+                        inNotInstalled = false
+                        result.add(item)
+                        continue
+                    }
+                }
+                if (inNotInstalled) {
+                    if (item is MangaSourceUiModel.AvailableExtension) continue
+                    if (item is MangaSourceUiModel.Header && item.language != MangaSourcesScreenModel.NOT_INSTALLED_KEY) continue
+                }
+                result.add(item)
+            }
+            result
         }
     }
 

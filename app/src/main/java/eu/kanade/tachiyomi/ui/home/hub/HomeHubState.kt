@@ -91,7 +91,9 @@ data class HomeHubState(
         get() = recentNovels
             .distinctBy { it.novelId }
             .map {
-                HomeHubCardItem(it.novelId, it.title, it.coverData, HomeHubMediaType.NOVEL, "Ch. ${it.chapterNumber}")
+                val progress = it.chapterName?.takeIf { name -> name.isNotBlank() }
+                    ?: "Ch. ${it.chapterNumber}"
+                HomeHubCardItem(it.novelId, it.title, it.coverData, HomeHubMediaType.NOVEL, progress)
             }
 
     val recentlyAddedAnimeCards: List<HomeHubCardItem>
@@ -128,9 +130,11 @@ data class HomeHubHero(
     val entryId: Long,
     val title: String,
     val progressNumber: Double,
+    val chapterTitle: String? = null,
     val coverData: Any?,
     val subId: Long,
     val mediaType: HomeHubMediaType,
+    val allRead: Boolean = false,
 )
 
 enum class HomeHubMediaType {

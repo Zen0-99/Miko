@@ -23,6 +23,9 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import eu.kanade.tachiyomi.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 class TextAdapter(
     private val getConfig: () -> TextConfig,
@@ -34,6 +37,8 @@ class TextAdapter(
     private val onShare: ((String) -> Unit)? = null,
     private val onReadAloud: ((String) -> Unit)? = null,
     private val onTranslate: ((String) -> Unit)? = null,
+    /** Called when text selection becomes active (true) or inactive (false). */
+    private val onSelectionActiveChange: ((Boolean) -> Unit)? = null,
     /**
      * Highlight colors are computed dynamically from the current background
      * color so they're theme-aware: darker colors on dark backgrounds (where
@@ -51,6 +56,8 @@ class TextAdapter(
     private val getChapterNumber: (() -> Double)? = null,
     /** Called when a highlight is deleted via tap-to-delete. */
     private val onHighlightDeleted: (() -> Unit)? = null,
+    /** Returns the accent color for navigation buttons (cover accent or null). */
+    private val getAccentColor: (() -> Int?)? = null,
 ) : ListAdapter<TextItem, TextAdapter.TextViewHolder>(TextItemDiffCallback()) {
 
     /** Compute theme-aware highlight colors from the current config. */
@@ -72,11 +79,76 @@ class TextAdapter(
     @Volatile
     private var activeHighlightPopup: PopupWindow? = null
 
+    // ===== Multi-paragraph range selection =====
+    /** When non-null, the user is selecting a range of paragraphs. This is the
+     * adapter position of the first paragraph in the range. */
+    @Volatile
+    var rangeSelectStart: Int? = null
+        private set
+
+    /** Callback invoked when range selection completes with the combined text. */
+    var onRangeSelectComplete: ((String) -> Unit)? = null
+
+    /** Callback to show a toast/message to the user. */
+    var onShowMessage: ((String) -> Unit)? = null
+
+    /** Called when range selection mode is entered or exited. */
+    var onRangeSelectModeChange: ((Boolean) -> Unit)? = null
+
     fun setCurrentChapterId(id: Long) {
         currentChapterId = id
     }
 
     fun getCurrentChapterId(): Long = currentChapterId
+
+    /** Start multi-paragraph range selection from the given adapter position. */
+    fun startRangeSelection(adapterPosition: Int) {
+        rangeSelectStart = adapterPosition
+        onRangeSelectModeChange?.invoke(true)
+        onShowMessage?.invoke("Tap the last paragraph to select")
+        notifyDataSetChanged()
+    }
+
+    /** Complete range selection: the user tapped [endAdapterPosition]. Collects
+     * all paragraph text between start and end (inclusive) and calls
+     * [onRangeSelectComplete]. */
+    fun completeRangeSelection(endAdapterPosition: Int) {
+        val start = rangeSelectStart ?: return
+        rangeSelectStart = null
+        onRangeSelectModeChange?.invoke(false)
+
+        val from = minOf(start, endAdapterPosition)
+        val to = maxOf(start, endAdapterPosition)
+
+        val textParts = mutableListOf<String>()
+        for (i in from..to) {
+            val item = currentList.getOrNull(i) as? TextItem.Paragraph ?: continue
+            textParts.add(item.text.toString())
+        }
+
+        val combined = textParts.joinToString("\n\n")
+        if (combined.isNotBlank()) {
+            onRangeSelectComplete?.invoke(combined)
+        }
+        notifyDataSetChanged()
+    }
+
+    /** Cancel range selection mode. */
+    fun cancelRangeSelection() {
+        if (rangeSelectStart != null) {
+            rangeSelectStart = null
+            onRangeSelectModeChange?.invoke(false)
+            notifyDataSetChanged()
+        }
+    }
+
+    /** Check if an adapter position is within the current range selection. */
+    fun isInRangeSelection(adapterPosition: Int): Boolean {
+        val start = rangeSelectStart ?: return false
+        // While selecting, only the start is highlighted. The range is
+        // determined when the user taps the end paragraph.
+        return adapterPosition == start
+    }
 
     /** Dismiss any active selection popup (call from RecyclerView scroll listener). */
     fun dismissActiveSelectionPopup() {
@@ -108,8 +180,34 @@ class TextAdapter(
         private val getChapterNumber: (() -> Double)?,
         private val onHighlightDeleted: (() -> Unit)?,
         private val onPopupShown: ((PopupWindow) -> Unit)?,
+        private val onSelectionActiveChange: ((Boolean) -> Unit)? = null,
+        private val isRangeSelected: ((Int) -> Boolean)? = null,
+        private val getAdapter: (() -> TextAdapter)? = null,
     ) : TextViewHolder(view) {
         private val textView: TextView = view.findViewById(R.id.paragraph_text)
+
+        // Track the latest touch position for use in onLongClick.
+        @Volatile private var latestTouchX: Float = 0f
+        @Volatile private var latestTouchY: Float = 0f
+
+        // Re-enable text selection when the view is (re-)attached to the window.
+        // setTextIsSelectable(true) in bind() calls Editor.prepareCursorControllers(),
+        // but at bind time the view may not be attached to the window yet. When the
+        // view is later attached (after recycling), the selection controllers may
+        // not be re-enabled. Toggling setTextIsSelectable off/on forces
+        // prepareCursorControllers() to be called again with the view attached.
+        init {
+            textView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    if (textView.isTextSelectable) {
+                        textView.setTextIsSelectable(false)
+                        textView.setTextIsSelectable(true)
+                    }
+                }
+
+                override fun onViewDetachedFromWindow(v: View) {}
+            })
+        }
 
         override fun bind(item: TextItem) {
             if (item is TextItem.Paragraph) {
@@ -125,10 +223,27 @@ class TextAdapter(
                 // Apply saved highlight spans from storage.
                 val displayText = applyHighlightSpans(baseText, item)
 
-                textView.text = displayText
+                // Ensure text is always Spannable — the Editor requires it for
+                // selection. If displayText is a plain String (no highlights,
+                // no bionic reading), wrap it in SpannableStringBuilder.
+                val spannableText: CharSequence = if (displayText is android.text.Spannable) {
+                    displayText
+                } else {
+                    android.text.SpannableStringBuilder(displayText)
+                }
+                textView.text = spannableText
                 textView.textSize = config.textSize
                 textView.setTextColor(config.textColor)
                 textView.setLineSpacing(config.lineSpacing, 1f)
+
+                // Range selection highlight: if this paragraph is the start of
+                // a range selection, tint its background.
+                val adapter = getAdapter?.invoke()
+                if (adapter != null && isRangeSelected?.invoke(bindingAdapterPosition) == true) {
+                    textView.setBackgroundColor(0x30FF9800.toInt()) // semi-transparent orange
+                } else {
+                    textView.background = null
+                }
                 val density = textView.context.resources.displayMetrics.density
                 val hPadding = (config.horizontalPadding * density).toInt()
                 val vPadding = ((config.verticalPadding / 2) * density).toInt()
@@ -147,8 +262,11 @@ class TextAdapter(
                     textView.layoutParams = layoutParams
                 }
 
+                // Set text selectable — simple, no toggle.
+                // The OnAttachStateChangeListener in the ViewHolder constructor
+                // handles re-enabling selection controllers when the view is
+                // re-attached after recycling.
                 textView.setTextIsSelectable(config.isTextSelectable)
-                textView.isLongClickable = config.isTextSelectable
 
                 if (config.isTextSelectable && activity != null) {
                     val colors = if (highlightColors.isNotEmpty()) highlightColors
@@ -166,44 +284,71 @@ class TextAdapter(
                         onShare = onShare,
                         onReadAloud = onReadAloud,
                         onTranslate = onTranslate,
+                        onSelectRange = {
+                            // Enter multi-paragraph range selection mode.
+                            // The current adapter position is the start of the range.
+                            getAdapter?.invoke()?.startRangeSelection(bindingAdapterPosition)
+                        },
+                        onSelectionActiveChange = onSelectionActiveChange,
                     )
                     textView.customSelectionActionModeCallback = callback
                     onCallbackActivated?.invoke(callback)
 
-                    // Fix for unreliable long-press text selection in RecyclerView:
-                    // The RecyclerView intercepts touch events for scrolling before
-                    // the TextView can start text selection. We use a delayed
-                    // disallow-intercept that fires after the long-press timeout,
-                    // giving the TextView time to start selection mode while still
-                    // allowing normal scrolling.
-                    val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                    val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
-                    textView.setOnTouchListener { v, event ->
-                        when (event.actionMasked) {
+                    // Simple touch listener — only handles highlight taps and
+                    // range selection taps. The TextView's built-in long-press
+                    // handles selection natively (shows handles + popup).
+                    var downX = 0f
+                    var downY = 0f
+                    var downTime = 0L
+                    textView.setOnTouchListener { _, event ->
+
+                        when (event.action) {
                             MotionEvent.ACTION_DOWN -> {
-                                // Schedule intercept disallow after long-press threshold.
-                                // If the user starts scrolling before this fires, the
-                                // RecyclerView will have already intercepted the move
-                                // events and the Runnable will be a no-op.
-                                handler.postDelayed({
-                                    v.parent?.requestDisallowInterceptTouchEvent(true)
-                                }, longPressTimeout)
+                                downX = event.x
+                                downY = event.y
+                                downTime = System.currentTimeMillis()
+                                latestTouchX = event.x
+                                latestTouchY = event.y
                             }
-                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                                handler.removeCallbacksAndMessages(null)
-                                v.parent?.requestDisallowInterceptTouchEvent(false)
-                            }
-                            MotionEvent.ACTION_MOVE -> {
-                                // If the user moves more than touch slop, cancel
-                                // the pending long-press disallow so scrolling works.
-                                val slop = ViewConfiguration.get(v.context).scaledTouchSlop
-                                val moved = kotlin.math.abs(event.x) > slop || kotlin.math.abs(event.y) > slop
-                                if (moved) {
-                                    handler.removeCallbacksAndMessages(null)
+                            MotionEvent.ACTION_UP -> {
+                                val duration = System.currentTimeMillis() - downTime
+                                val distance = kotlin.math.hypot(event.x - downX, event.y - downY)
+                                val touchSlop = ViewConfiguration.get(textView.context).scaledTouchSlop
+
+                                // Multi-paragraph range selection: if we're in
+                                // range-select mode and the user taps a paragraph,
+                                // complete the range selection.
+                                val adapter = getAdapter?.invoke()
+                                if (adapter != null && adapter.rangeSelectStart != null && duration < 400 && distance < touchSlop * 2) {
+                                    val start = adapter.rangeSelectStart!!
+                                    if (bindingAdapterPosition != start) {
+                                        adapter.completeRangeSelection(bindingAdapterPosition)
+                                    } else {
+                                        adapter.cancelRangeSelection()
+                                        adapter.onShowMessage?.invoke("Selection cancelled")
+                                    }
+                                    return@setOnTouchListener true
+                                }
+
+                                // Highlight tap: short tap on an existing highlight
+                                if (duration < 200 && distance < touchSlop && !textView.hasSelection()) {
+                                    val offset = textView.getOffsetForPosition(event.x, event.y)
+                                    if (offset >= 0) {
+                                        val spannable = textView.text as? Spannable
+                                        val spans = spannable?.getSpans(offset, offset, NovelHighlightSpan::class.java)
+                                        if (!spans.isNullOrEmpty()) {
+                                            val span = spans.first()
+                                            val spanStart = spannable.getSpanStart(span)
+                                            val spanEnd = spannable.getSpanEnd(span)
+                                            val highlightText = spannable.substring(spanStart, spanEnd)
+                                            showHighlightActions(textView, highlightText, spanStart, spanEnd, item, event.rawX, event.rawY)
+                                            return@setOnTouchListener true
+                                        }
+                                    }
                                 }
                             }
                         }
-                        false // Let the TextView handle the event normally
+                        false
                     }
                 } else {
                     textView.setOnTouchListener(null)
@@ -262,8 +407,7 @@ class TextAdapter(
                     textView.setShadowLayer(0f, 0f, 0f, 0)
                 }
 
-                // Setup tap detection for highlighted text.
-                setupHighlightTapDetection(textView, item)
+                // Highlight tap detection is now handled by the combined touch listener above.
             }
         }
 
@@ -307,50 +451,6 @@ class TextAdapter(
                 }
             }
             return spannable
-        }
-
-        /**
-         * Detect taps on highlighted text. If the tap lands on a
-         * [NovelHighlightSpan], show a popup with Copy, Search, Delete.
-         */
-        private fun setupHighlightTapDetection(textView: TextView, item: TextItem.Paragraph) {
-            var downX = 0f
-            var downY = 0f
-            var downTime = 0L
-
-            textView.setOnTouchListener { _, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        downX = event.x
-                        downY = event.y
-                        downTime = System.currentTimeMillis()
-                        false
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        val duration = System.currentTimeMillis() - downTime
-                        val distance = kotlin.math.hypot(event.x - downX, event.y - downY)
-                        // Only treat as tap if short, small movement, no active selection.
-                        val touchSlop = ViewConfiguration.get(textView.context).scaledTouchSlop
-                        if (duration < 250 && distance < touchSlop && !textView.hasSelection()) {
-                            val offset = textView.getOffsetForPosition(event.x, event.y)
-                            if (offset >= 0) {
-                                val spannable = textView.text as? Spannable
-                                val spans = spannable?.getSpans(offset, offset, NovelHighlightSpan::class.java)
-                                if (!spans.isNullOrEmpty()) {
-                                    val span = spans.first()
-                                    val spanStart = spannable.getSpanStart(span)
-                                    val spanEnd = spannable.getSpanEnd(span)
-                                    val highlightText = spannable.substring(spanStart, spanEnd)
-                                    showHighlightActions(textView, highlightText, spanStart, spanEnd, item, event.rawX, event.rawY)
-                                    return@setOnTouchListener true
-                                }
-                            }
-                        }
-                        false
-                    }
-                    else -> false
-                }
-            }
         }
 
         /**
@@ -448,18 +548,19 @@ class TextAdapter(
             val key = NovelHighlightManager.NovelKey(title = novelTitle, novelId = novelId)
             val highlights = manager.getChapterHighlights(key, chapterNumber)
 
-            // Find the matching highlight by text (first match).
-            val match = highlights.find { it.text == highlightText }
-            if (match != null) {
-                kotlinx.coroutines.runBlocking {
-                    manager.deleteHighlight(key, chapterNumber, match.text, match.timestamp)
-                }
-            }
-
-            // Remove the span visually.
+            // Remove the span visually IMMEDIATELY (before the async delete)
+            // so the user sees instant feedback.
             val spannable = textView.text as? Spannable
             spannable?.getSpans(spanStart, spanEnd, NovelHighlightSpan::class.java)?.forEach {
                 spannable.removeSpan(it)
+            }
+
+            // Find the matching highlight by text (first match) and delete async.
+            val match = highlights.find { it.text == highlightText }
+            if (match != null) {
+                kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                    manager.deleteHighlight(key, chapterNumber, match.text, match.timestamp)
+                }
             }
 
             onHighlightDeleted?.invoke()
@@ -471,6 +572,30 @@ class TextAdapter(
             const val MENU_ID_HIGHLIGHT = 102
             const val MENU_ID_SHARE = 103
             const val MENU_ID_TTS = 104
+
+            /**
+             * Find the start of the word containing [offset] in [text].
+             * Word boundaries are non-alphanumeric characters.
+             */
+            private fun findWordStart(text: CharSequence, offset: Int): Int {
+                var i = offset
+                while (i > 0 && i < text.length && isWordChar(text[i - 1])) i--
+                return i
+            }
+
+            /**
+             * Find the end of the word containing [offset] in [text].
+             * Returns the index after the last word character.
+             */
+            private fun findWordEnd(text: CharSequence, offset: Int): Int {
+                var i = offset
+                while (i < text.length && isWordChar(text[i])) i++
+                return i
+            }
+
+            private fun isWordChar(c: Char): Boolean {
+                return c.isLetterOrDigit() || c == '\'' || c == '\u2019'
+            }
 
             private fun applyBionicReading(text: CharSequence): CharSequence {
                 if (text.isEmpty()) return text
@@ -520,6 +645,7 @@ class TextAdapter(
     class ChapterNavigationViewHolder(
         view: View,
         private val onNavigationClick: ((TextItem.LoadDirection) -> Unit)?,
+        private val getAccentColor: (() -> Int?)? = null,
     ) : TextViewHolder(view) {
         private val button: com.google.android.material.button.MaterialButton =
             view.findViewById(R.id.navigation_button)
@@ -535,6 +661,13 @@ class TextAdapter(
                 button.text = buttonText
                 button.isEnabled = item.isEnabled
                 button.alpha = if (item.isEnabled) 1.0f else 0.5f
+
+                // Apply accent color if available (cover accent color toggle)
+                val accentColor = getAccentColor?.invoke()
+                if (accentColor != null && item.isEnabled) {
+                    button.backgroundTintList = android.content.res.ColorStateList.valueOf(accentColor)
+                    button.setTextColor(android.graphics.Color.WHITE)
+                }
 
                 if (item.isEnabled) {
                     button.setOnClickListener { onNavigationClick?.invoke(item.direction) }
@@ -576,6 +709,9 @@ class TextAdapter(
                 getChapterNumber = getChapterNumber,
                 onHighlightDeleted = onHighlightDeleted,
                 onPopupShown = { popup -> activeHighlightPopup = popup },
+                onSelectionActiveChange = onSelectionActiveChange,
+                isRangeSelected = { pos -> isInRangeSelection(pos) },
+                getAdapter = { this@TextAdapter },
             )
             VIEW_TYPE_CHAPTER_HEADER -> ChapterHeaderViewHolder(
                 inflater.inflate(R.layout.item_novel_chapter_header, parent, false),
@@ -587,6 +723,7 @@ class TextAdapter(
             VIEW_TYPE_CHAPTER_NAVIGATION -> ChapterNavigationViewHolder(
                 inflater.inflate(R.layout.item_novel_chapter_navigation, parent, false),
                 onNavigationClick,
+                getAccentColor,
             )
             else -> LoadingViewHolder(
                 inflater.inflate(R.layout.item_novel_loading, parent, false),
@@ -595,6 +732,12 @@ class TextAdapter(
     }
 
     override fun onBindViewHolder(holder: TextViewHolder, position: Int) {
+        holder.bind(getItem(position))
+    }
+
+    override fun onBindViewHolder(holder: TextViewHolder, position: Int, payloads: List<Any>) {
+        // When called with a "config" payload (from textConfig change),
+        // force a full re-bind to pick up the new styling.
         holder.bind(getItem(position))
     }
 

@@ -58,6 +58,8 @@ import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
@@ -225,9 +227,16 @@ data object AnimeLibraryTab : Tab {
             val hostPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
             val hostTop = hostPadding?.calculateTopPadding() ?: androidx.compose.ui.unit.Dp.Hairline
             val hostBottom = hostPadding?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+            // Add extra bottom padding when the fetching overlay is visible
+            // so the last library items aren't hidden behind it.
+            val updateState by LibraryUpdateProgressBus.state.collectAsState()
+            val overlayExtraBottom = when (updateState) {
+                is LibraryUpdateProgress.Running, is LibraryUpdateProgress.Completed -> 80.dp
+                else -> 0.dp
+            }
             val resolvedContentPadding = androidx.compose.foundation.layout.PaddingValues(
                 top = contentPadding.calculateTopPadding() + hostTop,
-                bottom = contentPadding.calculateBottomPadding() + hostBottom,
+                bottom = contentPadding.calculateBottomPadding() + hostBottom + overlayExtraBottom,
             )
             when {
                 state.isLoading -> LoadingScreen(Modifier.padding(resolvedContentPadding))

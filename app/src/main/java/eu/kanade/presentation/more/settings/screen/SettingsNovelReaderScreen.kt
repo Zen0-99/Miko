@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderPreferences
+import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsHighlightMode
 import eu.kanade.tachiyomi.ui.reader.novel.TextAlignment
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReadingMode
@@ -91,22 +92,23 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     ),
                 ),
             ),
-            getTtsGroup(pref),
+            getTtsGroup(),
         )
     }
 
     @Composable
-    private fun getTtsGroup(prefs: NovelReaderPreferences): Preference.PreferenceGroup {
-        val ttsSpeechRatePref = prefs.ttsSpeechRate()
+    private fun getTtsGroup(): Preference.PreferenceGroup {
+        val ttsPrefs = remember { Injekt.get<NovelTtsPreferences>() }
+        val ttsSpeechRatePref = ttsPrefs.speechRate()
         val ttsSpeechRate by ttsSpeechRatePref.collectAsState()
-        val ttsPitchPref = prefs.ttsPitch()
+        val ttsPitchPref = ttsPrefs.pitch()
         val ttsPitch by ttsPitchPref.collectAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(AYMR.strings.novel_reader_tts_section),
             preferenceItems = persistentListOf(
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = prefs.ttsEnabled(),
+                    preference = ttsPrefs.enabled(),
                     title = stringResource(AYMR.strings.novel_reader_tts_enabled),
                     subtitle = stringResource(AYMR.strings.novel_reader_tts_enabled_summary),
                 ),
@@ -131,7 +133,7 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     },
                 ),
                 Preference.PreferenceItem.ListPreference(
-                    preference = prefs.ttsHighlightMode(),
+                    preference = ttsPrefs.highlightMode(),
                     entries = NovelTtsHighlightMode.entries
                         .associateWith { getTtsHighlightModeLabel(it) }
                         .toImmutableMap(),
@@ -139,34 +141,34 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     subtitle = stringResource(AYMR.strings.novel_reader_tts_highlight_mode_summary),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = prefs.ttsWordHighlightEnabled(),
+                    preference = ttsPrefs.wordHighlightEnabled(),
                     title = stringResource(AYMR.strings.novel_reader_tts_word_highlight_enabled),
                     subtitle = stringResource(AYMR.strings.novel_reader_tts_word_highlight_enabled_summary),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = prefs.ttsAutoAdvanceChapter(),
+                    preference = ttsPrefs.autoAdvanceChapter(),
                     title = stringResource(AYMR.strings.novel_reader_tts_auto_advance_chapter),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = prefs.ttsFollowAlong(),
+                    preference = ttsPrefs.followAlong(),
                     title = stringResource(AYMR.strings.novel_reader_tts_follow_along),
                     subtitle = stringResource(AYMR.strings.novel_reader_tts_follow_along_summary),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = prefs.ttsPauseOnManualNavigation(),
+                    preference = ttsPrefs.pauseOnManualNavigation(),
                     title = stringResource(AYMR.strings.novel_reader_tts_pause_on_manual_navigation),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = prefs.ttsKeepScreenOnDuringPlayback(),
+                    preference = ttsPrefs.keepScreenOnDuringPlayback(),
                     title = stringResource(AYMR.strings.novel_reader_tts_keep_screen_on_during_playback),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = prefs.ttsPreferTranslatedText(),
+                    preference = ttsPrefs.preferTranslatedText(),
                     title = stringResource(AYMR.strings.novel_reader_tts_prefer_translated_text),
                     subtitle = stringResource(AYMR.strings.novel_reader_tts_prefer_translated_text_summary),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = prefs.ttsReadChapterTitle(),
+                    preference = ttsPrefs.readChapterTitle(),
                     title = stringResource(AYMR.strings.novel_reader_tts_read_chapter_title),
                 ),
             ),

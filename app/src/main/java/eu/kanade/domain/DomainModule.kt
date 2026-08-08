@@ -267,6 +267,7 @@ import tachiyomi.domain.items.chapter.interactor.UpdateChapter
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
+import tachiyomi.domain.items.chapter.interactor.BackfillNovelCharCounts
 import tachiyomi.domain.items.chapter.interactor.GetTotalReadNovelCharCount
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
@@ -594,6 +595,7 @@ class DomainModule : InjektModule {
         addFactory { GetNovelChapter(get()) }
         addFactory { GetNovelChaptersByNovelId(get()) }
         addFactory { GetTotalReadNovelCharCount(get()) }
+        addFactory { BackfillNovelCharCounts(get()) }
         addFactory { GetNovelCollections(get()) }
         addFactory { GetNovelCustomOrder(get()) }
         addFactory { GetLinkedNovels(get()) }

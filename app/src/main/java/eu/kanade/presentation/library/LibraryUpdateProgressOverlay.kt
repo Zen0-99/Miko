@@ -35,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +59,7 @@ import eu.kanade.presentation.components.LocalHostScaffoldContentPadding
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -134,9 +137,17 @@ fun LibraryUpdateProgressOverlay(
     val hostPadding = LocalHostScaffoldContentPadding.current
     val navBarBottom = hostPadding?.calculateBottomPadding() ?: 0.dp
 
-    // Swipe-down dismiss: user can drag the overlay down to hide it.
+    // Swipe-side dismiss: user can drag the overlay sideways to hide it.
+    // When dismissed by swipe, the card animates off-screen in the swipe
+    // direction (left or right). Auto-dismiss uses fade + slide down.
     val dismissThreshold = with(LocalDensity.current) { 200.dp.toPx() }
+    val screenWidthPx = with(LocalDensity.current) {
+        LocalConfiguration.current.screenWidthDp.dp.toPx()
+    }
     var dragOffset by remember { mutableStateOf(0f) }
+    // Track whether the overlay is being dismissed by swipe (vs auto-dismiss)
+    var swipeDismissDirection by remember { mutableStateOf(0f) }
+    val scope = rememberCoroutineScope()
 
     AnimatedVisibility(
         visible = visible,
@@ -164,20 +175,41 @@ fun LibraryUpdateProgressOverlay(
             onResume = { LibraryUpdateProgressBus.resumeRun(context) },
             onCancel = LibraryUpdateProgressBus::requestCancel,
             modifier = Modifier
-                .graphicsLayer { translationY = dragOffset }
+                .graphicsLayer {
+                    translationX = if (swipeDismissDirection != 0f) {
+                        // Animate off-screen in the swipe direction
+                        swipeDismissDirection * screenWidthPx
+                    } else {
+                        dragOffset
+                    }
+                    alpha = if (swipeDismissDirection != 0f) {
+                        1f - (kotlin.math.abs(swipeDismissDirection * screenWidthPx) / screenWidthPx).coerceIn(0f, 1f)
+                    } else {
+                        1f
+                    }
+                }
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragEnd = {
-                            if (dragOffset > dismissThreshold) {
-                                userDismissed = true
+                            if (kotlin.math.abs(dragOffset) > dismissThreshold) {
+                                // Animate off-screen in the swipe direction
+                                val direction = if (dragOffset > 0) 1f else -1f
+                                scope.launch {
+                                    // Animate the swipe dismissal
+                                    animatableSwipeDismiss(direction, screenWidthPx) { progress ->
+                                        swipeDismissDirection = progress
+                                    }
+                                    userDismissed = true
+                                    swipeDismissDirection = 0f
+                                }
                             }
                             dragOffset = 0f
                         },
                         onDragCancel = { dragOffset = 0f },
                     ) { _, dragAmount ->
-                        // Only respond to downward drags (positive Y)
-                        if (dragAmount.y > 0) {
-                            dragOffset += dragAmount.y
+                        // Respond to horizontal drags (either direction)
+                        if (kotlin.math.abs(dragAmount.x) > kotlin.math.abs(dragAmount.y)) {
+                            dragOffset += dragAmount.x
                         }
                     }
                 },
@@ -201,7 +233,7 @@ private fun GlassOverlayCard(
     val completed = state as? LibraryUpdateProgress.Completed
     val isPaused = running?.isPaused == true
     val processed = running?.processedEntries ?: completed?.totalProcessed ?: 0
-    val total = running?.totalEntries ?: completed?.totalProcessed ?: 0
+    val total = running?.totalEntries ?: completed?.totalEntries ?: 0
     val failedCount = running?.failedSoFar?.size ?: completed?.failed?.size ?: 0
     // Keep the last non-null title so it doesn't disappear between entries
     // during long fetches (the currentlyUpdating list can be briefly empty).
@@ -211,7 +243,7 @@ private fun GlassOverlayCard(
     val displayTitle = currentTitle ?: lastTitle
     val source = running?.source ?: completed?.source ?: ""
     val isCompleted = completed != null
-    val isAllUpToDate = isCompleted && processed == 0 && total == 0 && failedCount == 0
+    val isAllUpToDate = isCompleted && failedCount == 0 && processed == total
 
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     // Use the unified glass tint (passed from caller) so the overlay reads
@@ -358,5 +390,28 @@ private fun GlassOverlayCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Animate the swipe dismissal: interpolate from 0 to [direction] over ~250ms,
+ * calling [onProgress] with the current value each frame so the caller can
+ * update the graphicsLayer translationX.
+ */
+private suspend fun animatableSwipeDismiss(
+    direction: Float,
+    screenWidthPx: Float,
+    onProgress: (Float) -> Unit,
+) {
+    val durationMs = 250L
+    val startTime = System.currentTimeMillis()
+    while (true) {
+        val elapsed = System.currentTimeMillis() - startTime
+        val t = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
+        // Ease-out for natural deceleration
+        val eased = 1f - (1f - t) * (1f - t)
+        onProgress(direction * eased)
+        if (t >= 1f) break
+        kotlinx.coroutines.delay(16)
     }
 }

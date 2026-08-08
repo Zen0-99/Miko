@@ -3,6 +3,7 @@ package tachiyomi.data.source.novel
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
+import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -73,6 +74,11 @@ class NovelSourceRepositoryImpl(
     override fun getLatestNovels(sourceId: Long): NovelSourcePagingSourceType {
         val source = sourceManager.get(sourceId) as NovelCatalogueSource
         return NovelSourceLatestPagingSource(source)
+    }
+
+    override fun searchNovelsFlow(sourceId: Long, query: String): Flow<List<SNovel>> {
+        val source = sourceManager.get(sourceId) as NovelCatalogueSource
+        return source.searchFlow(query, 1)
     }
 
     private fun mapSourceToDomainSource(source: NovelSource): DomainNovelSource = DomainNovelSource(

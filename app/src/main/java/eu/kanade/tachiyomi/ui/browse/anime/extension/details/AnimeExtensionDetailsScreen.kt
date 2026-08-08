@@ -10,6 +10,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.browse.anime.AnimeExtensionDetailsScreen
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.ui.browse.anime.migration.all.MigrateAnimeAllScreen
 import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeSearchScreen
 import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.presentation.core.screens.LoadingScreen
@@ -47,6 +48,17 @@ data class AnimeExtensionDetailsScreen(
             onClickSource = screenModel::toggleSource,
             onClickIncognito = screenModel::toggleIncognito,
             onClickMigrate = { animeId -> navigator.push(MigrateAnimeSearchScreen(animeId)) },
+            onClickMigrateAll = {
+                val animeIds = state.migrateItems.map { it.anime.id }
+                if (animeIds.isNotEmpty()) {
+                    navigator.push(
+                        MigrateAnimeAllScreen(
+                            animeIds = animeIds,
+                            extensionName = state.extension?.name ?: "",
+                        ),
+                    )
+                }
+            },
         )
 
         LaunchedEffect(Unit) {

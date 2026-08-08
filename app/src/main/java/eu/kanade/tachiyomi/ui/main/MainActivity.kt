@@ -89,6 +89,7 @@ import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
 import eu.kanade.tachiyomi.data.updater.RELEASE_URL
 import eu.kanade.tachiyomi.extension.anime.api.AnimeExtensionApi
 import eu.kanade.tachiyomi.extension.manga.api.MangaExtensionApi
+import eu.kanade.tachiyomi.extension.novel.api.NovelExtensionApi
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
@@ -466,6 +467,7 @@ class MainActivity : BaseActivity() {
             try {
                 AnimeExtensionApi().checkForUpdates(context)
                 MangaExtensionApi().checkForUpdates(context)
+                NovelExtensionApi().checkForUpdates(context)
             } catch (e: Exception) {
                 logcat(LogPriority.ERROR, e)
             }
@@ -553,9 +555,10 @@ class MainActivity : BaseActivity() {
             Constants.SHORTCUT_UPDATES -> HomeScreen.Tab.Updates
             Constants.SHORTCUT_FETCHING -> HomeScreen.Tab.Fetching
             Constants.SHORTCUT_HISTORY -> HomeScreen.Tab.History
-            Constants.SHORTCUT_SOURCES -> HomeScreen.Tab.Browse(false)
-            Constants.SHORTCUT_ANIMEEXTENSIONS -> HomeScreen.Tab.Browse(true, true)
-            Constants.SHORTCUT_EXTENSIONS -> HomeScreen.Tab.Browse(true)
+            Constants.SHORTCUT_SOURCES -> HomeScreen.Tab.Browse()
+            Constants.SHORTCUT_ANIMEEXTENSIONS -> HomeScreen.Tab.Browse(mode = ContentMode.ANIME)
+            Constants.SHORTCUT_EXTENSIONS -> HomeScreen.Tab.Browse(mode = ContentMode.MANGA)
+            Constants.SHORTCUT_NOVELEXTENSIONS -> HomeScreen.Tab.Browse(mode = ContentMode.NOVEL)
             Constants.SHORTCUT_DOWNLOADS -> {
                 navigator.popUntilRoot()
                 HomeScreen.Tab.More(toDownloads = true)

@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.data.library
 
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicReference
@@ -32,6 +34,11 @@ object LibraryUpdateProgressBus {
     private val cancelRequested = AtomicReference(false)
     private val checkpointMutex = Mutex()
 
+    // Store the total entries for the current run so completeRun can
+    // report the correct total (avoids the "0/0" flash when the
+    // checkpoint is cleared before completion is published).
+    private var currentRunTotal: Int = 0
+
     /**
      * The set of entry IDs already processed in the current run, used for resume.
      * Cleared when a run completes (success or fully cancelled).
@@ -44,8 +51,14 @@ object LibraryUpdateProgressBus {
     fun startRun(total: Int, source: String, isResume: Boolean = false) {
         pauseRequested.set(false)
         cancelRequested.set(false)
+        currentRunTotal = total
         if (!isResume) {
             synchronized(_checkpoint) { _checkpoint.clear() }
+            // Clear persisted failed fetches from previous runs so the
+            // Fetching tab shows only the current run's failures.
+            kotlinx.coroutines.GlobalScope.launch {
+                FailedFetchStore.clearAll()
+            }
         }
         _state.value = LibraryUpdateProgress.Running(
             totalEntries = total,
@@ -90,12 +103,15 @@ object LibraryUpdateProgressBus {
 
     fun completeRun(failed: List<FailedEntry>, source: String) {
         val processed = synchronized(_checkpoint) { _checkpoint.size }
+        val total = currentRunTotal
         _state.value = LibraryUpdateProgress.Completed(
             failed = failed,
             totalProcessed = processed,
+            totalEntries = total,
             source = source,
         )
         synchronized(_checkpoint) { _checkpoint.clear() }
+        currentRunTotal = 0
         pauseRequested.set(false)
         cancelRequested.set(false)
     }
@@ -192,6 +208,7 @@ sealed interface LibraryUpdateProgress {
     data class Completed(
         val failed: List<FailedEntry>,
         val totalProcessed: Int,
+        val totalEntries: Int,
         val source: String,
     ) : LibraryUpdateProgress
 }

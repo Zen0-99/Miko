@@ -36,6 +36,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,9 +54,7 @@ fun NovelReaderTopBar(
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
     progressPercent: Int = -1,
-    estimatedReadingTime: Int = -1,
     wordCount: Int = -1,
-    timeToEnd: Int = -1,
     fullscreen: Boolean = false,
 ) {
     Surface(
@@ -105,20 +108,7 @@ fun NovelReaderTopBar(
                         text = "$progressPercent%",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(end = if (estimatedReadingTime >= 0) 4.dp else 12.dp),
-                    )
-                }
-                if (estimatedReadingTime >= 0) {
-                    val timeText = if (estimatedReadingTime == 0) {
-                        "<1m"
-                    } else {
-                        "${estimatedReadingTime}m"
-                    }
-                    Text(
-                        text = timeText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(end = if (wordCount >= 0 || timeToEnd >= 0) 4.dp else 12.dp),
+                        modifier = Modifier.padding(end = if (wordCount >= 0) 4.dp else 12.dp),
                     )
                 }
                 if (wordCount >= 0) {
@@ -129,19 +119,6 @@ fun NovelReaderTopBar(
                     }
                     Text(
                         text = wordText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(end = if (timeToEnd >= 0) 4.dp else 12.dp),
-                    )
-                }
-                if (timeToEnd >= 0) {
-                    val endText = if (timeToEnd == 0) {
-                        "<1m left"
-                    } else {
-                        "${timeToEnd}m left"
-                    }
-                    Text(
-                        text = endText,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(end = 12.dp),
@@ -236,12 +213,13 @@ fun NovelReaderChrome(
     subtitle: String,
     accentColor: Color? = null,
     progressPercent: Int = -1,
-    estimatedReadingTime: Int = -1,
     wordCount: Int = -1,
-    timeToEnd: Int = -1,
     fullscreen: Boolean = false,
     showPhoneInfo: Boolean = false,
+    estimatedReadingTime: Int = -1,
     readerBackgroundColor: Color = MaterialTheme.colorScheme.background,
+    backgroundTexture: eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture = eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE,
+    textureStrength: Int = 0,
     showCommentsButton: Boolean = false,
     isTtsActive: Boolean = false,
     onBackClick: () -> Unit,
@@ -265,9 +243,7 @@ fun NovelReaderChrome(
                 onBackClick = onBackClick,
                 accentColor = accentColor,
                 progressPercent = progressPercent,
-                estimatedReadingTime = estimatedReadingTime,
                 wordCount = wordCount,
-                timeToEnd = timeToEnd,
                 fullscreen = fullscreen,
             )
         }
@@ -277,6 +253,9 @@ fun NovelReaderChrome(
                 accentColor = accentColor,
                 fullscreen = fullscreen,
                 backgroundColor = readerBackgroundColor,
+                backgroundTexture = backgroundTexture,
+                textureStrength = textureStrength,
+                estimatedReadingTime = estimatedReadingTime,
             )
         }
         AnimatedVisibility(
@@ -307,6 +286,9 @@ fun NovelPhoneInfoOverlay(
     accentColor: Color? = null,
     fullscreen: Boolean = false,
     backgroundColor: Color = MaterialTheme.colorScheme.background,
+    backgroundTexture: eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture = eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE,
+    textureStrength: Int = 0,
+    estimatedReadingTime: Int = -1,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val textColor = when {
@@ -350,33 +332,96 @@ fun NovelPhoneInfoOverlay(
         }
     }
 
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(backgroundColor)
-            .then(
-                if (fullscreen) {
-                    Modifier.padding(bottom = 4.dp)
-                } else {
-                    Modifier.navigationBarsPadding()
-                },
-            )
-            .padding(horizontal = 24.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .background(backgroundColor),
     ) {
-        Text(
-            text = currentTime,
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-            fontSize = 11.sp,
+        // Texture overlay on top of the background color.
+        // matchParentSize() fills the Box's content size (the Row's height),
+        // NOT the full screen — fillMaxSize() would expand to cover everything.
+        if (backgroundTexture != eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE) {
+            NovelPhoneInfoTextureOverlay(
+                texture = backgroundTexture,
+                strengthPercent = textureStrength,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (fullscreen) {
+                        Modifier.padding(bottom = 4.dp)
+                    } else {
+                        Modifier.navigationBarsPadding()
+                    },
+                )
+                .padding(horizontal = 24.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = currentTime,
+                style = MaterialTheme.typography.labelSmall,
+                color = textColor,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontSize = 11.sp,
+            )
+            if (estimatedReadingTime >= 0) {
+                val timeText = if (estimatedReadingTime == 0) {
+                    "<1m left"
+                } else {
+                    "${estimatedReadingTime}m left"
+                }
+                Text(
+                    text = timeText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor.copy(alpha = 0.7f),
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    fontSize = 11.sp,
+                )
+            }
+            Text(
+                text = "$batteryPct%",
+                style = MaterialTheme.typography.labelSmall,
+                color = textColor,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontSize = 11.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovelPhoneInfoTextureOverlay(
+    texture: eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture,
+    strengthPercent: Int,
+    modifier: Modifier = Modifier,
+) {
+    if (texture == eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE) return
+    val alpha = (strengthPercent.coerceIn(0, 100) / 100f)
+    val imageRes = when (texture) {
+        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.PAPER_GRAIN -> eu.kanade.tachiyomi.R.drawable.texture_paper
+        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.LINEN -> eu.kanade.tachiyomi.R.drawable.texture_linen
+        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.CANVAS -> eu.kanade.tachiyomi.R.drawable.texture_canvas
+        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.KRAFT -> eu.kanade.tachiyomi.R.drawable.texture_kraft
+        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.DOTTED -> eu.kanade.tachiyomi.R.drawable.texture_dotted
+        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE -> return
+    }
+    val imageBitmap = ImageBitmap.imageResource(id = imageRes)
+    val brush = remember(imageBitmap) {
+        ShaderBrush(
+            ImageShader(
+                image = imageBitmap,
+                tileModeX = TileMode.Repeated,
+                tileModeY = TileMode.Repeated,
+            ),
         )
-        Text(
-            text = "$batteryPct%",
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-            fontSize = 11.sp,
-        )
+    }
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        if (alpha > 0f) {
+            drawRect(brush = brush, alpha = alpha)
+        }
     }
 }

@@ -45,9 +45,6 @@ class NovelReaderPreferences(
     /** Whether to use the novel's cover-derived accent color in the reader UI. */
     fun useCoverAccentColor() = preferenceStore.getBoolean("pref_novel_use_cover_accent", false)
 
-    /** Whether to show in-line phone info (time + battery) at the bottom of the reader. */
-    fun inlinePhoneInfo() = preferenceStore.getBoolean("pref_novel_inline_phone_info", false)
-
     /** Show estimated reading time for the current chapter in the reader chrome. */
     fun showEstimatedReadingTime() = preferenceStore.getBoolean("pref_novel_show_reading_time", false)
 
@@ -104,11 +101,14 @@ class NovelReaderPreferences(
     /** Background texture overlay (paper grain, linen, parchment). */
     fun backgroundTexture() = preferenceStore.getEnum("pref_novel_bg_texture", NovelReaderBackgroundTexture.NONE)
 
-    /** Native texture strength (0–100 percent). */
+    /** Native texture strength (0–100 percent, 100 = max). */
     fun nativeTextureStrength() = preferenceStore.getInt("pref_novel_texture_strength", 50)
 
     /** OLED edge gradient: adds a subtle dark gradient at screen edges for OLED displays. */
     fun oledEdgeGradient() = preferenceStore.getBoolean("pref_novel_oled_edge_gradient", false)
+
+    /** Edge fade: gradient fade at top/bottom of reader that makes text fade out while scrolling. */
+    fun edgeFadeEnabled() = preferenceStore.getBoolean("pref_novel_edge_fade", false)
 
     /** Auto-scroll: enables automatic scrolling of the reader content. */
     fun autoScroll() = preferenceStore.getBoolean("pref_novel_auto_scroll", false)
@@ -124,9 +124,6 @@ class NovelReaderPreferences(
 
     /** Auto-scroll offset (pixels per scroll step). */
     fun autoScrollOffset() = preferenceStore.getInt("pref_novel_auto_scroll_offset", 60)
-
-    /** Auto-scroll adaptive delay: adjusts scroll speed based on content density. */
-    fun autoScrollAdaptiveDelay() = preferenceStore.getBoolean("pref_novel_auto_scroll_adaptive", true)
 
     /** Auto-scroll chapter end behavior. */
     fun autoScrollChapterEndBehavior() = preferenceStore.getEnum("pref_novel_auto_scroll_end_behavior", NovelAutoScrollChapterEndBehavior.StopAtEnd)
@@ -173,64 +170,12 @@ class NovelReaderPreferences(
     /** Swipe to previous chapter gesture. */
     fun swipeToPrevChapter() = preferenceStore.getBoolean("pref_novel_swipe_prev_chapter", false)
 
-    /** Tap to scroll: tap left/right half of screen to scroll. */
+    /** Tap to navigate: tap top/bottom (or left/right in page mode) to scroll/navigate. */
     fun tapToScroll() = preferenceStore.getBoolean("pref_novel_tap_scroll", false)
+
+    /** Tap-to-navigate scroll amount: percentage of viewport height to scroll per tap (10-100). */
+    fun tapToScrollAmount() = preferenceStore.getInt("pref_novel_tap_scroll_amount", 80)
 
     /** Vertical seekbar: display the seekbar vertically on the side. */
     fun verticalSeekbar() = preferenceStore.getBoolean("pref_novel_vertical_seekbar", false)
-
-    /** Custom CSS injected into the reader WebView. */
-    fun customCSS() = preferenceStore.getString("pref_novel_custom_css", "")
-
-    /** Custom JS injected into the reader WebView. */
-    fun customJS() = preferenceStore.getString("pref_novel_custom_js", "")
-
-    // --- TTS (text-to-speech) ---
-
-    /** Enable text-to-speech for novel chapters. */
-    fun ttsEnabled() = preferenceStore.getBoolean("novel_reader_tts_enabled", false)
-
-    /** TTS speech rate (0.5–2.0, where 1.0 is normal speed). */
-    fun ttsSpeechRate() = preferenceStore.getFloat("novel_reader_tts_speech_rate", 1f)
-
-    /** TTS pitch (0.5–2.0, where 1.0 is normal pitch). */
-    fun ttsPitch() = preferenceStore.getFloat("novel_reader_tts_pitch", 1f)
-
-    /** Word highlight mode during TTS playback. */
-    fun ttsHighlightMode() =
-        preferenceStore.getEnum("novel_reader_tts_highlight_mode", NovelTtsHighlightMode.AUTO)
-
-    /** Highlight individual spoken words during playback. */
-    fun ttsWordHighlightEnabled() =
-        preferenceStore.getBoolean("novel_reader_tts_word_highlight_enabled", true)
-
-    /** Automatically advance to the next chapter when current one finishes. */
-    fun ttsAutoAdvanceChapter() =
-        preferenceStore.getBoolean("novel_reader_tts_auto_advance_chapter", false)
-
-    /** Follow spoken position: keep scroll/page aligned with speech progress. */
-    fun ttsFollowAlong() = preferenceStore.getBoolean("novel_reader_tts_follow_along", true)
-
-    /** Pause TTS when the user manually navigates. */
-    fun ttsPauseOnManualNavigation() =
-        preferenceStore.getBoolean("novel_reader_tts_pause_on_manual_navigation", true)
-
-    /** Keep screen on during TTS playback. */
-    fun ttsKeepScreenOnDuringPlayback() =
-        preferenceStore.getBoolean("novel_reader_tts_keep_screen_on_during_playback", false)
-
-    /** Prefer translated chapter text for TTS when available. */
-    fun ttsPreferTranslatedText() =
-        preferenceStore.getBoolean("novel_reader_tts_prefer_translated_text", false)
-
-    /** Read the chapter title aloud before the chapter content. */
-    fun ttsReadChapterTitle() =
-        preferenceStore.getBoolean("novel_reader_tts_read_chapter_title", true)
-}
-
-enum class NovelTtsHighlightMode {
-    AUTO,
-    EXACT,
-    ESTIMATED,
-    OFF,
 }
