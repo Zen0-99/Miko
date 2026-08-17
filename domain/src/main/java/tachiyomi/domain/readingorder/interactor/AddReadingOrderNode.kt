@@ -5,7 +5,7 @@ import tachiyomi.domain.readingorder.repository.ReadingOrderRepository
 class AddReadingOrderNode(
     private val repository: ReadingOrderRepository,
 ) {
-    suspend fun await(orderId: Long, mangaId: Long): Long {
-        return repository.addNode(orderId, mangaId)
+    suspend fun await(orderId: Long, entryId: Long): Long {
+        return repository.addNode(orderId, entryId)
     }
 }

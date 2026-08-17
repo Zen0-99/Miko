@@ -42,20 +42,55 @@ class UpdateNovel(
         val genre = if (localNovel.favorite) null else remoteGenre
         val status = if (localNovel.favorite) null else remoteStatus
 
+        // Cover art checker: if the cover cache file doesn't exist (e.g., after
+        // a backup restore where cover files weren't included), force a cover
+        // refresh. This only checks for missing covers — existing covers are
+        // not re-fetched.
+        //
+        // Key insight: use the LOCAL thumbnailUrl for the cover cache check,
+        // not the remote one. The source (e.g. Anna's Archive) may return null
+        // for thumbnail_url, but the novel already has a valid thumbnailUrl in
+        // the database from the backup. We just need to invalidate the cover
+        // cache so Coil re-fetches the image.
+        val coverFileExists = coverCache.getCoverFile(localNovel.thumbnailUrl)?.exists() == true
+        val hasLocalThumbnailUrl = !localNovel.thumbnailUrl.isNullOrEmpty()
+        val hasRemoteThumbnailUrl = !remoteThumbnailUrl.isNullOrEmpty()
+        android.util.Log.d("UpdateNovel", "awaitUpdateFromSource: novel=${localNovel.title} coverFileExists=$coverFileExists hasLocal=$hasLocalThumbnailUrl hasRemote=$hasRemoteThumbnailUrl localUrl=${localNovel.thumbnailUrl} remoteUrl=$remoteThumbnailUrl")
+
         val coverLastModified = when {
-            remoteThumbnailUrl.isNullOrEmpty() -> null
+            // No cover URL anywhere — can't fetch a cover
+            !hasLocalThumbnailUrl && !hasRemoteThumbnailUrl -> null
+            // Cover cache file is missing — force refresh to re-fetch the image.
+            // Use whichever thumbnailUrl is available (prefer remote if it changed,
+            // fall back to local for sources that don't return thumbnail_url).
+            !coverFileExists -> {
+                coverCache.deleteFromCache(localNovel, false)
+                Instant.now().toEpochMilli()
+            }
+            // Cover exists and URL hasn't changed — no need to refresh
             !manualFetch && localNovel.thumbnailUrl == remoteThumbnailUrl -> null
+            // User has a custom cover — don't overwrite
             localNovel.hasCustomCover(coverCache) -> {
                 coverCache.deleteFromCache(localNovel, false)
                 null
             }
+            // URL changed — refresh the cover
             else -> {
                 coverCache.deleteFromCache(localNovel, false)
                 Instant.now().toEpochMilli()
             }
         }
 
-        val thumbnailUrl = remoteThumbnailUrl?.takeIf { it.isNotEmpty() }
+        // Use remote thumbnailUrl if provided, otherwise keep the local one.
+        // This ensures we don't null out the thumbnailUrl when the source
+        // doesn't return one (e.g. Anna's Archive).
+        val thumbnailUrl = if (hasRemoteThumbnailUrl) {
+            remoteThumbnailUrl?.takeIf { it.isNotEmpty() }
+        } else {
+            localNovel.thumbnailUrl
+        }
+
+        android.util.Log.d("UpdateNovel", "result: novel=${localNovel.title} coverLastModified=$coverLastModified thumbnailUrl=$thumbnailUrl")
 
         return novelRepository.updateNovel(
             NovelUpdate(

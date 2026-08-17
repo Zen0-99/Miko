@@ -49,6 +49,14 @@ class NovelHistoryRepositoryImpl(
         }
     }
 
+    override suspend fun deleteHistoryByNovelId(novelId: Long) {
+        try {
+            handler.await { novelhistoryQueries.deleteHistoryByNovelId(novelId) }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, throwable = e)
+        }
+    }
+
     override suspend fun deleteAllNovelHistory(): Boolean {
         return try {
             handler.await { novelhistoryQueries.removeAllHistory() }

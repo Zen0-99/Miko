@@ -46,6 +46,11 @@ fun MangaLibraryPager(
     onTogglePinned: ((MangaLibraryItem) -> Unit)? = null,
     onSeriesClicked: ((Long) -> Unit)? = null,
     onReorder: ((List<Long>) -> Unit)? = null,
+    showListAuthor: Boolean = false,
+    showListStatus: Boolean = false,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerMangaIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     BoxWithConstraints {
         val density = LocalDensity.current
@@ -84,8 +89,8 @@ fun MangaLibraryPager(
                 LibraryDisplayMode.List -> {
                     MangaLibraryList(
                         items = library,
-                        entries = columns,
-                        containerHeight = containerHeightPx,
+                        entries = 0,
+                        containerHeight = 0,
                         contentPadding = contentPadding,
                         selection = selectedManga,
                         onClick = onClickManga,
@@ -95,6 +100,11 @@ fun MangaLibraryPager(
                         onGlobalSearchClicked = onGlobalSearchClicked,
                         onSeriesClicked = onSeriesClicked,
                         onReorder = onReorder,
+                        showAuthor = showListAuthor,
+                        showStatus = showListStatus,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerMangaIds = getPreviousLayerMangaIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
 
@@ -113,6 +123,9 @@ fun MangaLibraryPager(
                         onTogglePinned = onTogglePinned,
                         onSeriesClicked = onSeriesClicked,
                         performanceMode = performanceMode,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerMangaIds = getPreviousLayerMangaIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
 
@@ -130,6 +143,10 @@ fun MangaLibraryPager(
                         onTogglePinned = onTogglePinned,
                         onSeriesClicked = onSeriesClicked,
                         performanceMode = performanceMode,
+                        showAuthor = showListAuthor,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerMangaIds = getPreviousLayerMangaIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
             }

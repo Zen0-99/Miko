@@ -34,6 +34,7 @@ data class MangaLibrarySort(
         data object DateAdded : Type(0b00011100)
         data object TrackerMean : Type(0b000100000)
         data object CustomOrder : Type(0b00100100)
+        data object ReadingOrder : Type(0b00101000)
         data object Random : Type(0b00111100)
 
         companion object {
@@ -82,6 +83,7 @@ data class MangaLibrarySort(
                 Type.DateAdded,
                 Type.TrackerMean,
                 Type.CustomOrder,
+                Type.ReadingOrder,
                 Type.Random,
             )
         }
@@ -111,6 +113,7 @@ data class MangaLibrarySort(
                     "DATE_ADDED" -> Type.DateAdded
                     "TRACKER_MEAN" -> Type.TrackerMean
                     "CUSTOM_ORDER" -> Type.CustomOrder
+                    "READING_ORDER" -> Type.ReadingOrder
                     "RANDOM" -> Type.Random
                     else -> Type.Alphabetical
                 }
@@ -134,6 +137,7 @@ data class MangaLibrarySort(
             Type.DateAdded -> "DATE_ADDED"
             Type.TrackerMean -> "TRACKER_MEAN"
             Type.CustomOrder -> "CUSTOM_ORDER"
+            Type.ReadingOrder -> "READING_ORDER"
             Type.Random -> "RANDOM"
         }
         val direction = if (direction == Direction.Ascending) "ASCENDING" else "DESCENDING"

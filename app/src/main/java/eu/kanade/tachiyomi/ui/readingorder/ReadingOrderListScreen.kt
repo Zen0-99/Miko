@@ -37,11 +37,13 @@ import eu.kanade.presentation.util.Screen
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
-class ReadingOrderListScreen : Screen() {
+class ReadingOrderListScreen(
+    private val entryKind: String = "manga",
+) : Screen() {
 
     @Composable
     override fun Content() {
-        val screenModel = rememberScreenModel { ReadingOrderListScreenModel() }
+        val screenModel = rememberScreenModel { ReadingOrderListScreenModel(entryKind) }
         val state by screenModel.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
 

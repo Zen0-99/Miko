@@ -60,6 +60,21 @@
     <string name="action_filter_tracked">Tracked</string>
     <string name="action_filter_unread">Unread</string>
     <string name="action_filter_interval_custom">Customized update frequency</string>
+    <string name="filter_not_downloaded">Not downloaded</string>
+    <string name="filter_read">Read</string>
+    <string name="filter_not_started">Not started</string>
+    <string name="filter_not_bookmarked">Not bookmarked</string>
+    <string name="filter_not_completed">Not completed</string>
+    <string name="filter_not_tracked">Not tracked</string>
+    <string name="not_tracked">Untracked</string>
+    <string name="group_library_by">Group library by…</string>
+    <string name="display_options">Display options</string>
+    <string name="ungrouped">Ungrouped</string>
+    <string name="tracking_status">Tracking status</string>
+    <string name="tag">Tag</string>
+    <string name="sources">Sources</string>
+    <string name="language">Language</string>
+    <string name="categories">Categories</string>
     <!-- reserved for #4048 -->
     <string name="action_filter_empty">Remove filter</string>
     <string name="action_sort_alpha">Alphabetically</string>
@@ -140,13 +155,23 @@
     <string name="action_display_comfortable_grid">Comfortable grid</string>
     <string name="action_display_list">List</string>
     <string name="action_display_cover_only_grid">Cover-only grid</string>
+    <string name="display_mode_compact">Compact</string>
+    <string name="display_mode_comfortable">Comfortable</string>
+    <string name="display_mode_cover_only">Cover-only</string>
     <string name="action_display_download_badge">Downloaded chapters</string>
     <string name="action_display_unread_badge">Unread chapters</string>
     <string name="action_display_local_badge">Local source</string>
     <string name="action_display_language_badge">Language</string>
     <string name="action_display_show_tabs">Show collection tabs</string>
     <string name="action_display_show_number_of_items">Show number of items</string>
+    <string name="action_display_show_library_title">Show library title</string>
+    <string name="action_display_show_list_author">Show author</string>
+    <string name="action_display_show_list_status">Show status</string>
+    <string name="collection_display_mode">Collection display</string>
+    <string name="collection_display_tabbed">Tabbed pages (swipeable)</string>
+    <string name="collection_display_continuous">Continuous scroll (section headers)</string>
     <string name="action_display_show_continue_reading_button">Continue reading button</string>
+    <string name="action_display_show_reading_number">Reading order number</string>
     <string name="action_disable">Disable</string>
     <string name="action_pin">Pin</string>
     <string name="action_unpin">Unpin</string>
@@ -157,6 +182,11 @@
     <string name="action_cancel">Cancel</string>
     <string name="action_ok">OK</string>
     <string name="action_cancel_all">Cancel all</string>
+    <string name="clear_filters">Clear filters</string>
+    <string name="reorder_filters">Reorder filters</string>
+    <string name="reorder">Reorder</string>
+    <string name="expand_all_categories">Expand all</string>
+    <string name="collapse_all_categories">Collapse all</string>
     <string name="cancel_all_for_series">Cancel all for this series</string>
     <string name="action_sort">Sort</string>
     <string name="action_order_by_upload_date">By upload date</string>
@@ -577,6 +607,7 @@
     <string name="enhanced_services_not_installed">Available but source not installed: %s</string>
     <string name="enhanced_tracking_info">Provides enhanced features for specific sources. Entries are automatically tracked when added to your library.</string>
     <string name="track_activity_name">Tracker login</string>
+    <string name="track_no_trackers">No trackers logged in. Log in to a tracker in Settings to start tracking.</string>
 
       <!-- Browse section -->
     <string name="pref_hide_in_library_items">Hide entries already in library</string>
@@ -719,7 +750,10 @@
     <string name="intervals_header">Intervals</string>
     <!-- For badges/buttons on library covers. -->
     <string name="overlay_header">Overlay</string>
+    <string name="overlay_cover_badges">Cover badges</string>
+    <string name="overlay_actions">Actions</string>
     <string name="tabs_header">Tabs</string>
+    <string name="badges">Badges</string>
 
     <!-- Browse source -->
     <!-- missing prompt after Compose rewrite #7901 -->
@@ -1042,6 +1076,7 @@
     <string name="exception_http">HTTP %d, check website in WebView</string>
     <string name="exception_offline">No Internet connection</string>
     <string name="exception_unknown_host">Couldn\'t reach %s</string>
+    <string name="dns_blocked_toast">DNS blocked for %s — check if VPN is interfering</string>
 
     <!-- Linked sources -->
     <string name="action_linked_sources">Linked sources</string>

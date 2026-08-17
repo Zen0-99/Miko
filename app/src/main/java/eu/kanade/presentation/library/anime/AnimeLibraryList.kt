@@ -12,6 +12,7 @@ import eu.kanade.presentation.library.components.DownloadsBadge
 import eu.kanade.presentation.library.components.EntryListItem
 import eu.kanade.presentation.library.components.GlobalSearchItem
 import eu.kanade.presentation.library.components.LanguageBadge
+import eu.kanade.presentation.library.components.ReadingOrderBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryItem
 import tachiyomi.domain.entries.anime.model.AnimeCover
@@ -31,6 +32,9 @@ internal fun AnimeLibraryList(
     onClickContinueWatching: ((LibraryAnime) -> Unit)?,
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerAnimeIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     FastScrollLazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -52,8 +56,10 @@ internal fun AnimeLibraryList(
             contentType = { "anime_library_list_item" },
         ) { libraryItem ->
             val anime = libraryItem.libraryAnime.anime
+            val isPreviousLayer = getPreviousLayerAnimeIds?.invoke()?.contains(anime.id) == true
             EntryListItem(
                 isSelected = selection.fastAny { it.id == libraryItem.libraryAnime.id },
+                coverAlpha = if (isPreviousLayer) 0.4f else 1f,
                 title = anime.title,
                 coverData = AnimeCover(
                     animeId = anime.id,
@@ -69,10 +75,14 @@ internal fun AnimeLibraryList(
                         isLocal = libraryItem.isLocal,
                         sourceLanguage = libraryItem.sourceLanguage,
                     )
+                    val roLayer = getReadingOrderLayer?.invoke(anime.id)
+                    if (roLayer != null) {
+                        ReadingOrderBadge(layer = roLayer)
+                    }
                 },
                 onLongClick = { onLongClick(libraryItem.libraryAnime) },
                 onClick = { onClick(libraryItem.libraryAnime) },
-                onClickContinueViewing = if (onClickContinueWatching != null && libraryItem.unseenCount > 0) {
+                onClickContinueViewing = if (onClickContinueWatching != null && libraryItem.unseenCount > 0 && isEntryLocked?.invoke(anime.id) != true) {
                     { onClickContinueWatching(libraryItem.libraryAnime) }
                 } else {
                     null

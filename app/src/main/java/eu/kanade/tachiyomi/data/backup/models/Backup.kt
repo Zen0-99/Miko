@@ -74,4 +74,10 @@ data class Backup(
     @ProtoNumber(601) var backupNovelCollection: List<BackupCollection> = emptyList(),
     @ProtoNumber(602) var backupNovelSources: List<BackupNovelSource> = emptyList(),
     @ProtoNumber(603) var backupNovelLinks: List<BackupNovelLink> = emptyList(),
+
+    // Achievement / stats values
+    @ProtoNumber(700) val backupAchievements: List<BackupAchievement> = emptyList(),
+    @ProtoNumber(701) val backupUserProfile: BackupUserProfile? = null,
+    @ProtoNumber(702) val backupActivityLog: List<BackupDayActivity> = emptyList(),
+    @ProtoNumber(703) val backupStats: BackupStats? = null,
 )

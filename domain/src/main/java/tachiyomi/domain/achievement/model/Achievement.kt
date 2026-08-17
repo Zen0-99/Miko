@@ -11,6 +11,7 @@ data class Achievement(
     val points: Int = 0,
     val title: String,
     val description: String? = null,
+    /** Legacy field — unused by the generative icon renderer. Retained for data compatibility. */
     val badgeIcon: String? = null,
     val isHidden: Boolean = false,
     val isSecret: Boolean = false,

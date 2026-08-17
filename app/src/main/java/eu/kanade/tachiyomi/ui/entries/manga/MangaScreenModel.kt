@@ -56,6 +56,7 @@ import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
+import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
@@ -497,6 +498,7 @@ class MangaScreenModel(
             if (e is HttpException && e.code == 103) return
 
             logcat(LogPriority.ERROR, e)
+            context.maybeShowDnsToast(e, state.manga.thumbnailUrl)
             screenModelScope.launch {
                 snackbarHostState.showSnackbar(message = with(context) { e.formattedMessage })
             }

@@ -11,6 +11,7 @@ import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.LazyLibraryGrid
 import eu.kanade.presentation.library.components.PinnedBadge
+import eu.kanade.presentation.library.components.ReadingOrderBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.components.globalSearchItem
 import eu.kanade.presentation.library.components.shouldShowContinueViewingAction
@@ -32,6 +33,10 @@ internal fun MangaLibraryComfortableGrid(
     onTogglePinned: ((MangaLibraryItem) -> Unit)? = null,
     onSeriesClicked: ((Long) -> Unit)? = null,
     performanceMode: Boolean = false,
+    showAuthor: Boolean = false,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerMangaIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -46,9 +51,23 @@ internal fun MangaLibraryComfortableGrid(
             contentType = { "manga_library_comfortable_grid_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
+            val isPreviousLayer = getPreviousLayerMangaIds?.invoke()?.contains(manga.id) == true
+            val authorSubtitle = if (showAuthor) {
+                val authorArtist = if (manga.author == manga.artist || manga.artist.isNullOrBlank()) {
+                    manga.author?.trim()?.takeIf { it.isNotBlank() }
+                } else {
+                    listOfNotNull(
+                        manga.author?.trim()?.takeIf { it.isNotBlank() },
+                        manga.artist?.trim()?.takeIf { it.isNotBlank() },
+                    ).joinToString(", ").takeIf { it.isNotBlank() }
+                }
+                authorArtist
+            } else null
             EntryComfortableGridItem(
                 isSelected = selection.fastAny { it.id == libraryItem.libraryManga.id },
+                coverAlpha = if (isPreviousLayer) 0.4f else 1f,
                 title = manga.title,
+                subtitle = authorSubtitle,
                 coverData = MangaCover(
                     mangaId = manga.id,
                     sourceId = manga.source,
@@ -61,6 +80,10 @@ internal fun MangaLibraryComfortableGrid(
                     UnviewedBadge(count = libraryItem.unreadCount)
                 },
                 coverBadgeEnd = {
+                    val roLayer = getReadingOrderLayer?.invoke(manga.id)
+                    if (roLayer != null) {
+                        ReadingOrderBadge(layer = roLayer)
+                    }
                     LanguageBadge(
                         isLocal = libraryItem.isLocal,
                         sourceLanguage = libraryItem.sourceLanguage,
@@ -75,7 +98,8 @@ internal fun MangaLibraryComfortableGrid(
                 onClick = { onClick(libraryItem.libraryManga) },
                 onClickContinueViewing = if (
                     shouldShowContinueViewingAction(
-                        hasContinueAction = onClickContinueReading != null,
+                        hasContinueAction = onClickContinueReading != null &&
+                            isEntryLocked?.invoke(manga.id) != true,
                         remainingCount = libraryItem.unreadCount,
                     )
                 ) {

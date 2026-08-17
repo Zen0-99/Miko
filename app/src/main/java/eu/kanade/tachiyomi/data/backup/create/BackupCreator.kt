@@ -5,6 +5,7 @@ import android.net.Uri
 import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.backup.BackupFileValidator
+import eu.kanade.tachiyomi.data.backup.create.creators.AchievementBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeCollectionsBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeExtensionRepoBackupCreator
@@ -88,6 +89,7 @@ class BackupCreator(
     private val novelSourcesBackupCreator: NovelSourcesBackupCreator = NovelSourcesBackupCreator(),
     private val novelLinksBackupCreator: NovelLinksBackupCreator = NovelLinksBackupCreator(),
     private val extensionsBackupCreator: ExtensionsBackupCreator = ExtensionsBackupCreator(context),
+    private val achievementBackupCreator: AchievementBackupCreator = AchievementBackupCreator(),
 ) {
 
     suspend fun backup(uri: Uri, options: BackupOptions): String {
@@ -127,6 +129,14 @@ class BackupCreator(
 
             val backupNovel = backupNovels(getNovelFavorites.await(), options)
 
+            // Always back up achievements/stats — they're user data, not settings.
+            val achievementData = try {
+                achievementBackupCreator(options)
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Failed to backup achievements" }
+                null
+            }
+
             val backup = Backup(
                 backupManga = backupManga,
                 backupCollections = backupMangaCollections(options),
@@ -147,6 +157,11 @@ class BackupCreator(
                 backupNovelCollection = backupNovelCollections(options),
                 backupNovelSources = backupNovelSources(backupNovel),
                 backupNovelLinks = backupNovelLinks(),
+
+                backupAchievements = achievementData?.achievements ?: emptyList(),
+                backupUserProfile = achievementData?.userProfile,
+                backupActivityLog = achievementData?.activityLog ?: emptyList(),
+                backupStats = achievementData?.stats,
             )
 
             val byteArray = parser.encodeToByteArray(Backup.serializer(), backup)

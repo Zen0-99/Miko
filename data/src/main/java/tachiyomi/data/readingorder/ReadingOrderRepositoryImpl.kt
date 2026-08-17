@@ -23,10 +23,16 @@ class ReadingOrderRepositoryImpl(
         }
     }
 
-    override suspend fun insertReadingOrder(name: String, description: String?): Long {
+    override suspend fun getReadingOrdersByKind(entryKind: String): List<ReadingOrder> {
+        return handler.awaitList {
+            reading_orderQueries.getReadingOrdersByKind(entryKind, ::mapReadingOrder)
+        }
+    }
+
+    override suspend fun insertReadingOrder(name: String, description: String?, entryKind: String): Long {
         val now = System.currentTimeMillis()
         return handler.awaitOneExecutable(inTransaction = true) {
-            reading_orderQueries.insertReadingOrder(name, description, now, now)
+            reading_orderQueries.insertReadingOrder(name, description, entryKind, now, now)
             reading_orderQueries.selectLastInsertedRowId()
         }
     }
@@ -54,21 +60,21 @@ class ReadingOrderRepositoryImpl(
         }
     }
 
-    override suspend fun addNode(orderId: Long, mangaId: Long): Long {
+    override suspend fun addNode(orderId: Long, entryId: Long): Long {
         val maxPos = handler.awaitOneOrNull<Long> {
             reading_order_nodeQueries.getMaxPosition(orderId) { maxPos: Long? -> maxPos ?: -1L }
         } ?: -1L
         return handler.awaitOneExecutable(inTransaction = true) {
-            reading_order_nodeQueries.insertNode(orderId, mangaId, maxPos + 1L)
+            reading_order_nodeQueries.insertNode(orderId, entryId, maxPos + 1L)
             reading_order_nodeQueries.selectLastInsertedRowId()
         }
     }
 
-    override suspend fun removeNode(orderId: Long, mangaId: Long) {
+    override suspend fun removeNode(orderId: Long, entryId: Long) {
         handler.await {
-            reading_order_edgeQueries.deleteEdgesByMangaId(orderId, mangaId)
-            reading_order_progressQueries.deleteProgressByMangaId(orderId, mangaId)
-            reading_order_nodeQueries.deleteNode(orderId, mangaId)
+            reading_order_edgeQueries.deleteEdgesByEntryId(orderId, entryId)
+            reading_order_progressQueries.deleteProgressByEntryId(orderId, entryId)
+            reading_order_nodeQueries.deleteNode(orderId, entryId)
         }
     }
 
@@ -78,61 +84,61 @@ class ReadingOrderRepositoryImpl(
         }
     }
 
-    override suspend fun addEdge(orderId: Long, fromMangaId: Long, toMangaId: Long) {
+    override suspend fun addEdge(orderId: Long, fromEntryId: Long, toEntryId: Long) {
         handler.await {
-            reading_order_edgeQueries.insertEdge(orderId, fromMangaId, toMangaId)
+            reading_order_edgeQueries.insertEdge(orderId, fromEntryId, toEntryId)
         }
     }
 
-    override suspend fun removeEdge(orderId: Long, fromMangaId: Long, toMangaId: Long) {
+    override suspend fun removeEdge(orderId: Long, fromEntryId: Long, toEntryId: Long) {
         handler.await {
-            reading_order_edgeQueries.deleteEdge(orderId, fromMangaId, toMangaId)
+            reading_order_edgeQueries.deleteEdge(orderId, fromEntryId, toEntryId)
         }
     }
 
-    override suspend fun getPrerequisites(orderId: Long, mangaId: Long): List<Long> {
+    override suspend fun getPrerequisites(orderId: Long, entryId: Long): List<Long> {
         return handler.awaitList {
-            reading_order_edgeQueries.getPrerequisites(orderId, mangaId)
+            reading_order_edgeQueries.getPrerequisites(orderId, entryId)
         }
     }
 
-    override suspend fun getProgress(orderId: Long, mangaId: Long): ReadingOrderProgress? {
+    override suspend fun getProgress(orderId: Long, entryId: Long): ReadingOrderProgress? {
         return handler.awaitOneOrNull {
             reading_order_progressQueries.getProgress(
                 orderId,
-                mangaId,
+                entryId,
             ) { completed, completedAt ->
-                ReadingOrderProgress(orderId, mangaId, completed == 1L, completedAt)
+                ReadingOrderProgress(orderId, entryId, completed == 1L, completedAt)
             }
         }
     }
 
     override suspend fun getAllProgress(orderId: Long): List<ReadingOrderProgress> {
         return handler.awaitList {
-            reading_order_progressQueries.getAllProgressByOrderId(orderId) { mangaId, completed, completedAt ->
-                ReadingOrderProgress(orderId, mangaId, completed == 1L, completedAt)
+            reading_order_progressQueries.getAllProgressByOrderId(orderId) { entryId, completed, completedAt ->
+                ReadingOrderProgress(orderId, entryId, completed == 1L, completedAt)
             }
         }
     }
 
-    override suspend fun setProgress(orderId: Long, mangaId: Long, completed: Boolean, completedAt: Long?) {
+    override suspend fun setProgress(orderId: Long, entryId: Long, completed: Boolean, completedAt: Long?) {
         handler.await {
             reading_order_progressQueries.upsertProgress(
                 orderId = orderId,
-                mangaId = mangaId,
+                entryId = entryId,
                 completed = if (completed) 1L else 0L,
                 completedAt = completedAt,
             )
         }
     }
 
-    override suspend fun getReadingOrdersForManga(mangaId: Long): List<ReadingOrder> {
+    override suspend fun getReadingOrdersForEntry(entryId: Long): List<ReadingOrder> {
         val allOrders = handler.awaitList {
             reading_orderQueries.getAllReadingOrders(::mapReadingOrder)
         }
         return allOrders.filter { order ->
             handler.awaitOneOrNull {
-                reading_order_nodeQueries.getNodeByMangaId(order.id, mangaId) { id, _, _, _ -> id }
+                reading_order_nodeQueries.getNodeByEntryId(order.id, entryId) { id, _, _, _ -> id }
             } != null
         }
     }
@@ -141,21 +147,22 @@ class ReadingOrderRepositoryImpl(
         id: Long,
         name: String,
         description: String?,
+        entryKind: String,
         createdAt: Long,
         updatedAt: Long,
-    ): ReadingOrder = ReadingOrder(id, name, description, createdAt, updatedAt)
+    ): ReadingOrder = ReadingOrder(id, name, description, entryKind, createdAt, updatedAt)
 
     private fun mapNode(
         id: Long,
         orderId: Long,
-        mangaId: Long,
+        entryId: Long,
         position: Long,
-    ): ReadingOrderNode = ReadingOrderNode(id, orderId, mangaId, position)
+    ): ReadingOrderNode = ReadingOrderNode(id, orderId, entryId, position)
 
     private fun mapEdge(
         id: Long,
         orderId: Long,
-        fromMangaId: Long,
-        toMangaId: Long,
-    ): ReadingOrderEdge = ReadingOrderEdge(id, orderId, fromMangaId, toMangaId)
+        fromEntryId: Long,
+        toEntryId: Long,
+    ): ReadingOrderEdge = ReadingOrderEdge(id, orderId, fromEntryId, toEntryId)
 }

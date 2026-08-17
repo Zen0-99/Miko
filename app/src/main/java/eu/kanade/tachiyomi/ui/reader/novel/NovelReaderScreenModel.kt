@@ -1871,9 +1871,14 @@ class NovelReaderScreenModel(
             _progressPercent.value = 0
         }
 
-        // Mark the previous chapter as read since the user has scrolled past it.
+        // Mark the previous chapter as read ONLY if the user scrolled DOWN
+        // (new chapter is after the previous one). When scrolling UP to view
+        // a previous chapter, the "previous" current chapter hasn't been
+        // finished — don't mark it as read.
         previousChapter?.let { prev ->
-            if (!prev.read) {
+            val prevIndex = _chapters.value.indexOf(prev)
+            val newIndex = _chapters.value.indexOf(chapter)
+            if (newIndex > prevIndex && !prev.read) {
                 screenModelScope.launchIO {
                     try {
                         setReadStatus.await(true, prev)

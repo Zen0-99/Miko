@@ -39,7 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -88,20 +88,11 @@ fun AchievementGroupNotification(
         }
     }
 
-    val scale by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0.6f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "scale",
-    )
-
     val slideOffset by animateFloatAsState(
         targetValue = if (isVisible) 0f else AchievementPopupSizeTokens.unlockSlideHiddenOffset,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow,
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
         ),
         label = "slide_offset",
     )
@@ -111,8 +102,8 @@ fun AchievementGroupNotification(
         enter = expandVertically(
             expandFrom = Alignment.Top,
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow,
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
             ),
         ) + fadeIn(animationSpec = androidx.compose.animation.core.tween(300)),
         exit = shrinkVertically(
@@ -139,8 +130,7 @@ fun AchievementGroupNotification(
                         horizontal = AchievementPopupSizeTokens.groupOuterHorizontalPadding,
                         vertical = AchievementPopupSizeTokens.groupOuterVerticalPadding,
                     )
-                    .offset(y = slideOffset.dp)
-                    .scale(scale),
+                    .offset(y = slideOffset.dp),
             )
         }
     }

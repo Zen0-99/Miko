@@ -218,13 +218,22 @@ fun AnimeActionRow(
             onClick = onAddToLibraryClicked,
         )
 
-        // Tracking icon action
-        EntryIconAction(
-            icon = if (trackingCount > 0) Icons.Outlined.Done else Icons.Outlined.Sync,
-            contentDescription = stringResource(MR.strings.action_track),
-            tint = accent,
-            onClick = onTrackingClicked,
-        )
+        // Tracking pill
+        if (onTrackingClicked != null) {
+            EntryTogglePill(
+                checked = trackingCount > 0,
+                checkedText = if (trackingCount == 0) {
+                    stringResource(MR.strings.action_track)
+                } else {
+                    pluralStringResource(MR.plurals.num_trackers, trackingCount, trackingCount)
+                },
+                uncheckedText = stringResource(MR.strings.action_track),
+                checkedIcon = Icons.Outlined.Done,
+                uncheckedIcon = Icons.Outlined.Sync,
+                accentColor = accent,
+                onClick = onTrackingClicked,
+            )
+        }
 
         // WebView icon action
         EntryIconAction(

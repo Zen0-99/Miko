@@ -61,9 +61,9 @@ class ReadingOrderEditorScreenModel(
             val nodes = getReadingOrderNodes.await(orderId)
             val edges = getReadingOrderEdges.await(orderId)
             val progressList = getReadingOrderProgress.awaitAll(orderId)
-            val progressMap = progressList.associateBy { it.mangaId }
+            val progressMap = progressList.associateBy { it.entryId }
 
-            val mangaIds = nodes.map { it.mangaId }
+            val mangaIds = nodes.map { it.entryId }
             val mangaMap = mutableMapOf<Long, Manga>()
             for (mangaId in mangaIds) {
                 getManga.await(mangaId)?.let { mangaMap[it.id] = it }
@@ -121,9 +121,9 @@ class ReadingOrderEditorScreenModel(
         val nodes = getReadingOrderNodes.await(orderId)
         val edges = getReadingOrderEdges.await(orderId)
         val progressList = getReadingOrderProgress.awaitAll(orderId)
-        val progressMap = progressList.associateBy { it.mangaId }
+        val progressMap = progressList.associateBy { it.entryId }
 
-        val mangaIds = nodes.map { it.mangaId }
+        val mangaIds = nodes.map { it.entryId }
         val mangaMap = mutableMapOf<Long, Manga>()
         for (mangaId in mangaIds) {
             getManga.await(mangaId)?.let { mangaMap[it.id] = it }

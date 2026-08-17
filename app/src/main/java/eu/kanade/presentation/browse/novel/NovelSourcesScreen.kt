@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PushPin
@@ -100,15 +100,24 @@ fun NovelSourcesScreen(
     onRefresh: () -> Unit = {},
     onClickUpdateAll: () -> Unit = {},
 ) {
-    var notInstalledExpanded by remember { mutableStateOf(false) }
+    // When there are no installed extensions (only the local source), hide
+    // the "Installed" section header and auto-expand "Not Installed" so the
+    // user sees available extensions immediately.
+    val hasInstalledExtensions = sourceExtensionMap.isNotEmpty()
+    var notInstalledExpanded by remember { mutableStateOf(!hasInstalledExtensions) }
 
     // Filter out available extensions (and their language sub-headers) when
     // the "Not Installed" section is collapsed. Language sub-headers within
     // the Not Installed section appear after the NOT_INSTALLED_KEY header and
     // before the next section — they must also be hidden when collapsed.
-    val visibleItems = remember(state.items, notInstalledExpanded) {
+    // Also hides the INSTALLED_KEY header when there are no installed extensions.
+    val visibleItems = remember(state.items, notInstalledExpanded, hasInstalledExtensions) {
         if (notInstalledExpanded) {
-            state.items
+            if (!hasInstalledExtensions) {
+                state.items.filterNot { it is NovelSourceUiModel.Header && it.language == NovelSourcesScreenModel.INSTALLED_KEY }
+            } else {
+                state.items
+            }
         } else {
             // Walk the list and skip everything between NOT_INSTALLED_KEY
             // header and the end (or next top-level section). Keep the
@@ -129,6 +138,10 @@ fun NovelSourcesScreen(
                     // checking if they're the INSTALLED_KEY or NOT_INSTALLED_KEY.
                     if (item.language == NovelSourcesScreenModel.INSTALLED_KEY) {
                         inNotInstalled = false
+                        // Hide the "Installed" header when there are no installed
+                        // extensions — the local source still shows, just without
+                        // a section label.
+                        if (!hasInstalledExtensions) continue
                         result.add(item)
                         continue
                     }
@@ -180,9 +193,9 @@ fun NovelSourcesScreen(
                 LazyColumn(
                     contentPadding = contentPadding + topSmallPaddingValues,
                 ) {
-                items(
+                itemsIndexed(
                     items = visibleItems,
-                    contentType = {
+                    contentType = { _, it ->
                         when (it) {
                             is NovelSourceUiModel.Header -> "header"
                             is NovelSourceUiModel.Item -> "item"
@@ -190,15 +203,15 @@ fun NovelSourcesScreen(
                             is NovelSourceUiModel.UntrustedExtension -> "untrusted-extension"
                         }
                     },
-                    key = {
+                    key = { index, it ->
                         when (it) {
-                            is NovelSourceUiModel.Header -> it.hashCode()
+                            is NovelSourceUiModel.Header -> "header-$index-${it.language}"
                             is NovelSourceUiModel.Item -> "source-${it.source.key()}"
                             is NovelSourceUiModel.AvailableExtension -> "available-${it.extension.pkgName}"
                             is NovelSourceUiModel.UntrustedExtension -> "untrusted-${it.extension.pkgName}"
                         }
                     },
-                ) { model ->
+                ) { _, model ->
                     when (model) {
                         is NovelSourceUiModel.Header -> {
                             when (model.language) {
@@ -315,8 +328,8 @@ private fun NovelSourcesCardView(
     LazyColumn(
         contentPadding = contentPadding,
     ) {
-        sectionedItems.forEach { (header, sectionItems) ->
-            item(key = header?.hashCode() ?: "no-header") {
+        sectionedItems.forEachIndexed { sectionIndex, (header, sectionItems) ->
+            item(key = "header-$sectionIndex") {
                 if (header != null) {
                     when (header.language) {
                         NovelSourcesScreenModel.NOT_INSTALLED_KEY -> {
@@ -355,7 +368,7 @@ private fun NovelSourcesCardView(
             if (header?.language != NovelSourcesScreenModel.NOT_INSTALLED_KEY || notInstalledExpanded) {
                 val rows = sectionItems.chunked(cardColumns)
                 rows.forEachIndexed { rowIndex, rowItems ->
-                    item(key = "cards-${header?.hashCode() ?: "no-header"}-$rowIndex") {
+                    item(key = "cards-$sectionIndex-$rowIndex") {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -401,6 +414,18 @@ private fun NovelSourcesCardView(
                                             isInstalled = false,
                                             supportsComments = model.extension.sources.any { it.supportsComments },
                                             onClick = { onClickInstallExtension(model.extension) },
+                                        )
+                                    }
+                                    is NovelSourceUiModel.UntrustedExtension -> {
+                                        ExtensionCard(
+                                            modifier = Modifier.weight(1f),
+                                            title = model.extension.name,
+                                            lang = (model.extension.lang ?: "").uppercase(),
+                                            version = model.extension.versionName,
+                                            isInstalled = true,
+                                            isUntrusted = true,
+                                            onClick = { onClickTrustExtension(model.extension) },
+                                            onTrustClick = { onClickTrustExtension(model.extension) },
                                         )
                                     }
                                     else -> {}

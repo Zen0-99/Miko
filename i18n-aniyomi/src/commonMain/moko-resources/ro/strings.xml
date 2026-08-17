@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="pref_library_summary">Categorii, actualizări globale</string>
     <string name="pref_library_update_show_tab_badge">Afișați numărul de necitite pe pictograma Actualizări</string>

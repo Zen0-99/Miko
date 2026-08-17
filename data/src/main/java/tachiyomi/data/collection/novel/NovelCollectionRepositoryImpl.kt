@@ -49,6 +49,12 @@ class NovelCollectionRepositoryImpl(
         }
     }
 
+    override suspend fun insertNovelCollection(collection: Collection) {
+        handler.await {
+            novelcategoriesQueries.insert(collection.name, collection.order, collection.flags)
+        }
+    }
+
     override suspend fun update(
         collectionId: Long,
         name: String?,
@@ -97,6 +103,20 @@ class NovelCollectionRepositoryImpl(
                 hidden = update.hidden?.let { if (it) 1L else 0L },
                 categoryId = update.id,
             )
+        }
+    }
+
+    override suspend fun updatePartialNovelCollections(updates: List<CollectionUpdate>) {
+        handler.await(inTransaction = true) {
+            updates.forEach { update ->
+                novelcategoriesQueries.update(
+                    name = update.name,
+                    `order` = update.order,
+                    flags = update.flags,
+                    hidden = update.hidden?.let { if (it) 1L else 0L },
+                    categoryId = update.id,
+                )
+            }
         }
     }
 

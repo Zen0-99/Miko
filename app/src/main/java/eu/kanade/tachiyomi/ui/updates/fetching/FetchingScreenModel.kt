@@ -123,8 +123,6 @@ class FetchingScreenModel(
         screenModelScope.launch { deleteFailedFetch.awaitByReason(reason) }
     }
 
-    fun pause() = LibraryUpdateProgressBus.requestPause()
-    fun resume(context: android.content.Context) = LibraryUpdateProgressBus.resumeRun(context)
     fun cancel() = LibraryUpdateProgressBus.requestCancel()
 
     sealed interface Dialog {

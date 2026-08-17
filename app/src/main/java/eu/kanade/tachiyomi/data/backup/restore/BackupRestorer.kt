@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelLink
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
+import eu.kanade.tachiyomi.data.backup.restore.restorers.AchievementRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeCollectionsRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeExtensionRepoRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeRestorer
@@ -26,12 +27,17 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelCollectionsRestore
 import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelLinksRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
+import eu.kanade.tachiyomi.data.library.EntryRef
+import eu.kanade.tachiyomi.data.library.FailedEntry
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.domain.library.model.EntryKind
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.service.NovelSourceManager
@@ -43,6 +49,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
 
 class BackupRestorer(
     private val context: Context,
@@ -61,11 +68,20 @@ class BackupRestorer(
     private val novelRestorer: NovelRestorer = NovelRestorer(),
     private val novelLinksRestorer: NovelLinksRestorer = NovelLinksRestorer(),
     private val extensionsRestorer: ExtensionsRestorer = ExtensionsRestorer(context),
+    private val achievementRestorer: AchievementRestorer = AchievementRestorer(),
 ) {
 
     private var restoreAmount = 0
     private var restoreProgress = 0
     private val errors = mutableListOf<Pair<Date, String>>()
+
+    // Per-mode progress for the in-app fetching overlay
+    private val animeRestoreProgress = AtomicInteger(0)
+    private val mangaRestoreProgress = AtomicInteger(0)
+    private val novelRestoreProgress = AtomicInteger(0)
+    private val animeRestoreFailures = java.util.concurrent.CopyOnWriteArrayList<FailedEntry>()
+    private val mangaRestoreFailures = java.util.concurrent.CopyOnWriteArrayList<FailedEntry>()
+    private val novelRestoreFailures = java.util.concurrent.CopyOnWriteArrayList<FailedEntry>()
 
     /**
      * Mapping of source ID to source name from backup data
@@ -128,6 +144,16 @@ class BackupRestorer(
 
         if (options.libraryEntries) {
             restoreAmount += backup.backupManga.size + backup.backupAnime.size + backup.backupNovels.size
+            // Start per-mode progress on the in-app fetching overlay
+            if (backup.backupAnime.isNotEmpty()) {
+                LibraryUpdateProgressBus.startRun(total = backup.backupAnime.size, source = "Anime")
+            }
+            if (backup.backupManga.isNotEmpty()) {
+                LibraryUpdateProgressBus.startRun(total = backup.backupManga.size, source = "Manga")
+            }
+            if (backup.backupNovels.isNotEmpty()) {
+                LibraryUpdateProgressBus.startRun(total = backup.backupNovels.size, source = "Novel")
+            }
         }
         if (options.collections) {
             restoreAmount += 3 // +3 for anime, manga, and novel collections
@@ -179,6 +205,14 @@ class BackupRestorer(
                 restoreExtensions(backup.backupExtensions)
             }
 
+            // Always restore achievements/stats if present in the backup.
+            restoreAchievements(
+                backup.backupAchievements,
+                backup.backupUserProfile,
+                backup.backupActivityLog,
+                backup.backupStats,
+            )
+
             // TODO: optionally trigger online library + tracker update
         }
     }
@@ -206,61 +240,118 @@ class BackupRestorer(
         backupAnimes: List<BackupAnime>,
         backupAnimeCollections: List<BackupCollection>,
     ) = launch {
+        val total = backupAnimes.size
         animeRestorer.sortByNew(backupAnimes)
             .forEach {
                 ensureActive()
 
                 val seasons = backupAnimes.filter { s -> s.parentId == it.id }
+                val entryRef = EntryRef(
+                    id = it.url.hashCode().toLong(),
+                    title = it.title,
+                    sourceId = it.source,
+                    kind = EntryKind.ANIME,
+                )
                 try {
                     animeRestorer.restore(it, backupAnimeCollections, seasons)
                 } catch (e: Exception) {
                     val sourceName = animeSourceMapping[it.source] ?: it.source.toString()
                     errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")
+                    animeRestoreFailures.add(
+                        FailedEntry(entry = entryRef, reason = e.message ?: "Unknown error", sourceName = sourceName),
+                    )
                 }
 
                 restoreProgress += 1
+                val processed = animeRestoreProgress.incrementAndGet()
                 notifier.showRestoreProgress(it.title, restoreProgress, restoreAmount, isSync)
+                LibraryUpdateProgressBus.updateProgress(
+                    processed = processed,
+                    currentlyUpdating = listOf(entryRef),
+                    failedSoFar = animeRestoreFailures.toList(),
+                    totalEntries = total,
+                    source = "Anime",
+                )
             }
+        LibraryUpdateProgressBus.completeRun(failed = animeRestoreFailures.toList(), source = "Anime")
     }
 
     private fun CoroutineScope.restoreManga(
         backupMangas: List<BackupManga>,
         backupMangaCollections: List<BackupCollection>,
     ) = launch {
+        val total = backupMangas.size
         mangaRestorer.sortByNew(backupMangas)
             .forEach {
                 ensureActive()
 
+                val entryRef = EntryRef(
+                    id = it.url.hashCode().toLong(),
+                    title = it.title,
+                    sourceId = it.source,
+                    kind = EntryKind.MANGA,
+                )
                 try {
                     mangaRestorer.restore(it, backupMangaCollections)
                 } catch (e: Exception) {
                     val sourceName = mangaSourceMapping[it.source] ?: it.source.toString()
                     errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")
+                    mangaRestoreFailures.add(
+                        FailedEntry(entry = entryRef, reason = e.message ?: "Unknown error", sourceName = sourceName),
+                    )
                 }
 
                 restoreProgress += 1
+                val processed = mangaRestoreProgress.incrementAndGet()
                 notifier.showRestoreProgress(it.title, restoreProgress, restoreAmount, isSync)
+                LibraryUpdateProgressBus.updateProgress(
+                    processed = processed,
+                    currentlyUpdating = listOf(entryRef),
+                    failedSoFar = mangaRestoreFailures.toList(),
+                    totalEntries = total,
+                    source = "Manga",
+                )
             }
+        LibraryUpdateProgressBus.completeRun(failed = mangaRestoreFailures.toList(), source = "Manga")
     }
 
     private fun CoroutineScope.restoreNovel(
         backupNovels: List<BackupNovel>,
         backupNovelCollections: List<BackupCollection>,
     ) = launch {
+        val total = backupNovels.size
         novelRestorer.sortByNew(backupNovels)
             .forEach {
                 ensureActive()
 
+                val entryRef = EntryRef(
+                    id = it.url.hashCode().toLong(),
+                    title = it.title,
+                    sourceId = it.source,
+                    kind = EntryKind.NOVEL,
+                )
                 try {
                     novelRestorer.restore(it, backupNovelCollections)
                 } catch (e: Exception) {
                     val sourceName = novelSourceMapping[it.source] ?: it.source.toString()
                     errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")
+                    novelRestoreFailures.add(
+                        FailedEntry(entry = entryRef, reason = e.message ?: "Unknown error", sourceName = sourceName),
+                    )
                 }
 
                 restoreProgress += 1
+                val processed = novelRestoreProgress.incrementAndGet()
                 notifier.showRestoreProgress(it.title, restoreProgress, restoreAmount, isSync)
+                LibraryUpdateProgressBus.updateProgress(
+                    processed = processed,
+                    currentlyUpdating = listOf(entryRef),
+                    failedSoFar = novelRestoreFailures.toList(),
+                    totalEntries = total,
+                    source = "Novel",
+                )
             }
+        LibraryUpdateProgressBus.completeRun(failed = novelRestoreFailures.toList(), source = "Novel")
     }
 
     private fun CoroutineScope.restoreNovelLinks(
@@ -374,6 +465,28 @@ class BackupRestorer(
             restoreAmount,
             isSync,
         )
+    }
+
+    private fun CoroutineScope.restoreAchievements(
+        backupAchievements: List<eu.kanade.tachiyomi.data.backup.models.BackupAchievement>,
+        backupUserProfile: eu.kanade.tachiyomi.data.backup.models.BackupUserProfile?,
+        backupActivityLog: List<eu.kanade.tachiyomi.data.backup.models.BackupDayActivity>,
+        backupStats: eu.kanade.tachiyomi.data.backup.models.BackupStats?,
+    ) = launch {
+        if (backupAchievements.isEmpty() && backupUserProfile == null && backupActivityLog.isEmpty() && backupStats == null) {
+            return@launch
+        }
+        ensureActive()
+        try {
+            achievementRestorer.restoreAchievements(
+                backupAchievements,
+                backupUserProfile,
+                backupActivityLog,
+                backupStats,
+            )
+        } catch (e: Exception) {
+            errors.add(Date() to "Achievement restore: ${e.message}")
+        }
     }
 
     private fun writeErrorLog(): File {

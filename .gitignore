@@ -27,7 +27,12 @@ ui*.xml
 
 # Extracted libs (not source)
 libs/
+# Keep the local Maven repo for vendored AARs
+!libs/repo/
 
 # Devin/GSD tooling
 .devin/
 .planning/
+
+# Code graph cache
+graphify-out/

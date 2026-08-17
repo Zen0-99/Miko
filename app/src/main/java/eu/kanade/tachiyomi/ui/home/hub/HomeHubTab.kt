@@ -713,7 +713,7 @@ private fun HistoryRow(
     selection: Set<Long> = emptySet(),
     onToggleSelection: ((HomeHubCardItem) -> Unit)? = null,
 ) {
-    val cardShape = remember { RoundedCornerShape(16.dp) }
+    val cardShape = MaterialTheme.shapes.extraSmall
     val gradientScrim = remember {
         Brush.verticalGradient(
             colorStops = arrayOf(
@@ -734,8 +734,8 @@ private fun HistoryRow(
             val inSelectionMode = selection.isNotEmpty()
             Box(
                 modifier = Modifier
-                    .width(120.dp)
-                    .height(200.dp)
+                    .width(128.dp)
+                    .height(192.dp)
                     .clip(cardShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .combinedClickable(

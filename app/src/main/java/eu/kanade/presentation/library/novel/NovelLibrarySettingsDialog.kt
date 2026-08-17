@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,7 @@ import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.BaseSortItem
 import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.HeadingItem
+import tachiyomi.presentation.core.components.IconItem
 import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.components.SortItem
@@ -45,6 +47,7 @@ fun NovelLibrarySettingsDialog(
     onDismissRequest: () -> Unit,
     screenModel: NovelLibrarySettingsScreenModel,
     collection: Collection?,
+    onClickReadingOrders: () -> Unit,
 ) {
     TabbedDialog(
         onDismissRequest = onDismissRequest,
@@ -62,7 +65,7 @@ fun NovelLibrarySettingsDialog(
             when (page) {
                 0 -> FilterPage(screenModel = screenModel)
                 1 -> SortPage(collection = collection, screenModel = screenModel)
-                2 -> DisplayPage(screenModel = screenModel)
+                2 -> DisplayPage(screenModel = screenModel, onClickReadingOrders = onClickReadingOrders)
             }
         }
     }
@@ -130,6 +133,7 @@ private fun ColumnScope.SortPage(
             MR.strings.action_sort_chapter_fetch_date to NovelLibrarySort.Type.ChapterFetchDate,
             MR.strings.action_sort_date_added to NovelLibrarySort.Type.DateAdded,
             AYMR.strings.action_sort_custom_order to NovelLibrarySort.Type.CustomOrder,
+            AYMR.strings.reading_order to NovelLibrarySort.Type.ReadingOrder,
             MR.strings.action_sort_random to NovelLibrarySort.Type.Random,
         )
     }
@@ -179,6 +183,7 @@ private val displayModes = listOf(
 @Composable
 private fun ColumnScope.DisplayPage(
     screenModel: NovelLibrarySettingsScreenModel,
+    onClickReadingOrders: () -> Unit,
 ) {
     val displayMode by screenModel.libraryPreferences.displayMode().collectAsStateWithLifecycle()
     SettingsChipRow(MR.strings.action_display_mode) {
@@ -229,7 +234,7 @@ private fun ColumnScope.DisplayPage(
         )
     }
 
-    HeadingItem(MR.strings.overlay_header)
+    HeadingItem(MR.strings.overlay_cover_badges)
     CheckboxItem(
         label = stringResource(MR.strings.action_display_download_badge),
         pref = screenModel.libraryPreferences.downloadBadge(),
@@ -246,6 +251,12 @@ private fun ColumnScope.DisplayPage(
         label = stringResource(MR.strings.action_display_language_badge),
         pref = screenModel.libraryPreferences.languageBadge(),
     )
+
+    HeadingItem(MR.strings.overlay_actions)
+    CheckboxItem(
+        label = stringResource(MR.strings.action_display_show_reading_number),
+        pref = screenModel.libraryPreferences.showReadingNumber(),
+    )
     CheckboxItem(
         label = stringResource(AYMR.strings.action_display_show_continue_reading_button),
         pref = screenModel.libraryPreferences.showContinueViewingButton(),
@@ -259,5 +270,12 @@ private fun ColumnScope.DisplayPage(
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_number_of_items),
         pref = screenModel.libraryPreferences.collectionNumberOfItems(),
+    )
+
+    HeadingItem(AYMR.strings.reading_order_list)
+    IconItem(
+        label = stringResource(AYMR.strings.reading_order_list),
+        icon = Icons.AutoMirrored.Outlined.List,
+        onClick = onClickReadingOrders,
     )
 }

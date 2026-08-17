@@ -579,18 +579,16 @@ class NovelReaderScreen(
                 }
             }
 
-            // Edge fade: gradient fade at top/bottom that makes text fade out
-            // as it scrolls under the edges. Draws the background color (with
-            // texture) as a vertical gradient — opaque at the very top/bottom
-            // edges, transparent towards the center. The NovelReaderChrome
-            // (including the phone info overlay) is drawn on top of this,
-            // so the bottom info overlay is NOT affected by the fade.
+            // Edge fade: top-only gradient that makes text fade out as it
+            // scrolls under the top edge. The bottom edge fade is handled
+            // entirely by the info overlay itself (NovelPhoneInfoOverlay),
+            // which is a gradient from transparent (top) to opaque (bottom).
             if (textConfig.edgeFadeEnabled) {
                 NovelEdgeFadeOverlay(
                     backgroundColor = bgColor,
                     texture = textConfig.backgroundTexture,
                     textureStrength = textConfig.textureStrength,
-                    fadeHeightFraction = 0.06f,
+                    fadeHeightFraction = 0.08f,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -612,6 +610,7 @@ class NovelReaderScreen(
                 readerBackgroundColor = bgColor,
                 backgroundTexture = textConfig.backgroundTexture,
                 textureStrength = textConfig.textureStrength,
+                edgeFadeEnabled = textConfig.edgeFadeEnabled,
                 showCommentsButton = screenModel.supportsComments,
                 isTtsActive = screenModel.isTtsActive,
                 onBackClick = { navigator.pop() },
@@ -1731,17 +1730,17 @@ private fun NovelEdgeFadeOverlay(
 
     val textureAlpha = (textureStrength.coerceIn(0, 100) / 100f)
 
+    // Top-only fade: the bottom fade is handled entirely by the
+    // NovelPhoneInfoOverlay, which is itself a gradient from transparent
+    // (top) to opaque (bottom). This avoids double gradients.
     Canvas(modifier = modifier) {
         val fadeHeight = size.height * fadeHeightFraction.coerceIn(0.01f, 0.3f)
         val layerCount = 24
         val layerHeight = fadeHeight / layerCount
 
         // Top fade: opaque at the very top → transparent towards center.
-        // Use backgroundColor.copy(alpha = ...) to avoid Color.Transparent
-        // (transparent black) interpolation artifacts.
         for (i in 0 until layerCount) {
             val fraction = i.toFloat() / (layerCount - 1)
-            // Wakely-style: opacity = fromOpacity * (1 - along)
             val alpha = 1f - fraction
             drawRect(
                 color = backgroundColor.copy(alpha = alpha),
@@ -1750,36 +1749,16 @@ private fun NovelEdgeFadeOverlay(
             )
         }
 
-        // Bottom fade: transparent towards center → opaque at the very bottom.
-        for (i in 0 until layerCount) {
-            val fraction = i.toFloat() / (layerCount - 1)
-            val alpha = fraction
-            drawRect(
-                color = backgroundColor.copy(alpha = alpha),
-                topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - fadeHeight + i * layerHeight),
-                size = androidx.compose.ui.geometry.Size(size.width, layerHeight + 1f),
-            )
-        }
-
-        // Draw texture in the fade areas with matching alpha gradient
+        // Draw texture in the top fade area with matching alpha gradient
         if (textureBrush != null && textureAlpha > 0f) {
             for (i in 0 until layerCount) {
                 val fraction = i.toFloat() / (layerCount - 1)
-                // Top: full texture alpha at top → 0 at bottom of fade
                 val topAlpha = textureAlpha * (1f - fraction)
                 drawRect(
                     brush = textureBrush,
                     topLeft = androidx.compose.ui.geometry.Offset(0f, i * layerHeight),
                     size = androidx.compose.ui.geometry.Size(size.width, layerHeight + 1f),
                     alpha = topAlpha,
-                )
-                // Bottom: 0 at top of fade → full texture alpha at bottom
-                val bottomAlpha = textureAlpha * fraction
-                drawRect(
-                    brush = textureBrush,
-                    topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - fadeHeight + i * layerHeight),
-                    size = androidx.compose.ui.geometry.Size(size.width, layerHeight + 1f),
-                    alpha = bottomAlpha,
                 )
             }
         }

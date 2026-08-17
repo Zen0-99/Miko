@@ -11,6 +11,7 @@ import eu.kanade.presentation.library.components.EntryCompactGridItem
 import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.LazyLibraryGrid
 import eu.kanade.presentation.library.components.PinnedBadge
+import eu.kanade.presentation.library.components.ReadingOrderBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.components.globalSearchItem
 import eu.kanade.presentation.library.components.shouldShowContinueViewingAction
@@ -33,6 +34,9 @@ internal fun MangaLibraryCompactGrid(
     onTogglePinned: ((MangaLibraryItem) -> Unit)? = null,
     onSeriesClicked: ((Long) -> Unit)? = null,
     performanceMode: Boolean = false,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerMangaIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -47,8 +51,10 @@ internal fun MangaLibraryCompactGrid(
             contentType = { "manga_library_compact_grid_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
+            val isPreviousLayer = getPreviousLayerMangaIds?.invoke()?.contains(manga.id) == true
             EntryCompactGridItem(
                 isSelected = selection.fastAny { it.id == libraryItem.libraryManga.id },
+                coverAlpha = if (isPreviousLayer) 0.4f else 1f,
                 title = manga.title.takeIf { showTitle },
                 coverData = MangaCover(
                     mangaId = manga.id,
@@ -62,6 +68,10 @@ internal fun MangaLibraryCompactGrid(
                     UnviewedBadge(count = libraryItem.unreadCount)
                 },
                 coverBadgeEnd = {
+                    val roLayer = getReadingOrderLayer?.invoke(manga.id)
+                    if (roLayer != null) {
+                        ReadingOrderBadge(layer = roLayer)
+                    }
                     LanguageBadge(
                         isLocal = libraryItem.isLocal,
                         sourceLanguage = libraryItem.sourceLanguage,
@@ -76,7 +86,8 @@ internal fun MangaLibraryCompactGrid(
                 onClick = { onClick(libraryItem.libraryManga) },
                 onClickContinueViewing = if (
                     shouldShowContinueViewingAction(
-                        hasContinueAction = onClickContinueReading != null,
+                        hasContinueAction = onClickContinueReading != null &&
+                            isEntryLocked?.invoke(manga.id) != true,
                         remainingCount = libraryItem.unreadCount,
                     )
                 ) {

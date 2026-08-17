@@ -90,8 +90,8 @@ class ReadingOrderEditorScreen(
                         .padding(padding),
                 ) {
                     items(state.nodes, key = { it.id }) { node ->
-                        val manga = state.mangaMap[node.mangaId]
-                        val progress = state.progress[node.mangaId]
+                        val manga = state.mangaMap[node.entryId]
+                        val progress = state.progress[node.entryId]
                         val isCompleted = progress?.completed ?: false
                         val isLocked = isNodeLocked(node, state.edges, state.progress)
 
@@ -99,8 +99,8 @@ class ReadingOrderEditorScreen(
                             title = manga?.title ?: "Unknown",
                             isCompleted = isCompleted,
                             isLocked = isLocked,
-                            onToggleCompleted = { screenModel.toggleCompleted(node.mangaId) },
-                            onRemove = { screenModel.removeManga(node.mangaId) },
+                            onToggleCompleted = { screenModel.toggleCompleted(node.entryId) },
+                            onRemove = { screenModel.removeManga(node.entryId) },
                         )
                     }
                 }
@@ -110,7 +110,7 @@ class ReadingOrderEditorScreen(
         when (state.dialog) {
             is ReadingOrderEditorScreenModel.Dialog.AddManga -> AddMangaDialog(
                 libraryManga = state.libraryManga,
-                existingMangaIds = state.nodes.map { it.mangaId }.toSet(),
+                existingMangaIds = state.nodes.map { it.entryId }.toSet(),
                 onAdd = { screenModel.addManga(it) },
                 onDismiss = { screenModel.closeDialog() },
             )
@@ -123,7 +123,7 @@ class ReadingOrderEditorScreen(
         edges: List<tachiyomi.domain.readingorder.model.ReadingOrderEdge>,
         progress: Map<Long, tachiyomi.domain.readingorder.model.ReadingOrderProgress>,
     ): Boolean {
-        val prerequisites = edges.filter { it.toMangaId == node.mangaId }.map { it.fromMangaId }
+        val prerequisites = edges.filter { it.toEntryId == node.entryId }.map { it.fromEntryId }
         if (prerequisites.isEmpty()) return false
         return prerequisites.any { prereqId ->
             val p = progress[prereqId]

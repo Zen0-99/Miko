@@ -34,6 +34,7 @@ import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.isRunning
+import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -119,12 +120,11 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
         val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
-        val isResume = inputData.getBoolean(KEY_RESUME, false)
         addAnimeToQueue(collectionId)
 
         return withIOContext {
             try {
-                updateEpisodeList(isResume = isResume)
+                updateEpisodeList()
                 Result.success()
             } catch (e: Exception) {
                 if (e is CancellationException) {
@@ -270,7 +270,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      *
      * @return an observable delivering the progress of each update.
      */
-    private suspend fun updateEpisodeList(isResume: Boolean = false) {
+    private suspend fun updateEpisodeList() {
         val semaphore = Semaphore(5)
         val progressCount = AtomicInteger(0)
         val currentlyUpdatingAnime = CopyOnWriteArrayList<Anime>()
@@ -280,38 +280,27 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val fetchWindow = animeFetchInterval.getWindow(ZonedDateTime.now())
 
         // Publish initial running state to the in-app progress bus
-        LibraryUpdateProgressBus.startRun(total = animeToUpdate.size, source = "Anime", isResume = isResume)
-        if (isResume) {
-            progressCount.set(LibraryUpdateProgressBus.checkpoint.size)
-        }
+        LibraryUpdateProgressBus.startRun(total = animeToUpdate.size, source = "Anime")
 
-        coroutineScope {
-            animeToUpdate.groupBy { it.anime.source }.values
-                .map { animeInSource ->
-                    async {
-                        semaphore.withPermit {
-                            animeInSource.forEach { libraryAnime ->
-                                val anime = libraryAnime.anime
-                                ensureActive()
+        try {
+            coroutineScope {
+                animeToUpdate.groupBy { it.anime.source }.values
+                    .map { animeInSource ->
+                        async {
+                            semaphore.withPermit {
+                                animeInSource.forEach { libraryAnime ->
+                                    val anime = libraryAnime.anime
+                                    ensureActive()
 
-                                // Cooperative pause/cancel check
-                                if (LibraryUpdateProgressBus.isCancelRequested()) {
-                                    throw CancellationException("User cancelled library update")
-                                }
-                                if (LibraryUpdateProgressBus.isPauseRequested()) {
-                                    throw CancellationException("User paused library update")
-                                }
+                                    // Cooperative cancel check
+                                    if (LibraryUpdateProgressBus.isCancelRequested("Anime")) {
+                                        throw CancellationException("User cancelled library update")
+                                    }
 
-                                // Don't continue to update if anime is not in library
-                                if (anime.parentId == null && getAnime.await(anime.id)?.favorite != true) {
-                                    return@forEach
-                                }
-
-                                // Skip entries already processed in a prior (paused) run
-                                if (anime.id in LibraryUpdateProgressBus.checkpoint) {
-                                    progressCount.incrementAndGet()
-                                    return@forEach
-                                }
+                                    // Don't continue to update if anime is not in library
+                                    if (anime.parentId == null && getAnime.await(anime.id)?.favorite != true) {
+                                        return@forEach
+                                    }
 
                                 val publishState: () -> Unit = {
                                     LibraryUpdateProgressBus.updateProgress(
@@ -379,45 +368,47 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                     }
                                 }
 
-                                // Mark processed for resume checkpoint
-                                LibraryUpdateProgressBus.markProcessed(anime.id)
                             }
                         }
                     }
                 }
                 .awaitAll()
-        }
-
-        notifier.cancelProgressNotification()
-
-        if (newUpdates.isNotEmpty()) {
-            notifier.showUpdateNotifications(newUpdates)
-            if (hasDownloads.get()) {
-                downloadManager.startDownloads()
             }
-        }
+        } finally {
+            // Ensure completeRun is ALWAYS called, even if the coroutineScope
+            // throws (e.g., due to cancellation). Without this, the overlay
+            // would stay stuck at "X/Y" forever.
+            notifier.cancelProgressNotification()
 
-        // Publish completion + persist failures to the FailedFetch table
-        val failedEntries = failedUpdates.map { (a, reason) ->
-            eu.kanade.tachiyomi.data.library.FailedEntry(
-                entry = eu.kanade.tachiyomi.data.library.EntryRef(
-                    id = a.id,
-                    title = a.title,
-                    sourceId = a.source,
-                    kind = tachiyomi.domain.library.model.EntryKind.ANIME,
-                ),
-                reason = reason ?: context.stringResource(MR.strings.unknown_error),
-                sourceName = sourceManager.getOrStub(a.source).name,
-            )
-        }
-        LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Anime")
-        if (failedEntries.isNotEmpty()) {
-            FailedFetchStore.insert(failedEntries)
-            val errorFile = writeErrorFile(failedUpdates)
-            notifier.showUpdateErrorNotification(
-                failedUpdates.size,
-                errorFile.getUriCompat(context),
-            )
+            if (newUpdates.isNotEmpty()) {
+                notifier.showUpdateNotifications(newUpdates)
+                if (hasDownloads.get()) {
+                    downloadManager.startDownloads()
+                }
+            }
+
+            // Publish completion + persist failures to the FailedFetch table
+            val failedEntries = failedUpdates.map { (a, reason) ->
+                eu.kanade.tachiyomi.data.library.FailedEntry(
+                    entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                        id = a.id,
+                        title = a.title,
+                        sourceId = a.source,
+                        kind = tachiyomi.domain.library.model.EntryKind.ANIME,
+                    ),
+                    reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                    sourceName = sourceManager.getOrStub(a.source).name,
+                )
+            }
+            LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Anime")
+            if (failedEntries.isNotEmpty()) {
+                FailedFetchStore.insert(failedEntries)
+                val errorFile = writeErrorFile(failedUpdates)
+                notifier.showUpdateErrorNotification(
+                    failedUpdates.size,
+                    errorFile.getUriCompat(context),
+                )
+            }
         }
     }
 
@@ -436,10 +427,55 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private suspend fun updateAnime(anime: Anime, fetchWindow: Pair<Long, Long>): List<Episode> {
         val source = sourceManager.getOrStub(anime.source)
 
+        // Cooperative cancel check before network calls
+        if (LibraryUpdateProgressBus.isCancelRequested("Anime")) {
+            throw CancellationException("User cancelled library update")
+        }
+
+        // Cover art checker: check if cover cache file is missing.
+        val coverFileExists = coverCache.getCoverFile(anime.thumbnailUrl)?.exists() == true
+        val hasLocalThumbnailUrl = !anime.thumbnailUrl.isNullOrEmpty()
+
         // Update anime metadata if needed
         if (libraryPreferences.autoUpdateMetadata().get()) {
-            val networkAnime = source.getAnimeDetails(anime.toSAnime())
-            updateAnime.awaitUpdateFromSource(anime, networkAnime, manualFetch = false, coverCache, backgroundCache)
+            try {
+                val networkAnime = source.getAnimeDetails(anime.toSAnime())
+                updateAnime.awaitUpdateFromSource(anime, networkAnime, manualFetch = false, coverCache, backgroundCache)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Metadata update failed for anime ${anime.id}" }
+                context.maybeShowDnsToast(e, anime.thumbnailUrl)
+                if (!coverFileExists && hasLocalThumbnailUrl) {
+                    try {
+                        coverCache.deleteFromCache(anime, false)
+                        updateAnime.awaitUpdateCoverLastModified(anime.id)
+                    } catch (e2: Throwable) {
+                        logcat(LogPriority.ERROR, e2) { "Cover refresh failed for anime ${anime.id}" }
+                    }
+                }
+            }
+        } else if (!coverFileExists && hasLocalThumbnailUrl) {
+            // autoUpdateMetadata is off, but cover is missing. The stored
+            // thumbnailUrl may be stale. Call getAnimeDetails to get a fresh
+            // URL, then update both thumbnailUrl and coverLastModified —
+            // same as the detail view does.
+            try {
+                val networkAnime = source.getAnimeDetails(anime.toSAnime())
+                updateAnime.awaitUpdateFromSource(anime, networkAnime, manualFetch = false, coverCache)
+            } catch (e: Throwable) {
+                // getAnimeDetails failed — fall back to just updating
+                // coverLastModified with the existing URL
+                try {
+                    coverCache.deleteFromCache(anime, false)
+                    updateAnime.awaitUpdateCoverLastModified(anime.id)
+                } catch (e2: Throwable) {
+                    logcat(LogPriority.ERROR, e2) { "Cover refresh failed for anime ${anime.id}" }
+                }
+            }
+        }
+
+        // Cooperative cancel check before the heavy episode list fetch
+        if (LibraryUpdateProgressBus.isCancelRequested("Anime")) {
+            throw CancellationException("User cancelled library update")
         }
 
         val episodes = source.getEpisodeList(anime.toSAnime())
@@ -531,7 +567,6 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
          * Key for collection to update.
          */
         private const val KEY_COLLECTION = "animeCollection"
-        private const val KEY_RESUME = "animeResume"
 
         fun cancelAllWorks(context: Context) {
             context.workManager.cancelAllWorkByTag(TAG)
@@ -588,7 +623,6 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         fun startNow(
             context: Context,
             collection: Collection? = null,
-            resumeFromCheckpoint: Boolean = false,
         ): Boolean {
             val wm = context.workManager
             if (wm.isRunning(TAG)) {
@@ -598,7 +632,6 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
             val inputData = workDataOf(
                 KEY_COLLECTION to collection?.id,
-                KEY_RESUME to resumeFromCheckpoint,
             )
             val request = OneTimeWorkRequestBuilder<AnimeLibraryUpdateJob>()
                 .addTag(TAG)
@@ -628,3 +661,4 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
     }
 }
+

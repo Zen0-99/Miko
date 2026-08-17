@@ -16,14 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -58,10 +55,10 @@ object CommonEntryItemDefaults {
 }
 
 private val ContinueViewingButtonSizeSmall = 28.dp
-private val ContinueViewingButtonSizeLarge = 32.dp
+private val ContinueViewingButtonSizeLarge = 30.dp
 
 private val ContinueViewingButtonIconSizeSmall = 16.dp
-private val ContinueViewingButtonIconSizeLarge = 20.dp
+private val ContinueViewingButtonIconSizeLarge = 18.dp
 
 private val ContinueViewingButtonGridPadding = 6.dp
 private val ContinueViewingButtonListSpacing = 8.dp
@@ -85,6 +82,7 @@ fun EntryCompactGridItem(
     coverBadgeStart: @Composable (RowScope.() -> Unit)? = null,
     coverBadgeEnd: @Composable (RowScope.() -> Unit)? = null,
     topEndBadge: (@Composable BoxScope.() -> Unit)? = null,
+    bottomStartBadge: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     GridItemSelectable(
         isSelected = isSelected,
@@ -110,6 +108,7 @@ fun EntryCompactGridItem(
             badgesStart = coverBadgeStart,
             badgesEnd = coverBadgeEnd,
             topEndBadge = topEndBadge,
+            bottomStartBadge = bottomStartBadge,
             content = {
                 if (title != null) {
                     CoverTextOverlay(
@@ -200,7 +199,9 @@ fun EntryComfortableGridItem(
     coverBadgeStart: (@Composable RowScope.() -> Unit)? = null,
     coverBadgeEnd: (@Composable RowScope.() -> Unit)? = null,
     topEndBadge: (@Composable BoxScope.() -> Unit)? = null,
+    bottomStartBadge: (@Composable BoxScope.() -> Unit)? = null,
     onClickContinueViewing: (() -> Unit)? = null,
+    subtitle: String? = null,
 ) {
     GridItemSelectable(
         isSelected = isSelected,
@@ -227,6 +228,7 @@ fun EntryComfortableGridItem(
                 badgesStart = coverBadgeStart,
                 badgesEnd = coverBadgeEnd,
                 topEndBadge = topEndBadge,
+                bottomStartBadge = bottomStartBadge,
                 content = {
                     if (onClickContinueViewing != null) {
                         ContinueViewingButton(
@@ -240,13 +242,32 @@ fun EntryComfortableGridItem(
                     }
                 },
             )
-            GridItemTitle(
-                modifier = Modifier.padding(4.dp),
-                title = title,
-                style = MaterialTheme.typography.titleSmall,
-                minLines = 2,
-                maxLines = titleMaxLines,
-            )
+            // Title + optional subtitle (author) — subtitle shows only when title fits in 1 line
+            if (subtitle != null) {
+                Column(modifier = Modifier.padding(4.dp)) {
+                    GridItemTitle(
+                        title = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        minLines = 1,
+                        maxLines = titleMaxLines,
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            } else {
+                GridItemTitle(
+                    modifier = Modifier.padding(4.dp),
+                    title = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    minLines = 2,
+                    maxLines = titleMaxLines,
+                )
+            }
         }
     }
 }
@@ -261,6 +282,7 @@ private fun EntryGridCover(
     badgesStart: (@Composable RowScope.() -> Unit)? = null,
     badgesEnd: (@Composable RowScope.() -> Unit)? = null,
     topEndBadge: (@Composable BoxScope.() -> Unit)? = null,
+    bottomStartBadge: (@Composable BoxScope.() -> Unit)? = null,
     content: @Composable (BoxScope.() -> Unit)? = null,
 ) {
     Box(
@@ -297,6 +319,16 @@ private fun EntryGridCover(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 topEndBadge.invoke(this@Box)
+            }
+        }
+
+        if (bottomStartBadge != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp),
+            ) {
+                bottomStartBadge.invoke(this@Box)
             }
         }
     }
@@ -378,14 +410,16 @@ fun EntryListItem(
     onClickContinueViewing: (() -> Unit)? = null,
     entries: Int = 0,
     containerHeight: Int = 0,
+    subtitle: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
+            .fillMaxWidth()
             .selectedBackground(isSelected)
             .height(
                 when (entries) {
-                    0 -> 76.dp
+                    0 -> 56.dp
                     else -> {
                         val density = LocalDensity.current
                         with(density) { (containerHeight / entries).toDp() } - (3 / entries).dp
@@ -418,14 +452,27 @@ fun EntryListItem(
                 }
             }
         }
-        Text(
-            text = title,
+        Column(
             modifier = Modifier
                 .padding(horizontal = 16.dp)
                 .weight(1f),
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        ) {
+            Text(
+                text = title,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
         BadgeGroup(content = badge)
         if (onClickContinueViewing != null) {
             ContinueViewingButton(
@@ -445,21 +492,22 @@ private fun ContinueViewingButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier) {
-        FilledIconButton(
-            onClick = onClick,
-            shape = MaterialTheme.shapes.small,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                contentColor = contentColorFor(MaterialTheme.colorScheme.primaryContainer),
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(size / 2))
+            .background(Color(0xAD212121))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onClick,
             ),
-            modifier = Modifier.size(size),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = stringResource(MR.strings.action_resume),
-                modifier = Modifier.size(iconSize),
-            )
-        }
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.MenuBook,
+            contentDescription = stringResource(MR.strings.action_resume),
+            tint = Color.White,
+            modifier = Modifier.size(iconSize),
+        )
     }
 }

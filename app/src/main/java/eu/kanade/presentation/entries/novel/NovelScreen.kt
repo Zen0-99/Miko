@@ -16,8 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.pulltorefresh.pullToRefresh
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -310,16 +309,10 @@ private fun NovelScreenSmallImpl(
         }
     })
 
-    val pullToRefreshState = rememberPullToRefreshState()
-
-    Box(
-        modifier = Modifier
-            .pullToRefresh(
-                isRefreshing = state.isRefreshingData,
-                state = pullToRefreshState,
-                enabled = !isAnySelected,
-                onRefresh = onRefresh,
-            ),
+    PullRefresh(
+        refreshing = state.isRefreshingData,
+        enabled = !isAnySelected,
+        onRefresh = onRefresh,
     ) {
     Scaffold(
         topBar = {
@@ -580,18 +573,6 @@ private fun NovelScreenSmallImpl(
                 }.takeIf { onDownloadChapter != null },
             )
         }
-
-        // Pull-to-refresh indicator rendered on top of the Scaffold (above the toolbar)
-        androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .wrapContentSize(Alignment.TopCenter),
-            isRefreshing = state.isRefreshingData,
-            state = pullToRefreshState,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 
     val longPressChapterVal = longPressChapter

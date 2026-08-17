@@ -41,10 +41,28 @@ class UpdateManga(
         // if the manga isn't a favorite, set its title from source and update in db
         val title = if (remoteTitle.isEmpty() || localManga.favorite) null else remoteTitle
 
+        // Cover art checker: if the cover cache file doesn't exist (e.g., after
+        // a backup restore where cover files weren't included), force a cover
+        // refresh. Uses the LOCAL thumbnailUrl for the check, not the remote —
+        // the source may return null thumbnail_url but the manga already has
+        // a valid URL in the database.
+        val coverFileExists = coverCache.getCoverFile(localManga.thumbnailUrl)?.exists() == true
+        val hasLocalThumbnailUrl = !localManga.thumbnailUrl.isNullOrEmpty()
+        val hasRemoteThumbnailUrl = !remoteManga.thumbnail_url.isNullOrEmpty()
+        android.util.Log.d("UpdateManga", "awaitUpdateFromSource: manga=${localManga.title} coverFileExists=$coverFileExists hasLocal=$hasLocalThumbnailUrl hasRemote=$hasRemoteThumbnailUrl localUrl=${localManga.thumbnailUrl} remoteUrl=${remoteManga.thumbnail_url}")
+
         val coverLastModified =
             when {
-                // Never refresh covers if the url is empty to avoid "losing" existing covers
-                remoteManga.thumbnail_url.isNullOrEmpty() -> null
+                // No cover URL anywhere — can't fetch a cover
+                !hasLocalThumbnailUrl && !hasRemoteThumbnailUrl -> null
+                // Cover cache file is missing — force refresh
+                !coverFileExists -> {
+                    coverCache.deleteFromCache(localManga, false)
+                    val now = Instant.now().toEpochMilli()
+                    android.util.Log.d("UpdateManga", "coverLastModified set to $now (cover file was missing, forcing refresh)")
+                    now
+                }
+                // Cover exists and URL hasn't changed — no need to refresh
                 !manualFetch && localManga.thumbnailUrl == remoteManga.thumbnail_url -> null
                 localManga.isLocal() -> Instant.now().toEpochMilli()
                 localManga.hasCustomCover(coverCache) -> {
@@ -57,7 +75,14 @@ class UpdateManga(
                 }
             }
 
-        val thumbnailUrl = remoteManga.thumbnail_url?.takeIf { it.isNotEmpty() }
+        // Use remote thumbnailUrl if provided, otherwise keep the local one
+        val thumbnailUrl = if (hasRemoteThumbnailUrl) {
+            remoteManga.thumbnail_url?.takeIf { it.isNotEmpty() }
+        } else {
+            localManga.thumbnailUrl
+        }
+
+        android.util.Log.d("UpdateManga", "result: manga=${localManga.title} coverLastModified=$coverLastModified thumbnailUrl=$thumbnailUrl")
 
         return mangaRepository.updateManga(
             MangaUpdate(

@@ -91,9 +91,7 @@ data class HomeHubState(
         get() = recentNovels
             .distinctBy { it.novelId }
             .map {
-                val progress = it.chapterName?.takeIf { name -> name.isNotBlank() }
-                    ?: "Ch. ${it.chapterNumber}"
-                HomeHubCardItem(it.novelId, it.title, it.coverData, HomeHubMediaType.NOVEL, progress)
+                HomeHubCardItem(it.novelId, it.title, it.coverData, HomeHubMediaType.NOVEL, "Ch. ${it.chapterNumber}")
             }
 
     val recentlyAddedAnimeCards: List<HomeHubCardItem>

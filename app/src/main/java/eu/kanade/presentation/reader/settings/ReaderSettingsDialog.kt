@@ -2,7 +2,8 @@ package eu.kanade.presentation.reader.settings
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -34,14 +35,18 @@ fun ReaderSettingsDialog(
     val pagerState = rememberPagerState { tabTitles.size }
 
     BoxWithConstraints {
+        // Fixed height — prevents the sheet from resizing when switching tabs,
+        // which was hiding settings. Content scrolls within this fixed height.
+        val sheetHeight = maxHeight * 0.72f
         TabbedDialog(
-            modifier = Modifier.heightIn(max = maxHeight * 0.75f),
+            modifier = Modifier.height(sheetHeight),
             onDismissRequest = {
                 onDismissRequest()
                 onShowMenus()
             },
             tabTitles = tabTitles,
             pagerState = pagerState,
+            fillHeight = true,
         ) { page ->
             val window = (LocalView.current.parent as? DialogWindowProvider)?.window
 
@@ -57,6 +62,7 @@ fun ReaderSettingsDialog(
 
             Column(
                 modifier = Modifier
+                    .fillMaxHeight()
                     .padding(vertical = TabbedDialogPaddings.Vertical)
                     .verticalScroll(rememberScrollState()),
             ) {

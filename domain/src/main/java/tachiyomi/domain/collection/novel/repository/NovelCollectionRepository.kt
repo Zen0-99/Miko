@@ -20,9 +20,13 @@ interface NovelCollectionRepository {
 
     suspend fun insert(name: String, order: Long, flags: Long): Long?
 
+    suspend fun insertNovelCollection(collection: Collection)
+
     suspend fun update(collectionId: Long, name: String?, order: Long?, flags: Long?, hidden: Boolean?)
 
     suspend fun updatePartialNovelCollection(update: CollectionUpdate)
+
+    suspend fun updatePartialNovelCollections(updates: List<CollectionUpdate>)
 
     suspend fun updateAllNovelCollectionFlags(flags: Long?)
 

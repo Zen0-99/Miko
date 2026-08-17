@@ -42,6 +42,9 @@ fun AnimeLibraryPager(
     onClickAnime: (LibraryAnime) -> Unit,
     onLongClickAnime: (LibraryAnime) -> Unit,
     onClickContinueWatching: ((LibraryAnime) -> Unit)?,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerAnimeIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     BoxWithConstraints {
         val density = LocalDensity.current
@@ -86,6 +89,9 @@ fun AnimeLibraryPager(
                         onLongClick = onLongClickAnime,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerAnimeIds = getPreviousLayerAnimeIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
 
@@ -101,6 +107,9 @@ fun AnimeLibraryPager(
                         onLongClick = onLongClickAnime,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerAnimeIds = getPreviousLayerAnimeIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
 
@@ -115,6 +124,9 @@ fun AnimeLibraryPager(
                         onClickContinueWatching = onClickContinueWatching,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerAnimeIds = getPreviousLayerAnimeIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
             }

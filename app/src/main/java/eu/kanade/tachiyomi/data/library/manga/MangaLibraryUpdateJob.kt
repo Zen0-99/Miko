@@ -32,6 +32,7 @@ import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.isRunning
+import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -118,12 +119,11 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
         val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
-        val isResume = inputData.getBoolean(KEY_RESUME, false)
         addMangaToQueue(collectionId)
 
         return withIOContext {
             try {
-                updateChapterList(isResume = isResume)
+                updateChapterList()
                 Result.success()
             } catch (e: Exception) {
                 if (e is CancellationException) {
@@ -249,7 +249,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      *
      * @return an observable delivering the progress of each update.
      */
-    private suspend fun updateChapterList(isResume: Boolean = false) {
+    private suspend fun updateChapterList() {
         val semaphore = Semaphore(5)
         val progressCount = AtomicInteger(0)
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
@@ -259,41 +259,27 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val fetchWindow = mangaFetchInterval.getWindow(ZonedDateTime.now())
 
         // Publish initial running state to the in-app progress bus
-        LibraryUpdateProgressBus.startRun(total = mangaToUpdate.size, source = "Manga", isResume = isResume)
-        if (isResume) {
-            // Start the progress counter at the checkpoint size so the UI shows
-            // the correct "X / Y" ratio immediately.
-            progressCount.set(LibraryUpdateProgressBus.checkpoint.size)
-        }
+        LibraryUpdateProgressBus.startRun(total = mangaToUpdate.size, source = "Manga")
 
-        coroutineScope {
-            mangaToUpdate.groupBy { it.manga.source }.values
-                .map { mangaInSource ->
-                    async {
-                        semaphore.withPermit {
-                            mangaInSource.forEach { libraryManga ->
-                                val manga = libraryManga.manga
-                                ensureActive()
+        try {
+            coroutineScope {
+                mangaToUpdate.groupBy { it.manga.source }.values
+                    .map { mangaInSource ->
+                        async {
+                            semaphore.withPermit {
+                                mangaInSource.forEach { libraryManga ->
+                                    val manga = libraryManga.manga
+                                    ensureActive()
 
-                                // Cooperative pause/cancel check
-                                if (LibraryUpdateProgressBus.isCancelRequested()) {
-                                    throw CancellationException("User cancelled library update")
-                                }
-                                if (LibraryUpdateProgressBus.isPauseRequested()) {
-                                    // Pause = cancel this run; checkpoint is preserved for resume
-                                    throw CancellationException("User paused library update")
-                                }
+                                    // Cooperative cancel check
+                                    if (LibraryUpdateProgressBus.isCancelRequested("Manga")) {
+                                        throw CancellationException("User cancelled library update")
+                                    }
 
-                                // Don't continue to update if manga is not in library
-                                if (getManga.await(manga.id)?.favorite != true) {
-                                    return@forEach
-                                }
-
-                                // Skip entries already processed in a prior (paused) run
-                                if (manga.id in LibraryUpdateProgressBus.checkpoint) {
-                                    progressCount.incrementAndGet()
-                                    return@forEach
-                                }
+                                    // Don't continue to update if manga is not in library
+                                    if (getManga.await(manga.id)?.favorite != true) {
+                                        return@forEach
+                                    }
 
                                 val publishState: () -> Unit = {
                                     LibraryUpdateProgressBus.updateProgress(
@@ -359,46 +345,47 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                         failedUpdates.add(manga to errorMessage)
                                     }
                                 }
-
-                                // Mark processed for resume checkpoint
-                                LibraryUpdateProgressBus.markProcessed(manga.id)
                             }
                         }
                     }
                 }
                 .awaitAll()
-        }
-
-        notifier.cancelProgressNotification()
-
-        if (newUpdates.isNotEmpty()) {
-            notifier.showUpdateNotifications(newUpdates)
-            if (hasDownloads.get()) {
-                downloadManager.startDownloads()
             }
-        }
+        } finally {
+            // Ensure completeRun is ALWAYS called, even if the coroutineScope
+            // throws (e.g., due to cancellation). Without this, the overlay
+            // would stay stuck at "X/Y" forever.
+            notifier.cancelProgressNotification()
 
-        // Publish completion + persist failures to the FailedFetch table
-        val failedEntries = failedUpdates.map { (m, reason) ->
-            eu.kanade.tachiyomi.data.library.FailedEntry(
-                entry = eu.kanade.tachiyomi.data.library.EntryRef(
-                    id = m.id,
-                    title = m.title,
-                    sourceId = m.source,
-                    kind = tachiyomi.domain.library.model.EntryKind.MANGA,
-                ),
-                reason = reason ?: context.stringResource(MR.strings.unknown_error),
-                sourceName = sourceManager.getOrStub(m.source).name,
-            )
-        }
-        LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Manga")
-        if (failedEntries.isNotEmpty()) {
-            FailedFetchStore.insert(failedEntries)
-            val errorFile = writeErrorFile(failedUpdates)
-            notifier.showUpdateErrorNotification(
-                failedUpdates.size,
-                errorFile.getUriCompat(context),
-            )
+            if (newUpdates.isNotEmpty()) {
+                notifier.showUpdateNotifications(newUpdates)
+                if (hasDownloads.get()) {
+                    downloadManager.startDownloads()
+                }
+            }
+
+            // Publish completion + persist failures to the FailedFetch table
+            val failedEntries = failedUpdates.map { (m, reason) ->
+                eu.kanade.tachiyomi.data.library.FailedEntry(
+                    entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                        id = m.id,
+                        title = m.title,
+                        sourceId = m.source,
+                        kind = tachiyomi.domain.library.model.EntryKind.MANGA,
+                    ),
+                    reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                    sourceName = sourceManager.getOrStub(m.source).name,
+                )
+            }
+            LibraryUpdateProgressBus.completeRun(failed = failedEntries, source = "Manga")
+            if (failedEntries.isNotEmpty()) {
+                FailedFetchStore.insert(failedEntries)
+                val errorFile = writeErrorFile(failedUpdates)
+                notifier.showUpdateErrorNotification(
+                    failedUpdates.size,
+                    errorFile.getUriCompat(context),
+                )
+            }
         }
     }
 
@@ -417,10 +404,68 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private suspend fun updateManga(manga: Manga, fetchWindow: Pair<Long, Long>): List<Chapter> {
         val source = sourceManager.getOrStub(manga.source)
 
+        // Cooperative cancel check before network calls
+        if (LibraryUpdateProgressBus.isCancelRequested("Manga")) {
+            throw CancellationException("User cancelled library update")
+        }
+
+        // Cover art checker: check if cover cache file is missing.
+        // Runs regardless of autoUpdateMetadata — missing covers should
+        // always be fetched.
+        val coverFileExists = coverCache.getCoverFile(manga.thumbnailUrl)?.exists() == true
+        val hasLocalThumbnailUrl = !manga.thumbnailUrl.isNullOrEmpty()
+        android.util.Log.d("MangaCoverCheck", "manga=${manga.title} id=${manga.id} thumbnailUrl=${manga.thumbnailUrl} coverFileExists=$coverFileExists hasLocalThumbnailUrl=$hasLocalThumbnailUrl autoUpdateMetadata=${libraryPreferences.autoUpdateMetadata().get()}")
+
         // Update manga metadata if needed
         if (libraryPreferences.autoUpdateMetadata().get()) {
-            val networkManga = source.getMangaDetails(manga.toSManga())
-            updateManga.awaitUpdateFromSource(manga, networkManga, manualFetch = false, coverCache)
+            try {
+                val networkManga = source.getMangaDetails(manga.toSManga())
+                updateManga.awaitUpdateFromSource(manga, networkManga, manualFetch = false, coverCache)
+            } catch (e: Throwable) {
+                android.util.Log.e("MangaCoverCheck", "getMangaDetails FAILED for manga=${manga.title}: ${e::class.simpleName}: ${e.message}")
+                logcat(LogPriority.ERROR, e) { "Metadata update failed for manga ${manga.id}" }
+                context.maybeShowDnsToast(e, manga.thumbnailUrl)
+                // getMangaDetails failed — still try to fix missing covers
+                if (!coverFileExists && hasLocalThumbnailUrl) {
+                    try {
+                        coverCache.deleteFromCache(manga, false)
+                        updateManga.awaitUpdateCoverLastModified(manga.id)
+                        android.util.Log.d("MangaCoverCheck", "Cover refresh triggered (catch block) for manga=${manga.title}")
+                    } catch (e2: Throwable) {
+                        android.util.Log.e("MangaCoverCheck", "Cover refresh FAILED for manga=${manga.title}: ${e2::class.simpleName}: ${e2.message}")
+                        logcat(LogPriority.ERROR, e2) { "Cover refresh failed for manga ${manga.id}" }
+                    }
+                }
+            }
+        } else if (!coverFileExists && hasLocalThumbnailUrl) {
+            // autoUpdateMetadata is off, but cover is missing. The stored
+            // thumbnailUrl may be stale (e.g. the source changed CDN host).
+            // Call getMangaDetails to get the fresh URL, then update both
+            // the thumbnailUrl and coverLastModified — same as the detail
+            // view does. This matches the user's expectation: refreshing
+            // the library should fetch covers just like opening the detail
+            // page does.
+            android.util.Log.d("MangaCoverCheck", "autoUpdateMetadata off, fetching fresh details for cover for manga=${manga.title}")
+            try {
+                val networkManga = source.getMangaDetails(manga.toSManga())
+                updateManga.awaitUpdateFromSource(manga, networkManga, manualFetch = false, coverCache)
+                android.util.Log.d("MangaCoverCheck", "Cover refresh via getMangaDetails for manga=${manga.title}")
+            } catch (e: Throwable) {
+                // getMangaDetails failed — fall back to just updating
+                // coverLastModified with the existing (possibly stale) URL
+                android.util.Log.e("MangaCoverCheck", "getMangaDetails failed for cover refresh, falling back: manga=${manga.title}: ${e::class.simpleName}: ${e.message}")
+                try {
+                    coverCache.deleteFromCache(manga, false)
+                    updateManga.awaitUpdateCoverLastModified(manga.id)
+                } catch (e2: Throwable) {
+                    android.util.Log.e("MangaCoverCheck", "Cover refresh fallback FAILED for manga=${manga.title}: ${e2::class.simpleName}: ${e2.message}")
+                }
+            }
+        }
+
+        // Cooperative cancel check before the heavy chapter list fetch
+        if (LibraryUpdateProgressBus.isCancelRequested("Manga")) {
+            throw CancellationException("User cancelled library update")
         }
 
         val chapters = source.getChapterList(manga.toSManga())
@@ -511,8 +556,6 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
          * Key for collection to update.
          */
         private const val KEY_COLLECTION = "collection"
-        private const val KEY_RESUME = "resume"
-
         fun cancelAllWorks(context: Context) {
             context.workManager.cancelAllWorkByTag(TAG)
         }
@@ -569,7 +612,6 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         fun startNow(
             context: Context,
             collection: Collection? = null,
-            resumeFromCheckpoint: Boolean = false,
         ): Boolean {
             val wm = context.workManager
             if (wm.isRunning(TAG)) {
@@ -579,7 +621,6 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
             val inputData = workDataOf(
                 KEY_COLLECTION to collection?.id,
-                KEY_RESUME to resumeFromCheckpoint,
             )
             val request = OneTimeWorkRequestBuilder<MangaLibraryUpdateJob>()
                 .addTag(TAG)

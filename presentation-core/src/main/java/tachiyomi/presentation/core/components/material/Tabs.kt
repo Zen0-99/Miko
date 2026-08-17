@@ -14,6 +14,7 @@ import tachiyomi.presentation.core.components.Pill
 fun TabText(
     text: String,
     badgeCount: Int? = null,
+    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
 ) {
     val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
 
@@ -24,6 +25,7 @@ fun TabText(
             text = text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            fontSize = fontSize,
         )
         if (badgeCount != null) {
             Pill(

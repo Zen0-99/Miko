@@ -15,8 +15,8 @@
     <string name="reading_order_remove_manga">Remove from reading order</string>
     <string name="reading_order_mark_completed">Mark as completed</string>
     <string name="reading_order_mark_incomplete">Mark as incomplete</string>
-    <string name="reading_order_locked_title">Entry locked</string>
-    <string name="reading_order_locked_message">This entry is locked by the reading order \"%1$s\". Complete the prerequisite entries first.</string>
+    <string name="reading_order_locked_title">%1$s locked</string>
+    <string name="reading_order_locked_message">Finish the earlier entries in \"%1$s\" to unlock this one.</string>
     <string name="reading_order_locked_view">View reading order</string>
     <string name="reading_order_locked_dismiss">Go back</string>
     <string name="reading_order_delete_confirm">Delete this reading order?</string>
@@ -489,6 +489,7 @@
     <string name="action_remove_bookmark_episode">Unbookmark episode</string>
     <string name="action_edit_anime_collections">Edit anime collections</string>
     <string name="action_edit_manga_collections">Edit manga collections</string>
+    <string name="action_edit_novel_collections">Edit novel collections</string>
     <string name="action_view_episodes">View episodes</string>
     <string name="action_previous_episode">Previous episode</string>
     <string name="action_play">Play</string>
@@ -512,6 +513,7 @@
     <string name="pref_default_home_tab_library">Set start screen to Manga Tab</string>
     <string name="default_manga_collection">Default manga collection</string>
     <string name="default_anime_collection">Default anime collection</string>
+    <string name="default_novel_collection">Default novel collection</string>
     <string name="pref_manga_library_update_collections_details">Manga in excluded collections will not be updated even if they are also in included collections.</string>
     <string name="pref_anime_library_update_collections_details">Anime in excluded collections will not be updated even if they are also in included collections.</string>
     <string name="pref_novel_library_update_collections_details">Novels in excluded collections will not be updated even if they are also in included collections.</string>
@@ -1236,6 +1238,7 @@
     <string name="achievement_list_confirm">Awesome!</string>
     <string name="achievement_banner_rare_title">RARE ACHIEVEMENT!</string>
     <string name="achievement_banner_unlocked_title">ACHIEVEMENT UNLOCKED!</string>
+    <string name="achievement_banner_hidden_title">HIDDEN ACHIEVEMENT UNLOCKED!</string>
     <string name="achievement_hint_vague_prefix">Clue: %s</string>
     <string name="achievement_hint_direct_prefix">Hint: %s</string>
     <string name="achievement_hint_obvious_prefix">Target: %s</string>
@@ -1324,9 +1327,9 @@
     <string name="achievement_slice_of_life_zen_title">Slice of Life Zen</string>
     <string name="achievement_slice_of_life_zen_desc">Collect 15 slice of life titles in your library</string>
     <string name="achievement_secret_shadow_monarch_title">Shadow Monarch</string>
-    <string name="achievement_secret_shadow_monarch_desc">Arise â€” a hidden achievement unlocked</string>
+    <string name="achievement_secret_shadow_monarch_desc">Build a dark fantasy army in your library</string>
     <string name="achievement_secret_weeb_awakening_title">Weeb Awakening</string>
-    <string name="achievement_secret_weeb_awakening_desc">Your true power awakens â€” a hidden achievement</string>
+    <string name="achievement_secret_weeb_awakening_desc">Keep a library of 50+ titles spanning every medium</string>
     <string name="achievement_time_paradox_hint">Symmetry of time</string>
     <string name="achievement_void_broadcast_unlocked_title">Transmission Lost</string>
     <string name="achievement_void_broadcast_unlocked_desc">Eva is ready for launch. The Third Impact has come â€” the signal of humanity has dissolved into the crimson sea of LCL. The core fuses are silent. Only red remains.</string>

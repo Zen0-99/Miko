@@ -10,6 +10,7 @@ import eu.kanade.presentation.library.components.DownloadsBadge
 import eu.kanade.presentation.library.components.EntryCompactGridItem
 import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.LazyLibraryGrid
+import eu.kanade.presentation.library.components.ReadingOrderBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.components.globalSearchItem
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryItem
@@ -28,6 +29,9 @@ fun AnimeLibraryCompactGrid(
     onClickContinueWatching: ((LibraryAnime) -> Unit)?,
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerAnimeIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -42,8 +46,10 @@ fun AnimeLibraryCompactGrid(
             contentType = { "anime_library_compact_grid_item" },
         ) { libraryItem ->
             val anime = libraryItem.libraryAnime.anime
+            val isPreviousLayer = getPreviousLayerAnimeIds?.invoke()?.contains(anime.id) == true
             EntryCompactGridItem(
                 isSelected = selection.fastAny { it.id == libraryItem.libraryAnime.id },
+                coverAlpha = if (isPreviousLayer) 0.4f else 1f,
                 title = anime.title.takeIf { showTitle },
                 coverData = AnimeCover(
                     animeId = anime.id,
@@ -57,6 +63,10 @@ fun AnimeLibraryCompactGrid(
                     UnviewedBadge(count = libraryItem.unseenCount)
                 },
                 coverBadgeEnd = {
+                    val roLayer = getReadingOrderLayer?.invoke(anime.id)
+                    if (roLayer != null) {
+                        ReadingOrderBadge(layer = roLayer)
+                    }
                     LanguageBadge(
                         isLocal = libraryItem.isLocal,
                         sourceLanguage = libraryItem.sourceLanguage,
@@ -64,7 +74,7 @@ fun AnimeLibraryCompactGrid(
                 },
                 onLongClick = { onLongClick(libraryItem.libraryAnime) },
                 onClick = { onClick(libraryItem.libraryAnime) },
-                onClickContinueViewing = if (onClickContinueWatching != null && libraryItem.unseenCount > 0) {
+                onClickContinueViewing = if (onClickContinueWatching != null && libraryItem.unseenCount > 0 && isEntryLocked?.invoke(anime.id) != true) {
                     { onClickContinueWatching(libraryItem.libraryAnime) }
                 } else {
                     null

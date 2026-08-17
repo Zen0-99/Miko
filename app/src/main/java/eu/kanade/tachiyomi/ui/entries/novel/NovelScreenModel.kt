@@ -46,6 +46,7 @@ import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.util.system.cancelNotification
+import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
 import eu.kanade.tachiyomi.util.system.toast
@@ -480,6 +481,7 @@ class NovelScreenModel(
             withIOContext {
                 val source = state.source as? NovelCatalogueSource ?: return@withIOContext
                 val networkNovel = source.getNovelDetails(state.novel.toSNovel())
+                android.util.Log.d("NovelScreenModel", "fetchNovelFromSource: novel=${state.novel.title} remoteThumbnailUrl=${networkNovel.thumbnail_url} localThumbnailUrl=${state.novel.thumbnailUrl}")
                 updateNovel.awaitUpdateFromSource(
                     localNovel = state.novel,
                     remoteTitle = networkNovel.title,
@@ -495,7 +497,9 @@ class NovelScreenModel(
             }
         } catch (e: Throwable) {
             if (e is HttpException && e.code == 103) return
+            android.util.Log.e("NovelScreenModel", "fetchNovelFromSource FAILED: novel=${state.novel.title}", e)
             logcat(LogPriority.ERROR, e)
+            context.maybeShowDnsToast(e, state.novel.thumbnailUrl)
             screenModelScope.launch {
                 snackbarHostState.showSnackbar(message = with(context) { e.formattedMessage })
             }
@@ -715,12 +719,17 @@ class NovelScreenModel(
     fun fetchAllFromSource(manualFetch: Boolean = true) {
         screenModelScope.launch {
             updateSuccessState { it.copy(isRefreshingData = true) }
-            val tasks = listOf(
-                async { fetchNovelFromSource(manualFetch) },
-                async { fetchChaptersFromSource(manualFetch) },
-            )
-            tasks.awaitAll()
-            updateSuccessState { it.copy(isRefreshingData = false) }
+            try {
+                val tasks = listOf(
+                    async { fetchNovelFromSource(manualFetch) },
+                    async { fetchChaptersFromSource(manualFetch) },
+                )
+                tasks.awaitAll()
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "fetchAllFromSource failed" }
+            } finally {
+                updateSuccessState { it.copy(isRefreshingData = false) }
+            }
         }
     }
 

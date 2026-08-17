@@ -102,7 +102,6 @@ class MyAnimeListApi(
             val url = "$BASE_API_URL/anime".toUri().buildUpon()
                 // MAL API throws a 400 when the query is over 64 characters...
                 .appendQueryParameter("q", query.take(64))
-                .appendQueryParameter("q", query)
                 .appendQueryParameter("nsfw", "true")
                 .build()
             with(json) {
@@ -304,7 +303,7 @@ class MyAnimeListApi(
 
     suspend fun findListItemsAnime(query: String, offset: Int = 0): List<AnimeTrackSearch> {
         return withIOContext {
-            val myListSearchResult = getListPage(offset)
+            val myListSearchResult = getListPageAnime(offset)
 
             val matches = myListSearchResult.data
                 .filter { it.node.title.contains(query, ignoreCase = true) }
@@ -323,6 +322,27 @@ class MyAnimeListApi(
     private suspend fun getListPage(offset: Int): MALUserSearchResult {
         return withIOContext {
             val urlBuilder = "$BASE_API_URL/users/@me/mangalist".toUri().buildUpon()
+                .appendQueryParameter("fields", "list_status{start_date,finish_date}")
+                .appendQueryParameter("limit", LIST_PAGINATION_AMOUNT.toString())
+            if (offset > 0) {
+                urlBuilder.appendQueryParameter("offset", offset.toString())
+            }
+
+            val request = Request.Builder()
+                .url(urlBuilder.build().toString())
+                .get()
+                .build()
+            with(json) {
+                authClient.newCall(request)
+                    .awaitSuccess()
+                    .parseAs()
+            }
+        }
+    }
+
+    private suspend fun getListPageAnime(offset: Int): MALUserSearchResult {
+        return withIOContext {
+            val urlBuilder = "$BASE_API_URL/users/@me/animelist".toUri().buildUpon()
                 .appendQueryParameter("fields", "list_status{start_date,finish_date}")
                 .appendQueryParameter("limit", LIST_PAGINATION_AMOUNT.toString())
             if (offset > 0) {

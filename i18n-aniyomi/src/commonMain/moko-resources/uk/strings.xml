@@ -14,8 +14,8 @@
     <string name="reading_order_remove_manga">Remove from reading order</string>
     <string name="reading_order_mark_completed">Mark as completed</string>
     <string name="reading_order_mark_incomplete">Mark as incomplete</string>
-    <string name="reading_order_locked_title">Entry locked</string>
-    <string name="reading_order_locked_message">This entry is locked by the reading order "%1". Complete the prerequisite entries first.</string>
+    <string name="reading_order_locked_title">%1$s locked</string>
+    <string name="reading_order_locked_message">Finish the earlier entries in \"%1$s\" to unlock this one.</string>
     <string name="reading_order_locked_view">View reading order</string>
     <string name="reading_order_locked_dismiss">Go back</string>
     <string name="reading_order_delete_confirm">Delete this reading order?</string>
@@ -326,6 +326,7 @@
     <string name="action_remove_bookmark_episode">Видалити епізод із закладок</string>
     <string name="action_edit_anime_collections">Редагувати категорії аніме</string>
     <string name="action_edit_manga_collections">Редагувати категорії манґи</string>
+        <string name="action_edit_novel_collections">Редагувати категорії манґи</string>
     <string name="action_view_episodes">Переглянути епізоди</string>
     <string name="action_previous_episode">Попередній епізод</string>
     <string name="action_play">Дивитися</string>
@@ -346,6 +347,7 @@
     <string name="pref_default_home_tab_library">Встановіть стартовий екран на вкладку Манґа</string>
     <string name="default_manga_collection">Категорія манґи за замовчуванням</string>
     <string name="default_anime_collection">Категорія аніме за замовчуванням</string>
+        <string name="default_novel_collection">Категорія аніме за замовчуванням</string>
     <string name="pref_manga_library_update_collections_details">Манґу в виключених категоріях не буде оновлено, навіть якщо вона також знаходиться у включених категоріях.</string>
     <string name="pref_anime_library_update_collections_details">Аніме у виключених категоріях не оновлюватимуться, навіть якщо вони є у включених категоріях.</string>
     <string name="unofficial_extension_message_aniyomi">Це розширення не входить до переліку офіційних розширень Aniyomi.</string>

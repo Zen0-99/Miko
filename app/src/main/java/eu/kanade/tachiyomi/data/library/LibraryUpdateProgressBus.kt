@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.data.library
 
+import android.content.Context
+import android.util.Log
+import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.util.system.cancelNotification
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,8 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -17,57 +20,109 @@ import java.util.concurrent.atomic.AtomicReference
  * (LibraryUpdateProgressOverlay) and the Fetching tab. The 3 library update jobs
  * (Manga/Anime/Novel) publish state here; the UI subscribes.
  *
- * Pause/resume is cooperative: the UI calls [requestPause] / [requestResume], and
- * the running job checks [isPauseRequested] between entries. Pause cancels the job
- * (WorkManager has no native pause), but the checkpoint of already-processed entry
- * IDs is preserved so a subsequent [resumeFromCheckpoint] can skip them.
+ * Supports multiple concurrent sources: [states] exposes a map keyed by source
+ * name ("Manga" / "Anime" / "Novel") so the overlay can show stacked progress
+ * sections when the user refreshes multiple modes simultaneously. [state] is
+ * kept for backward compat (returns the first Running or Completed entry).
+ *
+ * Cancel is cooperative: the UI calls [requestCancel], and the running job
+ * checks [isCancelRequested] between entries. The job's try/finally ensures
+ * [completeRun] is called even on cancellation so the overlay doesn't get
+ * stuck in Running state.
+ *
+ * All `_states` map mutations are synchronized via [statesLock] to prevent
+ * read-modify-write races when multiple sources call [updateProgress]
+ * concurrently.
  */
 object LibraryUpdateProgressBus {
 
     private val _state = MutableStateFlow<LibraryUpdateProgress>(LibraryUpdateProgress.Idle)
     val state: StateFlow<LibraryUpdateProgress> = _state.asStateFlow()
 
+    // Multi-source map: source name -> progress state. Allows the overlay to
+    // show stacked progress sections when multiple modes refresh simultaneously.
+    private val _states = MutableStateFlow<Map<String, LibraryUpdateProgress>>(emptyMap())
+    val states: StateFlow<Map<String, LibraryUpdateProgress>> = _states.asStateFlow()
+
     private val _commands = MutableSharedFlow<Command>(extraBufferCapacity = 8)
     val commands: SharedFlow<Command> = _commands.asSharedFlow()
 
-    private val pauseRequested = AtomicReference(false)
     private val cancelRequested = AtomicReference(false)
-    private val checkpointMutex = Mutex()
 
-    // Store the total entries for the current run so completeRun can
-    // report the correct total (avoids the "0/0" flash when the
-    // checkpoint is cleared before completion is published).
-    private var currentRunTotal: Int = 0
+    // Per-source cancel flags: allows cancelling only one mode (manga/anime/novel)
+    // without affecting the others.
+    private val cancelRequestedBySource = mutableMapOf<String, Boolean>()
 
-    /**
-     * The set of entry IDs already processed in the current run, used for resume.
-     * Cleared when a run completes (success or fully cancelled).
-     */
-    private val _checkpoint = mutableSetOf<Long>()
-    val checkpoint: Set<Long> get() = synchronized(_checkpoint) { _checkpoint.toSet() }
+    // Incremented on every startRun call. The overlay observes this to
+    // un-dismiss itself when a new run starts (e.g. user swiped away the
+    // overlay, then pulled to refresh again).
+    private val _runGeneration = MutableStateFlow(0)
+    val runGeneration: StateFlow<Int> = _runGeneration.asStateFlow()
+
+    // Incremented on every refreshRequest call — even when startNow returns
+    // false because the job is already running. This lets the overlay
+    // un-dismiss itself when the user pulls to refresh while a job is
+    // already running and the overlay was swiped away.
+    private val _refreshRequested = MutableStateFlow(0)
+    val refreshRequested: StateFlow<Int> = _refreshRequested.asStateFlow()
+
+    // Tracks whether a modal bottom sheet (GroupBy, DisplayOptions, etc.) is
+    // currently open. The overlay hides itself when this is true so the sheet
+    // appears above the overlay without z-order conflicts.
+    private val _sheetVisible = MutableStateFlow(false)
+    val sheetVisible: StateFlow<Boolean> = _sheetVisible.asStateFlow()
+
+    fun setSheetVisible(visible: Boolean) {
+        _sheetVisible.value = visible
+    }
+
+    // Synchronizes all _states map read-modify-write operations to prevent
+    // concurrent updates from overwriting each other. Uses a plain Object lock
+    // with synchronized() blocks instead of a coroutine Mutex because these
+    // methods are called from non-suspending job code and must block until the
+    // lock is acquired — tryLock() would silently skip synchronization.
+    private val statesLock = Object()
+
+    // Store per-source total entries so completeRun can report the correct
+    // total even when multiple sources run concurrently (e.g. backup restore
+    // restoring Manga + Anime + Novel in parallel).
+    private val currentRunTotals = mutableMapOf<String, Int>()
 
     // ---- Job-side API (called from Manga/Anime/NovelLibraryUpdateJob) ----
 
-    fun startRun(total: Int, source: String, isResume: Boolean = false) {
-        pauseRequested.set(false)
+    fun startRun(total: Int, source: String) {
+        Log.d("ProgressBus", "startRun: source=$source total=$total gen=${_runGeneration.value}")
         cancelRequested.set(false)
-        currentRunTotal = total
-        if (!isResume) {
-            synchronized(_checkpoint) { _checkpoint.clear() }
-            // Clear persisted failed fetches from previous runs so the
-            // Fetching tab shows only the current run's failures.
-            kotlinx.coroutines.GlobalScope.launch {
-                FailedFetchStore.clearAll()
-            }
+        synchronized(cancelRequestedBySource) { cancelRequestedBySource.remove(source) }
+        _runGeneration.value = _runGeneration.value + 1
+        synchronized(currentRunTotals) { currentRunTotals[source] = total }
+        // Clear persisted failed fetches from previous runs so the
+        // Fetching tab shows only the current run's failures.
+        kotlinx.coroutines.GlobalScope.launch {
+            FailedFetchStore.clearAll()
         }
-        _state.value = LibraryUpdateProgress.Running(
+        val running = LibraryUpdateProgress.Running(
             totalEntries = total,
-            processedEntries = if (isResume) checkpoint.size else 0,
+            processedEntries = 0,
             currentlyUpdating = emptyList(),
             failedSoFar = emptyList(),
             source = source,
-            isPaused = false,
         )
+        _state.value = running
+
+        // Update multi-source map atomically: accumulate totals if the same
+        // source is already running (e.g. refreshing Action collection then
+        // Comedy collection in the same mode → x/35).
+        synchronized(statesLock) {
+            val currentMap = _states.value
+            val existing = currentMap[source] as? LibraryUpdateProgress.Running
+            val updated = if (existing != null) {
+                existing.copy(totalEntries = existing.totalEntries + total)
+            } else {
+                running
+            }
+            _states.value = currentMap + (source to updated)
+        }
     }
 
     fun updateProgress(
@@ -77,109 +132,161 @@ object LibraryUpdateProgressBus {
         totalEntries: Int,
         source: String,
     ) {
+        Log.d("ProgressBus", "updateProgress: source=$source processed=$processed total=$totalEntries titles=${currentlyUpdating.map { it.title }}")
+        // Update single state flow (backward compat) — only if the current
+        // state belongs to this source, to prevent cross-source contamination.
         val current = _state.value
-        if (current is LibraryUpdateProgress.Running) {
+        if (current is LibraryUpdateProgress.Running && current.source == source) {
             _state.value = current.copy(
                 processedEntries = processed,
                 currentlyUpdating = currentlyUpdating,
                 failedSoFar = failedSoFar,
                 totalEntries = totalEntries,
             )
-        } else {
+        } else if (current !is LibraryUpdateProgress.Running) {
             _state.value = LibraryUpdateProgress.Running(
                 totalEntries = totalEntries,
                 processedEntries = processed,
                 currentlyUpdating = currentlyUpdating,
                 failedSoFar = failedSoFar,
                 source = source,
-                isPaused = false,
             )
+        }
+
+        // Update multi-source map atomically to prevent race conditions.
+        // Use max(processed, existing.processed) to ensure progress never
+        // goes backwards when out-of-order completions cause an old
+        // publishState() to arrive after a newer one.
+        // Preserve the accumulated total from startRun (which sums totals
+        // when the same mode is refreshed multiple times).
+        synchronized(statesLock) {
+            val currentMap = _states.value
+            val existing = currentMap[source] as? LibraryUpdateProgress.Running
+            val updated = if (existing != null) {
+                existing.copy(
+                    processedEntries = maxOf(processed, existing.processedEntries),
+                    currentlyUpdating = currentlyUpdating,
+                    failedSoFar = failedSoFar,
+                    totalEntries = maxOf(totalEntries, existing.totalEntries),
+                )
+            } else {
+                LibraryUpdateProgress.Running(
+                    totalEntries = totalEntries,
+                    processedEntries = processed,
+                    currentlyUpdating = currentlyUpdating,
+                    failedSoFar = failedSoFar,
+                    source = source,
+                )
+            }
+            _states.value = currentMap + (source to updated)
         }
     }
 
-    fun markProcessed(entryId: Long) {
-        synchronized(_checkpoint) { _checkpoint.add(entryId) }
-    }
-
     fun completeRun(failed: List<FailedEntry>, source: String) {
-        val processed = synchronized(_checkpoint) { _checkpoint.size }
-        val total = currentRunTotal
-        _state.value = LibraryUpdateProgress.Completed(
+        Log.d("ProgressBus", "completeRun: source=$source failed=${failed.size}")
+        synchronized(cancelRequestedBySource) { cancelRequestedBySource.remove(source) }
+        val runningProcessed = (_states.value[source] as? LibraryUpdateProgress.Running)?.processedEntries ?: 0
+        val total = synchronized(currentRunTotals) { currentRunTotals[source] ?: 0 }
+        val completed = LibraryUpdateProgress.Completed(
             failed = failed,
-            totalProcessed = processed,
+            totalProcessed = runningProcessed,
             totalEntries = total,
             source = source,
         )
-        synchronized(_checkpoint) { _checkpoint.clear() }
-        currentRunTotal = 0
-        pauseRequested.set(false)
+        _state.value = completed
+        synchronized(statesLock) {
+            _states.value = _states.value + (source to completed)
+        }
+        synchronized(currentRunTotals) { currentRunTotals.remove(source) }
         cancelRequested.set(false)
     }
 
     fun idle() {
         _state.value = LibraryUpdateProgress.Idle
-        synchronized(_checkpoint) { _checkpoint.clear() }
-        pauseRequested.set(false)
+        _states.value = emptyMap()
+        synchronized(currentRunTotals) { currentRunTotals.clear() }
         cancelRequested.set(false)
     }
 
-    fun isPauseRequested(): Boolean = pauseRequested.get()
+    /**
+     * Remove a source from the multi-source map. Called by the overlay after
+     * a completed source has been shown for the auto-dismiss delay.
+     */
+    fun removeSource(source: String) {
+        synchronized(statesLock) {
+            _states.value = _states.value - source
+        }
+    }
+
     fun isCancelRequested(): Boolean = cancelRequested.get()
 
     /**
-     * Returns the current checkpoint snapshot for resume. The caller should pass this
-     * to [startNowWithResume] on the relevant job.
+     * Check if cancel was requested for a specific source ("Manga" / "Anime" /
+     * "Novel"). Jobs should check this between entries and before network calls
+     * for per-mode cancellation.
      */
-    suspend fun resumeFromCheckpoint(): Set<Long> = checkpointMutex.withLock { checkpoint }
+    fun isCancelRequested(source: String): Boolean {
+        return cancelRequested.get() || synchronized(cancelRequestedBySource) {
+            cancelRequestedBySource[source] == true
+        }
+    }
 
     // ---- UI-side API ----
 
-    fun requestPause() {
-        pauseRequested.set(true)
-        _commands.tryEmit(Command.Pause)
-    }
-
-    fun requestResume() {
-        pauseRequested.set(false)
-        _commands.tryEmit(Command.Resume)
-    }
-
-    fun requestCancel() {
-        cancelRequested.set(true)
-        _commands.tryEmit(Command.Cancel)
+    /**
+     * Called by the library tab when the user pulls to refresh, regardless
+     * of whether [startRun] is actually called (the job may already be
+     * running, in which case startNow returns false). The overlay observes
+     * this to un-dismiss itself.
+     */
+    fun refreshRequested() {
+        Log.d("ProgressBus", "refreshRequested: gen=${_refreshRequested.value}")
+        _refreshRequested.value = _refreshRequested.value + 1
     }
 
     /**
-     * Resume a paused run by starting a new job of the same kind that skips
-     * entries already in [checkpoint]. Called by the UI's resume button.
-     * The source is read from the current [state]; if no run was paused, this
-     * is a no-op.
+     * Request cancellation of all running library update jobs. Sets the
+     * cooperative cancel flag (checked by jobs between entries and before
+     * network calls), emits [Command.Cancel] (observed by the overlay to
+     * hide instantly), and cancels the progress notification immediately
+     * so the user sees an instant UI response.
+     *
+     * Pass the [context] so we can cancel the notification. If context is
+     * null (e.g. called from a pure Kotlin context), the notification is
+     * not cancelled — the job's finally block will handle it.
      */
-    fun resumeRun(context: android.content.Context) {
-        val current = _state.value as? LibraryUpdateProgress.Running ?: return
-        if (!current.isPaused) return
-        val source = current.source
-        pauseRequested.set(false)
-        when (source) {
-            "Manga" -> eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob.startNow(
-                context,
-                resumeFromCheckpoint = true,
-            )
-            "Anime" -> eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob.startNow(
-                context,
-                resumeFromCheckpoint = true,
-            )
-            "Novel" -> eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob.startNow(
-                context,
-                resumeFromCheckpoint = true,
-            )
+    fun requestCancel(context: Context? = null) {
+        Log.d("ProgressBus", "requestCancel (all)")
+        cancelRequested.set(true)
+        _commands.tryEmit(Command.Cancel)
+        context?.cancelNotification(Notifications.ID_LIBRARY_PROGRESS)
+    }
+
+    /**
+     * Request cancellation of a specific source only (e.g. "Manga" but not
+     * "Anime" or "Novel"). Emits [Command.CancelSource] with the source name
+     * so the overlay can hide just that section. The job for that source
+     * checks [isCancelRequested] with its source name.
+     */
+    fun requestCancelSource(source: String, context: Context? = null) {
+        Log.d("ProgressBus", "requestCancelSource: source=$source")
+        synchronized(cancelRequestedBySource) {
+            cancelRequestedBySource[source] = true
+        }
+        _commands.tryEmit(Command.CancelSource(source))
+        // If no other sources are running, cancel the notification too
+        val otherSourcesRunning = _states.value.any { (key, state) ->
+            key != source && state is LibraryUpdateProgress.Running
+        }
+        if (!otherSourcesRunning) {
+            context?.cancelNotification(Notifications.ID_LIBRARY_PROGRESS)
         }
     }
 
     sealed interface Command {
-        object Pause : Command
-        object Resume : Command
         object Cancel : Command
+        /** Cancel only a specific source (e.g. "Manga" but not "Anime") */
+        data class CancelSource(val source: String) : Command
         /**
          * Emitted when the user taps "view failures" on the progress overlay.
          * Observed by [eu.kanade.tachiyomi.ui.home.HomeScreen] to switch to the
@@ -202,7 +309,6 @@ sealed interface LibraryUpdateProgress {
         val currentlyUpdating: List<EntryRef>,
         val failedSoFar: List<FailedEntry>,
         val source: String, // "Manga" / "Anime" / "Novel" / "All"
-        val isPaused: Boolean = false,
     ) : LibraryUpdateProgress
 
     data class Completed(

@@ -5,6 +5,8 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,6 +65,11 @@ import uy.kohesive.injekt.api.get
 data object UpdatesTab : Tab {
 
     private val uiPreferences: UiPreferences = Injekt.get()
+
+    /** Set by the fetching overlay's "view failures" button to request
+     *  navigation to the Fetching sub-tab on next composition. */
+    @Volatile
+    var navigateToFetchingRequested: Boolean = false
 
     @OptIn(ExperimentalAnimationGraphicsApi::class)
     override val options: TabOptions
@@ -183,9 +190,26 @@ data object UpdatesTab : Tab {
             if (fetchingTabContent != null) add(fetchingTabContent)
         }.toPersistentList()
 
+        // Pager state — start on the Fetching tab if requested by the overlay
+        val pagerState = rememberPagerState(
+            initialPage = if (navigateToFetchingRequested && fetchingTabContent != null) {
+                tabs.lastIndex // Fetching tab is always last
+            } else {
+                0
+            },
+        ) { tabs.size }
+
+        // Consume the navigation request after the pager state is created
+        LaunchedEffect(Unit) {
+            if (navigateToFetchingRequested) {
+                navigateToFetchingRequested = false
+            }
+        }
+
         TabbedScreen(
             titleRes = MR.strings.label_recent_updates,
             tabs = tabs,
+            state = pagerState,
             scrollable = true,
             onClickSettings = { navigator.push(SettingsScreen()) },
         )

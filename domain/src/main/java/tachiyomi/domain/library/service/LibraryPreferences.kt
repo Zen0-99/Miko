@@ -70,6 +70,9 @@ class LibraryPreferences(
     fun showContinueViewingButton() =
         preferenceStore.getBoolean("display_continue_reading_button", false)
 
+    fun showReadingNumber() =
+        preferenceStore.getBoolean("display_reading_number", false)
+
     // Common Collection
 
     fun collectionTabs() = preferenceStore.getBoolean("display_category_tabs", true)
@@ -80,6 +83,12 @@ class LibraryPreferences(
     )
 
     fun collectionNumberOfItems() = preferenceStore.getBoolean("display_number_of_items", false)
+
+    fun showLibraryTitle() = preferenceStore.getBoolean("display_library_title", true)
+
+    fun showListAuthor() = preferenceStore.getBoolean("display_list_author", true)
+
+    fun showListStatus() = preferenceStore.getBoolean("display_list_status", true)
 
     fun perCollectionDisplaySettings() = preferenceStore.getBoolean("categorized_display", false)
 
@@ -179,6 +188,12 @@ class LibraryPreferences(
 
     fun filterTrackedNovel(id: Int) =
         preferenceStore.getEnum("pref_filter_novellib_tracked_${id}_v2", TriState.DISABLED)
+
+    // Filter chip order — string of chars: d=downloaded, u=unread/unseen, s=started, b=bookmarked, c=completed, t=tracked
+    fun filterOrder() = preferenceStore.getString("pref_filter_order", "dusbct")
+
+    // Group By mode — 0=categories, 1=tag, 2=source, 3=status, 4=tracking, 5=ungrouped, 6=author, 7=language
+    fun groupLibraryBy() = preferenceStore.getInt("pref_group_library_by", 0)
 
     // Mixture Update Count
 

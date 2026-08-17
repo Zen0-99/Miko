@@ -1,48 +1,48 @@
 CREATE TABLE reading_order_edge(
     _id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER NOT NULL,
-    from_manga_id INTEGER NOT NULL,
-    to_manga_id INTEGER NOT NULL,
-    UNIQUE(order_id, from_manga_id, to_manga_id),
+    from_entry_id INTEGER NOT NULL,
+    to_entry_id INTEGER NOT NULL,
+    UNIQUE(order_id, from_entry_id, to_entry_id),
     FOREIGN KEY(order_id) REFERENCES reading_order(_id) ON DELETE CASCADE
 );
 
 getEdgesByOrderId:
-SELECT _id AS id, order_id, from_manga_id, to_manga_id
+SELECT _id AS id, order_id, from_entry_id, to_entry_id
 FROM reading_order_edge
 WHERE order_id = :orderId;
 
-getEdgesFromManga:
-SELECT _id AS id, order_id, from_manga_id, to_manga_id
+getEdgesFromEntry:
+SELECT _id AS id, order_id, from_entry_id, to_entry_id
 FROM reading_order_edge
-WHERE order_id = :orderId AND from_manga_id = :mangaId;
+WHERE order_id = :orderId AND from_entry_id = :entryId;
 
-getEdgesToManga:
-SELECT _id AS id, order_id, from_manga_id, to_manga_id
+getEdgesToEntry:
+SELECT _id AS id, order_id, from_entry_id, to_entry_id
 FROM reading_order_edge
-WHERE order_id = :orderId AND to_manga_id = :mangaId;
+WHERE order_id = :orderId AND to_entry_id = :entryId;
 
 insertEdge:
-INSERT INTO reading_order_edge(order_id, from_manga_id, to_manga_id)
-VALUES (:orderId, :fromMangaId, :toMangaId)
-ON CONFLICT(order_id, from_manga_id, to_manga_id) DO NOTHING;
+INSERT INTO reading_order_edge(order_id, from_entry_id, to_entry_id)
+VALUES (:orderId, :fromEntryId, :toEntryId)
+ON CONFLICT(order_id, from_entry_id, to_entry_id) DO NOTHING;
 
 deleteEdge:
 DELETE FROM reading_order_edge
-WHERE order_id = :orderId AND from_manga_id = :fromMangaId AND to_manga_id = :toMangaId;
+WHERE order_id = :orderId AND from_entry_id = :fromEntryId AND to_entry_id = :toEntryId;
 
 deleteEdgesByOrderId:
 DELETE FROM reading_order_edge
 WHERE order_id = :orderId;
 
-deleteEdgesByMangaId:
+deleteEdgesByEntryId:
 DELETE FROM reading_order_edge
-WHERE order_id = :orderId AND (from_manga_id = :mangaId OR to_manga_id = :mangaId);
+WHERE order_id = :orderId AND (from_entry_id = :entryId OR to_entry_id = :entryId);
 
 countPrerequisites:
 SELECT COUNT(*) FROM reading_order_edge
-WHERE order_id = :orderId AND to_manga_id = :mangaId;
+WHERE order_id = :orderId AND to_entry_id = :entryId;
 
 getPrerequisites:
-SELECT from_manga_id FROM reading_order_edge
-WHERE order_id = :orderId AND to_manga_id = :mangaId;
+SELECT from_entry_id FROM reading_order_edge
+WHERE order_id = :orderId AND to_entry_id = :entryId;

@@ -7,37 +7,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material3.Badge
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.relativeDateText
 import eu.kanade.presentation.util.isTabletUi
-import eu.kanade.tachiyomi.core.common.Constants
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.coroutines.launch
 import mihon.feature.upcoming.components.calendar.Calendar
 import mihon.feature.upcoming.manga.components.UpcomingItem
 import tachiyomi.domain.entries.manga.model.Manga
-import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.TwoPanelBox
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
-import tachiyomi.presentation.core.i18n.stringResource
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -58,7 +47,6 @@ fun UpcomingMangaScreenContent(
         }
     }
     Scaffold(
-        topBar = { UpcomingToolbar() },
         modifier = modifier,
     ) { paddingValues ->
         if (isTabletUi()) {
@@ -85,25 +73,6 @@ fun UpcomingMangaScreenContent(
             )
         }
     }
-}
-
-@Composable
-private fun UpcomingToolbar() {
-    val navigator = LocalNavigator.currentOrThrow
-    val uriHandler = LocalUriHandler.current
-
-    AppBar(
-        title = stringResource(MR.strings.label_upcoming),
-        navigateUp = navigator::pop,
-        actions = {
-            IconButton(onClick = { uriHandler.openUri(Constants.URL_HELP_UPCOMING) }) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
-                    contentDescription = stringResource(MR.strings.upcoming_guide),
-                )
-            }
-        },
-    )
 }
 
 @Composable

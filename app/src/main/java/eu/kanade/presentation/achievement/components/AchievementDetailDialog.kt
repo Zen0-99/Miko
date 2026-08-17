@@ -10,10 +10,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,7 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -88,11 +87,13 @@ fun AchievementDetailDialog(
 
     AdaptiveSheet(
         onDismissRequest = onDismiss,
-        modifier = modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.85f),
+        modifier = modifier,
+        contentWindowInsets = { WindowInsets(0) },
     ) {
         val surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
         val backgroundColor = MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
         val glowColor = MaterialTheme.colorScheme.primary
+        val rarityGlowAlpha = if (isUnlocked) achievement.rarity.glowAlpha() else 0f
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -102,23 +103,26 @@ fun AchievementDetailDialog(
                     ),
                 )
                 .drawBehind {
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                glowColor.copy(alpha = 0.15f * glowIntensity),
-                                Color.Transparent,
+                    if (rarityGlowAlpha > 0f) {
+                        drawRect(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    glowColor.copy(alpha = rarityGlowAlpha * glowIntensity),
+                                    Color.Transparent,
+                                ),
+                                center = Offset(size.width / 2, 0f),
+                                radius = size.width * 0.8f,
                             ),
-                            center = Offset(size.width / 2, 0f),
-                            radius = size.width * 0.8f,
-                        ),
-                    )
+                        )
+                    }
                 }
                 .padding(top = 24.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(scrollState),
+                    .verticalScroll(scrollState)
+                    .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 // Header: badge on left, title + XP on right
@@ -155,7 +159,6 @@ fun AchievementDetailDialog(
                                 isUnlocked = isUnlocked,
                                 modifier = Modifier.size(64.dp),
                                 size = 64.dp,
-                                useHexagonShape = true,
                             )
                         }
                     }
@@ -176,23 +179,12 @@ fun AchievementDetailDialog(
                             overflow = TextOverflow.Ellipsis,
                         )
                         if (achievement.points > 0) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = stringResource(AYMR.strings.achievement_points, achievement.points),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
+                            Text(
+                                text = if (isUnlocked) "+${achievement.points} XP" else "${achievement.points} XP",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            )
                         }
                     }
                 }

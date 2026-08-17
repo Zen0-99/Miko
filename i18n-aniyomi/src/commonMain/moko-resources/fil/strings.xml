@@ -14,8 +14,8 @@
     <string name="reading_order_remove_manga">Remove from reading order</string>
     <string name="reading_order_mark_completed">Mark as completed</string>
     <string name="reading_order_mark_incomplete">Mark as incomplete</string>
-    <string name="reading_order_locked_title">Entry locked</string>
-    <string name="reading_order_locked_message">This entry is locked by the reading order "%1". Complete the prerequisite entries first.</string>
+    <string name="reading_order_locked_title">%1$s locked</string>
+    <string name="reading_order_locked_message">Finish the earlier entries in \"%1$s\" to unlock this one.</string>
     <string name="reading_order_locked_view">View reading order</string>
     <string name="reading_order_locked_dismiss">Go back</string>
     <string name="reading_order_delete_confirm">Delete this reading order?</string>
@@ -298,6 +298,7 @@
     <string name="action_remove_bookmark_episode">I-unbookmark ang episode</string>
     <string name="action_edit_anime_collections">I-edit ang mga kategorya ng anime</string>
     <string name="action_edit_manga_collections">I-edit ang mga kategorya ng manga</string>
+        <string name="action_edit_novel_collections">I-edit ang mga kategorya ng novel</string>
     <string name="action_view_episodes">Tingnan ang mga episode</string>
     <string name="action_previous_episode">Nakaraang episode</string>
     <string name="action_play">I-Play</string>
@@ -318,6 +319,7 @@
     <string name="pref_default_home_tab_library">Itakda ang panimulang screen sa Manga Tab</string>
     <string name="default_manga_collection">Panimulang lagayan</string>
     <string name="default_anime_collection">Default na kategorya ng anime</string>
+        <string name="default_novel_collection">Default na kategorya ng novel</string>
     <string name="pref_manga_library_update_collections_details">Ang mga entry sa mga ibinukod na kategorya ay hindi maa-update kahit na sila ay kasama rin sa mga kategoryang kasama.</string>
     <string name="pref_anime_library_update_collections_details">Ang mga anime sa mga ibinukod na kategorya ay hindi maa-update kahit na sila ay kasama rin sa mga kategoryang kasama.</string>
     <string name="unofficial_extension_message_aniyomi">Ang extension na ito ay hindi mula sa opisyal na listahan ng mga extension ng Aniyomi.</string>

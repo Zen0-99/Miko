@@ -19,6 +19,8 @@ interface NovelHistoryRepository {
 
     suspend fun resetHistoryByNovelId(novelId: Long)
 
+    suspend fun deleteHistoryByNovelId(novelId: Long)
+
     suspend fun deleteAllNovelHistory(): Boolean
 
     suspend fun upsertNovelHistory(historyUpdate: NovelHistoryUpdate)

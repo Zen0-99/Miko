@@ -56,7 +56,7 @@ class ExportMangaCollection(
         // Find all reading orders that involve any of these manga
         val affectedOrders = mutableMapOf<Long, MutableSet<Long>>() // orderId -> mangaIds
         for (mangaId in selectedMangaIds) {
-            val orders = getReadingOrders.awaitForManga(mangaId)
+            val orders = getReadingOrders.awaitForEntry(mangaId)
             for (order in orders) {
                 affectedOrders.getOrPut(order.id) { mutableSetOf() }.add(mangaId)
             }
@@ -69,8 +69,8 @@ class ExportMangaCollection(
             val orphanedTitles = mutableListOf<String>()
 
             for (node in allNodes) {
-                if (node.mangaId !in selectedMangaIds) {
-                    val manga = getManga.await(node.mangaId)
+                if (node.entryId !in selectedMangaIds) {
+                    val manga = getManga.await(node.entryId)
                     orphanedTitles.add(manga?.title ?: "Unknown")
                 }
             }
@@ -118,7 +118,7 @@ class ExportMangaCollection(
         if (includeReadingOrders) {
             val seenOrders = mutableSetOf<Long>()
             for (mangaId in allMangaIds) {
-                val orders = getReadingOrders.awaitForManga(mangaId)
+                val orders = getReadingOrders.awaitForEntry(mangaId)
                 for (order in orders) {
                     if (seenOrders.add(order.id)) {
                         val nodes = readingOrderRepository.getNodes(order.id)
@@ -133,7 +133,7 @@ class ExportMangaCollection(
                             ),
                         )
                         // Add node manga IDs to the export set
-                        allMangaIds.addAll(nodes.map { it.mangaId })
+                        allMangaIds.addAll(nodes.map { it.entryId })
                     }
                 }
             }
@@ -170,14 +170,14 @@ class ExportMangaCollection(
             McollReadingOrder(
                 name = rod.order.name,
                 description = rod.order.description,
-                nodeUuids = rod.nodes.mapNotNull { mangaIdToUuid[it.mangaId] },
+                nodeUuids = rod.nodes.mapNotNull { mangaIdToUuid[it.entryId] },
                 edges = rod.edges.mapNotNull { edge ->
-                    val fromUuid = mangaIdToUuid[edge.fromMangaId] ?: return@mapNotNull null
-                    val toUuid = mangaIdToUuid[edge.toMangaId] ?: return@mapNotNull null
+                    val fromUuid = mangaIdToUuid[edge.fromEntryId] ?: return@mapNotNull null
+                    val toUuid = mangaIdToUuid[edge.toEntryId] ?: return@mapNotNull null
                     McollEdge(fromUuid = fromUuid, toUuid = toUuid)
                 },
                 progress = rod.progress.mapNotNull { p ->
-                    val uuid = mangaIdToUuid[p.mangaId] ?: return@mapNotNull null
+                    val uuid = mangaIdToUuid[p.entryId] ?: return@mapNotNull null
                     McollProgress(uuid = uuid, completed = p.completed, completedAt = p.completedAt)
                 },
             )

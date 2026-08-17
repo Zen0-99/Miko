@@ -6,16 +6,11 @@ class AddReadingOrderEdge(
     private val repository: ReadingOrderRepository,
     private val checkCycle: CheckReadingOrderCycle,
 ) {
-    /**
-     * Adds a prerequisite edge: `fromMangaId` must be read before `toMangaId`.
-     *
-     * @return true if the edge was added, false if it would create a cycle
-     */
-    suspend fun await(orderId: Long, fromMangaId: Long, toMangaId: Long): Boolean {
-        if (checkCycle.await(orderId, fromMangaId, toMangaId)) {
+    suspend fun await(orderId: Long, fromEntryId: Long, toEntryId: Long): Boolean {
+        if (checkCycle.await(orderId, fromEntryId, toEntryId)) {
             return false
         }
-        repository.addEdge(orderId, fromMangaId, toMangaId)
+        repository.addEdge(orderId, fromEntryId, toEntryId)
         return true
     }
 }

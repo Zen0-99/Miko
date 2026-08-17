@@ -155,6 +155,20 @@ import tachiyomi.domain.collection.manga.interactor.ExportMangaCollection
 import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.collection.manga.interactor.GetMangaCustomOrder
 import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
+import tachiyomi.domain.collection.novel.interactor.GetNovelCustomOrder
+import tachiyomi.domain.collection.novel.interactor.GetVisibleNovelCollections
+import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
+import tachiyomi.domain.collection.novel.interactor.SetNovelCustomOrder
+import tachiyomi.domain.collection.novel.interactor.SetSortModeForNovelCollection
+import tachiyomi.domain.collection.novel.interactor.CreateNovelCollectionWithName
+import tachiyomi.domain.collection.novel.interactor.DeleteNovelCollection
+import tachiyomi.domain.collection.novel.interactor.HideNovelCollection
+import tachiyomi.domain.collection.novel.interactor.RenameNovelCollection
+import tachiyomi.domain.collection.novel.interactor.ReorderNovelCollection
+import tachiyomi.domain.collection.novel.interactor.ResetNovelCollectionFlags
+import tachiyomi.domain.collection.novel.interactor.SetNovelDisplayMode
+import tachiyomi.domain.collection.novel.interactor.UpdateNovelCollection
+import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.collection.manga.interactor.GetVisibleMangaCollections
 import tachiyomi.domain.collection.manga.interactor.HideMangaCollection
 import tachiyomi.domain.collection.manga.interactor.ImportMangaCollection
@@ -202,6 +216,7 @@ import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
 import tachiyomi.domain.readingorder.interactor.CheckReadingOrderCycle
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
 import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
+import tachiyomi.domain.readingorder.interactor.AutoRemoveCompletedReadingOrderEntries
 import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
@@ -235,12 +250,6 @@ import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.entries.novel.repository.NovelLinkRepository
 import tachiyomi.domain.source.novel.interactor.GetRemoteNovel
 import tachiyomi.domain.source.novel.repository.NovelSourceRepository
-import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
-import tachiyomi.domain.collection.novel.interactor.GetVisibleNovelCollections
-import tachiyomi.domain.collection.novel.interactor.GetNovelCustomOrder
-import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
-import tachiyomi.domain.collection.novel.interactor.SetNovelCustomOrder
-import tachiyomi.domain.collection.novel.interactor.SetSortModeForNovelCollection
 import tachiyomi.domain.history.anime.interactor.GetAnimeHistory
 import tachiyomi.domain.history.anime.interactor.GetNextEpisodes
 import tachiyomi.domain.history.anime.interactor.RemoveAnimeHistory
@@ -304,6 +313,7 @@ import tachiyomi.domain.track.manga.interactor.InsertMangaTrack
 import tachiyomi.domain.track.manga.repository.MangaTrackRepository
 import tachiyomi.domain.track.novel.interactor.DeleteNovelTrack
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
+import tachiyomi.domain.track.novel.interactor.GetTracksPerNovel
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
 import tachiyomi.domain.track.novel.repository.NovelTrackRepository
 import eu.kanade.domain.track.novel.interactor.AddNovelTracks
@@ -441,6 +451,7 @@ class DomainModule : InjektModule {
         addFactory { RemoveReadingOrderEdge(get()) }
         addFactory { GetReadingOrderProgress(get()) }
         addFactory { SetReadingOrderProgress(get()) }
+        addFactory { AutoRemoveCompletedReadingOrderEntries(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         addFactory { GetLockedReadingOrders(get()) }
 
         addSingletonFactory<ReleaseService> { ReleaseServiceImpl(get(), get()) }
@@ -612,6 +623,14 @@ class DomainModule : InjektModule {
         addFactory { SetNovelCollections(get()) }
         addFactory { SetNovelCustomOrder(get()) }
         addFactory { SetSortModeForNovelCollection(get(), get()) }
+        addFactory { CreateNovelCollectionWithName(get(), get()) }
+        addFactory { RenameNovelCollection(get()) }
+        addFactory { ReorderNovelCollection(get()) }
+        addFactory { UpdateNovelCollection(get()) }
+        addFactory { HideNovelCollection(get()) }
+        addFactory { DeleteNovelCollection(get(), get()) }
+        addFactory { ResetNovelCollectionFlags(get(), get()) }
+        addFactory { SetNovelDisplayMode(get()) }
         addFactory { NetworkToLocalNovel(get()) }
         addFactory { GetRemoteNovel(get()) }
         addFactory { GetEnabledNovelSources(get(), get()) }
@@ -642,6 +661,7 @@ class DomainModule : InjektModule {
 
         addSingletonFactory<NovelTrackRepository> { NovelTrackRepositoryImpl(get()) }
         addFactory { GetNovelTracks(get()) }
+        addFactory { GetTracksPerNovel(get()) }
         addFactory { InsertNovelTrack(get()) }
         addFactory { DeleteNovelTrack(get()) }
         addFactory { AddNovelTracks(get(), get(), get(), get()) }

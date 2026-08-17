@@ -14,8 +14,8 @@
     <string name="reading_order_remove_manga">Remove from reading order</string>
     <string name="reading_order_mark_completed">Mark as completed</string>
     <string name="reading_order_mark_incomplete">Mark as incomplete</string>
-    <string name="reading_order_locked_title">Entry locked</string>
-    <string name="reading_order_locked_message">This entry is locked by the reading order "%1". Complete the prerequisite entries first.</string>
+    <string name="reading_order_locked_title">%1$s locked</string>
+    <string name="reading_order_locked_message">Finish the earlier entries in \"%1$s\" to unlock this one.</string>
     <string name="reading_order_locked_view">View reading order</string>
     <string name="reading_order_locked_dismiss">Go back</string>
     <string name="reading_order_delete_confirm">Delete this reading order?</string>
@@ -294,6 +294,7 @@
     <string name="action_remove_bookmark_episode">Quitar episodio de marcadores</string>
     <string name="action_edit_anime_collections">Editar categorías de anime</string>
     <string name="action_edit_manga_collections">Editar categorías de manga</string>
+        <string name="action_edit_novel_collections">Editar categorías de novel</string>
     <string name="action_view_episodes">Ver episodios</string>
     <string name="action_previous_episode">Episodio anterior</string>
     <string name="action_play">Reproducir</string>
@@ -314,6 +315,7 @@
     <string name="pref_default_home_tab_library">Configure la pantalla de inicio en la pestaña Manga</string>
     <string name="default_manga_collection">Categoría predeterminada de manga</string>
     <string name="default_anime_collection">Categoría predeterminada de anime</string>
+        <string name="default_novel_collection">Categoría predeterminada de novel</string>
     <string name="pref_manga_library_update_collections_details">El manga de las categorías excluidas no se actualizará, ni siquiera si pertenece a alguna de las categorías que sí estén incluidas.</string>
     <string name="pref_anime_library_update_collections_details">El anime de las categorías excluidas no se actualizará, ni siquiera si pertenece a alguna de las categorías que sí estén incluidas.</string>
     <string name="unofficial_extension_message_aniyomi">Esta extensión no es de la lista oficial de extensiones de Aniyomi.</string>

@@ -147,6 +147,23 @@ object SettingsLibraryScreen : SearchableSettings {
                     entries = mangaIds.zip(mangaLabels).toMap().toImmutableMap(),
                     title = stringResource(AYMR.strings.default_manga_collection),
                 ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(AYMR.strings.action_edit_novel_collections),
+                    subtitle = pluralStringResource(
+                        MR.plurals.num_collections,
+                        count = userNovelCollectionsCount,
+                        userNovelCollectionsCount,
+                    ),
+                    onClick = {
+                        navigator.push(CollectionsTab)
+                        CollectionsTab.showNovelCollection()
+                    },
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = libraryPreferences.defaultNovelCollection(),
+                    entries = novelIds.zip(novelLabels).toMap().toImmutableMap(),
+                    title = stringResource(AYMR.strings.default_novel_collection),
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.perCollectionDisplaySettings(),
                     title = stringResource(MR.strings.per_collection_display_settings),
@@ -154,6 +171,8 @@ object SettingsLibraryScreen : SearchableSettings {
                         if (!it) {
                             scope.launch {
                                 Injekt.get<ResetMangaCollectionFlags>().await()
+                                Injekt.get<tachiyomi.domain.collection.anime.interactor.ResetAnimeCollectionFlags>().await()
+                                Injekt.get<tachiyomi.domain.collection.novel.interactor.ResetNovelCollectionFlags>().await()
                             }
                         }
                         true

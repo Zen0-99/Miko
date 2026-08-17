@@ -15,6 +15,7 @@ import eu.kanade.presentation.library.components.DownloadsBadge
 import eu.kanade.presentation.library.components.EntryListItem
 import eu.kanade.presentation.library.components.GlobalSearchItem
 import eu.kanade.presentation.library.components.LanguageBadge
+import eu.kanade.presentation.library.components.ReadingOrderBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.components.shouldShowContinueViewingAction
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryItem
@@ -23,6 +24,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
+import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.plus
 
 @Composable
@@ -39,6 +41,11 @@ internal fun MangaLibraryList(
     onGlobalSearchClicked: () -> Unit,
     onSeriesClicked: ((Long) -> Unit)? = null,
     onReorder: ((List<Long>) -> Unit)? = null,
+    showAuthor: Boolean = false,
+    showStatus: Boolean = false,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerMangaIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     if (onReorder != null) {
         ReorderableMangaLibraryList(
@@ -54,6 +61,9 @@ internal fun MangaLibraryList(
             onGlobalSearchClicked = onGlobalSearchClicked,
             onSeriesClicked = onSeriesClicked,
             onReorder = onReorder,
+            getReadingOrderLayer = getReadingOrderLayer,
+            getPreviousLayerMangaIds = getPreviousLayerMangaIds,
+            isEntryLocked = isEntryLocked,
         )
         return
     }
@@ -78,8 +88,11 @@ internal fun MangaLibraryList(
             contentType = { "manga_library_list_item" },
         ) { libraryItem ->
             val manga = libraryItem.libraryManga.manga
+            val subtitle = buildListSubtitle(manga, showAuthor, showStatus)
+            val isPreviousLayer = getPreviousLayerMangaIds?.invoke()?.contains(manga.id) == true
             EntryListItem(
                 isSelected = selection.fastAny { it.id == libraryItem.libraryManga.id },
+                coverAlpha = if (isPreviousLayer) 0.4f else 1f,
                 title = manga.title,
                 coverData = MangaCover(
                     mangaId = manga.id,
@@ -95,12 +108,17 @@ internal fun MangaLibraryList(
                         isLocal = libraryItem.isLocal,
                         sourceLanguage = libraryItem.sourceLanguage,
                     )
+                    val roLayer = getReadingOrderLayer?.invoke(manga.id)
+                    if (roLayer != null) {
+                        ReadingOrderBadge(layer = roLayer)
+                    }
                 },
                 onLongClick = { onLongClick(libraryItem.libraryManga) },
                 onClick = { onClick(libraryItem.libraryManga) },
                 onClickContinueViewing = if (
                     shouldShowContinueViewingAction(
-                        hasContinueAction = onClickContinueReading != null,
+                        hasContinueAction = onClickContinueReading != null &&
+                            isEntryLocked?.invoke(manga.id) != true,
                         remainingCount = libraryItem.unreadCount,
                     )
                 ) {
@@ -110,6 +128,7 @@ internal fun MangaLibraryList(
                 },
                 entries = entries,
                 containerHeight = containerHeight,
+                subtitle = subtitle,
             )
         }
     }
@@ -129,6 +148,11 @@ private fun ReorderableMangaLibraryList(
     onGlobalSearchClicked: () -> Unit,
     onSeriesClicked: ((Long) -> Unit)?,
     onReorder: (List<Long>) -> Unit,
+    showAuthor: Boolean = false,
+    showStatus: Boolean = false,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerMangaIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     val listState = remember { androidx.compose.foundation.lazy.LazyListState() }
     val itemState = remember { items.toMutableStateList() }
@@ -168,10 +192,14 @@ private fun ReorderableMangaLibraryList(
         ) { libraryItem ->
             ReorderableItem(reorderableState, libraryItem.libraryManga.manga.id) {
                 val manga = libraryItem.libraryManga.manga
+                val subtitle = buildListSubtitle(manga, showAuthor, showStatus)
+                val isPreviousLayer = getPreviousLayerMangaIds?.invoke()?.contains(manga.id) == true
                 EntryListItem(
                     modifier = Modifier.longPressDraggableHandle(),
                     isSelected = selection.fastAny { it.id == libraryItem.libraryManga.id },
+                    coverAlpha = if (isPreviousLayer) 0.4f else 1f,
                     title = manga.title,
+                    subtitle = subtitle,
                     coverData = MangaCover(
                         mangaId = manga.id,
                         sourceId = manga.source,
@@ -186,12 +214,17 @@ private fun ReorderableMangaLibraryList(
                             isLocal = libraryItem.isLocal,
                             sourceLanguage = libraryItem.sourceLanguage,
                         )
+                        val roLayer = getReadingOrderLayer?.invoke(manga.id)
+                        if (roLayer != null) {
+                            ReadingOrderBadge(layer = roLayer)
+                        }
                     },
                     onLongClick = { onLongClick(libraryItem.libraryManga) },
                     onClick = { onClick(libraryItem.libraryManga) },
                     onClickContinueViewing = if (
                         shouldShowContinueViewingAction(
-                            hasContinueAction = onClickContinueReading != null,
+                            hasContinueAction = onClickContinueReading != null &&
+                                isEntryLocked?.invoke(manga.id) != true,
                             remainingCount = libraryItem.unreadCount,
                         )
                     ) {
@@ -205,4 +238,38 @@ private fun ReorderableMangaLibraryList(
             }
         }
     }
+}
+
+@Composable
+internal fun buildListSubtitle(
+    manga: tachiyomi.domain.entries.manga.model.Manga,
+    showAuthor: Boolean,
+    showStatus: Boolean,
+): String? {
+    val parts = buildList {
+        if (showAuthor) {
+            val authorArtist = if (manga.author == manga.artist || manga.artist.isNullOrBlank()) {
+                manga.author?.trim()?.takeIf { it.isNotBlank() }
+            } else {
+                listOfNotNull(
+                    manga.author?.trim()?.takeIf { it.isNotBlank() },
+                    manga.artist?.trim()?.takeIf { it.isNotBlank() },
+                ).joinToString(", ").takeIf { it.isNotBlank() }
+            }
+            if (!authorArtist.isNullOrBlank()) add(authorArtist)
+        }
+        if (showStatus) {
+            val statusStr = when (manga.status.toInt()) {
+                eu.kanade.tachiyomi.source.model.SManga.ONGOING -> stringResource(tachiyomi.i18n.MR.strings.ongoing)
+                eu.kanade.tachiyomi.source.model.SManga.COMPLETED -> stringResource(tachiyomi.i18n.MR.strings.completed)
+                eu.kanade.tachiyomi.source.model.SManga.LICENSED -> stringResource(tachiyomi.i18n.MR.strings.licensed)
+                eu.kanade.tachiyomi.source.model.SManga.PUBLISHING_FINISHED -> stringResource(tachiyomi.i18n.MR.strings.publishing_finished)
+                eu.kanade.tachiyomi.source.model.SManga.CANCELLED -> stringResource(tachiyomi.i18n.MR.strings.cancelled)
+                eu.kanade.tachiyomi.source.model.SManga.ON_HIATUS -> stringResource(tachiyomi.i18n.MR.strings.on_hiatus)
+                else -> null
+            }
+            if (!statusStr.isNullOrBlank()) add(statusStr)
+        }
+    }
+    return if (parts.isEmpty()) null else parts.joinToString(" • ")
 }

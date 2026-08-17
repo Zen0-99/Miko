@@ -12,6 +12,7 @@ import eu.kanade.presentation.library.components.DownloadsBadge
 import eu.kanade.presentation.library.components.EntryListItem
 import eu.kanade.presentation.library.components.GlobalSearchItem
 import eu.kanade.presentation.library.components.LanguageBadge
+import eu.kanade.presentation.library.components.ReadingOrderBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryItem
 import tachiyomi.domain.entries.novel.model.NovelCover
@@ -31,6 +32,9 @@ internal fun NovelLibraryList(
     onClickContinueReading: ((LibraryNovel) -> Unit)?,
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerNovelIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     FastScrollLazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -52,8 +56,10 @@ internal fun NovelLibraryList(
             contentType = { "novel_library_list_item" },
         ) { libraryItem ->
             val novel = libraryItem.libraryNovel.novel
+            val isPreviousLayer = getPreviousLayerNovelIds?.invoke()?.contains(novel.id) == true
             EntryListItem(
                 isSelected = selection.fastAny { it.id == libraryItem.libraryNovel.id },
+                coverAlpha = if (isPreviousLayer) 0.4f else 1f,
                 title = novel.title,
                 coverData = NovelCover(
                     novelId = novel.id,
@@ -69,10 +75,14 @@ internal fun NovelLibraryList(
                         isLocal = libraryItem.isLocal,
                         sourceLanguage = libraryItem.sourceLanguage,
                     )
+                    val roLayer = getReadingOrderLayer?.invoke(novel.id)
+                    if (roLayer != null) {
+                        ReadingOrderBadge(layer = roLayer)
+                    }
                 },
                 onLongClick = { onLongClick(libraryItem.libraryNovel) },
                 onClick = { onClick(libraryItem.libraryNovel) },
-                onClickContinueViewing = if (onClickContinueReading != null && libraryItem.unreadCount > 0) {
+                onClickContinueViewing = if (onClickContinueReading != null && libraryItem.unreadCount > 0 && isEntryLocked?.invoke(novel.id) != true) {
                     { onClickContinueReading(libraryItem.libraryNovel) }
                 } else {
                     null

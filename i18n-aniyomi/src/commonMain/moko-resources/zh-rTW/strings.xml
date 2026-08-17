@@ -14,8 +14,8 @@
     <string name="reading_order_remove_manga">Remove from reading order</string>
     <string name="reading_order_mark_completed">Mark as completed</string>
     <string name="reading_order_mark_incomplete">Mark as incomplete</string>
-    <string name="reading_order_locked_title">Entry locked</string>
-    <string name="reading_order_locked_message">This entry is locked by the reading order "%1". Complete the prerequisite entries first.</string>
+    <string name="reading_order_locked_title">%1$s locked</string>
+    <string name="reading_order_locked_message">Finish the earlier entries in \"%1$s\" to unlock this one.</string>
     <string name="reading_order_locked_view">View reading order</string>
     <string name="reading_order_locked_dismiss">Go back</string>
     <string name="reading_order_delete_confirm">Delete this reading order?</string>
@@ -169,6 +169,7 @@
     <string name="action_remove_bookmark_episode">取消收藏此集</string>
     <string name="action_edit_anime_collections">編輯動漫類別</string>
     <string name="action_edit_manga_collections">編輯漫畫類別</string>
+        <string name="action_edit_novel_collections">編輯漫畫類別</string>
     <string name="action_view_episodes">查看集數</string>
     <string name="action_previous_episode">上一集</string>
     <string name="action_play">播放</string>
@@ -189,6 +190,7 @@
     <string name="pref_default_home_tab_library">將起始畫面設定為漫畫分頁</string>
     <string name="default_manga_collection">預設類別</string>
     <string name="default_anime_collection">預設動漫類別</string>
+        <string name="default_novel_collection">預設動漫類別</string>
     <string name="pref_manga_library_update_collections_details">類別同時屬於「排除」及「包含」的作品，將不會自動更新。</string>
     <string name="pref_anime_library_update_collections_details">同時出現在包含的/被排除的分類中，則不會進行更新。</string>
     <string name="unofficial_extension_message_aniyomi">此擴充功能不是來自官方列表。</string>

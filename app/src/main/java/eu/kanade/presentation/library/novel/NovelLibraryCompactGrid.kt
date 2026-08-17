@@ -10,6 +10,7 @@ import eu.kanade.presentation.library.components.DownloadsBadge
 import eu.kanade.presentation.library.components.EntryCompactGridItem
 import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.LazyLibraryGrid
+import eu.kanade.presentation.library.components.ReadingOrderBadge
 import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.components.globalSearchItem
 import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryItem
@@ -28,6 +29,9 @@ internal fun NovelLibraryCompactGrid(
     onClickContinueReading: ((LibraryNovel) -> Unit)?,
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerNovelIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -42,8 +46,10 @@ internal fun NovelLibraryCompactGrid(
             contentType = { "novel_library_compact_grid_item" },
         ) { libraryItem ->
             val novel = libraryItem.libraryNovel.novel
+            val isPreviousLayer = getPreviousLayerNovelIds?.invoke()?.contains(novel.id) == true
             EntryCompactGridItem(
                 isSelected = selection.fastAny { it.id == libraryItem.libraryNovel.id },
+                coverAlpha = if (isPreviousLayer) 0.4f else 1f,
                 title = novel.title.takeIf { showTitle },
                 coverData = NovelCover(
                     novelId = novel.id,
@@ -57,6 +63,10 @@ internal fun NovelLibraryCompactGrid(
                     UnviewedBadge(count = libraryItem.unreadCount)
                 },
                 coverBadgeEnd = {
+                    val roLayer = getReadingOrderLayer?.invoke(novel.id)
+                    if (roLayer != null) {
+                        ReadingOrderBadge(layer = roLayer)
+                    }
                     LanguageBadge(
                         isLocal = libraryItem.isLocal,
                         sourceLanguage = libraryItem.sourceLanguage,
@@ -64,7 +74,7 @@ internal fun NovelLibraryCompactGrid(
                 },
                 onLongClick = { onLongClick(libraryItem.libraryNovel) },
                 onClick = { onClick(libraryItem.libraryNovel) },
-                onClickContinueViewing = if (onClickContinueReading != null && libraryItem.unreadCount > 0) {
+                onClickContinueViewing = if (onClickContinueReading != null && libraryItem.unreadCount > 0 && isEntryLocked?.invoke(novel.id) != true) {
                     { onClickContinueReading(libraryItem.libraryNovel) }
                 } else {
                     null

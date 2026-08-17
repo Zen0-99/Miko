@@ -13,6 +13,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 class ReadingOrderListScreenModel(
+    private val entryKind: String = "manga",
     private val getReadingOrders: GetReadingOrders = Injekt.get(),
     private val createReadingOrder: CreateReadingOrder = Injekt.get(),
     private val deleteReadingOrder: DeleteReadingOrder = Injekt.get(),
@@ -32,7 +33,7 @@ class ReadingOrderListScreenModel(
 
     init {
         screenModelScope.launchIO {
-            val orders = getReadingOrders.await()
+            val orders = getReadingOrders.await(entryKind)
             mutableState.update { it.copy(isLoading = false, readingOrders = orders) }
         }
     }
@@ -51,7 +52,7 @@ class ReadingOrderListScreenModel(
 
     fun createOrder(name: String, description: String?) {
         screenModelScope.launchIO {
-            createReadingOrder.await(name, description)
+            createReadingOrder.await(name, description, entryKind)
             refresh()
             closeDialog()
         }
@@ -66,7 +67,7 @@ class ReadingOrderListScreenModel(
     }
 
     private suspend fun refresh() {
-        val orders = getReadingOrders.await()
+        val orders = getReadingOrders.await(entryKind)
         mutableState.update { it.copy(readingOrders = orders) }
     }
 }

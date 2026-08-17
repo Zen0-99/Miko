@@ -33,6 +33,7 @@ import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.mutate
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -45,12 +46,29 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.domain.library.model.LibraryGroupMode
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.core.common.util.lang.withUIContext
+import tachiyomi.core.common.util.system.logcat
+import logcat.LogPriority
+import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
+import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
+import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
+import tachiyomi.domain.readingorder.interactor.GetReadingOrders
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
+import tachiyomi.domain.readingorder.interactor.AutoRemoveCompletedReadingOrderEntries
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderProgress
+import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderNode
+import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
+import tachiyomi.domain.readingorder.interactor.UpdateReadingOrder
+import tachiyomi.domain.readingorder.model.ReadingOrder
 import tachiyomi.domain.collection.manga.interactor.GetMangaCustomOrder
 import tachiyomi.domain.collection.manga.interactor.GetVisibleMangaCollections
 import tachiyomi.domain.collection.manga.interactor.SetMangaCollections
@@ -58,6 +76,8 @@ import tachiyomi.domain.collection.manga.interactor.SetMangaCustomOrder
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
+import tachiyomi.domain.entries.manga.interactor.GetManga
+import tachiyomi.domain.entries.manga.interactor.GetMangaFavorites
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.model.MangaUpdate
 import tachiyomi.domain.history.manga.interactor.GetNextChapters
@@ -68,6 +88,7 @@ import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.manga.model.sort
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.i18n.MR
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.track.manga.interactor.GetTracksPerManga
 import tachiyomi.domain.track.manga.model.MangaTrack
@@ -83,6 +104,8 @@ typealias MangaLibraryMap = Map<Collection, List<MangaLibraryItem>>
 
 class MangaLibraryScreenModel(
     private val getLibraryManga: GetLibraryManga = Injekt.get(),
+    private val getManga: GetManga = Injekt.get(),
+    private val getMangaFavorites: GetMangaFavorites = Injekt.get(),
     private val getCollections: GetVisibleMangaCollections = Injekt.get(),
     private val getMangaCustomOrder: GetMangaCustomOrder = Injekt.get(),
     private val getTracksPerManga: GetTracksPerManga = Injekt.get(),
@@ -99,6 +122,17 @@ class MangaLibraryScreenModel(
     private val downloadManager: MangaDownloadManager = Injekt.get(),
     private val downloadCache: MangaDownloadCache = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
+    private val createReadingOrder: CreateReadingOrder = Injekt.get(),
+    private val addReadingOrderNode: AddReadingOrderNode = Injekt.get(),
+    private val addReadingOrderEdge: AddReadingOrderEdge = Injekt.get(),
+    private val getReadingOrders: GetReadingOrders = Injekt.get(),
+    private val getReadingOrderNodes: GetReadingOrderNodes = Injekt.get(),
+    private val getReadingOrderEdges: GetReadingOrderEdges = Injekt.get(),
+    private val getReadingOrderProgress: GetReadingOrderProgress = Injekt.get(),
+    private val autoRemoveCompleted: AutoRemoveCompletedReadingOrderEntries = Injekt.get(),
+    private val removeReadingOrderNode: RemoveReadingOrderNode = Injekt.get(),
+    private val deleteReadingOrderInteractor: DeleteReadingOrder = Injekt.get(),
+    private val updateReadingOrder: UpdateReadingOrder = Injekt.get(),
 ) : StateScreenModel<MangaLibraryScreenModel.State>(State()) {
 
     var activeCollectionIndex: Int by libraryPreferences.lastUsedMangaCollection().asState(
@@ -139,16 +173,33 @@ class MangaLibraryScreenModel(
             libraryPreferences.collectionTabs().changes(),
             libraryPreferences.collectionNumberOfItems().changes(),
             libraryPreferences.showContinueViewingButton().changes(),
-        ) { a, b, c -> Triple(a, b, c) }
-            .onEach { (showCollectionTabs, showMangaCount, showMangaContinueButton) ->
+            libraryPreferences.showLibraryTitle().changes(),
+        ) { a, b, c, d -> arrayOf(a, b, c, d) }
+            .onEach { values ->
                 mutableState.update { state ->
                     state.copy(
-                        showCollectionTabs = showCollectionTabs,
-                        showMangaCount = showMangaCount,
-                        showMangaContinueButton = showMangaContinueButton,
+                        showCollectionTabs = values[0] as Boolean,
+                        showMangaCount = values[1] as Boolean,
+                        showMangaContinueButton = values[2] as Boolean,
+                        showLibraryTitle = values[3] as Boolean,
                     )
                 }
             }
+            .launchIn(screenModelScope)
+
+        combine(
+            libraryPreferences.showListAuthor().changes(),
+            libraryPreferences.showListStatus().changes(),
+        ) { a, b -> Pair(a, b) }
+            .onEach { (showAuthor, showStatus) ->
+                mutableState.update { state ->
+                    state.copy(
+                        showListAuthor = showAuthor,
+                        showListStatus = showStatus,
+                    )
+                }
+            }
+            .launchIn(screenModelScope)
 
         libraryPreferences.collectionDisplayMode().changes()
             .onEach { mode ->
@@ -157,6 +208,10 @@ class MangaLibraryScreenModel(
                 }
             }
             .launchIn(screenModelScope)
+
+        screenModelScope.launchIO {
+            loadSavedReadingOrderLayers()
+        }
 
         combine(
             getLibraryItemPreferencesFlow(),
@@ -323,6 +378,11 @@ class MangaLibraryScreenModel(
                 MangaLibrarySort.Type.CustomOrder -> {
                     error("CustomOrder is handled separately")
                 }
+                MangaLibrarySort.Type.ReadingOrder -> {
+                    val layer1 = state.value.savedReadingOrderLayers[i1.libraryManga.id] ?: Int.MAX_VALUE
+                    val layer2 = state.value.savedReadingOrderLayers[i2.libraryManga.id] ?: Int.MAX_VALUE
+                    layer1.compareTo(layer2)
+                }
             }
         }
 
@@ -400,7 +460,6 @@ class MangaLibraryScreenModel(
         ) { libraryMangaList, prefs, _ ->
             libraryMangaList
                 .map { libraryManga ->
-                    // Display mode based on user preference: take it from global library setting or collection
                     MangaLibraryItem(
                         libraryManga,
                         downloadCount = if (prefs.downloadBadge) {
@@ -421,15 +480,146 @@ class MangaLibraryScreenModel(
                 .groupBy { it.libraryManga.collection }
         }
 
-        return combine(getCollections.subscribe(), libraryMangasFlow) { collections, libraryManga ->
-            val displayCollections = if (libraryManga.isNotEmpty() && !libraryManga.containsKey(0)) {
-                collections.fastFilterNot { it.isSystemCollection }
+        return combine(
+            getCollections.subscribe(),
+            libraryMangasFlow,
+            libraryPreferences.groupLibraryBy().changes(),
+            getTracksPerManga.subscribe(),
+            trackerManager.loggedInTrackersFlow(),
+        ) { collections, libraryManga, groupMode, tracks, loggedInTrackers ->
+            if (groupMode == LibraryGroupMode.BY_DEFAULT) {
+                // Original category-based grouping
+                val displayCollections = if (libraryManga.isNotEmpty() && !libraryManga.containsKey(0)) {
+                    collections.fastFilterNot { it.isSystemCollection }
+                } else {
+                    collections
+                }
+                displayCollections.associateWith { libraryManga[it.id].orEmpty() }
             } else {
-                collections
+                // Regroup by selected criterion
+                val allItems = libraryManga.values.flatten()
+                groupLibraryItemsByMode(allItems, groupMode, tracks, loggedInTrackers)
             }
-
-            displayCollections.associateWith { libraryManga[it.id].orEmpty() }
         }
+    }
+
+    /**
+     * Groups library items by the selected group mode, creating synthetic Collection objects.
+     */
+    private fun groupLibraryItemsByMode(
+        items: List<MangaLibraryItem>,
+        groupMode: Int,
+        tracks: Map<Long, List<MangaTrack>>,
+        loggedInTrackers: List<eu.kanade.tachiyomi.data.track.Tracker>,
+    ): MangaLibraryMap {
+        val context = preferences.context
+        val unknown = context.stringResource(MR.strings.unknown)
+
+        val groupNames: Map<String, List<MangaLibraryItem>> = when (groupMode) {
+            LibraryGroupMode.UNGROUPED -> {
+                mapOf(ungroupedName to items)
+            }
+            LibraryGroupMode.BY_TAG -> {
+                items.flatMap { item ->
+                    val tags = item.libraryManga.manga.genre
+                        ?.map { it.trim() }
+                        ?.filter { it.isNotBlank() }
+                        ?.distinct()
+                    if (tags.isNullOrEmpty()) {
+                        listOf(unknown to item)
+                    } else {
+                        tags.map { it to item }
+                    }
+                }.groupBy({ it.first }, { it.second })
+            }
+            LibraryGroupMode.BY_SOURCE -> {
+                items.groupBy { item ->
+                    val source = sourceManager.getOrStub(item.libraryManga.manga.source)
+                    source.name
+                }
+            }
+            LibraryGroupMode.BY_STATUS -> {
+                items.groupBy { item ->
+                    statusToString(item.libraryManga.manga.status, context)
+                }
+            }
+            LibraryGroupMode.BY_TRACK_STATUS -> {
+                items.groupBy { item ->
+                    val mangaTracks = tracks[item.libraryManga.manga.id].orEmpty()
+                    val track = mangaTracks.find { track ->
+                        loggedInTrackers.any { it.id == track.trackerId }
+                    }
+                    val service = loggedInTrackers.find { it.id == track?.trackerId }
+                    if (track != null && service != null) {
+                        service.mangaService.getStatusForManga(track.status)?.let {
+                            context.stringResource(it)
+                        } ?: unknown
+                    } else {
+                        context.stringResource(MR.strings.not_tracked)
+                    }
+                }
+            }
+            LibraryGroupMode.BY_AUTHOR -> {
+                items.flatMap { item ->
+                    val manga = item.libraryManga.manga
+                    val authors = listOfNotNull(
+                        manga.author?.takeUnless { it.isBlank() },
+                        manga.artist?.takeUnless { it.isBlank() },
+                    ).flatMap {
+                        it.split(",", "/", " x ", " - ")
+                            .map { name -> name.trim() }
+                            .filter { name -> name.isNotBlank() }
+                    }.distinct()
+                    if (authors.isEmpty()) {
+                        listOf(unknown to item)
+                    } else {
+                        authors.map { it to item }
+                    }
+                }.groupBy({ it.first }, { it.second })
+            }
+            LibraryGroupMode.BY_LANGUAGE -> {
+                items.groupBy { item ->
+                    val lang = sourceManager.getOrStub(item.libraryManga.manga.source).lang
+                    if (lang.isBlank()) unknown else lang
+                }
+            }
+            else -> mapOf(ungroupedName to items)
+        }
+
+        // Create synthetic Collection objects, sorted alphabetically
+        return groupNames.entries
+            .sortedBy { it.key.lowercase() }
+            .mapIndexed { index, (name, groupedItems) ->
+                val syntheticCollection = Collection(
+                    id = syntheticCollectionId(name),
+                    name = name,
+                    order = index.toLong(),
+                    flags = 0L,
+                    hidden = false,
+                )
+                syntheticCollection to groupedItems
+            }
+            .toMap()
+    }
+
+    private val ungroupedName: String = "All"
+
+    private fun syntheticCollectionId(name: String): Long {
+        // Use negative hash to distinguish from real category IDs
+        return -(name.hashCode().toLong() and 0x7FFFFFFFL)
+    }
+
+    private fun statusToString(status: Long, context: android.content.Context): String {
+        val resId = when (status.toInt()) {
+            SManga.ONGOING -> MR.strings.ongoing
+            SManga.COMPLETED -> MR.strings.completed
+            SManga.LICENSED -> MR.strings.licensed
+            SManga.PUBLISHING_FINISHED -> MR.strings.publishing_finished
+            SManga.CANCELLED -> MR.strings.cancelled
+            SManga.ON_HIATUS -> MR.strings.on_hiatus
+            else -> MR.strings.unknown
+        }
+        return context.stringResource(resId)
     }
 
     /**
@@ -628,19 +818,492 @@ class MangaLibraryScreenModel(
     }
 
     fun clearSelection() {
-        mutableState.update { it.copy(selection = persistentListOf()) }
+        mutableState.update {
+            it.copy(
+                selection = persistentListOf(),
+                readingOrderMode = false,
+                readingOrderLayers = persistentListOf(),
+                readingOrderCurrentLayer = 0,
+                editingReadingOrderId = null,
+                readingOrderName = "",
+            )
+        }
     }
 
     fun toggleSelection(manga: LibraryManga) {
-        mutableState.update { state ->
-            val newSelection = state.selection.mutate { list ->
+        val state = this.state.value
+        if (!state.readingOrderMode) {
+            mutableState.update { s ->
+                val newSelection = s.selection.mutate { list ->
+                    if (list.fastAny { it.id == manga.id }) {
+                        list.removeAll { it.id == manga.id }
+                    } else {
+                        list.add(manga)
+                    }
+                }
+                s.copy(selection = newSelection)
+            }
+            return
+        }
+        val isRemoving = state.selection.fastAny { it.id == manga.id }
+        if (isRemoving && state.editingReadingOrderId != null) {
+            val isInOrder = state.readingOrderLayers.flatten().fastAny { it.id == manga.id } ||
+                state.selection.fastAny { it.id == manga.id }
+            if (isInOrder) {
+                mutableState.update { it.copy(dialog = Dialog.ReadingOrderRemoveConfirm(manga)) }
+                return
+            }
+        }
+        val existingDepth = state.readingOrderLayers.indexOfFirst { layer ->
+            layer.fastAny { it.id == manga.id }
+        }
+        if (existingDepth >= 0 && existingDepth != state.readingOrderCurrentLayer) {
+            mutableState.update {
+                it.copy(dialog = Dialog.ReadingOrderMoveDepth(manga, existingDepth + 1, state.readingOrderCurrentLayer + 1))
+            }
+            return
+        }
+        mutableState.update { s ->
+            val newSelection = s.selection.mutate { list ->
                 if (list.fastAny { it.id == manga.id }) {
                     list.removeAll { it.id == manga.id }
                 } else {
                     list.add(manga)
                 }
             }
-            state.copy(selection = newSelection)
+            s.copy(selection = newSelection)
+        }
+    }
+
+    fun confirmMoveEntryDepth(manga: LibraryManga) {
+        mutableState.update { s ->
+            val newLayers = s.readingOrderLayers.mapIndexed { index, layer ->
+                if (index == s.readingOrderCurrentLayer) {
+                    layer.mutate { l ->
+                        if (!l.fastAny { it.id == manga.id }) l.add(manga)
+                    }
+                } else {
+                    layer.mutate { l -> l.removeAll { it.id == manga.id } }
+                }
+            }.toPersistentList()
+            val compactedLayers = compactLayers(newLayers)
+            s.copy(readingOrderLayers = compactedLayers, dialog = null)
+        }
+    }
+
+    private fun compactLayers(layers: PersistentList<PersistentList<LibraryManga>>): PersistentList<PersistentList<LibraryManga>> {
+        return layers.filter { it.isNotEmpty() }.toPersistentList()
+    }
+
+    fun confirmRemoveFromReadingOrder(manga: LibraryManga) {
+        val state = this.state.value
+        val orderId = state.editingReadingOrderId ?: return
+        screenModelScope.launchNonCancellable {
+            withIOContext {
+                removeReadingOrderNode.await(orderId, manga.manga.id)
+            }
+            withUIContext {
+                mutableState.update { s ->
+                    val newSelection = s.selection.mutate { list ->
+                        list.removeAll { it.id == manga.id }
+                    }
+                    val newLayers = s.readingOrderLayers.map { layer ->
+                        layer.mutate { l -> l.removeAll { it.id == manga.id } }
+                    }.toPersistentList()
+                    s.copy(selection = newSelection, readingOrderLayers = newLayers, dialog = null)
+                }
+                loadSavedReadingOrderLayers()
+            }
+        }
+    }
+
+    fun cancelRemoveDialog() {
+        mutableState.update { it.copy(dialog = null) }
+    }
+
+    fun showReadingOrderDialog() {
+        screenModelScope.launchIO {
+            val orders = getReadingOrders.await("manga")
+            withUIContext {
+                mutableState.update { it.copy(dialog = Dialog.ReadingOrderPicker(orders)) }
+            }
+        }
+    }
+
+    fun confirmDeleteReadingOrder(order: ReadingOrder) {
+        screenModelScope.launchNonCancellable {
+            withIOContext {
+                deleteReadingOrderInteractor.await(order.id)
+            }
+            withUIContext {
+                mutableState.update { it.copy(dialog = null) }
+                loadSavedReadingOrderLayers()
+            }
+        }
+    }
+
+    fun confirmEditReadingOrder(order: ReadingOrder, newName: String) {
+        screenModelScope.launchNonCancellable {
+            withIOContext {
+                updateReadingOrder.await(order.id, newName, null)
+            }
+            withUIContext {
+                mutableState.update { it.copy(dialog = null) }
+                loadSavedReadingOrderLayers()
+            }
+        }
+    }
+
+    suspend fun exportReadingOrder(order: ReadingOrder): String {
+        val nodes = getReadingOrderNodes.await(order.id)
+        val edges = getReadingOrderEdges.await(order.id)
+        val entryTitles = mutableMapOf<Long, String>()
+        val entryUrls = mutableMapOf<Long, String>()
+        for (node in nodes) {
+            val manga = getManga.await(node.entryId)
+            if (manga != null) {
+                entryTitles[node.entryId] = manga.title
+                entryUrls[node.entryId] = manga.url
+            }
+        }
+        val nodesJson = nodes.joinToString(",") { node ->
+            """{"entryId":${node.entryId},"position":${node.position},"title":"${entryTitles[node.entryId]?.replace("\"", "\\\"") ?: ""}","url":"${entryUrls[node.entryId]?.replace("\"", "\\\"") ?: ""}"}"""
+        }
+        val edgesJson = edges.joinToString(",") { edge ->
+            """{"fromEntryId":${edge.fromEntryId},"toEntryId":${edge.toEntryId}}"""
+        }
+        val desc = order.description
+        val descJson = if (desc != null) "\"${desc.replace("\"", "\\\"")}\"" else "null"
+        return """{"name":"${order.name.replace("\"", "\\\"")}","description":$descJson,"entryKind":"${order.entryKind}","nodes":[$nodesJson],"edges":[$edgesJson]}"""
+    }
+
+    suspend fun importReadingOrder(json: String): Boolean {
+        return withIOContext {
+            try {
+                val nameMatch = Regex(""""name"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
+                val name = nameMatch?.groupValues?.get(1)?.replace("\\\"", "\"") ?: "Imported Reading Order"
+                val nodeRegex = Regex("""\{"entryId":(\d+),"position":\d+,"title":"((?:[^"\\]|\\.)*)","url":"((?:[^"\\]|\\.)*)"\}""")
+                val nodes = nodeRegex.findAll(json).map { match ->
+                    match.groupValues[1].toLong() to match.groupValues[2].replace("\\\"", "\"")
+                }.toList()
+                val edgeRegex = Regex("""\{"fromEntryId":(\d+),"toEntryId":(\d+)\}""")
+                val edges = edgeRegex.findAll(json).map { match ->
+                    match.groupValues[1].toLong() to match.groupValues[2].toLong()
+                }.toList()
+                val favorites = getMangaFavorites.await()
+                val titleToId = favorites.associateBy { it.title.lowercase() }
+                val orderId = createReadingOrder.await(name, null, "manga")
+                val origIdToNewId = mutableMapOf<Long, Long>()
+                for ((origEntryId, title) in nodes) {
+                    val manga = titleToId[title.lowercase()]
+                    if (manga != null) {
+                        addReadingOrderNode.await(orderId, manga.id)
+                        origIdToNewId[origEntryId] = manga.id
+                    }
+                }
+                for ((fromOrigId, toOrigId) in edges) {
+                    val fromId = origIdToNewId[fromOrigId] ?: continue
+                    val toId = origIdToNewId[toOrigId] ?: continue
+                    addReadingOrderEdge.await(orderId, fromId, toId)
+                }
+                withUIContext {
+                    mutableState.update { it.copy(dialog = null) }
+                    loadSavedReadingOrderLayers()
+                }
+                true
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e)
+                false
+            }
+        }
+    }
+
+    fun createNewReadingOrder(name: String) {
+        mutableState.update {
+            it.copy(
+                dialog = null,
+                readingOrderMode = true,
+                readingOrderCurrentLayer = 0,
+                readingOrderName = name,
+                editingReadingOrderId = null,
+                readingOrderLayers = persistentListOf(),
+            )
+        }
+    }
+
+    fun editExistingReadingOrder(orderId: Long) {
+        screenModelScope.launchIO {
+            val order = getReadingOrders.await(orderId) ?: return@launchIO
+            val nodes = getReadingOrderNodes.await(orderId)
+            val edges = getReadingOrderEdges.await(orderId)
+            val entryIdsInOrder = nodes.map { it.entryId }.toSet()
+            val libraryMangaMap = state.value.library.values.flatten().associateBy { it.libraryManga.manga.id }
+            val layers = buildLayersFromEdges(nodes, edges, entryIdsInOrder, libraryMangaMap)
+            withUIContext {
+                mutableState.update {
+                    it.copy(
+                        dialog = null,
+                        readingOrderMode = true,
+                        readingOrderCurrentLayer = 0,
+                        readingOrderName = order.name,
+                        editingReadingOrderId = orderId,
+                        readingOrderLayers = layers,
+                        selection = layers.getOrElse(0) { persistentListOf() },
+                    )
+                }
+            }
+        }
+    }
+
+    private fun buildLayersFromEdges(
+        nodes: List<tachiyomi.domain.readingorder.model.ReadingOrderNode>,
+        edges: List<tachiyomi.domain.readingorder.model.ReadingOrderEdge>,
+        entryIdsInOrder: Set<Long>,
+        libraryMangaMap: Map<Long, MangaLibraryItem>,
+    ): PersistentList<PersistentList<LibraryManga>> {
+        val entryToLayer = mutableMapOf<Long, Int>()
+        val remaining = entryIdsInOrder.toMutableSet()
+        var layer = 0
+        while (remaining.isNotEmpty()) {
+            val layerItems = remaining.filter { id ->
+                edges.none { it.toEntryId == id && it.fromEntryId in remaining }
+            }
+            if (layerItems.isEmpty()) {
+                remaining.forEach { entryToLayer[it] = layer }
+                break
+            }
+            layerItems.forEach { id ->
+                entryToLayer[id] = layer
+                remaining.remove(id)
+            }
+            layer++
+        }
+        val maxLayer = entryToLayer.values.maxOrNull() ?: 0
+        val result = mutableListOf<PersistentList<LibraryManga>>()
+        for (i in 0..maxLayer) {
+            val layerEntryIds = entryToLayer.entries.filter { it.value == i }.map { it.key }
+            val layerManga = layerEntryIds.mapNotNull { id ->
+                libraryMangaMap[id]?.libraryManga
+            }.toPersistentList()
+            result.add(layerManga)
+        }
+        return result.toPersistentList()
+    }
+
+    fun enterReadingOrderMode() {
+        showReadingOrderDialog()
+    }
+
+    fun exitReadingOrderMode() {
+        mutableState.update {
+            it.copy(
+                readingOrderMode = false,
+                readingOrderLayers = persistentListOf(),
+                readingOrderCurrentLayer = 0,
+                selection = persistentListOf(),
+                editingReadingOrderId = null,
+                readingOrderName = "",
+            )
+        }
+    }
+
+    fun advanceReadingOrderLayer() {
+        val state = this.state.value
+        if (state.selection.isEmpty()) return
+        mutableState.update { s ->
+            val newLayers = s.readingOrderLayers.mutate { layers ->
+                while (layers.size <= s.readingOrderCurrentLayer) {
+                    layers.add(persistentListOf())
+                }
+                layers[s.readingOrderCurrentLayer] = s.selection
+            }
+            s.copy(
+                readingOrderLayers = newLayers,
+                readingOrderCurrentLayer = s.readingOrderCurrentLayer + 1,
+                selection = persistentListOf(),
+            )
+        }
+    }
+
+    fun goBackReadingOrderLayer() {
+        mutableState.update { state ->
+            if (state.readingOrderCurrentLayer == 0) {
+                return@update state.copy(
+                    readingOrderMode = false,
+                    readingOrderLayers = persistentListOf(),
+                    readingOrderCurrentLayer = 0,
+                    selection = persistentListOf(),
+                    editingReadingOrderId = null,
+                    readingOrderName = "",
+                )
+            }
+            val prevLayer = state.readingOrderCurrentLayer - 1
+            val restoredSelection = state.readingOrderLayers.getOrNull(prevLayer) ?: persistentListOf()
+            val newLayers = state.readingOrderLayers.mutate { layers ->
+                if (layers.size > prevLayer) layers.removeAt(prevLayer)
+            }
+            state.copy(
+                readingOrderLayers = newLayers,
+                readingOrderCurrentLayer = prevLayer,
+                selection = restoredSelection,
+            )
+        }
+    }
+
+    fun saveReadingOrder() {
+        val state = this.state.value
+        val allLayers = state.readingOrderLayers.mutate { layers ->
+            while (layers.size <= state.readingOrderCurrentLayer) {
+                layers.add(persistentListOf())
+            }
+            layers[state.readingOrderCurrentLayer] = state.selection
+        }.filter { it.isNotEmpty() }
+
+        if (allLayers.isEmpty() || allLayers.size < 2) {
+            if (allLayers.size < 2) {
+                val editingId = state.editingReadingOrderId
+                screenModelScope.launchNonCancellable {
+                    if (editingId != null) {
+                        withIOContext { deleteReadingOrderInteractor.await(editingId) }
+                    }
+                    withUIContext {
+                        mutableState.update {
+                            it.copy(
+                                readingOrderMode = false,
+                                readingOrderLayers = persistentListOf(),
+                                readingOrderCurrentLayer = 0,
+                                selection = persistentListOf(),
+                                editingReadingOrderId = null,
+                                readingOrderName = "",
+                            )
+                        }
+                        loadSavedReadingOrderLayers()
+                    }
+                }
+            } else {
+                exitReadingOrderMode()
+            }
+            return
+        }
+
+        val name = state.readingOrderName.ifBlank {
+            "Reading Order ${java.text.SimpleDateFormat.getDateTimeInstance().format(java.util.Date(System.currentTimeMillis()))}"
+        }
+        val editingId = state.editingReadingOrderId
+
+        screenModelScope.launchNonCancellable {
+            withIOContext {
+                if (editingId != null) {
+                    val existingNodes = getReadingOrderNodes.await(editingId)
+                    existingNodes.forEach { node ->
+                        removeReadingOrderNode.await(editingId, node.entryId)
+                    }
+                    val allManga = allLayers.flatten().distinctBy { it.id }
+                    allManga.forEach { manga ->
+                        addReadingOrderNode.await(editingId, manga.manga.id)
+                    }
+                    for (i in 0 until allLayers.size - 1) {
+                        val fromLayer = allLayers[i]
+                        val toLayer = allLayers[i + 1]
+                        for (from in fromLayer) {
+                            for (to in toLayer) {
+                                if (from.id != to.id) {
+                                    addReadingOrderEdge.await(editingId, from.manga.id, to.manga.id)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    val orderId = createReadingOrder.await(
+                        name = name,
+                        description = "",
+                        entryKind = "manga",
+                    )
+                    val allManga = allLayers.flatten().distinctBy { it.id }
+                    allManga.forEach { manga ->
+                        addReadingOrderNode.await(orderId, manga.manga.id)
+                    }
+                    for (i in 0 until allLayers.size - 1) {
+                        val fromLayer = allLayers[i]
+                        val toLayer = allLayers[i + 1]
+                        for (from in fromLayer) {
+                            for (to in toLayer) {
+                                if (from.id != to.id) {
+                                    addReadingOrderEdge.await(orderId, from.manga.id, to.manga.id)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            withUIContext {
+                val msg = if (editingId != null) "Reading order updated" else "Reading order \"$name\" created"
+                mutableState.update {
+                    it.copy(
+                        readingOrderMode = false,
+                        readingOrderLayers = persistentListOf(),
+                        readingOrderCurrentLayer = 0,
+                        selection = persistentListOf(),
+                        editingReadingOrderId = null,
+                        readingOrderName = "",
+                        readingOrderSavedMessage = msg,
+                    )
+                }
+                loadSavedReadingOrderLayers()
+            }
+        }
+    }
+
+    fun clearReadingOrderSavedMessage() {
+        mutableState.update { it.copy(readingOrderSavedMessage = null) }
+    }
+
+    suspend fun loadSavedReadingOrderLayers() {
+        autoRemoveCompleted.await()
+        val orders = getReadingOrders.await("manga")
+        val layerMap = mutableMapOf<Long, Int>()
+        val lockedIds = mutableSetOf<Long>()
+        for (order in orders) {
+            val nodes = getReadingOrderNodes.await(order.id)
+            val edges = getReadingOrderEdges.await(order.id)
+            val progressList = getReadingOrderProgress.awaitAll(order.id)
+            val completedIds = progressList.filter { it.completed }.map { it.entryId }.toSet()
+            val entryIds = nodes.map { it.entryId }.toSet()
+            val entryToLayer = mutableMapOf<Long, Int>()
+            val remaining = entryIds.toMutableSet()
+            var layer = 0
+            while (remaining.isNotEmpty()) {
+                val layerItems = remaining.filter { id ->
+                    edges.none { it.toEntryId == id && it.fromEntryId in remaining }
+                }
+                if (layerItems.isEmpty()) {
+                    remaining.forEach { entryToLayer[it] = layer + 1 }
+                    break
+                }
+                layerItems.forEach { id ->
+                    entryToLayer[id] = layer + 1
+                    remaining.remove(id)
+                }
+                layer++
+            }
+            val maxLayer = entryToLayer.values.maxOrNull() ?: 0
+            for (currentLayer in 2..maxLayer) {
+                val hasIncompletePrereq = (1 until currentLayer).any { prereqLayer ->
+                    entryToLayer.entries.filter { it.value == prereqLayer }.any { it.key !in completedIds }
+                }
+                if (hasIncompletePrereq) {
+                    entryToLayer.entries.filter { it.value >= currentLayer }.forEach {
+                        lockedIds.add(it.key)
+                    }
+                }
+            }
+            entryToLayer.forEach { (id, lyr) -> layerMap[id] = lyr }
+        }
+        mutableState.update {
+            it.copy(
+                savedReadingOrderLayers = layerMap,
+                lockedReadingOrderEntryIds = lockedIds,
+            )
         }
     }
 
@@ -753,6 +1416,9 @@ class MangaLibraryScreenModel(
             val initialSelection: ImmutableList<CheckboxState<Collection>>,
         ) : Dialog
         data class DeleteManga(val manga: List<Manga>) : Dialog
+        data class ReadingOrderPicker(val orders: List<ReadingOrder>) : Dialog
+        data class ReadingOrderRemoveConfirm(val manga: LibraryManga) : Dialog
+        data class ReadingOrderMoveDepth(val manga: LibraryManga, val fromDepth: Int, val toDepth: Int) : Dialog
     }
 
     @Immutable
@@ -782,9 +1448,20 @@ class MangaLibraryScreenModel(
         val showCollectionTabs: Boolean = false,
         val showMangaCount: Boolean = false,
         val showMangaContinueButton: Boolean = false,
+        val showLibraryTitle: Boolean = true,
+        val showListAuthor: Boolean = false,
+        val showListStatus: Boolean = false,
         val collectionDisplayMode: tachiyomi.domain.library.model.LibraryCollectionDisplay =
             tachiyomi.domain.library.model.LibraryCollectionDisplay.TABBED,
         val dialog: Dialog? = null,
+        val readingOrderMode: Boolean = false,
+        val readingOrderLayers: PersistentList<PersistentList<LibraryManga>> = persistentListOf(),
+        val readingOrderCurrentLayer: Int = 0,
+        val readingOrderName: String = "",
+        val editingReadingOrderId: Long? = null,
+        val savedReadingOrderLayers: Map<Long, Int> = emptyMap(),
+        val lockedReadingOrderEntryIds: Set<Long> = emptySet(),
+        val readingOrderSavedMessage: String? = null,
     ) {
         private val libraryCount by lazy {
             library.values
@@ -795,7 +1472,18 @@ class MangaLibraryScreenModel(
 
         val isLibraryEmpty by lazy { libraryCount == 0 }
 
-        val selectionMode = selection.isNotEmpty()
+        val selectionMode = selection.isNotEmpty() || readingOrderMode
+
+        fun getReadingOrderLayer(mangaId: Long): Int? {
+            if (readingOrderMode) {
+                readingOrderLayers.forEachIndexed { index, layer ->
+                    if (layer.fastAny { it.id == mangaId }) return index + 1
+                }
+                if (selection.fastAny { it.id == mangaId }) return readingOrderCurrentLayer + 1
+                return null
+            }
+            return savedReadingOrderLayers[mangaId]
+        }
 
         val collections = library.keys.toList()
 
@@ -820,14 +1508,12 @@ class MangaLibraryScreenModel(
             val collectionName = collection.let {
                 if (it.isSystemCollection) defaultCollectionTitle else it.name
             }
-            // Title is always "Library"; subtitle is the current collection name
-            // only shown when there is more than one collection.
-            val subtitle = if (collections.size > 1) collectionName else null
+            // Subtitle is always the collection name so the user can see which
+            // collection they're viewing, even when tabs are hidden.
+            val subtitle = collectionName
             val count = when {
                 !showMangaCount -> null
-                !showCollectionTabs -> getMangaCountForCollection(collection)
-                // Whole library count
-                else -> libraryCount
+                else -> getMangaCountForCollection(collection)
             }
 
             return LibraryToolbarTitle(defaultTitle, subtitle, count)

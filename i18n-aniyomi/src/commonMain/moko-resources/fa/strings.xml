@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="pref_library_summary">دسته‌ها، به روز رسانی سراسری</string>
     <string name="pref_library_update_show_tab_badge">تعداد خوانده‌نشده را بر روی آیکون به‌روزرسانی نشان بده</string>
@@ -92,6 +92,7 @@
     <string name="action_remove_bookmark_episode">لغو نشانه قسمت</string>
     <string name="action_edit_anime_collections">ویرایش دسته‌بندی انیمه</string>
     <string name="action_edit_manga_collections">ویرایش دسته‌بندی مانگا</string>
+        <string name="action_edit_novel_collections">ویرایش دسته‌بندی مانگا</string>
     <string name="action_view_episodes">نمایش قسمت‌ها</string>
     <string name="action_previous_episode">قسمت قبلی</string>
     <string name="action_play">پخش</string>
@@ -112,6 +113,7 @@
     <string name="pref_default_home_tab_library">تنظیم صفحه شروع به برگه مانگا</string>
     <string name="default_manga_collection">دسته بندی پیشفرض</string>
     <string name="default_anime_collection">دسته‌بندی پیشفرض انیمه</string>
+        <string name="default_novel_collection">دسته‌بندی پیشفرض انیمه</string>
     <string name="pref_manga_library_update_collections_details">مانگاهایی که در دسته‌بندی های حذف‌شده هستند، حتی اگر هم‌زمان در دسته‌بندی های مشمول باشند به‌روزرسانی نمی‌شوند.</string>
     <string name="pref_anime_library_update_collections_details">انیمه‌های دسته‌‌بندی‌های حذف شده به‌روزرسانی نمی‌شوند، حتی اگر در دسته‌‌بندی گنجانده شده باشند.</string>
     <string name="unofficial_extension_message_aniyomi">این افزونه از لیست افزونه‌های رسمی آنی‌یومی نیست.</string>

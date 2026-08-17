@@ -24,8 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.AlertDialog
@@ -69,8 +67,6 @@ fun FetchingScreen(
     onDismissEntry: (Long) -> Unit,
     onDismissGroup: (String) -> Unit,
     onClearAll: () -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -97,8 +93,6 @@ fun FetchingScreen(
                 onMigrate = onMigrate,
                 onDismissEntry = onDismissEntry,
                 onDismissGroup = onDismissGroup,
-                onPause = onPause,
-                onResume = onResume,
                 onCancel = onCancel,
                 modifier = modifier,
             )
@@ -113,8 +107,6 @@ private fun FetchingScreenContent(
     onMigrate: (FailedFetchUi) -> Unit,
     onDismissEntry: (Long) -> Unit,
     onDismissGroup: (String) -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -127,8 +119,6 @@ private fun FetchingScreenContent(
             item(key = "progress") {
                 ProgressCard(
                     progress = progress,
-                    onPause = onPause,
-                    onResume = onResume,
                     onCancel = onCancel,
                 )
             }
@@ -167,8 +157,6 @@ private fun FetchingScreenContent(
 @Composable
 private fun ProgressCard(
     progress: LibraryUpdateProgress.Running,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
     onCancel: () -> Unit,
 ) {
     Surface(
@@ -190,19 +178,8 @@ private fun ProgressCard(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Row {
-                    if (progress.isPaused) {
-                        IconButton(onClick = onResume) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(AYMR.strings.action_resume))
-                        }
-                    } else {
-                        IconButton(onClick = onPause) {
-                            Icon(Icons.Filled.Pause, contentDescription = stringResource(AYMR.strings.action_pause))
-                        }
-                    }
-                    IconButton(onClick = onCancel) {
-                        Icon(Icons.Filled.Close, contentDescription = stringResource(AYMR.strings.action_cancel))
-                    }
+                IconButton(onClick = onCancel) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(AYMR.strings.action_cancel))
                 }
             }
             Spacer(Modifier.height(8.dp))

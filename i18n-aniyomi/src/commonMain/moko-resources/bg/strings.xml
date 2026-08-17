@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="pref_library_summary">Категории, глобални обновления</string>
     <string name="pref_library_update_show_tab_badge">Покажи броя на непрочетените в иконата за ъпдейти</string>

@@ -15,8 +15,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.presentation.library.components.LibraryTabs
+import eu.kanade.presentation.library.components.CollectionHeaderRow
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -46,6 +48,14 @@ fun AnimeLibraryContent(
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
     getAnimeLibraryForPage: (Int) -> List<AnimeLibraryItem>,
+    sortLabel: String? = null,
+    sortDescending: Boolean? = null,
+    onSortClick: () -> Unit = {},
+    showLibraryTitle: Boolean = true,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    readingOrderMode: Boolean = false,
+    getPreviousLayerAnimeIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     Column(
         modifier = Modifier.padding(
@@ -70,10 +80,27 @@ fun AnimeLibraryContent(
                 collections = collections,
                 pagerState = pagerState,
                 getNumberOfItemsForCollection = getNumberOfAnimeForCollection,
-            ) { scope.launch { pagerState.animateScrollToPage(it) } }
+                onTabItemClick = { scope.launch { pagerState.animateScrollToPage(it) } },
+                sortLabel = sortLabel,
+                sortDescending = sortDescending,
+                onSortClick = onSortClick,
+            )
+        } else {
+            val currentCollection = collections.getOrNull(pagerState.currentPage)
+            if (currentCollection != null) {
+                CollectionHeaderRow(
+                    title = currentCollection.let { if (it.name.isBlank()) "Default" else it.name },
+                    itemCount = getNumberOfAnimeForCollection(currentCollection),
+                    sortLabel = sortLabel,
+                    sortDescending = sortDescending,
+                    onSortClick = onSortClick,
+                    showTitle = showLibraryTitle,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
         }
 
-        val notSelectionMode = selection.isEmpty()
+        val notSelectionMode = selection.isEmpty() && !readingOrderMode
         val onClickAnime = { anime: LibraryAnime ->
             if (notSelectionMode) {
                 onAnimeClicked(anime.anime.id)
@@ -109,6 +136,9 @@ fun AnimeLibraryContent(
                 onClickAnime = onClickAnime,
                 onLongClickAnime = onToggleRangeSelection,
                 onClickContinueWatching = onContinueWatchingClicked,
+                getReadingOrderLayer = getReadingOrderLayer,
+                getPreviousLayerAnimeIds = getPreviousLayerAnimeIds,
+                isEntryLocked = isEntryLocked,
             )
         }
 

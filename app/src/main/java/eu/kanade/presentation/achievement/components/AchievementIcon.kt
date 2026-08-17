@@ -1,65 +1,68 @@
 package eu.kanade.presentation.achievement.components
 
-import android.content.Context
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import eu.kanade.tachiyomi.R
+import com.woowla.compose.icon.collections.tabler.Tabler
+import com.woowla.compose.icon.collections.tabler.tabler.Filled
+import com.woowla.compose.icon.collections.tabler.tabler.Outline
+import com.woowla.compose.icon.collections.tabler.tabler.filled.Star
+import com.woowla.compose.icon.collections.tabler.tabler.outline.QuestionMark
 import tachiyomi.domain.achievement.model.Achievement
+import tachiyomi.domain.achievement.model.AchievementRarity
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Aurora-themed Achievement Icon with hexagonal shape, pulsing glow, and scanline effects
+ * Generative achievement icon — a Compose-drawn hexagon whose content is
+ * derived from [Achievement] metadata, themed via
+ * `MaterialTheme.colorScheme.primary`.
  *
- * @param icon The icon name from achievement.badge_icon
+ * @param achievement The achievement to render
  * @param isUnlocked Whether the achievement is unlocked
  * @param modifier The modifier to be applied to the icon
  * @param size The size of the icon
- * @param useHexagonShape Whether to use hexagon shape (true) or rounded rectangle (false)
+ * @param showGlow Whether to draw the rarity glow behind the hexagon.
+ *   Pass `false` when the caller already draws its own glow (e.g. the unlock
+ *   banner) to avoid stacking.
  */
 @Composable
 fun AchievementIcon(
-    icon: String?,
+    achievement: Achievement,
     isUnlocked: Boolean,
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
-    useHexagonShape: Boolean = true,
+    showGlow: Boolean = true,
 ) {
-    val context = LocalContext.current
-    val iconResId = getIconResourceId(icon, context)
+    val content = resolveIconContent(achievement)
 
-    // Note: Pulsing animation removed for compatibility - can be added back with proper infinite transition setup
-    val pulseScale = 1f
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val lockedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val strokeColor = if (isUnlocked) primaryColor else lockedColor
 
-    // Glow alpha animation
-    val glowAlpha by animateFloatAsState(
-        targetValue = if (isUnlocked) 0.6f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow,
-        ),
-        label = "glow_alpha",
-    )
+    val glowAlpha = if (showGlow && isUnlocked) achievement.rarity.glowAlpha() else 0f
 
     // Scale animation on unlock
     val unlockScale by animateFloatAsState(
@@ -74,55 +77,98 @@ fun AchievementIcon(
     Box(
         modifier = modifier
             .size(size)
-            .scale(unlockScale * pulseScale),
+            .scale(unlockScale),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            painter = painterResource(id = iconResId),
-            contentDescription = null,
+        // Glow + hexagon stroke drawn behind content
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(if (isUnlocked) 1f else 0.4f),
-            tint = if (isUnlocked) Color.Unspecified else Color.Gray,
+                .drawBehind {
+                    val drawSize = this.size
+                    val hexHeight = drawSize.width * 0.866f
+                    val verticalOffset = (drawSize.height - hexHeight) / 2
+                    val path = createHexagonPath(drawSize.width, verticalOffset)
+
+                    // Rarity glow — radial wash behind the hexagon
+                    if (glowAlpha > 0f) {
+                        val glowRadius = drawSize.minDimension * 0.75f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    primaryColor.copy(alpha = glowAlpha),
+                                    primaryColor.copy(alpha = glowAlpha * 0.3f),
+                                    Color.Transparent,
+                                ),
+                            ),
+                            radius = glowRadius,
+                            center = Offset(drawSize.width / 2f, drawSize.height / 2f),
+                        )
+                    }
+
+                    // Optional faint fill for legendary/mythic unlocked
+                    if (isUnlocked && (achievement.rarity == AchievementRarity.LEGENDARY ||
+                            achievement.rarity == AchievementRarity.MYTHIC)
+                    ) {
+                        drawPath(
+                            path = path,
+                            color = primaryColor.copy(alpha = 0.06f),
+                        )
+                    }
+
+                    // Hexagon stroke
+                    val strokeWidthPx = drawSize.width * 0.052f
+                    drawPath(
+                        path = path,
+                        color = strokeColor,
+                        style = Stroke(width = strokeWidthPx),
+                    )
+                },
         )
+
+        // Content — glyph or secret mark
+        val contentSize = size * 0.5f
+        when (content) {
+            is IconContent.Glyph -> {
+                Icon(
+                    imageVector = content.vector,
+                    contentDescription = null,
+                    tint = strokeColor,
+                    modifier = Modifier.size(contentSize),
+                )
+            }
+            is IconContent.Secret -> {
+                Icon(
+                    imageVector = Tabler.Outline.QuestionMark,
+                    contentDescription = null,
+                    tint = strokeColor,
+                    modifier = Modifier.size(contentSize),
+                )
+            }
+        }
+
+        // Star pips — rarity rank insignia, below content
+        val starCount = achievement.rarity.starCount()
+        if (starCount > 0) {
+            Row(
+                modifier = Modifier.offset(y = size * 0.28f),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                repeat(starCount) {
+                    Icon(
+                        imageVector = Tabler.Filled.Star,
+                        contentDescription = null,
+                        tint = strokeColor,
+                        modifier = Modifier.size(size * 0.10f),
+                    )
+                }
+            }
+        }
     }
 }
 
 /**
- * Scanline overlay effect for locked achievements
- */
-@Composable
-private fun ScanlineOverlay(
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .drawBehind {
-                val drawSize = this.size
-                val lineCount = 6
-                val lineHeight = drawSize.height / (lineCount * 2)
-
-                for (i in 0 until lineCount) {
-                    drawRect(
-                        color = Color.Black.copy(alpha = 0.2f),
-                        topLeft = Offset(0f, i * 2 * lineHeight),
-                        size = androidx.compose.ui.geometry.Size(drawSize.width, lineHeight),
-                    )
-                }
-
-                // Diagonal scan line
-                drawLine(
-                    color = Color.White.copy(alpha = 0.1f),
-                    start = Offset(0f, drawSize.height),
-                    end = Offset(drawSize.width, 0f),
-                    strokeWidth = 1f,
-                )
-            },
-    )
-}
-
-/**
- * Hexagon shape for achievement icons - vertically centered in the bounds
+ * Hexagon shape for achievement icons — vertically centered in the bounds.
  */
 private val HexagonShape = GenericShape { drawSize, _ ->
     val hexHeight = drawSize.width * 0.866f
@@ -132,7 +178,7 @@ private val HexagonShape = GenericShape { drawSize, _ ->
 }
 
 /**
- * Creates a hexagon path with optional vertical offset for centering
+ * Creates a pointy-top hexagon path with optional vertical offset for centering.
  */
 private fun createHexagonPath(width: Float, verticalOffset: Float = 0f): Path {
     val height = width * 0.866f // sqrt(3)/2
@@ -157,61 +203,28 @@ private fun createHexagonPath(width: Float, verticalOffset: Float = 0f): Path {
 }
 
 /**
- * Resolves the icon resource ID from the icon name.
- *
- * @param iconName The name of the icon resource (e.g. "ic_badge_first_chapter")
- * @param packageName The package name of the app
- * @return The resource ID, defaults to ic_badge_default if not found
+ * Glow alpha for each rarity tier — common gets none, mythic gets the strongest.
+ * Values are high enough to be clearly visible at 48dp.
  */
-private fun getIconResourceId(
-    iconName: String?,
-    context: Context,
-): Int {
-    if (iconName.isNullOrEmpty()) {
-        return R.drawable.ic_badge_default
-    }
-
-    val formattedId = when (iconName) {
-        "cross" -> "ic_badge_cross"
-        "rank" -> "ic_badge_rank"
-        "immersion" -> "ic_badge_immersion"
-        "hybrid" -> "ic_badge_hybrid"
-        "trinity" -> "ic_reward_badge_trinity"
-        else -> iconName
-    }
-
-    return try {
-        val resourceId = context.resources.getIdentifier(
-            formattedId,
-            "drawable",
-            context.packageName,
-        )
-        if (resourceId != 0) {
-            resourceId
-        } else {
-            R.drawable.ic_badge_default
-        }
-    } catch (e: Exception) {
-        R.drawable.ic_badge_default
-    }
+fun AchievementRarity.glowAlpha(): Float = when (this) {
+    AchievementRarity.COMMON -> 0f
+    AchievementRarity.UNCOMMON -> 0.15f
+    AchievementRarity.RARE -> 0.25f
+    AchievementRarity.EPIC -> 0.35f
+    AchievementRarity.LEGENDARY -> 0.45f
+    AchievementRarity.MYTHIC -> 0.55f
 }
 
 /**
- * Simplified version that takes an Achievement directly.
+ * Star pip count for each rarity tier — military-rank style.
+ * Capped at 4 to avoid overflowing the hexagon edges.
+ * Common shows no pips; mythic shows four.
  */
-@Composable
-fun AchievementIcon(
-    achievement: Achievement,
-    isUnlocked: Boolean,
-    modifier: Modifier = Modifier,
-    size: Dp = 48.dp,
-    useHexagonShape: Boolean = true,
-) {
-    AchievementIcon(
-        icon = achievement.badgeIcon,
-        isUnlocked = isUnlocked,
-        modifier = modifier,
-        size = size,
-        useHexagonShape = useHexagonShape,
-    )
+fun AchievementRarity.starCount(): Int = when (this) {
+    AchievementRarity.COMMON -> 0
+    AchievementRarity.UNCOMMON -> 1
+    AchievementRarity.RARE -> 2
+    AchievementRarity.EPIC -> 3
+    AchievementRarity.LEGENDARY -> 4
+    AchievementRarity.MYTHIC -> 4
 }

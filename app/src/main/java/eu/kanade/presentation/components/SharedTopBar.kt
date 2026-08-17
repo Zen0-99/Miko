@@ -24,6 +24,8 @@ import kotlinx.collections.immutable.persistentListOf
  */
 class SharedTopBarState {
     var title by mutableStateOf("")
+    var subtitle by mutableStateOf<String?>(null)
+    var numberOfEntries by mutableStateOf<Int?>(null)
     var actions by mutableStateOf<ImmutableList<AppBar.AppBarAction>>(persistentListOf())
     var navigateUp by mutableStateOf<(() -> Unit)?>(null)
 
@@ -67,6 +69,8 @@ fun useSharedTopBar(
     val state = LocalSharedTopBar.current
     state?.let {
         it.title = title
+        it.subtitle = null
+        it.numberOfEntries = null
         it.actions = actions
         it.navigateUp = navigateUp
         // Clear search state so it doesn't leak from a previous tab that had search
@@ -101,10 +105,14 @@ fun useSharedTopBarWithSearch(
     onSearch: (String) -> Unit = {},
     searchPlaceholderText: String? = null,
     searchPillContent: (@Composable () -> Unit)? = null,
+    subtitle: String? = null,
+    numberOfEntries: Int? = null,
 ) {
     val state = LocalSharedTopBar.current
     state?.let {
         it.title = title
+        it.subtitle = subtitle
+        it.numberOfEntries = numberOfEntries
         it.actions = actions
         it.navigateUp = navigateUp
         it.searchAvailable = true

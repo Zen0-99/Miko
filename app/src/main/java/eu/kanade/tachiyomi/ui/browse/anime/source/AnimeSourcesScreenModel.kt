@@ -122,8 +122,11 @@ class AnimeSourcesScreenModel(
         // Untrusted extensions (installed but not trusted — show with trust icon)
         val untrustedItems = untrusted.map { AnimeSourceUiModel.UntrustedExtension(it) }
 
-        // Build the "Not Installed" section (available extensions not yet installed)
-        val notInstalled = available.filter { it.pkgName !in installedPkgNames }
+        // Build the "Not Installed" section (available extensions not yet installed
+        // and not currently untrusted — untrusted extensions are shown separately
+        // with a trust button, not as installable available extensions)
+        val untrustedPkgNames = untrusted.map { it.pkgName }.toSet()
+        val notInstalled = available.filter { it.pkgName !in installedPkgNames && it.pkgName !in untrustedPkgNames }
         val notInstalledItems = if (notInstalled.isEmpty()) {
             emptyList()
         } else {

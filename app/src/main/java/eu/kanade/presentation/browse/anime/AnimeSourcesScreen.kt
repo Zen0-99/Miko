@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PushPin
@@ -99,15 +99,24 @@ fun AnimeSourcesScreen(
     onRefresh: () -> Unit = {},
     onClickUpdateAll: () -> Unit = {},
 ) {
-    var notInstalledExpanded by remember { mutableStateOf(false) }
+    // When there are no installed extensions (only the local source), hide
+    // the "Installed" section header and auto-expand "Not Installed" so the
+    // user sees available extensions immediately.
+    val hasInstalledExtensions = sourceExtensionMap.isNotEmpty()
+    var notInstalledExpanded by remember { mutableStateOf(!hasInstalledExtensions) }
 
     // Filter out available extensions (and their language sub-headers) when
     // the "Not Installed" section is collapsed. Language sub-headers within
     // the Not Installed section appear after the NOT_INSTALLED_KEY header and
     // before the next section — they must also be hidden when collapsed.
-    val visibleItems = remember(state.items, notInstalledExpanded) {
+    // Also hides the INSTALLED_KEY header when there are no installed extensions.
+    val visibleItems = remember(state.items, notInstalledExpanded, hasInstalledExtensions) {
         if (notInstalledExpanded) {
-            state.items
+            if (!hasInstalledExtensions) {
+                state.items.filterNot { it is AnimeSourceUiModel.Header && it.language == AnimeSourcesScreenModel.INSTALLED_KEY }
+            } else {
+                state.items
+            }
         } else {
             val result = mutableListOf<AnimeSourceUiModel>()
             var inNotInstalled = false
@@ -120,6 +129,10 @@ fun AnimeSourcesScreen(
                     }
                     if (item.language == AnimeSourcesScreenModel.INSTALLED_KEY) {
                         inNotInstalled = false
+                        // Hide the "Installed" header when there are no installed
+                        // extensions — the local source still shows, just without
+                        // a section label.
+                        if (!hasInstalledExtensions) continue
                         result.add(item)
                         continue
                     }
@@ -168,9 +181,9 @@ fun AnimeSourcesScreen(
             LazyColumn(
                 contentPadding = contentPadding + topSmallPaddingValues,
             ) {
-                items(
+                itemsIndexed(
                     items = visibleItems,
-                    contentType = {
+                    contentType = { _, it ->
                         when (it) {
                             is AnimeSourceUiModel.Header -> "header"
                             is AnimeSourceUiModel.Item -> "item"
@@ -178,15 +191,15 @@ fun AnimeSourcesScreen(
                             is AnimeSourceUiModel.UntrustedExtension -> "untrusted-extension"
                         }
                     },
-                    key = {
+                    key = { index, it ->
                         when (it) {
-                            is AnimeSourceUiModel.Header -> it.hashCode()
+                            is AnimeSourceUiModel.Header -> "header-$index-${it.language}"
                             is AnimeSourceUiModel.Item -> "source-${it.source.key()}"
                             is AnimeSourceUiModel.AvailableExtension -> "available-${it.extension.pkgName}"
                             is AnimeSourceUiModel.UntrustedExtension -> "untrusted-${it.extension.pkgName}"
                         }
                     },
-                ) { model ->
+                ) { _, model ->
                     when (model) {
                         is AnimeSourceUiModel.Header -> {
                             when (model.language) {
@@ -302,8 +315,8 @@ private fun AnimeSourcesCardView(
     LazyColumn(
         contentPadding = contentPadding,
     ) {
-        sectionedItems.forEach { (header, sectionItems) ->
-            item(key = header?.hashCode() ?: "no-header") {
+        sectionedItems.forEachIndexed { sectionIndex, (header, sectionItems) ->
+            item(key = "header-$sectionIndex") {
                 if (header != null) {
                     when (header.language) {
                         AnimeSourcesScreenModel.NOT_INSTALLED_KEY -> {
@@ -342,7 +355,7 @@ private fun AnimeSourcesCardView(
             if (header?.language != AnimeSourcesScreenModel.NOT_INSTALLED_KEY || notInstalledExpanded) {
                 val rows = sectionItems.chunked(cardColumns)
                 rows.forEachIndexed { rowIndex, rowItems ->
-                    item(key = "cards-${header?.hashCode() ?: "no-header"}-$rowIndex") {
+                    item(key = "cards-$sectionIndex-$rowIndex") {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -384,6 +397,18 @@ private fun AnimeSourcesCardView(
                                             iconUrl = model.extension.iconUrl,
                                             isInstalled = false,
                                             onClick = { onClickInstallExtension(model.extension) },
+                                        )
+                                    }
+                                    is AnimeSourceUiModel.UntrustedExtension -> {
+                                        ExtensionCard(
+                                            modifier = Modifier.weight(1f),
+                                            title = model.extension.name,
+                                            lang = (model.extension.lang ?: "").uppercase(),
+                                            version = model.extension.versionName,
+                                            isInstalled = true,
+                                            isUntrusted = true,
+                                            onClick = { onClickTrustExtension(model.extension) },
+                                            onTrustClick = { onClickTrustExtension(model.extension) },
                                         )
                                     }
                                     else -> {}

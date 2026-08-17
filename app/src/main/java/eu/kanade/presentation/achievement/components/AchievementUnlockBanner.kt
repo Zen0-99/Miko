@@ -43,7 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.scale
+
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -77,14 +77,14 @@ internal object AchievementPopupSizeTokens {
     val unlockOuterVerticalPadding = scaledDp(8f)
     val unlockParticleHeight = scaledDp(200f)
     val unlockContainerCornerRadius = scaledDp(20f)
-    val unlockRareShadowElevation = scaledDp(20f)
+    val unlockRareShadowElevation = scaledDp(12f)
     val unlockNormalShadowElevation = scaledDp(16f)
-    val unlockRareShadowElevationPx = 20f * COMPACT_SCALE
+    val unlockRareShadowElevationPx = 12f * COMPACT_SCALE
     val unlockRareBorderWidth = scaledDp(2f)
     val unlockNormalBorderWidth = scaledDp(1f)
     val unlockContentPadding = scaledDp(20f)
     val unlockRowSpacing = scaledDp(16f)
-    val unlockIconSize = scaledDp(56f)
+    val unlockIconSize = 48.dp
     val unlockRareBadgeSize = scaledDp(20f)
     val unlockRareBadgeOffset = scaledDp(4f)
     val unlockRareBadgeBorderWidth = scaledDp(1f)
@@ -163,22 +163,12 @@ fun AchievementUnlockBanner(
         }
     }
 
-    // Enhanced bounce animation with overshoot
-    val scale by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0.6f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
-        label = "scale",
-    )
-
-    // Slide from top with bounce
+    // Slide from top — no overshoot, no scale
     val slideOffset by animateFloatAsState(
         targetValue = if (isVisible) 0f else AchievementPopupSizeTokens.unlockSlideHiddenOffset,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow,
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow,
         ),
         label = "slide_offset",
     )
@@ -188,8 +178,8 @@ fun AchievementUnlockBanner(
         enter = expandVertically(
             expandFrom = Alignment.Top,
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow,
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
             ),
         ) + fadeIn(
             animationSpec = tween(300),
@@ -227,8 +217,7 @@ fun AchievementUnlockBanner(
                             horizontal = AchievementPopupSizeTokens.unlockOuterHorizontalPadding,
                             vertical = AchievementPopupSizeTokens.unlockOuterVerticalPadding,
                         )
-                        .offset(y = slideOffset.dp)
-                        .scale(scale),
+                        .offset(y = slideOffset.dp),
                 )
             }
         }
@@ -345,10 +334,10 @@ private fun AchievementBannerItem(
     LaunchedEffect(isRare) {
         if (isRare) {
             while (true) {
-                glowScale = 1.2f
-                delay(500)
+                glowScale = 1.1f
+                delay(600)
                 glowScale = 1f
-                delay(500)
+                delay(600)
             }
         }
     }
@@ -366,8 +355,8 @@ private fun AchievementBannerItem(
             .graphicsLayer {
                 if (isRare) {
                     shadowElevation = AchievementPopupSizeTokens.unlockRareShadowElevationPx
-                    spotShadowColor = primaryColor.copy(alpha = 0.6f)
-                    ambientShadowColor = secondaryColor.copy(alpha = 0.4f)
+                    spotShadowColor = primaryColor.copy(alpha = 0.3f)
+                    ambientShadowColor = secondaryColor.copy(alpha = 0.2f)
                 }
             }
             .shadow(
@@ -377,10 +366,10 @@ private fun AchievementBannerItem(
                     AchievementPopupSizeTokens.unlockNormalShadowElevation
                 },
                 shape = RoundedCornerShape(AchievementPopupSizeTokens.unlockContainerCornerRadius),
-                ambientColor = if (isRare) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                ambientColor = if (isRare) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                 spotColor = if (isRare) {
                     MaterialTheme.colorScheme.secondary.copy(
-                        alpha = 0.5f,
+                        alpha = 0.25f,
                     )
                 } else {
                     MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
@@ -403,7 +392,7 @@ private fun AchievementBannerItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(AchievementPopupSizeTokens.unlockRowSpacing),
         ) {
-            // Achievement Icon with glow
+            // Achievement Icon with glow — padded so it has breathing room
             Box(
                 modifier = Modifier
                     .size(AchievementPopupSizeTokens.unlockIconSize)
@@ -413,11 +402,11 @@ private fun AchievementBannerItem(
                             drawCircle(
                                 brush = Brush.radialGradient(
                                     colors = listOf(
-                                        Color(0xFFFFD700).copy(alpha = 0.4f * animatedGlow),
+                                        Color(0xFFFFD700).copy(alpha = 0.2f * animatedGlow),
                                         Color.Transparent,
                                     ),
                                 ),
-                                radius = size.minDimension * 0.7f * animatedGlow,
+                                radius = size.minDimension * 0.6f * animatedGlow,
                             )
                         }
                         drawCircle(
@@ -436,38 +425,8 @@ private fun AchievementBannerItem(
                     isUnlocked = true,
                     modifier = Modifier.size(AchievementPopupSizeTokens.unlockIconSize),
                     size = AchievementPopupSizeTokens.unlockIconSize,
-                    useHexagonShape = true,
+                    showGlow = false,
                 )
-
-                // Rare badge indicator
-                if (isRare) {
-                    Box(
-                        modifier = Modifier
-                            .size(AchievementPopupSizeTokens.unlockRareBadgeSize)
-                            .align(Alignment.TopEnd)
-                            .offset(
-                                x = AchievementPopupSizeTokens.unlockRareBadgeOffset,
-                                y = -AchievementPopupSizeTokens.unlockRareBadgeOffset,
-                            )
-                            .background(
-                                color = Color(0xFFFFD700),
-                                shape = CircleShape,
-                            )
-                            .border(
-                                width = AchievementPopupSizeTokens.unlockRareBadgeBorderWidth,
-                                color = Color.White,
-                                shape = CircleShape,
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
-                            tint = Color(0xFFFF6B00),
-                            modifier = Modifier.size(AchievementPopupSizeTokens.unlockRareBadgeStarSize),
-                        )
-                    }
-                }
             }
 
             // Text content
@@ -486,10 +445,10 @@ private fun AchievementBannerItem(
                         modifier = Modifier.size(AchievementPopupSizeTokens.unlockHeaderIconSize),
                     )
                     Text(
-                        text = if (isRare) {
-                            stringResource(AYMR.strings.achievement_banner_rare_title)
-                        } else {
-                            stringResource(AYMR.strings.achievement_banner_unlocked_title)
+                        text = when {
+                            achievement.isHidden -> stringResource(AYMR.strings.achievement_banner_hidden_title)
+                            isRare -> stringResource(AYMR.strings.achievement_banner_rare_title)
+                            else -> stringResource(AYMR.strings.achievement_banner_unlocked_title)
                         },
                         color = MaterialTheme.colorScheme.primary,
                         fontSize = if (isRare) {
@@ -528,37 +487,24 @@ private fun AchievementBannerItem(
                         text = description,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = AchievementPopupSizeTokens.unlockDescriptionFontSize,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
 
-                // Points with special styling for rare
+                // Points
                 Spacer(modifier = Modifier.height(AchievementPopupSizeTokens.unlockPointsTopSpacing))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(AchievementPopupSizeTokens.unlockPointsRowSpacing),
-                ) {
-                    if (isRare) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(AchievementPopupSizeTokens.unlockRarePointsIconSize),
-                        )
-                    }
-                    Text(
-                        text = stringResource(AYMR.strings.achievement_points_reward, achievement.points),
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = if (isRare) {
-                            AchievementPopupSizeTokens.unlockPointsRareFontSize
-                        } else {
-                            AchievementPopupSizeTokens.unlockPointsNormalFontSize
-                        },
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.5.sp,
-                    )
-                }
+                Text(
+                    text = stringResource(AYMR.strings.achievement_points_reward, achievement.points),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = if (isRare) {
+                        AchievementPopupSizeTokens.unlockPointsRareFontSize
+                    } else {
+                        AchievementPopupSizeTokens.unlockPointsNormalFontSize
+                    },
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp,
+                )
             }
         }
     }

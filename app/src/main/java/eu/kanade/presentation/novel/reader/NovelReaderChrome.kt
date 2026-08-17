@@ -6,26 +6,23 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,17 +31,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import eu.kanade.presentation.components.AppBar
 
 @Composable
 fun NovelReaderTopBar(
@@ -56,77 +57,43 @@ fun NovelReaderTopBar(
     progressPercent: Int = -1,
     wordCount: Int = -1,
     fullscreen: Boolean = false,
+    readerBackgroundColor: Color = MaterialTheme.colorScheme.surface,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (fullscreen) {
-                        Modifier.padding(top = 24.dp) // Fixed padding when system bars hidden
-                    } else {
-                        Modifier.statusBarsPadding()
-                    },
-                ),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (progressPercent in 0..100) {
-                    Text(
-                        text = "$progressPercent%",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(end = if (wordCount >= 0) 4.dp else 12.dp),
-                    )
-                }
-                if (wordCount >= 0) {
-                    val wordText = if (wordCount >= 1000) {
-                        "%.1fk".format(wordCount / 1000f)
-                    } else {
-                        "$wordCount"
-                    }
-                    Text(
-                        text = wordText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(end = 12.dp),
-                    )
-                }
+    // Use the reader background color (semi-transparent) instead of theme
+    // surface — matches the reader's actual background (sepia, black, etc.)
+    val backgroundColor = readerBackgroundColor.copy(alpha = 0.9f)
+    val onColor = if (readerBackgroundColor.luminance() > 0.5f) Color.Black else MaterialTheme.colorScheme.onSurface
+
+    AppBar(
+        modifier = modifier,
+        backgroundColor = backgroundColor,
+        title = title,
+        subtitle = subtitle.takeIf { it.isNotBlank() },
+        navigateUp = onBackClick,
+        actions = {
+            if (progressPercent in 0..100) {
+                Text(
+                    text = "$progressPercent%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = onColor.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(end = if (wordCount >= 0) 4.dp else 12.dp),
+                )
             }
-        }
-    }
+            if (wordCount >= 0) {
+                val wordText = if (wordCount >= 1000) {
+                    "%.1fk".format(wordCount / 1000f)
+                } else {
+                    "$wordCount"
+                }
+                Text(
+                    text = wordText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = onColor.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(end = 12.dp),
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -142,66 +109,62 @@ fun NovelReaderBottomBar(
     onCommentsClick: () -> Unit = {},
     onTtsClick: () -> Unit = {},
     isTtsActive: Boolean = false,
+    readerBackgroundColor: Color = MaterialTheme.colorScheme.surface,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+    // Floating rounded pill using the reader background color.
+    val pillColor = readerBackgroundColor.copy(alpha = 0.9f)
+    val onColor = if (readerBackgroundColor.luminance() > 0.5f) Color.Black else MaterialTheme.colorScheme.onSurface
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(pillColor)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (fullscreen) {
-                        Modifier.padding(bottom = 24.dp) // Fixed padding when system bars hidden
-                    } else {
-                        Modifier.navigationBarsPadding()
-                    },
-                )
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onChaptersClick) {
+        IconButton(onClick = onChaptersClick) {
+            Icon(
+                imageVector = Icons.Outlined.FormatListNumbered,
+                contentDescription = "Chapters",
+                tint = onColor,
+            )
+        }
+        IconButton(onClick = onHighlightsClick) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.MenuBook,
+                contentDescription = "Highlights",
+                tint = onColor,
+            )
+        }
+        if (showCommentsButton) {
+            IconButton(onClick = onCommentsClick) {
                 Icon(
-                    imageVector = Icons.Outlined.FormatListNumbered,
-                    contentDescription = "Chapters",
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    imageVector = Icons.AutoMirrored.Filled.Comment,
+                    contentDescription = "Comments",
+                    tint = onColor,
                 )
             }
-            IconButton(onClick = onHighlightsClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.MenuBook,
-                    contentDescription = "Highlights",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            if (showCommentsButton) {
-                IconButton(onClick = onCommentsClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Comment,
-                        contentDescription = "Comments",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-            IconButton(onClick = onTtsClick) {
-                Icon(
-                    imageVector = Icons.Filled.RecordVoiceOver,
-                    contentDescription = "Read aloud",
-                    tint = if (isTtsActive) {
-                        accentColor ?: MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                )
-            }
-            IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Settings",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
+        }
+        IconButton(onClick = onTtsClick) {
+            Icon(
+                imageVector = Icons.Filled.RecordVoiceOver,
+                contentDescription = "Read aloud",
+                tint = if (isTtsActive) {
+                    accentColor ?: MaterialTheme.colorScheme.primary
+                } else {
+                    onColor
+                },
+            )
+        }
+        IconButton(onClick = onSettingsClick) {
+            Icon(
+                imageVector = Icons.Outlined.Settings,
+                contentDescription = "Settings",
+                tint = onColor,
+            )
         }
     }
 }
@@ -220,6 +183,7 @@ fun NovelReaderChrome(
     readerBackgroundColor: Color = MaterialTheme.colorScheme.background,
     backgroundTexture: eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture = eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE,
     textureStrength: Int = 0,
+    edgeFadeEnabled: Boolean = false,
     showCommentsButton: Boolean = false,
     isTtsActive: Boolean = false,
     onBackClick: () -> Unit,
@@ -230,6 +194,15 @@ fun NovelReaderChrome(
     onCommentsClick: () -> Unit = {},
     onTtsClick: () -> Unit = {},
 ) {
+    // The info overlay IS the edge gradient. When edge fade is on, the
+    // overlay is taller (64dp gradient + 28dp info content) and its
+    // background fades from transparent (top) to opaque (bottom).
+    // When edge fade is off, the overlay is just the 28dp info content
+    // with a solid background.
+    val infoBarFadeHeight = if (edgeFadeEnabled) 64.dp else 0.dp
+    val infoBarBaseHeight = 28.dp
+    val infoBarTotalHeight = infoBarBaseHeight + infoBarFadeHeight
+
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = isMenuVisible,
@@ -245,6 +218,7 @@ fun NovelReaderChrome(
                 progressPercent = progressPercent,
                 wordCount = wordCount,
                 fullscreen = fullscreen,
+                readerBackgroundColor = readerBackgroundColor,
             )
         }
         if (showPhoneInfo) {
@@ -256,13 +230,19 @@ fun NovelReaderChrome(
                 backgroundTexture = backgroundTexture,
                 textureStrength = textureStrength,
                 estimatedReadingTime = estimatedReadingTime,
+                edgeFadeEnabled = edgeFadeEnabled,
+                fadeHeight = infoBarFadeHeight,
             )
         }
         AnimatedVisibility(
             visible = isMenuVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(
+                    bottom = if (showPhoneInfo) infoBarTotalHeight + 2.dp else 2.dp,
+                ),
         ) {
             NovelReaderBottomBar(
                 onChaptersClick = onChaptersClick,
@@ -275,6 +255,7 @@ fun NovelReaderChrome(
                 onCommentsClick = onCommentsClick,
                 onTtsClick = onTtsClick,
                 isTtsActive = isTtsActive,
+                readerBackgroundColor = readerBackgroundColor,
             )
         }
     }
@@ -289,6 +270,8 @@ fun NovelPhoneInfoOverlay(
     backgroundTexture: eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture = eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE,
     textureStrength: Int = 0,
     estimatedReadingTime: Int = -1,
+    edgeFadeEnabled: Boolean = false,
+    fadeHeight: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val textColor = when {
@@ -332,23 +315,129 @@ fun NovelPhoneInfoOverlay(
         }
     }
 
+    // The info overlay IS the edge gradient. The overlay uses a single
+    // vertical gradient that spans the full height with no visible boundary
+    // between the fade area and the solid info area.
+    //
+    // The gradient uses smooth color stops across the entire height:
+    // - Top: transparent (text fades out here)
+    // - Middle: gradually increasing opacity (the fade zone)
+    // - Bottom: fully opaque (solid background for info content)
+    //
+    // There is no hard cutoff — the gradient smoothly reaches 1.0 near the
+    // bottom, so the "solid" area is just where the gradient is already at
+    // full opacity. This eliminates any visible boundary.
+    //
+    // Brush.verticalGradient uses native dithered rendering — no banding.
+    //
+    // When edgeFadeEnabled is off, the entire overlay is solid.
+    val infoContentHeight = 28.dp
+    val totalHeight = fadeHeight + infoContentHeight
+
+    // Build texture brush in composable context (imageResource is @Composable)
+    val textureBrush: ShaderBrush? = if (backgroundTexture != eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE && textureStrength > 0) {
+        val imageRes = when (backgroundTexture) {
+            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.PAPER_GRAIN -> eu.kanade.tachiyomi.R.drawable.texture_paper
+            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.LINEN -> eu.kanade.tachiyomi.R.drawable.texture_linen
+            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.CANVAS -> eu.kanade.tachiyomi.R.drawable.texture_canvas
+            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.KRAFT -> eu.kanade.tachiyomi.R.drawable.texture_kraft
+            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.DOTTED -> eu.kanade.tachiyomi.R.drawable.texture_dotted
+            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE -> null
+        }
+        if (imageRes != null) {
+            val imageBitmap = ImageBitmap.imageResource(id = imageRes)
+            remember(imageBitmap) {
+                ShaderBrush(
+                    ImageShader(
+                        image = imageBitmap,
+                        tileModeX = TileMode.Repeated,
+                        tileModeY = TileMode.Repeated,
+                    ),
+                )
+            }
+        } else {
+            null
+        }
+    } else {
+        null
+    }
+    val texAlpha = (textureStrength.coerceIn(0, 100) / 100f)
+
+    // Background gradient: smooth across the full height, no hard boundary.
+    // The fadeHeight portion is where the gradient transitions from
+    // transparent to near-opaque. Below that, it smoothly reaches full
+    // opacity. Using multiple stops for a natural ease-in curve.
+    val bgGradient = if (edgeFadeEnabled && fadeHeight > 0.dp) {
+        val fadeFraction = (fadeHeight / totalHeight).coerceIn(0f, 1f)
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to backgroundColor.copy(alpha = 0f),
+                fadeFraction * 0.3f to backgroundColor.copy(alpha = 0.08f),
+                fadeFraction * 0.5f to backgroundColor.copy(alpha = 0.25f),
+                fadeFraction * 0.7f to backgroundColor.copy(alpha = 0.55f),
+                fadeFraction * 0.85f to backgroundColor.copy(alpha = 0.85f),
+                fadeFraction to backgroundColor.copy(alpha = 0.97f),
+                1f to backgroundColor.copy(alpha = 1f),
+            ),
+        )
+    } else {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to backgroundColor,
+                1f to backgroundColor,
+            ),
+        )
+    }
+
+    // Texture alpha gradient: matches the background gradient so texture
+    // also fades in smoothly from top to bottom. Applied via a separate
+    // offscreen compositing layer to support BlendMode.DstIn masking.
+    val texAlphaGradient = if (edgeFadeEnabled && fadeHeight > 0.dp) {
+        val fadeFraction = (fadeHeight / totalHeight).coerceIn(0f, 1f)
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to Color.Transparent,
+                fadeFraction * 0.3f to Color.White.copy(alpha = texAlpha * 0.08f),
+                fadeFraction * 0.5f to Color.White.copy(alpha = texAlpha * 0.25f),
+                fadeFraction * 0.7f to Color.White.copy(alpha = texAlpha * 0.55f),
+                fadeFraction * 0.85f to Color.White.copy(alpha = texAlpha * 0.85f),
+                fadeFraction to Color.White.copy(alpha = texAlpha * 0.97f),
+                1f to Color.White.copy(alpha = texAlpha),
+            ),
+        )
+    } else {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to Color.White.copy(alpha = texAlpha),
+                1f to Color.White.copy(alpha = texAlpha),
+            ),
+        )
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(backgroundColor),
+            .height(totalHeight)
+            .background(bgGradient),
     ) {
-        // Texture overlay on top of the background color.
-        // matchParentSize() fills the Box's content size (the Row's height),
-        // NOT the full screen — fillMaxSize() would expand to cover everything.
-        if (backgroundTexture != eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE) {
-            NovelPhoneInfoTextureOverlay(
-                texture = backgroundTexture,
-                strengthPercent = textureStrength,
-                modifier = Modifier.matchParentSize(),
+        // Texture overlay in a separate layer with offscreen compositing
+        // so BlendMode.DstIn can mask it with the alpha gradient.
+        if (textureBrush != null && texAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer(compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen)
+                    .drawWithContent {
+                        drawRect(brush = textureBrush)
+                        drawRect(brush = texAlphaGradient, blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
+                    },
             )
         }
+
+        // Info content at the bottom of the gradient
         Row(
             modifier = Modifier
+                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .then(
                     if (fullscreen) {
@@ -365,7 +454,7 @@ fun NovelPhoneInfoOverlay(
                 text = currentTime,
                 style = MaterialTheme.typography.labelSmall,
                 color = textColor,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontWeight = FontWeight.Bold,
                 fontSize = 11.sp,
             )
             if (estimatedReadingTime >= 0) {
@@ -378,7 +467,7 @@ fun NovelPhoneInfoOverlay(
                     text = timeText,
                     style = MaterialTheme.typography.labelSmall,
                     color = textColor.copy(alpha = 0.7f),
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
                 )
             }
@@ -386,42 +475,9 @@ fun NovelPhoneInfoOverlay(
                 text = "$batteryPct%",
                 style = MaterialTheme.typography.labelSmall,
                 color = textColor,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontWeight = FontWeight.Bold,
                 fontSize = 11.sp,
             )
-        }
-    }
-}
-
-@Composable
-private fun NovelPhoneInfoTextureOverlay(
-    texture: eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture,
-    strengthPercent: Int,
-    modifier: Modifier = Modifier,
-) {
-    if (texture == eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE) return
-    val alpha = (strengthPercent.coerceIn(0, 100) / 100f)
-    val imageRes = when (texture) {
-        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.PAPER_GRAIN -> eu.kanade.tachiyomi.R.drawable.texture_paper
-        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.LINEN -> eu.kanade.tachiyomi.R.drawable.texture_linen
-        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.CANVAS -> eu.kanade.tachiyomi.R.drawable.texture_canvas
-        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.KRAFT -> eu.kanade.tachiyomi.R.drawable.texture_kraft
-        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.DOTTED -> eu.kanade.tachiyomi.R.drawable.texture_dotted
-        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE -> return
-    }
-    val imageBitmap = ImageBitmap.imageResource(id = imageRes)
-    val brush = remember(imageBitmap) {
-        ShaderBrush(
-            ImageShader(
-                image = imageBitmap,
-                tileModeX = TileMode.Repeated,
-                tileModeY = TileMode.Repeated,
-            ),
-        )
-    }
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        if (alpha > 0f) {
-            drawRect(brush = brush, alpha = alpha)
         }
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -103,7 +104,7 @@ fun AchievementListDialog(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(400.dp),
+                    .heightIn(max = 400.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(achievements) { achievement ->
@@ -192,7 +193,6 @@ private fun AchievementListItem(
             isUnlocked = true,
             modifier = Modifier.size(56.dp),
             size = 56.dp,
-            useHexagonShape = true,
         )
 
         // Content
@@ -229,23 +229,12 @@ private fun AchievementListItem(
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = if (isRare) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(14.dp),
-                )
-                Text(
-                    text = stringResource(AYMR.strings.achievement_points_reward, achievement.points),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isRare) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
-                )
-            }
+            Text(
+                text = stringResource(AYMR.strings.achievement_points_reward, achievement.points),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = if (isRare) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

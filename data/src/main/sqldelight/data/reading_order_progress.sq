@@ -1,26 +1,26 @@
 CREATE TABLE reading_order_progress(
     order_id INTEGER NOT NULL,
-    manga_id INTEGER NOT NULL,
+    entry_id INTEGER NOT NULL,
     completed INTEGER NOT NULL DEFAULT 0,
     completed_at INTEGER,
-    PRIMARY KEY (order_id, manga_id),
+    PRIMARY KEY (order_id, entry_id),
     FOREIGN KEY(order_id) REFERENCES reading_order(_id) ON DELETE CASCADE
 );
 
 getProgress:
 SELECT completed, completed_at
 FROM reading_order_progress
-WHERE order_id = :orderId AND manga_id = :mangaId;
+WHERE order_id = :orderId AND entry_id = :entryId;
 
 getAllProgressByOrderId:
-SELECT manga_id, completed, completed_at
+SELECT entry_id, completed, completed_at
 FROM reading_order_progress
 WHERE order_id = :orderId;
 
 upsertProgress:
-INSERT INTO reading_order_progress(order_id, manga_id, completed, completed_at)
-VALUES (:orderId, :mangaId, :completed, :completedAt)
-ON CONFLICT(order_id, manga_id) DO UPDATE SET
+INSERT INTO reading_order_progress(order_id, entry_id, completed, completed_at)
+VALUES (:orderId, :entryId, :completed, :completedAt)
+ON CONFLICT(order_id, entry_id) DO UPDATE SET
     completed = excluded.completed,
     completed_at = excluded.completed_at;
 
@@ -28,6 +28,6 @@ deleteProgressByOrderId:
 DELETE FROM reading_order_progress
 WHERE order_id = :orderId;
 
-deleteProgressByMangaId:
+deleteProgressByEntryId:
 DELETE FROM reading_order_progress
-WHERE order_id = :orderId AND manga_id = :mangaId;
+WHERE order_id = :orderId AND entry_id = :entryId;

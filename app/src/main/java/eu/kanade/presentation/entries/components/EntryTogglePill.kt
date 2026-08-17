@@ -8,8 +8,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -96,6 +98,7 @@ fun EntryTogglePill(
                 modifier = Modifier.size(20.dp),
             )
         }
+        Spacer(modifier = Modifier.width(6.dp))
         AnimatedContent(
             targetState = checked,
             transitionSpec = {

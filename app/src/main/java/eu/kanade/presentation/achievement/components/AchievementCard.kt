@@ -77,7 +77,6 @@ fun AchievementCard(
                     isUnlocked = isUnlocked,
                     modifier = Modifier.size(48.dp),
                     size = 48.dp,
-                    useHexagonShape = true,
                 )
             }
 

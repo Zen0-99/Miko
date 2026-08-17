@@ -51,6 +51,18 @@ WHERE _id IN (
     WHERE N._id = :novelId
 );
 
+deleteHistoryByNovelId:
+DELETE FROM novelhistory
+WHERE _id IN (
+    SELECT H._id
+    FROM novels N
+    INNER JOIN novelchapters C
+    ON N._id = C.novel_id
+    INNER JOIN novelhistory H
+    ON C._id = H.chapter_id
+    WHERE N._id = :novelId
+);
+
 removeAllHistory:
 DELETE FROM novelhistory;
 

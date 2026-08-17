@@ -13,12 +13,10 @@ import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidthIn
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -99,7 +98,6 @@ fun AdaptiveSheet(
                         indication = null,
                         onClick = {},
                     )
-                    .systemBarsPadding()
                     .padding(vertical = 16.dp)
                     .then(modifier),
                 shape = MaterialTheme.shapes.extraLarge,
@@ -115,6 +113,7 @@ fun AdaptiveSheet(
             }
         }
     } else {
+        val screenHeightDpForLog = LocalConfiguration.current.screenHeightDp
         val decayAnimationSpec = rememberSplineBasedDecay<Float>()
         val anchoredDraggableState = remember {
             AnchoredDraggableState(
@@ -126,19 +125,41 @@ fun AdaptiveSheet(
             )
         }
         val internalOnDismissRequest = {
+            android.util.Log.d("AdaptiveSheet", "internalOnDismissRequest called. settledValue=${anchoredDraggableState.settledValue}")
             if (anchoredDraggableState.settledValue == 0) {
                 scope.launch { anchoredDraggableState.animateTo(1) }
             }
         }
+
+        // Guard: the original tap that opened the sheet can leak into the
+        // Dialog's scrim clickable, causing the sheet to immediately close.
+        // Disable scrim dismiss for 300ms after the sheet appears to absorb
+        // that stray touch event.
+        var dismissEnabled by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(300)
+            dismissEnabled = true
+            android.util.Log.d("AdaptiveSheet", "dismissEnabled = true (scrim clickable now active)")
+        }
+
         Box(
             modifier = Modifier
                 .clickable(
                     interactionSource = null,
                     indication = null,
-                    onClick = internalOnDismissRequest,
+                    enabled = dismissEnabled,
+                    onClick = {
+                        android.util.Log.d("AdaptiveSheet", "SCRIM CLICKED — calling internalOnDismissRequest")
+                        internalOnDismissRequest()
+                    },
                 )
                 .fillMaxSize()
                 .onSizeChanged {
+                    android.util.Log.d(
+                        "AdaptiveSheet",
+                        "SCRIM(window) onSizeChanged: w=${it.width} h=${it.height} " +
+                            "density=${density.density} screenH=${screenHeightDpForLog}dp",
+                    )
                     val anchors = DraggableAnchors {
                         0 at 0f
                         1 at it.height.toFloat()
@@ -147,9 +168,16 @@ fun AdaptiveSheet(
                 },
             contentAlignment = Alignment.BottomCenter,
         ) {
+            // Constrain the sheet height so tall content scrolls instead of
+            // extending beyond the screen top (which cuts off the top items).
+            val screenHeight = LocalConfiguration.current.screenHeightDp.dp
             Surface(
                 modifier = Modifier
                     .widthIn(max = maxWidth)
+                    .heightIn(max = screenHeight * 0.85f)
+                    .onSizeChanged {
+                        android.util.Log.d("AdaptiveSheet", "Surface onSizeChanged: w=${it.width} h=${it.height}")
+                    }
                     .clickable(
                         interactionSource = null,
                         indication = null,
@@ -170,21 +198,17 @@ fun AdaptiveSheet(
                     )
                     .then(modifier)
                     .offset {
-                        IntOffset(
-                            0,
-                            anchoredDraggableState.offset
-                                .takeIf { it.isFinite() }
-                                ?.roundToInt()
-                                ?: 0,
-                        )
+                        val o = anchoredDraggableState.offset
+                            .takeIf { it.isFinite() }
+                            ?.roundToInt()
+                            ?: 0
+                        IntOffset(0, o)
                     }
                     .anchoredDraggable(
                         state = anchoredDraggableState,
                         orientation = Orientation.Vertical,
                         enabled = enableSwipeDismiss,
-                    )
-                    .navigationBarsPadding()
-                    .statusBarsPadding(),
+                    ),
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 content = {
@@ -197,11 +221,16 @@ fun AdaptiveSheet(
             )
 
             LaunchedEffect(anchoredDraggableState) {
-                scope.launch { anchoredDraggableState.animateTo(0) }
+                android.util.Log.d("AdaptiveSheet", "LaunchedEffect: animateTo(0) start. state=${anchoredDraggableState.settledValue}")
+                scope.launch {
+                    anchoredDraggableState.animateTo(0)
+                    android.util.Log.d("AdaptiveSheet", "animateTo(0) done. state=${anchoredDraggableState.settledValue} offset=${anchoredDraggableState.offset}")
+                }
                 snapshotFlow { anchoredDraggableState.settledValue }
                     .drop(1)
                     .filter { it == 1 }
                     .collectLatest {
+                        android.util.Log.d("AdaptiveSheet", "settled to 1 → onDismissRequest")
                         onDismissRequest()
                     }
             }

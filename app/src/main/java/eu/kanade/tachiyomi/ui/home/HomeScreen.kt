@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -387,6 +388,7 @@ object HomeScreen : Screen() {
                                 // LocalHostScaffoldContentPadding.
                                 LibraryUpdateProgressOverlay(
                                     onViewFailures = {
+                                        UpdatesTab.navigateToFetchingRequested = true
                                         tabNavigator.current = UpdatesTab
                                     },
                                     hazeState = hazeState,
@@ -1029,6 +1031,37 @@ private fun SearchFirstTopBarContent(
                         contentDescription = "Close search",
                     )
                 }
+            }
+        }
+    }
+
+    // Collection subtitle — shown below the top bar when a library tab provides
+    // a collection name and/or item count. Hidden during active search.
+    if (!isSearchActive && (sharedTopBarState.subtitle != null || sharedTopBarState.numberOfEntries != null)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            sharedTopBarState.subtitle?.let { subtitleText ->
+                Text(
+                    text = subtitleText,
+                    color = colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                )
+            }
+            sharedTopBarState.numberOfEntries?.let { count ->
+                if (sharedTopBarState.subtitle != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = "($count)",
+                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                )
             }
         }
     }

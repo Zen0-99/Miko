@@ -14,8 +14,8 @@
     <string name="reading_order_remove_manga">Remove from reading order</string>
     <string name="reading_order_mark_completed">Mark as completed</string>
     <string name="reading_order_mark_incomplete">Mark as incomplete</string>
-    <string name="reading_order_locked_title">Entry locked</string>
-    <string name="reading_order_locked_message">This entry is locked by the reading order "%1". Complete the prerequisite entries first.</string>
+    <string name="reading_order_locked_title">%1$s locked</string>
+    <string name="reading_order_locked_message">Finish the earlier entries in \"%1$s\" to unlock this one.</string>
     <string name="reading_order_locked_view">View reading order</string>
     <string name="reading_order_locked_dismiss">Go back</string>
     <string name="reading_order_delete_confirm">Delete this reading order?</string>
@@ -317,6 +317,7 @@
     <string name="action_remove_bookmark_episode">Desmarcar episódio</string>
     <string name="action_edit_anime_collections">Editar categorias de animes</string>
     <string name="action_edit_manga_collections">Editar categorias de mangás</string>
+        <string name="action_edit_novel_collections">Editar categorias de mangás</string>
     <string name="action_view_episodes">Ver episódios</string>
     <string name="action_previous_episode">Episódio anterior</string>
     <string name="action_play">Play</string>
@@ -337,6 +338,7 @@
     <string name="pref_default_home_tab_library">Defina a tela inicial para a guia Mangá</string>
     <string name="default_manga_collection">Categoria de mangá padrão</string>
     <string name="default_anime_collection">Categoria de anime padrão</string>
+        <string name="default_novel_collection">Categoria de novel padrão</string>
     <string name="pref_manga_library_update_collections_details">Os mangás nas categorias excluídas não serão atualizados, mesmo que também estejam nas categorias incluídas.</string>
     <string name="pref_anime_library_update_collections_details">Os animes nas categorias excluídas não serão atualizados, mesmo que também estejam nas categorias incluídas.</string>
     <string name="unofficial_extension_message_aniyomi">Esta extensão não está na lista oficial de extensões do Aniyomi.</string>

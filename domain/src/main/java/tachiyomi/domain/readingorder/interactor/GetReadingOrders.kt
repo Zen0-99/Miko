@@ -6,9 +6,9 @@ import tachiyomi.domain.readingorder.repository.ReadingOrderRepository
 class GetReadingOrders(
     private val repository: ReadingOrderRepository,
 ) {
-    suspend fun await(): List<ReadingOrder> = repository.getAllReadingOrders()
+    suspend fun await(entryKind: String): List<ReadingOrder> = repository.getReadingOrdersByKind(entryKind)
 
     suspend fun await(id: Long): ReadingOrder? = repository.getReadingOrder(id)
 
-    suspend fun awaitForManga(mangaId: Long): List<ReadingOrder> = repository.getReadingOrdersForManga(mangaId)
+    suspend fun awaitForEntry(entryId: Long): List<ReadingOrder> = repository.getReadingOrdersForEntry(entryId)
 }

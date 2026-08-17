@@ -2,23 +2,30 @@ CREATE TABLE reading_order(
     _id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     description TEXT,
+    entry_kind TEXT NOT NULL DEFAULT 'manga',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
 
 getReadingOrderById:
-SELECT _id AS id, name, description, created_at, updated_at
+SELECT _id AS id, name, description, entry_kind, created_at, updated_at
 FROM reading_order
 WHERE _id = :id;
 
 getAllReadingOrders:
-SELECT _id AS id, name, description, created_at, updated_at
+SELECT _id AS id, name, description, entry_kind, created_at, updated_at
 FROM reading_order
 ORDER BY updated_at DESC;
 
+getReadingOrdersByKind:
+SELECT _id AS id, name, description, entry_kind, created_at, updated_at
+FROM reading_order
+WHERE entry_kind = :entryKind
+ORDER BY updated_at DESC;
+
 insertReadingOrder:
-INSERT INTO reading_order(name, description, created_at, updated_at)
-VALUES (:name, :description, :createdAt, :updatedAt);
+INSERT INTO reading_order(name, description, entry_kind, created_at, updated_at)
+VALUES (:name, :description, :entryKind, :createdAt, :updatedAt);
 
 updateReadingOrder:
 UPDATE reading_order

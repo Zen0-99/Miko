@@ -19,6 +19,9 @@ import eu.kanade.tachiyomi.ui.collection.anime.animeCollectionTab
 import eu.kanade.tachiyomi.ui.collection.manga.MangaCollectionEvent
 import eu.kanade.tachiyomi.ui.collection.manga.MangaCollectionScreenModel
 import eu.kanade.tachiyomi.ui.collection.manga.mangaCollectionTab
+import eu.kanade.tachiyomi.ui.collection.novel.NovelCollectionEvent
+import eu.kanade.tachiyomi.ui.collection.novel.NovelCollectionScreenModel
+import eu.kanade.tachiyomi.ui.collection.novel.novelCollectionTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.persistentListOf
@@ -44,9 +47,14 @@ data object CollectionsTab : Tab {
         }
 
     private val switchToMangaCollectionTabChannel = Channel<Unit>(1, BufferOverflow.DROP_OLDEST)
+    private val switchToNovelCollectionTabChannel = Channel<Unit>(1, BufferOverflow.DROP_OLDEST)
 
     fun showMangaCollection() {
         switchToMangaCollectionTabChannel.trySend(Unit)
+    }
+
+    fun showNovelCollection() {
+        switchToNovelCollectionTabChannel.trySend(Unit)
     }
 
     @Composable
@@ -55,10 +63,12 @@ data object CollectionsTab : Tab {
 
         val animeCollectionScreenModel = rememberScreenModel { AnimeCollectionScreenModel() }
         val mangaCollectionScreenModel = rememberScreenModel { MangaCollectionScreenModel() }
+        val novelCollectionScreenModel = rememberScreenModel { NovelCollectionScreenModel() }
 
         val tabs = persistentListOf(
             animeCollectionTab(),
             mangaCollectionTab(),
+            novelCollectionTab(),
         )
 
         val state = rememberPagerState { tabs.size }
@@ -74,6 +84,11 @@ data object CollectionsTab : Tab {
         }
 
         LaunchedEffect(Unit) {
+            switchToNovelCollectionTabChannel.receiveAsFlow()
+                .collectLatest { state.scrollToPage(2) }
+        }
+
+        LaunchedEffect(Unit) {
             (context as? MainActivity)?.ready = true
         }
 
@@ -85,6 +100,11 @@ data object CollectionsTab : Tab {
             }
             animeCollectionScreenModel.events.collectLatest { event ->
                 if (event is AnimeCollectionEvent.LocalizedMessage) {
+                    context.toast(event.stringRes)
+                }
+            }
+            novelCollectionScreenModel.events.collectLatest { event ->
+                if (event is NovelCollectionEvent.LocalizedMessage) {
                     context.toast(event.stringRes)
                 }
             }

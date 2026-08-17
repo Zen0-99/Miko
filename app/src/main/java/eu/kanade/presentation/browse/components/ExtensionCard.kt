@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -68,10 +69,12 @@ fun ExtensionCard(
     isUpdating: Boolean = false,
     isInstalled: Boolean = true,
     isObsolete: Boolean = false,
+    isUntrusted: Boolean = false,
     supportsComments: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     onCogClick: () -> Unit = {},
+    onTrustClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -110,6 +113,19 @@ fun ExtensionCard(
                         strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.primary,
                     )
+                } else if (isUntrusted) {
+                    // Untrusted: show trust button (VerifiedUser icon)
+                    IconButton(
+                        onClick = onTrustClick,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.VerifiedUser,
+                            contentDescription = stringResource(MR.strings.ext_trust),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                 } else if (!isInstalled) {
                     // Not-installed: show install button only (no cog)
                     IconButton(

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +36,7 @@ import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.BaseSortItem
 import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.HeadingItem
+import tachiyomi.presentation.core.components.IconItem
 import tachiyomi.presentation.core.components.RadioItem
 import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.components.SettingsChipRow
@@ -49,6 +51,7 @@ fun MangaLibrarySettingsDialog(
     onDismissRequest: () -> Unit,
     screenModel: MangaLibrarySettingsScreenModel,
     collection: Collection?,
+    onClickReadingOrders: () -> Unit,
 ) {
     TabbedDialog(
         onDismissRequest = onDismissRequest,
@@ -73,6 +76,7 @@ fun MangaLibrarySettingsDialog(
                 )
                 2 -> DisplayPage(
                     screenModel = screenModel,
+                    onClickReadingOrders = onClickReadingOrders,
                 )
             }
         }
@@ -190,6 +194,7 @@ private fun ColumnScope.SortPage(
             MR.strings.action_sort_date_added to MangaLibrarySort.Type.DateAdded,
             trackerMeanPair,
             AYMR.strings.action_sort_custom_order to MangaLibrarySort.Type.CustomOrder,
+            AYMR.strings.reading_order to MangaLibrarySort.Type.ReadingOrder,
             MR.strings.action_sort_random to MangaLibrarySort.Type.Random,
         )
     }
@@ -239,6 +244,7 @@ private val displayModes = listOf(
 @Composable
 private fun ColumnScope.DisplayPage(
     screenModel: MangaLibrarySettingsScreenModel,
+    onClickReadingOrders: () -> Unit,
 ) {
     val displayMode by screenModel.libraryPreferences.displayMode().collectAsStateWithLifecycle()
     SettingsChipRow(MR.strings.action_display_mode) {
@@ -289,7 +295,7 @@ private fun ColumnScope.DisplayPage(
         )
     }
 
-    HeadingItem(MR.strings.overlay_header)
+    HeadingItem(MR.strings.overlay_cover_badges)
     CheckboxItem(
         label = stringResource(MR.strings.action_display_download_badge),
         pref = screenModel.libraryPreferences.downloadBadge(),
@@ -306,23 +312,21 @@ private fun ColumnScope.DisplayPage(
         label = stringResource(MR.strings.action_display_language_badge),
         pref = screenModel.libraryPreferences.languageBadge(),
     )
+
+    HeadingItem(MR.strings.overlay_actions)
+    CheckboxItem(
+        label = stringResource(MR.strings.action_display_show_reading_number),
+        pref = screenModel.libraryPreferences.showReadingNumber(),
+    )
     CheckboxItem(
         label = stringResource(AYMR.strings.action_display_show_continue_reading_button),
         pref = screenModel.libraryPreferences.showContinueViewingButton(),
     )
 
-    HeadingItem(MR.strings.tabs_header)
-    CheckboxItem(
-        label = stringResource(MR.strings.action_display_show_tabs),
-        pref = screenModel.libraryPreferences.collectionTabs(),
-    )
-    CheckboxItem(
-        label = stringResource(MR.strings.action_display_show_number_of_items),
-        pref = screenModel.libraryPreferences.collectionNumberOfItems(),
-    )
+    HeadingItem(MR.strings.collection_display_mode)
     val collectionDisplayMode by screenModel.libraryPreferences.collectionDisplayMode().collectAsStateWithLifecycle()
     RadioItem(
-        label = "Tabbed pages (swipeable)",
+        label = stringResource(MR.strings.collection_display_tabbed),
         selected = collectionDisplayMode == tachiyomi.domain.library.model.LibraryCollectionDisplay.TABBED,
         onClick = {
             screenModel.libraryPreferences.collectionDisplayMode().set(
@@ -331,12 +335,57 @@ private fun ColumnScope.DisplayPage(
         },
     )
     RadioItem(
-        label = "Continuous scroll (section headers)",
+        label = stringResource(MR.strings.collection_display_continuous),
         selected = collectionDisplayMode == tachiyomi.domain.library.model.LibraryCollectionDisplay.CONTINUOUS,
         onClick = {
             screenModel.libraryPreferences.collectionDisplayMode().set(
                 tachiyomi.domain.library.model.LibraryCollectionDisplay.CONTINUOUS,
             )
         },
+    )
+
+    // Common settings — "show number of items" applies to both modes
+    HeadingItem(MR.strings.tabs_header)
+    CheckboxItem(
+        label = stringResource(MR.strings.action_display_show_number_of_items),
+        pref = screenModel.libraryPreferences.collectionNumberOfItems(),
+    )
+    // "Show author" only in List or ComfortableGrid display mode
+    if (displayMode == LibraryDisplayMode.List ||
+        displayMode == LibraryDisplayMode.ComfortableGrid
+    ) {
+        CheckboxItem(
+            label = stringResource(MR.strings.action_display_show_list_author),
+            pref = screenModel.libraryPreferences.showListAuthor(),
+        )
+    }
+    // "Show status" only in List display mode
+    if (displayMode == LibraryDisplayMode.List) {
+        CheckboxItem(
+            label = stringResource(MR.strings.action_display_show_list_status),
+            pref = screenModel.libraryPreferences.showListStatus(),
+        )
+    }
+
+    // Tabbed-only settings
+    if (collectionDisplayMode == tachiyomi.domain.library.model.LibraryCollectionDisplay.TABBED) {
+        CheckboxItem(
+            label = stringResource(MR.strings.action_display_show_tabs),
+            pref = screenModel.libraryPreferences.collectionTabs(),
+        )
+        val showCollectionTabs by screenModel.libraryPreferences.collectionTabs().collectAsStateWithLifecycle()
+        if (!showCollectionTabs) {
+            CheckboxItem(
+                label = stringResource(MR.strings.action_display_show_library_title),
+                pref = screenModel.libraryPreferences.showLibraryTitle(),
+            )
+        }
+    }
+
+    HeadingItem(AYMR.strings.reading_order_list)
+    IconItem(
+        label = stringResource(AYMR.strings.reading_order_list),
+        icon = Icons.AutoMirrored.Outlined.List,
+        onClick = onClickReadingOrders,
     )
 }

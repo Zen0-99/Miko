@@ -94,8 +94,6 @@ fun Screen.fetchingTab(
                 onDismissEntry = screenModel::deleteById,
                 onDismissGroup = screenModel::deleteByReason,
                 onClearAll = screenModel::clearAll,
-                onPause = screenModel::pause,
-                onResume = { screenModel.resume(context) },
                 onCancel = screenModel::cancel,
                 modifier = Modifier.padding(contentPadding),
             )

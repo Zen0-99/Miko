@@ -1,6 +1,7 @@
 package eu.kanade.presentation.library.components
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Folder
@@ -57,6 +58,15 @@ internal fun PinnedBadge() {
     )
 }
 
+@Composable
+internal fun ReadingOrderBadge(layer: Int) {
+    Badge(
+        text = "$layer",
+        color = Color.Black,
+        textColor = Color.White,
+    )
+}
+
 @PreviewLightDark
 @Composable
 private fun BadgePreview() {
@@ -67,6 +77,7 @@ private fun BadgePreview() {
             LanguageBadge(isLocal = true, sourceLanguage = "EN")
             LanguageBadge(isLocal = false, sourceLanguage = "EN")
             PinnedBadge()
+            ReadingOrderBadge(layer = 3)
         }
     }
 }

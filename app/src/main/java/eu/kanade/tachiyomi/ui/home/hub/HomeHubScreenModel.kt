@@ -234,22 +234,28 @@ class HomeHubScreenModel(
     }
 
     /**
-     * Delete all selected items. For recently-read items, resets the history entry.
+     * Delete all selected items. For recently-read items, deletes ALL history
+     * for that entry (not just the single chapter shown on the home screen),
+     * so the item disappears entirely as if never read. If the user reads it
+     * again, a new history entry is created and it reappears normally.
      * For recently-added items, optimistically removes from state.
      */
     fun deleteSelectedItems() {
         val currentState = mutableState.value
         val selectedIds = currentState.selection
         screenModelScope.launchIO {
-            // Delete history entries for recently-read items
+            // Delete ALL history for recently-read entries (by anime/manga/novel id,
+            // not by individual history record id) so the item is fully removed
+            // from the home screen as if never read. Uses DELETE instead of
+            // reset (SET last_read=0) so the entry is completely gone.
             currentState.recentAnime.filter { it.animeId in selectedIds }.forEach {
-                animeHistoryRepository.resetAnimeHistory(it.id)
+                animeHistoryRepository.deleteHistoryByAnimeId(it.animeId)
             }
             currentState.recentManga.filter { it.mangaId in selectedIds }.forEach {
-                mangaHistoryRepository.resetMangaHistory(it.id)
+                mangaHistoryRepository.deleteHistoryByMangaId(it.mangaId)
             }
             currentState.recentNovels.filter { it.novelId in selectedIds }.forEach {
-                novelHistoryRepository.resetNovelHistory(it.id)
+                novelHistoryRepository.deleteHistoryByNovelId(it.novelId)
             }
             // Optimistically remove both recently-read and recently-added items
             mutableState.update { state ->

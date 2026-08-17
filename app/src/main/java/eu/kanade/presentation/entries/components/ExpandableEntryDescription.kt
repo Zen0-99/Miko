@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -32,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tachiyomi.i18n.MR
@@ -79,7 +77,6 @@ fun ExpandableEntryDescription(
         // has been applied for one full frame without animation, so the initial
         // sizing is instant but subsequent expand/collapse toggles animate.
         var hasLaidOut by remember { mutableStateOf(false) }
-        val density = LocalDensity.current
         val desc = description.takeIf { !it.isNullOrBlank() }
             ?: stringResource(MR.strings.description_placeholder)
         val trimmedDescription = remember(desc) {
@@ -128,13 +125,6 @@ fun ExpandableEntryDescription(
                     } else {
                         Modifier
                     },
-                )
-                .then(
-                    if (!expanded && canExpand && collapsedTextHeight != null) {
-                        Modifier.height(with(density) { collapsedTextHeight!!.toDp() })
-                    } else {
-                        Modifier
-                    },
                 ),
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -142,11 +132,15 @@ fun ExpandableEntryDescription(
                     text = trimmedDescription,
                     style = MaterialTheme.typography.bodyMedium,
                     color = descColor,
-                    maxLines = Int.MAX_VALUE,
+                    maxLines = if (expanded) Int.MAX_VALUE else 3,
                     overflow = TextOverflow.Visible,
                     modifier = Modifier.fillMaxWidth(),
                     onTextLayout = { textLayoutResult ->
-                        isOverflowing = textLayoutResult.lineCount > 3
+                        isOverflowing = if (expanded) {
+                            textLayoutResult.lineCount > 3
+                        } else {
+                            textLayoutResult.hasVisualOverflow || textLayoutResult.lineCount > 3
+                        }
                         if (textLayoutResult.lineCount >= 3) {
                             collapsedTextHeight = textLayoutResult.getLineBottom(2).toInt()
                         } else {

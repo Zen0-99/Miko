@@ -44,10 +44,22 @@ class UpdateAnime(
         // if the anime isn't a favorite, set its title from source and update in db
         val title = if (remoteTitle.isEmpty() || localAnime.favorite) null else remoteTitle
 
+        // Cover art checker: if the cover cache file doesn't exist, force a
+        // cover refresh. Uses LOCAL thumbnailUrl for the check.
+        val coverFileExists = coverCache.getCoverFile(localAnime.thumbnailUrl)?.exists() == true
+        val hasLocalThumbnailUrl = !localAnime.thumbnailUrl.isNullOrEmpty()
+        val hasRemoteThumbnailUrl = !remoteAnime.thumbnail_url.isNullOrEmpty()
+
         val coverLastModified =
             when {
-                // Never refresh covers if the url is empty to avoid "losing" existing covers
-                remoteAnime.thumbnail_url.isNullOrEmpty() -> null
+                // No cover URL anywhere — can't fetch a cover
+                !hasLocalThumbnailUrl && !hasRemoteThumbnailUrl -> null
+                // Cover cache file is missing — force refresh
+                !coverFileExists -> {
+                    coverCache.deleteFromCache(localAnime, false)
+                    Instant.now().toEpochMilli()
+                }
+                // Cover exists and URL hasn't changed — no need to refresh
                 !manualFetch && localAnime.thumbnailUrl == remoteAnime.thumbnail_url -> null
                 localAnime.isLocal() -> Instant.now().toEpochMilli()
                 localAnime.hasCustomCover(coverCache) -> {
@@ -76,7 +88,12 @@ class UpdateAnime(
                 }
             }
 
-        val thumbnailUrl = remoteAnime.thumbnail_url?.takeIf { it.isNotEmpty() }
+        // Use remote thumbnailUrl if provided, otherwise keep the local one
+        val thumbnailUrl = if (hasRemoteThumbnailUrl) {
+            remoteAnime.thumbnail_url?.takeIf { it.isNotEmpty() }
+        } else {
+            localAnime.thumbnailUrl
+        }
 
         val backgroundUrl = remoteAnime.background_url?.takeIf { it.isNotEmpty() }
 

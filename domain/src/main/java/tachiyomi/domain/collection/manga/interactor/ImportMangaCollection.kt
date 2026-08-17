@@ -165,7 +165,7 @@ class ImportMangaCollection(
             }
             existingOrderNames.add(finalName)
 
-            val orderId = readingOrderRepository.insertReadingOrder(finalName, mcollRO.description)
+            val orderId = readingOrderRepository.insertReadingOrder(finalName, mcollRO.description, "manga")
 
             // Add nodes
             for (uuid in mcollRO.nodeUuids) {

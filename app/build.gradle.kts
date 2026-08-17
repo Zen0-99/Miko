@@ -204,6 +204,7 @@ dependencies {
     implementation(compose.foundation)
     implementation(compose.material3.core)
     implementation(compose.material.icons)
+    implementation(libs.compose.tabler.icons)
     implementation(compose.animation)
     implementation(compose.animation.graphics)
     debugImplementation(compose.ui.tooling)
@@ -285,7 +286,7 @@ dependencies {
     implementation(libs.subsamplingscaleimageview) {
         exclude(module = "image-decoder")
     }
-    implementation(files("../libs/image-decoder-16kb.aar"))
+    implementation("local.lib:image-decoder:16kb@aar")
 
     // UI libraries
     implementation(libs.material)
@@ -327,7 +328,7 @@ dependencies {
         implementation(aniyomilibs.ffmpeg.kit)
     implementation(aniyomilibs.arthenica.smartexceptions)
     // TorrServer
-    implementation(files("../libs/torrserver-0.1.0-16kb.aar"))
+    implementation("local.lib:torrserver:0.1.0-16kb@aar")
     // seeker seek bar
     implementation(aniyomilibs.seeker)
     // true type parser

@@ -61,6 +61,7 @@ class MangaCoverFetcher(
         get() = diskCacheKeyLazy.value
 
     override suspend fun fetch(): FetchResult {
+        android.util.Log.d("MangaCoverFetcher", "fetch: url=$url isLibraryManga=$isLibraryManga diskCacheKey=$diskCacheKey")
         // Use custom cover if exists
         val useCustomCover = options.extras.getOrDefault(USE_CUSTOM_COVER_KEY)
         if (useCustomCover) {
@@ -109,14 +110,18 @@ class MangaCoverFetcher(
         } else {
             null
         }
-        if (libraryCoverCacheFile?.exists() == true && options.diskCachePolicy.readEnabled) {
-            return fileLoader(libraryCoverCacheFile)
+        val coverExists = libraryCoverCacheFile?.exists() == true
+        android.util.Log.d("MangaCoverFetcher", "httpLoader: url=$url coverExists=$coverExists coverFile=$libraryCoverCacheFile")
+        if (coverExists && options.diskCachePolicy.readEnabled) {
+            android.util.Log.d("MangaCoverFetcher", "httpLoader: returning from cover cache")
+            return fileLoader(libraryCoverCacheFile!!)
         }
 
         var snapshot = readFromDiskCache()
         try {
             // Fetch from disk cache
             if (snapshot != null) {
+                android.util.Log.d("MangaCoverFetcher", "httpLoader: found disk cache snapshot")
                 val snapshotCoverCache = moveSnapshotToCoverCache(snapshot, libraryCoverCacheFile)
                 if (snapshotCoverCache != null) {
                     // Read from cover cache after added to library
@@ -132,12 +137,15 @@ class MangaCoverFetcher(
             }
 
             // Fetch from network
+            android.util.Log.d("MangaCoverFetcher", "httpLoader: executing network request to $url")
             val response = executeNetworkRequest()
+            android.util.Log.d("MangaCoverFetcher", "httpLoader: network response code=${response.code}")
             val responseBody = checkNotNull(response.body) { "Null response source" }
             try {
                 // Read from cover cache after library manga cover updated
                 val responseCoverCache = writeResponseToCoverCache(response, libraryCoverCacheFile)
                 if (responseCoverCache != null) {
+                    android.util.Log.d("MangaCoverFetcher", "httpLoader: wrote to cover cache, returning")
                     return fileLoader(responseCoverCache)
                 }
 
@@ -162,6 +170,7 @@ class MangaCoverFetcher(
                 throw e
             }
         } catch (e: Exception) {
+            android.util.Log.e("MangaCoverFetcher", "httpLoader: FAILED for url=$url: ${e::class.simpleName}: ${e.message}")
             snapshot?.close()
             throw e
         }

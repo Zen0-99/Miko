@@ -65,11 +65,13 @@ class NovelCoverFetcher(
         get() = diskCacheKeyLazy.value
 
     override suspend fun fetch(): FetchResult {
+        android.util.Log.d("NovelCoverFetcher", "fetch: url=$url isLibraryNovel=$isLibraryNovel diskCacheKey=$diskCacheKey")
         // Use custom cover if exists
         val useCustomCover = options.extras.getOrDefault(USE_CUSTOM_COVER_KEY)
         if (useCustomCover) {
             val customCoverFile = customCoverFileLazy.value
             if (customCoverFile.exists()) {
+                android.util.Log.d("NovelCoverFetcher", "fetch: using custom cover")
                 return fileLoader(customCoverFile)
             }
         }
@@ -113,14 +115,18 @@ class NovelCoverFetcher(
         } else {
             null
         }
-        if (libraryCoverCacheFile?.exists() == true && options.diskCachePolicy.readEnabled) {
-            return fileLoader(libraryCoverCacheFile)
+        val coverExists = libraryCoverCacheFile?.exists() == true
+        android.util.Log.d("NovelCoverFetcher", "httpLoader: url=$url coverExists=$coverExists coverFile=$libraryCoverCacheFile")
+        if (coverExists && options.diskCachePolicy.readEnabled) {
+            android.util.Log.d("NovelCoverFetcher", "httpLoader: returning from cover cache")
+            return fileLoader(libraryCoverCacheFile!!)
         }
 
         var snapshot = readFromDiskCache()
         try {
             // Fetch from disk cache
             if (snapshot != null) {
+                android.util.Log.d("NovelCoverFetcher", "httpLoader: found disk cache snapshot")
                 val snapshotCoverCache = moveSnapshotToCoverCache(snapshot, libraryCoverCacheFile)
                 if (snapshotCoverCache != null) {
                     // Read from cover cache after added to library
@@ -136,23 +142,25 @@ class NovelCoverFetcher(
             }
 
             // Fetch from plugin's fetchImage() when available (LNReader JS plugins).
-            // This uses the plugin's own fetch logic (dynamic headers, Referer, etc.)
-            // instead of a raw HTTP request with only static headers.
             val source = sourceLazy.value
             if (source is NovelPluginImageSource) {
+                android.util.Log.d("NovelCoverFetcher", "httpLoader: trying plugin fetchImage")
                 val pluginResult = pluginImageFetch(source, libraryCoverCacheFile)
                 if (pluginResult != null) {
                     return pluginResult
                 }
             }
 
-            // Fall back to direct HTTP request (APK extensions or plugin without fetchImage)
+            // Fall back to direct HTTP request
+            android.util.Log.d("NovelCoverFetcher", "httpLoader: executing network request to $url")
             val response = executeNetworkRequest()
+            android.util.Log.d("NovelCoverFetcher", "httpLoader: network response code=${response.code}")
             val responseBody = checkNotNull(response.body) { "Null response source" }
             try {
                 // Read from cover cache after library novel cover updated
                 val responseCoverCache = writeResponseToCoverCache(response, libraryCoverCacheFile)
                 if (responseCoverCache != null) {
+                    android.util.Log.d("NovelCoverFetcher", "httpLoader: wrote to cover cache, returning")
                     return fileLoader(responseCoverCache)
                 }
 
@@ -177,6 +185,7 @@ class NovelCoverFetcher(
                 throw e
             }
         } catch (e: Exception) {
+            android.util.Log.e("NovelCoverFetcher", "httpLoader: FAILED for url=$url: ${e::class.simpleName}: ${e.message}")
             snapshot?.close()
             throw e
         }

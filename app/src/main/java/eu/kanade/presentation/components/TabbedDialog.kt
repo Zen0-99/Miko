@@ -51,6 +51,7 @@ fun TabbedDialog(
     onOverflowMenuClicked: (() -> Unit)? = null,
     overflowIcon: ImageVector? = null,
     pagerState: PagerState = rememberPagerState { tabTitles.size },
+    fillHeight: Boolean = false,
     content: @Composable (Int) -> Unit,
 ) {
     AdaptiveSheet(
@@ -104,7 +105,7 @@ fun TabbedDialog(
             HorizontalDivider()
 
             HorizontalPager(
-                modifier = Modifier.animateContentSize(),
+                modifier = if (fillHeight) Modifier.weight(1f) else Modifier.animateContentSize(),
                 state = pagerState,
                 verticalAlignment = Alignment.Top,
                 pageContent = { page -> content(page) },

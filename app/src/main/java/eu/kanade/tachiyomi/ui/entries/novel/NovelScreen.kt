@@ -8,9 +8,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +55,8 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import eu.kanade.tachiyomi.ui.reader.novel.NovelHighlightsScreen
+import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen
+import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toast
@@ -62,6 +66,8 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
+import tachiyomi.domain.readingorder.model.ReadingOrder
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -87,6 +93,8 @@ class NovelScreen(
         val haptic = LocalHapticFeedback.current
         val scope = rememberCoroutineScope()
         val lifecycleOwner = LocalLifecycleOwner.current
+        val getLockedReadingOrders: GetLockedReadingOrders = remember { Injekt.get() }
+        var lockDialog by remember { mutableStateOf<List<ReadingOrder>>(emptyList()) }
         val screenModel =
             rememberScreenModel { NovelScreenModel(context, lifecycleOwner.lifecycle, novelId, fromSource) }
 
@@ -135,7 +143,14 @@ class NovelScreen(
             chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
             navigateUp = navigator::pop,
             onChapterClicked = { chapter ->
-                navigator.push(NovelReaderScreen(novelId, chapter.id))
+                scope.launch {
+                    val lockedOrders = getLockedReadingOrders.await(novelId)
+                    if (lockedOrders.isNotEmpty()) {
+                        lockDialog = lockedOrders
+                    } else {
+                        navigator.push(NovelReaderScreen(novelId, chapter.id))
+                    }
+                }
             },
             onDownloadChapter = screenModel::runChapterDownloadActions.takeIf { !successState.source.isLocalOrStub() },
             onAddToLibraryClicked = {
@@ -351,6 +366,17 @@ class NovelScreen(
                     onDismissRequest = onDismissRequest,
                 )
             }
+        }
+
+        if (lockDialog.isNotEmpty()) {
+            ReadingOrderLockDialog(
+                lockedOrders = lockDialog,
+                onDismiss = { lockDialog = emptyList() },
+                onViewOrder = { orderId ->
+                    lockDialog = emptyList()
+                    navigator.push(ReadingOrderViewerScreen(orderId))
+                },
+            )
         }
     }
 

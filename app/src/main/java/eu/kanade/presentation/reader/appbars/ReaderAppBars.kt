@@ -10,7 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -71,12 +72,6 @@ fun ReaderAppBars(
         .surfaceColorAtElevation(3.dp)
         .copy(alpha = if (isSystemInDarkTheme()) 0.9f else 0.95f)
 
-    val modifierWithInsetsPadding = if (fullscreen) {
-        Modifier.systemBarsPadding()
-    } else {
-        Modifier
-    }
-
     Column(
         modifier = Modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.SpaceBetween,
@@ -92,8 +87,13 @@ fun ReaderAppBars(
                 animationSpec = animationSpec,
             ),
         ) {
+            // AppBar already handles status bar padding internally (adds
+            // statusBarHeight as top padding with background extending behind
+            // the status bar). Don't wrap with systemBarsPadding — that would
+            // push the entire bar (including background) inward, leaving the
+            // status bar area without background.
             AppBar(
-                modifier = modifierWithInsetsPadding
+                modifier = Modifier
                     .clickable(onClick = onClickTopAppBar),
                 backgroundColor = backgroundColor,
                 title = mangaTitle,
@@ -164,8 +164,13 @@ fun ReaderAppBars(
                 animationSpec = animationSpec,
             ),
         ) {
+            // No edge-to-edge background — the ChapterNavigator has its own
+            // rounded elements and BottomReaderBar is a floating rounded pill.
+            // Only apply navigation bar padding so content sits above the nav bar.
             Column(
-                modifier = modifierWithInsetsPadding,
+                modifier = Modifier
+                    .then(if (fullscreen) Modifier.navigationBarsPadding() else Modifier)
+                    .padding(bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
             ) {
                 ChapterNavigator(

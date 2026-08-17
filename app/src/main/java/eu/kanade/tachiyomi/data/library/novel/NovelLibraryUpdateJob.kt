@@ -24,6 +24,7 @@ import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.model.NovelUpdateStrategy
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.util.system.isRunning
+import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -96,12 +97,11 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
 
         val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
-        val isResume = inputData.getBoolean(KEY_RESUME, false)
         addNovelsToQueue(collectionId)
 
         return withIOContext {
             try {
-                updateChapterList(isResume = isResume)
+                updateChapterList()
                 Result.success()
             } catch (e: Exception) {
                 if (e is CancellationException) {
@@ -239,7 +239,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      * Method that updates novels in [novelsToUpdate]. It's called in a background thread, so it's safe
      * to do heavy operations or network calls here.
      */
-    private suspend fun updateChapterList(isResume: Boolean = false) {
+    private suspend fun updateChapterList() {
         val semaphore = Semaphore(5)
         val progressCount = AtomicInteger(0)
         val currentlyUpdatingNovels = CopyOnWriteArrayList<Novel>()
@@ -247,10 +247,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val failedUpdates = CopyOnWriteArrayList<Pair<Novel, String?>>()
 
         // Publish initial running state to the in-app progress bus
-        LibraryUpdateProgressBus.startRun(total = novelsToUpdate.size, source = "Novel", isResume = isResume)
-        if (isResume) {
-            progressCount.set(LibraryUpdateProgressBus.checkpoint.size)
-        }
+        LibraryUpdateProgressBus.startRun(total = novelsToUpdate.size, source = "Novel")
 
         try {
             coroutineScope {
@@ -262,22 +259,13 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                     val novel = libraryNovel.novel
                                     ensureActive()
 
-                                    // Cooperative pause/cancel check
-                                    if (LibraryUpdateProgressBus.isCancelRequested()) {
+                                    // Cooperative cancel check
+                                    if (LibraryUpdateProgressBus.isCancelRequested("Novel")) {
                                         throw CancellationException("User cancelled library update")
-                                    }
-                                    if (LibraryUpdateProgressBus.isPauseRequested()) {
-                                        throw CancellationException("User paused library update")
                                     }
 
                                     // Don't continue to update if novel is not in library
                                     if (getNovel.await(novel.id)?.favorite != true) {
-                                        return@forEach
-                                    }
-
-                                    // Skip entries already processed in a prior (paused) run
-                                    if (novel.id in LibraryUpdateProgressBus.checkpoint) {
-                                        progressCount.incrementAndGet()
                                         return@forEach
                                     }
 
@@ -338,9 +326,6 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                             failedUpdates.add(novel to errorMessage)
                                         }
                                     }
-
-                                    // Mark processed for resume checkpoint
-                                    LibraryUpdateProgressBus.markProcessed(novel.id)
                                 }
                             }
                         }
@@ -391,6 +376,14 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val source = sourceManager.getOrStub(novel.source) as? NovelCatalogueSource
             ?: return emptyList()
 
+        // Cover art checker: check if the cover cache file is missing.
+        // This runs regardless of autoUpdateMetadata because missing covers
+        // (e.g., after a backup restore) should always be fetched.
+        val coverCache = Injekt.get<eu.kanade.tachiyomi.data.cache.NovelCoverCache>()
+        val coverFileExists = coverCache.getCoverFile(novel.thumbnailUrl)?.exists() == true
+        val hasLocalThumbnailUrl = !novel.thumbnailUrl.isNullOrEmpty()
+        android.util.Log.d("NovelCoverCheck", "novel=${novel.title} id=${novel.id} thumbnailUrl=${novel.thumbnailUrl} coverFileExists=$coverFileExists hasLocalThumbnailUrl=$hasLocalThumbnailUrl autoUpdateMetadata=${libraryPreferences.autoUpdateMetadata().get()}")
+
         // Update novel metadata if needed
         if (libraryPreferences.autoUpdateMetadata().get()) {
             try {
@@ -400,7 +393,28 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 val artist = if (novel.favorite) null else networkNovel.artist
                 val description = if (novel.favorite) null else networkNovel.description
                 val genres = if (novel.favorite) null else networkNovel.getGenres()
-                val thumbnailUrl = if (novel.favorite) null else networkNovel.thumbnail_url
+                // For favorited novels, only update thumbnailUrl if cover is missing.
+                // Use remote thumbnail_url if available, otherwise keep local.
+                val hasRemoteThumbnailUrl = !networkNovel.thumbnail_url.isNullOrEmpty()
+                val thumbnailUrl = if (novel.favorite) {
+                    if (!coverFileExists) {
+                        if (hasRemoteThumbnailUrl) networkNovel.thumbnail_url
+                        else if (hasLocalThumbnailUrl) null // keep local, just force cover refresh
+                        else null
+                    } else {
+                        null // cover exists, don't overwrite
+                    }
+                } else {
+                    networkNovel.thumbnail_url
+                }
+                // Force coverLastModified update when cover is missing and we
+                // have any thumbnailUrl (local or remote)
+                val coverLastModified = if (!coverFileExists && (hasLocalThumbnailUrl || hasRemoteThumbnailUrl)) {
+                    coverCache.deleteFromCache(novel, false)
+                    java.time.Instant.now().toEpochMilli()
+                } else {
+                    null
+                }
                 val status = if (novel.favorite) null else networkNovel.status.toLong()
 
                 val update = NovelUpdate(
@@ -412,12 +426,78 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     genre = genres,
                     thumbnailUrl = thumbnailUrl,
                     status = status,
+                    coverLastModified = coverLastModified,
                 )
                 val novelRepository = Injekt.get<tachiyomi.domain.entries.novel.repository.NovelRepository>()
                 novelRepository.updateNovel(update)
             } catch (e: Throwable) {
+                android.util.Log.e("NovelCoverCheck", "getNovelDetails FAILED for novel=${novel.title}: ${e::class.simpleName}: ${e.message}")
                 logcat(LogPriority.ERROR, e) { "Metadata update failed for novel ${novel.id}" }
+                context.maybeShowDnsToast(e, novel.thumbnailUrl)
+                // getNovelDetails failed (e.g. Anna's Archive may not support it).
+                // Still try to fix missing covers using the local thumbnailUrl.
+                if (!coverFileExists && hasLocalThumbnailUrl) {
+                    try {
+                        coverCache.deleteFromCache(novel, false)
+                        val novelRepository = Injekt.get<tachiyomi.domain.entries.novel.repository.NovelRepository>()
+                        novelRepository.updateNovel(
+                            NovelUpdate(
+                                id = novel.id,
+                                coverLastModified = java.time.Instant.now().toEpochMilli(),
+                            ),
+                        )
+                        android.util.Log.d("NovelCoverCheck", "Cover refresh triggered (catch block) for novel=${novel.title}")
+                    } catch (e2: Throwable) {
+                        android.util.Log.e("NovelCoverCheck", "Cover refresh FAILED for novel=${novel.title}: ${e2::class.simpleName}: ${e2.message}")
+                        logcat(LogPriority.ERROR, e2) { "Cover refresh failed for novel ${novel.id}" }
+                    }
+                }
             }
+        } else if (!coverFileExists && hasLocalThumbnailUrl) {
+            // autoUpdateMetadata is off, but cover is missing. The stored
+            // thumbnailUrl may be stale. Call getNovelDetails to get a fresh
+            // URL (some sources change CDN hosts), then update both
+            // thumbnailUrl and coverLastModified — same as the detail view.
+            android.util.Log.d("NovelCoverCheck", "autoUpdateMetadata off, fetching fresh details for cover for novel=${novel.title}")
+            try {
+                val networkNovel = source.getNovelDetails(novel.toSNovel())
+                val updateNovelInteractor = Injekt.get<eu.kanade.domain.entries.novel.interactor.UpdateNovel>()
+                updateNovelInteractor.awaitUpdateFromSource(
+                    localNovel = novel,
+                    remoteTitle = networkNovel.title,
+                    remoteAuthor = networkNovel.author,
+                    remoteArtist = networkNovel.artist,
+                    remoteDescription = networkNovel.description,
+                    remoteGenre = networkNovel.getGenres(),
+                    remoteThumbnailUrl = networkNovel.thumbnail_url,
+                    remoteStatus = networkNovel.status.toLong(),
+                    remoteUpdateStrategy = networkNovel.update_strategy,
+                    manualFetch = false,
+                )
+                android.util.Log.d("NovelCoverCheck", "Cover refresh via getNovelDetails for novel=${novel.title}")
+            } catch (e: Throwable) {
+                // getNovelDetails failed — fall back to just updating
+                // coverLastModified with the existing URL
+                android.util.Log.e("NovelCoverCheck", "getNovelDetails failed for cover refresh, falling back: novel=${novel.title}: ${e::class.simpleName}: ${e.message}")
+                context.maybeShowDnsToast(e, novel.thumbnailUrl)
+                try {
+                    coverCache.deleteFromCache(novel, false)
+                    val novelRepository = Injekt.get<tachiyomi.domain.entries.novel.repository.NovelRepository>()
+                    novelRepository.updateNovel(
+                        NovelUpdate(
+                            id = novel.id,
+                            coverLastModified = java.time.Instant.now().toEpochMilli(),
+                        ),
+                    )
+                } catch (e2: Throwable) {
+                    android.util.Log.e("NovelCoverCheck", "Cover refresh fallback FAILED for novel=${novel.title}: ${e2::class.simpleName}: ${e2.message}")
+                }
+            }
+        }
+
+        // Cooperative cancel check before the heavy network call
+        if (LibraryUpdateProgressBus.isCancelRequested("Novel")) {
+            throw CancellationException("User cancelled library update")
         }
 
         val remoteChapters = source.getChapterList(novel.toSNovel())
@@ -537,7 +617,6 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val WORK_NAME_MANUAL = "NovelLibraryUpdate-$TAG-manual"
         private const val WORK_NAME_AUTO = "NovelLibraryUpdate-$TAG-auto"
         private const val KEY_COLLECTION = "collection"
-        private const val KEY_RESUME = "resume"
         // 1-minute hard timeout per novel fetch
         private const val PER_NOVEL_TIMEOUT_MS = 60_000L
 
@@ -566,7 +645,6 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         fun startNow(
             context: Context,
             collection: Collection? = null,
-            resumeFromCheckpoint: Boolean = false,
         ): Boolean {
             val wm = androidx.work.WorkManager.getInstance(context)
             val workQuery = androidx.work.WorkQuery.Builder
@@ -583,7 +661,6 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 .setInputData(
                     workDataOf(
                         KEY_COLLECTION to (collection?.id ?: -1L),
-                        KEY_RESUME to resumeFromCheckpoint,
                     ),
                 )
                 .build()
@@ -630,5 +707,26 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 request,
             )
         }
+
+        /**
+         * Stops a running novel library update job by cancelling the WorkManager
+         * work. This interrupts the coroutine, which triggers the try/finally
+         * in [updateChapterList] to call [LibraryUpdateProgressBus.completeRun].
+         */
+        fun stop(context: Context) {
+            val wm = androidx.work.WorkManager.getInstance(context)
+            val workQuery = androidx.work.WorkQuery.Builder
+                .fromTags(listOf(TAG))
+                .addStates(listOf(WorkInfo.State.RUNNING))
+                .build()
+            wm.getWorkInfos(workQuery).get()
+                .forEach {
+                    wm.cancelWorkById(it.id)
+                    if (it.tags.contains(WORK_NAME_AUTO)) {
+                        setupTask(context)
+                    }
+                }
+        }
     }
 }
+

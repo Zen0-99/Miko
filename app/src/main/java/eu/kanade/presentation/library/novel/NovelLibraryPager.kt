@@ -42,6 +42,9 @@ fun NovelLibraryPager(
     onClickNovel: (LibraryNovel) -> Unit,
     onLongClickNovel: (LibraryNovel) -> Unit,
     onClickContinueReading: ((LibraryNovel) -> Unit)?,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerNovelIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
 ) {
     BoxWithConstraints {
         val density = LocalDensity.current
@@ -85,6 +88,9 @@ fun NovelLibraryPager(
                         onClickContinueReading = onClickContinueReading,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerNovelIds = getPreviousLayerNovelIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
 
@@ -100,6 +106,9 @@ fun NovelLibraryPager(
                         onClickContinueReading = onClickContinueReading,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerNovelIds = getPreviousLayerNovelIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
 
@@ -114,6 +123,9 @@ fun NovelLibraryPager(
                         onClickContinueReading = onClickContinueReading,
                         searchQuery = searchQuery,
                         onGlobalSearchClicked = onGlobalSearchClicked,
+                        getReadingOrderLayer = getReadingOrderLayer,
+                        getPreviousLayerNovelIds = getPreviousLayerNovelIds,
+                        isEntryLocked = isEntryLocked,
                     )
                 }
             }

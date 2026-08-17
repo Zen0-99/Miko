@@ -10,8 +10,10 @@ import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
 import eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob
+import eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob
 import eu.kanade.tachiyomi.data.updater.AppUpdateDownloadJob
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
@@ -263,20 +265,29 @@ class NotificationReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Method called when user wants to stop a library update
+     * Method called when user wants to stop a library update.
+     * Cancels ALL library update jobs (manga, anime, novel) and sets the
+     * cooperative cancel flag on the progress bus so running jobs stop
+     * between entries. Also stops the WorkManager jobs to interrupt
+     * coroutines that are blocked on network calls.
      *
      * @param context context of application
      */
+    /**
+     * Method called when user wants to stop a manga library update.
+     * Only cancels the manga job — per-mode cancel, not all modes.
+     */
     private fun cancelLibraryUpdate(context: Context) {
+        LibraryUpdateProgressBus.requestCancelSource("Manga", context)
         MangaLibraryUpdateJob.stop(context)
     }
 
     /**
-     * Method called when user wants to stop a library update
-     *
-     * @param context context of application
+     * Method called when user wants to stop an anime library update.
+     * Only cancels the anime job — per-mode cancel, not all modes.
      */
     private fun cancelAnimelibUpdate(context: Context) {
+        LibraryUpdateProgressBus.requestCancelSource("Anime", context)
         AnimeLibraryUpdateJob.stop(context)
     }
 

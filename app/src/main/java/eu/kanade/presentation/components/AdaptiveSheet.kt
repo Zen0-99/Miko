@@ -5,6 +5,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
@@ -63,26 +69,46 @@ fun NavigatorAdaptiveSheet(
  * Sheet with adaptive position aligned to bottom on small screen, otherwise aligned to center
  * and will not be able to dismissed with swipe gesture.
  *
- * Max width of the content is set to 460 dp.
+ * On phones uses Material3 [ModalBottomSheet]. On tablets uses a centered Dialog.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdaptiveSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     enableSwipeDismiss: Boolean = true,
+    contentWindowInsets: @Composable () -> WindowInsets = { BottomSheetDefaults.windowInsets },
     content: @Composable () -> Unit,
 ) {
     val isTabletUi = isTabletUi()
 
-    Dialog(
-        onDismissRequest = onDismissRequest,
-        properties = dialogProperties,
-    ) {
-        AdaptiveSheetImpl(
-            modifier = modifier,
-            isTabletUi = isTabletUi,
-            enableSwipeDismiss = enableSwipeDismiss,
+    if (isTabletUi) {
+        // Tablet: centered dialog-style sheet (unchanged)
+        Dialog(
             onDismissRequest = onDismissRequest,
+            properties = dialogProperties,
+        ) {
+            AdaptiveSheetImpl(
+                modifier = modifier,
+                isTabletUi = true,
+                enableSwipeDismiss = enableSwipeDismiss,
+                onDismissRequest = onDismissRequest,
+            ) {
+                content()
+            }
+        }
+    } else {
+        // Phone: standard Material3 ModalBottomSheet — replaces the custom
+        // AnchoredDraggableState impl that was auto-dismissing.
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = onDismissRequest,
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = MaterialTheme.shapes.extraLarge,
+            dragHandle = null,
+            contentWindowInsets = contentWindowInsets,
+            modifier = modifier,
         ) {
             content()
         }
@@ -92,4 +118,5 @@ fun AdaptiveSheet(
 private val dialogProperties = DialogProperties(
     usePlatformDefaultWidth = false,
     decorFitsSystemWindows = true,
+    dismissOnClickOutside = false,
 )

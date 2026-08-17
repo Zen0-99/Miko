@@ -6,6 +6,7 @@ data class ReadingOrder(
     val id: Long,
     val name: String,
     val description: String?,
+    val entryKind: String,
     val createdAt: Long,
     val updatedAt: Long,
 ) : Serializable

@@ -1,0 +1,45 @@
+-- Add entry_kind to reading_order so a reading order knows whether its
+-- entries are manga, novel, or anime.
+ALTER TABLE reading_order ADD COLUMN entry_kind TEXT NOT NULL DEFAULT 'manga';
+
+-- reading_order_node: rename manga_id → entry_id, drop FK to mangas.
+CREATE TABLE reading_order_node_new(
+    _id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    entry_id INTEGER NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(order_id, entry_id),
+    FOREIGN KEY(order_id) REFERENCES reading_order(_id) ON DELETE CASCADE
+);
+INSERT INTO reading_order_node_new(_id, order_id, entry_id, position)
+SELECT _id, order_id, manga_id, position FROM reading_order_node;
+DROP TABLE reading_order_node;
+ALTER TABLE reading_order_node_new RENAME TO reading_order_node;
+
+-- reading_order_edge: rename from_manga_id/to_manga_id → from_entry_id/to_entry_id.
+CREATE TABLE reading_order_edge_new(
+    _id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    from_entry_id INTEGER NOT NULL,
+    to_entry_id INTEGER NOT NULL,
+    UNIQUE(order_id, from_entry_id, to_entry_id),
+    FOREIGN KEY(order_id) REFERENCES reading_order(_id) ON DELETE CASCADE
+);
+INSERT INTO reading_order_edge_new(_id, order_id, from_entry_id, to_entry_id)
+SELECT _id, order_id, from_manga_id, to_manga_id FROM reading_order_edge;
+DROP TABLE reading_order_edge;
+ALTER TABLE reading_order_edge_new RENAME TO reading_order_edge;
+
+-- reading_order_progress: rename manga_id → entry_id.
+CREATE TABLE reading_order_progress_new(
+    order_id INTEGER NOT NULL,
+    entry_id INTEGER NOT NULL,
+    completed INTEGER NOT NULL DEFAULT 0,
+    completed_at INTEGER,
+    PRIMARY KEY (order_id, entry_id),
+    FOREIGN KEY(order_id) REFERENCES reading_order(_id) ON DELETE CASCADE
+);
+INSERT INTO reading_order_progress_new(order_id, entry_id, completed, completed_at)
+SELECT order_id, manga_id, completed, completed_at FROM reading_order_progress;
+DROP TABLE reading_order_progress;
+ALTER TABLE reading_order_progress_new RENAME TO reading_order_progress;

@@ -368,7 +368,7 @@ class MangaScreen(
                 onDismiss = { lockDialog = emptyList() },
                 onViewOrder = { orderId ->
                     lockDialog = emptyList()
-                    navigator.push(eu.kanade.tachiyomi.ui.readingorder.ReadingOrderEditorScreen(orderId))
+                    navigator.push(eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen(orderId))
                 },
             )
         }
