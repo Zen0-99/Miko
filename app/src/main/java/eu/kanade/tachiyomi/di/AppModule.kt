@@ -37,6 +37,8 @@ import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.network.JavaScriptEngine
+import eu.kanade.tachiyomi.metadata.MetadataSourceManager
+import eu.kanade.tachiyomi.metadata.cinemeta.CinemetaMetadataSource
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.anime.AndroidAnimeSourceManager
 import eu.kanade.tachiyomi.source.manga.AndroidMangaSourceManager
@@ -307,6 +309,12 @@ class AppModule(val app: Application) : InjektModule {
 
         addSingletonFactory<MangaSourceManager> { AndroidMangaSourceManager(app, get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(app, get(), get()) }
+
+        addSingletonFactory<MetadataSourceManager> {
+            MetadataSourceManager(
+                listOf(CinemetaMetadataSource(get(), get())),
+            )
+        }
 
         // --- JS novel plugin runtime wiring ---
         // Storage for plugin scripts and custom assets

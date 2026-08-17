@@ -61,6 +61,7 @@ import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.ui.browse.anime.extension.animeExtensionsTab
+import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreen
 import eu.kanade.tachiyomi.ui.browse.anime.extension.AnimeExtensionsScreenModel
 import eu.kanade.tachiyomi.ui.browse.anime.source.animeSourcesTab
 import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
@@ -92,6 +93,8 @@ import tachiyomi.presentation.core.screens.EmptyScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
+enum class BrowseMode { BROWSE, DISCOVER, EXTENSIONS }
+
 data object BrowseTab : Tab {
 
     override val options: TabOptions
@@ -120,7 +123,7 @@ data object BrowseTab : Tab {
 
         // Search state — query survives pill toggle
         var searchQuery by remember { mutableStateOf<String?>(null) }
-        var showExtensions by remember { mutableStateOf(false) }
+        var browseMode by remember { mutableStateOf(BrowseMode.BROWSE) }
         // Whether the user has submitted the search (pressed enter/search on IME).
         // Results are only shown after submission, not while typing.
         var searchSubmitted by remember { mutableStateOf(false) }
@@ -158,8 +161,8 @@ data object BrowseTab : Tab {
         // The stale searchQuery in the SM is harmless: it's reset the next
         // time the user opens search (search("") is called first, then the
         // actual query).
-        LaunchedEffect(searchQuery, showExtensions, contentMode) {
-            if (showExtensions && searchQuery != null) {
+        LaunchedEffect(searchQuery, browseMode, contentMode) {
+            if (browseMode == BrowseMode.EXTENSIONS && searchQuery != null) {
                 val query = searchQuery!!
                 when (contentMode) {
                     ContentMode.ANIME -> animeExtSM.search(query)
@@ -225,10 +228,10 @@ data object BrowseTab : Tab {
             title = stringResource(titleRes),
             actions = allActions,
             searchEnabled = true,
-            searchPlaceholderText = if (showExtensions) {
-                stringResource(MR.strings.search_hint_extensions)
-            } else {
-                stringResource(MR.strings.search_hint_browse)
+            searchPlaceholderText = when (browseMode) {
+                BrowseMode.EXTENSIONS -> stringResource(MR.strings.search_hint_extensions)
+                BrowseMode.DISCOVER -> stringResource(MR.strings.search_hint_browse)
+                BrowseMode.BROWSE -> stringResource(MR.strings.search_hint_browse)
             },
             searchQuery = searchQuery,
             onSearchQueryChange = { query ->
@@ -237,33 +240,35 @@ data object BrowseTab : Tab {
                 // after enter. Extensions side shows results immediately.
                 searchSubmitted = false
                 if (query == null) {
-                    showExtensions = false
+                    browseMode = BrowseMode.BROWSE
                     searchSubmitted = false
                 }
             },
             onSearch = { query ->
                 if (query.isBlank()) return@useSharedTopBarWithSearch
-                // Only the Browse side uses submit — it navigates to global
-                // search. The Extensions side already shows results live.
-                if (!showExtensions) {
-                    when (contentMode) {
-                        ContentMode.ANIME -> navigator.push(GlobalAnimeSearchScreen(query))
-                        ContentMode.MANGA -> navigator.push(GlobalMangaSearchScreen(query))
-                        ContentMode.NOVEL -> navigator.push(GlobalNovelSearchScreen(query))
+                when (browseMode) {
+                    BrowseMode.DISCOVER -> {
+                        // Cinemeta search is handled by the screen model
+                        searchSubmitted = true
                     }
-                    searchQuery = null
-                    searchSubmitted = false
-                } else {
-                    // On the Extensions side, submit just marks results as
-                    // "submitted" so the Browse-side gate (if toggled later)
-                    // doesn't immediately navigate.
-                    searchSubmitted = true
+                    BrowseMode.EXTENSIONS -> {
+                        searchSubmitted = true
+                    }
+                    BrowseMode.BROWSE -> {
+                        when (contentMode) {
+                            ContentMode.ANIME -> navigator.push(GlobalAnimeSearchScreen(query))
+                            ContentMode.MANGA -> navigator.push(GlobalMangaSearchScreen(query))
+                            ContentMode.NOVEL -> navigator.push(GlobalNovelSearchScreen(query))
+                        }
+                        searchQuery = null
+                        searchSubmitted = false
+                    }
                 }
             },
             searchPillContent = {
                 BrowseSearchPill(
-                    showExtensions = showExtensions,
-                    onToggle = { showExtensions = it },
+                    browseMode = browseMode,
+                    onModeChange = { browseMode = it },
                 )
             },
         )
@@ -295,19 +300,30 @@ data object BrowseTab : Tab {
                 // Source tab — always mounted, never torn down by search.
                 sourceTab.content(resolvedPadding, snackbarHostState)
 
+                // Discover overlay — Cinemeta browse screen shown when Discover mode is active
+                if (browseMode == BrowseMode.DISCOVER) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                    ) {
+                        CinemetaBrowseScreen().Content()
+                    }
+                }
+
                 // Search overlay — only present when there is actual search
                 // content to show. When typing on the Browse side (not yet
                 // submitted), no overlay is shown and the source tab is
                 // visible underneath (same behavior as before).
                 val currentQuery = searchQuery
-                val showSearchOverlay = currentQuery != null && (showExtensions || searchSubmitted)
+                val showSearchOverlay = currentQuery != null && (browseMode == BrowseMode.EXTENSIONS || searchSubmitted)
                 if (showSearchOverlay) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                     ) {
-                        if (showExtensions) {
+                        if (browseMode == BrowseMode.EXTENSIONS) {
                             // Extensions side: show results immediately as the
                             // user types — no submit needed.
                             if (cardDesign) {
@@ -379,13 +395,14 @@ data object BrowseTab : Tab {
  */
 @Composable
 private fun BrowseSearchPill(
-    showExtensions: Boolean,
-    onToggle: (Boolean) -> Unit,
+    browseMode: BrowseMode,
+    onModeChange: (BrowseMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val options = listOf(
-        stringResource(MR.strings.browse) to false,
-        stringResource(MR.strings.label_extensions) to true,
+        stringResource(MR.strings.browse) to BrowseMode.BROWSE,
+        stringResource(MR.strings.discover) to BrowseMode.DISCOVER,
+        stringResource(MR.strings.label_extensions) to BrowseMode.EXTENSIONS,
     )
     val containerShape = RoundedCornerShape(999.dp)
     val segmentShape = RoundedCornerShape(999.dp)
@@ -398,8 +415,8 @@ private fun BrowseSearchPill(
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        options.forEach { (label, isExt) ->
-            val isSelected = showExtensions == isExt
+        options.forEach { (label, mode) ->
+            val isSelected = browseMode == mode
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -411,7 +428,7 @@ private fun BrowseSearchPill(
                             Modifier
                         },
                     )
-                    .clickable { onToggle(isExt) }
+                    .clickable { onModeChange(mode) }
                     .padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center,
             ) {
