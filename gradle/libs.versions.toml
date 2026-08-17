@@ -10,10 +10,23 @@ sqlite = "2.4.0"
 voyager = "1.0.1"
 spotless = "7.0.2"
 ktlint-core = "1.5.0"
+media3 = "1.4.1"
+play_services_cast = "21.5.0"
 
 [libraries]
 desugar = "com.android.tools:desugar_jdk_libs:2.1.5"
 android-shortcut-gradle = "com.github.zellius:android-shortcut-gradle-plugin:0.1.2"
+
+# Media3 ExoPlayer (dual engine fallback)
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
+media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
+media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
+media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3" }
+media3-cast = { module = "androidx.media3:media3-cast", version.ref = "media3" }
+
+# Google Cast SDK
+play-services-cast = { module = "com.google.android.gms:play-services-cast", version.ref = "play_services_cast" }
+play-services-cast-framework = { module = "com.google.android.gms:play-services-cast-framework", version.ref = "play_services_cast" }
 
 rxjava = "io.reactivex:rxjava:1.3.8"
 

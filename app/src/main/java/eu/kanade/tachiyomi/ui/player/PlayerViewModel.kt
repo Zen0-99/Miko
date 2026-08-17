@@ -77,6 +77,7 @@ import eu.kanade.tachiyomi.ui.player.controls.components.sheets.getChangedAt
 import eu.kanade.tachiyomi.ui.player.loader.EpisodeLoader
 import eu.kanade.tachiyomi.ui.player.loader.HosterLoader
 import eu.kanade.tachiyomi.ui.player.settings.GesturePreferences
+import eu.kanade.tachiyomi.ui.player.settings.PlayerEngine
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.player.utils.AniSkipApi
 import eu.kanade.tachiyomi.ui.player.utils.ChapterUtils.Companion.getStringRes
@@ -269,6 +270,10 @@ class PlayerViewModel @JvmOverloads constructor(
     private val _paused = MutableStateFlow(false)
     val paused = _paused.asStateFlow()
 
+    fun setPaused(value: Boolean) {
+        _paused.value = value
+    }
+
     // False because the video shouldn't start paused
     private val _pausedState = MutableStateFlow<Boolean?>(false)
     val pausedState = _pausedState.asStateFlow()
@@ -337,6 +342,17 @@ class PlayerViewModel @JvmOverloads constructor(
     // Up-next overlay
     val nextEpisodeInfo = MutableStateFlow<NextEpisodeInfo?>(null)
     val showUpNextOverlay = MutableStateFlow(false)
+
+    // Dual engine: tracks which player engine is currently active
+    val activeEngine = MutableStateFlow(PlayerEngine.Mpv)
+    val engineFallbackOccurred = MutableStateFlow(false)
+
+    fun setActiveEngine(engine: PlayerEngine) {
+        activeEngine.value = engine
+        if (engine == PlayerEngine.ExoPlayer) {
+            engineFallbackOccurred.value = true
+        }
+    }
 
     data class NextEpisodeInfo(
         val title: String,
@@ -730,7 +746,11 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     fun pause() {
-        activity.player.paused = true
+        if (activeEngine.value == PlayerEngine.ExoPlayer) {
+            activity.exoPlayerEngine?.pause()
+        } else {
+            activity.player.paused = true
+        }
         _paused.update { true }
         runCatching {
             activity.setPictureInPictureParams(activity.createPipParams())
@@ -738,7 +758,11 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     fun unpause() {
-        activity.player.paused = false
+        if (activeEngine.value == PlayerEngine.ExoPlayer) {
+            activity.exoPlayerEngine?.play()
+        } else {
+            activity.player.paused = false
+        }
         _paused.update { false }
     }
 
@@ -821,12 +845,20 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     fun seekBy(offset: Int, precise: Boolean = false) {
-        MPVLib.command(arrayOf("seek", offset.toString(), if (precise) "relative+exact" else "relative"))
+        if (activeEngine.value == PlayerEngine.ExoPlayer) {
+            activity.exoPlayerEngine?.seekTo(((pos.value + offset) * 1000).toLong())
+        } else {
+            MPVLib.command(arrayOf("seek", offset.toString(), if (precise) "relative+exact" else "relative"))
+        }
     }
 
     fun seekTo(position: Int, precise: Boolean = true) {
-        if (position !in 0..(activity.player.duration ?: 0)) return
-        MPVLib.command(arrayOf("seek", position.toString(), if (precise) "absolute" else "absolute+keyframes"))
+        if (activeEngine.value == PlayerEngine.ExoPlayer) {
+            activity.exoPlayerEngine?.seekTo(position * 1000L)
+        } else {
+            if (position !in 0..(activity.player.duration ?: 0)) return
+            MPVLib.command(arrayOf("seek", position.toString(), if (precise) "absolute" else "absolute+keyframes"))
+        }
     }
 
     fun changeBrightnessTo(

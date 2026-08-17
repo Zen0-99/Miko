@@ -11,6 +11,12 @@ enum class ResumeMode {
     StartOver,
 }
 
+enum class PlayerEngine(val displayName: String) {
+    Mpv("MPV"),
+    ExoPlayer("ExoPlayer"),
+    Auto("Auto (MPV → ExoPlayer)"),
+}
+
 class PlayerPreferences(
     private val preferenceStore: PreferenceStore,
 ) {
@@ -19,6 +25,7 @@ class PlayerPreferences(
         false,
     )
     fun resumeMode() = preferenceStore.getEnum("pref_resume_mode", ResumeMode.Ask)
+    fun playerEngine() = preferenceStore.getEnum("pref_player_engine", PlayerEngine.Auto)
     fun progressPreference() = preferenceStore.getFloat("pref_progress_preference", 0.85F)
     fun defaultPlayerOrientationType() = preferenceStore.getEnum(
         "pref_default_player_orientation_type_key",

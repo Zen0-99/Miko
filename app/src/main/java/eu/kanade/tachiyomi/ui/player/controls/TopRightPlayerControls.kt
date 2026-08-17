@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.player.controls.components.AutoPlaySwitch
+import eu.kanade.tachiyomi.ui.player.controls.components.CastButton
 import eu.kanade.tachiyomi.ui.player.controls.components.ControlsButton
 import tachiyomi.presentation.core.components.material.padding
 
@@ -96,6 +97,9 @@ fun TopRightPlayerControls(
             onClick = onMoreClick,
             onLongClick = onMoreLongClick,
             horizontalSpacing = MaterialTheme.padding.mediumSmall,
+        )
+        CastButton(
+            modifier = Modifier.size(48.dp),
         )
     }
 }

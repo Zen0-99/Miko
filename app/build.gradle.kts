@@ -333,6 +333,18 @@ dependencies {
     implementation(aniyomilibs.seeker)
     // true type parser
     implementation(aniyomilibs.truetypeparser)
+
+    // Media3 ExoPlayer (dual engine fallback)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+    implementation(libs.media3.common)
+    implementation(libs.media3.datasource.okhttp)
+    implementation(libs.media3.cast)
+
+    // Google Cast SDK
+    implementation(libs.play.services.cast)
+    implementation(libs.play.services.cast.framework)
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
 }
 
 androidComponents {

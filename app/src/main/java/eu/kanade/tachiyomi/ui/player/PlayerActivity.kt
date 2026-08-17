@@ -77,6 +77,7 @@ import eu.kanade.tachiyomi.ui.player.controls.PlayerControls
 import eu.kanade.tachiyomi.ui.player.settings.AdvancedPlayerPreferences
 import eu.kanade.tachiyomi.ui.player.settings.AudioPreferences
 import eu.kanade.tachiyomi.ui.player.settings.GesturePreferences
+import eu.kanade.tachiyomi.ui.player.settings.PlayerEngine
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.player.settings.ResumeMode
 import eu.kanade.tachiyomi.ui.player.utils.ChapterUtils
@@ -104,6 +105,7 @@ import tachiyomi.domain.custombuttons.model.CustomButton
 import tachiyomi.domain.storage.service.StorageManager
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
+import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import eu.kanade.presentation.achievement.components.AchievementBannerManager
@@ -118,8 +120,15 @@ class PlayerActivity : BaseActivity() {
     private val binding by lazy { PlayerLayoutBinding.inflate(layoutInflater) }
     private val playerObserver by lazy { PlayerObserver(this) }
     val player by lazy { binding.player }
+    val exoPlayerView by lazy { binding.exoPlayerView }
     val windowInsetsController by lazy { WindowCompat.getInsetsController(window, window.decorView) }
     val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+
+    var exoPlayerEngine: ExoPlayerEngine? = null
+    private var mpvLoadTimeoutJob: kotlinx.coroutines.Job? = null
+    private var pendingVideoUrl: String? = null
+    private var pendingStartPosition: Long = 0
+    private val castManager by lazy { eu.kanade.tachiyomi.ui.player.cast.CastManager(this) }
 
     private var mediaSession: MediaSession? = null
 
@@ -263,6 +272,7 @@ class PlayerActivity : BaseActivity() {
         setupPlayerAudio()
         setupMediaSession()
         setupPlayerOrientation()
+        castManager.initialize()
 
         Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             runOnUiThread {
@@ -340,6 +350,10 @@ class PlayerActivity : BaseActivity() {
             MPVLib.removeObserver(playerObserver)
         }
         player.destroy()
+        exoPlayerEngine?.release()
+        exoPlayerEngine = null
+        mpvLoadTimeoutJob?.cancel()
+        castManager.release()
         viewModel.stopHttpServer()
 
         // Resume deferred achievement unlock banners now that player is closing
@@ -806,10 +820,22 @@ class PlayerActivity : BaseActivity() {
         if (!mpvLoaded || player.isExiting) return
         when (eventId) {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
+                mpvLoadTimeoutJob?.cancel()
                 viewModel.viewModelScope.launchIO { fileLoaded() }
             }
             MPVLib.mpvEventId.MPV_EVENT_SEEK -> viewModel.isLoading.update { true }
             MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> player.isExiting = false
+            MPVLib.mpvEventId.MPV_EVENT_END_FILE -> {
+                // If file ended with error and we're in Auto mode, try ExoPlayer
+                if (viewModel.isLoading.value &&
+                    playerPreferences.playerEngine().get() == PlayerEngine.Auto &&
+                    viewModel.activeEngine.value == PlayerEngine.Mpv
+                ) {
+                    logcat(LogPriority.WARN) { "MPV end-file while loading — falling back to ExoPlayer" }
+                    switchToExoPlayer()
+                    pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
+                }
+            }
         }
     }
 
@@ -1114,66 +1140,161 @@ class PlayerActivity : BaseActivity() {
     }
 
     fun setVideo(video: Video?, position: Long? = null) {
-        if (player.isExiting) return
+        if (player.isExiting && viewModel.activeEngine.value == PlayerEngine.Mpv) return
         if (video == null) return
 
         setHttpOptions(video)
 
-        if (viewModel.isLoadingEpisode.value) {
+        val savedPosition = if (viewModel.isLoadingEpisode.value) {
             viewModel.currentEpisode.value?.let { episode ->
                 val preservePos = playerPreferences.preserveWatchingPosition().get()
-                val savedPosition = position
+                position
                     ?: if (episode.seen && !preservePos) {
                         0L
                     } else {
                         episode.last_second_seen
                     }
-                val resumeMode = playerPreferences.resumeMode().get()
-                when (resumeMode) {
-                    ResumeMode.Resume -> MPVLib.command(arrayOf("set", "start", "${savedPosition / 1000F}"))
-                    ResumeMode.StartOver -> MPVLib.command(arrayOf("set", "start", "0"))
-                    ResumeMode.Ask -> {
-                        if (savedPosition > 1000) {
+            } ?: 0L
+        } else {
+            player.timePos?.let { it * 1000L } ?: 0L
+        }
+
+        // Handle resume overlay for Ask mode
+        if (viewModel.isLoadingEpisode.value) {
+            val resumeMode = playerPreferences.resumeMode().get()
+            when (resumeMode) {
+                ResumeMode.Resume -> {
+                    if (viewModel.activeEngine.value == PlayerEngine.Mpv) {
+                        MPVLib.command(arrayOf("set", "start", "${savedPosition / 1000F}"))
+                    }
+                }
+                ResumeMode.StartOver -> {
+                    if (viewModel.activeEngine.value == PlayerEngine.Mpv) {
+                        MPVLib.command(arrayOf("set", "start", "0"))
+                    }
+                }
+                ResumeMode.Ask -> {
+                    if (savedPosition > 1000) {
+                        if (viewModel.activeEngine.value == PlayerEngine.Mpv) {
                             MPVLib.command(arrayOf("set", "start", "0"))
-                            viewModel.showResumeOverlay(savedPosition / 1000)
-                        } else {
+                        }
+                        viewModel.showResumeOverlay(savedPosition / 1000)
+                    } else {
+                        if (viewModel.activeEngine.value == PlayerEngine.Mpv) {
                             MPVLib.command(arrayOf("set", "start", "${savedPosition / 1000F}"))
                         }
                     }
                 }
             }
-        } else {
-            player.timePos?.let {
-                MPVLib.command(arrayOf("set", "start", "${player.timePos}"))
-            }
         }
 
-        val videoOptions = video.mpvArgs.joinToString(",") { (option, value) ->
-            "$option=\"$value\""
-        }
+        val enginePref = playerPreferences.playerEngine().get()
+        val videoUrl = video.videoUrl
+        val startMs = savedPosition
 
-        if (torrentPreferences.torrServerEnable().get() &&
-            (
-                video.videoUrl.startsWith(torrentServerApi.hostUrl) ||
-                    video.videoUrl.startsWith("magnet") ||
-                    video.videoUrl.endsWith("torrent")
-                )
-        ) {
-            launchIO {
-                TorrentServerService.start()
-                torrentLinkHandler(video.videoUrl, video.videoTitle, videoOptions)
+        when {
+            viewModel.activeEngine.value == PlayerEngine.ExoPlayer -> {
+                loadWithExoPlayer(videoUrl, startMs)
             }
-        } else {
-            MPVLib.command(
-                arrayOf(
-                    "loadfile",
-                    parseVideoUrl(video.videoUrl),
-                    "replace",
-                    "0",
-                    videoOptions,
-                ),
+            enginePref == PlayerEngine.ExoPlayer -> {
+                switchToExoPlayer()
+                loadWithExoPlayer(videoUrl, startMs)
+            }
+            else -> {
+                // MPV or Auto — load with MPV, set fallback timeout
+                pendingVideoUrl = videoUrl
+                pendingStartPosition = startMs
+                startMpvLoadTimeout()
+
+                val videoOptions = video.mpvArgs.joinToString(",") { (option, value) ->
+                    "$option=\"$value\""
+                }
+
+                if (torrentPreferences.torrServerEnable().get() &&
+                    (
+                        videoUrl.startsWith(torrentServerApi.hostUrl) ||
+                            videoUrl.startsWith("magnet") ||
+                            videoUrl.endsWith("torrent")
+                        )
+                ) {
+                    launchIO {
+                        TorrentServerService.start()
+                        torrentLinkHandler(videoUrl, video.videoTitle, videoOptions)
+                    }
+                } else {
+                    MPVLib.command(
+                        arrayOf(
+                            "loadfile",
+                            parseVideoUrl(videoUrl),
+                            "replace",
+                            "0",
+                            videoOptions,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun startMpvLoadTimeout() {
+        mpvLoadTimeoutJob?.cancel()
+        mpvLoadTimeoutJob = launchIO {
+            kotlinx.coroutines.delay(15000)
+            if (viewModel.activeEngine.value == PlayerEngine.Mpv && viewModel.isLoading.value) {
+                logcat(LogPriority.WARN) { "MPV load timeout — falling back to ExoPlayer" }
+                switchToExoPlayer()
+                pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
+            }
+        }
+    }
+
+    private fun switchToExoPlayer() {
+        if (!mpvLoaded) return
+        mpvLoadTimeoutJob?.cancel()
+        viewModel.setActiveEngine(PlayerEngine.ExoPlayer)
+        runOnUiThread {
+            player.visibility = android.view.View.GONE
+            player.paused = true
+            exoPlayerView.visibility = android.view.View.VISIBLE
+        }
+        if (exoPlayerEngine == null) {
+            val okHttpClient = Injekt.get<OkHttpClient>()
+            exoPlayerEngine = ExoPlayerEngine(
+                context = this,
+                okHttpClient = okHttpClient,
+                callbacks = object : ExoPlayerEngine.Callbacks {
+                    override fun onReady() {
+                        viewModel.isLoading.update { false }
+                        runOnUiThread { exoPlayerView.player = exoPlayerEngine?.player }
+                    }
+
+                    override fun onPlayingChanged(isPlaying: Boolean) {
+                        viewModel.setPaused(!isPlaying)
+                    }
+
+                    override fun onPositionChanged(positionMs: Long, durationMs: Long) {
+                        viewModel.updatePlayBackPos(positionMs / 1000f)
+                        viewModel.duration.update { durationMs / 1000f }
+                    }
+
+                    override fun onError(message: String) {
+                        logcat(LogPriority.ERROR) { "ExoPlayer error: $message" }
+                        runOnUiThread { toast(message) }
+                    }
+
+                    override fun onEnded() {
+                        if (playerPreferences.autoplayEnabled().get()) {
+                            viewModel.changeEpisode(previous = false, autoPlay = true)
+                        }
+                    }
+                },
             )
+            exoPlayerEngine?.initialize()
         }
+    }
+
+    private fun loadWithExoPlayer(url: String, startPositionMs: Long) {
+        exoPlayerEngine?.loadVideo(url, startPositionMs)
     }
 
     /**

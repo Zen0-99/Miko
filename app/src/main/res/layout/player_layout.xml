@@ -9,6 +9,15 @@ android:fitsSystemWindows="false">
     android:layout_width="match_parent"
     android:layout_height="match_parent" />
 
+<androidx.media3.ui.PlayerView
+    android:id="@+id/exo_player_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:visibility="gone"
+    app:use_controller="false"
+    app:resize_mode="fit"
+    xmlns:app="http://schemas.android.com/apk/res-auto" />
+
 <androidx.compose.ui.platform.ComposeView
     android:id="@+id/controls"
     android:layout_width="match_parent"
