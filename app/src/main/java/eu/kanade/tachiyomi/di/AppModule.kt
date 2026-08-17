@@ -39,6 +39,9 @@ import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.network.JavaScriptEngine
 import eu.kanade.tachiyomi.metadata.MetadataSourceManager
 import eu.kanade.tachiyomi.metadata.cinemeta.CinemetaMetadataSource
+import eu.kanade.tachiyomi.metadata.stream.SourceMappingCache
+import eu.kanade.tachiyomi.metadata.stream.StreamResolver
+import eu.kanade.tachiyomi.metadata.stream.TitleMatcher
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.anime.AndroidAnimeSourceManager
 import eu.kanade.tachiyomi.source.manga.AndroidMangaSourceManager
@@ -313,6 +316,18 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory<MetadataSourceManager> {
             MetadataSourceManager(
                 listOf(CinemetaMetadataSource(get(), get())),
+            )
+        }
+
+        // --- Stream resolver wiring ---
+        addSingletonFactory { TitleMatcher() }
+        addSingletonFactory { SourceMappingCache(get()) }
+        addSingletonFactory {
+            StreamResolver(
+                sourceManager = get(),
+                networkToLocalAnime = get(),
+                sourceMappingCache = get(),
+                titleMatcher = get(),
             )
         }
 
