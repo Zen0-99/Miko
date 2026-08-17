@@ -42,15 +42,20 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 @Composable
-fun Screen.animeSourcesTab(): TabContent {
+fun Screen.animeSourcesTab(
+    screenModel: AnimeSourcesScreenModel = rememberScreenModel { AnimeSourcesScreenModel() },
+): TabContent {
     val navigator = LocalNavigator.currentOrThrow
     val context = LocalContext.current
-    val screenModel = rememberScreenModel { AnimeSourcesScreenModel() }
     val state by screenModel.state.collectAsState()
     val extensionManager = remember { Injekt.get<AnimeExtensionManager>() }
 
     // Track which source IDs have extension updates available + extension info for cards
-    val installedExtensions by extensionManager.installedExtensionsFlow.collectAsState(emptyList())
+    // Use the flow's current value as initial state to avoid a brief emptyList()
+    // flash when the composable remounts (e.g. switching content modes).
+    val installedExtensions by extensionManager.installedExtensionsFlow.collectAsState(
+        extensionManager.installedExtensionsFlow.value,
+    )
     val sourcesWithUpdates by remember(installedExtensions) {
         derivedStateOf {
             installedExtensions.filter { it.hasUpdate }

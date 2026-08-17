@@ -61,8 +61,10 @@ import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.ui.browse.anime.extension.animeExtensionsTab
-import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreen
+import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseContent
+import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreenModel
 import eu.kanade.tachiyomi.ui.browse.anime.extension.AnimeExtensionsScreenModel
+import eu.kanade.tachiyomi.ui.browse.anime.source.AnimeSourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.anime.source.animeSourcesTab
 import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
@@ -70,15 +72,18 @@ import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearch
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.manga.extension.MangaExtensionsScreenModel
+import eu.kanade.tachiyomi.ui.browse.manga.source.MangaSourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.manga.source.mangaSourcesTab
 import eu.kanade.tachiyomi.ui.browse.manga.source.browse.BrowseMangaSourceScreen
 import eu.kanade.tachiyomi.ui.browse.novel.extension.novelExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.novel.extension.NovelExtensionsScreenModel
+import eu.kanade.tachiyomi.ui.browse.novel.source.NovelSourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.novel.source.novelSourcesTab
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.collections.immutable.toImmutableList
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.anime.interactor.GetRemoteAnime
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.interactor.GetRemoteManga
@@ -123,7 +128,10 @@ data object BrowseTab : Tab {
 
         // Search state — query survives pill toggle
         var searchQuery by remember { mutableStateOf<String?>(null) }
-        var browseMode by remember { mutableStateOf(BrowseMode.BROWSE) }
+        // Discover is the default for anime mode; Browse is the default for manga/novel.
+        var browseMode by remember { mutableStateOf(
+            if (contentMode == ContentMode.ANIME) BrowseMode.DISCOVER else BrowseMode.BROWSE,
+        ) }
         // Whether the user has submitted the search (pressed enter/search on IME).
         // Results are only shown after submission, not while typing.
         var searchSubmitted by remember { mutableStateOf(false) }
@@ -132,6 +140,19 @@ data object BrowseTab : Tab {
         val animeExtSM = rememberScreenModel { AnimeExtensionsScreenModel() }
         val mangaExtSM = rememberScreenModel { MangaExtensionsScreenModel() }
         val novelExtSM = rememberScreenModel { NovelExtensionsScreenModel() }
+
+        // Source screen models (one per type; created here so they persist
+        // across content mode switches — otherwise each switch recreates the
+        // SM with isLoading=true, causing the "Installed" header to flash.)
+        val animeSourceSM = rememberScreenModel { AnimeSourcesScreenModel() }
+        val mangaSourceSM = rememberScreenModel { MangaSourcesScreenModel() }
+        val novelSourceSM = rememberScreenModel { NovelSourcesScreenModel() }
+
+        // Cinemeta discover screen model — hoisted here so search from the
+        // shared top bar can reach it, and the Movies/Series toggle doesn't
+        // navigate away (which would hide the top/bottom bars).
+        val cinemetaBrowseSM = rememberScreenModel { CinemetaBrowseScreenModel() }
+        val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
 
         // Source managers for source search
         val animeSourceManager = remember { Injekt.get<AnimeSourceManager>() }
@@ -144,10 +165,9 @@ data object BrowseTab : Tab {
         // them immediately; this refreshes the *available* list (which drives
         // update detection) in the background.
         LaunchedEffect(contentMode) {
-            when (contentMode) {
-                ContentMode.ANIME -> animeExtSM.findAvailableExtensions()
-                ContentMode.MANGA -> mangaExtSM.findAvailableExtensions()
-                ContentMode.NOVEL -> novelExtSM.findAvailableExtensions()
+            // Reset to Discover for anime, Browse for manga/novel when content mode changes
+            if (browseMode == BrowseMode.DISCOVER && contentMode != ContentMode.ANIME) {
+                browseMode = BrowseMode.BROWSE
             }
         }
 
@@ -176,9 +196,9 @@ data object BrowseTab : Tab {
 
         // Mode-aware source tab (used when search is NOT active)
         val sourceTab = when (contentMode) {
-            ContentMode.ANIME -> animeSourcesTab()
-            ContentMode.MANGA -> mangaSourcesTab()
-            ContentMode.NOVEL -> novelSourcesTab()
+            ContentMode.ANIME -> animeSourcesTab(animeSourceSM)
+            ContentMode.MANGA -> mangaSourcesTab(mangaSourceSM)
+            ContentMode.NOVEL -> novelSourcesTab(novelSourceSM)
         }
 
         val titleRes = MR.strings.browse
@@ -240,7 +260,12 @@ data object BrowseTab : Tab {
                 // after enter. Extensions side shows results immediately.
                 searchSubmitted = false
                 if (query == null) {
-                    browseMode = BrowseMode.BROWSE
+                    // Search closed (X pressed) — clear Cinemeta search if in
+                    // Discover mode, but keep the user's current browse mode.
+                    // Don't force them back to Discover.
+                    if (browseMode == BrowseMode.DISCOVER) {
+                        cinemetaBrowseSM.clearSearch()
+                    }
                     searchSubmitted = false
                 }
             },
@@ -248,7 +273,7 @@ data object BrowseTab : Tab {
                 if (query.isBlank()) return@useSharedTopBarWithSearch
                 when (browseMode) {
                     BrowseMode.DISCOVER -> {
-                        // Cinemeta search is handled by the screen model
+                        cinemetaBrowseSM.search(query)
                         searchSubmitted = true
                     }
                     BrowseMode.EXTENSIONS -> {
@@ -269,6 +294,7 @@ data object BrowseTab : Tab {
                 BrowseSearchPill(
                     browseMode = browseMode,
                     onModeChange = { browseMode = it },
+                    showDiscover = contentMode == ContentMode.ANIME,
                 )
             },
         )
@@ -297,17 +323,25 @@ data object BrowseTab : Tab {
             Box(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                // Source tab — always mounted, never torn down by search.
+                // Source tab — ALWAYS mounted underneath, even in Discover mode.
+                // This preserves its state (remembered bitmaps, scroll position,
+                // extension list) so switching back from Discover doesn't cause
+                // a recomposition or "installed" header jump.
                 sourceTab.content(resolvedPadding, snackbarHostState)
 
-                // Discover overlay — Cinemeta browse screen shown when Discover mode is active
+                // Discover overlay — shown on top with an opaque background
+                // when in Discover mode (anime only).
                 if (browseMode == BrowseMode.DISCOVER) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                     ) {
-                        CinemetaBrowseScreen().Content()
+                        CinemetaBrowseContent(
+                            screenModel = cinemetaBrowseSM,
+                            contentPadding = resolvedPadding,
+                            libraryPreferences = libraryPreferences,
+                        )
                     }
                 }
 
@@ -323,7 +357,16 @@ data object BrowseTab : Tab {
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                     ) {
-                        if (browseMode == BrowseMode.EXTENSIONS) {
+                        if (browseMode == BrowseMode.DISCOVER) {
+                            // Discover search results — the Cinemeta screen model
+                            // already has the search results in its state; just
+                            // render the same browse content.
+                            CinemetaBrowseContent(
+                                screenModel = cinemetaBrowseSM,
+                                contentPadding = resolvedPadding,
+                                libraryPreferences = libraryPreferences,
+                            )
+                        } else if (browseMode == BrowseMode.EXTENSIONS) {
                             // Extensions side: show results immediately as the
                             // user types — no submit needed.
                             if (cardDesign) {
@@ -397,13 +440,16 @@ data object BrowseTab : Tab {
 private fun BrowseSearchPill(
     browseMode: BrowseMode,
     onModeChange: (BrowseMode) -> Unit,
+    showDiscover: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val options = listOf(
-        stringResource(MR.strings.browse) to BrowseMode.BROWSE,
-        stringResource(MR.strings.discover) to BrowseMode.DISCOVER,
-        stringResource(MR.strings.label_extensions) to BrowseMode.EXTENSIONS,
-    )
+    val options = buildList {
+        add(stringResource(MR.strings.browse) to BrowseMode.BROWSE)
+        if (showDiscover) {
+            add(stringResource(MR.strings.discover) to BrowseMode.DISCOVER)
+        }
+        add(stringResource(MR.strings.label_extensions) to BrowseMode.EXTENSIONS)
+    }
     val containerShape = RoundedCornerShape(999.dp)
     val segmentShape = RoundedCornerShape(999.dp)
     Row(

@@ -105,6 +105,9 @@ import kotlin.math.roundToInt
 
 private val whitespaceLineRegex = Regex("[\\r\\n]{2,}", setOf(RegexOption.MULTILINE))
 
+/** Synthetic source ID for Cinemeta-provided anime entries. */
+private const val CINEMETA_SOURCE_ID = 0L
+
 @Composable
 fun AnimeInfoBox(
     isTabletUi: Boolean,
@@ -309,22 +312,45 @@ private fun AnimeAndSourceTitlesLarge(
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = statusText(anime.status),
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = sourceName,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
-            textAlign = TextAlign.Center,
-        )
+        if (anime.source == CINEMETA_SOURCE_ID) {
+            anime.artist?.substringAfter("||")?.let { releaseInfo ->
+                Text(
+                    text = releaseInfo,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                    textAlign = TextAlign.Center,
+                )
+            }
+            anime.artist?.substringBefore("||")?.let { rating ->
+                Text(
+                    text = rating,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else {
+            Text(
+                text = statusText(anime.status),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = sourceName,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -379,20 +405,43 @@ private fun AnimeAndSourceTitlesSmall(
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
             )
-            Text(
-                text = statusText(anime.status),
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
-            )
-            Text(
-                text = sourceName,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
-            )
+            // Cinemeta entries (source ID 0): show releaseInfo as status,
+            // rating as source name. Otherwise: standard status/source display.
+            if (anime.source == CINEMETA_SOURCE_ID) {
+                anime.artist?.substringAfter("||")?.let { releaseInfo ->
+                    Text(
+                        text = releaseInfo,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                    )
+                }
+                anime.artist?.substringBefore("||")?.let { rating ->
+                    Text(
+                        text = rating,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                    )
+                }
+            } else {
+                Text(
+                    text = statusText(anime.status),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                )
+                Text(
+                    text = sourceName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                )
+            }
         }
     }
 }

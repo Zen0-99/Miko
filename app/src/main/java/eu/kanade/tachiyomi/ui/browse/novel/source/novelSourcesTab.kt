@@ -43,16 +43,21 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 @Composable
-fun Screen.novelSourcesTab(): TabContent {
+fun Screen.novelSourcesTab(
+    screenModel: NovelSourcesScreenModel = rememberScreenModel { NovelSourcesScreenModel() },
+): TabContent {
     val navigator = LocalNavigator.currentOrThrow
     val context = LocalContext.current
-    val screenModel = rememberScreenModel { NovelSourcesScreenModel() }
     val state by screenModel.state.collectAsState()
     val extensionManager = remember { Injekt.get<NovelExtensionManager>() }
     val jsPluginManager = remember { Injekt.get<eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager>() }
 
     // Track which source IDs have extension updates available + extension info for cards
-    val installedExtensions by extensionManager.installedExtensionsFlow.collectAsState(emptyList())
+    // Use the flow's current value as initial state to avoid a brief emptyList()
+    // flash when the composable remounts (e.g. switching content modes).
+    val installedExtensions by extensionManager.installedExtensionsFlow.collectAsState(
+        extensionManager.installedExtensionsFlow.value,
+    )
     val jsInstalledPlugins by jsPluginManager.installedPluginsFlow.collectAsState(emptyList())
     val sourcesWithUpdates by remember(installedExtensions) {
         derivedStateOf {
