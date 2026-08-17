@@ -325,6 +325,85 @@ class PlayerViewModel @JvmOverloads constructor(
     private val _primaryButton = MutableStateFlow<CustomButton?>(null)
     val primaryButton = _primaryButton.asStateFlow()
 
+    // Pinch-to-zoom: MPV video-zoom is log2 scale (0 = 1x, 1 = 2x). Range: 0..0.5 (1x..1.4x)
+    val videoZoom = MutableStateFlow(0f)
+    val videoPanX = MutableStateFlow(0f)
+    val videoPanY = MutableStateFlow(0f)
+
+    // Resume overlay
+    val resumePosition = MutableStateFlow(0L)
+    val showResumeOverlay = MutableStateFlow(false)
+
+    // Up-next overlay
+    val nextEpisodeInfo = MutableStateFlow<NextEpisodeInfo?>(null)
+    val showUpNextOverlay = MutableStateFlow(false)
+
+    data class NextEpisodeInfo(
+        val title: String,
+        val episodeNumber: String,
+    )
+
+    fun showResumeOverlay(position: Long) {
+        resumePosition.value = position
+        showResumeOverlay.value = true
+    }
+
+    fun dismissResumeOverlay(resume: Boolean) {
+        if (resume) {
+            seekTo(resumePosition.value.toInt())
+        }
+        showResumeOverlay.value = false
+    }
+
+    fun updateNextEpisodeInfo() {
+        val index = getCurrentEpisodeIndex()
+        val next = currentPlaylist.value.getOrNull(index + 1)
+        if (next != null && hasNextEpisode.value) {
+            nextEpisodeInfo.value = NextEpisodeInfo(
+                title = next.name,
+                episodeNumber = next.episode_number.toString(),
+            )
+        } else {
+            nextEpisodeInfo.value = null
+        }
+    }
+
+    fun checkUpNextOverlay() {
+        val autoPlay = playerPreferences.autoplayEnabled().get()
+        if (!autoPlay || nextEpisodeInfo.value == null) {
+            showUpNextOverlay.value = false
+            return
+        }
+        val remaining = duration.value - pos.value
+        showUpNextOverlay.value = remaining <= 60f && remaining > 0f
+    }
+
+    fun dismissUpNextOverlay() {
+        showUpNextOverlay.value = false
+    }
+
+    fun setVideoZoom(zoom: Float) {
+        val clamped = zoom.coerceIn(0f, 0.5f)
+        videoZoom.value = clamped
+        MPVLib.setPropertyDouble("video-zoom", clamped.toDouble())
+        if (clamped == 0f) {
+            setVideoPan(0f, 0f)
+        }
+    }
+
+    fun setVideoPan(x: Float, y: Float) {
+        val clampedX = x.coerceIn(-1f, 1f)
+        val clampedY = y.coerceIn(-1f, 1f)
+        videoPanX.value = clampedX
+        videoPanY.value = clampedY
+        MPVLib.setPropertyDouble("video-pan-x", clampedX.toDouble())
+        MPVLib.setPropertyDouble("video-pan-y", clampedY.toDouble())
+    }
+
+    fun resetVideoZoom() {
+        setVideoZoom(0f)
+    }
+
     init {
         viewModelScope.launchIO {
             try {
@@ -380,6 +459,7 @@ class PlayerViewModel @JvmOverloads constructor(
 
     private fun updateEpisodeList(episodeList: List<Episode>) {
         _currentPlaylist.update { _ -> filterEpisodeList(episodeList) }
+        updateNextEpisodeInfo()
     }
 
     fun getDecoder() {
@@ -1626,6 +1706,7 @@ class PlayerViewModel @JvmOverloads constructor(
 
         _currentEpisode.update { _ -> chosenEpisode }
         updateEpisode(chosenEpisode)
+        resetVideoZoom()
 
         return withIOContext {
             try {

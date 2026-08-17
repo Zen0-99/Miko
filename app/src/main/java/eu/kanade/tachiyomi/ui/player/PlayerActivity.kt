@@ -78,6 +78,7 @@ import eu.kanade.tachiyomi.ui.player.settings.AdvancedPlayerPreferences
 import eu.kanade.tachiyomi.ui.player.settings.AudioPreferences
 import eu.kanade.tachiyomi.ui.player.settings.GesturePreferences
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
+import eu.kanade.tachiyomi.ui.player.settings.ResumeMode
 import eu.kanade.tachiyomi.ui.player.utils.ChapterUtils
 import eu.kanade.tachiyomi.ui.player.utils.ChapterUtils.Companion.getStringRes
 import eu.kanade.tachiyomi.util.system.powerManager
@@ -718,6 +719,7 @@ class PlayerActivity : BaseActivity() {
             "time-pos" -> {
                 viewModel.updatePlayBackPos(value.toFloat())
                 viewModel.setChapter(value.toFloat())
+                viewModel.checkUpNextOverlay()
             }
             "demuxer-cache-time" -> viewModel.updateReadAhead(value = value)
             "volume" -> viewModel.setMPVVolume(value.toInt())
@@ -1120,13 +1122,25 @@ class PlayerActivity : BaseActivity() {
         if (viewModel.isLoadingEpisode.value) {
             viewModel.currentEpisode.value?.let { episode ->
                 val preservePos = playerPreferences.preserveWatchingPosition().get()
-                val resumePosition = position
+                val savedPosition = position
                     ?: if (episode.seen && !preservePos) {
                         0L
                     } else {
                         episode.last_second_seen
                     }
-                MPVLib.command(arrayOf("set", "start", "${resumePosition / 1000F}"))
+                val resumeMode = playerPreferences.resumeMode().get()
+                when (resumeMode) {
+                    ResumeMode.Resume -> MPVLib.command(arrayOf("set", "start", "${savedPosition / 1000F}"))
+                    ResumeMode.StartOver -> MPVLib.command(arrayOf("set", "start", "0"))
+                    ResumeMode.Ask -> {
+                        if (savedPosition > 1000) {
+                            MPVLib.command(arrayOf("set", "start", "0"))
+                            viewModel.showResumeOverlay(savedPosition / 1000)
+                        } else {
+                            MPVLib.command(arrayOf("set", "start", "${savedPosition / 1000F}"))
+                        }
+                    }
+                }
             }
         } else {
             player.timePos?.let {

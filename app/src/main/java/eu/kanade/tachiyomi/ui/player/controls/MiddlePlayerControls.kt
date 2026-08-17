@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.player.controls.components.ControlsButton
+import eu.kanade.tachiyomi.ui.player.controls.components.SeekArcButton
 import `is`.xyz.mpv.Utils
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.padding
@@ -54,6 +57,11 @@ fun MiddlePlayerControls(
     paused: Boolean,
     gestureSeekAmount: Pair<Int, Int>?,
     onPlayPauseClick: () -> Unit,
+
+    // seek
+    seekAmount: Int,
+    onSeekBackward: () -> Unit,
+    onSeekForward: () -> Unit,
 
     // next
     hasNext: Boolean,
@@ -79,6 +87,20 @@ fun MiddlePlayerControls(
                     onClick = onSkipPrevious,
                     iconSize = 48.dp,
                     enabled = hasPrevious,
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = controlsShown && !areControlsLocked,
+            enter = enter,
+            exit = exit,
+        ) {
+            if (gestureSeekAmount == null) {
+                SeekArcButton(
+                    icon = Icons.Filled.FastRewind,
+                    amount = -seekAmount,
+                    onClick = onSeekBackward,
                 )
             }
         }
@@ -123,6 +145,20 @@ fun MiddlePlayerControls(
                         contentDescription = null,
                     )
                 }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = controlsShown && !areControlsLocked,
+            enter = enter,
+            exit = exit,
+        ) {
+            if (gestureSeekAmount == null) {
+                SeekArcButton(
+                    icon = Icons.Filled.FastForward,
+                    amount = seekAmount,
+                    onClick = onSeekForward,
+                )
             }
         }
 

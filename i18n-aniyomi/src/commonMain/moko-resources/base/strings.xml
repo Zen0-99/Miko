@@ -386,6 +386,19 @@
     <string name="player_sheets_custom_buttons_title">Custom buttons</string>
     <string name="player_seek_n_seconds">%d seconds</string>
     <string name="player_gesture_seek_indicator" translatable="false">%c%s\n[%s]</string>
+    <string name="player_zoom_indicator" translatable="false">Zoom: %d%%</string>
+    <string name="player_subtitle_presets_title">Presets</string>
+    <string name="player_subtitle_preset_default">Default</string>
+    <string name="player_subtitle_preset_yellow">Yellow</string>
+    <string name="player_subtitle_preset_high_contrast">High Contrast</string>
+    <string name="player_subtitle_preset_large">Large</string>
+    <string name="player_resume_title">Resume playback?</string>
+    <string name="player_resume_message">You were at %s</string>
+    <string name="player_resume_start_over">Start over</string>
+    <string name="player_resume_continue">Resume</string>
+    <string name="player_resume_always_start_over">Always start over</string>
+    <string name="player_resume_always_continue">Always resume</string>
+    <string name="player_up_next">Up Next</string>
     <string name="timer_title">Sleep Timer</string>
     <string name="timer_remaining">%s remaining</string>
     <string name="timer_picker_enter_timer">Enter duration</string>

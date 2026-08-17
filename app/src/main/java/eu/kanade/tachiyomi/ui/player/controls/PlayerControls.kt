@@ -31,6 +31,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -69,7 +70,9 @@ import eu.kanade.tachiyomi.ui.player.controls.components.BrightnessOverlay
 import eu.kanade.tachiyomi.ui.player.controls.components.BrightnessSlider
 import eu.kanade.tachiyomi.ui.player.controls.components.ControlsButton
 import eu.kanade.tachiyomi.ui.player.controls.components.SeekbarWithTimers
+import eu.kanade.tachiyomi.ui.player.controls.components.ResumeOverlay
 import eu.kanade.tachiyomi.ui.player.controls.components.TextPlayerUpdate
+import eu.kanade.tachiyomi.ui.player.controls.components.UpNextOverlay
 import eu.kanade.tachiyomi.ui.player.controls.components.ThumbnailPreview
 import eu.kanade.tachiyomi.ui.player.controls.components.VolumeSlider
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.toFixed
@@ -85,8 +88,10 @@ import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.source.local.entries.anime.LocalAnimeSource
+import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import kotlin.math.pow
 
 @Suppress("CompositionLocalAllowlist")
 val LocalPlayerButtonsClickEvent = staticCompositionLocalOf { {} }
@@ -120,6 +125,7 @@ fun PlayerControls(
     val currentChapter by viewModel.currentChapter.collectAsState()
     val indexedChapters by viewModel.chapters.collectAsState()
     val currentBrightness by viewModel.currentBrightness.collectAsState()
+    val videoZoom by viewModel.videoZoom.collectAsState()
 
     val playerTimeToDisappear by playerPreferences.playerTimeToDisappear().collectAsState()
     var resetControls by remember { mutableStateOf(true) }
@@ -153,6 +159,25 @@ fun PlayerControls(
         interactionSource = interactionSource,
     )
     DoubleTapToSeekOvals(doubleTapSeekAmount, seekText, interactionSource)
+
+    // Opening animation: black overlay that fades out when video is first loaded
+    var hasOpenedOnce by remember { mutableStateOf(false) }
+    val openingAlpha by animateFloatAsState(
+        targetValue = if (isLoading && !hasOpenedOnce) 1f else 0f,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "opening_animation",
+    )
+    LaunchedEffect(isLoading) {
+        if (!isLoading) hasOpenedOnce = true
+    }
+    if (openingAlpha > 0f) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = openingAlpha)),
+        )
+    }
+
     CompositionLocalProvider(
         LocalRippleConfiguration provides playerRippleConfiguration,
         LocalPlayerButtonsClickEvent provides { resetControls = !resetControls },
@@ -318,6 +343,19 @@ fun PlayerControls(
                         else -> {}
                     }
                 }
+                AnimatedVisibility(
+                    visible = videoZoom > 0f,
+                    enter = fadeIn(playerControlsEnterAnimationSpec()),
+                    exit = fadeOut(playerControlsExitAnimationSpec()),
+                    modifier = Modifier.constrainAs(playerUpdates) {
+                        linkTo(parent.start, parent.end)
+                        linkTo(parent.top, parent.bottom, bias = 0.15f)
+                    },
+                ) {
+                    TextPlayerUpdate(
+                        stringResource(AYMR.strings.player_zoom_indicator, (2f.pow(videoZoom) * 100).toInt()),
+                    )
+                }
 
                 AnimatedVisibility(
                     controlsShown && areControlsLocked,
@@ -348,6 +386,7 @@ fun PlayerControls(
                     },
                 ) {
                     val showLoadingCircle by playerPreferences.showLoadingCircle().collectAsState()
+                    val seekAmountPref by gesturePreferences.skipLengthPreference().collectAsState()
                     MiddlePlayerControls(
                         hasPrevious = hasPreviousEpisode,
                         onSkipPrevious = { viewModel.changeEpisode(true) },
@@ -361,6 +400,9 @@ fun PlayerControls(
                         paused = paused,
                         gestureSeekAmount = gestureSeekAmount,
                         onPlayPauseClick = viewModel::pauseUnpause,
+                        seekAmount = seekAmountPref,
+                        onSeekBackward = { viewModel.seekBy(-seekAmountPref) },
+                        onSeekForward = { viewModel.seekBy(seekAmountPref) },
                         enter = fadeIn(playerControlsEnterAnimationSpec()),
                         exit = fadeOut(playerControlsExitAnimationSpec()),
                     )
@@ -666,6 +708,14 @@ fun PlayerControls(
 
         BrightnessOverlay(
             brightness = currentBrightness,
+        )
+        ResumeOverlay(viewModel)
+        UpNextOverlay(
+            viewModel = viewModel,
+            onPlayNext = {
+                viewModel.dismissUpNextOverlay()
+                viewModel.changeEpisode(false, autoPlay = true)
+            },
         )
     }
 }

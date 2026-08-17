@@ -97,6 +97,7 @@ fun SubtitleSettingsPanel(
                     },
                     colors = TopAppBarDefaults.topAppBarColors().copy(containerColor = Color.Transparent),
                 )
+                SubtitlePresetsRow(Modifier.fillMaxWidth())
                 HorizontalPager(
                     state = pagerState,
                     pageSize = PageSize.Fixed(LocalConfiguration.current.screenWidthDp.dp * 0.9f),
@@ -135,6 +136,7 @@ fun SubtitleSettingsPanel(
                         Icon(imageVector = Icons.Default.Close, contentDescription = null)
                     }
                 }
+                SubtitlePresetsRow(Modifier)
                 repeat(3) { cards(it, Modifier) }
                 Spacer(Modifier.height(16.dp))
             }

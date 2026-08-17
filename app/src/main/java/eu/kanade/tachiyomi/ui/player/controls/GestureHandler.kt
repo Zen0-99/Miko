@@ -21,6 +21,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -113,6 +114,9 @@ fun GestureHandler(
     val currentBrightness by viewModel.currentBrightness.collectAsState()
     val volumeBoostingCap = audioPreferences.volumeBoostCap().get()
     val haptics = LocalHapticFeedback.current
+    val videoZoom by viewModel.videoZoom.collectAsState()
+    val videoPanX by viewModel.videoPanX.collectAsState()
+    val videoPanY by viewModel.videoPanY.collectAsState()
 
     Box(
         modifier = modifier
@@ -296,6 +300,24 @@ fun GestureHandler(
                         if (change.position.x > size.width / 2) changeBrightness() else changeVolume()
                     } else {
                         if (change.position.x < size.width / 2) changeBrightness() else changeVolume()
+                    }
+                }
+            }
+            .pointerInput(areControlsLocked) {
+                if (areControlsLocked) return@pointerInput
+                detectTransformGestures { _, pan, zoom, _ ->
+                    if (zoom != 1f) {
+                        val newZoom = videoZoom + (zoom - 1f) * 0.5f
+                        viewModel.setVideoZoom(newZoom)
+                        if (newZoom > 0f) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                    }
+                    if (videoZoom > 0f && (pan.x != 0f || pan.y != 0f)) {
+                        viewModel.setVideoPan(
+                            videoPanX + pan.x / size.width,
+                            videoPanY + pan.y / size.height,
+                        )
                     }
                 }
             },

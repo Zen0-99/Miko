@@ -5,6 +5,12 @@ import eu.kanade.tachiyomi.ui.player.VideoAspect
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
 
+enum class ResumeMode {
+    Ask,
+    Resume,
+    StartOver,
+}
+
 class PlayerPreferences(
     private val preferenceStore: PreferenceStore,
 ) {
@@ -12,6 +18,7 @@ class PlayerPreferences(
         "pref_preserve_watching_position",
         false,
     )
+    fun resumeMode() = preferenceStore.getEnum("pref_resume_mode", ResumeMode.Ask)
     fun progressPreference() = preferenceStore.getFloat("pref_progress_preference", 0.85F)
     fun defaultPlayerOrientationType() = preferenceStore.getEnum(
         "pref_default_player_orientation_type_key",
