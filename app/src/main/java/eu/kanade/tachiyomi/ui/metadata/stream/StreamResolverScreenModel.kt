@@ -31,7 +31,11 @@ class StreamResolverScreenModel(
     sealed interface State {
         data object Idle : State
         data object Loading : State
-        data class Success(val candidates: List<StreamResolver.StreamCandidate>) : State
+        data class Success(
+            val candidates: List<StreamResolver.StreamCandidate>,
+            val timedOut: Boolean = false,
+            val failedSources: List<String> = emptyList(),
+        ) : State
         data object Empty : State
         data class Error(val message: String) : State
         data class Resolving(val candidate: StreamResolver.StreamCandidate) : State
@@ -41,26 +45,28 @@ class StreamResolverScreenModel(
 
     /**
      * Start resolving streaming sources for [anime].
+     * If [episodeNumber] is provided and a cached mapping exists, the episode
+     * is auto-resolved without showing the picker.
      */
-    fun resolve(anime: Anime) {
+    fun resolve(anime: Anime, episodeNumber: Double? = null) {
         mutableState.update { State.Loading }
         screenModelScope.launchIO {
             try {
-                val candidates = streamResolver.resolve(anime)
-                mutableState.update {
-                    when {
-                        candidates.isEmpty() -> State.Empty
-                        candidates.size == 1 && candidates.first().cached -> {
-                            // Cached — go straight to episode resolution
-                            State.Resolving(candidates.first())
+                val result = streamResolver.resolve(anime)
+                val cachedCandidate = result.candidates.firstOrNull { it.cached }
+                if (cachedCandidate != null) {
+                    // Cached — go straight to episode resolution, skip picker
+                    mutableState.update { State.Resolving(cachedCandidate) }
+                    fetchAndMapEpisode(anime, cachedCandidate, episodeNumber)
+                } else {
+                    mutableState.update {
+                        when {
+                            result.candidates.isEmpty() && result.timedOut ->
+                                State.Error("Sources are taking too long. Try again or search manually.")
+                            result.candidates.isEmpty() -> State.Empty
+                            else -> State.Success(result.candidates, result.timedOut, result.failedSources)
                         }
-                        else -> State.Success(candidates)
                     }
-                }
-                // If cached, auto-resolve the episode
-                val state = state.value
-                if (state is State.Resolving) {
-                    fetchAndMapEpisode(anime, state.candidate, null)
                 }
             } catch (e: Exception) {
                 logcat(LogPriority.ERROR, e) { "Stream resolution failed" }
@@ -139,6 +145,14 @@ class StreamResolverScreenModel(
             logcat(LogPriority.ERROR, e) { "Episode fetch/mapping failed" }
             mutableState.update { State.Error(e.message ?: "Failed to load episodes") }
         }
+    }
+
+    /**
+     * Clear the cached source mapping for [anime] so the picker shows again
+     * on next play. Called from the "Change source" menu option.
+     */
+    fun clearCachedMapping(anime: Anime) {
+        streamResolver.clearMapping(anime)
     }
 
     /**

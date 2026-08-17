@@ -42,6 +42,7 @@ import eu.kanade.tachiyomi.metadata.cinemeta.CinemetaMetadataSource
 import eu.kanade.tachiyomi.metadata.stream.SourceMappingCache
 import eu.kanade.tachiyomi.metadata.stream.StreamResolver
 import eu.kanade.tachiyomi.metadata.stream.TitleMatcher
+import eu.kanade.tachiyomi.metadata.stream.LoadCinemetaEpisodes
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.anime.AndroidAnimeSourceManager
 import eu.kanade.tachiyomi.source.manga.AndroidMangaSourceManager
@@ -330,6 +331,7 @@ class AppModule(val app: Application) : InjektModule {
                 titleMatcher = get(),
             )
         }
+        addSingletonFactory { LoadCinemetaEpisodes(get(), get()) }
 
         // --- JS novel plugin runtime wiring ---
         // Storage for plugin scripts and custom assets

@@ -167,6 +167,7 @@ class AnimeScreenModel(
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
     private val searchFallbackEngine: AnimeSearchFallbackEngine = Injekt.get(),
+    private val loadCinemetaEpisodes: eu.kanade.tachiyomi.metadata.stream.LoadCinemetaEpisodes = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<AnimeScreenModel.State>(State.Loading) {
 
@@ -444,6 +445,12 @@ class AnimeScreenModel(
             val needRefreshInfo = !anime.initialized
             val needRefreshEpisode = episodes.isEmpty() && anime.fetchType == FetchType.Episodes
             val needRefreshSeason = seasons.isEmpty() && anime.fetchType == FetchType.Seasons
+
+            // Cinemeta entries (source == 0) — load virtual episodes from Cinemeta metadata
+            val isCinemetaEntry = anime.source == 0L
+            if (isCinemetaEntry && episodes.isEmpty()) {
+                loadCinemetaEpisodes.await(anime)
+            }
 
             // Show what we have earlier
             val intervalDays = fetchInterval.calculateInterval(

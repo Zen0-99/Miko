@@ -174,7 +174,8 @@ class AnimeScreen(
                 if (isCinemetaEntry) {
                     // Cinemeta entry — resolve streaming source before playing
                     pendingEpisodeNumber = episode.episodeNumber
-                    streamResolverSM.resolve(successState.anime)
+                    streamResolverSM.resolve(successState.anime, episode.episodeNumber)
+                    // Picker is shown only if not cached — LaunchedEffect below handles the rest
                     showStreamPicker = true
                 } else {
                     scope.launchIO {
@@ -474,8 +475,8 @@ class AnimeScreen(
             }
         }
 
-        // Stream picker for Cinemeta entries
-        if (showStreamPicker) {
+        // Stream picker for Cinemeta entries — only show when not auto-resolving from cache
+        if (showStreamPicker && streamResolverState !is StreamResolverScreenModel.State.Resolving) {
             StreamPickerSheet(
                 state = streamResolverState,
                 onDismiss = {

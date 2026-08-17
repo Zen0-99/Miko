@@ -77,6 +77,8 @@ fun StreamPickerSheet(
                         onCandidateSelected = { candidate ->
                             onCandidateSelected(candidate)
                         },
+                        timedOut = state.timedOut,
+                        failedSources = state.failedSources,
                     )
                 }
                 is StreamResolverScreenModel.State.Resolving -> {
@@ -151,6 +153,8 @@ private fun ResolvingContent(candidate: StreamResolver.StreamCandidate) {
 private fun CandidatesList(
     candidates: List<StreamResolver.StreamCandidate>,
     onCandidateSelected: (StreamResolver.StreamCandidate) -> Unit,
+    timedOut: Boolean = false,
+    failedSources: List<String> = emptyList(),
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -161,6 +165,25 @@ private fun CandidatesList(
                 onClick = { onCandidateSelected(candidate) },
             )
             HorizontalDivider()
+        }
+        if (timedOut || failedSources.isNotEmpty()) {
+            item {
+                val message = buildString {
+                    if (timedOut) append("Some sources are taking too long.")
+                    if (failedSources.isNotEmpty()) {
+                        if (isNotEmpty()) append(" ")
+                        append("Failed: ${failedSources.joinToString(", ")}")
+                    }
+                }
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                )
+            }
         }
     }
 }
