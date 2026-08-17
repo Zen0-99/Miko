@@ -9,8 +9,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -67,6 +69,11 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.ui.library.LibraryTab
+import eu.kanade.presentation.metadata.stream.StreamPickerSheet
+import eu.kanade.tachiyomi.metadata.stream.StreamResolver
+import eu.kanade.tachiyomi.ui.metadata.stream.StreamResolverScreenModel
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
@@ -122,6 +129,14 @@ class AnimeScreen(
         val successState = state as AnimeScreenModel.State.Success
         val isAnimeHttpSource = remember { successState.source is AnimeHttpSource }
 
+        // Cinemeta entry detection — source ID 0 means it's a Cinemeta metadata entry
+        // that needs stream resolution to find a playable source.
+        val isCinemetaEntry = successState.anime.source == 0L
+        var showStreamPicker by remember { mutableStateOf(false) }
+        var pendingEpisodeNumber by remember { mutableStateOf<Double?>(null) }
+        val streamResolverSM = rememberScreenModel { StreamResolverScreenModel(Injekt.get(), Injekt.get(), Injekt.get()) }
+        val streamResolverState by streamResolverSM.state.collectAsState()
+
         val extractedAccent = rememberEntryAccentColor(
             entryId = successState.anime.id,
             cover = successState.anime,
@@ -156,12 +171,19 @@ class AnimeScreen(
             alwaysUseExternalPlayer = screenModel.alwaysUseExternalPlayer,
             navigateUp = navigator::pop,
             onEpisodeClicked = { episode, alt ->
-                scope.launchIO {
-                    if (screenModel.isTorrentEnabled() && successState.source.isSourceForTorrents()) {
-                        TorrentServerService.start()
+                if (isCinemetaEntry) {
+                    // Cinemeta entry — resolve streaming source before playing
+                    pendingEpisodeNumber = episode.episodeNumber
+                    streamResolverSM.resolve(successState.anime)
+                    showStreamPicker = true
+                } else {
+                    scope.launchIO {
+                        if (screenModel.isTorrentEnabled() && successState.source.isSourceForTorrents()) {
+                            TorrentServerService.start()
+                        }
+                        val extPlayer = screenModel.alwaysUseExternalPlayer != alt
+                        openEpisode(context, episode, extPlayer)
                     }
-                    val extPlayer = screenModel.alwaysUseExternalPlayer != alt
-                    openEpisode(context, episode, extPlayer)
                 }
             },
             onDownloadEpisode = screenModel::runEpisodeDownloadActions.takeIf {
@@ -449,6 +471,46 @@ class AnimeScreen(
                     ),
                     onDismissRequest = onDismissRequest,
                 )
+            }
+        }
+
+        // Stream picker for Cinemeta entries
+        if (showStreamPicker) {
+            StreamPickerSheet(
+                state = streamResolverState,
+                onDismiss = {
+                    showStreamPicker = false
+                    streamResolverSM.reset()
+                },
+                onCandidateSelected = { candidate ->
+                    streamResolverSM.selectCandidate(
+                        cinemetaAnime = successState.anime,
+                        candidate = candidate,
+                        episodeNumber = pendingEpisodeNumber,
+                    )
+                },
+                onSearchManually = {
+                    showStreamPicker = false
+                    streamResolverSM.reset()
+                    navigator.push(GlobalAnimeSearchScreen(successState.anime.title))
+                },
+            )
+        }
+
+        // Launch player when episode is resolved
+        LaunchedEffect(streamResolverState) {
+            val resolved = streamResolverState as? StreamResolverScreenModel.State.EpisodeResolved
+            if (resolved != null && showStreamPicker) {
+                showStreamPicker = false
+                streamResolverSM.reset()
+                scope.launchIO {
+                    val extPlayer = screenModel.alwaysUseExternalPlayer
+                    val episode = resolved.episode
+                    if (screenModel.isTorrentEnabled()) {
+                        TorrentServerService.start()
+                    }
+                    openEpisode(context, episode, extPlayer)
+                }
             }
         }
     }
