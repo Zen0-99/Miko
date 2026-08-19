@@ -50,7 +50,7 @@ class NovelExtensionManager(
     private val installer by lazy { NovelExtensionInstaller(context) }
 
     companion object {
-        private const val DEFAULT_REPO_URL = "https://raw.githubusercontent.com/keypop3750/MikoNovelSources/main"
+        private const val DEFAULT_REPO_URL = "https://raw.githubusercontent.com/Zen0-99/MikoNovelSources/main"
     }
 
     private val iconMap = mutableMapOf<String, Drawable>()
