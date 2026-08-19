@@ -42,7 +42,7 @@ internal object NovelExtensionLoader {
     private const val METADATA_SOURCE_FACTORY = "yokai.novel.extension.factory"
     private const val METADATA_NSFW = "yokai.novel.extension.nsfw"
     const val LIB_VERSION_MIN = 1.0
-    const val LIB_VERSION_MAX = 1.5
+    const val LIB_VERSION_MAX = 2.0
 
     @Suppress("DEPRECATION")
     private val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or

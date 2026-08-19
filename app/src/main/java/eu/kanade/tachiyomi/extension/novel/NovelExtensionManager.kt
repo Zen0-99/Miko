@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.domain.extensionrepo.novel.interactor.CreateNovelExtensionRepo
+import mihon.domain.extensionrepo.novel.interactor.DeleteNovelExtensionRepo
+import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepo
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.novel.model.StubNovelSource
@@ -73,19 +75,48 @@ class NovelExtensionManager(
     /**
      * Seeds the default MikoNovelSources extension repo on first launch so that
      * available extensions and updates are detected without manual setup.
+     *
+     * Also migrates the repo URL if it was previously seeded with an old URL
+     * (e.g. keypop3750/MikoNovelSources → Zen0-99/MikoNovelSources).
      */
     private fun seedDefaultRepoIfNeeded() {
         val seeded = preferences.novelDefaultRepoSeeded()
-        if (seeded.get()) return
         scope.launch {
             try {
+                val getRepo = Injekt.get<GetNovelExtensionRepo>()
                 val createRepo = Injekt.get<CreateNovelExtensionRepo>()
-                createRepo.await(DEFAULT_REPO_URL)
-                seeded.set(true)
-                // Refresh available extensions now that the repo is configured
+                val deleteRepo = Injekt.get<DeleteNovelExtensionRepo>()
+                val repos = getRepo.getAll()
+                val oldUrl = "https://raw.githubusercontent.com/keypop3750/MikoNovelSources/main"
+                val hasOldRepo = repos.any { it.baseUrl == oldUrl }
+                val hasNewRepo = repos.any { it.baseUrl == DEFAULT_REPO_URL }
+
+                android.util.Log.i("NovelExtMgr", "seedDefaultRepo: seeded=${seeded.get()}, repos=${repos.size}, hasOld=$hasOldRepo, hasNew=$hasNewRepo")
+                repos.forEach { repo ->
+                    android.util.Log.i("NovelExtMgr", "  existing repo: ${repo.baseUrl}")
+                }
+
+                if (!seeded.get()) {
+                    // First launch — seed the default repo
+                    createRepo.await(DEFAULT_REPO_URL)
+                    seeded.set(true)
+                    android.util.Log.i("NovelExtMgr", "Seeded default novel extension repo: $DEFAULT_REPO_URL")
+                } else if (hasOldRepo && !hasNewRepo) {
+                    // Migrate: delete old repo, create new one
+                    android.util.Log.i("NovelExtMgr", "Migrating novel extension repo: $oldUrl -> $DEFAULT_REPO_URL")
+                    deleteRepo.await(oldUrl)
+                    createRepo.await(DEFAULT_REPO_URL)
+                } else if (!hasNewRepo) {
+                    // Seeded flag was set but repo is missing — re-seed
+                    android.util.Log.i("NovelExtMgr", "Re-seeding default novel extension repo (was missing)")
+                    createRepo.await(DEFAULT_REPO_URL)
+                } else {
+                    android.util.Log.i("NovelExtMgr", "Repo already correct, no migration needed")
+                }
+                // Refresh available extensions
                 findAvailableExtensions()
             } catch (e: Exception) {
-                logcat(LogPriority.WARN, e) { "Failed to seed default novel extension repo" }
+                android.util.Log.e("NovelExtMgr", "Failed to seed/migrate default novel extension repo", e)
             }
         }
     }

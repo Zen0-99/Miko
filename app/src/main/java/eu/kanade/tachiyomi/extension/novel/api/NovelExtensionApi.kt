@@ -45,7 +45,12 @@ internal class NovelExtensionApi {
 
     suspend fun findExtensions(): List<NovelExtension.Available> {
         return withIOContext {
-            getExtensionRepo.getAll()
+            val repos = getExtensionRepo.getAll()
+            android.util.Log.i("NovelExtApi", "findExtensions: fetching from ${repos.size} repo(s)")
+            repos.forEach { repo ->
+                android.util.Log.i("NovelExtApi", "  repo: ${repo.baseUrl}")
+            }
+            repos
                 .map { async { getExtensions(it) } }
                 .awaitAll()
                 .flatten()
@@ -55,11 +60,21 @@ internal class NovelExtensionApi {
     private suspend fun getExtensions(extRepo: ExtensionRepo): List<NovelExtension.Available> {
         val repoBaseUrl = extRepo.baseUrl
         return try {
+            android.util.Log.i("NovelExtApi", "getExtensions: fetching index from $repoBaseUrl")
             val entries = extensionRepoService.fetchExtensionIndex(repoBaseUrl)
-                ?: return emptyList()
-            entries.toNovelExtensions()
+                ?: run {
+                    android.util.Log.w("NovelExtApi", "getExtensions: fetchExtensionIndex returned null for $repoBaseUrl")
+                    return emptyList()
+                }
+            android.util.Log.i("NovelExtApi", "getExtensions: got ${entries.size} entries from $repoBaseUrl")
+            val extensions = entries.toNovelExtensions()
+            android.util.Log.i("NovelExtApi", "getExtensions: ${extensions.size} entries passed lib version filter")
+            extensions.forEach { ext ->
+                android.util.Log.i("NovelExtApi", "  available: ${ext.name} v${ext.versionName} (code ${ext.versionCode}) pkg=${ext.pkgName}")
+            }
+            extensions
         } catch (e: Throwable) {
-            logcat(LogPriority.ERROR, e) { "Failed to get novel extensions from $repoBaseUrl" }
+            android.util.Log.e("NovelExtApi", "Failed to get novel extensions from $repoBaseUrl", e)
             emptyList()
         }
     }
