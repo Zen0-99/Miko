@@ -16,8 +16,11 @@ import tachiyomi.core.common.util.system.logcat
  * paragraph while the current one is still being played, eliminating the
  * per-paragraph dead-air gap that a strict speak → onDone → speak chain
  * produces (the gap equals the full synthesis latency of the next paragraph).
- * Neural engines play each speak() call immediately, so they keep the serial
- * onDone-chained flow.
+ * Serial engines ([PocketTtsEngine]) play each speak() call immediately — for
+ * them the controller synth-aheads instead: when a paragraph starts speaking,
+ * [TtsEngine.prefetch] begins synthesizing the next paragraph into the
+ * engine's PCM buffer so the following speak() drains it with zero wait
+ * (D-06).
  */
 class TtsController(
     private val context: Context,
@@ -68,25 +71,18 @@ class TtsController(
         onReady: () -> Unit,
         onError: (String) -> Unit,
     ) {
-        val engineType = preferences.engineType().get()
-        val engineImpl: TtsEngine = if (engineType == "neural") {
-            val modelPath = preferences.neuralModelPath().get()
-            val modelType = preferences.neuralModelType().get()
-            NeuralTtsEngine(
-                context = context,
-                modelPath = modelPath,
-                modelType = modelType,
-                useNnapi = preferences.neuralUseNnapi().get(),
-                numThreads = preferences.neuralNumThreads().get(),
-                maxNumSentences = preferences.neuralMaxSentences().get(),
-                speakerId = preferences.neuralSpeakerId().get(),
-                lengthScale = preferences.neuralLengthScale().get(),
-                noiseScale = preferences.neuralNoiseScale().get(),
-                noiseScaleW = preferences.neuralNoiseScaleW().get(),
-                sentencePauseMs = preferences.neuralSentencePauseMs().get(),
-            )
-        } else {
-            AndroidTtsEngine(context)
+        val requested = preferences.engineType().get()
+        // D-02: stale "neural" prefs resolve silently — to Pocket when the
+        // engine bundle is installed, else to the Android fallback. This is a
+        // string-level mapping; the sherpa engine class itself is gone.
+        val engineType = when (requested) {
+            "neural" ->
+                if (PocketEngineCatalog.isInstalled(context.filesDir)) "pocket" else "android"
+            else -> requested
+        }
+        val engineImpl: TtsEngine = when (engineType) {
+            "pocket" -> PocketTtsEngine(context, preferences)
+            else -> AndroidTtsEngine(context)
         }
 
         engineImpl.setSpeechRate(preferences.speechRate().get())
@@ -108,9 +104,10 @@ class TtsController(
                 onReady()
             },
             onError = { error ->
-                // Fall back to Android TTS if neural fails
-                if (engineType == "neural") {
-                    logcat(LogPriority.WARN) { "Neural TTS failed: $error — falling back to Android TTS" }
+                // Fall back to Android TTS if the neural engine fails
+                // (bundle missing or load failure alike — Q7).
+                if (engineType == "pocket") {
+                    logcat(LogPriority.WARN) { "Pocket TTS failed: $error — falling back to Android TTS" }
                     val fallback = AndroidTtsEngine(context)
                     fallback.setSpeechRate(preferences.speechRate().get())
                     fallback.setPitch(preferences.pitch().get())
@@ -210,7 +207,8 @@ class TtsController(
      * engine queue when [flushFirst] is set; the rest are appended. On
      * queue-capable engines a lookahead window of upcoming paragraphs is
      * enqueued so synthesis overlaps playback; on serial engines only [from]
-     * is spoken and the chain continues via onDone.
+     * is spoken, the next paragraph is synth-aheaded via [TtsEngine.prefetch],
+     * and the chain continues via onDone.
      */
     private fun enqueueWindow(from: Int, flushFirst: Boolean) {
         val engine = engine ?: return
@@ -234,6 +232,14 @@ class TtsController(
                 callback = sessionCallback,
             )
             flush = false
+        }
+        // D-06 synth-ahead: serial engines can't queue, so once the window's
+        // first paragraph starts speaking, begin synthesizing the next one
+        // into the engine's PCM buffer — its speak() drains it instead of
+        // cold-starting synthesis (no default-op harm on queue-capable
+        // engines; this branch never runs for them).
+        if (!canQueue && preferences.autoContinue().get() && last + 1 < paragraphs.size) {
+            engine.prefetch(paragraphs[last + 1])
         }
         nextToEnqueue = last + 1
     }
@@ -267,6 +273,11 @@ class TtsController(
                     flush = true,
                     callback = sessionCallback,
                 )
+                // D-06: keep the pipeline hot — the just-started speak drains
+                // its prefetch buffer; start buffering the paragraph after it.
+                if (preferences.autoContinue().get() && next + 1 < paragraphs.size) {
+                    engine.prefetch(paragraphs[next + 1])
+                }
             }
         }
     }
