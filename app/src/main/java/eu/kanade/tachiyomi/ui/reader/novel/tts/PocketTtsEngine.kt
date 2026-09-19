@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.SynthAudio
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.EngineProfiles
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyApplier
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyHint
+import java.io.File
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -166,7 +167,7 @@ class PocketTtsEngine internal constructor(
                         sink.write(shape(audio, prepared.hint))
                     }
                 } else {
-                    streamSource(prepared.engineText, currentVoice).collect { audio ->
+                    streamSource(prepared.engineText, resolveVoice()).collect { audio ->
                         coroutineContext.ensureActive()
                         sink.write(shape(audio, prepared.hint))
                     }
@@ -202,7 +203,7 @@ class PocketTtsEngine internal constructor(
             val channel = Channel<SynthAudio>(capacity = Channel.UNLIMITED)
             val job = scope.launch {
                 try {
-                    streamSource(prepared.engineText, currentVoice).collect { channel.send(it) }
+                    streamSource(prepared.engineText, resolveVoice()).collect { channel.send(it) }
                     channel.close()
                 } catch (t: Throwable) {
                     channel.close(t)
@@ -316,6 +317,27 @@ class PocketTtsEngine internal constructor(
             }
         }
         return pcm
+    }
+
+    /**
+     * Resolve the requested voice to one the installed bundle actually
+     * ships. A stale pref (e.g. a sherpa-era `vits-piper-*` name, or a
+     * voice absent from the active bundle) would otherwise surface as
+     * PocketEngine's "Voice WAV missing" check and kill playback — anything
+     * unrecognized falls back to the default voice instead. `cloned-*`
+     * voices live under `cloned_voices/`, not `voices/`, and pass through
+     * for the engine's own store to resolve.
+     */
+    private fun resolveVoice(): String {
+        val requested = currentVoice.ifBlank { PocketVoiceCatalog.DEFAULT_VOICE }
+        val localName = requested.substringAfter(':', requested)
+        if (localName.startsWith(PocketEngine.CLONED_VOICE_PREFIX)) return requested
+        val voicesDir = File(PocketEngineCatalog.engineDir(context.filesDir), "voices")
+        if (File(voicesDir, "$localName.wav").isFile) return requested
+        logcat(LogPriority.WARN) {
+            "Pocket voice '$requested' not in the installed bundle — using ${PocketVoiceCatalog.DEFAULT_VOICE}"
+        }
+        return PocketVoiceCatalog.DEFAULT_VOICE
     }
 
     private fun normalizedKey(text: String): String = text.trim().replace(WHITESPACE, " ")

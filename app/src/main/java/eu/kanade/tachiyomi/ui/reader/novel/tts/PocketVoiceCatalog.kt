@@ -32,6 +32,20 @@ object PocketVoiceCatalog {
     private val EXTRA_VOICE_WAV = Regex("vctk_(p\\d{3})\\.wav")
 
     /**
+     * Accent labels for the curated UK extras in `tools/pocket-uk-speakers.txt`
+     * (verified against VCTK `speaker-info.txt`). Unknown `vctk_*` ids fall
+     * back to "British" — the build script only admits UK accents.
+     */
+    private val EXTRA_VOICE_ACCENTS = mapOf(
+        "p225" to "English",
+        "p226" to "English",
+        "p227" to "English",
+        "p228" to "English",
+        "p229" to "English",
+        "p253" to "Welsh",
+    )
+
+    /**
      * The 6 commercial-safe predefined voices, in upstream
      * `bundle.json#predefined_voices` order. Gender from F0 estimation of the
      * bundled reference WAVs (~Hz noted); names don't map reliably to the Les
@@ -44,8 +58,8 @@ object PocketVoiceCatalog {
         PocketVoice("azelma", "Azelma", "female", "CC-BY-4.0", accent = "Canadian"),
         // VCTK p262 — Scottish (Edinburgh). ~164 Hz. Locked default (D-08).
         PocketVoice("eponine", "Eponine", "female", "CC-BY-4.0", accent = "Scottish"),
-        // VCTK p244. ~211 Hz.
-        PocketVoice("fantine", "Fantine", "female", "CC-BY-4.0"),
+        // VCTK p244 — English (Southern England). ~211 Hz.
+        PocketVoice("fantine", "Fantine", "female", "CC-BY-4.0", accent = "English"),
         // Unmute Voice Donation Project, CC0. ~96 Hz.
         PocketVoice("javert", "Javert", "male", "CC0"),
         // Unmute Voice Donation Project, CC0. ~214 Hz.
@@ -91,10 +105,23 @@ object PocketVoiceCatalog {
                     displayName = "VCTK ${name.removePrefix("vctk_")}",
                     gender = "",
                     license = licenseFor(name),
-                    accent = "UK",
+                    accent = EXTRA_VOICE_ACCENTS[name.removePrefix("vctk_")] ?: "British",
                 )
             }
         return base + extras
+    }
+
+    /**
+     * Human-facing picker label: `"Name (Accent)"` where an accent is
+     * verified, otherwise `"Name (Male|Female)"` from the F0-estimated
+     * gender. Never exposes license strings — attribution lives in
+     * About → Licenses.
+     */
+    fun labelFor(voice: PocketVoice): String {
+        val descriptor = voice.accent.ifBlank {
+            voice.gender.replaceFirstChar { it.uppercase() }
+        }
+        return if (descriptor.isBlank()) voice.displayName else "${voice.displayName} ($descriptor)"
     }
 }
 

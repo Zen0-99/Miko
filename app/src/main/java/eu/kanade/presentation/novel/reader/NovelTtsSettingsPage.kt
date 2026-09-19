@@ -7,27 +7,28 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +41,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
-import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.TtsVoice
@@ -65,7 +65,7 @@ fun ColumnScope.NovelTtsSettingsPage(
     SectionHeader("Text-to-Speech", accentColor)
 
     val engineType by preferences.engineType().collectAsState()
-    val engineLabels = listOf("Android TTS (system)", "Pocket TTS (neural)")
+    val engineLabels = listOf("Android TTS (system)", "Pocket TTS")
     val engineValues = listOf("android", "pocket")
     SettingsDropdown(
         label = "TTS engine",
@@ -108,7 +108,7 @@ fun ColumnScope.NovelTtsSettingsPage(
     if (engineType == "pocket") {
         SubHeader("Engine", accentColor)
 
-        PocketEngineInstallCard(
+        PocketEngineItem(
             state = pocketInstallState,
             accentColor = accentColor,
             onInstall = onInstallPocket,
@@ -119,15 +119,7 @@ fun ColumnScope.NovelTtsSettingsPage(
         val voiceName by preferences.voiceName().collectAsState()
         if (pocketInstallState is InstallState.Installed || pocketInstallState is InstallState.Outdated) {
             if (pocketVoices.isNotEmpty()) {
-                val voiceLabels = pocketVoices.map { voice ->
-                    buildString {
-                        append(voice.displayName)
-                        if (voice.license.isNotBlank()) {
-                            append(" · ")
-                            append(voice.license)
-                        }
-                    }
-                }
+                val voiceLabels = pocketVoices.map { PocketVoiceCatalog.labelFor(it) }
                 // Blank or unknown selections resolve to the locked default
                 // (eponine, D-08) for display; the engine does the same.
                 val selectedIndex = pocketVoices.indexOfFirst { it.name == voiceName }
@@ -142,35 +134,17 @@ fun ColumnScope.NovelTtsSettingsPage(
                     onSelectPocketVoice(pocketVoices[index].name)
                 }
             } else {
-                Text(
-                    text = "No voices found in the installed bundle",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                SettingsCaption("No voices found — try reinstalling the engine")
             }
 
-            // Voice attribution (REQ-006f) — every shipped voice carries its
-            // license; the full notice lives in About → Licenses.
-            Text(
-                text = "Voices: alba, azelma, eponine, fantine — CC-BY-4.0 " +
-                    "(VCTK Corpus, U. Edinburgh / Alba Mackenna) · " +
-                    "javert, marius — CC0 (Unmute Voice Donation Project) · " +
-                    "Details in About → Licenses",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            // Voice attribution (REQ-006f) — the full notice lives in
+            // About → Licenses; keep the picker itself free of legalese.
+            SettingsCaption("Voice credits — About → Licenses")
         } else {
-            Text(
-                text = "Install the Pocket engine to choose a voice",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            SettingsCaption("Install the engine to pick a voice")
         }
 
-        // ---- Advanced Pocket TTS Settings (collapsible) ----
+        // ---- Advanced (collapsible) ----
         var showAdvanced by remember { mutableStateOf(false) }
         Row(
             modifier = Modifier
@@ -181,9 +155,8 @@ fun ColumnScope.NovelTtsSettingsPage(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "Advanced Pocket TTS Settings",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                text = "Advanced",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Icon(
@@ -201,8 +174,6 @@ fun ColumnScope.NovelTtsSettingsPage(
             Column {
                 // Performance overrides (D-09) — autodetect is the default;
                 // these cover the long tail of exotic SoCs.
-                SubHeader("Performance", accentColor)
-
                 val intraOpThreads by preferences.pocketIntraOpThreads().collectAsState()
                 SliderItem(
                     label = "Synthesis threads",
@@ -214,34 +185,19 @@ fun ColumnScope.NovelTtsSettingsPage(
                 ) { threads ->
                     preferences.pocketIntraOpThreads().set(threads.coerceIn(0, 8))
                 }
-                Text(
-                    text = "ONNX Runtime intra-op thread count. Auto detects the " +
-                        "CPU's performance cluster; override only if synthesis " +
-                        "is slow or the device overheats.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                )
+                SettingsCaption("Auto matches your CPU. Only change this if speech is slow or the phone gets hot.")
 
                 val xnnpackMode by preferences.pocketXnnpackMode().collectAsState()
                 val xnnpackLabels = listOf("Auto", "On", "Off")
                 val xnnpackValues = listOf("auto", "on", "off")
                 SettingsDropdown(
-                    label = "XNNPACK acceleration",
+                    label = "Hardware acceleration",
                     selectedLabel = xnnpackLabels[xnnpackValues.indexOf(xnnpackMode).coerceAtLeast(0)],
                     options = xnnpackLabels,
                 ) { index ->
                     preferences.pocketXnnpackMode().set(xnnpackValues[index])
                 }
-                Text(
-                    text = "XNNPACK execution provider. Auto tries it with a CPU " +
-                        "fallback; On forces it; Off uses the CPU provider only.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
+                SettingsCaption("Leave on Auto — Off can help on phones where speech stutters.")
             }
         }
     } else {
@@ -292,152 +248,181 @@ fun ColumnScope.NovelTtsSettingsPage(
 }
 
 /**
- * Install card for the Pocket TTS engine bundle — mirrors the voice-download
- * card UX: title + download size on top, state-driven content below
- * (D-04).
+ * Small caption row used under settings items — same 16dp padding and
+ * bodySmall/onSurfaceVariant styling as the rest of this page.
  */
 @Composable
-private fun PocketEngineInstallCard(
+private fun SettingsCaption(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
+}
+
+/**
+ * Engine install row — a standard settings row (16dp padding, bodyMedium
+ * label, bodySmall subtitle) with a download-style trailing affordance that
+ * mirrors extension/chapter downloads: download icon → progress → checkmark.
+ * Tapping the checkmark opens a menu holding the destructive action
+ * ("Remove"), the same pattern as downloaded chapters.
+ */
+@Composable
+private fun PocketEngineItem(
     state: InstallState?,
     accentColor: Color?,
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
-    Card(
+    var menuOpen by remember { mutableStateOf(false) }
+    val retryable = state is InstallState.Failed || state is InstallState.Corrupt
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+            .heightIn(min = 48.dp)
+            .clickable(enabled = state == null || state == InstallState.NotInstalled || retryable) {
+                onInstall()
+            }
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = PocketEngineCatalog.POCKET_TTS_EN.displayName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                text = "Voice pack",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Text(
-                text = "~97 MB download · engine MIT (Kyutai), voices CC-BY-4.0/CC0",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
             when (state) {
                 null, InstallState.NotInstalled -> {
-                    Button(onClick = onInstall) {
-                        Text("Install")
-                    }
+                    SettingsInlineCaption("Not installed · ~97 MB")
                 }
                 is InstallState.Downloading -> {
                     val total = state.totalBytes.coerceAtLeast(1L)
+                    val fraction = (state.bytesFetched.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                    SettingsInlineCaption("Downloading… ${(fraction * 100).toInt()}%")
                     LinearProgressIndicator(
-                        progress = { (state.bytesFetched.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth(),
+                        progress = { fraction },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
                         color = accent,
-                    )
-                    Text(
-                        text = String.format(
-                            "Downloading — %.0f / %.0f MB",
-                            state.bytesFetched / 1_000_000f,
-                            state.totalBytes / 1_000_000f,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
                 is InstallState.Extracting -> {
-                    if (state.totalBytes > 0L) {
-                        LinearProgressIndicator(
-                            progress = {
+                    SettingsInlineCaption("Preparing voices…")
+                    LinearProgressIndicator(
+                        progress = {
+                            if (state.totalBytes > 0L) {
                                 (state.bytesExtracted.toFloat() / state.totalBytes.toFloat())
                                     .coerceIn(0f, 1f)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = accent,
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = accent,
-                        )
-                    }
-                    Text(
-                        text = "Extracting…",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
+                            } else {
+                                0f
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        color = accent,
                     )
                 }
                 InstallState.Installed -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.CheckCircle,
-                                contentDescription = "Installed",
-                                tint = accent,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Text(
-                                text = "Installed",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
-                        }
-                        TextButton(onClick = onUninstall) {
-                            Text("Uninstall")
-                        }
-                    }
+                    SettingsInlineCaption("Installed")
+                }
+                is InstallState.Outdated -> {
+                    SettingsInlineCaption("Installed · update available")
                 }
                 is InstallState.Failed -> {
                     Text(
-                        text = "Install failed: ${state.reason}",
+                        text = "Couldn't download — tap to retry",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onInstall) {
-                        Text("Retry")
-                    }
                 }
                 InstallState.Corrupt -> {
                     Text(
-                        text = "Reinstall required — the installed files are incomplete.",
+                        text = "Install incomplete — tap to repair",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onInstall) {
-                        Text("Reinstall")
+                }
+            }
+        }
+
+        when (state) {
+            null, InstallState.NotInstalled -> {
+                IconButton(onClick = onInstall) {
+                    Icon(
+                        imageVector = Icons.Outlined.Download,
+                        contentDescription = "Install voice pack",
+                        tint = accent,
+                    )
+                }
+            }
+            is InstallState.Downloading, is InstallState.Extracting -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = accent,
+                    strokeWidth = 2.dp,
+                )
+            }
+            InstallState.Installed, is InstallState.Outdated -> {
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = "Installed — open options",
+                            tint = accent,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                    ) {
+                        if (state is InstallState.Outdated) {
+                            DropdownMenuItem(
+                                text = { Text("Update") },
+                                onClick = {
+                                    menuOpen = false
+                                    onInstall()
+                                },
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Remove") },
+                            onClick = {
+                                menuOpen = false
+                                onUninstall()
+                            },
+                        )
                     }
                 }
-                is InstallState.Outdated -> {
-                    Text(
-                        text = "Update available — the installed bundle predates the current catalog. The existing install keeps working.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            }
+            is InstallState.Failed, InstallState.Corrupt -> {
+                IconButton(onClick = onInstall) {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = "Retry install",
+                        tint = MaterialTheme.colorScheme.error,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onInstall) {
-                        Text("Update")
-                    }
                 }
             }
         }
     }
+}
+
+/**
+ * Subtitle text inside [PocketEngineItem]'s row — no extra padding since the
+ * row already carries the page's 16dp inset.
+ */
+@Composable
+private fun SettingsInlineCaption(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }

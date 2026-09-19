@@ -5,7 +5,10 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.SynthAudio
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import io.mockk.every
 import io.mockk.mockk
+import java.io.File
+import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -51,13 +54,33 @@ class PocketTtsEngineTest {
     private fun chunk(size: Int, fill: Int = 7): SynthAudio =
         SynthAudio(ShortArray(size) { (it * fill % 1000).toShort() }, sampleRate = 24000)
 
+    /**
+     * Builds a Context whose filesDir holds a bundle voices/ dir containing
+     * [voiceNames] — enough for resolveVoice()'s voices/<name>.wav existence
+     * check. A relaxed-mock filesDir NPEs here: `File(File, String)` reads
+     * `parent.path` as a field, which a constructor-bypassing mockk instance
+     * leaves null.
+     */
+    private fun contextWithVoices(vararg voiceNames: String): Context {
+        val dir = createTempDirectory().toFile()
+        val voicesDir = File(dir, "engines/pocket-tts-en-v2026_04/voices")
+        voicesDir.mkdirs()
+        voiceNames.forEach { File(voicesDir, "$it.wav").writeBytes(byteArrayOf(0)) }
+        val context = mockk<Context>(relaxed = true)
+        every { context.filesDir } returns dir
+        return context
+    }
+
     private fun makeEngine(
         dispatcher: CoroutineDispatcher,
         flows: ArrayDeque<Flow<SynthAudio>>,
         sink: RecordingSink,
         calls: MutableList<Pair<String, String>>,
+        context: Context = contextWithVoices(
+            "alba", "azelma", "eponine", "fantine", "javert", "marius",
+        ),
     ): PocketTtsEngine = PocketTtsEngine(
-        context = mockk(relaxed = true),
+        context = context,
         preferences = NovelTtsPreferences(FakePreferenceStore()),
         streamFactory = { text, voice ->
             calls += text to voice
@@ -340,6 +363,54 @@ class PocketTtsEngineTest {
         testScheduler.advanceUntilIdle()
         sink.written.map { it.size } shouldBe listOf(40, 40)
         events.last() shouldBe "done:u10"
+    }
+
+    // -- voice resolution -------------------------------------------------------
+
+    @Test
+    fun `stale voice name falls back to the default voice instead of erroring`() = runTest {
+        // Regression: a sherpa-era voice pref (e.g. "vits-piper-…") carried
+        // into the Pocket engine hit "Voice WAV missing" and killed playback.
+        val sink = RecordingSink(events())
+        val calls = mutableListOf<Pair<String, String>>()
+        val engine = makeEngine(
+            StandardTestDispatcher(testScheduler),
+            ArrayDeque(listOf(flowOf(chunk(40)))),
+            sink,
+            calls,
+            context = contextWithVoices("eponine"),
+        )
+        val events = sink.events
+        val cb = callback(events)
+
+        engine.setVoice("vits-piper-en_GB-alba-medium")
+        engine.speak("hello", "u11", flush = true, callback = cb)
+        testScheduler.advanceUntilIdle()
+
+        calls.last().second shouldBe PocketVoiceCatalog.DEFAULT_VOICE
+        events shouldBe listOf("start:u11", "write:40", "done:u11")
+    }
+
+    @Test
+    fun `installed voice passes through to the stream`() = runTest {
+        val sink = RecordingSink(events())
+        val calls = mutableListOf<Pair<String, String>>()
+        val engine = makeEngine(
+            StandardTestDispatcher(testScheduler),
+            ArrayDeque(listOf(flowOf(chunk(40)))),
+            sink,
+            calls,
+            context = contextWithVoices("eponine", "marius"),
+        )
+        val events = sink.events
+        val cb = callback(events)
+
+        engine.setVoice("marius")
+        engine.speak("hello", "u12", flush = true, callback = cb)
+        testScheduler.advanceUntilIdle()
+
+        calls.last().second shouldBe "marius"
+        events shouldBe listOf("start:u12", "write:40", "done:u12")
     }
 
     // -- fakes ------------------------------------------------------------------
