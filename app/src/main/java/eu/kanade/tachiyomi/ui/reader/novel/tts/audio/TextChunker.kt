@@ -186,7 +186,7 @@ object TextChunker {
      *   false, every sentence becomes its own chunk regardless of how
      *   much room is left in [maxChars] — used by callers that need
      *   minimum-latency first-emit. Combine with [minChars] to merge
-     *   runs of tiny sentences (sherpa's pattern).
+     *   runs of tiny sentences (the classic neural-TTS pattern).
      * @param sentenceOnly When true, only `.!?;:` + newlines trigger a
      *   split. Commas, em-dashes do not.
      * @param terminalMarksOnly When true (overrides [sentenceOnly]),
@@ -203,7 +203,7 @@ object TextChunker {
      * @param minChars When > 0 and [packSentences]=false, merges runs
      *   of adjacent sentence-chunks while the accumulator length is
      *   below this threshold. Once the accumulator reaches [minChars],
-     *   it's emitted and a new accumulator starts. This is sherpa's
+     *   it's emitted and a new accumulator starts. This is the
      *   "merge tiny sentences" pattern — chunks always end on a
      *   sentence boundary, but a 5-char "Yes." doesn't waste an entire
      *   ORT call as its own chunk. Ignored when [packSentences]=true
@@ -286,8 +286,8 @@ object TextChunker {
      * a new accumulator. Chunks always end at a sentence boundary —
      * we only merge across already-split sentence breaks.
      *
-     * This mirrors sherpa-onnx's `kokoro-multi-lang-lexicon.cc` logic
-     * around the 50-token merge threshold, adapted to a character
+     * This mirrors the upstream multi-lang lexicon's merge-threshold
+     * logic (~50 tokens), adapted to a character
      * count (50 phoneme tokens ≈ 50 source-text chars for English).
      */
     private fun mergeUpToMin(

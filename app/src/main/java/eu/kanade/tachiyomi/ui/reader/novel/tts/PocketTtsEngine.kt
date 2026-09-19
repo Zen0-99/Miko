@@ -51,9 +51,9 @@ import tachiyomi.core.common.util.system.logcat
  * make synth-ahead dead code).
  *
  * [supportsQueueing] is false (serial onDone-chained playback, same as the
- * sherpa path it replaces); [supportsPause] is true (AudioTrack pause/play).
- * `onRangeStart` is never emitted — parity with the sherpa path; word
- * highlight stays in estimated mode.
+ * previous neural path); [supportsPause] is true (AudioTrack pause/play).
+ * `onRangeStart` is never emitted — parity with the previous neural path;
+ * word highlight stays in estimated mode.
  *
  * Test seams (research pattern 9 — fun-interface testability): the internal
  * constructor accepts a [streamFactory] and [pcmSinkFactory] so JVM tests can
@@ -364,12 +364,12 @@ internal fun interface PcmSink {
 }
 
 /**
- * [PcmSink] over an `AudioTrack` in `MODE_STREAM` — the same construction as
- * `NeuralTtsEngine.playPcm` (USAGE_MEDIA + CONTENT_TYPE_SPEECH + PCM_16BIT +
+ * [PcmSink] over an `AudioTrack` in `MODE_STREAM` — the same construction the
+ * previous neural engine used (USAGE_MEDIA + CONTENT_TYPE_SPEECH + PCM_16BIT +
  * mono + `maxOf(minBuf, 8192)` buffer + LOW_LATENCY), adapted for streaming:
  * the track is created lazily on the first [write], [write] blocks while the
  * HAL buffer is full (that's the playback pacing), and [awaitDrain] polls
- * `playbackHeadPosition` like the sherpa path's drain loop. [release]
+ * `playbackHeadPosition` to drain like the old playPcm loop. [release]
  * unblocks a mid-flight [write] so a cancelled playback job unwinds promptly.
  */
 internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {

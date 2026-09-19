@@ -7,7 +7,7 @@ import tachiyomi.core.common.util.system.logcat
 /**
  * Controller that manages TTS engine lifecycle, text queuing, and reading session.
  *
- * Supports both Android TTS and neural TTS (sherpa-onnx) engines.
+ * Supports both Android TTS (system) and Pocket TTS (neural) engines.
  * Handles paragraph-by-paragraph reading with auto-continue.
  *
  * For engines that support it ([TtsEngine.supportsQueueing] — the Android TTS
@@ -74,7 +74,7 @@ class TtsController(
         val requested = preferences.engineType().get()
         // D-02: stale "neural" prefs resolve silently — to Pocket when the
         // engine bundle is installed, else to the Android fallback. This is a
-        // string-level mapping; the sherpa engine class itself is gone.
+        // string-level mapping; no engine class for "neural" exists anymore.
         val engineType = when (requested) {
             "neural" ->
                 if (PocketEngineCatalog.isInstalled(context.filesDir)) "pocket" else "android"

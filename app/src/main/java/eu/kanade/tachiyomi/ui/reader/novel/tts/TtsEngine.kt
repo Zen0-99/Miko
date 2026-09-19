@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.novel.tts
 
 /**
- * Interface for TTS engines. Implemented by [AndroidTtsEngine] and [NeuralTtsEngine].
+ * Interface for TTS engines. Implemented by [AndroidTtsEngine] and [PocketTtsEngine].
  *
  * Engines are responsible for synthesizing text to speech and reporting progress
  * via [TtsCallback]. The caller is responsible for queueing text and managing

@@ -296,8 +296,8 @@ sealed class InstallState {
  *     `<name>.archive.tmp`, extracted into a scratch directory
  *     (`<name>.tmp`), and the scratch dir is renamed to the final
  *     location on success. The app never observes a partial engine
- *         directory. (This is the fix for the `NeuralVoiceManager`
- *     anti-pattern, which extracted straight into the final dir.)
+ *         directory. (This fixes the old voice-manager anti-pattern, which
+ *     extracted straight into the final dir.)
  *  2. **Hash-verified archive.** Each source's archive SHA-256 is checked
  *     against its own pin (D-03) — integrity never depends on which host
  *     served the bytes. Mismatch fails that source's attempt and deletes
@@ -923,7 +923,7 @@ class PocketEngineInstaller(
         }
         // At least the flow_lm_main file should be appreciably-sized — guards
         // against a truncated extraction where the headers landed but the body
-        // didn't (the sherpa MIN_MODEL_BYTES analogue). flow_lm_main is the
+        // didn't (a minimum-model-size sanity check). flow_lm_main is the
         // largest of the five graphs across all variants.
         val mainOnnx = File(dir, onnxFiles.flowLmMain)
         if (mainOnnx.length() < MIN_MODEL_BYTES) return InstallState.Corrupt
