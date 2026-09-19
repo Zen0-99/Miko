@@ -43,6 +43,8 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelAutoScrollChapterEndBehavior
 import eu.kanade.tachiyomi.ui.reader.novel.NovelPageTransitionStyle
 import eu.kanade.tachiyomi.ui.reader.novel.TextAlignment
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import dev.icerock.moko.resources.StringResource
@@ -62,13 +64,12 @@ class NovelReaderSettingsScreenModel(
     val preferences: NovelReaderPreferences = Injekt.get(),
     val readerPreferences: ReaderPreferences = Injekt.get(),
     val ttsPreferences: eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences = Injekt.get(),
-    // Neural TTS voice management
-    val installedNeuralVoices: kotlinx.coroutines.flow.StateFlow<List<eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList()),
-    val downloadingVoiceId: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null),
-    val voiceDownloadProgress: kotlinx.coroutines.flow.StateFlow<Float> = kotlinx.coroutines.flow.MutableStateFlow(0f),
-    val onDownloadVoice: (eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralVoiceEntry) -> Unit = {},
-    val onUninstallVoice: (String) -> Unit = {},
-    val onSelectNeuralVoice: (eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice) -> Unit = {},
+    // Pocket TTS engine management
+    val pocketInstallState: kotlinx.coroutines.flow.StateFlow<InstallState?> = kotlinx.coroutines.flow.MutableStateFlow(null),
+    val pocketVoices: kotlinx.coroutines.flow.StateFlow<List<PocketVoice>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList()),
+    val onInstallPocket: () -> Unit = {},
+    val onUninstallPocket: () -> Unit = {},
+    val onSelectPocketVoice: (String) -> Unit = {},
 ) : ScreenModel
 
 /**
@@ -172,12 +173,11 @@ fun NovelReaderSettingsDialog(
                     2 -> NovelTtsSettingsPage(
                         preferences = screenModel.ttsPreferences,
                         accentColor = accentColor,
-                        installedNeuralVoices = screenModel.installedNeuralVoices.collectAsStateWithLifecycle().value,
-                        downloadingVoiceId = screenModel.downloadingVoiceId.collectAsStateWithLifecycle().value,
-                        downloadProgress = screenModel.voiceDownloadProgress.collectAsStateWithLifecycle().value,
-                        onDownloadVoice = screenModel.onDownloadVoice,
-                        onUninstallVoice = screenModel.onUninstallVoice,
-                        onSelectNeuralVoice = screenModel.onSelectNeuralVoice,
+                        pocketInstallState = screenModel.pocketInstallState.collectAsStateWithLifecycle().value,
+                        pocketVoices = screenModel.pocketVoices.collectAsStateWithLifecycle().value,
+                        onInstallPocket = screenModel.onInstallPocket,
+                        onUninstallPocket = screenModel.onUninstallPocket,
+                        onSelectPocketVoice = screenModel.onSelectPocketVoice,
                     )
                 }
             }

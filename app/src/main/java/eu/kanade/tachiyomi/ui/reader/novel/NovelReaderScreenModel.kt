@@ -49,6 +49,15 @@ import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import eu.kanade.tachiyomi.ui.reader.novel.tts.EngineFilesDir
+import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NativeEngineHandle
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineInstaller
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.UrlHttpFetcher
+import java.io.File
 
 class NovelReaderScreenModel(
     private val novelId: Long,
@@ -424,66 +433,79 @@ class NovelReaderScreenModel(
     val isTtsActive: Boolean
         get() = _ttsPlaybackState.value.isInitialized || _ttsPlaybackState.value.isPlaying
 
-    // ===== Neural TTS voice management =====
-    private val neuralVoiceManager by lazy {
-        eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralVoiceManager(
-            context ?: Injekt.get<Context>(),
-            ttsPreferences,
+    // ===== Pocket TTS engine management =====
+    private val pocketEngineInstaller by lazy {
+        PocketEngineInstaller(
+            filesDir = EngineFilesDir {
+                (context ?: Injekt.get<Context>()).filesDir
+            },
+            // Engine-release seam: the ScreenModel never holds a live
+            // PocketEngine instance (TtsController owns the engine lifecycle),
+            // so there is no native handle to release here — an empty lambda
+            // is correct.
+            engineHandle = NativeEngineHandle { },
+            httpFetcher = UrlHttpFetcher,
         )
     }
-    private val _installedNeuralVoices = MutableStateFlow<List<eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice>>(emptyList())
-    val installedNeuralVoices = _installedNeuralVoices.asStateFlow()
 
-    private val _downloadingVoiceId = MutableStateFlow<String?>(null)
-    val downloadingVoiceId = _downloadingVoiceId.asStateFlow()
-
-    private val _voiceDownloadProgress = MutableStateFlow(0f)
-    val voiceDownloadProgress = _voiceDownloadProgress.asStateFlow()
-
-    /** Refresh the list of installed neural voices from disk. */
-    fun refreshInstalledNeuralVoices() {
+    /**
+     * Install state of the Pocket engine bundle. Nullable because the StateFlow
+     * starts empty and is filled by `PocketEngineInstaller.state()` — its eager
+     * disk check lands on first collection, and the one-shot [verify] launched
+     * on first access refines Installed into Corrupt/Outdated when the layout
+     * or install-meta check fails.
+     */
+    val pocketInstallState: StateFlow<InstallState?> by lazy {
         screenModelScope.launchIO {
-            _installedNeuralVoices.value = neuralVoiceManager.getInstalledVoices()
+            pocketEngineInstaller.verify(PocketEngineCatalog.ENGINE_NAME)
+        }
+        pocketEngineInstaller.state(PocketEngineCatalog.ENGINE_NAME)
+            .stateIn(screenModelScope, SharingStarted.Eagerly, null)
+    }
+
+    private val _pocketVoices = MutableStateFlow<List<PocketVoice>>(emptyList())
+    val pocketVoices = _pocketVoices.asStateFlow()
+
+    /** Refresh the list of usable Pocket voices from the installed engine dir. */
+    fun refreshPocketVoices() {
+        screenModelScope.launchIO {
+            val filesDir = (context ?: Injekt.get<Context>()).filesDir
+            _pocketVoices.value = PocketVoiceCatalog.discoverVoices(
+                PocketEngineCatalog.engineDir(filesDir),
+            )
         }
     }
 
-    /** Download a neural TTS voice bundle. */
-    fun downloadNeuralVoice(entry: eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralVoiceEntry) {
-        if (_downloadingVoiceId.value != null) return // don't allow concurrent downloads
+    /** Download + install the Pocket engine bundle (~97 MB, sha256-pinned). */
+    fun installPocketEngine() {
         screenModelScope.launchIO {
-            _downloadingVoiceId.value = entry.id
-            _voiceDownloadProgress.value = 0f
-            val result = neuralVoiceManager.downloadVoice(entry) { progress ->
-                _voiceDownloadProgress.value = progress
-            }
-            _downloadingVoiceId.value = null
-            _voiceDownloadProgress.value = 0f
-            result.onSuccess {
-                _installedNeuralVoices.value = neuralVoiceManager.getInstalledVoices()
-            }.onFailure { error ->
-                _events.tryEmit(NovelReaderEvent.ShowError(error.message ?: "Download failed"))
-            }
+            pocketEngineInstaller.install(PocketEngineCatalog.ENGINE_NAME)
+                .onSuccess { refreshPocketVoices() }
+                .onFailure { error ->
+                    _events.emit(NovelReaderEvent.ShowError(error.message ?: "Install failed"))
+                }
         }
     }
 
-    /** Uninstall a neural TTS voice. */
-    fun uninstallNeuralVoice(voiceId: String) {
+    /** Remove the installed Pocket engine bundle (incl. voice caches). */
+    fun uninstallPocketEngine() {
         screenModelScope.launchIO {
-            neuralVoiceManager.uninstallVoice(voiceId)
-            _installedNeuralVoices.value = neuralVoiceManager.getInstalledVoices()
-            // If the uninstalled voice was selected, clear the selection
-            if (ttsPreferences.voiceName().get() == voiceId) {
+            pocketEngineInstaller.uninstall(PocketEngineCatalog.ENGINE_NAME)
+            refreshPocketVoices()
+            // If the active voice was a Pocket voice, clear the selection so
+            // the picker falls back to the eponine default on next install.
+            val selected = ttsPreferences.voiceName().get()
+            val isPocketVoice = selected.startsWith("vctk_") ||
+                PocketVoiceCatalog.baseVoices.any { it.name == selected }
+            if (isPocketVoice) {
                 ttsPreferences.voiceName().set("")
-                ttsPreferences.neuralModelPath().set("")
             }
         }
     }
 
-    /** Select an installed neural voice as the active voice. */
-    fun selectNeuralVoice(voice: eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice) {
-        ttsPreferences.voiceName().set(voice.voiceId)
-        ttsPreferences.neuralModelPath().set(voice.path.absolutePath)
-        ttsPreferences.neuralModelType().set(voice.family)
+    /** Select a Pocket voice as the active TTS voice. */
+    fun selectPocketVoice(name: String) {
+        ttsPreferences.voiceName().set(name)
     }
 
     fun initContext(context: Context) {
@@ -1967,7 +1989,7 @@ class NovelReaderScreenModel(
     fun showSettings() {
         _isControlsVisible.value = false
         _isSettingsVisible.value = true
-        refreshInstalledNeuralVoices()
+        refreshPocketVoices()
     }
 
     fun dismissSettings() {

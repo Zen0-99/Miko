@@ -866,12 +866,11 @@ class NovelReaderScreen(
                         },
                         onOrientationChange = { _ -> screenModel.applyOrientation() },
                         onTextSettingChange = { screenModel.refreshTextConfig(themeBackgroundColor, themeTextColor) },
-                        installedNeuralVoices = screenModel.installedNeuralVoices,
-                        downloadingVoiceId = screenModel.downloadingVoiceId,
-                        voiceDownloadProgress = screenModel.voiceDownloadProgress,
-                        onDownloadVoice = { entry -> screenModel.downloadNeuralVoice(entry) },
-                        onUninstallVoice = { voiceId -> screenModel.uninstallNeuralVoice(voiceId) },
-                        onSelectNeuralVoice = { voice -> screenModel.selectNeuralVoice(voice) },
+                        pocketInstallState = screenModel.pocketInstallState,
+                        pocketVoices = screenModel.pocketVoices,
+                        onInstallPocket = { screenModel.installPocketEngine() },
+                        onUninstallPocket = { screenModel.uninstallPocketEngine() },
+                        onSelectPocketVoice = { name -> screenModel.selectPocketVoice(name) },
                     )
                 },
             )
