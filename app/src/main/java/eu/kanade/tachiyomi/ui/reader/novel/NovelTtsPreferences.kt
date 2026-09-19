@@ -105,6 +105,14 @@ class NovelTtsPreferences(
 
     /** Silence inserted between sentences in neural TTS, in milliseconds (default 0 = no pause) */
     fun neuralSentencePauseMs() = preferenceStore.getInt("pref_novel_tts_neural_sentence_pause_ms", 0)
+
+    // Pocket TTS (onnxruntime) specific preferences
+
+    /** Pocket engine intra-op threads: 0 = auto-detect via CPU cluster detection */
+    fun pocketIntraOpThreads() = preferenceStore.getInt("pref_novel_tts_pocket_threads", 0)
+
+    /** XNNPACK execution provider mode: "auto" (attempt, CPU EP fallback), "on", "off" */
+    fun pocketXnnpackMode() = preferenceStore.getString("pref_novel_tts_pocket_xnnpack", "auto")
 }
 
 enum class NovelTtsHighlightMode {

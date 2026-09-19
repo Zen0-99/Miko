@@ -90,7 +90,8 @@ android {
         getByName("benchmark").res.srcDirs("src/debug/res")
     }
 
-    // Keep .onnx weights uncompressed so sherpa-onnx can mmap them directly.
+    // Keep .onnx weights uncompressed — sherpa-onnx mmaps them directly today,
+    // and this stays correct if Pocket TTS engine assets are ever bundled in-app.
     androidResources {
         noCompress += "onnx"
     }
@@ -270,6 +271,12 @@ dependencies {
     implementation(files("../libs/sherpa-onnx-1.13.2.aar"))
     // tar.bz2 extraction for sherpa-onnx voice bundles.
     implementation(libs.commons.compress)
+
+    // Pocket TTS runs directly on ONNX Runtime (replaces sherpa for neural TTS).
+    // Pinned to 1.26.0 for port parity with marmalade-tts-android — all of its
+    // perf tuning was validated on that version; upgrading is a deliberate
+    // follow-up, not a drive-by.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.26.0")
 
     // Disk
     implementation(libs.disklrucache)
