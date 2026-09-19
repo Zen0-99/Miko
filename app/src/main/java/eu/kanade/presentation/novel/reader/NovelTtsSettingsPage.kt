@@ -5,48 +5,29 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DockedSearchBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,14 +37,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
-import eu.kanade.tachiyomi.ui.reader.novel.tts.InstalledNeuralVoice
-import eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralTtsVoiceCatalog
-import eu.kanade.tachiyomi.ui.reader.novel.tts.NeuralVoiceEntry
+import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.TtsVoice
 import tachiyomi.presentation.core.util.collectAsState
 
 /**
@@ -73,24 +53,25 @@ import tachiyomi.presentation.core.util.collectAsState
 fun ColumnScope.NovelTtsSettingsPage(
     preferences: NovelTtsPreferences,
     accentColor: Color? = null,
-    availableVoices: List<eu.kanade.tachiyomi.ui.reader.novel.tts.TtsVoice> = emptyList(),
+    availableVoices: List<TtsVoice> = emptyList(),
     onRefreshVoices: () -> Unit = {},
-    installedNeuralVoices: List<InstalledNeuralVoice> = emptyList(),
-    downloadingVoiceId: String? = null,
-    downloadProgress: Float = 0f,
-    onDownloadVoice: (NeuralVoiceEntry) -> Unit = {},
-    onUninstallVoice: (String) -> Unit = {},
-    onSelectNeuralVoice: (InstalledNeuralVoice) -> Unit = {},
+    pocketInstallState: InstallState? = null,
+    pocketVoices: List<PocketVoice> = emptyList(),
+    onInstallPocket: () -> Unit = {},
+    onUninstallPocket: () -> Unit = {},
+    onSelectPocketVoice: (String) -> Unit = {},
 ) {
     // ---- Engine section ----
     SectionHeader("Text-to-Speech", accentColor)
 
     val engineType by preferences.engineType().collectAsState()
-    val engineLabels = listOf("Android TTS (system)", "Neural TTS (sherpa-onnx)")
-    val engineValues = listOf("android", "neural")
+    val engineLabels = listOf("Android TTS (system)", "Pocket TTS (neural)")
+    val engineValues = listOf("android", "pocket")
     SettingsDropdown(
         label = "TTS engine",
-        selectedLabel = engineLabels[engineValues.indexOf(engineType)],
+        // A stale stored value (e.g. the pre-port "neural") renders the first
+        // entry instead of crashing — TtsController remaps it on next init (D-02).
+        selectedLabel = engineLabels[engineValues.indexOf(engineType).coerceAtLeast(0)],
         options = engineLabels,
     ) { index ->
         preferences.engineType().set(engineValues[index])
@@ -124,67 +105,72 @@ fun ColumnScope.NovelTtsSettingsPage(
     }
 
     // ---- Voice selection ----
-    if (engineType == "neural") {
-        val selectedVoiceId by preferences.voiceName().collectAsState()
-        var showVoiceBrowser by remember { mutableStateOf(false) }
+    if (engineType == "pocket") {
+        SubHeader("Engine", accentColor)
 
-        val selectedVoiceName = remember(selectedVoiceId, installedNeuralVoices) {
-            if (selectedVoiceId.isBlank()) {
-                "None"
+        PocketEngineInstallCard(
+            state = pocketInstallState,
+            accentColor = accentColor,
+            onInstall = onInstallPocket,
+            onUninstall = onUninstallPocket,
+        )
+
+        // ---- Voice picker (enabled only once the engine is installed) ----
+        val voiceName by preferences.voiceName().collectAsState()
+        if (pocketInstallState is InstallState.Installed || pocketInstallState is InstallState.Outdated) {
+            if (pocketVoices.isNotEmpty()) {
+                val voiceLabels = pocketVoices.map { voice ->
+                    buildString {
+                        append(voice.displayName)
+                        if (voice.license.isNotBlank()) {
+                            append(" · ")
+                            append(voice.license)
+                        }
+                    }
+                }
+                // Blank or unknown selections resolve to the locked default
+                // (eponine, D-08) for display; the engine does the same.
+                val selectedIndex = pocketVoices.indexOfFirst { it.name == voiceName }
+                    .takeIf { it >= 0 }
+                    ?: pocketVoices.indexOfFirst { it.name == PocketVoiceCatalog.DEFAULT_VOICE }
+                        .coerceAtLeast(0)
+                SettingsDropdown(
+                    label = "Voice",
+                    selectedLabel = voiceLabels[selectedIndex],
+                    options = voiceLabels,
+                ) { index ->
+                    onSelectPocketVoice(pocketVoices[index].name)
+                }
             } else {
-                NeuralTtsVoiceCatalog.VOICE_CATALOG
-                    .firstOrNull { it.id == selectedVoiceId }
-                    ?.displayName
-                    ?: installedNeuralVoices.firstOrNull { it.voiceId == selectedVoiceId }?.displayName
-                    ?: "None"
-            }
-        }
-
-        // Button box that opens the full-screen voice browser
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .clickable { showVoiceBrowser = true }
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column {
                 Text(
-                    text = "Neural Voices",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = selectedVoiceName,
+                    text = "No voices found in the installed bundle",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
+
+            // Voice attribution (REQ-006f) — every shipped voice carries its
+            // license; the full notice lives in About → Licenses.
             Text(
-                text = "Browse",
-                style = MaterialTheme.typography.labelMedium,
-                color = accentColor ?: MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
+                text = "Voices: alba, azelma, eponine, fantine — CC-BY-4.0 " +
+                    "(VCTK Corpus, U. Edinburgh / Alba Mackenna) · " +
+                    "javert, marius — CC0 (Unmute Voice Donation Project) · " +
+                    "Details in About → Licenses",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        } else {
+            Text(
+                text = "Install the Pocket engine to choose a voice",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
 
-        if (showVoiceBrowser) {
-            NeuralVoiceBrowserDialog(
-                installedVoices = installedNeuralVoices,
-                downloadingVoiceId = downloadingVoiceId,
-                downloadProgress = downloadProgress,
-                accentColor = accentColor,
-                onDownloadVoice = onDownloadVoice,
-                onUninstallVoice = onUninstallVoice,
-                onSelectVoice = onSelectNeuralVoice,
-                selectedVoiceId = selectedVoiceId,
-                onDismiss = { showVoiceBrowser = false },
-            )
-        }
-
-        // ---- Advanced Neural TTS Settings (collapsible) ----
+        // ---- Advanced Pocket TTS Settings (collapsible) ----
         var showAdvanced by remember { mutableStateOf(false) }
         Row(
             modifier = Modifier
@@ -195,7 +181,7 @@ fun ColumnScope.NovelTtsSettingsPage(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "Advanced Neural TTS Settings",
+                text = "Advanced Pocket TTS Settings",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -213,97 +199,43 @@ fun ColumnScope.NovelTtsSettingsPage(
             exit = shrinkVertically() + fadeOut(),
         ) {
             Column {
-                // Performance settings
+                // Performance overrides (D-09) — autodetect is the default;
+                // these cover the long tail of exotic SoCs.
                 SubHeader("Performance", accentColor)
 
-                CheckboxItem(
-                    label = "NNAPI hardware acceleration",
-                    pref = preferences.neuralUseNnapi(),
-                    accentColor = accentColor,
-                )
-
-                val numThreads by preferences.neuralNumThreads().collectAsState()
+                val intraOpThreads by preferences.pocketIntraOpThreads().collectAsState()
                 SliderItem(
                     label = "Synthesis threads",
-                    value = numThreads,
-                    valueRange = 1..8,
-                    valueText = "$numThreads",
+                    value = intraOpThreads.coerceIn(0, 8),
+                    valueRange = 0..8,
+                    valueText = if (intraOpThreads == 0) "Auto" else "$intraOpThreads",
+                    steps = 7,
                     accentColor = accentColor,
                 ) { threads ->
-                    preferences.neuralNumThreads().set(threads)
-                }
-
-                val maxSentences by preferences.neuralMaxSentences().collectAsState()
-                SliderItem(
-                    label = "Max sentences per call",
-                    value = maxSentences,
-                    valueRange = 1..4,
-                    valueText = "$maxSentences",
-                    accentColor = accentColor,
-                ) { max ->
-                    preferences.neuralMaxSentences().set(max)
-                }
-
-                // Playback timing
-                SubHeader("Playback Timing", accentColor)
-
-                val sentencePause by preferences.neuralSentencePauseMs().collectAsState()
-                SliderItem(
-                    label = "Sentence pause",
-                    value = sentencePause,
-                    valueRange = 0..500,
-                    valueText = if (sentencePause == 0) "Off" else "${sentencePause}ms",
-                    accentColor = accentColor,
-                ) { pause ->
-                    preferences.neuralSentencePauseMs().set(pause)
+                    preferences.pocketIntraOpThreads().set(threads.coerceIn(0, 8))
                 }
                 Text(
-                    text = "Silence inserted between sentences. Neural TTS " +
-                        "concatenates sentences with no gap — increase this " +
-                        "for natural breathing pauses.",
+                    text = "ONNX Runtime intra-op thread count. Auto detects the " +
+                        "CPU's performance cluster; override only if synthesis " +
+                        "is slow or the device overheats.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
 
-                // Voice tuning (VITS/Piper only)
-                SubHeader("Voice Tuning (Piper/VITS only)", accentColor)
-
-                val noiseScale by preferences.neuralNoiseScale().collectAsState()
-                FloatSliderItem(
-                    label = "Noise scale",
-                    value = noiseScale,
-                    valueRange = 0f..1f,
-                    valueText = String.format("%.3f", noiseScale),
-                    steps = 19,
-                    accentColor = accentColor,
-                ) { ns ->
-                    preferences.neuralNoiseScale().set(ns)
+                val xnnpackMode by preferences.pocketXnnpackMode().collectAsState()
+                val xnnpackLabels = listOf("Auto", "On", "Off")
+                val xnnpackValues = listOf("auto", "on", "off")
+                SettingsDropdown(
+                    label = "XNNPACK acceleration",
+                    selectedLabel = xnnpackLabels[xnnpackValues.indexOf(xnnpackMode).coerceAtLeast(0)],
+                    options = xnnpackLabels,
+                ) { index ->
+                    preferences.pocketXnnpackMode().set(xnnpackValues[index])
                 }
                 Text(
-                    text = "Controls expressiveness of the generated speech. " +
-                        "Higher values produce more natural variation; lower values " +
-                        "sound more monotone. Default: 0.667",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-
-                val noiseScaleW by preferences.neuralNoiseScaleW().collectAsState()
-                FloatSliderItem(
-                    label = "Noise scale W",
-                    value = noiseScaleW,
-                    valueRange = 0f..1f,
-                    valueText = String.format("%.3f", noiseScaleW),
-                    steps = 19,
-                    accentColor = accentColor,
-                ) { nsw ->
-                    preferences.neuralNoiseScaleW().set(nsw)
-                }
-                Text(
-                    text = "Controls variation in phoneme durations. " +
-                        "Higher values add more natural rhythm variation; lower values " +
-                        "produce more consistent timing. Default: 0.8",
+                    text = "XNNPACK execution provider. Auto tries it with a CPU " +
+                        "fallback; On forces it; Off uses the CPU provider only.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -359,361 +291,150 @@ fun ColumnScope.NovelTtsSettingsPage(
     )
 }
 
-// ---- Voice quality/speed ratings derived from family ----
-
-private fun voiceQualityRating(family: String): String = when (family) {
-    "piper" -> "Good"
-    "kokoro" -> "Highest"
-    "matcha" -> "Good"
-    "kitten" -> "Compact"
-    "zipvoice" -> "Lower"
-    else -> "—"
-}
-
-private fun voiceSpeedRating(family: String): String = when (family) {
-    "piper" -> "Fast"
-    "kokoro" -> "Slower"
-    "matcha" -> "Medium"
-    "kitten" -> "Fast"
-    "zipvoice" -> "Fast"
-    else -> "—"
-}
-
-private fun familyDisplay(family: String): String = when (family) {
-    "piper" -> "Piper"
-    "kokoro" -> "Kokoro"
-    "matcha" -> "Matcha"
-    "kitten" -> "Kitten"
-    "zipvoice" -> "ZipVoice"
-    else -> family.replaceFirstChar { it.uppercase() }
-}
-
 /**
- * Full-screen dialog for browsing and searching neural TTS voices.
- * Uses a DockedSearchBar integrated into the top bar area, and card-based
- * voice items with quality/speed ratings.
+ * Install card for the Pocket TTS engine bundle — mirrors the voice-download
+ * card UX: title + download size on top, state-driven content below
+ * (D-04).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NeuralVoiceBrowserDialog(
-    installedVoices: List<InstalledNeuralVoice>,
-    downloadingVoiceId: String?,
-    downloadProgress: Float,
-    accentColor: Color? = null,
-    onDownloadVoice: (NeuralVoiceEntry) -> Unit,
-    onUninstallVoice: (String) -> Unit,
-    onSelectVoice: (InstalledNeuralVoice) -> Unit,
-    selectedVoiceId: String,
-    onDismiss: () -> Unit,
+private fun PocketEngineInstallCard(
+    state: InstallState?,
+    accentColor: Color?,
+    onInstall: () -> Unit,
+    onUninstall: () -> Unit,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
-    var searchQuery by remember { mutableStateOf("") }
-    var searchActive by remember { mutableStateOf(false) }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false,
-        ),
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        if (searchActive) {
-                            // When search is active, the DockedSearchBar below
-                            // handles the input; show empty title
-                        } else {
-                            Text("Neural Voices")
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { searchActive = !searchActive }) {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = "Search",
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                )
-            },
-        ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-            ) {
-                // Search bar — shown when search is toggled on
-                if (searchActive) {
-                    androidx.compose.material3.OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        placeholder = { Text("Search voices...") },
-                        leadingIcon = {
-                            Icon(Icons.Filled.Search, contentDescription = "Search")
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Filled.ExpandLess, contentDescription = "Clear")
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    )
-                }
-
-                // Filter voices by search query
-                val filteredVoices = remember(searchQuery) {
-                    if (searchQuery.isBlank()) {
-                        NeuralTtsVoiceCatalog.VOICE_CATALOG
-                    } else {
-                        val query = searchQuery.lowercase()
-                        NeuralTtsVoiceCatalog.VOICE_CATALOG.filter { entry ->
-                            entry.displayName.lowercase().contains(query) ||
-                                entry.language.lowercase().contains(query) ||
-                                entry.family.lowercase().contains(query) ||
-                                entry.id.lowercase().contains(query)
-                        }
-                    }
-                }
-
-                // Group filtered voices by language
-                val grouped = filteredVoices.groupBy { it.language.substringBefore("-") }
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (filteredVoices.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = "No voices found",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                    grouped.forEach { (lang, voices) ->
-                        item {
-                            Text(
-                                text = fullLanguageName(lang),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 4.dp),
-                            )
-                        }
-                        items(voices, key = { it.id }) { entry ->
-                            VoiceCard(
-                                entry = entry,
-                                isInstalled = installedVoices.any { it.voiceId == entry.id },
-                                isSelected = selectedVoiceId == entry.id,
-                                isDownloading = downloadingVoiceId == entry.id,
-                                downloadProgress = if (downloadingVoiceId == entry.id) downloadProgress else 0f,
-                                accentColor = accent,
-                                onDownload = { onDownloadVoice(entry) },
-                                onUninstall = { onUninstallVoice(entry.id) },
-                                onSelect = {
-                                    installedVoices.firstOrNull { it.voiceId == entry.id }
-                                        ?.let(onSelectVoice)
-                                },
-                            )
-                        }
-                    }
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
-                }
-            }
-        }
-    }
-}
-
-private fun fullLanguageName(code: String): String = when (code) {
-    "en" -> "English"
-    "zh" -> "Chinese"
-    "ja" -> "Japanese"
-    "ko" -> "Korean"
-    "es" -> "Spanish"
-    "fr" -> "French"
-    "de" -> "German"
-    "multi" -> "Multilingual"
-    else -> code.uppercase()
-}
-
-/**
- * Card-based voice item with quality/speed ratings.
- *
- * Layout:
- * - Title: "Amy" + family suffix in slightly darker font (" · Piper")
- * - Sub-text 1: "Q: Good  S: Fast" quality and speed ratings
- * - Sub-text 2: Gender · Size (e.g. "Female · ~61 MB")
- * - Action: download/install/select/delete button on the right
- */
-@Composable
-private fun VoiceCard(
-    entry: NeuralVoiceEntry,
-    isInstalled: Boolean,
-    isSelected: Boolean,
-    isDownloading: Boolean,
-    downloadProgress: Float,
-    accentColor: Color,
-    onDownload: () -> Unit,
-    onUninstall: () -> Unit,
-    onSelect: () -> Unit,
-) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                accentColor.copy(alpha = 0.08f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
-        onClick = if (isInstalled) onSelect else ({ }),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-            ) {
-                // Title: voice name + family suffix
-                Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = entry.displayName.substringBefore(" ("),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                        color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "· ${familyDisplay(entry.family)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            Text(
+                text = PocketEngineCatalog.POCKET_TTS_EN.displayName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "~97 MB download · engine MIT (Kyutai), voices CC-BY-4.0/CC0",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
-                Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                // Quality and speed ratings
-                Text(
-                    text = "Q: ${voiceQualityRating(entry.family)}  ·  S: ${voiceSpeedRating(entry.family)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                // Gender and size
-                val genderText = when (entry.gender) {
-                    "M" -> "Male"
-                    "F" -> "Female"
-                    else -> ""
-                }
-                val detailText = buildString {
-                    if (genderText.isNotEmpty()) {
-                        append(genderText)
-                        append(" · ")
+            when (state) {
+                null, InstallState.NotInstalled -> {
+                    Button(onClick = onInstall) {
+                        Text("Install")
                     }
-                    append("~")
-                    append(entry.approxSizeMb)
-                    append(" MB")
                 }
-                Text(
-                    text = detailText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-
-                if (isDownloading) {
+                is InstallState.Downloading -> {
+                    val total = state.totalBytes.coerceAtLeast(1L)
                     LinearProgressIndicator(
-                        progress = { downloadProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        color = accentColor,
+                        progress = { (state.bytesFetched.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = accent,
+                    )
+                    Text(
+                        text = String.format(
+                            "Downloading — %.0f / %.0f MB",
+                            state.bytesFetched / 1_000_000f,
+                            state.totalBytes / 1_000_000f,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
-            }
-
-            // Action button
-            Box(
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    isDownloading -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(26.dp),
-                            color = accentColor,
-                            strokeWidth = 2.dp,
+                is InstallState.Extracting -> {
+                    if (state.totalBytes > 0L) {
+                        LinearProgressIndicator(
+                            progress = {
+                                (state.bytesExtracted.toFloat() / state.totalBytes.toFloat())
+                                    .coerceIn(0f, 1f)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = accent,
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = accent,
                         )
                     }
-                    isInstalled && isSelected -> {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = "Selected",
-                            tint = accentColor,
-                            modifier = Modifier.size(28.dp),
-                        )
-                    }
-                    isInstalled -> {
-                        Row {
-                            IconButton(onClick = onSelect) {
-                                Icon(
-                                    imageVector = Icons.Filled.DownloadDone,
-                                    contentDescription = "Select",
-                                    tint = accentColor,
-                                )
-                            }
-                            IconButton(onClick = onUninstall) {
-                                Icon(
-                                    imageVector = Icons.Filled.Delete,
-                                    contentDescription = "Uninstall",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                    else -> {
-                        IconButton(onClick = onDownload) {
+                    Text(
+                        text = "Extracting…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                InstallState.Installed -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Outlined.Download,
-                                contentDescription = "Download",
-                                tint = accentColor,
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = "Installed",
+                                tint = accent,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Text(
+                                text = "Installed",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(start = 8.dp),
                             )
                         }
+                        TextButton(onClick = onUninstall) {
+                            Text("Uninstall")
+                        }
+                    }
+                }
+                is InstallState.Failed -> {
+                    Text(
+                        text = "Install failed: ${state.reason}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = onInstall) {
+                        Text("Retry")
+                    }
+                }
+                InstallState.Corrupt -> {
+                    Text(
+                        text = "Reinstall required — the installed files are incomplete.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = onInstall) {
+                        Text("Reinstall")
+                    }
+                }
+                is InstallState.Outdated -> {
+                    Text(
+                        text = "Update available — the installed bundle predates the current catalog. The existing install keeps working.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = onInstall) {
+                        Text("Update")
                     }
                 }
             }
