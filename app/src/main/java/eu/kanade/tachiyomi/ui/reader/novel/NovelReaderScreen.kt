@@ -13,6 +13,7 @@ import android.view.ViewConfiguration
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.TextView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -320,6 +321,10 @@ class NovelReaderScreen(
             }
         }
 
+        // While TTS reads, the spoken-position highlight drives scrolling —
+        // the user's own auto-scroll loop must not fight it.
+        val isTtsActive = ttsPlaybackState.isInitialized || ttsPlaybackState.isPlaying
+
         // Auto-scroll should only run when the user is in full focus of the text —
         // not when any overlay (settings, chapters, comments, dictionary, TTS
         // controls, translation dialog) is open, not while the user is
@@ -327,7 +332,8 @@ class NovelReaderScreen(
         // (notification shade pulled down).
         val isOverlayActive = isControlsVisible || isSettingsVisible ||
             isChaptersSheetVisible || isCommentsDialogVisible ||
-            dictionaryQuery != null || !hasWindowFocus || isTextSelectionActive
+            dictionaryQuery != null || !hasWindowFocus || isTextSelectionActive ||
+            isTtsActive
 
         LaunchedEffect(autoScrollEnabled, smoothAutoScroll, autoScrollInterval, autoScrollOffset, smoothSpeed, isOverlayActive, isUserTouching, isLoading) {
             if (!autoScrollEnabled) return@LaunchedEffect
@@ -406,6 +412,57 @@ class NovelReaderScreen(
                         rv.post { rv.scrollBy(0, autoScrollOffset) }
                     }
                 }
+            }
+        }
+
+        // TTS read-along: highlight the currently-spoken sentence and keep it
+        // on screen. The highlight color comes from the same system as user
+        // highlights — accent color blended against the reader background —
+        // using the cover-derived accent when that toggle is on, else the
+        // theme primary. Follow-scroll runs regardless of the auto-scroll
+        // preference (TTS hijacks the viewport), but only while the window
+        // is focused and the user isn't dragging.
+        val ttsAccentArgb = (accentColor ?: MaterialTheme.colorScheme.primary).toArgb()
+        LaunchedEffect(
+            isTtsActive,
+            ttsPlaybackState.currentParagraphIndex,
+            ttsPlaybackState.currentRangeStart,
+            ttsPlaybackState.currentRangeEnd,
+            ttsAccentArgb,
+            textConfig.backgroundColor,
+            recyclerViewRef,
+            contentItems,
+            hasWindowFocus,
+            isUserTouching,
+            ttsPlaybackState.isPlaying,
+        ) {
+            val rv = recyclerViewRef ?: return@LaunchedEffect
+            val ad = rv.adapter as? TextAdapter ?: return@LaunchedEffect
+            if (!isTtsActive) {
+                ad.clearTtsPlayback()
+                rv.stopScroll()
+                return@LaunchedEffect
+            }
+            val paragraphId = screenModel.ttsParagraphItems
+                .getOrNull(ttsPlaybackState.currentParagraphIndex)?.id
+            val adapterPos = ad.currentList.indexOfFirst { it is TextItem.Paragraph && it.id == paragraphId }
+            if (adapterPos < 0) {
+                ad.clearTtsPlayback()
+                return@LaunchedEffect
+            }
+            val highlightColor = HighlightColorUtils
+                .computeColors(ttsAccentArgb, textConfig.backgroundColor)[0]
+            ad.setTtsPlayback(
+                position = adapterPos,
+                rangeStart = ttsPlaybackState.currentRangeStart,
+                rangeEnd = ttsPlaybackState.currentRangeEnd,
+                color = highlightColor,
+            )
+            if (ttsPlaybackState.isPlaying && hasWindowFocus && !isUserTouching) {
+                androidx.compose.runtime.withFrameNanos { }
+                scrollToTtsPosition(rv, adapterPos, ttsPlaybackState.currentRangeStart)
+            } else {
+                rv.stopScroll()
             }
         }
 
@@ -1446,11 +1503,40 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
  */
 private fun smoothScrollByAnimated(rv: RecyclerView, dy: Int) {
     if (dy == 0) return
-    val animator = android.animation.ValueAnimator.ofInt(0, dy)
-    animator.duration = 450
-    animator.interpolator = android.view.animation.DecelerateInterpolator(1.5f)
-    animator.addUpdateListener { rv.scrollBy(0, it.animatedValue as Int) }
-    animator.start()
+    rv.stopScroll()
+    rv.smoothScrollBy(0, dy, android.view.animation.DecelerateInterpolator(1.5f), 450)
+}
+
+/**
+ * Keep the paragraph currently being read by TTS on screen. Off-screen items
+ * jump to ~30% from the top; visible items only nudge when the spoken line
+ * drifts outside a comfortable band (15%–55% of the viewport), so the screen
+ * follows the highlight without constant churn.
+ */
+private suspend fun scrollToTtsPosition(rv: RecyclerView, adapterPos: Int, rangeStart: Int) {
+    val lm = rv.layoutManager as? LinearLayoutManager ?: return
+    val first = lm.findFirstVisibleItemPosition()
+    val last = lm.findLastVisibleItemPosition()
+    if (adapterPos < first || adapterPos > last) {
+        lm.scrollToPositionWithOffset(adapterPos, (rv.height * 0.3f).toInt())
+        repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+    }
+    val view = lm.findViewByPosition(adapterPos) ?: return
+    val tv = view.findViewById<TextView>(eu.kanade.tachiyomi.R.id.paragraph_text) ?: return
+    val layout = tv.layout ?: return
+    val targetLine = if (rangeStart >= 0) {
+        layout.getLineForOffset(rangeStart.coerceIn(0, tv.text.length))
+    } else {
+        0
+    }
+    val bounds = android.graphics.Rect(0, 0, tv.width, tv.height)
+    rv.offsetDescendantRectToMyCoords(tv, bounds)
+    val lineTop = bounds.top + tv.totalPaddingTop - tv.scrollY + layout.getLineTop(targetLine)
+    val upperBound = (rv.height * 0.15f).toInt()
+    val lowerBound = (rv.height * 0.55f).toInt()
+    if (lineTop < upperBound || lineTop > lowerBound) {
+        smoothScrollByAnimated(rv, lineTop - (rv.height * 0.35f).toInt())
+    }
 }
 
 /**

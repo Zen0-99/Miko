@@ -51,6 +51,12 @@ data class NovelTtsPlaybackState(
     val currentText: String = "",
     val title: String = "",
     val error: String? = null,
+    /**
+     * Char range within the current paragraph's text that is being spoken
+     * right now (estimated sentence granularity). -1/-1 = whole paragraph.
+     */
+    val currentRangeStart: Int = -1,
+    val currentRangeEnd: Int = -1,
 )
 
 /**
@@ -181,7 +187,7 @@ class NovelTtsPlaybackService : Service() {
         )
 
         val controller = ttsController
-        if (controller == null || !controller.isSpeaking) {
+        if (controller == null || !controller.isReady) {
             // Engine not yet initialized — initialize then start
             ttsController?.initializeEngine(
                 onReady = {
@@ -292,11 +298,30 @@ class NovelTtsPlaybackService : Service() {
                 _playbackState.value = _playbackState.value.copy(
                     currentParagraphIndex = index,
                     currentText = paragraphs.getOrNull(index)?.take(120) ?: "",
+                    currentRangeStart = -1,
+                    currentRangeEnd = -1,
                 )
                 updateNotification()
             },
+            onRangeChanged = { index, start, end ->
+                val state = _playbackState.value
+                if (index == state.currentParagraphIndex &&
+                    (start != state.currentRangeStart || end != state.currentRangeEnd)
+                ) {
+                    _playbackState.value = state.copy(
+                        currentRangeStart = start,
+                        currentRangeEnd = end,
+                    )
+                }
+            },
+            onPlaybackError = { error ->
+                _playbackState.value = _playbackState.value.copy(isPlaying = false, error = error)
+                unregisterBecomingNoisyReceiver()
+                audioFocusManager.abandonPlaybackFocus()
+                updateNotification()
+            },
             onComplete = {
-                _playbackState.value = _playbackState.value.copy(isPlaying = false)
+                _playbackState.value = _playbackState.value.copy(isPlaying = false, isInitialized = false)
                 unregisterBecomingNoisyReceiver()
                 audioFocusManager.abandonPlaybackFocus()
                 stopForegroundPlayback()

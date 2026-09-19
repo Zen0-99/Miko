@@ -150,6 +150,50 @@ class TextAdapter(
         return adapterPosition == start
     }
 
+    // ===== TTS read-along highlight =====
+    /** Adapter position currently being read by TTS, or -1. */
+    @Volatile
+    var ttsActivePosition: Int = -1
+        private set
+
+    /** Char range within the active paragraph, or -1/-1 for the whole paragraph. */
+    @Volatile
+    var ttsRangeStart: Int = -1
+        private set
+    @Volatile
+    var ttsRangeEnd: Int = -1
+        private set
+
+    @Volatile
+    var ttsHighlightColor: Int = 0
+        private set
+
+    /**
+     * Mark the adapter position + intra-paragraph char range being spoken.
+     * Rebinds the previous and current rows so the highlight moves.
+     */
+    fun setTtsPlayback(position: Int, rangeStart: Int, rangeEnd: Int, color: Int) {
+        if (position == ttsActivePosition && rangeStart == ttsRangeStart &&
+            rangeEnd == ttsRangeEnd && color == ttsHighlightColor
+        ) return
+        val previous = ttsActivePosition
+        ttsActivePosition = position
+        ttsRangeStart = rangeStart
+        ttsRangeEnd = rangeEnd
+        ttsHighlightColor = color
+        if (previous >= 0 && previous != position) notifyItemChanged(previous)
+        if (position >= 0) notifyItemChanged(position)
+    }
+
+    fun clearTtsPlayback() {
+        if (ttsActivePosition < 0) return
+        val previous = ttsActivePosition
+        ttsActivePosition = -1
+        ttsRangeStart = -1
+        ttsRangeEnd = -1
+        notifyItemChanged(previous)
+    }
+
     /** Dismiss any active selection popup (call from RecyclerView scroll listener). */
     fun dismissActiveSelectionPopup() {
         activeSelectionCallback?.onScrollDismiss()
@@ -221,15 +265,42 @@ class TextAdapter(
                 }
 
                 // Apply saved highlight spans from storage.
-                val displayText = applyHighlightSpans(baseText, item)
+                val displayText = applyHighlightSpans(android.text.SpannableStringBuilder(baseText), item)
 
                 // Ensure text is always Spannable — the Editor requires it for
                 // selection. If displayText is a plain String (no highlights,
                 // no bionic reading), wrap it in SpannableStringBuilder.
-                val spannableText: CharSequence = if (displayText is android.text.Spannable) {
+                var spannableText: CharSequence = if (displayText is android.text.Spannable) {
                     displayText
                 } else {
                     android.text.SpannableStringBuilder(displayText)
+                }
+
+                // TTS read-along highlight: tint the currently-spoken range
+                // (sentence when known, whole paragraph otherwise) with the
+                // accent-derived color — same machinery as user highlights.
+                val ttsAdapter = getAdapter?.invoke()
+                if (ttsAdapter != null && bindingAdapterPosition == ttsAdapter.ttsActivePosition) {
+                    val spanText = if (spannableText is Spannable) {
+                        spannableText
+                    } else {
+                        android.text.SpannableStringBuilder(spannableText)
+                    }
+                    val start = ttsAdapter.ttsRangeStart.coerceIn(0, spanText.length)
+                    val end = if (ttsAdapter.ttsRangeEnd >= 0) {
+                        ttsAdapter.ttsRangeEnd.coerceIn(start, spanText.length)
+                    } else {
+                        spanText.length
+                    }
+                    if (end > start) {
+                        spanText.setSpan(
+                            NovelTtsHighlightSpan(textView, start, end, ttsAdapter.ttsHighlightColor),
+                            start,
+                            end,
+                            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
+                        )
+                    }
+                    spannableText = spanText
                 }
                 textView.text = spannableText
                 textView.textSize = config.textSize

@@ -12,11 +12,30 @@ interface TtsEngine {
     /** Whether the engine is initialized and ready to speak. */
     val isReady: Boolean
 
+    /**
+     * Whether [speak] with `flush = false` appends to a queue instead of
+     * interrupting current playback. When true the caller can enqueue
+     * upcoming utterances ahead of time so synthesis overlaps playback;
+     * when false each [speak] call plays immediately and callers must
+     * chain utterances through [TtsCallback.onDone].
+     */
+    val supportsQueueing: Boolean
+
+    /**
+     * Whether [pause]/[resume] freeze playback in place (queue and position
+     * preserved). When false, [pause] degrades to [stop] and the caller must
+     * rebuild the queue on resume.
+     */
+    val supportsPause: Boolean
+
     /** Initialize the engine. Calls [onReady] when initialization completes. */
     fun initialize(onReady: () -> Unit, onError: (String) -> Unit)
 
-    /** Speak the given [text]. If [flush] is true, clears any pending speech first. */
-    fun speak(text: String, flush: Boolean = true, callback: TtsCallback? = null)
+    /**
+     * Speak the given [text] under [utteranceId], which is echoed back in
+     * [TtsCallback] events. If [flush] is true, clears any pending speech first.
+     */
+    fun speak(text: String, utteranceId: String, flush: Boolean = true, callback: TtsCallback? = null)
 
     /** Stop all speech and clear the queue. */
     fun stop()

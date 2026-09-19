@@ -546,17 +546,42 @@ class NovelReaderScreenModel(
     // ===== TTS playback service methods =====
 
     /**
-     * Start TTS playback of the full chapter via the foreground service.
-     * Extracts paragraph texts from the current content items.
+     * Paragraph items currently being read aloud, parallel to the list the
+     * service received. Lets the UI map [NovelTtsPlaybackState.currentParagraphIndex]
+     * back to a RecyclerView adapter position for the reading highlight.
      */
-    fun startTtsPlayback(startIndex: Int = 0) {
+    var ttsParagraphItems: List<TextItem.Paragraph> = emptyList()
+        private set
+
+    /**
+     * Start TTS playback via the foreground service, beginning at the
+     * paragraph the user is currently looking at rather than the top of the
+     * chapter.
+     */
+    fun startTtsPlayback() {
         val ctx = context ?: return
         val items = _contentItems.value
-        val paragraphs = items
+        val ttsItems = items
             .filterIsInstance<TextItem.Paragraph>()
-            .map { it.text.toString() }
-            .filter { it.isNotBlank() }
-        if (paragraphs.isEmpty()) return
+            .filter { it.text.isNotBlank() }
+        if (ttsItems.isEmpty()) return
+        val paragraphs = ttsItems.map { it.text.toString() }
+        ttsParagraphItems = ttsItems
+
+        // Resolve the start index from the tracked reading position: find the
+        // paragraph (in the currently-visible chapter) whose character range
+        // contains the position the user scrolled to.
+        val pos = positionTracker.currentPosition.value
+        var startIndex = ttsItems.indexOfFirst { p ->
+            p.chapterId == pos.chapterId &&
+                pos.characterPosition in p.startCharIndex..p.endCharIndex
+        }
+        if (startIndex < 0 && pos.characterPosition > 0) {
+            // Position past the last paragraph of the chapter (e.g. user at
+            // the bottom) — clamp to the chapter's last paragraph.
+            startIndex = ttsItems.indexOfLast { it.chapterId == pos.chapterId }
+        }
+        if (startIndex < 0) startIndex = 0
 
         val title = currentChapter.value?.name ?: novel.value?.title ?: "Novel"
 
@@ -617,6 +642,7 @@ class NovelReaderScreenModel(
 
     fun stopTtsPlayback() {
         ttsService?.stop()
+        ttsParagraphItems = emptyList()
         // Keep the current text visible during the fade-out animation.
         // Clear isPlaying/isInitialized so AnimatedVisibility starts fading out,
         // but preserve currentText so it fades with the overlay rather than
@@ -634,6 +660,15 @@ class NovelReaderScreenModel(
                 _ttsPlaybackState.value = NovelTtsPlaybackState()
             }
         }
+    }
+
+    /**
+     * Map a TTS paragraph index (as reported in [NovelTtsPlaybackState]) back
+     * to its RecyclerView adapter position, or -1 when unknown.
+     */
+    fun ttsAdapterPosition(ttsIndex: Int): Int {
+        val item = ttsParagraphItems.getOrNull(ttsIndex) ?: return -1
+        return _contentItems.value.indexOfFirst { it is TextItem.Paragraph && it.id == item.id }
     }
 
     /**

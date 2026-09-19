@@ -18,7 +18,6 @@ import tachiyomi.core.common.util.system.logcat
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Neural TTS engine backed by sherpa-onnx (Piper/Kokoro/Matcha/ZipVoice models).
@@ -59,10 +58,17 @@ class NeuralTtsEngine(
     @Volatile private var isPaused = false
     @Volatile private var stopRequested = false
 
-    private val utteranceCounter = AtomicInteger(0)
-
     override val isReady: Boolean
         get() = ready
+
+    // speak() starts a synthesis+playback thread per call; concurrent
+    // calls would overlap audio, so callers must chain via onDone.
+    override val supportsQueueing: Boolean
+        get() = false
+
+    // Pause/resume are real — AudioTrack.pause() keeps the playback position.
+    override val supportsPause: Boolean
+        get() = true
 
     override fun initialize(onReady: () -> Unit, onError: (String) -> Unit) {
         val modelDir = File(modelPath)
@@ -92,7 +98,7 @@ class NeuralTtsEngine(
         }
     }
 
-    override fun speak(text: String, flush: Boolean, callback: TtsCallback?) {
+    override fun speak(text: String, utteranceId: String, flush: Boolean, callback: TtsCallback?) {
         this.callback = callback
         val tts = sherpaTts
         if (tts == null || !ready) {
@@ -108,7 +114,6 @@ class NeuralTtsEngine(
             stopPlayback()
         }
 
-        val utteranceId = utteranceCounter.incrementAndGet().toString()
         stopRequested = false
 
         Thread {
@@ -161,11 +166,13 @@ class NeuralTtsEngine(
     }
 
     override fun pause() {
+        // Set the flag unconditionally — if pause lands during synthesis
+        // (no track yet), playPcm starts the new track paused.
+        isPaused = true
         val track = audioTrack
-        if (track != null && isPlaying && !isPaused) {
+        if (track != null && isPlaying) {
             try {
                 track.pause()
-                isPaused = true
             } catch (e: Exception) {
                 logcat(LogPriority.WARN, e) { "NeuralTtsEngine.pause failed" }
             }
@@ -173,11 +180,11 @@ class NeuralTtsEngine(
     }
 
     override fun resume() {
+        isPaused = false
         val track = audioTrack
-        if (track != null && isPaused) {
+        if (track != null && track.playState == AudioTrack.PLAYSTATE_PAUSED) {
             try {
                 track.play()
-                isPaused = false
             } catch (e: Exception) {
                 logcat(LogPriority.WARN, e) { "NeuralTtsEngine.resume failed" }
             }
@@ -290,8 +297,14 @@ class NeuralTtsEngine(
 
         audioTrack = track
         isPlaying = true
-        isPaused = false
-        track.play()
+        // If pause() landed while synthesis was running, start the track
+        // already-paused. MODE_STREAM buffers writes even before play(), so
+        // resume() picks up seamlessly.
+        if (isPaused) {
+            track.pause()
+        } else {
+            track.play()
+        }
 
         // Write in chunks to avoid blocking the HAL on large buffers
         val chunkSize = bufSize

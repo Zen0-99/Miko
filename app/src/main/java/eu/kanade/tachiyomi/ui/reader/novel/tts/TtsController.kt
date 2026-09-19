@@ -9,6 +9,15 @@ import tachiyomi.core.common.util.system.logcat
  *
  * Supports both Android TTS and neural TTS (sherpa-onnx) engines.
  * Handles paragraph-by-paragraph reading with auto-continue.
+ *
+ * For engines that support it ([TtsEngine.supportsQueueing] — the Android TTS
+ * path), upcoming paragraphs are enqueued ahead of playback via QUEUE_ADD in a
+ * rolling lookahead window. This lets the TTS service synthesize the next
+ * paragraph while the current one is still being played, eliminating the
+ * per-paragraph dead-air gap that a strict speak → onDone → speak chain
+ * produces (the gap equals the full synthesis latency of the next paragraph).
+ * Neural engines play each speak() call immediately, so they keep the serial
+ * onDone-chained flow.
  */
 class TtsController(
     private val context: Context,
@@ -20,7 +29,31 @@ class TtsController(
     private var currentIndex: Int = 0
     private var isPlaying: Boolean = false
     private var onParagraphChanged: ((Int) -> Unit)? = null
+    private var onRangeChanged: ((paragraphIndex: Int, start: Int, end: Int) -> Unit)? = null
     private var onComplete: (() -> Unit)? = null
+    private var onPlaybackError: ((String) -> Unit)? = null
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    val isReady: Boolean
+        get() = engine?.isReady == true
+
+    /**
+     * Bumped every time the engine queue is flushed/rebuilt. Utterance IDs
+     * encode it so callbacks from flushed utterances can be ignored.
+     */
+    private var generation: Int = 0
+
+    /** Next paragraph index that has not been sent to the engine yet. */
+    private var nextToEnqueue: Int = 0
+
+    /**
+     * True when playback was paused through the engine's real pause
+     * ([TtsEngine.supportsPause]) — the engine's queue and playback position
+     * are preserved and [resume] only needs to unpause it.
+     */
+    private var enginePaused: Boolean = false
+
+    private var sessionCallback: TtsCallback? = null
 
     val isSpeaking: Boolean
         get() = isPlaying
@@ -104,74 +137,202 @@ class TtsController(
         paragraphs: List<String>,
         startIndex: Int = 0,
         onParagraphChanged: (Int) -> Unit,
+        onRangeChanged: ((paragraphIndex: Int, start: Int, end: Int) -> Unit)? = null,
+        onPlaybackError: ((String) -> Unit)? = null,
         onComplete: () -> Unit,
     ) {
         this.paragraphs = paragraphs
         this.currentIndex = startIndex
         this.onParagraphChanged = onParagraphChanged
+        this.onRangeChanged = onRangeChanged
         this.onComplete = onComplete
+        this.onPlaybackError = onPlaybackError
         isPlaying = true
-        speakCurrent()
+        enginePaused = false
+        generation++
+        sessionCallback = makeSessionCallback()
+        enqueueWindow(startIndex, flushFirst = true)
     }
 
-    private fun speakCurrent() {
-        if (currentIndex >= paragraphs.size) {
+    private fun makeSessionCallback(): TtsCallback = object : TtsCallback {
+        override fun onStart(utteranceId: String) {
+            mainHandler.post {
+                val index = paragraphIndexFor(utteranceId) ?: return@post
+                currentIndex = index
+                onParagraphChanged?.invoke(index)
+            }
+        }
+
+        override fun onDone(utteranceId: String) {
+            mainHandler.post {
+                val index = paragraphIndexFor(utteranceId) ?: return@post
+                if (index >= paragraphs.size - 1 || !preferences.autoContinue().get()) {
+                    isPlaying = false
+                    onComplete?.invoke()
+                } else {
+                    enqueueAhead(index)
+                }
+            }
+        }
+
+        override fun onError(utteranceId: String, errorMessage: String) {
+            mainHandler.post {
+                paragraphIndexFor(utteranceId) ?: return@post
+                logcat(LogPriority.ERROR) { "TTS error: $errorMessage" }
+                stop()
+                onPlaybackError?.invoke(errorMessage)
+            }
+        }
+
+        override fun onRangeStart(utteranceId: String, start: Int, end: Int, frame: Int) {
+            mainHandler.post {
+                val index = paragraphIndexFor(utteranceId) ?: return@post
+                onRangeChanged?.invoke(index, start, end)
+            }
+        }
+    }
+
+    /**
+     * Map an utterance ID back to its paragraph index, or null when the ID
+     * belongs to a flushed (stale-generation) queue.
+     */
+    private fun paragraphIndexFor(utteranceId: String): Int? {
+        val parts = utteranceId.split('_')
+        if (parts.size != 3 || parts[0] != "tts") return null
+        if (parts[1].toIntOrNull() != generation) return null
+        return parts[2].toIntOrNull()
+    }
+
+    private fun utteranceId(index: Int): String = "tts_${generation}_$index"
+
+    /**
+     * Enqueue paragraphs starting at [from]. The first utterance flushes the
+     * engine queue when [flushFirst] is set; the rest are appended. On
+     * queue-capable engines a lookahead window of upcoming paragraphs is
+     * enqueued so synthesis overlaps playback; on serial engines only [from]
+     * is spoken and the chain continues via onDone.
+     */
+    private fun enqueueWindow(from: Int, flushFirst: Boolean) {
+        val engine = engine ?: return
+        if (from >= paragraphs.size) {
             isPlaying = false
             onComplete?.invoke()
             return
         }
+        val canQueue = engine.supportsQueueing && preferences.autoContinue().get()
+        val last = if (canQueue) {
+            minOf(from + QUEUE_LOOKAHEAD, paragraphs.size - 1)
+        } else {
+            from
+        }
+        var flush = flushFirst
+        for (i in from..last) {
+            engine.speak(
+                text = paragraphs[i],
+                utteranceId = utteranceId(i),
+                flush = flush,
+                callback = sessionCallback,
+            )
+            flush = false
+        }
+        nextToEnqueue = last + 1
+    }
 
-        val text = paragraphs[currentIndex]
-        engine?.speak(
-            text = text,
-            flush = true,
-            callback = object : TtsCallback {
-                override fun onDone(utteranceId: String) {
-                    if (isPlaying && preferences.autoContinue().get()) {
-                        currentIndex++
-                        onParagraphChanged?.invoke(currentIndex)
-                        speakCurrent()
-                    }
-                }
-
-                override fun onError(utteranceId: String, errorMessage: String) {
-                    logcat(LogPriority.ERROR) { "TTS error: $errorMessage" }
-                    isPlaying = false
-                }
-            },
-        )
+    /**
+     * Keep the engine's queue topped up after [doneIndex] finished. On
+     * queue-capable engines the following paragraphs are already queued —
+     * only the window tail needs extending. On serial engines this is where
+     * the next paragraph actually gets spoken.
+     */
+    private fun enqueueAhead(doneIndex: Int) {
+        val engine = engine ?: return
+        if (engine.supportsQueueing) {
+            if (nextToEnqueue < paragraphs.size) {
+                engine.speak(
+                    text = paragraphs[nextToEnqueue],
+                    utteranceId = utteranceId(nextToEnqueue),
+                    flush = false,
+                    callback = sessionCallback,
+                )
+                nextToEnqueue++
+            }
+        } else {
+            val next = doneIndex + 1
+            if (next < paragraphs.size) {
+                currentIndex = next
+                onParagraphChanged?.invoke(next)
+                engine.speak(
+                    text = paragraphs[next],
+                    utteranceId = utteranceId(next),
+                    flush = true,
+                    callback = sessionCallback,
+                )
+            }
+        }
     }
 
     fun pause() {
+        if (!isPlaying) return
         isPlaying = false
-        engine?.pause()
+        if (engine?.supportsPause == true) {
+            // Real pause: engine keeps its queue and playback position, so
+            // resume() is instant and continues mid-word. Generation stays —
+            // queued utterance callbacks must not be treated as stale.
+            enginePaused = true
+            engine?.pause()
+        } else {
+            generation++
+            engine?.pause()
+        }
     }
 
     fun resume() {
         if (!isPlaying && currentIndex < paragraphs.size) {
             isPlaying = true
-            speakCurrent()
+            if (enginePaused) {
+                enginePaused = false
+                engine?.resume()
+            } else {
+                generation++
+                enqueueWindow(currentIndex, flushFirst = true)
+            }
         }
     }
 
     fun next() {
         if (currentIndex < paragraphs.size - 1) {
-            currentIndex++
-            onParagraphChanged?.invoke(currentIndex)
-            if (isPlaying) speakCurrent()
+            val target = currentIndex + 1
+            repositionTo(target)
         }
     }
 
     fun previous() {
         if (currentIndex > 0) {
-            currentIndex--
-            onParagraphChanged?.invoke(currentIndex)
-            if (isPlaying) speakCurrent()
+            val target = currentIndex - 1
+            repositionTo(target)
+        }
+    }
+
+    private fun repositionTo(target: Int) {
+        currentIndex = target
+        onParagraphChanged?.invoke(target)
+        if (enginePaused) {
+            // Drop the engine's stale queue — resume() will rebuild from
+            // the new position instead of replaying the old utterances.
+            enginePaused = false
+            generation++
+            engine?.stop()
+        }
+        if (isPlaying) {
+            generation++
+            enqueueWindow(target, flushFirst = true)
         }
     }
 
     fun stop() {
         isPlaying = false
+        enginePaused = false
+        generation++
         engine?.stop()
     }
 
@@ -198,5 +359,10 @@ class TtsController(
         stop()
         engine?.shutdown()
         engine = null
+    }
+
+    companion object {
+        /** Paragraphs queued ahead of the currently speaking one. */
+        private const val QUEUE_LOOKAHEAD = 6
     }
 }
