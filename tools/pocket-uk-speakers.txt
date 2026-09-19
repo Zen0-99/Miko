@@ -1,0 +1,19 @@
+# UK-accented VCTK speakers injected into the Miko pocket-tts bundle as
+# voices/vctk_pNNN.wav (fetched from kyutai/tts-voices:
+# vctk/pNNN_023_enhanced.wav — sentence 23, mic1, CC-BY-4.0).
+#
+# Format: one "pNNN <accent>" per line. '#' comments and blank lines are
+# ignored. Accents are restricted to {English, Scottish, Welsh,
+# NorthernIrish, Irish} (phase-04 research, assumption A5).
+#
+# Only accents verified against the VCTK speaker-info.txt fields are listed
+# below (p225–p229 English, p253 Welsh — verified 2026-09-18). p262 is
+# intentionally absent: it already ships in the base bundle as `eponine`.
+# Add more speakers only after checking their ACCENTS field in
+# speaker-info.txt (datashare.is.ed.ac.uk VCTK release).
+p225 English
+p226 English
+p227 English
+p228 English
+p229 English
+p253 Welsh
