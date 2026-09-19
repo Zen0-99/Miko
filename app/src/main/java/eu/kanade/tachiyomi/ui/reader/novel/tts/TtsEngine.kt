@@ -37,6 +37,15 @@ interface TtsEngine {
      */
     fun speak(text: String, utteranceId: String, flush: Boolean = true, callback: TtsCallback? = null)
 
+    /**
+     * Begin synthesizing [text] in the background so a later [speak] of the
+     * same text starts from buffered PCM instead of cold synthesis. Default
+     * no-op; engines that can stream (Pocket) override. Called by the
+     * controller when a paragraph starts playing, for the next paragraph
+     * (D-06).
+     */
+    fun prefetch(text: String) {}
+
     /** Stop all speech and clear the queue. */
     fun stop()
 
