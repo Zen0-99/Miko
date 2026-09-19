@@ -43,6 +43,7 @@ sealed class NovelExtension {
         val apkName: String,
         val iconUrl: String,
         val repoUrl: String,
+        val apkUrl: String = "",
     ) : NovelExtension() {
 
         data class NovelSource(

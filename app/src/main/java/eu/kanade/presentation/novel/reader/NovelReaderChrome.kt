@@ -241,7 +241,11 @@ fun NovelReaderChrome(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(
-                    bottom = if (showPhoneInfo) infoBarTotalHeight + 2.dp else 2.dp,
+                    // Position above the info CONTENT (28dp), not the entire
+                    // overlay (which includes the transparent fade gradient).
+                    // The pill can overlap the fade area since it's transparent
+                    // at the top.
+                    bottom = if (showPhoneInfo) infoBarBaseHeight + 8.dp else 2.dp,
                 ),
         ) {
             NovelReaderBottomBar(

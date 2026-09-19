@@ -41,7 +41,8 @@ class ExtensionRepoService(
         return try {
             val response = client.newCall(GET("$repo/index.pb")).awaitSuccess()
             val bytes = response.body.bytes()
-            val index = ProtoBuf.decodeFromByteArray(IndexProto.serializer(), bytes)
+            val decompressed = maybeGunzip(bytes)
+            val index = ProtoBuf.decodeFromByteArray(IndexProto.serializer(), decompressed)
             ExtensionRepo(
                 baseUrl = repo,
                 name = index.name.ifBlank { repo },
@@ -64,11 +65,16 @@ class ExtensionRepoService(
      */
     suspend fun fetchExtensionIndex(repo: String): List<ExtensionIndexEntry>? {
         return withIOContext {
+            logcat(LogPriority.DEBUG) { "fetchExtensionIndex for repo: $repo" }
             // Try protobuf first
             val protoEntries = tryFetchProtoIndex(repo)
-            if (protoEntries != null) return@withIOContext protoEntries
+            if (protoEntries != null) {
+                logcat(LogPriority.DEBUG) { "Using proto index for $repo with ${protoEntries.size} entries" }
+                return@withIOContext protoEntries
+            }
 
             // Fall back to JSON
+            logcat(LogPriority.DEBUG) { "Proto failed, falling back to JSON for $repo" }
             tryFetchJsonIndex(repo)
         }
     }
@@ -77,20 +83,41 @@ class ExtensionRepoService(
         return try {
             val response = client.newCall(GET("$repo/index.pb")).awaitSuccess()
             val bytes = response.body.bytes()
-            val index = ProtoBuf.decodeFromByteArray(IndexProto.serializer(), bytes)
-            index.toEntries(repo)
+            logcat(LogPriority.DEBUG) { "Proto index from $repo: ${bytes.size} bytes, first bytes: ${bytes.take(2).map { b -> String.format("%02X", b) }.joinToString(" ")}" }
+            val decompressed = maybeGunzip(bytes)
+            logcat(LogPriority.DEBUG) { "After gunzip: ${decompressed.size} bytes" }
+            val index = ProtoBuf.decodeFromByteArray(IndexProto.serializer(), decompressed)
+            val entries = index.toEntries(repo)
+            logcat(LogPriority.DEBUG) { "Parsed ${entries.size} extensions from proto index" }
+            entries
         } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to fetch/parse proto index from $repo" }
             null
         }
+    }
+
+    /**
+     * Detects gzip magic bytes (0x1F 0x8B) and decompresses if present.
+     * Some repos (e.g. Keiyoushi) serve a gzip-compressed index.pb file
+     * without a `Content-Encoding: gzip` header, so OkHttp won't auto-
+     * decompress. We detect and handle it manually.
+     */
+    private fun maybeGunzip(bytes: ByteArray): ByteArray {
+        if (bytes.size < 2 || (bytes[0] != 0x1F.toByte() || bytes[1] != 0x8B.toByte())) {
+            return bytes
+        }
+        return java.util.zip.GZIPInputStream(bytes.inputStream()).use { it.readBytes() }
     }
 
     private suspend fun tryFetchJsonIndex(repo: String): List<ExtensionIndexEntry>? {
         return try {
             with(json) {
-                client.newCall(GET("$repo/index.min.json"))
+                val entries = client.newCall(GET("$repo/index.min.json"))
                     .awaitSuccess()
                     .parseAs<List<ExtensionRepoExtensionJsonDto>>()
                     .toEntries(repo)
+                logcat(LogPriority.DEBUG) { "Parsed ${entries.size} extensions from JSON index at $repo" }
+                entries
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to fetch extension index from $repo" }
@@ -100,13 +127,14 @@ class ExtensionRepoService(
 
     /**
      * Probes a repo URL and determines its content type based on the package
-     * names of the extensions in its index. Returns one of "anime", "manga",
-     * or "novel". Falls back to "manga" if the type cannot be determined.
+     * names of the extensions in its index. Returns a set containing one or
+     * more of "anime", "manga", "novel". A single repo (e.g. Keiyoushi) can
+     * serve multiple types simultaneously.
      *
      * Also checks for LNReader plugin repos (plugins.min.json / plugins.json)
      * and routes them to "novel" since LNReader plugins are novel plugins.
      */
-    suspend fun probeRepoType(repo: String): String {
+    suspend fun probeRepoTypes(repo: String): Set<String> {
         // Normalize: strip known index file suffixes so probing works
         // regardless of whether the user pasted a bare repo URL or a
         // full path to an index file (e.g. .../v3.0.0/.dist/plugins.min.json).
@@ -121,30 +149,50 @@ class ExtensionRepoService(
 
         // First, check if this is an LNReader plugin repo (plugins.min.json)
         if (hasLnReaderPluginIndex(baseUrl)) {
-            return "novel"
+            return setOf("novel")
         }
 
-        val entries = fetchExtensionIndex(baseUrl) ?: return "manga"
-        if (entries.isEmpty()) return "manga"
+        val entries = fetchExtensionIndex(baseUrl) ?: return setOf("manga")
+        if (entries.isEmpty()) return setOf("manga")
 
-        var animeScore = 0
-        var novelScore = 0
-        var mangaScore = 0
+        val types = mutableSetOf<String>()
         for (entry in entries) {
             val pkg = entry.pkgName.lowercase()
             val name = entry.name.lowercase()
-            when {
-                pkg.contains(".novel.") || pkg.contains("yokai.extension.novel") ||
-                    pkg.contains("tachiyomi.novel") || name.contains("novel") -> novelScore++
-                pkg.contains(".anime.") || pkg.contains("aniyomi") ||
-                    pkg.contains("jmiri.anime") || name.contains("anime") -> animeScore++
-                pkg.contains("tachiyomi.extension") || pkg.contains("tachiyomi.manga") ||
-                    pkg.contains("keiyoushi") -> mangaScore++
+            // A single extension can match multiple categories — check each
+            // independently so repos serving multiple types (e.g. Keiyoushi
+            // serving both manga and anime) are detected for all types.
+            if (pkg.contains(".novel.") || pkg.contains("yokai.extension.novel") ||
+                pkg.contains("tachiyomi.novel") || name.contains("novel")
+            ) {
+                types.add("novel")
+            }
+            if (pkg.contains(".anime.") || pkg.contains("aniyomi") ||
+                pkg.contains("jmiri.anime") || name.contains("anime")
+            ) {
+                types.add("anime")
+            }
+            if (pkg.contains("tachiyomi.extension") || pkg.contains("tachiyomi.manga") ||
+                pkg.contains("keiyoushi")
+            ) {
+                types.add("manga")
             }
         }
+        return if (types.isEmpty()) setOf("manga") else types
+    }
+
+    /**
+     * Legacy single-type probe. Returns the primary type for a repo.
+     * Kept for backward compatibility; prefer [probeRepoTypes] for repos
+     * that may serve multiple content types.
+     */
+    suspend fun probeRepoType(repo: String): String {
+        val types = probeRepoTypes(repo)
         return when {
-            novelScore > animeScore && novelScore > mangaScore -> "novel"
-            animeScore > mangaScore && animeScore > novelScore -> "anime"
+            "novel" in types && types.size == 1 -> "novel"
+            "anime" in types && "manga" in types -> "manga" // multi-type: prefer manga
+            "anime" in types -> "anime"
+            "novel" in types -> "novel"
             else -> "manga"
         }
     }

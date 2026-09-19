@@ -180,11 +180,7 @@ fun AppBar(
                     }
                 } else {
                     navigateUp?.let {
-                        IconButton(onClick = {
-                            android.util.Log.d("NovelSearch", "[AppBar] back arrow IconButton CLICKED - calling navigateUp")
-                            android.util.Log.d("NovelSearch", "[AppBar] back arrow stacktrace:", Throwable("back arrow click"))
-                            it()
-                        }) {
+                        IconButton(onClick = it) {
                             UpIcon(navigationIcon = navigationIcon)
                         }
                     }
@@ -437,11 +433,8 @@ fun SearchToolbar(
             }
 
             val searchAndClearFocus: () -> Unit = f@{
-                android.util.Log.d("NovelSearch", "[SearchToolbar] searchAndClearFocus called - searchQuery='$searchQuery', isBlank=${searchQuery.isBlank()}")
                 if (searchQuery.isBlank()) return@f
-                android.util.Log.d("NovelSearch", "[SearchToolbar] searchAndClearFocus - calling onSearch('$searchQuery')")
                 onSearch(searchQuery)
-                android.util.Log.d("NovelSearch", "[SearchToolbar] searchAndClearFocus - hiding keyboard (focus will be cleared by clearFocusOnSoftKeyboardHide after IME closes)")
                 keyboardController?.hide()
             }
 
@@ -494,10 +487,8 @@ fun SearchToolbar(
             )
         },
         navigateUp = if (searchQuery == null) {
-            android.util.Log.d("NovelSearch", "[SearchToolbar] navigateUp wiring - searchQuery is null, using original navigateUp")
             navigateUp
         } else {
-            android.util.Log.d("NovelSearch", "[SearchToolbar] navigateUp wiring - searchQuery='$searchQuery' is NOT null, using onClickCloseSearch")
             onClickCloseSearch
         },
         actions = {

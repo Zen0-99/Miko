@@ -212,21 +212,34 @@ class MangaExtensionManager(
             return
         }
 
+        // Track which repo URLs were successfully fetched so we don't mark
+        // extensions as obsolete just because their repo failed to load.
+        val fetchedRepoUrls = availableExtensions.map { it.repoUrl }.toSet()
+
         val installedExtensionsMap = installedExtensionsMapFlow.value.toMutableMap()
         var changed = false
 
         for ((pkgName, extension) in installedExtensionsMap) {
             val availableExt = availableExtensions.find { it.pkgName == pkgName }
 
-            if (availableExt == null && !extension.isObsolete) {
-                installedExtensionsMap[pkgName] = extension.copy(isObsolete = true)
-                changed = true
-            } else if (availableExt != null) {
+            if (availableExt == null) {
+                // Only mark as obsolete if we know the extension's repo was
+                // successfully fetched (i.e. other extensions from the same
+                // repo are present in the available list). This prevents
+                // false-positive obsolete flags when a repo is temporarily
+                // unreachable.
+                val extensionRepoKnown = extension.repoUrl != null && extension.repoUrl in fetchedRepoUrls
+                if (extensionRepoKnown && !extension.isObsolete) {
+                    installedExtensionsMap[pkgName] = extension.copy(isObsolete = true)
+                    changed = true
+                }
+            } else {
                 val hasUpdate = extension.updateExists(availableExt)
-                if (extension.hasUpdate != hasUpdate) {
+                if (extension.hasUpdate != hasUpdate || extension.isObsolete) {
                     installedExtensionsMap[pkgName] = extension.copy(
                         hasUpdate = hasUpdate,
                         repoUrl = availableExt.repoUrl,
+                        isObsolete = false,
                     )
                 } else {
                     installedExtensionsMap[pkgName] = extension.copy(

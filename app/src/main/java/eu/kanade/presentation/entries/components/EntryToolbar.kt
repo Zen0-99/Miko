@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FlipToBack
@@ -75,6 +76,10 @@ fun EntryToolbar(
     // Smart update interval (novels only); null = no badge, Int? = days or N/A
     intervalDays: Int? = null,
     showIntervalBadge: Boolean = false,
+    // When true, clicking the download icon directly invokes onClickDownload
+    // without showing the chapter-count dropdown. Used for book sources
+    // (Anna's Archive) where the action is "delete book", not "download N chapters".
+    directDownloadAction: Boolean = false,
 ) {
     val isActionMode = actionModeCounter > 0
     AppBar(
@@ -93,7 +98,7 @@ fun EntryToolbar(
         actions = {
             var downloadExpanded by remember { mutableStateOf(false) }
 
-            if (onClickDownload != null) {
+            if (onClickDownload != null && !directDownloadAction) {
                 val onDismissRequest = { downloadExpanded = false }
                 EntryDownloadDropdownMenu(
                     expanded = downloadExpanded,
@@ -126,9 +131,22 @@ fun EntryToolbar(
                     if (onClickDownload != null) {
                         add(
                             AppBar.Action(
-                                title = stringResource(MR.strings.manga_download),
-                                icon = Icons.Outlined.Download,
-                                onClick = { downloadExpanded = !downloadExpanded },
+                                title = stringResource(
+                                    if (directDownloadAction) MR.strings.action_remove_downloads
+                                    else MR.strings.manga_download,
+                                ),
+                                icon = if (directDownloadAction) {
+                                    Icons.Outlined.Delete
+                                } else {
+                                    Icons.Outlined.Download
+                                },
+                                onClick = {
+                                    if (directDownloadAction) {
+                                        onClickDownload(DownloadAction.NEXT_1_ITEM)
+                                    } else {
+                                        downloadExpanded = !downloadExpanded
+                                    }
+                                },
                             ),
                         )
                     }

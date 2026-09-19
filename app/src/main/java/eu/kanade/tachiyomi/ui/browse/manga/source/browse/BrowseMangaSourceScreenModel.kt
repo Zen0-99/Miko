@@ -37,7 +37,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.CheckboxState
@@ -153,7 +153,10 @@ class BrowseMangaSourceScreenModel(
         .map { it.listing }
         .distinctUntilChanged()
         .debounce(300L)
-        .transform { listing ->
+        .transformLatest { listing ->
+            // Emit null first to signal "loading" to the UI. This clears any
+            // stale results from a previous listing and shows the loading screen.
+            emit(null)
             val convertedManga = mutableMapOf<String, Manga>()
             val accumulated = mutableListOf<Manga>()
             val catSource = source as? CatalogueSource

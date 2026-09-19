@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,7 @@ fun NovelLibraryPager(
     getReadingOrderLayer: ((Long) -> Int?)? = null,
     getPreviousLayerNovelIds: (() -> Set<Long>)? = null,
     isEntryLocked: ((Long) -> Boolean)? = null,
+    sortKey: String = "",
 ) {
     BoxWithConstraints {
         val density = LocalDensity.current
@@ -75,58 +77,61 @@ fun NovelLibraryPager(
             val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val columns by remember(isLandscape) { getColumnsForOrientation(isLandscape) }
 
-            when (displayMode) {
-                LibraryDisplayMode.List -> {
-                    NovelLibraryList(
-                        items = library,
-                        entries = columns,
-                        containerHeight = containerHeightPx,
-                        contentPadding = contentPadding,
-                        selection = selectedNovels,
-                        onClick = onClickNovel,
-                        onLongClick = onLongClickNovel,
-                        onClickContinueReading = onClickContinueReading,
-                        searchQuery = searchQuery,
-                        onGlobalSearchClicked = onGlobalSearchClicked,
-                        getReadingOrderLayer = getReadingOrderLayer,
-                        getPreviousLayerNovelIds = getPreviousLayerNovelIds,
-                        isEntryLocked = isEntryLocked,
-                    )
-                }
+            // Key on sort so the scroll state resets to top when sort changes
+            key(sortKey, displayMode) {
+                when (displayMode) {
+                    LibraryDisplayMode.List -> {
+                        NovelLibraryList(
+                            items = library,
+                            entries = columns,
+                            containerHeight = containerHeightPx,
+                            contentPadding = contentPadding,
+                            selection = selectedNovels,
+                            onClick = onClickNovel,
+                            onLongClick = onLongClickNovel,
+                            onClickContinueReading = onClickContinueReading,
+                            searchQuery = searchQuery,
+                            onGlobalSearchClicked = onGlobalSearchClicked,
+                            getReadingOrderLayer = getReadingOrderLayer,
+                            getPreviousLayerNovelIds = getPreviousLayerNovelIds,
+                            isEntryLocked = isEntryLocked,
+                        )
+                    }
 
-                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
-                    NovelLibraryCompactGrid(
-                        items = library,
-                        showTitle = displayMode is LibraryDisplayMode.CompactGrid,
-                        columns = columns,
-                        contentPadding = contentPadding,
-                        selection = selectedNovels,
-                        onClick = onClickNovel,
-                        onLongClick = onLongClickNovel,
-                        onClickContinueReading = onClickContinueReading,
-                        searchQuery = searchQuery,
-                        onGlobalSearchClicked = onGlobalSearchClicked,
-                        getReadingOrderLayer = getReadingOrderLayer,
-                        getPreviousLayerNovelIds = getPreviousLayerNovelIds,
-                        isEntryLocked = isEntryLocked,
-                    )
-                }
+                    LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+                        NovelLibraryCompactGrid(
+                            items = library,
+                            showTitle = displayMode is LibraryDisplayMode.CompactGrid,
+                            columns = columns,
+                            contentPadding = contentPadding,
+                            selection = selectedNovels,
+                            onClick = onClickNovel,
+                            onLongClick = onLongClickNovel,
+                            onClickContinueReading = onClickContinueReading,
+                            searchQuery = searchQuery,
+                            onGlobalSearchClicked = onGlobalSearchClicked,
+                            getReadingOrderLayer = getReadingOrderLayer,
+                            getPreviousLayerNovelIds = getPreviousLayerNovelIds,
+                            isEntryLocked = isEntryLocked,
+                        )
+                    }
 
-                LibraryDisplayMode.ComfortableGrid -> {
-                    NovelLibraryComfortableGrid(
-                        items = library,
-                        columns = columns,
-                        contentPadding = contentPadding,
-                        selection = selectedNovels,
-                        onClick = onClickNovel,
-                        onLongClick = onLongClickNovel,
-                        onClickContinueReading = onClickContinueReading,
-                        searchQuery = searchQuery,
-                        onGlobalSearchClicked = onGlobalSearchClicked,
-                        getReadingOrderLayer = getReadingOrderLayer,
-                        getPreviousLayerNovelIds = getPreviousLayerNovelIds,
-                        isEntryLocked = isEntryLocked,
-                    )
+                    LibraryDisplayMode.ComfortableGrid -> {
+                        NovelLibraryComfortableGrid(
+                            items = library,
+                            columns = columns,
+                            contentPadding = contentPadding,
+                            selection = selectedNovels,
+                            onClick = onClickNovel,
+                            onLongClick = onLongClickNovel,
+                            onClickContinueReading = onClickContinueReading,
+                            searchQuery = searchQuery,
+                            onGlobalSearchClicked = onGlobalSearchClicked,
+                            getReadingOrderLayer = getReadingOrderLayer,
+                            getPreviousLayerNovelIds = getPreviousLayerNovelIds,
+                            isEntryLocked = isEntryLocked,
+                        )
+                    }
                 }
             }
         }

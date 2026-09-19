@@ -41,6 +41,7 @@ import eu.kanade.tachiyomi.metadata.MetadataSourceManager
 import eu.kanade.tachiyomi.metadata.cinemeta.CinemetaMetadataSource
 import eu.kanade.tachiyomi.metadata.stream.SourceMappingCache
 import eu.kanade.tachiyomi.metadata.stream.StreamResolver
+import eu.kanade.tachiyomi.metadata.tmdb.TmdbSeasonPosters
 import eu.kanade.tachiyomi.metadata.stream.TitleMatcher
 import eu.kanade.tachiyomi.metadata.stream.LoadCinemetaEpisodes
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -329,9 +330,31 @@ class AppModule(val app: Application) : InjektModule {
                 networkToLocalAnime = get(),
                 sourceMappingCache = get(),
                 titleMatcher = get(),
+                stremioStreamAddonClient = get(),
+                stremioStreamResolver = get(),
+                stremioAddonConfig = get(),
+            )
+        }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.metadata.stream.stremio.StremioStreamAddonClient(
+                networkHelper = get(),
+                json = get(),
+            )
+        }
+        addSingletonFactory { eu.kanade.tachiyomi.metadata.stream.stremio.StremioStreamResolver() }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.metadata.stream.stremio.StremioAddonConfig(
+                preferenceStore = get(),
+            )
+        }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.metadata.stream.MagnetResolver(
+                torrentServerApi = get(),
+                torrentServerUtils = get(),
             )
         }
         addSingletonFactory { LoadCinemetaEpisodes(get(), get()) }
+        addSingletonFactory { TmdbSeasonPosters(get(), get()) }
 
         // --- JS novel plugin runtime wiring ---
         // Storage for plugin scripts and custom assets

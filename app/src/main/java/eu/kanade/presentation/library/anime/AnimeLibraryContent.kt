@@ -56,6 +56,7 @@ fun AnimeLibraryContent(
     readingOrderMode: Boolean = false,
     getPreviousLayerAnimeIds: (() -> Set<Long>)? = null,
     isEntryLocked: ((Long) -> Boolean)? = null,
+    sortKey: String = "",
 ) {
     Column(
         modifier = Modifier.padding(
@@ -139,6 +140,7 @@ fun AnimeLibraryContent(
                 getReadingOrderLayer = getReadingOrderLayer,
                 getPreviousLayerAnimeIds = getPreviousLayerAnimeIds,
                 isEntryLocked = isEntryLocked,
+                sortKey = sortKey,
             )
         }
 

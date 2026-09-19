@@ -983,7 +983,7 @@
     <!-- Downloads activity and service -->
     <string name="download_queue_error">Couldn\'t download chapters. You can try again in the downloads section</string>
     <string name="download_insufficient_space">Couldn\'t download chapters due to low storage space</string>
-    <string name="download_queue_size_warning">Warning: large bulk downloads may lead to sources becoming slower and/or blocking Mihon. Tap to learn more.</string>
+    <string name="download_queue_size_warning">Warning: large bulk downloads may lead to sources becoming slower and/or blocking Miko. Tap to learn more.</string>
 
     <!-- Library update service notifications -->
     <string name="notification_updating_progress">Updating library… (%s)</string>

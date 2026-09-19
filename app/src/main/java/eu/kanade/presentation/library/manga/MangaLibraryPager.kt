@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +52,7 @@ fun MangaLibraryPager(
     getReadingOrderLayer: ((Long) -> Int?)? = null,
     getPreviousLayerMangaIds: (() -> Set<Long>)? = null,
     isEntryLocked: ((Long) -> Boolean)? = null,
+    sortKey: String = "",
 ) {
     BoxWithConstraints {
         val density = LocalDensity.current
@@ -85,69 +87,72 @@ fun MangaLibraryPager(
             // Performance mode: reduce visual effects when the grid is very large
             val performanceMode = library.size > AURORA_LARGE_GRID_PERFORMANCE_THRESHOLD
 
-            when (displayMode) {
-                LibraryDisplayMode.List -> {
-                    MangaLibraryList(
-                        items = library,
-                        entries = 0,
-                        containerHeight = 0,
-                        contentPadding = contentPadding,
-                        selection = selectedManga,
-                        onClick = onClickManga,
-                        onLongClick = onLongClickManga,
-                        onClickContinueReading = onClickContinueReading,
-                        searchQuery = searchQuery,
-                        onGlobalSearchClicked = onGlobalSearchClicked,
-                        onSeriesClicked = onSeriesClicked,
-                        onReorder = onReorder,
-                        showAuthor = showListAuthor,
-                        showStatus = showListStatus,
-                        getReadingOrderLayer = getReadingOrderLayer,
-                        getPreviousLayerMangaIds = getPreviousLayerMangaIds,
-                        isEntryLocked = isEntryLocked,
-                    )
-                }
+            // Key on sort so the scroll state resets to top when sort changes
+            key(sortKey, displayMode) {
+                when (displayMode) {
+                    LibraryDisplayMode.List -> {
+                        MangaLibraryList(
+                            items = library,
+                            entries = 0,
+                            containerHeight = 0,
+                            contentPadding = contentPadding,
+                            selection = selectedManga,
+                            onClick = onClickManga,
+                            onLongClick = onLongClickManga,
+                            onClickContinueReading = onClickContinueReading,
+                            searchQuery = searchQuery,
+                            onGlobalSearchClicked = onGlobalSearchClicked,
+                            onSeriesClicked = onSeriesClicked,
+                            onReorder = onReorder,
+                            showAuthor = showListAuthor,
+                            showStatus = showListStatus,
+                            getReadingOrderLayer = getReadingOrderLayer,
+                            getPreviousLayerMangaIds = getPreviousLayerMangaIds,
+                            isEntryLocked = isEntryLocked,
+                        )
+                    }
 
-                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
-                    MangaLibraryCompactGrid(
-                        items = library,
-                        showTitle = displayMode is LibraryDisplayMode.CompactGrid,
-                        columns = columns,
-                        contentPadding = contentPadding,
-                        selection = selectedManga,
-                        onClick = onClickManga,
-                        onLongClick = onLongClickManga,
-                        onClickContinueReading = onClickContinueReading,
-                        searchQuery = searchQuery,
-                        onGlobalSearchClicked = onGlobalSearchClicked,
-                        onTogglePinned = onTogglePinned,
-                        onSeriesClicked = onSeriesClicked,
-                        performanceMode = performanceMode,
-                        getReadingOrderLayer = getReadingOrderLayer,
-                        getPreviousLayerMangaIds = getPreviousLayerMangaIds,
-                        isEntryLocked = isEntryLocked,
-                    )
-                }
+                    LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+                        MangaLibraryCompactGrid(
+                            items = library,
+                            showTitle = displayMode is LibraryDisplayMode.CompactGrid,
+                            columns = columns,
+                            contentPadding = contentPadding,
+                            selection = selectedManga,
+                            onClick = onClickManga,
+                            onLongClick = onLongClickManga,
+                            onClickContinueReading = onClickContinueReading,
+                            searchQuery = searchQuery,
+                            onGlobalSearchClicked = onGlobalSearchClicked,
+                            onTogglePinned = onTogglePinned,
+                            onSeriesClicked = onSeriesClicked,
+                            performanceMode = performanceMode,
+                            getReadingOrderLayer = getReadingOrderLayer,
+                            getPreviousLayerMangaIds = getPreviousLayerMangaIds,
+                            isEntryLocked = isEntryLocked,
+                        )
+                    }
 
-                LibraryDisplayMode.ComfortableGrid -> {
-                    MangaLibraryComfortableGrid(
-                        items = library,
-                        columns = columns,
-                        contentPadding = contentPadding,
-                        selection = selectedManga,
-                        onClick = onClickManga,
-                        onLongClick = onLongClickManga,
-                        onClickContinueReading = onClickContinueReading,
-                        searchQuery = searchQuery,
-                        onGlobalSearchClicked = onGlobalSearchClicked,
-                        onTogglePinned = onTogglePinned,
-                        onSeriesClicked = onSeriesClicked,
-                        performanceMode = performanceMode,
-                        showAuthor = showListAuthor,
-                        getReadingOrderLayer = getReadingOrderLayer,
-                        getPreviousLayerMangaIds = getPreviousLayerMangaIds,
-                        isEntryLocked = isEntryLocked,
-                    )
+                    LibraryDisplayMode.ComfortableGrid -> {
+                        MangaLibraryComfortableGrid(
+                            items = library,
+                            columns = columns,
+                            contentPadding = contentPadding,
+                            selection = selectedManga,
+                            onClick = onClickManga,
+                            onLongClick = onLongClickManga,
+                            onClickContinueReading = onClickContinueReading,
+                            searchQuery = searchQuery,
+                            onGlobalSearchClicked = onGlobalSearchClicked,
+                            onTogglePinned = onTogglePinned,
+                            onSeriesClicked = onSeriesClicked,
+                            performanceMode = performanceMode,
+                            showAuthor = showListAuthor,
+                            getReadingOrderLayer = getReadingOrderLayer,
+                            getPreviousLayerMangaIds = getPreviousLayerMangaIds,
+                            isEntryLocked = isEntryLocked,
+                        )
+                    }
                 }
             }
         }

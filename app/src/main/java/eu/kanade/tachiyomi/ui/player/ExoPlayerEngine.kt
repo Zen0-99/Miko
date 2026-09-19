@@ -11,6 +11,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import okhttp3.OkHttpClient
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.util.system.logcat
+import logcat.LogPriority
 
 /**
  * Wraps a Media3 ExoPlayer instance as a fallback engine when MPV fails to load a video.
@@ -69,6 +71,12 @@ class ExoPlayerEngine(
     fun loadVideo(url: String, startPositionMs: Long = 0) {
         val exoPlayer = player ?: return
         hasLoadedFile = false
+        android.util.Log.d("ExoPlayerEngine", "loadVideo: url='$url', startPos=$startPositionMs")
+        if (url.isBlank()) {
+            android.util.Log.e("ExoPlayerEngine", "loadVideo: URL is blank!")
+            callbacks.onError("Video URL is empty")
+            return
+        }
         val mediaItem = MediaItem.fromUri(Uri.parse(url))
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()

@@ -42,6 +42,7 @@ data class Anime(
     val seasonFlags: Long,
     val seasonNumber: Double,
     val seasonSourceOrder: Long,
+    val country: String? = null,
 ) : Serializable {
 
     val expectedNextUpdate: Instant?
@@ -340,6 +341,7 @@ data class Anime(
             seasonFlags = 0L,
             seasonNumber = -1.0,
             seasonSourceOrder = 0L,
+            country = null,
         )
     }
 }

@@ -42,7 +42,6 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.protobuf.ProtoBuf
 import logcat.LogPriority
 import tachiyomi.core.common.storage.extension
-import tachiyomi.core.common.storage.nameWithoutExtension
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.system.logcat
@@ -81,7 +80,7 @@ class NovelDownloadCache(
         .stateIn(scope, SharingStarted.WhileSubscribed(), false)
 
     private val diskCacheFile: File
-        get() = File(context.cacheDir, "novel_dl_index_cache")
+        get() = File(context.cacheDir, "novel_dl_index_cache_v2")
 
     private val rootDownloadsDirMutex = Mutex()
     private var rootDownloadsDir = NovelRootDirectory(storageManager.getDownloadsDirectory())
@@ -290,7 +289,7 @@ class NovelDownloadCache(
                                 .mapNotNull {
                                     when {
                                         it.name?.endsWith(NovelDownloader.TMP_DIR_SUFFIX) == true -> null
-                                        it.isFile && it.extension == "txt" -> it.nameWithoutExtension
+                                        it.isFile && it.extension == "txt" -> it.name
                                         else -> null
                                     }
                                 }

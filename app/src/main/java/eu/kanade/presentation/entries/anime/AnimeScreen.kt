@@ -32,6 +32,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,7 +67,11 @@ import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.anime.components.AnimeActionRow
 import eu.kanade.presentation.entries.anime.components.AnimeContinueButton
 import eu.kanade.presentation.entries.anime.components.AnimeEpisodeListItem
+import eu.kanade.presentation.entries.anime.components.NuvioEpisodeCard
+import eu.kanade.presentation.entries.anime.components.SeasonPillRow
 import eu.kanade.presentation.entries.anime.components.AnimeInfoBox
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import eu.kanade.presentation.entries.anime.components.AnimeSeasonListItem
 import eu.kanade.presentation.entries.anime.components.EpisodeDownloadAction
 import eu.kanade.presentation.entries.anime.components.ExpandableAnimeDescription
@@ -95,6 +100,7 @@ import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.service.missingEntriesCount
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.anime.model.StubAnimeSource
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.FastScrollLazyVerticalGrid
@@ -369,6 +375,62 @@ private fun AnimeScreenSmallImpl(
     val seasons = remember(state) { state.processedSeasons }
     val episodes = remember(state) { state.processedEpisodes }
     val listItem = remember(state) { state.episodeListItems }
+
+    // Cinemeta season pills — parse season numbers from episode scanlator ("Season N")
+    val isCinemetaEntry = state.anime.source == 0L && state.anime.url.startsWith("cinemeta:")
+    val cinemetaSeasons = remember(listItem) {
+        if (!isCinemetaEntry) emptyList()
+        else listItem.mapNotNull { ep ->
+            (ep as? EpisodeList.Item)?.episode?.scanlator
+                ?.let { parseCinemetaSeason(it) }
+        }.distinct()
+    }
+    // Persist selected season per anime via PreferenceStore
+    val preferenceStore = remember { Injekt.get<PreferenceStore>() }
+    val seasonPrefKey = remember(state.anime.id) { "cinemeta_selected_season_${state.anime.id}" }
+    val seasonPref = remember(seasonPrefKey) { preferenceStore.getInt(seasonPrefKey, -1) }
+    var selectedCinemetaSeason by remember(state.anime.id) {
+        val saved = seasonPref.get()
+        val initial = if (saved >= 0 && saved in cinemetaSeasons) saved
+            else cinemetaSeasons.firstOrNull { it != 0 } ?: cinemetaSeasons.firstOrNull() ?: 1
+        mutableIntStateOf(initial)
+    }
+    // Save season selection when it changes
+    LaunchedEffect(selectedCinemetaSeason) {
+        if (isCinemetaEntry && cinemetaSeasons.size > 1) {
+            seasonPref.set(selectedCinemetaSeason)
+        }
+    }
+    val filteredListItem = remember(listItem, selectedCinemetaSeason, isCinemetaEntry) {
+        if (!isCinemetaEntry || cinemetaSeasons.size <= 1) listItem
+        else listItem.filter { ep ->
+            when (ep) {
+                is EpisodeList.MissingCount -> true
+                is EpisodeList.Item -> {
+                    val season = parseCinemetaSeason(ep.episode.scanlator)
+                    season == selectedCinemetaSeason
+                }
+            }
+        }
+    }
+
+    // Season cover override — fetch per-season posters from TMDB
+    val tmdbSeasonPosters = remember { Injekt.get<eu.kanade.tachiyomi.metadata.tmdb.TmdbSeasonPosters>() }
+    val seasonPosters = remember(state.anime.url) {
+        if (!isCinemetaEntry) mutableStateMapOf()
+        else mutableStateMapOf<Int, String>()
+    }
+    LaunchedEffect(state.anime.url, isCinemetaEntry) {
+        if (isCinemetaEntry) {
+            val imdbId = tmdbSeasonPosters.extractImdbId(state.anime.url)
+            if (imdbId != null) {
+                val posters = tmdbSeasonPosters.getSeasonPosters(imdbId)
+                posters.forEach { (season, url) -> seasonPosters[season] = url }
+            }
+        }
+    }
+    val seasonCoverOverride = seasonPosters[selectedCinemetaSeason]
+
     val hasFilters = remember(state) {
         when (state.anime.fetchType) {
             FetchType.Seasons -> state.anime.seasonsFiltered()
@@ -497,6 +559,7 @@ private fun AnimeScreenSmallImpl(
                             doSearch = onSearch,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                             accentColor = state.accentColor,
+                            coverOverride = seasonCoverOverride,
                         )
                     }
 
@@ -578,15 +641,18 @@ private fun AnimeScreenSmallImpl(
                         contentType = EntryScreenItem.ITEM_HEADER,
                         span = { GridItemSpan(maxLineSpan) },
                     ) {
-                        val missingEpisodesCount = remember(episodes) {
-                            episodes.map { it.episode.episodeNumber }.missingEntriesCount()
-                        }
+                        // Cinemeta entries: episode numbers reset per season, so
+                        // missingEntriesCount produces false positives. Skip it.
+                        val missingEpisodesCount = if (isCinemetaEntry) 0
+                            else remember(episodes) {
+                                episodes.map { it.episode.episodeNumber }.missingEntriesCount()
+                            }
                         val missingSeasonsCount = remember(seasons) {
                             seasons.map { it.seasonAnime.anime.seasonNumber }.missingEntriesCount()
                         }
                         val itemCount = when (state.anime.fetchType) {
                             FetchType.Seasons -> seasons.size
-                            FetchType.Episodes -> episodes.size
+                            FetchType.Episodes -> filteredListItem.size
                         }
                         val headerText = when (state.anime.fetchType) {
                             FetchType.Seasons -> pluralStringResource(
@@ -608,7 +674,9 @@ private fun AnimeScreenSmallImpl(
                             showInterval = state.showInterval,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                         )
-                        MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
+                        if (!isCinemetaEntry) {
+                            MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
+                        }
                     }
 
                     when (state.anime.fetchType) {
@@ -654,9 +722,26 @@ private fun AnimeScreenSmallImpl(
                                 }
                             }
 
+                            // Season pills for Cinemeta entries
+                            if (isCinemetaEntry && cinemetaSeasons.size > 1) {
+                                item(
+                                    key = "cinemeta-season-pills",
+                                    contentType = EntryScreenItem.ITEM,
+                                    span = { GridItemSpan(maxLineSpan) },
+                                ) {
+                                    SeasonPillRow(
+                                        seasons = cinemetaSeasons,
+                                        selectedSeason = selectedCinemetaSeason,
+                                        onSeasonSelected = { selectedCinemetaSeason = it },
+                                        modifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                                        accentColor = state.accentColor,
+                                    )
+                                }
+                            }
+
                             sharedEpisodeItems(
                                 anime = state.anime,
-                                episodes = listItem,
+                                episodes = filteredListItem,
                                 isAnyEpisodeSelected = episodes.fastAny { it.selected },
                                 showSummaries = state.showSummaries,
                                 showPreviews = state.showPreviews,
@@ -752,6 +837,61 @@ fun AnimeScreenLargeImpl(
     val seasons = remember(state) { state.processedSeasons }
     val episodes = remember(state) { state.processedEpisodes }
     val listItem = remember(state) { state.episodeListItems }
+
+    // Cinemeta season pills — parse season numbers from episode scanlator ("Season N")
+    val isCinemetaEntry = state.anime.source == 0L && state.anime.url.startsWith("cinemeta:")
+    val cinemetaSeasons = remember(listItem) {
+        if (!isCinemetaEntry) emptyList()
+        else listItem.mapNotNull { ep ->
+            (ep as? EpisodeList.Item)?.episode?.scanlator
+                ?.let { parseCinemetaSeason(it) }
+        }.distinct()
+    }
+    // Persist selected season per anime via PreferenceStore
+    val preferenceStore = remember { Injekt.get<PreferenceStore>() }
+    val seasonPrefKey = remember(state.anime.id) { "cinemeta_selected_season_${state.anime.id}" }
+    val seasonPref = remember(seasonPrefKey) { preferenceStore.getInt(seasonPrefKey, -1) }
+    var selectedCinemetaSeason by remember(state.anime.id) {
+        val saved = seasonPref.get()
+        val initial = if (saved >= 0 && saved in cinemetaSeasons) saved
+            else cinemetaSeasons.firstOrNull { it != 0 } ?: cinemetaSeasons.firstOrNull() ?: 1
+        mutableIntStateOf(initial)
+    }
+    // Save season selection when it changes
+    LaunchedEffect(selectedCinemetaSeason) {
+        if (isCinemetaEntry && cinemetaSeasons.size > 1) {
+            seasonPref.set(selectedCinemetaSeason)
+        }
+    }
+    val filteredListItem = remember(listItem, selectedCinemetaSeason, isCinemetaEntry) {
+        if (!isCinemetaEntry || cinemetaSeasons.size <= 1) listItem
+        else listItem.filter { ep ->
+            when (ep) {
+                is EpisodeList.MissingCount -> true
+                is EpisodeList.Item -> {
+                    val season = parseCinemetaSeason(ep.episode.scanlator)
+                    season == selectedCinemetaSeason
+                }
+            }
+        }
+    }
+
+    // Season cover override — fetch per-season posters from TMDB
+    val tmdbSeasonPosters = remember { Injekt.get<eu.kanade.tachiyomi.metadata.tmdb.TmdbSeasonPosters>() }
+    val seasonPosters = remember(state.anime.url) {
+        if (!isCinemetaEntry) mutableStateMapOf()
+        else mutableStateMapOf<Int, String>()
+    }
+    LaunchedEffect(state.anime.url, isCinemetaEntry) {
+        if (isCinemetaEntry) {
+            val imdbId = tmdbSeasonPosters.extractImdbId(state.anime.url)
+            if (imdbId != null) {
+                val posters = tmdbSeasonPosters.getSeasonPosters(imdbId)
+                posters.forEach { (season, url) -> seasonPosters[season] = url }
+            }
+        }
+    }
+    val seasonCoverOverride = seasonPosters[selectedCinemetaSeason]
 
     val isAnySelected by remember {
         derivedStateOf {
@@ -871,6 +1011,7 @@ fun AnimeScreenLargeImpl(
                                 onCoverClick = onCoverClicked,
                                 doSearch = onSearch,
                                 accentColor = state.accentColor,
+                                coverOverride = seasonCoverOverride,
                             )
                             AnimeActionRow(
                                 favorite = state.anime.favorite,
@@ -922,15 +1063,18 @@ fun AnimeScreenLargeImpl(
                                 contentType = EntryScreenItem.ITEM_HEADER,
                                 span = { GridItemSpan(maxLineSpan) },
                             ) {
-                                val missingEpisodesCount = remember(episodes) {
-                                    episodes.map { it.episode.episodeNumber }.missingEntriesCount()
-                                }
+                                // Cinemeta entries: episode numbers reset per season, so
+                                // missingEntriesCount produces false positives. Skip it.
+                                val missingEpisodesCount = if (isCinemetaEntry) 0
+                                    else remember(episodes) {
+                                        episodes.map { it.episode.episodeNumber }.missingEntriesCount()
+                                    }
                                 val missingSeasonsCount = remember(seasons) {
                                     seasons.map { it.seasonAnime.anime.seasonNumber }.missingEntriesCount()
                                 }
                                 val itemCount = when (state.anime.fetchType) {
                                     FetchType.Seasons -> seasons.size
-                                    FetchType.Episodes -> episodes.size
+                                    FetchType.Episodes -> filteredListItem.size
                                 }
                                 val headerText = when (state.anime.fetchType) {
                                     FetchType.Seasons -> pluralStringResource(
@@ -952,7 +1096,9 @@ fun AnimeScreenLargeImpl(
                                     showInterval = state.showInterval,
                                     modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                                 )
-                                MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
+                                if (!isCinemetaEntry) {
+                                    MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
+                                }
                             }
 
                             when (state.anime.fetchType) {
@@ -997,9 +1143,26 @@ fun AnimeScreenLargeImpl(
                                         }
                                     }
 
+                                    // Season pills for Cinemeta entries
+                                    if (isCinemetaEntry && cinemetaSeasons.size > 1) {
+                                        item(
+                                            key = "cinemeta-season-pills",
+                                            contentType = EntryScreenItem.ITEM,
+                                            span = { GridItemSpan(maxLineSpan) },
+                                        ) {
+                                            SeasonPillRow(
+                                                seasons = cinemetaSeasons,
+                                                selectedSeason = selectedCinemetaSeason,
+                                                onSeasonSelected = { selectedCinemetaSeason = it },
+                                                modifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                                                accentColor = state.accentColor,
+                                            )
+                                        }
+                                    }
+
                                     sharedEpisodeItems(
                                         anime = state.anime,
-                                        episodes = listItem,
+                                        episodes = filteredListItem,
                                         isAnyEpisodeSelected = episodes.fastAny { it.selected },
                                         showSummaries = state.showSummaries,
                                         showPreviews = state.showPreviews,
@@ -1140,7 +1303,20 @@ private fun LazyGridScope.sharedEpisodeItems(
                 )
             }
             is EpisodeList.Item -> {
-                AnimeEpisodeListItem(
+                val isCinemetaEntry = anime.source == 0L && anime.url.startsWith("cinemeta:")
+                val episodeString = if (isCinemetaEntry) {
+                    val seasonNum = parseCinemetaSeason(episodeItem.episode.scanlator)
+                    val epNum = episodeItem.episode.episodeNumber.toInt()
+                    "S${seasonNum.toString().padStart(2, '0')}E${epNum.toString().padStart(2, '0')}"
+                } else {
+                    ""
+                }
+                val episodeRating = if (isCinemetaEntry) {
+                    parseCinemetaRating(episodeItem.episode.scanlator)
+                } else {
+                    null
+                }
+                NuvioEpisodeCard(
                     title = if (anime.displayMode == Anime.EPISODE_DISPLAY_NUMBER) {
                         stringResource(
                             AYMR.strings.display_mode_episode,
@@ -1149,6 +1325,8 @@ private fun LazyGridScope.sharedEpisodeItems(
                     } else {
                         episodeItem.episode.name
                     },
+                    episodeString = episodeString,
+                    rating = episodeRating,
                     date = relativeDateTimeText(episodeItem.episode.dateUpload),
                     watchProgress = episodeItem.episode.lastSecondSeen
                         .takeIf { !episodeItem.episode.seen && it > 0L }
@@ -1159,7 +1337,9 @@ private fun LazyGridScope.sharedEpisodeItems(
                                 formatTime(episodeItem.episode.totalSeconds),
                             )
                         },
-                    scanlator = episodeItem.episode.scanlator.takeIf { !it.isNullOrBlank() },
+                    scanlator = episodeItem.episode.scanlator
+                        ?.takeIf { !it.isNullOrBlank() && !it.startsWith("Season ") }
+                        ?.takeIf { !it.isNullOrBlank() },
                     summary = episodeItem.episode.summary.takeIf { !it.isNullOrBlank() && showSummaries },
                     previewUrl = episodeItem.episode.previewUrl.takeIf { !it.isNullOrBlank() && showPreviews },
                     seen = episodeItem.episode.seen,
@@ -1211,6 +1391,27 @@ private fun onEpisodeItemClick(
         isAnyEpisodeSelected -> onToggleSelection(true)
         else -> onEpisodeClicked(episodeItem.episode, false)
     }
+}
+
+/**
+ * Parse season number from Cinemeta episode scanlator field.
+ * Format: "Season N" or "Season N|★R.R"
+ */
+private fun parseCinemetaSeason(scanlator: String?): Int {
+    if (scanlator.isNullOrBlank()) return 1
+    val seasonPart = scanlator.substringBefore("|")
+    return seasonPart.removePrefix("Season ").trim().toIntOrNull() ?: 1
+}
+
+/**
+ * Parse rating from Cinemeta episode scanlator field.
+ * Format: "Season N|★R.R" → "R.R", or null if no rating.
+ */
+private fun parseCinemetaRating(scanlator: String?): String? {
+    if (scanlator.isNullOrBlank()) return null
+    val idx = scanlator.indexOf("|")
+    if (idx < 0) return null
+    return scanlator.substring(idx + 1).removePrefix("★").trim().ifBlank { null }
 }
 
 private fun formatTime(milliseconds: Long, useDayFormat: Boolean = false): String {

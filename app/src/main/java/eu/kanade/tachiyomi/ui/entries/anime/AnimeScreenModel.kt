@@ -446,9 +446,13 @@ class AnimeScreenModel(
             val needRefreshEpisode = episodes.isEmpty() && anime.fetchType == FetchType.Episodes
             val needRefreshSeason = seasons.isEmpty() && anime.fetchType == FetchType.Seasons
 
-            // Cinemeta entries (source == 0) — load virtual episodes from Cinemeta metadata
-            val isCinemetaEntry = anime.source == 0L
-            if (isCinemetaEntry && episodes.isEmpty()) {
+            // Cinemeta entries (source == 0, URL starts with "cinemeta:") — load virtual
+            // episodes from Cinemeta metadata. Skip source-based episode/season/info fetching
+            // since source 0 is a stub for Cinemeta entries.
+            // Always call loadCinemetaEpisodes — it updates existing episodes' metadata
+            // (ratings, thumbnails, dates) to keep them in sync with Cinemeta.
+            val isCinemetaEntry = anime.source == 0L && anime.url.startsWith("cinemeta:")
+            if (isCinemetaEntry) {
                 loadCinemetaEpisodes.await(anime)
             }
 
@@ -479,8 +483,8 @@ class AnimeScreenModel(
             // Fetch suggestions asynchronously
             loadSuggestions(buildSuggestionSeed(anime))
 
-            // Fetch info-episodes when needed
-            if (screenModelScope.isActive) {
+            // Fetch info-episodes when needed — skip for Cinemeta entries (source 0 is a stub)
+            if (screenModelScope.isActive && !isCinemetaEntry) {
                 val fetchFromSourceTasks = listOf(
                     async { if (needRefreshInfo) fetchAnimeFromSource() },
                     async { if (needRefreshEpisode || needRefreshSeason) fetchEpisodesAndSeasonsFromSource() },
@@ -496,13 +500,24 @@ class AnimeScreenModel(
     fun fetchAllFromSource(manualFetch: Boolean = true) {
         screenModelScope.launch {
             updateSuccessState { it.copy(isRefreshingData = true) }
-            val fetchFromSourceTasks = listOf(
-                async { fetchAnimeFromSource(manualFetch) },
-                async { fetchEpisodesAndSeasonsFromSource(manualFetch) },
-            )
-            fetchFromSourceTasks.awaitAll()
-            updateSuccessState { it.copy(isRefreshingData = false) }
-            successState?.let { updateAiringTime(it.anime, it.trackItems, manualFetch) }
+            val state = successState ?: return@launch
+            val isCinemetaEntry = state.anime.source == 0L && state.anime.url.startsWith("cinemeta:")
+            if (isCinemetaEntry) {
+                // Cinemeta entries — reload virtual episodes from Cinemeta metadata.
+                // Skip source-based fetching since source 0 is a stub.
+                withIOContext {
+                    loadCinemetaEpisodes.await(state.anime)
+                }
+                updateSuccessState { it.copy(isRefreshingData = false) }
+            } else {
+                val fetchFromSourceTasks = listOf(
+                    async { fetchAnimeFromSource(manualFetch) },
+                    async { fetchEpisodesAndSeasonsFromSource(manualFetch) },
+                )
+                fetchFromSourceTasks.awaitAll()
+                updateSuccessState { it.copy(isRefreshingData = false) }
+                successState?.let { updateAiringTime(it.anime, it.trackItems, manualFetch) }
+            }
         }
     }
 
@@ -771,14 +786,19 @@ class AnimeScreenModel(
 
     private fun List<Episode>.toEpisodeListItems(anime: Anime): List<EpisodeList.Item> {
         val isLocal = anime.isLocal()
+        // Cinemeta entries also have source == 0 (same as LocalAnimeSource.ID),
+        // but their URL starts with "cinemeta:" — distinguish them from local.
+        val isCinemeta = anime.source == 0L && anime.url.startsWith("cinemeta:")
         return map { episode ->
-            val activeDownload = if (isLocal) {
+            val activeDownload = if (isLocal || isCinemeta) {
                 null
             } else {
                 downloadManager.getQueuedDownloadOrNull(episode.id)
             }
             val downloaded = if (isLocal) {
                 true
+            } else if (isCinemeta) {
+                false
             } else {
                 downloadManager.isEpisodeDownloaded(
                     episode.name,
@@ -894,8 +914,7 @@ class AnimeScreenModel(
 
     private suspend fun startTorrentServer(source: AnimeSource?) {
         if (isTorrentEnabled() && source.isSourceForTorrents()) {
-            TorrentServerService.start()
-            TorrentServerService.wait(10)
+            TorrentServerService.startInProcess()
             torrentServerUtils.setTrackersList()
         }
     }
@@ -1890,29 +1909,37 @@ class AnimeScreenModel(
             }
 
             val episodeListItems by lazy {
-                processedEpisodes.insertSeparators { before, after ->
-                    val (lowerEpisode, higherEpisode) = if (anime.sortDescending()) {
-                        after to before
-                    } else {
-                        before to after
-                    }
-                    if (higherEpisode == null) return@insertSeparators null
-
-                    if (lowerEpisode == null) {
-                        floor(higherEpisode.episode.episodeNumber)
-                            .toInt()
-                            .minus(1)
-                            .coerceAtLeast(0)
-                    } else {
-                        calculateEpisodeGap(higherEpisode.episode, lowerEpisode.episode)
-                    }
-                        .takeIf { it > 0 }
-                        ?.let { missingCount ->
-                            EpisodeList.MissingCount(
-                                id = "${lowerEpisode?.id}-${higherEpisode.id}",
-                                count = missingCount,
-                            )
+                // Cinemeta entries: episode numbers reset per season, so
+                // gap-based missing count separators produce false positives.
+                // Skip separator insertion entirely for Cinemeta entries.
+                val isCinemetaEntry = anime.source == 0L && anime.url.startsWith("cinemeta:")
+                if (isCinemetaEntry) {
+                    processedEpisodes
+                } else {
+                    processedEpisodes.insertSeparators { before, after ->
+                        val (lowerEpisode, higherEpisode) = if (anime.sortDescending()) {
+                            after to before
+                        } else {
+                            before to after
                         }
+                        if (higherEpisode == null) return@insertSeparators null
+
+                        if (lowerEpisode == null) {
+                            floor(higherEpisode.episode.episodeNumber)
+                                .toInt()
+                                .minus(1)
+                                .coerceAtLeast(0)
+                        } else {
+                            calculateEpisodeGap(higherEpisode.episode, lowerEpisode.episode)
+                        }
+                            .takeIf { it > 0 }
+                            ?.let { missingCount ->
+                                EpisodeList.MissingCount(
+                                    id = "${lowerEpisode?.id}-${higherEpisode.id}",
+                                    count = missingCount,
+                                )
+                            }
+                    }
                 }
             }
 

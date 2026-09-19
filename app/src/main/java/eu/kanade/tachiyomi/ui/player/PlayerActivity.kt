@@ -148,6 +148,7 @@ class PlayerActivity : BaseActivity() {
     private val torrentServerApi: TorrentServerApi = Injekt.get()
     private val torrentServerUtils: TorrentServerUtils = Injekt.get()
     private val torrentPreferences: TorrentPreferences = Injekt.get()
+    private val magnetResolver: eu.kanade.tachiyomi.metadata.stream.MagnetResolver = Injekt.get()
 
     private var audioFocusRequest: AudioFocusRequestCompat? = null
     private var restoreAudioFocus: () -> Unit = {}
@@ -832,8 +833,10 @@ class PlayerActivity : BaseActivity() {
                     viewModel.activeEngine.value == PlayerEngine.Mpv
                 ) {
                     logcat(LogPriority.WARN) { "MPV end-file while loading — falling back to ExoPlayer" }
-                    switchToExoPlayer()
-                    pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
+                    runOnUiThread {
+                        switchToExoPlayer()
+                        pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
+                    }
                 }
             }
         }
@@ -1160,8 +1163,11 @@ class PlayerActivity : BaseActivity() {
         }
 
         // Handle resume overlay for Ask mode
+        val resumeMode = playerPreferences.resumeMode().get()
+        val showResumeDialog = viewModel.isLoadingEpisode.value &&
+            resumeMode == ResumeMode.Ask && savedPosition > 1000
+
         if (viewModel.isLoadingEpisode.value) {
-            val resumeMode = playerPreferences.resumeMode().get()
             when (resumeMode) {
                 ResumeMode.Resume -> {
                     if (viewModel.activeEngine.value == PlayerEngine.Mpv) {
@@ -1174,7 +1180,8 @@ class PlayerActivity : BaseActivity() {
                     }
                 }
                 ResumeMode.Ask -> {
-                    if (savedPosition > 1000) {
+                    if (showResumeDialog) {
+                        // Load at position 0 — the dialog will seek if user picks "continue"
                         if (viewModel.activeEngine.value == PlayerEngine.Mpv) {
                             MPVLib.command(arrayOf("set", "start", "0"))
                         }
@@ -1189,9 +1196,50 @@ class PlayerActivity : BaseActivity() {
         }
 
         val enginePref = playerPreferences.playerEngine().get()
-        val videoUrl = video.videoUrl
-        val startMs = savedPosition
+        val rawVideoUrl = video.videoUrl
+        // When the resume dialog is showing, start at 0 — the dialog handles seeking to resume position
+        val startMs = if (showResumeDialog) 0L else savedPosition
 
+        // Resolve magnet/torrent URLs to TorrServer HTTP URLs before loading either player.
+        // This ensures both MPV and ExoPlayer receive only HTTP URLs — no magnet handling
+        // in player code. The MagnetResolver starts TorrServer, adds the torrent, and
+        // returns a playable HTTP URL.
+        val isMagnet = rawVideoUrl.startsWith("magnet") || rawVideoUrl.endsWith(".torrent")
+        if (isMagnet) {
+            if (!torrentPreferences.torrServerEnable().get()) {
+                android.util.Log.e("PlayerActivity", "Magnet URL but TorrServer is disabled")
+                toast("This video is a torrent/magnet link. Enable TorrServer in Settings → Player to play it.")
+                viewModel.isLoading.update { false }
+                return
+            }
+            launchIO {
+                val resolvedUrl = magnetResolver.resolve(rawVideoUrl, video.videoTitle)
+                if (resolvedUrl != null) {
+                    withUIContext { loadVideoWithResolvedUrl(resolvedUrl, startMs, enginePref, video) }
+                } else {
+                    withUIContext {
+                        toast("Failed to resolve torrent stream. Try again or check TorrServer settings.")
+                        viewModel.isLoading.update { false }
+                    }
+                }
+            }
+            return
+        }
+
+        // Not a magnet — load directly
+        loadVideoWithResolvedUrl(rawVideoUrl, startMs, enginePref, video)
+    }
+
+    /**
+     * Load a resolved HTTP URL into the appropriate player engine.
+     * Called after magnet resolution (if needed) — the URL is always a playable HTTP URL.
+     */
+    private fun loadVideoWithResolvedUrl(
+        videoUrl: String,
+        startMs: Long,
+        enginePref: PlayerEngine,
+        video: Video,
+    ) {
         when {
             viewModel.activeEngine.value == PlayerEngine.ExoPlayer -> {
                 loadWithExoPlayer(videoUrl, startMs)
@@ -1210,28 +1258,15 @@ class PlayerActivity : BaseActivity() {
                     "$option=\"$value\""
                 }
 
-                if (torrentPreferences.torrServerEnable().get() &&
-                    (
-                        videoUrl.startsWith(torrentServerApi.hostUrl) ||
-                            videoUrl.startsWith("magnet") ||
-                            videoUrl.endsWith("torrent")
-                        )
-                ) {
-                    launchIO {
-                        TorrentServerService.start()
-                        torrentLinkHandler(videoUrl, video.videoTitle, videoOptions)
-                    }
-                } else {
-                    MPVLib.command(
-                        arrayOf(
-                            "loadfile",
-                            parseVideoUrl(videoUrl),
-                            "replace",
-                            "0",
-                            videoOptions,
-                        ),
-                    )
-                }
+                MPVLib.command(
+                    arrayOf(
+                        "loadfile",
+                        parseVideoUrl(videoUrl),
+                        "replace",
+                        "0",
+                        videoOptions,
+                    ),
+                )
             }
         }
     }
@@ -1242,8 +1277,10 @@ class PlayerActivity : BaseActivity() {
             kotlinx.coroutines.delay(15000)
             if (viewModel.activeEngine.value == PlayerEngine.Mpv && viewModel.isLoading.value) {
                 logcat(LogPriority.WARN) { "MPV load timeout — falling back to ExoPlayer" }
-                switchToExoPlayer()
-                pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
+                withUIContext {
+                    switchToExoPlayer()
+                    pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
+                }
             }
         }
     }
@@ -1258,7 +1295,7 @@ class PlayerActivity : BaseActivity() {
             exoPlayerView.visibility = android.view.View.VISIBLE
         }
         if (exoPlayerEngine == null) {
-            val okHttpClient = Injekt.get<OkHttpClient>()
+            val okHttpClient = Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>().client
             exoPlayerEngine = ExoPlayerEngine(
                 context = this,
                 okHttpClient = okHttpClient,
@@ -1294,7 +1331,72 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun loadWithExoPlayer(url: String, startPositionMs: Long) {
+        android.util.Log.d("PlayerActivity", "loadWithExoPlayer: url='${url.take(80)}...', startPos=$startPositionMs")
+        // Magnet/torrent URLs are resolved to HTTP URLs by MagnetResolver before reaching here.
         exoPlayerEngine?.loadVideo(url, startPositionMs)
+    }
+
+    /**
+     * Handles magnet/torrent URLs for ExoPlayer by converting them to a playable
+     * URL via the torrent server, then loading with ExoPlayer.
+     * Waits for the torrent server to be ready before adding the torrent.
+     */
+    private suspend fun torrentLinkHandlerForExoPlayer(videoUrl: String, startPositionMs: Long) {
+        var index = 0
+
+        if (videoUrl.startsWith("content://")) {
+            val videoInputStream = applicationContext.contentResolver.openInputStream(videoUrl.toUri())
+            val torrent = torrentServerApi.uploadTorrent(videoInputStream!!, "Torrent", false)
+            val torrentUrl = torrentServerUtils.getTorrentPlayLink(torrent, 0)
+            runOnUiThread { exoPlayerEngine?.loadVideo(torrentUrl, startPositionMs) }
+            return
+        }
+
+        if (videoUrl.startsWith("magnet")) {
+            if (videoUrl.contains("index=")) {
+                index = try {
+                    videoUrl.substringAfter("index=").substringBefore("&").toInt()
+                } catch (_: NumberFormatException) {
+                    0
+                }
+            }
+        }
+
+        // Wait for torrent server to be ready (up to 15 seconds)
+        val serverReady = waitForTorrentServer()
+        if (!serverReady) {
+            android.util.Log.e("PlayerActivity", "torrentLinkHandlerForExoPlayer: torrent server not ready after waiting")
+            runOnUiThread {
+                toast("Torrent server failed to start. Try again or check TorrServer settings.")
+                viewModel.isLoading.update { false }
+            }
+            return
+        }
+
+        val currentTorrent = torrentServerApi.addTorrent(videoUrl, "Torrent", "", "", false)
+        val torrentUrl = torrentServerUtils.getTorrentPlayLink(currentTorrent, index)
+        android.util.Log.d("PlayerActivity", "torrentLinkHandlerForExoPlayer: resolved torrent url='$torrentUrl'")
+        runOnUiThread { exoPlayerEngine?.loadVideo(torrentUrl, startPositionMs) }
+    }
+
+    /**
+     * Wait for the torrent server to be ready by polling its echo endpoint.
+     * Returns true if ready, false if timed out (15 seconds).
+     */
+    private suspend fun waitForTorrentServer(): Boolean {
+        repeat(15) {
+            try {
+                val echo = torrentServerApi.echo()
+                if (echo.isNotEmpty()) {
+                    android.util.Log.d("PlayerActivity", "waitForTorrentServer: server ready after ${it + 1}s (echo='$echo')")
+                    return true
+                }
+            } catch (_: Exception) {
+                // Server not ready yet
+            }
+            kotlinx.coroutines.delay(1000)
+        }
+        return false
     }
 
     /**

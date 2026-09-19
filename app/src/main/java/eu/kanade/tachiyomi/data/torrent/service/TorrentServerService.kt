@@ -118,7 +118,9 @@ class TorrentServerService : Service() {
             setAutoCancel(false)
             setOngoing(true)
             setDeleteIntent(startAgainIntent)
-            setUsesChronometer(true)
+            setUsesChronometer(false)
+            setShowWhen(false)
+            setPriority(android.app.Notification.PRIORITY_LOW)
             addAction(
                 R.drawable.ic_close_24dp,
                 "Stop",
@@ -142,6 +144,44 @@ class TorrentServerService : Service() {
         const val ACTION_STOP = "stop_torrent_server"
         val applicationContext = Injekt.get<Application>()
         val api = Injekt.get<TorrentServerApi>()
+        private val torrentPreferences = Injekt.get<TorrentPreferences>()
+        private val torrentServerUtils = Injekt.get<TorrentServerUtils>()
+        private val networkPreferences = Injekt.get<NetworkPreferences>()
+
+        /**
+         * Start the torrent server in-process (no foreground service, no notification).
+         * This is the preferred method when the app is in the foreground (e.g., during playback).
+         * The server runs inside the app process and dies when the app is killed.
+         */
+        suspend fun startInProcess(): Boolean {
+            return try {
+                if (api.echo() != "") {
+                    // Already running
+                    return true
+                }
+                if (networkPreferences.verboseLogging().get()) {
+                    TorrServer.registerLogCallback()
+                }
+                val proxyMode = torrentPreferences.torrServerProxyMode().get()
+                val port = TorrServer.startServer(
+                    port = torrentPreferences.torrServerPort().get(),
+                    path = applicationContext.filesDir.absolutePath,
+                    proxyMode = proxyMode.value,
+                    proxyUrl = if (proxyMode == ProxyMode.None) "" else torrentPreferences.torrServerProxyUrl().get(),
+                )
+                if (port != -1) {
+                    api.setPort(port)
+                    wait(10)
+                    torrentServerUtils.setTrackersList()
+                    true
+                } else {
+                    false
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Failed to start torrent server in-process" }
+                false
+            }
+        }
 
         suspend fun start() {
             try {

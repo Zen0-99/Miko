@@ -66,6 +66,7 @@ fun MangaLibraryContent(
     readingOrderMode: Boolean = false,
     getPreviousLayerMangaIds: (() -> Set<Long>)? = null,
     isEntryLocked: ((Long) -> Boolean)? = null,
+    sortKey: String = "",
 ) {
     if (collectionDisplayMode == LibraryCollectionDisplay.CONTINUOUS && collections.size > 1) {
         MangaLibraryContinuousContent(
@@ -186,6 +187,7 @@ fun MangaLibraryContent(
                 getReadingOrderLayer = getReadingOrderLayer,
                 getPreviousLayerMangaIds = getPreviousLayerMangaIds,
                 isEntryLocked = isEntryLocked,
+                sortKey = sortKey,
             )
         }
 

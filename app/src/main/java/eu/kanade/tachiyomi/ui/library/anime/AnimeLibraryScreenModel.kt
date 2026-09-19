@@ -473,7 +473,10 @@ class AnimeLibraryScreenModel(
         }
 
         return combine(
-            getCollections.subscribe(),
+            combine(
+                getCollections.subscribe(),
+                libraryPreferences.animeSortingMode().changes(),
+            ) { collections, _ -> collections },
             animelibAnimesFlow,
             libraryPreferences.groupLibraryBy().changes(),
             getTracksPerAnime.subscribe(),
@@ -579,6 +582,9 @@ class AnimeLibraryScreenModel(
         }
 
         // Create synthetic Collection objects, sorted alphabetically
+        // Use the global sort preference for flags so that sort mode changes
+        // are reflected in synthetic collections (non-default grouping modes).
+        val sortFlags = libraryPreferences.animeSortingMode().get().flag
         return groupNames.entries
             .sortedBy { it.key.lowercase() }
             .mapIndexed { index, (name, groupedItems) ->
@@ -586,7 +592,7 @@ class AnimeLibraryScreenModel(
                     id = syntheticCollectionId(name),
                     name = name,
                     order = index.toLong(),
-                    flags = 0L,
+                    flags = sortFlags,
                     hidden = false,
                 )
                 syntheticCollection to groupedItems

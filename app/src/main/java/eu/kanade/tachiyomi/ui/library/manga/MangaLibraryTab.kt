@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Download
@@ -678,6 +679,9 @@ data object MangaLibraryTab : Tab {
                         isEntryLocked = { mangaId -> state.lockedReadingOrderEntryIds.contains(mangaId) },
                         showListAuthor = state.showListAuthor,
                         showListStatus = state.showListStatus,
+                        sortKey = state.collections.getOrNull(screenModel.activeCollectionIndex)?.let {
+                            "${it.sort.type}:${it.sort.direction}"
+                        } ?: "",
                         getSortLabelForCollection = { collection ->
                             sortLabelCache[collection.id]
                         },
@@ -973,6 +977,17 @@ data object MangaLibraryTab : Tab {
                         onClick = {
                             val dir = toggleDirection(sortingMode, MangaLibrarySort.Type.CustomOrder, sortDescending)
                             settingsScreenModel.setSort(collection, MangaLibrarySort.Type.CustomOrder, dir)
+                        },
+                    ))
+                    add(SortModeOption(
+                        labelRes = AYMR.strings.reading_order,
+                        icon = Icons.Outlined.AccountTree,
+                        isSelected = sortingMode == MangaLibrarySort.Type.ReadingOrder,
+                        isDescending = sortDescending,
+                        isDirectional = true,
+                        onClick = {
+                            val dir = toggleDirection(sortingMode, MangaLibrarySort.Type.ReadingOrder, sortDescending)
+                            settingsScreenModel.setSort(collection, MangaLibrarySort.Type.ReadingOrder, dir)
                         },
                     ))
                     add(SortModeOption(

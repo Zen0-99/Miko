@@ -382,6 +382,9 @@ private fun NovelScreenSmallImpl(
                 backgroundAlphaProvider = { backgroundAlpha },
                 isManga = true, // Novels use chapter/unread terminology like manga
                 toolbarBackgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
+                // For book sources with downloaded chapters, skip the chapter-count
+                // dropdown and directly trigger deletion (the whole book is one unit).
+                directDownloadAction = state.isBookSource && chapters.isNotEmpty(),
             )
         },
         snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },

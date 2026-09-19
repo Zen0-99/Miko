@@ -90,6 +90,7 @@ internal class MangaExtensionApi {
                     apkName = it.apkName,
                     iconUrl = it.iconUrl,
                     repoUrl = it.repoUrl,
+                    apkUrl = it.apkUrl,
                 )
             }
     }
@@ -161,7 +162,7 @@ internal class MangaExtensionApi {
     }
 
     fun getApkUrl(extension: MangaExtension.Available): String {
-        return "${extension.repoUrl}/apk/${extension.apkName}"
+        return extension.apkUrl.ifEmpty { "${extension.repoUrl}/apk/${extension.apkName}" }
     }
 
     private fun ExtensionJsonObject.extractLibVersion(): Double {

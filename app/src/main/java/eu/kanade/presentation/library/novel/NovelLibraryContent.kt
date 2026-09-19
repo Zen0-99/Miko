@@ -56,6 +56,7 @@ fun NovelLibraryContent(
     readingOrderMode: Boolean = false,
     getPreviousLayerNovelIds: (() -> Set<Long>)? = null,
     isEntryLocked: ((Long) -> Boolean)? = null,
+    sortKey: String = "",
 ) {
     Column(
         modifier = Modifier.padding(
@@ -138,6 +139,7 @@ fun NovelLibraryContent(
                 getReadingOrderLayer = getReadingOrderLayer,
                 getPreviousLayerNovelIds = getPreviousLayerNovelIds,
                 isEntryLocked = isEntryLocked,
+                sortKey = sortKey,
             )
         }
 

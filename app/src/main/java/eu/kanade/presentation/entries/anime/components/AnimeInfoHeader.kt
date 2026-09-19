@@ -119,6 +119,7 @@ fun AnimeInfoBox(
     doSearch: (query: String, global: Boolean) -> Unit,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
+    coverOverride: String? = null,
 ) {
     Box(modifier = modifier) {
         val backdropGradientColors = listOf(
@@ -138,7 +139,7 @@ fun AnimeInfoBox(
         // Layer 2: Blurred cover art backdrop (15% alpha, matching novel)
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(anime)
+                .data(coverOverride ?: anime)
                 .useBackground(true)
                 .crossfade(true)
                 .build(),
@@ -171,6 +172,7 @@ fun AnimeInfoBox(
                     isStubSource = isStubSource,
                     onCoverClick = onCoverClick,
                     doSearch = doSearch,
+                    coverOverride = coverOverride,
                 )
             } else {
                 AnimeAndSourceTitlesLarge(
@@ -180,6 +182,7 @@ fun AnimeInfoBox(
                     isStubSource = isStubSource,
                     onCoverClick = onCoverClick,
                     doSearch = doSearch,
+                    coverOverride = coverOverride,
                 )
             }
         }
@@ -276,6 +279,7 @@ private fun AnimeAndSourceTitlesLarge(
     isStubSource: Boolean,
     onCoverClick: () -> Unit,
     doSearch: (query: String, global: Boolean) -> Unit,
+    coverOverride: String? = null,
 ) {
     Column(
         modifier = Modifier
@@ -286,7 +290,7 @@ private fun AnimeAndSourceTitlesLarge(
         ItemCover.Book(
             modifier = Modifier.fillMaxWidth(0.65f),
             data = ImageRequest.Builder(LocalContext.current)
-                .data(anime)
+                .data(coverOverride ?: anime)
                 .crossfade(true)
                 .build(),
             contentDescription = stringResource(MR.strings.manga_cover),
@@ -362,6 +366,7 @@ private fun AnimeAndSourceTitlesSmall(
     isStubSource: Boolean,
     onCoverClick: () -> Unit,
     doSearch: (query: String, global: Boolean) -> Unit,
+    coverOverride: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -378,7 +383,7 @@ private fun AnimeAndSourceTitlesSmall(
         ItemCover.Book(
             modifier = Modifier.sizeIn(maxWidth = 90.dp),
             data = ImageRequest.Builder(LocalContext.current)
-                .data(anime)
+                .data(coverOverride ?: anime)
                 .crossfade(true)
                 .build(),
             contentDescription = stringResource(MR.strings.manga_cover),

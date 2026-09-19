@@ -102,6 +102,10 @@ data class BrowseMangaSourceScreen(
         val navigator = LocalNavigator.currentOrThrow
         val navigateUp: () -> Unit = {
             when {
+                state.isUserQuery -> {
+                    screenModel.setToolbarQuery(null)
+                    screenModel.setListing(BrowseMangaSourceScreenModel.Listing.Popular)
+                }
                 !state.isUserQuery && state.toolbarQuery != null -> screenModel.setToolbarQuery(
                     null,
                 )

@@ -242,6 +242,7 @@ class CinemetaBrowseScreenModel(
             title = meta.name,
             description = meta.description,
             genre = meta.genres,
+            country = meta.country,
             thumbnailUrl = meta.poster,
             backgroundUrl = meta.background,
             source = CINEMETA_SOURCE_ID,

@@ -80,6 +80,7 @@ import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
+import tachiyomi.core.common.util.lang.withUIContext
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
@@ -129,12 +130,15 @@ class AnimeScreen(
         val successState = state as AnimeScreenModel.State.Success
         val isAnimeHttpSource = remember { successState.source is AnimeHttpSource }
 
-        // Cinemeta entry detection — source ID 0 means it's a Cinemeta metadata entry
-        // that needs stream resolution to find a playable source.
-        val isCinemetaEntry = successState.anime.source == 0L
+        // Cinemeta entry detection — source ID 0 with URL prefix "cinemeta:" means it's a
+        // Cinemeta metadata entry that needs stream resolution to find a playable source.
+        // (LocalAnimeSource also uses ID 0, so we distinguish by URL prefix.)
+        val isCinemetaEntry = successState.anime.source == 0L && successState.anime.url.startsWith("cinemeta:")
         var showStreamPicker by remember { mutableStateOf(false) }
         var pendingEpisodeNumber by remember { mutableStateOf<Double?>(null) }
-        val streamResolverSM = rememberScreenModel { StreamResolverScreenModel(Injekt.get(), Injekt.get(), Injekt.get()) }
+        var pendingEpisodeName by remember { mutableStateOf<String?>(null) }
+        var pendingEpisodeUrl by remember { mutableStateOf<String?>(null) }
+        val streamResolverSM = rememberScreenModel { StreamResolverScreenModel(Injekt.get(), Injekt.get(), Injekt.get(), Injekt.get()) }
         val streamResolverState by streamResolverSM.state.collectAsState()
 
         val extractedAccent = rememberEntryAccentColor(
@@ -171,16 +175,18 @@ class AnimeScreen(
             alwaysUseExternalPlayer = screenModel.alwaysUseExternalPlayer,
             navigateUp = navigator::pop,
             onEpisodeClicked = { episode, alt ->
+                logcat(LogPriority.DEBUG) { "onEpisodeClicked: isCinemetaEntry=$isCinemetaEntry, source=${successState.anime.source}, url=${successState.anime.url}" }
                 if (isCinemetaEntry) {
                     // Cinemeta entry — resolve streaming source before playing
                     pendingEpisodeNumber = episode.episodeNumber
-                    streamResolverSM.resolve(successState.anime, episode.episodeNumber)
-                    // Picker is shown only if not cached — LaunchedEffect below handles the rest
+                    pendingEpisodeName = episode.name
+                    pendingEpisodeUrl = episode.url
+                    streamResolverSM.resolve(successState.anime, episode.episodeNumber, episode.url)
                     showStreamPicker = true
                 } else {
                     scope.launchIO {
                         if (screenModel.isTorrentEnabled() && successState.source.isSourceForTorrents()) {
-                            TorrentServerService.start()
+                            TorrentServerService.startInProcess()
                         }
                         val extPlayer = screenModel.alwaysUseExternalPlayer != alt
                         openEpisode(context, episode, extPlayer)
@@ -475,8 +481,8 @@ class AnimeScreen(
             }
         }
 
-        // Stream picker for Cinemeta entries — only show when not auto-resolving from cache
-        if (showStreamPicker && streamResolverState !is StreamResolverScreenModel.State.Resolving) {
+        // Stream picker for Cinemeta entries
+        if (showStreamPicker) {
             StreamPickerSheet(
                 state = streamResolverState,
                 onDismiss = {
@@ -488,12 +494,18 @@ class AnimeScreen(
                         cinemetaAnime = successState.anime,
                         candidate = candidate,
                         episodeNumber = pendingEpisodeNumber,
+                        episodeName = pendingEpisodeName,
+                        episodeUrl = pendingEpisodeUrl,
                     )
                 },
                 onSearchManually = {
                     showStreamPicker = false
                     streamResolverSM.reset()
                     navigator.push(GlobalAnimeSearchScreen(successState.anime.title))
+                },
+                onChangeSource = {
+                    streamResolverSM.clearCachedMapping(successState.anime)
+                    streamResolverSM.resolve(successState.anime, pendingEpisodeNumber, pendingEpisodeUrl)
                 },
             )
         }
@@ -505,12 +517,20 @@ class AnimeScreen(
                 showStreamPicker = false
                 streamResolverSM.reset()
                 scope.launchIO {
-                    val extPlayer = screenModel.alwaysUseExternalPlayer
-                    val episode = resolved.episode
-                    if (screenModel.isTorrentEnabled()) {
-                        TorrentServerService.start()
+                    try {
+                        val extPlayer = screenModel.alwaysUseExternalPlayer
+                        val episode = resolved.episode
+                        android.util.Log.d("AnimeScreen", "Launching player: animeId=${episode.animeId}, episodeId=${episode.id}, name=${episode.name}, url=${episode.url}")
+                        if (screenModel.isTorrentEnabled()) {
+                            TorrentServerService.startInProcess()
+                        }
+                        openEpisode(context, episode, extPlayer)
+                    } catch (e: Exception) {
+                        logcat(LogPriority.ERROR, e) { "Failed to launch player for resolved episode" }
+                        withUIContext {
+                            context.toast("Failed to play episode: ${e.message}")
+                        }
                     }
-                    openEpisode(context, episode, extPlayer)
                 }
             }
         }
@@ -526,12 +546,18 @@ class AnimeScreen(
 
     private suspend fun openEpisode(context: Context, episode: Episode, useExternalPlayer: Boolean) {
         withIOContext {
-            MainActivity.startPlayerActivity(
-                context,
-                episode.animeId,
-                episode.id,
-                useExternalPlayer,
-            )
+            android.util.Log.d("AnimeScreen", "openEpisode: animeId=${episode.animeId}, episodeId=${episode.id}, name=${episode.name}, url=${episode.url}")
+            try {
+                MainActivity.startPlayerActivity(
+                    context,
+                    episode.animeId,
+                    episode.id,
+                    useExternalPlayer,
+                )
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "startPlayerActivity failed" }
+                withUIContext { context.toast("Failed to launch player: ${e.message}") }
+            }
         }
     }
 

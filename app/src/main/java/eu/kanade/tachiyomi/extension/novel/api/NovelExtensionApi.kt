@@ -108,6 +108,7 @@ internal class NovelExtensionApi {
                     apkName = it.apkName,
                     iconUrl = it.iconUrl,
                     repoUrl = it.repoUrl,
+                    apkUrl = it.apkUrl,
                 )
             }
     }
@@ -180,7 +181,7 @@ internal class NovelExtensionApi {
     }
 
     fun getApkUrl(extension: NovelExtension.Available): String {
-        return "${extension.repoUrl}/apk/${extension.apkName}"
+        return extension.apkUrl.ifEmpty { "${extension.repoUrl}/apk/${extension.apkName}" }
     }
 
     private fun ExtensionJsonObject.extractLibVersion(): Double {

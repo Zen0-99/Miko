@@ -481,7 +481,10 @@ class MangaLibraryScreenModel(
         }
 
         return combine(
-            getCollections.subscribe(),
+            combine(
+                getCollections.subscribe(),
+                libraryPreferences.mangaSortingMode().changes(),
+            ) { collections, _ -> collections },
             libraryMangasFlow,
             libraryPreferences.groupLibraryBy().changes(),
             getTracksPerManga.subscribe(),
@@ -587,6 +590,9 @@ class MangaLibraryScreenModel(
         }
 
         // Create synthetic Collection objects, sorted alphabetically
+        // Use the global sort preference for flags so that sort mode changes
+        // are reflected in synthetic collections (non-default grouping modes).
+        val sortFlags = libraryPreferences.mangaSortingMode().get().flag
         return groupNames.entries
             .sortedBy { it.key.lowercase() }
             .mapIndexed { index, (name, groupedItems) ->
@@ -594,7 +600,7 @@ class MangaLibraryScreenModel(
                     id = syntheticCollectionId(name),
                     name = name,
                     order = index.toLong(),
-                    flags = 0L,
+                    flags = sortFlags,
                     hidden = false,
                 )
                 syntheticCollection to groupedItems

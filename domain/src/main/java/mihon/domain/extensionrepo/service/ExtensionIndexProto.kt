@@ -74,6 +74,10 @@ data class ExtensionIndexEntry(
     val apkName: String,
     val iconUrl: String,
     val repoUrl: String,
+    /** Full APK download URL when provided by the index (proto). Empty for
+     * legacy JSON indexes, in which case the URL is constructed from
+     * [repoUrl] and [apkName] by the extension API. */
+    val apkUrl: String = "",
 )
 
 data class ExtensionIndexSource(
@@ -98,7 +102,7 @@ internal fun IndexProto.toEntries(repoUrl: String): List<ExtensionIndexEntry> {
             pkgName = ext.packageName,
             versionName = ext.versionName,
             versionCode = ext.versionCode,
-            libVersion = ext.extensionLib.substringBeforeLast('.').toDoubleOrNull() ?: 0.0,
+            libVersion = ext.extensionLib.toDoubleOrNull() ?: 0.0,
             lang = ext.sources.firstOrNull()?.language ?: "",
             isNsfw = ext.contentWarning == 3, // CONTENT_WARNING_NSFW
             sources = ext.sources.map { src ->
@@ -112,6 +116,7 @@ internal fun IndexProto.toEntries(repoUrl: String): List<ExtensionIndexEntry> {
             apkName = apkName,
             iconUrl = iconUrl,
             repoUrl = repoUrl,
+            apkUrl = apkUrl,
         )
     }
 }
@@ -140,28 +145,37 @@ internal data class ExtensionRepoSourceJsonDto(
 )
 
 internal fun List<ExtensionRepoExtensionJsonDto>.toEntries(repoUrl: String): List<ExtensionIndexEntry> {
-    return this.map {
-        ExtensionIndexEntry(
-            name = it.name.substringAfter("Tachiyomi: ").substringAfter("Aniyomi: "),
-            pkgName = it.pkg,
-            versionName = it.version,
-            versionCode = it.code,
-            libVersion = it.version.substringBeforeLast('.').toDoubleOrNull() ?: 0.0,
-            lang = it.lang,
-            isNsfw = it.nsfw == 1,
-            isTorrent = it.torrent == 1,
-            sources = it.sources?.map { src ->
-                ExtensionIndexSource(
-                    id = src.id,
-                    lang = src.lang,
-                    name = src.name,
-                    baseUrl = src.baseUrl,
-                )
-            } ?: emptyList(),
-            apkName = it.apk,
-            iconUrl = "$repoUrl/icon/${it.pkg}.png",
-            repoUrl = repoUrl,
-        )
-    }
+    // Filter out fake "message" extensions that some repos (e.g. Keiyoushi)
+    // put in their legacy JSON index to tell old Tachiyomi/Mihon apps to
+    // update. These are not real extensions and should never be shown.
+    val fakeMessagePkgs = setOf(
+        "eu.kanade.tachiyomi.extension.all.keiyoushi",
+        "eu.kanade.tachiyomi.extension.all.mihon",
+    )
+    return this
+        .filter { it.pkg !in fakeMessagePkgs }
+        .map {
+            ExtensionIndexEntry(
+                name = it.name.substringAfter("Tachiyomi: ").substringAfter("Aniyomi: "),
+                pkgName = it.pkg,
+                versionName = it.version,
+                versionCode = it.code,
+                libVersion = it.version.substringBeforeLast('.').toDoubleOrNull() ?: 0.0,
+                lang = it.lang,
+                isNsfw = it.nsfw == 1,
+                isTorrent = it.torrent == 1,
+                sources = it.sources?.map { src ->
+                    ExtensionIndexSource(
+                        id = src.id,
+                        lang = src.lang,
+                        name = src.name,
+                        baseUrl = src.baseUrl,
+                    )
+                } ?: emptyList(),
+                apkName = it.apk,
+                iconUrl = "$repoUrl/icon/${it.pkg}.png",
+                repoUrl = repoUrl,
+            )
+        }
 }
 

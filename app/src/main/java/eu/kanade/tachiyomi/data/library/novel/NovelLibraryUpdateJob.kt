@@ -34,6 +34,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -64,6 +65,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.Instant
 import java.time.ZonedDateTime
+import kotlin.time.Duration.Companion.seconds
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -95,6 +97,20 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
 
         libraryPreferences.lastUpdatedTimestamp().set(Instant.now().toEpochMilli())
+
+        // Wait for the source manager to finish registering extensions before
+        // attempting library updates. Without this, getOrStub() may return stub
+        // sources for installed extensions that haven't been registered yet,
+        // causing "Source not found" errors on every refresh.
+        if (!sourceManager.isInitialized.value) {
+            logcat { "Waiting for novel source manager to initialize before library update..." }
+            withTimeoutOrNull(30.seconds.inWholeMilliseconds) {
+                sourceManager.isInitialized.first { it }
+            }
+            if (!sourceManager.isInitialized.value) {
+                logcat(LogPriority.WARN) { "Novel source manager not initialized after 30s, proceeding anyway" }
+            }
+        }
 
         val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
         addNovelsToQueue(collectionId)

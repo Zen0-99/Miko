@@ -91,6 +91,7 @@ internal class AnimeExtensionApi {
                     apkName = it.apkName,
                     iconUrl = it.iconUrl,
                     repoUrl = it.repoUrl,
+                    apkUrl = it.apkUrl,
                 )
             }
     }
@@ -167,7 +168,7 @@ internal class AnimeExtensionApi {
     }
 
     fun getApkUrl(extension: AnimeExtension.Available): String {
-        return "${extension.repoUrl}/apk/${extension.apkName}"
+        return extension.apkUrl.ifEmpty { "${extension.repoUrl}/apk/${extension.apkName}" }
     }
 
     private fun AnimeExtensionJsonObject.extractLibVersion(): Double {

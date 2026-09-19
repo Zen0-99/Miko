@@ -87,29 +87,27 @@ class ConsolidatedExtensionReposScreen(
         val novelRepos = (novelState as? RepoScreenState.Success)?.repos ?: emptyList()
         val allRepoUrls = (animeRepos + mangaRepos + novelRepos).map { it.baseUrl }.toImmutableSet()
 
-        // Probes a repo URL and routes the create to the appropriate tab.
-        // When the probe fails (e.g., network error, unsupported format), falls
-        // back to the currently selected tab instead of defaulting to manga.
+        // Probes a repo URL and creates it in ALL matching tabs.
+        // A single repo (e.g. Keiyoushi) can serve multiple content types,
+        // so we add it to every tab that has matching extensions.
         suspend fun probeAndCreateRepo(repoUrl: String, isConfirm: Boolean = false) {
             isProbing = true
             try {
-                val type = repoService.probeRepoType(repoUrl)
-                val targetIndex = when (type) {
-                    "anime" -> 0
-                    "novel" -> 2
-                    "manga" -> 1
-                    else -> pagerState.currentPage // fallback: use current tab
+                val types = repoService.probeRepoTypes(repoUrl)
+                // Create the repo in every matching tab. Navigate to the first
+                // matching tab so the user sees immediate feedback.
+                val firstIndex = when {
+                    "anime" in types -> 0
+                    "manga" in types -> 1
+                    "novel" in types -> 2
+                    else -> pagerState.currentPage
                 }
-                // Navigate to the target tab
-                if (pagerState.currentPage != targetIndex) {
-                    pagerState.animateScrollToPage(targetIndex)
+                if (pagerState.currentPage != firstIndex) {
+                    pagerState.animateScrollToPage(firstIndex)
                 }
-                // Call the appropriate screen model's createRepo
-                when (targetIndex) {
-                    0 -> animeScreenModel.createRepo(repoUrl)
-                    1 -> mangaScreenModel.createRepo(repoUrl)
-                    2 -> novelScreenModel.createRepo(repoUrl)
-                }
+                if ("anime" in types) animeScreenModel.createRepo(repoUrl)
+                if ("manga" in types) mangaScreenModel.createRepo(repoUrl)
+                if ("novel" in types) novelScreenModel.createRepo(repoUrl)
             } finally {
                 isProbing = false
             }

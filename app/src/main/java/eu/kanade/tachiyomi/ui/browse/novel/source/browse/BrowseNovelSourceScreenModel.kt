@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.util.lang.launchIO
@@ -76,10 +76,6 @@ class BrowseNovelSourceScreenModel(
 
     val source = sourceManager.getOrStub(sourceId)
 
-    init {
-        Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] init - sourceId=$sourceId, source=${source.name} (id=${source.id}), isCatalogueSource=${source is NovelCatalogueSource}, isStub=${source is tachiyomi.domain.source.novel.model.StubNovelSource}, listingQuery='$listingQuery'")
-    }
-
     val savedSearchesFlow = getSavedSearches.subscribe(sourceId)
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyList())
 
@@ -100,9 +96,6 @@ class BrowseNovelSourceScreenModel(
                     toolbarQuery = query,
                 )
             }
-            Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] init - initialized listing for catalogue source: listing=${state.value.listing}, toolbarQuery='${state.value.toolbarQuery}'")
-        } else {
-            Log.w("NovelSearch", "[BrowseNovelSourceScreenModel] init - source is NOT a NovelCatalogueSource, listing not initialized")
         }
 
         if (!sourcePreferences.incognitoNovelExtensions().isSet()) {
@@ -157,8 +150,10 @@ class BrowseNovelSourceScreenModel(
         .map { it.listing }
         .distinctUntilChanged()
         .debounce(300L)
-        .transform { listing ->
-            Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] incrementalBrowseFlow - listing=$listing")
+        .transformLatest { listing ->
+            // Emit null first to signal "loading" to the UI. This clears any
+            // stale results from a previous listing and shows the loading screen.
+            emit(null)
             val convertedNovels = mutableMapOf<String, Novel>()
             val accumulated = mutableListOf<Novel>()
             val catSource = source as? NovelCatalogueSource
@@ -178,7 +173,6 @@ class BrowseNovelSourceScreenModel(
                     // Search on incremental source: use searchFlow for batch-level incremental
                     listing is Listing.Search && !listing.query.isNullOrEmpty() && supportsIncrementalSearch -> {
                         getRemoteNovel.subscribeFlow(sourceId, listing.query!!).collect { batch ->
-                            Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] incrementalBrowseFlow - batch size=${batch.size}")
                             for (sNovel in batch) convertAndEmit(sNovel)
                         }
                     }
@@ -213,8 +207,13 @@ class BrowseNovelSourceScreenModel(
                         }
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Don't catch CancellationException — transformLatest needs it
+                // to properly cancel previous fetches. Re-throw to let the
+                // coroutine machinery handle it.
+                throw e
             } catch (e: Exception) {
-                Log.e("NovelSearch", "[BrowseNovelSourceScreenModel] incrementalBrowseFlow - error", e)
+                Log.e("BrowseNovelSource", "incrementalBrowseFlow error", e)
                 if (accumulated.isEmpty()) emit(emptyList())
             }
         }
@@ -235,11 +234,7 @@ class BrowseNovelSourceScreenModel(
     }
 
     fun search(query: String? = null, filters: NovelFilterList? = null) {
-        Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] search() - query='$query', filters=${filters?.size}, source=${source.name}")
-        if (source !is NovelCatalogueSource) {
-            Log.w("NovelSearch", "[BrowseNovelSourceScreenModel] search() - source is NOT a NovelCatalogueSource, returning early")
-            return
-        }
+        if (source !is NovelCatalogueSource) return
 
         val input = state.value.listing as? Listing.Search
             ?: Listing.Search(query = null, filters = source.getFilterList())
@@ -253,7 +248,6 @@ class BrowseNovelSourceScreenModel(
                 toolbarQuery = query ?: input.query,
             )
         }
-        Log.d("NovelSearch", "[BrowseNovelSourceScreenModel] search() - updated listing to ${state.value.listing}, toolbarQuery='${state.value.toolbarQuery}'")
     }
 
     fun searchGenre(genre: String) {

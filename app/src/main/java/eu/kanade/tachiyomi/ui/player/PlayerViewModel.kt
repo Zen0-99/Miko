@@ -362,13 +362,19 @@ class PlayerViewModel @JvmOverloads constructor(
     fun showResumeOverlay(position: Long) {
         resumePosition.value = position
         showResumeOverlay.value = true
+        // Pause playback while the dialog is showing
+        pause()
     }
 
     fun dismissResumeOverlay(resume: Boolean) {
         if (resume) {
             seekTo(resumePosition.value.toInt())
+        } else {
+            seekTo(0)
         }
         showResumeOverlay.value = false
+        // Resume playback
+        unpause()
     }
 
     fun updateNextEpisodeInfo() {
@@ -1267,7 +1273,12 @@ class PlayerViewModel @JvmOverloads constructor(
     private fun filterEpisodeList(episodes: List<Episode>): List<Episode> {
         val anime = currentAnime.value ?: return episodes
         val selectedEpisode = episodes.find { it.id == episodeId }
-            ?: error("Requested episode of id $episodeId not found in episode list")
+        if (selectedEpisode == null) {
+            logcat(LogPriority.ERROR) {
+                "filterEpisodeList: episode $episodeId not found in ${episodes.size} episodes — returning unfiltered list"
+            }
+            return episodes
+        }
 
         val episodesForPlayer = episodes.filterNot {
             anime.unseenFilterRaw == Anime.EPISODE_SHOW_SEEN &&
@@ -1391,7 +1402,15 @@ class PlayerViewModel @JvmOverloads constructor(
 
                 updateEpisodeList(initEpisodeList(anime))
 
-                val episode = currentPlaylist.value.first { it.id == episodeId }
+                val episode = currentPlaylist.value.firstOrNull { it.id == episodeId }
+                if (episode == null) {
+                    logcat(LogPriority.ERROR) {
+                        "PlayerViewModel.init: episode $episodeId not found in playlist of ${currentPlaylist.value.size} episodes for anime $animeId"
+                    }
+                    return Pair(defaultResult, Result.failure(
+                        RuntimeException("Episode not found in playlist (id=$episodeId, anime=$animeId)")
+                    ))
+                }
                 val source = sourceManager.getOrStub(anime.source)
 
                 _currentEpisode.update { _ -> episode }
@@ -1457,16 +1476,26 @@ class PlayerViewModel @JvmOverloads constructor(
     private fun initEpisodeList(anime: Anime): List<Episode> {
         val episodes = runBlocking { getEpisodesByAnimeId.await(anime.id) }
 
-        return episodes
-            .sortedWith(getEpisodeSort(anime, sortDescending = false))
-            .run {
-                if (basePreferences.downloadedOnly().get()) {
-                    filterDownloadedEpisodes(anime)
-                } else {
-                    this
+        val sorted = episodes.sortedWith(getEpisodeSort(anime, sortDescending = false))
+
+        // If downloadedOnly is enabled, filter — but only if the target episode
+        // survives the filter. If it doesn't (e.g., streaming-only episode from
+        // Cinemeta resolution), return the full list so playback can proceed.
+        val filtered = if (basePreferences.downloadedOnly().get()) {
+            val downloaded = sorted.filterDownloadedEpisodes(anime)
+            if (downloaded.any { it.id == episodeId }) {
+                downloaded
+            } else {
+                logcat(LogPriority.WARN) {
+                    "initEpisodeList: target episode $episodeId not in downloaded list — using full list"
                 }
+                sorted
             }
-            .map { it.toDbEpisode() }
+        } else {
+            sorted
+        }
+
+        return filtered.map { it.toDbEpisode() }
     }
 
     private var hasTrackers: Boolean = false
@@ -1736,6 +1765,8 @@ class PlayerViewModel @JvmOverloads constructor(
 
         val chosenEpisode = currentPlaylist.value.firstOrNull { ep -> ep.id == episodeId } ?: return null
 
+        android.util.Log.d("PlayerViewModel", "loadEpisode: anime='${anime.title}' (id=${anime.id}, source=${anime.source}), episode='${chosenEpisode.name}' (id=${chosenEpisode.id}, url='${chosenEpisode.url}'), source=${source.name} (id=${source.id})")
+
         _currentEpisode.update { _ -> chosenEpisode }
         updateEpisode(chosenEpisode)
         resetVideoZoom()
@@ -1750,6 +1781,8 @@ class PlayerViewModel @JvmOverloads constructor(
                     anime,
                     source,
                 )
+
+                android.util.Log.d("PlayerViewModel", "loadEpisode: got ${currentHosterList?.size ?: 0} hosters, first hoster videos: ${currentHosterList?.firstOrNull()?.videoList?.take(3)?.map { it.videoUrl }}")
 
                 this@PlayerViewModel.episodeId = currentEpisode.id!!
             } catch (e: Exception) {

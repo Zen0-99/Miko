@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Download
@@ -653,6 +654,9 @@ data object NovelLibraryTab : Tab {
                             null
                         },
                         isEntryLocked = { novelId -> state.lockedReadingOrderEntryIds.contains(novelId) },
+                        sortKey = state.collections.getOrNull(screenModel.activeCollectionIndex)?.let {
+                            "${it.sort.type}:${it.sort.direction}"
+                        } ?: "",
                     )
                 }
             }
@@ -954,6 +958,17 @@ data object NovelLibraryTab : Tab {
                         onClick = {
                             val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.CustomOrder, sortDescending)
                             settingsScreenModel.setSort(collection, NovelLibrarySort.Type.CustomOrder, dir)
+                        },
+                    ))
+                    add(SortModeOption(
+                        labelRes = AYMR.strings.reading_order,
+                        icon = Icons.Outlined.AccountTree,
+                        isSelected = sortingMode == NovelLibrarySort.Type.ReadingOrder,
+                        isDescending = sortDescending,
+                        isDirectional = true,
+                        onClick = {
+                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.ReadingOrder, sortDescending)
+                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.ReadingOrder, dir)
                         },
                     ))
                     add(SortModeOption(

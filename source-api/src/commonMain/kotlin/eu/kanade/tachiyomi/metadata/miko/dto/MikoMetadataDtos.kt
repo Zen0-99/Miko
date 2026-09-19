@@ -50,6 +50,7 @@ data class MikoMetaShort(
     val description: String? = null,
     val genres: List<String>? = null,
     val imdbRating: String? = null,
+    val country: String? = null,
 )
 
 @Serializable

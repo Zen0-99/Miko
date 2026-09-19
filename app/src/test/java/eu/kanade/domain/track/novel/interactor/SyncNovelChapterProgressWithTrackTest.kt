@@ -17,7 +17,7 @@ import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
 import tachiyomi.domain.track.novel.model.NovelTrack
-import kotlin.test.assertEquals
+import org.junit.jupiter.api.Assertions.assertEquals
 
 class SyncNovelChapterProgressWithTrackTest {
 
@@ -39,7 +39,7 @@ class SyncNovelChapterProgressWithTrackTest {
         )
         every { trackPreferences.autoSyncProgressFromTracker() } returns pullPreference
         every { pullPreference.get() } returns true
-        coEvery { repository.updateAllNovelChapters(capture(chapterUpdatesSlot)) } returns Unit
+        coEvery { repository.updateAllNovelChapters(capture(chapterUpdatesSlot)) } returns true
 
         val interactor = SyncNovelChapterProgressWithTrack(
             novelChapterRepository = repository,
