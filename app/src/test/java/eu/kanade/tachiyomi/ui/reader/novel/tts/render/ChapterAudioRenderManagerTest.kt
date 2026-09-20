@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
-import io.mockk.coAnswers
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -66,23 +65,20 @@ class ChapterAudioRenderManagerTest {
     private fun chapter(id: Long, name: String = "Chapter $id") =
         NovelChapter.create().copy(id = id, novelId = novel.id, name = name)
 
-    private fun manifest(): ChapterAudioManifest = ChapterAudioManifest(
-        voice = "eponine",
-        engine = "pocket-tts-en-v2026_04",
-        chapterTitle = "t",
-        speechRate = 1.0f,
-        pitch = 1.0f,
-        durationMs = 0,
-        paragraphOffsetsMs = emptyList(),
-        paragraphTexts = emptyList(),
-        text = "",
-    )
+    /**
+     * Default provider: relaxed mock with `findAudioFile` forced to null —
+     * relaxed mockk returns a non-null [UniFile] mock for nullable return
+     * types, which would make every chapter look already-rendered.
+     */
+    private fun fakeProvider(): NovelDownloadProvider = mockk<NovelDownloadProvider>(relaxed = true).apply {
+        every { findAudioFile(any(), any(), any(), any()) } returns null
+    }
 
     private fun TestScope.makeManager(
         renderer: ChapterAudioRenderer,
         scratchDir: File = createTempDirectory().toFile(),
         serviceEvents: MutableList<Boolean> = mutableListOf(),
-        provider: NovelDownloadProvider = mockk(relaxed = true),
+        provider: NovelDownloadProvider = fakeProvider(),
     ): ChapterAudioRenderManager = ChapterAudioRenderManager(
         context = mockk<Context>(relaxed = true),
         rendererFactory = { renderer },
@@ -322,7 +318,7 @@ class ChapterAudioRenderManagerTest {
 
     @Test
     fun `audioStateFor reports queue status then disk DONE then null`() = runTest {
-        val provider = mockk<NovelDownloadProvider>(relaxed = true)
+        val provider = fakeProvider()
         val gate = CompletableDeferred<Unit>()
         val renderer = FakeRenderer().apply { impl = { _, _ -> gate.await() } }
         val manager = makeManager(renderer.instance, provider = provider)
@@ -341,14 +337,12 @@ class ChapterAudioRenderManagerTest {
 
     // -- fakes ----------------------------------------------------------------------
 
-    private fun chapterManifestFor(@Suppress("UNUSED_PARAMETER") id: Long) = manifest()
-
     /**
      * Stubbed [ChapterAudioRenderer]: `renderChapter` records
      * (chapterId, resumeFromParagraph) then delegates to [impl] so tests can
      * gate, throw, or report progress; `abandon`/`releaseEngine` are counted.
      */
-    private inner class FakeRenderer {
+    private class FakeRenderer {
         data class Call(val chapterId: Long, val resumeFrom: Int)
 
         val calls = mutableListOf<Call>()
@@ -367,9 +361,21 @@ class ChapterAudioRenderManagerTest {
                 impl(ch.id, onProgress)
                 manifest()
             }
-            every { abandon(any()) } answers { abandoned += arg(0) }
+            every { abandon(any()) } answers { abandoned += arg<Long>(0) }
             every { releaseEngine() } answers { releaseCalls++ }
         }
+
+        private fun manifest(): ChapterAudioManifest = ChapterAudioManifest(
+            voice = "eponine",
+            engine = "pocket-tts-en-v2026_04",
+            chapterTitle = "t",
+            speechRate = 1.0f,
+            pitch = 1.0f,
+            durationMs = 0,
+            paragraphOffsetsMs = emptyList(),
+            paragraphTexts = emptyList(),
+            text = "",
+        )
     }
 
     private class FakePreference<T>(initial: T) : Preference<T> {
