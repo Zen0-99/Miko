@@ -309,6 +309,6 @@ private fun AudioErrorIndicator(
     }
 }
 
-// Inner-glyph size for the ring states — the `ArrowModifier` analog
-// (IndicatorSize - 7.dp = 19dp, UI-SPEC spacing exceptions).
-private val AudioGlyphModifier = Modifier.size(IndicatorSize - 7.dp)
+// Inner-glyph size for the ring states — sized so the Headphones icon matches
+// the inner glyph of ic_audio_item_24dp (~9.75dp inside the 26dp indicator).
+private val AudioGlyphModifier = Modifier.size(IndicatorSize - 13.dp)
