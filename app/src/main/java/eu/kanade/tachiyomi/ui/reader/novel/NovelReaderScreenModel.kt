@@ -13,7 +13,6 @@ import android.text.SpannableString
 import android.speech.tts.TextToSpeech
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jsoup.Jsoup
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.novelsource.model.NovelComment
@@ -1259,54 +1258,23 @@ class NovelReaderScreenModel(
             }
         }
 
-        // Fast path: if the paragraph HTML contains no HTML tags, use plain
-        // text directly instead of calling the expensive Html.fromHtml.
-        // This skips the XML parser for the majority of novel paragraphs
-        // (which are plain text), cutting parse time by 5-10x.
+        // Fast path lives in NovelParagraphSegmenter.renderParagraph (no `<`
+        // → raw string, skipping Html.fromHtml — a 5-10x parse saving); the
+        // reader only wraps the result into the Spanned TextItem requires.
         fun renderParagraph(paragraphHtml: String): Spanned {
-            if (!paragraphHtml.contains('<')) {
-                return SpannableString(paragraphHtml)
-            }
-            return renderHtml(paragraphHtml)
+            val rendered = NovelParagraphSegmenter.renderParagraph(paragraphHtml)
+            return rendered as? Spanned ?: SpannableString(rendered)
         }
 
         val items = mutableListOf<TextItem>()
         try {
-            // Clean HTML with Jsoup â€” removes style/script/noscript that cause
-            // stray "-->" artifacts and massive gaps.
-            val document = Jsoup.parse(html)
-            document.select("style, script, noscript").remove()
-
-            // Extract paragraphs (select <p> tags).
-            val paragraphs = document.select("p")
-
-            // Fallback: if no <p> tags, split body text by double-newlines.
-            val elementsToProcess = if (paragraphs.isEmpty()) {
-                val bodyText = document.body().text()
-                if (bodyText.isNotBlank()) {
-                    bodyText.split(Regex("\n\n+|\r\n\r\n+"))
-                        .map { it.trim() }
-                        .filter { it.isNotBlank() }
-                        .map { line ->
-                            org.jsoup.nodes.Element(
-                                org.jsoup.parser.Tag.valueOf("p"),
-                                "",
-                            ).apply { html(line) }
-                        }
-                } else {
-                    emptyList()
-                }
-            } else {
-                paragraphs
-            }
+            // Shared segmentation with the chapter-audio renderer (05-01) —
+            // identical paragraph list, identical indexing.
+            val elementsToProcess = NovelParagraphSegmenter.segmentParagraphHtml(html)
 
             var charIndex = 0
             var paragraphIndex = 0
-            for (element in elementsToProcess) {
-                val paragraphHtml = element.html()
-                // Skip empty paragraphs (fixes weird gaps).
-                if (paragraphHtml.isBlank()) continue
-
+            for (paragraphHtml in elementsToProcess) {
                 val spanned = renderParagraph(paragraphHtml)
                 if (spanned.isEmpty()) continue
 
@@ -1374,36 +1342,15 @@ class NovelReaderScreenModel(
         }
 
         fun renderParagraph(paragraphHtml: String): Spanned {
-            if (!paragraphHtml.contains('<')) {
-                return SpannableString(paragraphHtml)
-            }
-            return renderHtml(paragraphHtml)
+            val rendered = NovelParagraphSegmenter.renderParagraph(paragraphHtml)
+            return rendered as? Spanned ?: SpannableString(rendered)
         }
 
         val items = mutableListOf<TextItem>()
         try {
-            val document = Jsoup.parse(html)
-            document.select("style, script, noscript").remove()
-            val paragraphs = document.select("p")
-
-            val elementsToProcess = if (paragraphs.isEmpty()) {
-                val bodyText = document.body().text()
-                if (bodyText.isNotBlank()) {
-                    bodyText.split(Regex("\n\n+|\r\n\r\n+"))
-                        .map { it.trim() }
-                        .filter { it.isNotBlank() }
-                        .map { line ->
-                            org.jsoup.nodes.Element(
-                                org.jsoup.parser.Tag.valueOf("p"),
-                                "",
-                            ).apply { html(line) }
-                        }
-                } else {
-                    emptyList()
-                }
-            } else {
-                paragraphs
-            }
+            // Shared segmentation with the chapter-audio renderer (05-01) —
+            // identical paragraph list, identical indexing.
+            val elementsToProcess = NovelParagraphSegmenter.segmentParagraphHtml(html)
 
             // Phase 1: parse the first [initialBatchSize] non-empty paragraphs
             // and emit them immediately so the UI can render.
@@ -1412,10 +1359,7 @@ class NovelReaderScreenModel(
             var emitted = 0
             val batch = mutableListOf<TextItem>()
             var lastProcessedElementIdx = -1
-            for ((idx, element) in elementsToProcess.withIndex()) {
-                val paragraphHtml = element.html()
-                if (paragraphHtml.isBlank()) continue
-
+            for ((idx, paragraphHtml) in elementsToProcess.withIndex()) {
                 val spanned = renderParagraph(paragraphHtml)
                 if (spanned.isEmpty()) continue
 
@@ -1450,9 +1394,7 @@ class NovelReaderScreenModel(
 
             // Phase 2: parse the remaining paragraphs.
             for (i in (lastProcessedElementIdx + 1) until elementsToProcess.size) {
-                val element = elementsToProcess[i]
-                val paragraphHtml = element.html()
-                if (paragraphHtml.isBlank()) continue
+                val paragraphHtml = elementsToProcess[i]
 
                 val spanned = renderParagraph(paragraphHtml)
                 if (spanned.isEmpty()) continue

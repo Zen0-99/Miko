@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.SynthAudio
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.EngineProfiles
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyApplier
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyHint
-import java.io.File
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -330,17 +329,16 @@ class PocketTtsEngine internal constructor(
      */
     private fun resolveVoice(): String {
         val requested = currentVoice.ifBlank { PocketVoiceCatalog.DEFAULT_VOICE }
-        val localName = requested.substringAfter(':', requested)
-        if (localName.startsWith(PocketEngine.CLONED_VOICE_PREFIX)) return requested
-        val voicesDir = File(PocketEngineCatalog.engineDir(context.filesDir), "voices")
-        if (File(voicesDir, "$localName.wav").isFile) return requested
-        logcat(LogPriority.WARN) {
-            "Pocket voice '$requested' not in the installed bundle — using ${PocketVoiceCatalog.DEFAULT_VOICE}"
+        val resolved = PocketVoiceCatalog.resolveInstalledVoice(requested, context.filesDir)
+        if (resolved != requested) {
+            logcat(LogPriority.WARN) {
+                "Pocket voice '$requested' not in the installed bundle — using $resolved"
+            }
         }
-        // Persist the fallback for this engine instance so the file check +
+        // Persist the resolution for this engine instance so the file check +
         // warning don't repeat on every paragraph's speak/prefetch call.
-        currentVoice = PocketVoiceCatalog.DEFAULT_VOICE
-        return PocketVoiceCatalog.DEFAULT_VOICE
+        currentVoice = resolved
+        return resolved
     }
 
     private fun normalizedKey(text: String): String = text.trim().replace(WHITESPACE, " ")

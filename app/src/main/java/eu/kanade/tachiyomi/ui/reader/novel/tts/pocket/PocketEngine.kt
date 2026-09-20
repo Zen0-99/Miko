@@ -104,7 +104,6 @@ open class PocketEngine(
     private val clonedVoicesDir: File get() = File(engineDir, "cloned_voices")
 
     private val loadLock = Mutex()
-    private val synthLock = Mutex()
 
     /**
      * Raised by [release] so an in-flight synth (which holds [synthLock]
@@ -2082,6 +2081,16 @@ open class PocketEngine(
 
     companion object {
         const val ENGINE_NAME = PocketEngineCatalog.ENGINE_NAME
+
+        /**
+         * Process-shared synthesis lock (plan 05-01, D-16): EVERY PocketEngine
+         * instance — live read-along AND the chapter-audio renderer's — funnels
+         * through this one Mutex so concurrent synths can't double-book the
+         * ORT session CPU budget. The lock is held per `synthesizeStream`
+         * call, not per chapter — the renderer releases it between paragraphs,
+         * letting read-along interleave.
+         */
+        private val synthLock = Mutex()
 
         /**
          * Files that exist in every Pocket bundle regardless of variant.
