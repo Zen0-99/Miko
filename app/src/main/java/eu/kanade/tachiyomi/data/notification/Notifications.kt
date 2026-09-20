@@ -88,6 +88,12 @@ object Notifications {
     const val ID_NOVEL_TTS = 20260408
 
     /**
+     * Notification channel used for chapter audio rendering (render queue FGS)
+     */
+    const val CHANNEL_NOVEL_AUDIO_RENDER = "novel_audio_render_channel"
+    const val ID_NOVEL_AUDIO_RENDER = 20260409
+
+    /**
      * Notification channel and ids used for app and extension updates.
      */
     private const val GROUP_APK_UPDATES = "group_apk_updates"
@@ -192,6 +198,10 @@ object Notifications {
                 },
                 buildNotificationChannel(CHANNEL_NOVEL_TTS, IMPORTANCE_LOW) {
                     setName("Novel TTS playback")
+                    setShowBadge(false)
+                },
+                buildNotificationChannel(CHANNEL_NOVEL_AUDIO_RENDER, IMPORTANCE_LOW) {
+                    setName("Novel audio rendering")
                     setShowBadge(false)
                 },
                 buildNotificationChannel(CHANNEL_APP_UPDATE, IMPORTANCE_DEFAULT) {

@@ -32,6 +32,7 @@ import eu.kanade.tachiyomi.data.download.manga.MangaDownloadProvider
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadCache
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
 import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
@@ -453,6 +454,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NovelDownloadProvider(app) }
         addSingletonFactory { NovelDownloadManager(app) }
         addSingletonFactory { NovelDownloadCache(app) }
+        addSingletonFactory { ChapterAudioRenderManager(app) }
 
         addSingletonFactory { TrackerManager(app) }
         addSingletonFactory { DelayedAnimeTrackingStore(app) }

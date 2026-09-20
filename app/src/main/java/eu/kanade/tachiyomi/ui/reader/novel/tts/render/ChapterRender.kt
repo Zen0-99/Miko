@@ -59,6 +59,10 @@ class ChapterRender(
     @Volatile
     var cancelledForPreempt: Boolean = false
 
+    /** Failure message for the one-shot error notification (ERROR items). */
+    @Volatile
+    var errorMessage: String? = null
+
     @Transient
     var job: Job? = null
 

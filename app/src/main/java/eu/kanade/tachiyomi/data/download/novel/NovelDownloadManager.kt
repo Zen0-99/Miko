@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.data.download.novel
 import android.content.Context
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
 import eu.kanade.tachiyomi.novelsource.NovelSource
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.drop
@@ -22,6 +23,7 @@ import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.storage.service.StorageManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
 class NovelDownloadManager(
     private val context: Context,
@@ -39,6 +41,10 @@ class NovelDownloadManager(
         get() = downloader.isRunning
 
     private val pendingDeleter = NovelDownloadPendingDeleter(context)
+
+    // Lazy to avoid resolving the render manager at construction time; it is
+    // only needed on the delete/rename paths.
+    private val renderManager: ChapterAudioRenderManager by injectLazy()
 
     val queueState
         get() = downloader.queueState
@@ -150,6 +156,20 @@ class NovelDownloadManager(
             chapterDirs.forEach { it.delete() }
             cache.removeChapters(filteredChapters, novel)
 
+            // Rendered-audio cascade (05-02, D-18): cancel any queued/running
+            // render FIRST so the engine can't resurrect the .m4a after it
+            // is deleted here; runs before the empty-novel-dir check so the
+            // audio/ files don't block auto-cleanup.
+            filteredChapters.forEach { chapter ->
+                renderManager.cancelRender(chapter.id)
+                provider.deleteAudioFile(chapter.name, chapter.scanlator, novel.title, source)
+            }
+            // Drop the audio/ dir itself once empty — a leftover empty dir
+            // would still make novelDir.listFiles() non-empty below.
+            provider.findAudioDir(novel.title, source)
+                ?.takeIf { it.listFiles().isNullOrEmpty() }
+                ?.delete()
+
             if (novelDir?.listFiles()?.isEmpty() == true) {
                 deleteNovel(novel, source, removeQueued = false)
             }
@@ -220,6 +240,19 @@ class NovelDownloadManager(
     ) {
         val oldNames = provider.getValidChapterDirNames(oldChapter.name, oldChapter.scanlator)
         val novelDir = provider.getNovelDir(novel.title, source)
+
+        // Rename the rendered `.m4a` alongside the chapter dir so the audio
+        // stays keyed to the chapter's new name (05-02, D-18). Runs before the
+        // early-return guards below — rendered audio can outlive a deleted or
+        // partially-present chapter dir.
+        provider.findAudioFile(
+            oldChapter.name,
+            oldChapter.scanlator,
+            novel.title,
+            source,
+        )?.renameTo(
+            provider.getAudioFileName(newChapter.name, newChapter.scanlator),
+        )
 
         val oldDownload = oldNames.asSequence()
             .mapNotNull { novelDir.findFile(it) }

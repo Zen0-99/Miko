@@ -54,9 +54,15 @@ class ChapterAudioRenderManager(
     private val preferences: NovelTtsPreferences = Injekt.get(),
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     internal val scratchDir: File = File(context.cacheDir, "chapter_audio"),
-    // FGS start/stop seam — wired to NovelAudioRenderService in production
-    // (05-02 Task 2); tests inject a recorder.
-    internal val serviceController: (Boolean) -> Unit = {},
+    // FGS start/stop seam — NovelAudioRenderService in production; tests
+    // inject a recorder so no Context is needed.
+    internal val serviceController: (Boolean) -> Unit = { started ->
+        if (started) {
+            NovelAudioRenderService.start(context)
+        } else {
+            NovelAudioRenderService.stop(context)
+        }
+    },
 ) {
 
     private val _queueState = MutableStateFlow<List<ChapterRender>>(emptyList())
@@ -299,6 +305,7 @@ class ChapterAudioRenderManager(
         } catch (t: Throwable) {
             logcat(LogPriority.ERROR, t) { "chapter audio render failed for '${item.chapter.name}'" }
             // ERROR retains the scratch — a retry resumes at the checkpoint.
+            item.errorMessage = t.message
             item.status = ChapterRender.State.ERROR
         }
     }

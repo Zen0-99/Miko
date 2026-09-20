@@ -78,6 +78,11 @@ class NovelTtsPreferences(
 
     /** XNNPACK execution provider mode: "auto" (attempt, CPU EP fallback), "on", "off" */
     fun pocketXnnpackMode() = preferenceStore.getString("pref_novel_tts_pocket_xnnpack", "auto")
+
+    // Chapter audio rendering (phase 5)
+
+    /** Whether the one-time render heat/battery warning was shown (D-15/D-17) */
+    fun audioRenderWarned() = preferenceStore.getBoolean("pref_novel_audio_render_warned", false)
 }
 
 enum class NovelTtsHighlightMode {
