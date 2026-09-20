@@ -102,4 +102,58 @@ class NovelDownloadProvider(
         val chapterDirName = getChapterDirName(chapterName, chapterScanlator)
         return listOf(chapterDirName)
     }
+
+    // -- chapter audio (plan 05-01) ----------------------------------------------
+
+    /**
+     * `.m4a` filename for a rendered chapter — the downloaded chapter's
+     * sanitized base name with `.txt` swapped for `.m4a` (D-04).
+     */
+    fun getAudioFileName(chapterName: String, chapterScanlator: String?): String {
+        return getChapterDirName(chapterName, chapterScanlator)
+            .removeSuffix(".txt") + AUDIO_FILE_SUFFIX
+    }
+
+    /** Per-novel `audio/` subdirectory inside the user-picked downloads tree. */
+    fun findAudioDir(novelTitle: String, source: NovelSource): UniFile? {
+        return findNovelDir(novelTitle, source)?.findFile(AUDIO_DIR_NAME)
+    }
+
+    fun getOrCreateAudioDir(novelTitle: String, source: NovelSource): UniFile? {
+        return findNovelDir(novelTitle, source)?.createDirectory(AUDIO_DIR_NAME)
+    }
+
+    fun findAudioFile(
+        chapterName: String,
+        chapterScanlator: String?,
+        novelTitle: String,
+        source: NovelSource,
+    ): UniFile? {
+        return findAudioDir(novelTitle, source)
+            ?.findFile(getAudioFileName(chapterName, chapterScanlator))
+    }
+
+    fun deleteAudioFile(
+        chapterName: String,
+        chapterScanlator: String?,
+        novelTitle: String,
+        source: NovelSource,
+    ): Boolean {
+        return findAudioFile(chapterName, chapterScanlator, novelTitle, source)?.delete() ?: false
+    }
+
+    /** Names of rendered `.m4a` files under the novel's `audio/` dir. */
+    suspend fun renderedAudioFileNames(novelTitle: String, source: NovelSource): Set<String> {
+        return findAudioDir(novelTitle, source)?.listFiles()
+            .orEmpty()
+            .filter { it.isFile }
+            .mapNotNull { it.name }
+            .filter { it.endsWith(AUDIO_FILE_SUFFIX) }
+            .toSet()
+    }
+
+    private companion object {
+        const val AUDIO_DIR_NAME = "audio"
+        const val AUDIO_FILE_SUFFIX = ".m4a"
+    }
 }

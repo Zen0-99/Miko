@@ -139,7 +139,7 @@ class ChapterAudioRendererTest {
         preferences = preferences,
         engine = mockk<PocketEngine>(relaxed = true),
         streamFactory = streamFactory,
-        sinkFactory = { sink },
+        sinkFactory = { _, _ -> sink },
         chapterTextLoader = { _, _, _ -> html },
         scratchDir = scratchDir,
     )
@@ -231,7 +231,7 @@ class ChapterAudioRendererTest {
                 if (text.contains("Alpha")) {
                     flowOf(chunk(480))
                 } else {
-                    flow { emit(chunk(10)); gate.await(); emit(chunk(10)) }
+                    flow { gate.await(); emit(chunk(10)) }
                 }
             },
         )
@@ -305,10 +305,11 @@ class ChapterAudioRendererTest {
 
         calls.size shouldBe 1
         calls[0].first.contains("Beta") shouldBe true
-        // Paragraph 1 offset preserved from the checkpoint (480 samples → 20000ms).
-        manifest.paragraphOffsetsMs shouldBe listOf(0L, 20000L)
+        // Paragraph 1 offset preserved from the checkpoint (480 samples → 20ms).
+        manifest.paragraphOffsetsMs shouldBe listOf(0L, 480L * 1000L / 24000L)
         manifest.durationMs shouldBe (480 + 240) * 1000L / 24000L
-        decodeManifest(readAtomJson(outFile)!!)!!.paragraphOffsetsMs shouldBe listOf(0L, 20000L)
+        decodeManifest(readAtomJson(outFile)!!)!!.paragraphOffsetsMs shouldBe
+            listOf(0L, 480L * 1000L / 24000L)
         scratchFile(scratchDir).exists() shouldBe false
     }
 
@@ -340,7 +341,7 @@ class ChapterAudioRendererTest {
             preferences = NovelTtsPreferences(FakePreferenceStore()),
             engine = mockk<PocketEngine>(relaxed = true),
             streamFactory = { _, _ -> flowOf(chunk(10)) },
-            sinkFactory = { sinkCreated = true; sink },
+            sinkFactory = { _, _ -> sinkCreated = true; sink },
             chapterTextLoader = { _, _, _ -> "<p>   </p><p></p>" },
             scratchDir = scratchDir,
         )

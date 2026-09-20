@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.novel.tts
 
+import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.PocketEngine
 import java.io.File
 
 /**
@@ -81,6 +82,27 @@ object PocketVoiceCatalog {
     fun licenseFor(name: String): String = when {
         name.startsWith("vctk_") -> "CC-BY-4.0"
         else -> baseVoices.firstOrNull { it.name == name }?.license ?: ""
+    }
+
+    /**
+     * Resolve a requested voice name to one the installed bundle actually
+     * ships (plan 05-01: moved verbatim from `PocketTtsEngine.resolveVoice`,
+     * minus the `currentVoice` memoization — a PURE lookup that never
+     * mutates preferences, so the renderer can record the resolved name in
+     * the manifest without side effects).
+     *
+     *  - blank request → [DEFAULT_VOICE]
+     *  - `cloned-*` request → passes through unchanged (cloned voices live
+     *    under `cloned_voices/`, resolved by the engine's own store)
+     *  - `voices/<name>.wav` present in the installed bundle → the request
+     *  - anything else (stale pref, missing WAV) → [DEFAULT_VOICE]
+     */
+    fun resolveInstalledVoice(requested: String, filesDir: File): String {
+        val request = requested.ifBlank { DEFAULT_VOICE }
+        val localName = request.substringAfter(':', request)
+        if (localName.startsWith(PocketEngine.CLONED_VOICE_PREFIX)) return request
+        val voicesDir = File(PocketEngineCatalog.engineDir(filesDir), "voices")
+        return if (File(voicesDir, "$localName.wav").isFile) request else DEFAULT_VOICE
     }
 
     /**
