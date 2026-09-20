@@ -48,6 +48,8 @@ import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterRender
 import eu.kanade.tachiyomi.ui.reader.novel.tts.EngineFilesDir
 import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
 import eu.kanade.tachiyomi.ui.reader.novel.tts.NativeEngineHandle
@@ -69,6 +71,7 @@ class NovelReaderScreenModel(
     private val upsertNovelHistory: UpsertNovelHistory = Injekt.get(),
     private val downloadManager: eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager = Injekt.get(),
     private val downloadProvider: eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider = Injekt.get(),
+    private val audioRenderManager: ChapterAudioRenderManager = Injekt.get(),
     private val updateNovelChapter: tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter = Injekt.get(),
     val preferences: NovelReaderPreferences = Injekt.get(),
     val readerPreferences: ReaderPreferences = Injekt.get(),
@@ -104,6 +107,11 @@ class NovelReaderScreenModel(
 
     private val _chapters = MutableStateFlow<List<NovelChapter>>(emptyList())
     val chapters = _chapters.asStateFlow()
+
+    /** Chapter ids with a rendered `.m4a` on disk — drives the read-only
+     *  headphones glyph in `NovelChaptersSheet` (05-04 SD-3). */
+    private val _renderedAudioChapterIds = MutableStateFlow<Set<Long>>(emptySet())
+    val renderedAudioChapterIds = _renderedAudioChapterIds.asStateFlow()
 
     private val _isControlsVisible = MutableStateFlow(true)
     val isControlsVisible = _isControlsVisible.asStateFlow()
@@ -1042,6 +1050,12 @@ class NovelReaderScreenModel(
                 // regardless of how the source returns chapters.
                 _chapters.value = chapterList.sortedBy { it.chapterNumber }
 
+                // 05-04 SD-3: seed the rendered-audio set once (one SAF audio/
+                // listing) and keep it fresh via DONE events for the chapters
+                // sheet's read-only glyph.
+                loadRenderedAudioChapterIds(novel, source)
+                observeAudioRenderCompletions()
+
                 val targetChapter = if (chapterId != null) {
                     // Fetch directly from DB to get fresh lastCharRead data,
                     // since the chapter list may be cached/stale.
@@ -1059,6 +1073,32 @@ class NovelReaderScreenModel(
             } catch (e: Exception) {
                 mutableState.update { it.copy(loading = false, error = "Failed: ${e.message}") }
             }
+        }
+    }
+
+    /**
+     * Seed [renderedAudioChapterIds] from the novel's `audio/` dir — one SAF
+     * listing mapped through `getAudioFileName` to chapter ids (05-04 SD-3).
+     */
+    private suspend fun loadRenderedAudioChapterIds(novel: Novel, source: NovelCatalogueSource) {
+        val renderedNames = runCatching {
+            audioRenderManager.renderedAudioFileNames(novel, source)
+        }.getOrDefault(emptySet())
+        if (renderedNames.isEmpty()) return
+        _renderedAudioChapterIds.value = _chapters.value
+            .filter { downloadProvider.getAudioFileName(it.name, it.scanlator) in renderedNames }
+            .mapTo(mutableSetOf()) { it.id }
+    }
+
+    /** Keep [renderedAudioChapterIds] fresh while the reader is open. */
+    private fun observeAudioRenderCompletions() {
+        screenModelScope.launchIO {
+            audioRenderManager.statusFlow()
+                .collect { render ->
+                    if (render.novel.id == novelId && render.status == ChapterRender.State.DONE) {
+                        _renderedAudioChapterIds.update { it + render.chapter.id }
+                    }
+                }
         }
     }
 

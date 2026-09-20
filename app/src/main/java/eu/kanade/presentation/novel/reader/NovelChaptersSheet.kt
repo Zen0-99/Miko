@@ -1,12 +1,18 @@
 package eu.kanade.presentation.novel.reader
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -14,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -29,6 +36,7 @@ fun NovelChaptersSheet(
     onChapterClick: (NovelChapter) -> Unit,
     onDismiss: () -> Unit,
     accentColor: Color? = null,
+    renderedChapterIds: Set<Long> = emptySet(),
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val listState = rememberLazyListState()
@@ -89,15 +97,31 @@ fun NovelChaptersSheet(
                         .alpha(itemAlpha)
                         .clickable { onChapterClick(chapter) },
                     trailingContent = {
-                        Text(
-                            text = "Ch. ${chapter.chapterNumber}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isSelected) {
-                                accentColor ?: MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // Read-only rendered-audio glyph (05-04 SD-3,
+                            // UI-SPEC optional surface) — decorative; the
+                            // row's own semantics carry the description.
+                            if (chapter.id in renderedChapterIds) {
+                                Icon(
+                                    imageVector = Icons.Filled.Headphones,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = accentColor ?: MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            Text(
+                                text = "Ch. ${chapter.chapterNumber}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isSelected) {
+                                    accentColor ?: MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
                     },
                 )
             }

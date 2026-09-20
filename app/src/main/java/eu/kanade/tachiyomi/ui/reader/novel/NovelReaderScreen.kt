@@ -161,6 +161,7 @@ class NovelReaderScreen(
         val isControlsVisible by screenModel.isControlsVisible.collectAsStateWithLifecycle()
         val isSettingsVisible by screenModel.isSettingsVisible.collectAsStateWithLifecycle()
         val isChaptersSheetVisible by screenModel.isChaptersSheetVisible.collectAsStateWithLifecycle()
+        val renderedAudioChapterIds by screenModel.renderedAudioChapterIds.collectAsStateWithLifecycle()
         val isCommentsDialogVisible by screenModel.isCommentsDialogVisible.collectAsStateWithLifecycle()
         val comments by screenModel.comments.collectAsStateWithLifecycle()
         val isLoadingComments by screenModel.isLoadingComments.collectAsStateWithLifecycle()
@@ -906,6 +907,7 @@ class NovelReaderScreen(
                 },
                 onDismiss = { screenModel.dismissChapters() },
                 accentColor = accentColor,
+                renderedChapterIds = renderedAudioChapterIds,
             )
         }
 
