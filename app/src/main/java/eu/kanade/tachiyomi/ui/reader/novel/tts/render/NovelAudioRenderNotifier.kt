@@ -77,13 +77,18 @@ internal class NovelAudioRenderNotifier(
     /** Determinate progress for the currently-rendering item (D-09). */
     fun onProgress(render: ChapterRender) {
         val chapterText = render.chapter.name.chop(40)
+        val metric = if (render.totalParagraphs > 0) {
+            "${render.completedParagraphs}/${render.totalParagraphs}"
+        } else {
+            "${render.progress.coerceIn(0, 100)}%"
+        }
         val showWarning = !preferences.audioRenderWarned().get()
         with(progressNotificationBuilder) {
             setContentTitle(render.novel.title.chop(30))
-            setContentText(chapterText)
+            setContentText("$chapterText — $metric")
             if (showWarning) {
                 setStyle(
-                    NotificationCompat.BigTextStyle().bigText("$chapterText\n\n$WARNING_COPY"),
+                    NotificationCompat.BigTextStyle().bigText("$chapterText — $metric\n\n$WARNING_COPY"),
                 )
             } else {
                 setStyle(null)

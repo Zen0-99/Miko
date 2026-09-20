@@ -201,20 +201,14 @@ private fun RenderingAudioIndicator(
             animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
             label = "progress",
         )
-        // Once the thick ring fills past halfway it reads as a filled disc —
-        // flip the inner glyph to the background color (download-indicator
-        // convention, UI-SPEC contrast-in-fill).
-        val glyphColor = if (animatedProgress < 0.5f) {
-            tint
-        } else {
-            MaterialTheme.colorScheme.background
-        }
+        // Thin ring over a faint track: the outline stays visible and the
+        // progress sweep fills it — outline-fill, not a disc (user feedback).
         CircularProgressIndicator(
             progress = { animatedProgress },
             modifier = IndicatorModifier,
             color = tint,
-            strokeWidth = IndicatorSize / 2,
-            trackColor = Color.Transparent,
+            strokeWidth = IndicatorStrokeWidth,
+            trackColor = tint.copy(alpha = 0.25f),
             strokeCap = StrokeCap.Butt,
             gapSize = 0.dp,
         )
@@ -232,7 +226,7 @@ private fun RenderingAudioIndicator(
             imageVector = Icons.Outlined.Headphones,
             contentDescription = null,
             modifier = AudioGlyphModifier.semantics { contentDescription = renderingDescription },
-            tint = glyphColor,
+            tint = tint,
         )
     }
 }

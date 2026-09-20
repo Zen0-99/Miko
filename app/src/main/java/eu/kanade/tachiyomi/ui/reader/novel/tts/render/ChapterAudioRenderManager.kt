@@ -284,6 +284,7 @@ class ChapterAudioRenderManager(
                 resumeFromParagraph = item.completedParagraphs,
                 onProgress = { done, total ->
                     item.completedParagraphs = done
+                    item.totalParagraphs = total
                     if (total > 0) item.progress = done * 100 / total
                 },
             )

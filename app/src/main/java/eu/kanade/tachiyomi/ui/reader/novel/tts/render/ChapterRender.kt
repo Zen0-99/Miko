@@ -56,6 +56,10 @@ class ChapterRender(
     @Volatile
     var completedParagraphs: Int = 0
 
+    /** Total paragraphs in the chapter — 0 until the renderer reports it. */
+    @Volatile
+    var totalParagraphs: Int = 0
+
     @Volatile
     var cancelledForPreempt: Boolean = false
 
