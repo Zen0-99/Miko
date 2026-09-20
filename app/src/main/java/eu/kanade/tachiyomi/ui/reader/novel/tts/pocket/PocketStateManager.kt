@@ -258,27 +258,66 @@ class PocketStateSlot(
      * for the overlap-discard decoder's snapshot/restore. Only the live
      * `buffer`/`shape` are captured (mimi decode doesn't use output pinning,
      * so `outBuffer` is always null on the mimi slots this is used for).
+     *
+     * [data] is the slot's reusable [snapshotScratch] direct buffer —
+     * NOT a copy owned by the Snapshot. Invariant: at most one live
+     * snapshot per slot at a time (a second [snapshot] overwrites the
+     * scratch). The overlap-discard loop always restores before the next
+     * snapshot, so this holds.
      */
     class Snapshot internal constructor(
         val shape: LongArray,
-        val bytes: ByteArray,
-    )
+        internal val data: ByteBuffer,
+        val byteLen: Int,
+    ) {
+        /** Forged-snapshot constructor for tests. */
+        internal constructor(shape: LongArray, bytes: ByteArray) : this(
+            shape,
+            ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()),
+            bytes.size,
+        )
+
+        /** Heap copy of the captured bytes — tests/inspection only. */
+        val bytes: ByteArray
+            get() {
+                val dup = data.duplicate()
+                dup.position(0)
+                dup.limit(byteLen)
+                return ByteArray(byteLen).also { dup.get(it) }
+            }
+    }
+
+    /**
+     * Per-slot scratch backing [snapshot]/[restore]. The previous design
+     * allocated a `ByteArray` per slot per 64-frame decode window —
+     * ~16-30 MB of on-heap churn per mini-chunk (mimi state), which
+     * showed up on-device as constant LOS GC storms competing with the
+     * AR loop for cores. A persistent direct buffer moves the copy
+     * off-heap and allocates once per slot, grown on demand.
+     */
+    private var snapshotScratch: ByteBuffer? = null
 
     /** Capture this slot's current shape + buffer contents. */
     fun snapshot(): Snapshot {
         val byteLen = elementCount(shape) * elementBytes
-        val arr = ByteArray(byteLen)
+        var scratch = snapshotScratch
+        if (scratch == null || scratch.capacity() < byteLen) {
+            scratch = newNativeDirectBuffer(byteLen)
+            snapshotScratch = scratch
+        }
         if (byteLen > 0) {
             buffer.position(0)
             buffer.limit(byteLen)
-            buffer.get(arr, 0, byteLen)
-            // Rewind — `get` left position == limit, and callers may run
-            // reset()/fillRange() next, whose typed view is created over
+            scratch.position(0)
+            scratch.limit(byteLen)
+            scratch.put(buffer)
+            // Rewind — `put` left buffer.position == limit, and callers may
+            // run reset()/fillRange() next, whose typed view is created over
             // [position, limit). Restore the invariant: [0, capacity).
             buffer.position(0)
             buffer.limit(buffer.capacity())
         }
-        return Snapshot(shape.copyOf(), arr)
+        return Snapshot(shape.copyOf(), scratch, byteLen)
     }
 
     /** Restore this slot from a [snap] taken earlier, growing capacity if needed. */
@@ -291,10 +330,13 @@ class PocketStateSlot(
             buffer = newNativeDirectBuffer(capacityElements * elementBytes)
         }
         shape = snap.shape.copyOf()
-        if (snap.bytes.isNotEmpty()) {
+        if (snap.byteLen > 0) {
+            val src = snap.data.duplicate()
+            src.position(0)
+            src.limit(snap.byteLen)
             buffer.position(0)
-            buffer.limit(snap.bytes.size)
-            buffer.put(snap.bytes)
+            buffer.limit(snap.byteLen)
+            buffer.put(src)
             // Rewind: every other mutator (bindAsTensor / updateFromOutput)
             // leaves position at 0 / limit at capacity. Without this, a
             // restore→reset ordering builds fillRange's typed view over a

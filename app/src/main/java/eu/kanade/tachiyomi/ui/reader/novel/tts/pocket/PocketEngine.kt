@@ -613,23 +613,13 @@ open class PocketEngine(
      * gaps only appear if the next chunk isn't ready when the
      * current chunk's audio drains.
      *
-     * Adaptive pre-roll: while generating chunk 0, we measure the
-     * wall-time of frames 2..5 (skipping frame 0 — which carries
-     * ORT JIT/warmup cost — and frame 1 conservatively). The
-     * MAX of those samples is our per-frame steady-state estimate.
-     * From that we compute K = how many chunks to buffer before
-     * the first emit:
-     *
-     *   deficitMs = max(0, perFrameMaxMs − frameBudgetMs)
-     *   K = ceil(totalChunks × deficitMs / frameBudgetMs), capped at
-     *       [MAX_PREROLL_CHUNKS] (= 2 — the code constant is truth;
-     *       older comments saying "cap at 3" are stale)
-     *
-     * If gen is at or above realtime (deficitMs == 0), K = 1 and
-     * chunks emit as they're ready. If gen is sub-realtime, K grows
-     * so the buffer never fully drains before all chunks complete.
-     * TTFA pays the K×gen cost; we cap K at [MAX_PREROLL_CHUNKS] so
-     * TTFA stays bounded.
+     * Emission is emit-as-ready (K=1): each chunk is sent downstream the
+     * moment its decode completes. An earlier adaptive pre-roll that
+     * banked K chunks before first emit was reverted — on sustained
+     * sub-realtime workloads (thermal-throttled Tensor G3: ~80-130ms/frame
+     * vs the 80ms budget) K=2 doubled TTFA to 25-52s while still
+     * underrunning at later boundaries, trading the user's wait for
+     * smoothness it couldn't deliver.
      */
     fun synthesizeStream(
         text: String,
@@ -693,18 +683,25 @@ open class PocketEngine(
             }
         }
 
+        // The tail chunk's decode runs on a FRESH mimi state so it can be
+        // launched inside the lock but awaited after release — overlapping
+        // the NEXT stream's AR(0) instead of sitting serial at every
+        // paragraph boundary (~1.5–2.5s of dead air per paragraph on
+        // Tensor G3). Fresh state is required because the next stream
+        // resets the shared [mimiState] the moment it acquires the lock.
+        // initStates fills with the manifest's init values — the same
+        // starting condition resetStatesToInit produces for other chunks.
+        var tailDecode: Deferred<Unit>? = null
+
         synthLock.withLock {
-            var prerollChunks = 1
-            val buffered = ArrayList<SynthAudio>(MAX_PREROLL_CHUNKS)
-            // Pipelining: when sub-realtime (K > 1), kick off chunk N's mimi
-            // decode on a worker thread while chunk N+1's AR loop runs.
-            // [pendingDecode] holds the previous chunk's in-flight decode
-            // (chunkIdx, deferred audio) — awaited before the next emit.
-            // Disjoint ORT sessions (flow_lm_* on the main coroutine,
-            // mimi_decoder on the worker) make this safe; the win is total
-            // synth time, not TTFA, so we gate to K > 1 to avoid delaying
-            // chunk-0 emit on realtime workloads.
-            var pendingDecode: Pair<Int, Deferred<SynthAudio>>? = null
+            // Pipelining: every non-tail chunk's mimi decode runs on a worker
+            // thread while chunk N+1's AR loop runs. [pendingDecode] holds the
+            // in-flight decode (chunkIdx, deferred) — awaited ONLY as a
+            // mimi-state safety barrier before the next per-chunk reset
+            // (emission happens inside the deferred via orderedEmit). Disjoint
+            // ORT sessions (flow_lm_* on the main coroutine, mimi_decoder on
+            // the worker) make this safe.
+            var pendingDecode: Pair<Int, Deferred<Unit>>? = null
 
             // Engine-level mimi state, REUSED across synths (P-Y — the 56
             // direct ByteBuffers are allocated once at load, not per call;
@@ -720,47 +717,49 @@ open class PocketEngine(
                 ?: error("mimi state missing — engine not loaded?")
             resetStatesToInit(mimiState, bundle.mimiStateManifest)
 
-            // Local helper: emit a finished chunk's audio per the K-buffer
-            // policy. Lambda (not local fun) so we can suspend on `send`.
-            // P-A diagnostic: track inter-send producer gap; counts mini-
-            // chunks emitted to downstream (incl. buffered flushes).
+            // Local helper: emit a finished chunk's audio as soon as it's
+            // ready (emit-as-ready — see the K=1 note in the class doc).
+            // Lambda (not local fun) so we can suspend on `send`.
+            // P-A diagnostic: track inter-send producer gap.
             var prevSendNs = 0L
             var firstEmitted = false
             val emitOrBuffer: suspend (SynthAudio, Int) -> Unit = { audio, chunkIdx ->
-                if (chunkIdx < prerollChunks - 1 && chunkIdx < miniChunks.size - 1) {
-                    buffered.add(audio)
-                } else {
-                    // Flush previously-buffered chunks (in order), then this one.
-                    for (b in buffered) {
-                        val gMs = if (prevSendNs == 0L) -1L else (System.nanoTime() - prevSendNs) / 1_000_000
-                        logcat(LogPriority.DEBUG) {
-                            "pocket emit(buf) audio=${b.pcm.size * 1000L / b.sampleRate}ms gap=${gMs}ms"
-                        }
-                        if (!firstEmitted) {
-                            val ttfa = (System.nanoTime() - streamStartNs) / 1_000_000
-                            logcat(LogPriority.DEBUG) {
-                                "pocket TTFA=${ttfa}ms (loadWait=${loadWaitMs}ms + producePath=${ttfa - loadWaitMs}ms) K=$prerollChunks"
-                            }
-                            firstEmitted = true
-                        }
-                        send(b)
-                        prevSendNs = System.nanoTime()
-                    }
-                    buffered.clear()
-                    val gapMs = if (prevSendNs == 0L) -1L else (System.nanoTime() - prevSendNs) / 1_000_000
-                    val audioMs = audio.pcm.size * 1000L / audio.sampleRate
+                val gapMs = if (prevSendNs == 0L) -1L else (System.nanoTime() - prevSendNs) / 1_000_000
+                val audioMs = audio.pcm.size * 1000L / audio.sampleRate
+                logcat(LogPriority.DEBUG) {
+                    "pocket emit chunkIdx=$chunkIdx audio=${audioMs}ms gap=${gapMs}ms"
+                }
+                if (!firstEmitted) {
+                    val ttfa = (System.nanoTime() - streamStartNs) / 1_000_000
                     logcat(LogPriority.DEBUG) {
-                        "pocket emit chunkIdx=$chunkIdx audio=${audioMs}ms gap=${gapMs}ms K=$prerollChunks"
+                        "pocket TTFA=${ttfa}ms (loadWait=${loadWaitMs}ms + producePath=${ttfa - loadWaitMs}ms)"
                     }
-                    if (!firstEmitted) {
-                        val ttfa = (System.nanoTime() - streamStartNs) / 1_000_000
-                        logcat(LogPriority.DEBUG) {
-                            "pocket TTFA=${ttfa}ms (loadWait=${loadWaitMs}ms + producePath=${ttfa - loadWaitMs}ms) K=$prerollChunks"
-                        }
-                        firstEmitted = true
+                    firstEmitted = true
+                }
+                send(audio)
+                prevSendNs = System.nanoTime()
+            }
+
+            // Ordered emit: pipelined decodes finish on a worker thread while
+            // the NEXT chunk's AR loop is still running. They emit themselves
+            // through this gate as soon as they land — the old design awaited
+            // the deferred inside the loop AFTER the next AR pass, which pushed
+            // every chunk's emit out by a full AR iteration and produced the
+            // audible mid-paragraph gaps (5-10s observed on Tensor G3).
+            // nextEmitIdx + readyToEmit preserve chunk order when decodes
+            // complete out of order; emitMutex serializes emitOrBuffer's
+            // mutable prevSendNs/firstEmitted state.
+            val emitMutex = Mutex()
+            val readyToEmit = HashMap<Int, SynthAudio>()
+            var nextEmitIdx = 0
+            val orderedEmit: suspend (Int, SynthAudio) -> Unit = { emitIdx, audio ->
+                emitMutex.withLock {
+                    readyToEmit[emitIdx] = audio
+                    while (true) {
+                        val next = readyToEmit.remove(nextEmitIdx) ?: break
+                        emitOrBuffer(next, nextEmitIdx)
+                        nextEmitIdx++
                     }
-                    send(audio)
-                    prevSendNs = System.nanoTime()
                 }
             }
 
@@ -782,81 +781,75 @@ open class PocketEngine(
                     "pocket chunk=$idx ar=${arMs}ms (text='${miniChunk.take(40)}${if (miniChunk.length > 40) "…" else ""}')"
                 }
 
-                // 2. After chunk 0, calculate K from observed frame times.
-                //
-                // Originally used the raw max of frames[1..4]. That triggered
-                // K=2 on any single-frame hiccup (e.g. 93ms outlier when the
-                // sustained average was 60ms — well under the 80ms budget),
-                // doubling TTFA for no real reason. Switched to a
-                // trimmed-max: sort, drop the single worst frame, take the
-                // max of the remaining 3. Still conservative — a SUSTAINED
-                // sub-realtime workload trips K>1 — but a one-off cold-cache
-                // spike doesn't.
+                // 2. K is fixed at 1 — emit-as-ready. The adaptive pre-roll
+                // (K>1 when the measured frame deficit was positive) was
+                // reverted: on a thermally-throttled device the deficit is
+                // persistent, so K=2 only doubled TTFA (observed 25–52s on
+                // Pixel 8 Pro) while still underrunning at later boundaries —
+                // buffering can't fix a cumulative production deficit.
+                // sustainedAvg is still logged for diagnostics.
                 if (isFirst && frameTimes != null && frameTimes.size >= 5) {
-                    val window = frameTimes.subList(1, 5)
-                    val trimmedMaxMs = window.sortedDescending().drop(1).first()
+                    val sustainedAvgMs = frameTimes.drop(1).average()
                     val frameBudgetMs = 1000.0 / bundle.frameRate
-                    val deficitMs = (trimmedMaxMs - frameBudgetMs).coerceAtLeast(0.0)
-                    prerollChunks = if (deficitMs == 0.0) {
-                        1
-                    } else {
-                        Math.ceil(miniChunks.size * deficitMs / frameBudgetMs)
-                            .toInt()
-                            .coerceIn(1, MAX_PREROLL_CHUNKS)
-                    }
+                    val deficitMs = (sustainedAvgMs - frameBudgetMs).coerceAtLeast(0.0)
                     logcat(LogPriority.DEBUG) {
-                        "Adaptive pre-roll: chunk0 frames[1..4]=$window (raw frames=$frameTimes), " +
-                            "trimmedMax=${trimmedMaxMs}ms, deficit=${deficitMs}ms, " +
-                            "K=$prerollChunks chunk(s) of ${miniChunks.size} total"
+                        "AR rate: chunk0 frames=$frameTimes, " +
+                            "sustainedAvg=${"%.1f".format(sustainedAvgMs)}ms, deficit=${deficitMs}ms, " +
+                            "K=1 chunk(s) of ${miniChunks.size} total"
                     }
                 }
 
-                // 3. Drain any previously-pending decode (await + emit/buffer).
-                // Done BEFORE starting this chunk's decode so the await happens
-                // in the gap between iterations (typically the deferred is
-                // already complete by now thanks to the AR loop overlap).
-                pendingDecode?.let { (prevIdx, prevJob) ->
-                    val prevAudio = prevJob.await()
-                    emitOrBuffer(prevAudio, prevIdx)
-                }
+                // 3. Await the previous chunk's pipelined decode before this
+                // chunk's mimi state reset — the decode holds shared
+                // [mimiState]. Emission already happened inside the deferred
+                // via orderedEmit, so this is purely a state-safety barrier
+                // (typically instant: decode finished during the AR loop).
+                pendingDecode?.let { (_, prevJob) -> prevJob.await() }
                 pendingDecode = null
 
-                // 4. Decide whether to pipeline THIS chunk's decode or run
-                // it synchronously. Gate on K > 1 (sub-realtime regime where
-                // total-time savings matter more than first-emit latency)
-                // AND not the last chunk (no pipelining benefit on the tail).
-                val canPipeline = prerollChunks > 1 && idx < miniChunks.size - 1
+                // 4. Pipeline THIS chunk's decode whenever a next chunk
+                // exists — disjoint sessions (flow_lm_* here, mimi_decoder on
+                // the worker) make it safe, and emitting from the worker as
+                // soon as the decode lands keeps inter-chunk gaps at zero
+                // even when the workload is only slightly sub-realtime.
                 // P-AE REVERTED (carry-state was confounded by silent chunk
                 // boundaries → carried history ≈ zeros, inconclusive). Back
                 // to per-chunk reset; P-AF (warm-prime inside decodeChunkAudio)
                 // now fills the conv history with the chunk's own onset.
                 // Per-chunk reset is safe: chunk N-1's decode was awaited above.
                 resetStatesToInit(mimiState, bundle.mimiStateManifest)
-                if (canPipeline) {
+                if (idx < miniChunks.size - 1) {
                     pendingDecode = idx to async(Dispatchers.Default) {
                         val decodeStartNs = System.nanoTime()
                         val out = decodeChunkAudio(bundle, latents, mimiState)
                         val decodeMs = (System.nanoTime() - decodeStartNs) / 1_000_000
                         logcat(LogPriority.DEBUG) { "pocket chunk=$idx decode=${decodeMs}ms (pipelined)" }
-                        out
+                        orderedEmit(idx, out)
                     }
                 } else {
-                    val decodeStartNs = System.nanoTime()
-                    val audio = decodeChunkAudio(bundle, latents, mimiState)
-                    val decodeMs = (System.nanoTime() - decodeStartNs) / 1_000_000
-                    logcat(LogPriority.DEBUG) { "pocket chunk=$idx decode=${decodeMs}ms (sync)" }
-                    emitOrBuffer(audio, idx)
+                    // Tail chunk — launch on its own state, await post-lock.
+                    val tailState = initStates(bundle.mimiStateManifest)
+                    tailDecode = async(Dispatchers.Default) {
+                        val decodeStartNs = System.nanoTime()
+                        val audio = decodeChunkAudio(bundle, latents, tailState)
+                        val decodeMs = (System.nanoTime() - decodeStartNs) / 1_000_000
+                        logcat(LogPriority.DEBUG) { "pocket chunk=$idx decode=${decodeMs}ms (tail, post-lock)" }
+                        orderedEmit(idx, audio)
+                    }
                 }
             }
 
             // Drain any remaining pending decode after the last iteration.
-            pendingDecode?.let { (prevIdx, prevJob) ->
-                val prevAudio = prevJob.await()
-                emitOrBuffer(prevAudio, prevIdx)
-            }
-            // Defensive — buffered should be empty after the loop's flush logic.
-            for (b in buffered) send(b)
+            // This MUST stay inside the lock — the pending decode holds the
+            // shared mimiState, and the next stream resets it on acquire.
+            pendingDecode?.let { (_, prevJob) -> prevJob.await() }
         }
+
+        // The tail decode touches only its own fresh state + the
+        // (documented thread-safe) mimi_decoder session — safe to overlap
+        // with whatever runs next. Awaiting here keeps the producer alive
+        // until the final chunk's audio is emitted.
+        tailDecode?.await()
     }.flowOn(Dispatchers.Default)
 
     /**
@@ -910,7 +903,7 @@ open class PocketEngine(
             check(!releaseRequested.get()) { "Pocket engine released mid-synthesis" }
             val tStart = System.currentTimeMillis()
             val step = stepAr(ar) ?: break
-            if (frameTimes != null && frameTimes.size < 8) {
+            if (frameTimes != null) {
                 frameTimes.add(System.currentTimeMillis() - tStart)
             }
             for (v in step.latent) {
@@ -2286,21 +2279,6 @@ open class PocketEngine(
          */
         private const val POCKET_MIN_CHARS_PER_CHUNK = 40
 
-        /**
-         * Adaptive pre-roll ceiling. The K formula scales with the
-         * per-frame deficit and the chunk count; on slow devices it
-         * would otherwise demand 4+ chunks of buffering. We cap it
-         * to keep TTFA bounded.
-         *
-         * Calibration: at the fp32-mimi precision shipped with v0.3.0-
-         * alpha.7, a typical 15-frame chunk takes ~2.25 s wall-time on
-         * Pixel 8a (Tensor G3) when the per-frame deficit is 80 ms+.
-         * Cap K at 2 ⇒ worst-case TTFA ≈ 4.5 s, vs the older int8
-         * timing where K=3 fit a 3 s budget. The int8 budget no longer
-         * applies; the trade-off is now stutter risk (lower K) vs
-         * startup delay (higher K).
-         */
-        private const val MAX_PREROLL_CHUNKS = 2
 
         /** Sentence boundary: `.`, `!`, or `?` followed by whitespace. */
         private val SENTENCE_SPLIT_REGEX = Regex("(?<=[.!?])\\s+")

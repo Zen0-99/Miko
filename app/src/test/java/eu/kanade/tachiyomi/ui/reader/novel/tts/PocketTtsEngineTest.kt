@@ -10,6 +10,7 @@ import io.mockk.mockk
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -365,6 +366,49 @@ class PocketTtsEngineTest {
         events.last() shouldBe "done:u10"
     }
 
+    @Test
+    fun `pause mid-stream suspends writes and resume continues without restarting synthesis`() = runTest {
+        // Regression: a pause during a blocked AudioTrack write surfaced
+        // write()==0 as a fatal error → onError → the next resume() ran a
+        // brand-new speak() and re-synthesized the whole utterance.
+        val gate = CompletableDeferred<Unit>()
+        val source: Flow<SynthAudio> = flow {
+            emit(chunk(40))
+            gate.await()
+            emit(chunk(40))
+        }
+        val sink = PausingRecordingSink(events())
+        val calls = mutableListOf<Pair<String, String>>()
+        val engine = makeEngine(
+            StandardTestDispatcher(testScheduler),
+            ArrayDeque(listOf(source)),
+            sink,
+            calls,
+        )
+        val events = sink.events
+        val cb = callback(events)
+
+        engine.speak("pausable", "u13", flush = true, callback = cb)
+        testScheduler.runCurrent()
+
+        engine.pause()
+        gate.complete(Unit)
+        testScheduler.runCurrent()
+
+        // The second chunk's write stays suspended while paused: no error,
+        // no re-collection, nothing dropped.
+        calls.size shouldBe 1
+        sink.written.size shouldBe 1
+        events.none { it.startsWith("error:") } shouldBe true
+
+        engine.resume()
+        testScheduler.advanceUntilIdle()
+
+        calls.size shouldBe 1
+        sink.written.map { it.size } shouldBe listOf(40, 40)
+        events.last() shouldBe "done:u13"
+    }
+
     // -- voice resolution -------------------------------------------------------
 
     @Test
@@ -416,7 +460,7 @@ class PocketTtsEngineTest {
     // -- fakes ------------------------------------------------------------------
 
     /** Records writes/events in call order; pause/resume/release counted. */
-    private class RecordingSink(val events: MutableList<String>) : PcmSink {
+    private open class RecordingSink(val events: MutableList<String>) : PcmSink {
         val written = mutableListOf<ShortArray>()
         var pauseCalls = 0
         var resumeCalls = 0
@@ -437,6 +481,31 @@ class PocketTtsEngineTest {
 
         override fun release() {
             releaseCalls++
+        }
+    }
+
+    /**
+     * [RecordingSink] that mirrors `AudioTrackPcmSink`'s contract — [write]
+     * suspends while paused instead of writing into a stalled track.
+     */
+    private class PausingRecordingSink(events: MutableList<String>) : RecordingSink(events) {
+        @Volatile private var sinkPaused = false
+
+        override suspend fun write(chunk: ShortArray) {
+            while (sinkPaused) {
+                delay(5)
+            }
+            super.write(chunk)
+        }
+
+        override fun pause() {
+            sinkPaused = true
+            super.pause()
+        }
+
+        override fun resume() {
+            sinkPaused = false
+            super.resume()
         }
     }
 

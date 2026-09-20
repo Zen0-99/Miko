@@ -149,6 +149,12 @@ class NovelTtsPlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // startForegroundService() imposes a ~5s startForeground() obligation
+        // on EVERY start, not just the first. When the service survives a
+        // stopSelf() (the reader's bind keeps it created), onCreate() doesn't
+        // rerun — without this call the next startForegroundService() ANRs.
+        // Idempotent when already foreground.
+        startForeground(NOTIFICATION_ID, buildNotification())
         MediaButtonReceiver.handleIntent(mediaSession, intent)
         resolveTransportAction(intent?.action)?.let(::dispatchTransportAction)
         return START_STICKY

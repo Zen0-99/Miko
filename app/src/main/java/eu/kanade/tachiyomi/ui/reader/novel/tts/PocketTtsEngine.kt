@@ -337,6 +337,9 @@ class PocketTtsEngine internal constructor(
         logcat(LogPriority.WARN) {
             "Pocket voice '$requested' not in the installed bundle — using ${PocketVoiceCatalog.DEFAULT_VOICE}"
         }
+        // Persist the fallback for this engine instance so the file check +
+        // warning don't repeat on every paragraph's speak/prefetch call.
+        currentVoice = PocketVoiceCatalog.DEFAULT_VOICE
         return PocketVoiceCatalog.DEFAULT_VOICE
     }
 
@@ -408,7 +411,14 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
             AudioFormat.ENCODING_PCM_16BIT,
         )
         // MODE_STREAM (not MODE_STATIC — it glitches on long utterances).
-        val bufSize = maxOf(minBuf, 8192)
+        // Deep buffer: ~5s of PCM. The old maxOf(minBuf, 8192) held ~170ms,
+        // so any inter-chunk synthesis stall longer than that starved the
+        // track (underrun → Android disabled+restarted it). With Pocket
+        // producing at roughly realtime, a deep buffer is what lets
+        // prefetched audio actually bank ahead of the playback head.
+        // Pause stays instant — pause() halts output regardless of how
+        // much is buffered.
+        val bufSize = maxOf(minBuf, sampleRate * 2 * STREAM_BUFFER_SECONDS)
         val newTrack = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -425,7 +435,9 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
             )
             .setBufferSizeInBytes(bufSize)
             .setTransferMode(AudioTrack.MODE_STREAM)
-            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+            // No LOW_LATENCY flag — it pins a small HAL-buffer fast path,
+            // defeating the deep buffer above. TTS playback is not
+            // latency-sensitive.
             .build()
         // If pause() landed during synthesis, start already-paused —
         // MODE_STREAM buffers writes before play(), so resume() picks up
@@ -443,11 +455,36 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
         if (chunk.isEmpty()) return
         val t = ensureTrack()
         var offset = 0
+        var stalls = 0
         while (offset < chunk.size) {
             currentCoroutineContext().ensureActive()
+            // A paused MODE_STREAM track doesn't drain its HAL buffer, and a
+            // write blocked in native when pause() lands surfaces as a 0
+            // return — previously thrown as fatal, which aborted the whole
+            // utterance and forced a full re-synth on resume. Wait the pause
+            // out instead; cancellation still unwinds promptly via
+            // ensureActive + release() unblocking the native write.
+            while (paused) {
+                delay(PAUSE_POLL_MS)
+                currentCoroutineContext().ensureActive()
+            }
             val n = t.write(chunk, offset, chunk.size - offset)
-            if (n <= 0) throw IllegalStateException("AudioTrack.write returned $n")
-            offset += n
+            when {
+                n > 0 -> {
+                    offset += n
+                    stalls = 0
+                }
+                n == 0 -> {
+                    // Transient: pause delivered mid-write, or the track's
+                    // buffer momentarily reported no space. Bounded retry —
+                    // ~1s of continuous stalls is a real failure.
+                    if (++stalls > MAX_WRITE_STALLS) {
+                        throw IllegalStateException("AudioTrack.write stalled (paused=$paused)")
+                    }
+                    delay(WRITE_STALL_RETRY_MS)
+                }
+                else -> throw IllegalStateException("AudioTrack.write returned $n")
+            }
         }
         samplesWritten += chunk.size
     }
@@ -480,9 +517,13 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
         val t = track ?: return
         while (
             currentCoroutineContext().isActive &&
-            t.playState == AudioTrack.PLAYSTATE_PLAYING &&
             t.playbackHeadPosition < samplesWritten
         ) {
+            // Keep waiting while PAUSED — draining resumes on resume(). The
+            // old playState==PLAYING condition exited early on pause, fired
+            // onDone, and let the next flush release the track with buffered
+            // audio still unplayed.
+            if (t.playState == AudioTrack.PLAYSTATE_STOPPED) break
             delay(10)
         }
     }
@@ -500,5 +541,12 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
         } catch (_: Throwable) {
         }
         track = null
+    }
+
+    private companion object {
+        const val PAUSE_POLL_MS = 20L
+        const val WRITE_STALL_RETRY_MS = 20L
+        const val MAX_WRITE_STALLS = 50
+        const val STREAM_BUFFER_SECONDS = 5
     }
 }
