@@ -250,8 +250,10 @@ private fun RenderedAudioIndicator(
             ),
         contentAlignment = Alignment.Center,
     ) {
+        // Same circled-headphones vector as the idle state, but full accent
+        // (idle is dimmed via secondaryItemAlpha) so rendered reads as "on".
         Icon(
-            painter = painterResource(R.drawable.ic_play_circle_filled_24),
+            painter = painterResource(R.drawable.ic_audio_item_24dp),
             contentDescription = stringResource(AYMR.strings.novel_audio_available_cd),
             modifier = Modifier.size(IndicatorSize),
             tint = tint,
