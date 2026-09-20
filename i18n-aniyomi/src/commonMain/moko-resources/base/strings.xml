@@ -1393,6 +1393,17 @@
     <string name="novel_reader_tts_prefer_translated_text_summary">Uses translated chapter text when it is available, otherwise falls back to the original text.</string>
     <string name="novel_reader_tts_read_chapter_title">Read chapter title first</string>
 
+    <!-- Chapter audio rendering -->
+    <string name="novel_audio_render_cd">Render chapter audio</string>
+    <string name="novel_audio_queued_cd">Chapter audio queued</string>
+    <string name="novel_audio_rendering_cd">Rendering chapter audio</string>
+    <string name="novel_audio_available_cd">Chapter audio available</string>
+    <string name="novel_audio_error_cd">Chapter audio render failed — tap to retry</string>
+    <string name="action_start_render_now">Start render now</string>
+    <string name="action_re_render_audio">Re-render</string>
+    <string name="novel_audio_render_failed">Audio render failed</string>
+    <string name="novel_audio_render_warning">Rendering runs at full speed — the device may get warm and drain the battery faster.</string>
+
     <!-- Library update progress overlay + Fetching tab -->
     <string name="pref_show_update_progress_overlay">Show update progress overlay</string>
     <string name="pref_show_update_progress_overlay_summary">Display a floating progress box when the library is being updated</string>
