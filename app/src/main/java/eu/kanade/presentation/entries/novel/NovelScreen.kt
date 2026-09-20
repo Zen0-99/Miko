@@ -45,6 +45,7 @@ import eu.kanade.presentation.entries.novel.components.NovelEditDialog
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import eu.kanade.presentation.entries.novel.components.NovelActionRow
+import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadAction
 import eu.kanade.presentation.entries.novel.components.NovelChapterHeader
 import eu.kanade.presentation.entries.novel.components.NovelChapterListItem
@@ -71,6 +72,7 @@ fun NovelScreen(
     navigateUp: () -> Unit,
     onChapterClicked: (NovelChapter) -> Unit,
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction) -> Unit)?,
+    onAudioChapter: ((List<NovelChapterList.Item>, NovelChapterAudioAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
@@ -125,6 +127,7 @@ fun NovelScreen(
             navigateUp = navigateUp,
             onChapterClicked = onChapterClicked,
             onDownloadChapter = onDownloadChapter,
+            onAudioChapter = onAudioChapter,
             onAddToLibraryClicked = onAddToLibraryClicked,
             onCoverClick = onCoverClick,
             onWebViewClicked = onWebViewClicked,
@@ -179,6 +182,7 @@ fun NovelScreen(
             navigateUp = navigateUp,
             onChapterClicked = onChapterClicked,
             onDownloadChapter = onDownloadChapter,
+            onAudioChapter = onAudioChapter,
             onAddToLibraryClicked = onAddToLibraryClicked,
             onCoverClick = onCoverClick,
             onWebViewClicked = onWebViewClicked,
@@ -236,6 +240,7 @@ private fun NovelScreenSmallImpl(
     navigateUp: () -> Unit,
     onChapterClicked: (NovelChapter) -> Unit,
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction) -> Unit)?,
+    onAudioChapter: ((List<NovelChapterList.Item>, NovelChapterAudioAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
@@ -535,6 +540,13 @@ private fun NovelScreenSmallImpl(
                         } else {
                             null
                         },
+                        onAudioClick = if (onAudioChapter != null) {
+                            { onAudioChapter(listOf(chapterItem), it) }
+                        } else {
+                            null
+                        },
+                        audioStateProvider = { chapterItem.audioState },
+                        audioProgressProvider = { chapterItem.audioProgress },
                         onSwipeLeft = { onChapterSwipe(chapterItem, chapterSwipeStartAction) },
                         onSwipeRight = { onChapterSwipe(chapterItem, chapterSwipeEndAction) },
                         onSelect = { selected -> onChapterSelected(chapterItem, selected, true, false) },
@@ -612,6 +624,7 @@ private fun NovelScreenLargeImpl(
     navigateUp: () -> Unit,
     onChapterClicked: (NovelChapter) -> Unit,
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction) -> Unit)?,
+    onAudioChapter: ((List<NovelChapterList.Item>, NovelChapterAudioAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
@@ -665,6 +678,7 @@ private fun NovelScreenLargeImpl(
         navigateUp = navigateUp,
         onChapterClicked = onChapterClicked,
         onDownloadChapter = onDownloadChapter,
+        onAudioChapter = onAudioChapter,
         onAddToLibraryClicked = onAddToLibraryClicked,
         onCoverClick = onCoverClick,
         onWebViewClicked = onWebViewClicked,

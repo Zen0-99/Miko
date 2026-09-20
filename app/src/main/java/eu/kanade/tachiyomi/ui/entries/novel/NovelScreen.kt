@@ -30,6 +30,7 @@ import eu.kanade.domain.entries.novel.model.hasCustomCover
 import eu.kanade.domain.entries.novel.model.toSNovel
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
+import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import eu.kanade.presentation.entries.novel.NovelScreen
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
@@ -153,6 +154,29 @@ class NovelScreen(
                 }
             },
             onDownloadChapter = screenModel::runChapterDownloadActions.takeIf { !successState.source.isLocalOrStub() },
+            onAudioChapter = { items: List<NovelChapterList.Item>, action: NovelChapterAudioAction ->
+                when (action) {
+                    // SD-4: Play opens the reader with auto-start read-along —
+                    // same locked-reading-order check as onChapterClicked. The
+                    // reader's D-19 branch resolves file vs live playback.
+                    NovelChapterAudioAction.PLAY -> scope.launch {
+                        val lockedOrders = getLockedReadingOrders.await(novelId)
+                        if (lockedOrders.isNotEmpty()) {
+                            lockDialog = lockedOrders
+                        } else {
+                            navigator.push(
+                                NovelReaderScreen(
+                                    novelId,
+                                    items.first().chapter.id,
+                                    autoStartTts = true,
+                                ),
+                            )
+                        }
+                    }
+                    else -> screenModel.runChapterAudioActions(items, action)
+                }
+                Unit
+            }.takeIf { !successState.source.isLocalOrStub() },
             onAddToLibraryClicked = {
                 screenModel.toggleFavorite()
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)

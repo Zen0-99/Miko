@@ -55,6 +55,9 @@ fun NovelChapterListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDownloadClick: ((NovelChapterDownloadAction) -> Unit)?,
+    onAudioClick: ((NovelChapterAudioAction) -> Unit)? = null,
+    audioStateProvider: (() -> NovelChapterAudioState)? = null,
+    audioProgressProvider: (() -> Int)? = null,
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
     onSelect: (Boolean) -> Unit,
@@ -186,6 +189,21 @@ fun NovelChapterListItem(
                         }
                     }
                 }
+            }
+
+            // The audio indicator sits immediately LEFT of the download
+            // indicator and only exists on downloaded chapters (D-07) — it
+            // hides entirely otherwise, and disappears with the chapter
+            // download (D-18).
+            if (downloadIndicatorEnabled && item.downloadState == NovelDownload.State.DOWNLOADED) {
+                NovelChapterAudioIndicator(
+                    enabled = downloadIndicatorEnabled,
+                    audioStateProvider = audioStateProvider ?: { item.audioState },
+                    audioProgressProvider = audioProgressProvider ?: { item.audioProgress },
+                    onClick = { onAudioClick?.invoke(it) },
+                    modifier = Modifier.padding(start = 4.dp),
+                    accentColor = accentColor,
+                )
             }
 
             // Only render the download indicator if enabled. For book sources

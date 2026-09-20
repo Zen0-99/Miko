@@ -23,10 +23,13 @@ import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
 import eu.kanade.domain.source.service.SourcePreferences
 import tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter
 import eu.kanade.presentation.entries.DownloadAction
+import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
+import eu.kanade.presentation.entries.novel.components.NovelChapterAudioState
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadCache
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager
+import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.suggestions.SuggestionCache
@@ -45,6 +48,8 @@ import eu.kanade.tachiyomi.data.suggestions.util.dedupeByCleanTitle
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterRender
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.notificationBuilder
@@ -126,6 +131,8 @@ class NovelScreenModel(
     private val getNovelChapter: GetNovelChapter = Injekt.get(),
     private val downloadManager: NovelDownloadManager = Injekt.get(),
     private val downloadCache: NovelDownloadCache = Injekt.get(),
+    private val downloadProvider: NovelDownloadProvider = Injekt.get(),
+    private val audioRenderManager: ChapterAudioRenderManager = Injekt.get(),
     private val fetchInterval: tachiyomi.domain.entries.novel.interactor.NovelFetchInterval = Injekt.get(),
     private val getLinkedNovels: GetLinkedNovels = Injekt.get(),
     private val getNovelLinkedId: GetNovelLinkedId = Injekt.get(),
@@ -395,7 +402,8 @@ class NovelScreenModel(
                 getNovelAndChapters.subscribe(novelId).distinctUntilChanged(),
                 downloadCache.changes,
                 downloadManager.queueState,
-            ) { novelAndChapters, _, _ -> novelAndChapters }
+                audioRenderManager.queueState,
+            ) { novelAndChapters, _, _, _ -> novelAndChapters }
                 .flowWithLifecycle(lifecycle)
                 .collectLatest { (novel, chapters) ->
                     // Merge chapters from linked sources (dedup by chapter number)
@@ -410,6 +418,7 @@ class NovelScreenModel(
         }
 
         observeDownloads()
+        observeAudioRenders()
 
         screenModelScope.launchIO {
             val novel = getNovelAndChapters.awaitNovel(novelId)
@@ -1521,6 +1530,77 @@ class NovelScreenModel(
         }
     }
 
+    /**
+     * Stream render-queue state into the chapter rows (D-13): status changes
+     * (queued -> rendering -> done/error, preempt flips) and progress ticks.
+     * Queue *membership* changes (enqueue, cancel, preempt reorder) don't emit
+     * here — the chapter-list rebuild combine on `queueState` re-seeds those.
+     */
+    private fun observeAudioRenders() {
+        screenModelScope.launchIO {
+            audioRenderManager.statusFlow()
+                .filter { it.novel.id == successState?.novel?.id }
+                .catch { error -> logcat(LogPriority.ERROR, error) }
+                .flowWithLifecycle(lifecycle)
+                .collect {
+                    withUIContext {
+                        updateAudioState(it)
+                    }
+                }
+        }
+
+        screenModelScope.launchIO {
+            audioRenderManager.progressFlow()
+                .filter { it.novel.id == successState?.novel?.id }
+                .catch { error -> logcat(LogPriority.ERROR, error) }
+                .flowWithLifecycle(lifecycle)
+                .collect {
+                    withUIContext {
+                        updateAudioState(it)
+                    }
+                }
+        }
+    }
+
+    private fun updateAudioState(render: ChapterRender) {
+        updateSuccessState { successState ->
+            val modifiedIndex = successState.chapters.indexOfFirst { it.id == render.chapter.id }
+            if (modifiedIndex < 0) return@updateSuccessState successState
+
+            val newChapters = successState.chapters.toMutableList().apply {
+                val item = removeAt(modifiedIndex)
+                    .copy(
+                        audioState = render.status.toAudioState(),
+                        audioProgress = render.progress,
+                    )
+                add(modifiedIndex, item)
+            }
+            successState.copy(chapters = newChapters)
+        }
+    }
+
+    /**
+     * Explicit idle reset for actions whose queue effect emits no status
+     * event (cancel removes the item; delete removes the `.m4a`) — mirrors
+     * [updateDownloadState]'s manual NOT_DOWNLOADED reset in [cancelDownload].
+     */
+    private fun clearAudioState(chapterIds: List<Long>) {
+        updateSuccessState { successState ->
+            successState.copy(
+                chapters = successState.chapters.map { item ->
+                    if (item.chapter.id in chapterIds) {
+                        item.copy(
+                            audioState = NovelChapterAudioState.NOT_RENDERED,
+                            audioProgress = 0,
+                        )
+                    } else {
+                        item
+                    }
+                },
+            )
+        }
+    }
+
     private fun getUnreadChapters(): List<NovelChapter> {
         val novel = successState?.novel ?: return emptyList()
         // Filter by unread AND not already downloaded — matches manga behavior.
@@ -1591,6 +1671,81 @@ class NovelScreenModel(
         }
     }
 
+    /**
+     * Dispatch for the chapter-row audio icon (D-07/D-08/D-14). PLAY is
+     * intercepted at the screen call site — it navigates to the reader with
+     * `autoStartTts`, it never reaches this function.
+     */
+    fun runChapterAudioActions(
+        items: List<NovelChapterList.Item>,
+        action: NovelChapterAudioAction,
+    ) {
+        val state = successState ?: return
+        when (action) {
+            NovelChapterAudioAction.RENDER -> {
+                // D-13: enqueue while another render runs shows NO snackbar —
+                // the icon's flip to QUEUED is the feedback. Only a
+                // synchronous enqueue failure surfaces via snackbar.
+                items.forEach { item ->
+                    try {
+                        audioRenderManager.enqueueRender(state.novel, item.chapter, state.source)
+                    } catch (e: Throwable) {
+                        logcat(LogPriority.ERROR, e)
+                        screenModelScope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = with(context) { e.formattedMessage },
+                            )
+                        }
+                    }
+                }
+            }
+            NovelChapterAudioAction.RENDER_NOW -> {
+                val chapterId = items.singleOrNull()?.id ?: return
+                audioRenderManager.startRenderNow(chapterId)
+            }
+            NovelChapterAudioAction.CANCEL -> {
+                val chapterId = items.singleOrNull()?.id ?: return
+                audioRenderManager.cancelRender(chapterId)
+                clearAudioState(listOf(chapterId))
+            }
+            NovelChapterAudioAction.DELETE -> {
+                // D-11/D-08: immediate, no confirmation — deletes only the
+                // .m4a; the chapter stays downloaded and the icon reverts
+                // to idle.
+                screenModelScope.launchNonCancellable {
+                    try {
+                        items.forEach { item ->
+                            audioRenderManager.deleteAudio(state.novel, item.chapter, state.source)
+                        }
+                    } catch (e: Throwable) {
+                        logcat(LogPriority.ERROR, e)
+                    }
+                    clearAudioState(items.map { it.chapter.id })
+                }
+            }
+            NovelChapterAudioAction.RE_RENDER -> {
+                // Fresh render with current voice/speed prefs (D-08): drop the
+                // old file + scratch first, then enqueue like RENDER.
+                screenModelScope.launchNonCancellable {
+                    items.forEach { item ->
+                        try {
+                            audioRenderManager.deleteAudio(state.novel, item.chapter, state.source)
+                            audioRenderManager.enqueueRender(state.novel, item.chapter, state.source)
+                        } catch (e: Throwable) {
+                            logcat(LogPriority.ERROR, e)
+                            screenModelScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = with(context) { e.formattedMessage },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            NovelChapterAudioAction.PLAY -> Unit // handled by the screen (navigation)
+        }
+    }
+
     fun runDownloadAction(action: DownloadAction) {
         val chaptersToDownload = when (action) {
             DownloadAction.NEXT_1_ITEM -> getUnreadChaptersSorted().take(1)
@@ -1632,7 +1787,20 @@ class NovelScreenModel(
         }
     }
 
-    private fun List<NovelChapter>.toNovelChapterListItems(novel: Novel): List<NovelChapterList.Item> {
+    private suspend fun List<NovelChapter>.toNovelChapterListItems(novel: Novel): List<NovelChapterList.Item> {
+        // Seed audio state once per list build: one SAF `audio/` listing for
+        // the novel + the in-memory render queue — never a per-row SAF hit on
+        // scroll (T-05-04-02). An unreadable audio dir seeds all-idle rather
+        // than blanking the icon (UI-SPEC partial-state lift).
+        val source = sourceManager.getOrStub(novel.source)
+        val renderedAudioNames = runCatching {
+            audioRenderManager.renderedAudioFileNames(novel, source)
+        }.getOrElse {
+            logcat(LogPriority.WARN, it) { "audio dir listing failed for '${novel.title}'" }
+            emptySet()
+        }
+        val audioQueue = audioRenderManager.queueState.value
+
         return map { chapter ->
             val activeDownload = downloadManager.getQueuedDownloadOrNull(chapter.id)
             val downloaded = downloadManager.isChapterDownloaded(
@@ -1645,6 +1813,14 @@ class NovelScreenModel(
                 activeDownload != null -> activeDownload.status
                 downloaded -> NovelDownload.State.DOWNLOADED
                 else -> NovelDownload.State.NOT_DOWNLOADED
+            }
+
+            val activeRender = audioQueue.find { it.chapter.id == chapter.id }
+            val audioState = when {
+                activeRender != null -> activeRender.status.toAudioState()
+                downloadProvider.getAudioFileName(chapter.name, chapter.scanlator) in renderedAudioNames ->
+                    NovelChapterAudioState.RENDERED
+                else -> NovelChapterAudioState.NOT_RENDERED
             }
 
             val readProgress = if (!chapter.read && chapter.lastCharRead > 0 && chapter.totalCharCount > 0) {
@@ -1663,6 +1839,8 @@ class NovelScreenModel(
                 chapter = chapter,
                 downloadState = downloadState,
                 downloadProgress = activeDownload?.progress ?: 0,
+                audioState = audioState,
+                audioProgress = activeRender?.progress ?: 0,
                 selected = chapter.id in selectedChapterIds,
                 readProgress = readProgress,
                 isNew = !chapter.read && newChapterTracker.isNew(novel.id, chapter.dateFetch),
@@ -1841,11 +2019,20 @@ sealed class NovelChapterList {
         val selected: Boolean = false,
         val downloadState: NovelDownload.State = NovelDownload.State.NOT_DOWNLOADED,
         val downloadProgress: Int = 0,
+        val audioState: NovelChapterAudioState = NovelChapterAudioState.NOT_RENDERED,
+        val audioProgress: Int = 0,
         val readProgress: Int? = null,
         val isNew: Boolean = false,
     ) : NovelChapterList() {
         val id = chapter.id
     }
+}
+
+private fun ChapterRender.State.toAudioState(): NovelChapterAudioState = when (this) {
+    ChapterRender.State.QUEUED -> NovelChapterAudioState.QUEUED
+    ChapterRender.State.RENDERING -> NovelChapterAudioState.RENDERING
+    ChapterRender.State.DONE -> NovelChapterAudioState.RENDERED
+    ChapterRender.State.ERROR -> NovelChapterAudioState.ERROR
 }
 
 /**
