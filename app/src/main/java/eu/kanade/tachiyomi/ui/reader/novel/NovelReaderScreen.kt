@@ -97,12 +97,14 @@ import eu.kanade.tachiyomi.util.system.hasDisplayCutout
 import kotlin.math.hypot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 class NovelReaderScreen(
     private val novelId: Long,
     private val chapterId: Long? = null,
+    private val autoStartTts: Boolean = false,
 ) : Screen() {
 
     @Composable
@@ -130,6 +132,23 @@ class NovelReaderScreen(
                 screenModel.stopTtsPlayback()
                 screenModel.unbindTtsService()
                 screenModel.shutdownTts()
+            }
+        }
+
+        // D-19 navigation target for the chapter-row Play action (05-04):
+        // once chapter content is loaded, kick off read-along automatically —
+        // rendered .m4a → file playback, otherwise live synthesis. The fired
+        // flag keeps recomposition from re-triggering; rotation disposes and
+        // restarts playback anyway, so a fresh composition may fire again.
+        var ttsAutoStarted by remember { mutableStateOf(false) }
+        LaunchedEffect(autoStartTts) {
+            if (!autoStartTts || ttsAutoStarted) return@LaunchedEffect
+            screenModel.contentItems.first { items ->
+                items.any { it is TextItem.Paragraph && it.text.isNotBlank() }
+            }
+            if (!ttsAutoStarted) {
+                ttsAutoStarted = true
+                screenModel.startTtsPlayback()
             }
         }
 

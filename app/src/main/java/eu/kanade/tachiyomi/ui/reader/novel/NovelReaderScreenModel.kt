@@ -423,7 +423,19 @@ class NovelReaderScreenModel(
     private var ttsService: NovelTtsPlaybackService? = null
     private var ttsServiceConnection: NovelTtsServiceConnection? = null
     private var ttsStateCollectionJob: kotlinx.coroutines.Job? = null
-    private var pendingTtsStart: Triple<List<String>, Int, String>? = null
+    private var pendingTtsStart: PendingTtsStart? = null
+
+    /**
+     * Queued read-along request for the window between bindService and
+     * onServiceConnected. [chapterId] carries the single-chapter identity the
+     * service needs to resolve rendered audio (D-19); null = live synth only.
+     */
+    private data class PendingTtsStart(
+        val paragraphs: List<String>,
+        val startIndex: Int,
+        val title: String,
+        val chapterId: Long?,
+    )
 
     private val _ttsPlaybackState = MutableStateFlow(NovelTtsPlaybackState())
     val ttsPlaybackState = _ttsPlaybackState.asStateFlow()
@@ -604,6 +616,11 @@ class NovelReaderScreenModel(
         }
         if (startIndex < 0) startIndex = 0
 
+        // D-19 file playback is only eligible when the whole paragraph set
+        // belongs to one chapter — INFINITE_SCROLL mixed sets pass null and
+        // always take the live-synthesis path (RESEARCH §5 scope pin).
+        val chapterId = ttsItems.map { it.chapterId }.distinct().singleOrNull()
+
         val title = currentChapter.value?.name ?: novel.value?.title ?: "Novel"
 
         // Start the foreground service
@@ -611,7 +628,7 @@ class NovelReaderScreenModel(
 
         // Bind to the service if not already bound
         if (ttsServiceConnection == null) {
-            pendingTtsStart = Triple(paragraphs, startIndex, title)
+            pendingTtsStart = PendingTtsStart(paragraphs, startIndex, title, chapterId)
             ttsServiceConnection = NovelTtsServiceConnection(
                 onConnected = { service ->
                     ttsService = service
@@ -623,8 +640,13 @@ class NovelReaderScreenModel(
                         }
                     }
                     // If there's a pending start request, execute it now
-                    pendingTtsStart?.let { (paras, idx, ttl) ->
-                        service.startReading(paras, idx, ttl)
+                    pendingTtsStart?.let { pending ->
+                        service.startReading(
+                            pending.paragraphs,
+                            pending.startIndex,
+                            pending.title,
+                            pending.chapterId,
+                        )
                         pendingTtsStart = null
                     }
                 },
@@ -641,7 +663,7 @@ class NovelReaderScreenModel(
             )
         } else {
             // Already bound â€” start reading directly
-            ttsService?.startReading(paragraphs, startIndex, title)
+            ttsService?.startReading(paragraphs, startIndex, title, chapterId)
         }
     }
 

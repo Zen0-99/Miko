@@ -65,12 +65,45 @@ class TtsController(
         get() = currentIndex
 
     /**
+     * True when the active engine is a rendered-audio file player (D-19) —
+     * callers starting a non-rendered read must re-initialize without an
+     * override to swap back to live synthesis.
+     */
+    val isPlayingRenderedAudio: Boolean
+        get() = engine is RenderedAudioEngine
+
+    /**
      * Create and initialize the appropriate TTS engine based on preferences.
+     *
+     * When [engineOverride] is non-null it IS the engine (D-19 file playback):
+     * the pref/engineType resolution and the Pocket install-failure fallback
+     * are skipped, and an initialize failure propagates to [onError] so the
+     * caller can fall back to live synthesis by re-invoking this without an
+     * override. Any previously active engine is released either way —
+     * switching between live synthesis and file playback replaces it
+     * wholesale.
      */
     fun initializeEngine(
         onReady: () -> Unit,
         onError: (String) -> Unit,
+        engineOverride: TtsEngine? = null,
     ) {
+        engine?.shutdown()
+        engine = null
+
+        if (engineOverride != null) {
+            engineOverride.setSpeechRate(preferences.speechRate().get())
+            engineOverride.setPitch(preferences.pitch().get())
+            engineOverride.initialize(
+                onReady = {
+                    engine = engineOverride
+                    onReady()
+                },
+                onError = onError,
+            )
+            return
+        }
+
         val requested = preferences.engineType().get()
         // D-02: stale "neural" prefs resolve silently — to Pocket when the
         // engine bundle is installed, else to the Android fallback. This is a

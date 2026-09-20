@@ -17,9 +17,15 @@ import androidx.core.app.ServiceCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.media.session.MediaButtonReceiver
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioManifest
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.Mp4AtomReader
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.decodeManifest
 import eu.kanade.tachiyomi.util.system.notificationBuilder
+import java.io.FileInputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,8 +34,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import logcat.LogPriority
+import mihon.core.archive.openFileDescriptor
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.entries.novel.interactor.GetNovel
+import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -74,6 +85,7 @@ data class NovelTtsPlaybackState(
 class NovelTtsPlaybackService : Service() {
 
     companion object {
+        private val WHITESPACE = Regex("\\s+")
         private const val NOTIFICATION_ID = 20260408
         private const val ACTION_PREVIOUS = "eu.kanade.tachiyomi.ui.reader.novel.tts.action.PREVIOUS"
         private const val ACTION_PLAY = "eu.kanade.tachiyomi.ui.reader.novel.tts.action.PLAY"
@@ -110,6 +122,13 @@ class NovelTtsPlaybackService : Service() {
     private var ttsController: TtsController? = null
     private var paragraphs: List<String> = emptyList()
     private var chapterTitle: String = ""
+
+    // Rendered-audio resolution (D-19) — same interactor pattern as
+    // NovelDownload.fromChapterId. Lazy so construction never touches Injekt.
+    private val getNovelChapter: GetNovelChapter by lazy { Injekt.get() }
+    private val getNovel: GetNovel by lazy { Injekt.get() }
+    private val sourceManager: NovelSourceManager by lazy { Injekt.get() }
+    private val downloadProvider: NovelDownloadProvider by lazy { Injekt.get() }
 
     private val _playbackState = MutableStateFlow(NovelTtsPlaybackState())
     val playbackState: StateFlow<NovelTtsPlaybackState> = _playbackState.asStateFlow()
@@ -177,11 +196,20 @@ class NovelTtsPlaybackService : Service() {
     /**
      * Start reading a list of paragraphs from [startIndex].
      * Initializes the TTS engine if needed, then begins playback.
+     *
+     * When [chapterId] is non-null and the chapter has rendered audio whose
+     * embedded manifest validates against [paragraphs], playback swaps to the
+     * `.m4a` via a [RenderedAudioEngine] override — instant start, no
+     * synthesis (D-19). Any miss/mismatch/corruption silently falls back to
+     * live synthesis (RESEARCH §2 corruption contract). [chapterId] == null
+     * (e.g. a mixed-chapter paragraph set under INFINITE_SCROLL) always takes
+     * the live path.
      */
     fun startReading(
         paragraphs: List<String>,
         startIndex: Int = 0,
         title: String = "",
+        chapterId: Long? = null,
     ) {
         this.paragraphs = paragraphs
         this.chapterTitle = title
@@ -192,9 +220,33 @@ class NovelTtsPlaybackService : Service() {
             error = null,
         )
 
+        if (chapterId != null) {
+            // Resolution touches the DB + SAF — off the main thread; engine
+            // init lands back on main (ExoPlayer binds to its create looper).
+            serviceScope.launch {
+                val rendered = withContext(Dispatchers.IO) {
+                    resolveRenderedAudioEngine(chapterId, paragraphs)
+                }
+                if (rendered != null) {
+                    initializeRenderedEngine(rendered, startIndex)
+                } else {
+                    initializeLiveEngine(startIndex)
+                }
+            }
+        } else {
+            initializeLiveEngine(startIndex)
+        }
+    }
+
+    /**
+     * The existing live-synthesis path: initialize the pref-resolved engine
+     * when needed, else reuse it. A ready [RenderedAudioEngine] counts as
+     * "not the right engine" — reading a non-rendered chapter after a
+     * rendered one must swap back to live synthesis.
+     */
+    private fun initializeLiveEngine(startIndex: Int) {
         val controller = ttsController
-        if (controller == null || !controller.isReady) {
-            // Engine not yet initialized — initialize then start
+        if (controller == null || !controller.isReady || controller.isPlayingRenderedAudio) {
             ttsController?.initializeEngine(
                 onReady = {
                     _playbackState.value = _playbackState.value.copy(isInitialized = true)
@@ -209,6 +261,82 @@ class NovelTtsPlaybackService : Service() {
             beginReading(startIndex)
         }
     }
+
+    /**
+     * Initialize the controller with the rendered-audio override. If the
+     * file engine itself fails to initialize, fall back to the live path —
+     * the override's onError propagates here instead of the Pocket
+     * install-failure fallback (TtsController.initializeEngine).
+     */
+    private fun initializeRenderedEngine(engine: RenderedAudioEngine, startIndex: Int) {
+        ttsController?.initializeEngine(
+            onReady = {
+                _playbackState.value = _playbackState.value.copy(isInitialized = true)
+                beginReading(startIndex)
+            },
+            onError = { error ->
+                logcat(LogPriority.WARN) { "Rendered audio init failed: $error — live TTS fallback" }
+                initializeLiveEngine(startIndex)
+            },
+            engineOverride = engine,
+        )
+    }
+
+    /**
+     * Resolve the rendered `.m4a` for [chapterId] and validate its embedded
+     * manifest against [paragraphs]. Returns a ready-to-initialize
+     * [RenderedAudioEngine], or null on any miss/mismatch/corruption — the
+     * caller falls back to live synthesis silently (RESEARCH §2).
+     */
+    private suspend fun resolveRenderedAudioEngine(
+        chapterId: Long,
+        paragraphs: List<String>,
+    ): RenderedAudioEngine? {
+        return try {
+            val chapter = getNovelChapter.await(chapterId) ?: return null
+            val novel = getNovel.await(chapter.novelId) ?: return null
+            val source = sourceManager.get(novel.source) ?: return null
+            val audioFile = downloadProvider.findAudioFile(
+                chapter.name,
+                chapter.scanlator,
+                novel.title,
+                source,
+            ) ?: return null
+
+            val manifest = audioFile.openFileDescriptor(applicationContext, "r").use { pfd ->
+                // NB: the channel over pfd.fileDescriptor is intentionally
+                // not closed — pfd.use owns the fd (double-close → EBADF).
+                val json = Mp4AtomReader.read(FileInputStream(pfd.fileDescriptor).channel)
+                json?.let(::decodeManifest)
+            } ?: return null
+
+            if (!manifestMatches(manifest, paragraphs)) return null
+            RenderedAudioEngine(applicationContext, audioFile.uri, manifest)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN, e) { "Rendered audio resolution failed for chapter $chapterId" }
+            null
+        }
+    }
+
+    /**
+     * A manifest is only trustworthy when its paragraph list is the one being
+     * read: sizes must match and every text must agree after whitespace
+     * normalization; offsets must cover every paragraph index the controller
+     * can speak (T-05-03-01/T-05-03-03).
+     */
+    private fun manifestMatches(manifest: ChapterAudioManifest, paragraphs: List<String>): Boolean {
+        if (manifest.durationMs <= 0) return false
+        if (manifest.paragraphOffsetsMs.size < paragraphs.size) return false
+        if (manifest.paragraphTexts.size != paragraphs.size) return false
+        return manifest.paragraphTexts.zip(paragraphs).all { (m, p) ->
+            normalizeParagraph(m) == normalizeParagraph(p)
+        }
+    }
+
+    private fun normalizeParagraph(text: String): String =
+        text.trim().replace(WHITESPACE, " ")
 
     /**
      * Resume playback from the current position.
