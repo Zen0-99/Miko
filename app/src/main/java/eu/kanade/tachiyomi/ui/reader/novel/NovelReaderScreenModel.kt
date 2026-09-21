@@ -606,15 +606,18 @@ class NovelReaderScreenModel(
 
     /**
      * Preview a Supertonic voice ("quick brown fox" sample). Tapping the
-     * voice that is already loading/playing stops it — the picker icon
-     * doubles as a stop button.
+     * voice that is already playing stops it — the picker icon doubles as
+     * a stop button. A re-tap while the same voice is still synthesizing
+     * is a no-op: restarting would just reset the ~2 s inference, which is
+     * exactly what made rapid taps look like total failure (the cancelled
+     * job keeps holding the native synthLock until inference returns).
      */
     fun previewSupertonicVoice(styleName: String) {
-        val busy = _supertonicPreviewLoading.value == styleName ||
-            _supertonicPreviewPlaying.value == styleName
-        logcat(LogPriority.INFO) { "previewSupertonicVoice($styleName) busy=$busy" }
+        if (_supertonicPreviewLoading.value == styleName) return
+        val playing = _supertonicPreviewPlaying.value == styleName
+        logcat(LogPriority.INFO) { "previewSupertonicVoice($styleName) playing=$playing" }
         stopSupertonicPreview()
-        if (busy) return
+        if (playing) return
         val ctx = context ?: Injekt.get<Context>()
         val previewer = supertonicPreviewer
             ?: SupertonicVoicePreviewer(ctx, ttsPreferences).also { supertonicPreviewer = it }

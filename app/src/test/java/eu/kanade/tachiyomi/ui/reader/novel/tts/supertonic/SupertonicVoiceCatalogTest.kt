@@ -121,11 +121,11 @@ class SupertonicVoiceCatalogTest {
     }
 
     @Test
-    fun `labelFor renders style name plus descriptor and gender`() {
+    fun `labelFor renders style name plus display name`() {
         val f5 = SupertonicVoiceCatalog.voices.first { it.styleName == "F5" }
         val m1 = SupertonicVoiceCatalog.voices.first { it.styleName == "M1" }
-        SupertonicVoiceCatalog.labelFor(f5) shouldBe "F5 · Gentle Female"
-        SupertonicVoiceCatalog.labelFor(m1) shouldBe "M1 · Lively Male"
+        SupertonicVoiceCatalog.labelFor(f5) shouldBe "F5 · Willow"
+        SupertonicVoiceCatalog.labelFor(m1) shouldBe "M1 · Felix"
     }
 
     @Test

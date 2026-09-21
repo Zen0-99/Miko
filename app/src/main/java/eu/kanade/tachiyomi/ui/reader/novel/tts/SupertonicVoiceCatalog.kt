@@ -114,22 +114,21 @@ object SupertonicVoiceCatalog {
     }
 
     /**
-     * Short character descriptors — Supertone's own voice descriptions
-     * (supertonic-py Voices doc); the styles ship unnamed, so these are
-     * the closest thing to official names. F5 and M5 are Supertone's
-     * audiobook picks.
+     * Display names — upstream ships the styles unnamed (F1..M5 only), so
+     * these are Miko-assigned, picked loosely to match Supertone's own
+     * voice descriptions. F5 and M5 are Supertone's audiobook picks.
      */
-    private val DESCRIPTORS = mapOf(
-        "F1" to "Calm",
-        "F2" to "Bright",
-        "F3" to "Announcer",
-        "F4" to "Confident",
-        "F5" to "Gentle",
-        "M1" to "Lively",
-        "M2" to "Deep",
-        "M3" to "Authoritative",
-        "M4" to "Soft",
-        "M5" to "Storyteller",
+    private val NAMES = mapOf(
+        "F1" to "Serena",
+        "F2" to "Poppy",
+        "F3" to "Brooke",
+        "F4" to "Ivy",
+        "F5" to "Willow",
+        "M1" to "Felix",
+        "M2" to "Bruno",
+        "M3" to "August",
+        "M4" to "Ellis",
+        "M5" to "Rowan",
     )
 
     /** Supertone's use-case description, shown as picker subtitle. */
@@ -146,14 +145,13 @@ object SupertonicVoiceCatalog {
         "M5" to "Warm, calm storytelling — audiobook voice",
     )
 
-    /** Human-facing picker label: `"F5 · Gentle female"`. */
+    /** Human-facing picker label: `"F5 · Willow"`. */
     fun labelFor(voice: SupertonicVoice): String {
-        val descriptor = DESCRIPTORS[voice.styleName]
-        val gender = voice.gender.replaceFirstChar { it.uppercase() }
-        return if (descriptor != null) {
-            "${voice.styleName} · $descriptor $gender"
+        val name = NAMES[voice.styleName]
+        return if (name != null) {
+            "${voice.styleName} · $name"
         } else {
-            "${voice.styleName} · $gender"
+            voice.styleName
         }
     }
 
