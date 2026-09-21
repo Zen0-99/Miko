@@ -409,14 +409,17 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
             AudioFormat.ENCODING_PCM_16BIT,
         )
         // MODE_STREAM (not MODE_STATIC — it glitches on long utterances).
-        // Deep buffer: ~5s of PCM. The old maxOf(minBuf, 8192) held ~170ms,
-        // so any inter-chunk synthesis stall longer than that starved the
-        // track (underrun → Android disabled+restarted it). With Pocket
-        // producing at roughly realtime, a deep buffer is what lets
-        // prefetched audio actually bank ahead of the playback head.
-        // Pause stays instant — pause() halts output regardless of how
-        // much is buffered.
-        val bufSize = maxOf(minBuf, sampleRate * 2 * STREAM_BUFFER_SECONDS)
+        // Buffer deliberately stays small (~0.5s): anything near multi-second
+        // size gets assigned AUDIO_OUTPUT_FLAG_DEEP_BUFFER by AudioFlinger
+        // (observed on Pixel 8 Pro: flag 0x008, ~3.3s latency), and on that
+        // path playbackHeadPosition is unreliable — awaitDrain either exited
+        // instantly (release before audio reached the speaker) or never
+        // exited (zombie started track, output standby). Net effect: total
+        // silence despite full frame delivery. A normal-path buffer keeps
+        // head-position accurate and playback audible; inter-chunk synthesis
+        // stalls are absorbed by the blocking write() pacing.
+        // sampleRate bytes == STREAM_BUFFER_MS of mono PCM16 (2 bytes/frame).
+        val bufSize = maxOf(minBuf, sampleRate * 2 * STREAM_BUFFER_MS / 1000)
         val newTrack = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -513,6 +516,8 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
 
     override suspend fun awaitDrain() {
         val t = track ?: return
+        var lastHead = -1
+        var stallMs = 0L
         while (
             currentCoroutineContext().isActive &&
             t.playbackHeadPosition < samplesWritten
@@ -522,7 +527,21 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
             // onDone, and let the next flush release the track with buffered
             // audio still unplayed.
             if (t.playState == AudioTrack.PLAYSTATE_STOPPED) break
-            delay(10)
+            // A playing track whose head doesn't move for DRAIN_STALL_MS is
+            // wedged (seen on the deep-buffer path — head stays at 0 while
+            // the output sleeps). Bail instead of leaking a zombie track.
+            if (t.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                val head = t.playbackHeadPosition
+                stallMs = if (head == lastHead) stallMs + DRAIN_POLL_MS else 0
+                lastHead = head
+                if (stallMs >= DRAIN_STALL_MS) {
+                    logcat(LogPriority.WARN) {
+                        "AudioTrackPcmSink: playback head stuck at $head of $samplesWritten, abandoning drain"
+                    }
+                    break
+                }
+            }
+            delay(DRAIN_POLL_MS)
         }
     }
 
@@ -545,6 +564,8 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
         const val PAUSE_POLL_MS = 20L
         const val WRITE_STALL_RETRY_MS = 20L
         const val MAX_WRITE_STALLS = 50
-        const val STREAM_BUFFER_SECONDS = 5
+        const val STREAM_BUFFER_MS = 500
+        const val DRAIN_POLL_MS = 10L
+        const val DRAIN_STALL_MS = 4_000L
     }
 }
