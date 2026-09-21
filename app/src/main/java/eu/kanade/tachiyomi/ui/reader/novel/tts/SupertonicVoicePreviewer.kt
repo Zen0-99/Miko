@@ -39,8 +39,10 @@ internal class SupertonicVoicePreviewer(
      * (release unblocks a mid-flight sink write).
      */
     suspend fun play(styleName: String, onPlaybackStart: () -> Unit = {}) {
+        logcat(LogPriority.INFO) { "VoicePreview: play($styleName)" }
         val eng = engine ?: SupertonicEngine(context, preferences).also { engine = it }
         val pcm = cache[styleName] ?: run {
+            logcat(LogPriority.INFO) { "VoicePreview: synthesizing sample for $styleName" }
             val chunks = ArrayList<ShortArray>()
             eng.synthesizeStream(
                 SAMPLE_TEXT,
@@ -60,6 +62,7 @@ internal class SupertonicVoicePreviewer(
         }
         currentCoroutineContext().ensureActive()
         val pcmSink = AudioTrackPcmSink(eng.sampleRate).also { sink = it }
+        logcat(LogPriority.INFO) { "VoicePreview: playing ${pcm.size} samples for $styleName" }
         onPlaybackStart()
         try {
             pcmSink.write(pcm)

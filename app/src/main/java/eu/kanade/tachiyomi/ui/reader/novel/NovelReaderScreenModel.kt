@@ -61,6 +61,8 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoicePreviewer
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import eu.kanade.tachiyomi.ui.reader.novel.tts.UrlHttpFetcher
 import java.io.File
 
@@ -610,6 +612,7 @@ class NovelReaderScreenModel(
     fun previewSupertonicVoice(styleName: String) {
         val busy = _supertonicPreviewLoading.value == styleName ||
             _supertonicPreviewPlaying.value == styleName
+        logcat(LogPriority.INFO) { "previewSupertonicVoice($styleName) busy=$busy" }
         stopSupertonicPreview()
         if (busy) return
         val ctx = context ?: Injekt.get<Context>()

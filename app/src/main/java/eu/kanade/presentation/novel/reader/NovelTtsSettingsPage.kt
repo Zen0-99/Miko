@@ -445,14 +445,7 @@ private fun SupertonicVoicePicker(
                 voices.forEachIndexed { index, voice ->
                     DropdownMenuItem(
                         text = {
-                            Column {
-                                Text(SupertonicVoiceCatalog.labelFor(voice))
-                                Text(
-                                    text = SupertonicVoiceCatalog.descriptionFor(voice),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                            Text(SupertonicVoiceCatalog.labelFor(voice))
                         },
                         trailingIcon = {
                             // Nested IconButton consumes the tap — the row's
@@ -489,6 +482,9 @@ private fun SupertonicVoicePicker(
                         },
                         onClick = {
                             onSelect(index)
+                            // Selecting a voice also plays its preview — the
+                            // user hears what they just picked.
+                            onPreview(voice.styleName)
                             expanded = false
                         },
                     )
