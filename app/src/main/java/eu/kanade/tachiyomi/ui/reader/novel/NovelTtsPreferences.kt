@@ -72,12 +72,20 @@ class NovelTtsPreferences(
     fun backgroundPlayback() = preferenceStore.getBoolean("pref_novel_tts_bg_playback", true)
 
     // Pocket TTS (onnxruntime) specific preferences
+    //
+    // The thread/XNNPACK keys are shared by every ORT engine (Pocket +
+    // Supertonic) — renaming them would orphan existing user settings.
 
-    /** Pocket engine intra-op threads: 0 = auto-detect via CPU cluster detection */
+    /** ORT engine intra-op threads (Pocket + Supertonic): 0 = auto-detect via CPU cluster detection */
     fun pocketIntraOpThreads() = preferenceStore.getInt("pref_novel_tts_pocket_threads", 0)
 
-    /** XNNPACK execution provider mode: "auto" (attempt, CPU EP fallback), "on", "off" */
+    /** XNNPACK execution provider mode (Pocket + Supertonic): "auto" (attempt, CPU EP fallback), "on", "off" */
     fun pocketXnnpackMode() = preferenceStore.getString("pref_novel_tts_pocket_xnnpack", "auto")
+
+    // Supertonic TTS (onnxruntime) specific preferences
+
+    /** Supertonic denoise steps per chunk (sherpa's proven default is 5) */
+    fun supertonicNumSteps() = preferenceStore.getInt("pref_novel_tts_supertonic_steps", 5)
 
     // Chapter audio rendering (phase 5)
 

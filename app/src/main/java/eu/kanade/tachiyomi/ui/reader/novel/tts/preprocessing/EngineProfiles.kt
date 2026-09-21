@@ -77,6 +77,9 @@ object EngineProfiles {
         "pocket-tts-en-v2026_04" to KITTEN_DEFAULTS,
         // Developer-only clean-room Pocket engine — same profile as production Pocket.
         "pocket-tts-en-v2026_04-dev" to KITTEN_DEFAULTS,
+        // Supertonic's own preprocess does no number/date/abbreviation
+        // expansion either — same gap Pocket has, so the same rule set.
+        "supertonic-3-int8" to KITTEN_DEFAULTS,
         "piper" to setOf(
             // Piper does almost nothing natively — apply everything.
             "markdown", "html",
