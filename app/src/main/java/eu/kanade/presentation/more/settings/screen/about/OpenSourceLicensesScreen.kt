@@ -42,8 +42,8 @@ class OpenSourceLicensesScreen : Screen() {
                 librariesBlock = { context ->
                     val libs = Libs.Builder().withContext(context).build()
                     libs.copy(
-                        libraries = (libs.libraries + pocketVoicesLibrary).toImmutableList(),
-                        licenses = (libs.licenses + pocketVoiceLicense).toImmutableSet(),
+                        libraries = (libs.libraries + pocketVoicesLibrary + supertonicVoicesLibrary).toImmutableList(),
+                        licenses = (libs.licenses + pocketVoiceLicense + supertonicLicense).toImmutableSet(),
                     )
                 },
                 onLibraryClick = {
@@ -110,4 +110,49 @@ private val pocketVoicesLibrary = Library(
         url = "https://github.com/kyutai-labs/pocket-tts",
     ),
     licenses = persistentSetOf(pocketVoiceLicense),
+)
+
+/**
+ * OpenRAIL-M attribution notice for the Supertonic-3 model + bundled
+ * voice styles (D-10). Mirrors `LICENSES/supertonic-3.md`. Rendered as
+ * HTML on the license detail screen.
+ */
+private const val SUPERTONIC_ATTRIBUTION = """
+<b>Supertonic-3 TTS engine</b><br/>
+Model by <b>Supertone</b> — OpenRAIL-M license
+(https://huggingface.co/Supertone/supertonic-3). The engine bundle is
+downloaded on demand and is not shipped inside the app.<br/><br/>
+<b>Voice styles</b><br/>
+The ten bundled voices (F1–F5, M1–M5) ship inside the model's
+voice.bin tensor stack and are covered by the same OpenRAIL-M license.
+Use restrictions apply — see the model card for the full text.<br/><br/>
+The int8 weights are republished via the sherpa-onnx tts-models release
+(k2-fsa/sherpa-onnx); inference runs on Microsoft's onnxruntime-android
+(MIT — see the Pocket TTS voices entry).
+"""
+
+private val supertonicLicense = License(
+    name = "OpenRAIL-M",
+    url = "https://huggingface.co/Supertone/supertonic-3",
+    licenseContent = SUPERTONIC_ATTRIBUTION.trimIndent(),
+    hash = "supertonic-3-attribution",
+)
+
+private val supertonicVoicesLibrary = Library(
+    uniqueId = "supertone:supertonic-3",
+    artifactVersion = null,
+    name = "Supertonic-3 voices",
+    description = "Supertonic-3 TTS model and bundled voice styles " +
+        "(downloaded engine bundle). Model + voices: OpenRAIL-M (Supertone). " +
+        "int8 weights ship via the sherpa-onnx tts-models release; " +
+        "inference runs on onnxruntime-android (MIT).",
+    website = "https://huggingface.co/Supertone/supertonic-3",
+    developers = persistentListOf(),
+    organization = null,
+    scm = Scm(
+        connection = null,
+        developerConnection = null,
+        url = "https://huggingface.co/Supertone/supertonic-3",
+    ),
+    licenses = persistentSetOf(supertonicLicense),
 )

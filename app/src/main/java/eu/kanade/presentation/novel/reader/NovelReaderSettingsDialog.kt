@@ -185,6 +185,11 @@ fun NovelReaderSettingsDialog(
                         onInstallPocket = screenModel.onInstallPocket,
                         onUninstallPocket = screenModel.onUninstallPocket,
                         onSelectPocketVoice = screenModel.onSelectPocketVoice,
+                        supertonicInstallState = screenModel.supertonicInstallState.collectAsStateWithLifecycle().value,
+                        supertonicVoices = screenModel.supertonicVoices.collectAsStateWithLifecycle().value,
+                        onInstallSupertonic = screenModel.onInstallSupertonic,
+                        onUninstallSupertonic = screenModel.onUninstallSupertonic,
+                        onSelectSupertonicVoice = screenModel.onSelectSupertonicVoice,
                     )
                 }
             }

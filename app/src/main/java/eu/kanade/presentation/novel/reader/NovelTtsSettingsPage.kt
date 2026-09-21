@@ -43,6 +43,8 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.TtsVoice
 import tachiyomi.presentation.core.util.collectAsState
 
@@ -60,13 +62,18 @@ fun ColumnScope.NovelTtsSettingsPage(
     onInstallPocket: () -> Unit = {},
     onUninstallPocket: () -> Unit = {},
     onSelectPocketVoice: (String) -> Unit = {},
+    supertonicInstallState: InstallState? = null,
+    supertonicVoices: List<SupertonicVoice> = emptyList(),
+    onInstallSupertonic: () -> Unit = {},
+    onUninstallSupertonic: () -> Unit = {},
+    onSelectSupertonicVoice: (String) -> Unit = {},
 ) {
     // ---- Engine section ----
     SectionHeader("Text-to-Speech", accentColor)
 
     val engineType by preferences.engineType().collectAsState()
-    val engineLabels = listOf("Android TTS (system)", "Pocket TTS")
-    val engineValues = listOf("android", "pocket")
+    val engineLabels = listOf("Android TTS (system)", "Pocket TTS", "Supertonic TTS")
+    val engineValues = listOf("android", "pocket", "supertonic")
     SettingsDropdown(
         label = "TTS engine",
         // A stale stored value (e.g. the pre-port "neural") renders the first
@@ -108,9 +115,10 @@ fun ColumnScope.NovelTtsSettingsPage(
     if (engineType == "pocket") {
         SubHeader("Engine", accentColor)
 
-        PocketEngineItem(
+        EngineInstallItem(
             state = pocketInstallState,
             accentColor = accentColor,
+            sizeLabel = "~97 MB",
             onInstall = onInstallPocket,
             onUninstall = onUninstallPocket,
         )
@@ -174,6 +182,117 @@ fun ColumnScope.NovelTtsSettingsPage(
             Column {
                 // Performance overrides (D-09) — autodetect is the default;
                 // these cover the long tail of exotic SoCs.
+                val intraOpThreads by preferences.pocketIntraOpThreads().collectAsState()
+                SliderItem(
+                    label = "Synthesis threads",
+                    value = intraOpThreads.coerceIn(0, 8),
+                    valueRange = 0..8,
+                    valueText = if (intraOpThreads == 0) "Auto" else "$intraOpThreads",
+                    steps = 7,
+                    accentColor = accentColor,
+                ) { threads ->
+                    preferences.pocketIntraOpThreads().set(threads.coerceIn(0, 8))
+                }
+                SettingsCaption("Auto matches your CPU. Only change this if speech is slow or the phone gets hot.")
+
+                val xnnpackMode by preferences.pocketXnnpackMode().collectAsState()
+                val xnnpackLabels = listOf("Auto", "On", "Off")
+                val xnnpackValues = listOf("auto", "on", "off")
+                SettingsDropdown(
+                    label = "Hardware acceleration",
+                    selectedLabel = xnnpackLabels[xnnpackValues.indexOf(xnnpackMode).coerceAtLeast(0)],
+                    options = xnnpackLabels,
+                ) { index ->
+                    preferences.pocketXnnpackMode().set(xnnpackValues[index])
+                }
+                SettingsCaption("Leave on Auto — Off can help on phones where speech stutters.")
+            }
+        }
+    } else if (engineType == "supertonic") {
+        SubHeader("Engine", accentColor)
+
+        EngineInstallItem(
+            state = supertonicInstallState,
+            accentColor = accentColor,
+            sizeLabel = "~129 MB",
+            onInstall = onInstallSupertonic,
+            onUninstall = onUninstallSupertonic,
+        )
+
+        // ---- Voice picker (enabled only once the engine is installed) ----
+        val voiceName by preferences.voiceName().collectAsState()
+        if (supertonicInstallState is InstallState.Installed || supertonicInstallState is InstallState.Outdated) {
+            if (supertonicVoices.isNotEmpty()) {
+                val voiceLabels = supertonicVoices.map { SupertonicVoiceCatalog.labelFor(it) }
+                // Blank or stale (e.g. pocket-era) selections resolve to the
+                // locked default (supertonic:F5, D-05); the engine does the same (R6).
+                val selectedIndex = supertonicVoices.indexOfFirst { it.name == voiceName }
+                    .takeIf { it >= 0 }
+                    ?: supertonicVoices.indexOfFirst { it.name == SupertonicVoiceCatalog.DEFAULT_VOICE }
+                        .coerceAtLeast(0)
+                SettingsDropdown(
+                    label = "Voice",
+                    selectedLabel = voiceLabels[selectedIndex],
+                    options = voiceLabels,
+                ) { index ->
+                    onSelectSupertonicVoice(supertonicVoices[index].name)
+                }
+            } else {
+                SettingsCaption("No voices found — try reinstalling the engine")
+            }
+
+            // Voice attribution (REQ-006f) — the full notice lives in
+            // About → Licenses; keep the picker itself free of legalese.
+            SettingsCaption("Voice credits — About → Licenses")
+        } else {
+            SettingsCaption("Install the engine to pick a voice")
+        }
+
+        // ---- Advanced (collapsible) ----
+        var showAdvanced by remember { mutableStateOf(false) }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showAdvanced = !showAdvanced }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "Advanced",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Icon(
+                imageVector = if (showAdvanced) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (showAdvanced) "Collapse" else "Expand",
+                tint = accentColor ?: MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showAdvanced,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            Column {
+                // Diffusion denoise steps (PB-21) — sherpa's proven default
+                // is 5; the slider covers the V6 A/B tune range.
+                val numSteps by preferences.supertonicNumSteps().collectAsState()
+                SliderItem(
+                    label = "Diffusion steps",
+                    value = numSteps.coerceIn(3, 8),
+                    valueRange = 3..8,
+                    valueText = "$numSteps",
+                    steps = 4,
+                    accentColor = accentColor,
+                ) { steps ->
+                    preferences.supertonicNumSteps().set(steps.coerceIn(3, 8))
+                }
+                SettingsCaption("Higher is smoother but slower — 5 is the proven default.")
+
+                // Performance overrides — the same shared ORT knobs the
+                // pocket branch exposes (PB-5, RESEARCH rec 3).
                 val intraOpThreads by preferences.pocketIntraOpThreads().collectAsState()
                 SliderItem(
                     label = "Synthesis threads",
@@ -269,9 +388,10 @@ private fun SettingsCaption(text: String) {
  * ("Remove"), the same pattern as downloaded chapters.
  */
 @Composable
-private fun PocketEngineItem(
+private fun EngineInstallItem(
     state: InstallState?,
     accentColor: Color?,
+    sizeLabel: String,
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
 ) {
@@ -298,7 +418,7 @@ private fun PocketEngineItem(
             )
             when (state) {
                 null, InstallState.NotInstalled -> {
-                    SettingsInlineCaption("Not installed · ~97 MB")
+                    SettingsInlineCaption("Not installed · $sizeLabel")
                 }
                 is InstallState.Downloading -> {
                     val total = state.totalBytes.coerceAtLeast(1L)
@@ -415,7 +535,7 @@ private fun PocketEngineItem(
 }
 
 /**
- * Subtitle text inside [PocketEngineItem]'s row — no extra padding since the
+ * Subtitle text inside [EngineInstallItem]'s row — no extra padding since the
  * row already carries the page's 16dp inset.
  */
 @Composable
