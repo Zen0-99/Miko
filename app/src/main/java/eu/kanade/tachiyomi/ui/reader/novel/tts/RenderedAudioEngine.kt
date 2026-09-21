@@ -139,8 +139,14 @@ class RenderedAudioEngine internal constructor(
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     when (playbackState) {
                         Player.STATE_READY -> {
-                            ready = true
-                            onReady()
+                            // READY re-fires after every seek/buffer cycle —
+                            // without this guard each speak()→seekTo() round-
+                            // trips through the caller's onReady→beginReading
+                            // and loops forever (~40 audio-focus requests/s).
+                            if (!ready) {
+                                ready = true
+                                onReady()
+                            }
                         }
                         // EOF: fire the pending onDone so the controller's
                         // onComplete chain runs for the last paragraph.

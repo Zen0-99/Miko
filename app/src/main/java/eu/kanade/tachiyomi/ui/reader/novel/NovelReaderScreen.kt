@@ -896,6 +896,10 @@ class NovelReaderScreen(
                         onInstallSupertonic = { screenModel.installSupertonicEngine() },
                         onUninstallSupertonic = { screenModel.uninstallSupertonicEngine() },
                         onSelectSupertonicVoice = { name -> screenModel.selectSupertonicVoice(name) },
+                        supertonicPreviewLoading = screenModel.supertonicPreviewLoading,
+                        supertonicPreviewPlaying = screenModel.supertonicPreviewPlaying,
+                        onPreviewSupertonicVoice = { style -> screenModel.previewSupertonicVoice(style) },
+                        onStopSupertonicPreview = { screenModel.stopSupertonicPreview() },
                     )
                 },
             )

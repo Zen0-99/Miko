@@ -175,7 +175,18 @@ class NovelTtsPlaybackService : Service() {
         // Idempotent when already foreground.
         startForeground(NOTIFICATION_ID, buildNotification())
         MediaButtonReceiver.handleIntent(mediaSession, intent)
-        resolveTransportAction(intent?.action)?.let(::dispatchTransportAction)
+        val action = resolveTransportAction(intent?.action)
+        if (action != null && paragraphs.isEmpty()) {
+            // A stale notification or the system's resumable media card can
+            // fire transport actions after the session ended — the pending
+            // intents start this service again and startForeground() reposts
+            // a dead-controls notification. With no session loaded there is
+            // nothing to control: tear the zombie back down immediately.
+            logcat(LogPriority.INFO) { "Ignoring $action — no active TTS session" }
+            stopForegroundPlayback()
+            return START_NOT_STICKY
+        }
+        action?.let(::dispatchTransportAction)
         return START_STICKY
     }
 
@@ -293,25 +304,74 @@ class NovelTtsPlaybackService : Service() {
         paragraphs: List<String>,
     ): RenderedAudioEngine? {
         return try {
-            val chapter = getNovelChapter.await(chapterId) ?: return null
-            val novel = getNovel.await(chapter.novelId) ?: return null
-            val source = sourceManager.get(novel.source) ?: return null
+            val chapter = getNovelChapter.await(chapterId)
+            if (chapter == null) {
+                logcat(LogPriority.WARN) { "Rendered audio: chapter $chapterId not in DB" }
+                return null
+            }
+            val novel = getNovel.await(chapter.novelId)
+            if (novel == null) {
+                logcat(LogPriority.WARN) { "Rendered audio: novel ${chapter.novelId} not in DB" }
+                return null
+            }
+            val source = sourceManager.get(novel.source)
+            if (source == null) {
+                logcat(LogPriority.WARN) { "Rendered audio: source ${novel.source} unavailable" }
+                return null
+            }
             val audioFile = downloadProvider.findAudioFile(
                 chapter.name,
                 chapter.scanlator,
                 novel.title,
                 source,
-            ) ?: return null
+            )
+            if (audioFile == null) {
+                logcat(LogPriority.INFO) { "Rendered audio: no .m4a for '${chapter.name}'" }
+                return null
+            }
 
             val manifest = audioFile.openFileDescriptor(applicationContext, "r").use { pfd ->
                 // NB: the channel over pfd.fileDescriptor is intentionally
                 // not closed — pfd.use owns the fd (double-close → EBADF).
                 val json = Mp4AtomReader.read(FileInputStream(pfd.fileDescriptor).channel)
                 json?.let(::decodeManifest)
-            } ?: return null
+            }
+            if (manifest == null) {
+                logcat(LogPriority.WARN) { "Rendered audio: manifest atom unreadable for '${chapter.name}'" }
+                return null
+            }
 
-            if (!manifestMatches(manifest, paragraphs)) return null
-            RenderedAudioEngine(applicationContext, audioFile.uri, manifest)
+            // The reader's paragraph set may be a contiguous window of the
+            // manifest's — the progressive HTML parser can still be filling
+            // contentItems when playback starts (observed: reader=30p vs
+            // manifest=120p), or the set may start mid-chapter. Find the
+            // base index whose manifest texts match the reader list
+            // element-for-element; the engine then indexes into a manifest
+            // sliced to that base so paragraph indices stay aligned.
+            val base = manifestBaseIndex(manifest, paragraphs)
+            if (base == null) {
+                logcat(LogPriority.WARN) {
+                    "Rendered audio: manifest mismatch for '${chapter.name}' " +
+                        "(manifest=${manifest.paragraphTexts.size}p/${manifest.paragraphOffsetsMs.size}o/" +
+                        "${manifest.durationMs}ms, reader=${paragraphs.size}p)"
+                }
+                return null
+            }
+            val effectiveManifest = if (base == 0) {
+                manifest
+            } else {
+                manifest.copy(
+                    paragraphTexts = manifest.paragraphTexts.drop(base),
+                    paragraphOffsetsMs = manifest.paragraphOffsetsMs.drop(base),
+                )
+            }
+            if (base > 0) {
+                logcat(LogPriority.INFO) {
+                    "Rendered audio: reader set is a subsequence of '${chapter.name}' at base $base"
+                }
+            }
+            logcat(LogPriority.INFO) { "Rendered audio: playing '${chapter.name}' from .m4a (${manifest.engine})" }
+            RenderedAudioEngine(applicationContext, audioFile.uri, effectiveManifest)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -321,18 +381,29 @@ class NovelTtsPlaybackService : Service() {
     }
 
     /**
-     * A manifest is only trustworthy when its paragraph list is the one being
-     * read: sizes must match and every text must agree after whitespace
-     * normalization; offsets must cover every paragraph index the controller
-     * can speak (T-05-03-01/T-05-03-03).
+     * A manifest is only trustworthy when its paragraph list covers the one
+     * being read: the reader's paragraphs must appear as a contiguous,
+     * text-identical run inside the manifest's list (whitespace-normalized).
+     * Returns the manifest index the run starts at — 0 for a full match —
+     * or null when no such run exists (T-05-03-01/T-05-03-03).
      */
-    private fun manifestMatches(manifest: ChapterAudioManifest, paragraphs: List<String>): Boolean {
-        if (manifest.durationMs <= 0) return false
-        if (manifest.paragraphOffsetsMs.size < paragraphs.size) return false
-        if (manifest.paragraphTexts.size != paragraphs.size) return false
-        return manifest.paragraphTexts.zip(paragraphs).all { (m, p) ->
-            normalizeParagraph(m) == normalizeParagraph(p)
+    private fun manifestBaseIndex(manifest: ChapterAudioManifest, paragraphs: List<String>): Int? {
+        if (manifest.durationMs <= 0) return null
+        if (manifest.paragraphOffsetsMs.size < manifest.paragraphTexts.size) return null
+        if (paragraphs.isEmpty() || paragraphs.size > manifest.paragraphTexts.size) return null
+        val normalized = paragraphs.map(::normalizeParagraph)
+        val manifestTexts = manifest.paragraphTexts.map(::normalizeParagraph)
+        for (base in 0..manifestTexts.size - normalized.size) {
+            var match = true
+            for (i in normalized.indices) {
+                if (manifestTexts[base + i] != normalized[i]) {
+                    match = false
+                    break
+                }
+            }
+            if (match) return base
         }
+        return null
     }
 
     private fun normalizeParagraph(text: String): String =
@@ -386,6 +457,7 @@ class NovelTtsPlaybackService : Service() {
         unregisterBecomingNoisyReceiver()
         audioFocusManager.abandonPlaybackFocus()
         ttsController?.stop()
+        paragraphs = emptyList()
         _playbackState.value = NovelTtsPlaybackState()
         stopForegroundPlayback()
     }

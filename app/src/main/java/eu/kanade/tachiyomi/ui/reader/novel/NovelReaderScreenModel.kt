@@ -60,6 +60,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoicePreviewer
 import eu.kanade.tachiyomi.ui.reader.novel.tts.UrlHttpFetcher
 import java.io.File
 
@@ -588,6 +589,63 @@ class NovelReaderScreenModel(
         ttsPreferences.voiceName().set(name)
     }
 
+    // ---- Supertonic voice previews ----
+
+    private var supertonicPreviewer: SupertonicVoicePreviewer? = null
+    private var supertonicPreviewJob: kotlinx.coroutines.Job? = null
+
+    /** Style currently synthesizing a preview (UI shows a spinner). */
+    private val _supertonicPreviewLoading = MutableStateFlow<String?>(null)
+    val supertonicPreviewLoading = _supertonicPreviewLoading.asStateFlow()
+
+    /** Style whose preview is currently audible (UI shows a stop icon). */
+    private val _supertonicPreviewPlaying = MutableStateFlow<String?>(null)
+    val supertonicPreviewPlaying = _supertonicPreviewPlaying.asStateFlow()
+
+    /**
+     * Preview a Supertonic voice ("quick brown fox" sample). Tapping the
+     * voice that is already loading/playing stops it — the picker icon
+     * doubles as a stop button.
+     */
+    fun previewSupertonicVoice(styleName: String) {
+        val busy = _supertonicPreviewLoading.value == styleName ||
+            _supertonicPreviewPlaying.value == styleName
+        stopSupertonicPreview()
+        if (busy) return
+        val ctx = context ?: Injekt.get<Context>()
+        val previewer = supertonicPreviewer
+            ?: SupertonicVoicePreviewer(ctx, ttsPreferences).also { supertonicPreviewer = it }
+        supertonicPreviewJob = screenModelScope.launchIO {
+            try {
+                _supertonicPreviewLoading.value = styleName
+                // Engine load is part of the wait — flip to "playing" only
+                // once PCM is actually flowing into the sink.
+                previewer.play(styleName) {
+                    _supertonicPreviewLoading.value = null
+                    _supertonicPreviewPlaying.value = styleName
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                _events.emit(
+                    NovelReaderEvent.ShowError("Voice preview failed: ${t.message}"),
+                )
+            } finally {
+                _supertonicPreviewLoading.value = null
+                _supertonicPreviewPlaying.value = null
+            }
+        }
+    }
+
+    /** Stop any in-flight Supertonic voice preview. */
+    fun stopSupertonicPreview() {
+        supertonicPreviewJob?.cancel()
+        supertonicPreviewJob = null
+        supertonicPreviewer?.stop()
+        _supertonicPreviewLoading.value = null
+        _supertonicPreviewPlaying.value = null
+    }
+
     fun initContext(context: Context) {
         this.context = context.applicationContext
     }
@@ -667,8 +725,6 @@ class NovelReaderScreenModel(
             .filterIsInstance<TextItem.Paragraph>()
             .filter { it.text.isNotBlank() }
         if (ttsItems.isEmpty()) return
-        val paragraphs = ttsItems.map { it.text.toString() }
-        ttsParagraphItems = ttsItems
 
         // Resolve the start index from the tracked reading position: find the
         // paragraph (in the currently-visible chapter) whose character range
@@ -686,9 +742,26 @@ class NovelReaderScreenModel(
         if (startIndex < 0) startIndex = 0
 
         // D-19 file playback is only eligible when the whole paragraph set
-        // belongs to one chapter — INFINITE_SCROLL mixed sets pass null and
-        // always take the live-synthesis path (RESEARCH §5 scope pin).
-        val chapterId = ttsItems.map { it.chapterId }.distinct().singleOrNull()
+        // belongs to one chapter. Under INFINITE_SCROLL the set mixes chapters,
+        // so the original scope pin passed null and always took the live path —
+        // which made rendered audio unreachable in the most common reading
+        // mode. Instead: when the start chapter has a rendered file, scope the
+        // set to that chapter and let the service's manifest check confirm it;
+        // when it doesn't, keep the mixed set so live synthesis still reads
+        // across the chapter boundary.
+        var chapterId = ttsItems.map { it.chapterId }.distinct().singleOrNull()
+        var scopedItems = ttsItems
+        if (chapterId == null) {
+            val startChapterId = ttsItems[startIndex].chapterId
+            if (startChapterId in _renderedAudioChapterIds.value) {
+                val startItemId = ttsItems[startIndex].id
+                scopedItems = ttsItems.filter { it.chapterId == startChapterId }
+                startIndex = scopedItems.indexOfFirst { it.id == startItemId }.coerceAtLeast(0)
+                chapterId = startChapterId
+            }
+        }
+        val paragraphs = scopedItems.map { it.text.toString() }
+        ttsParagraphItems = scopedItems
 
         val title = currentChapter.value?.name ?: novel.value?.title ?: "Novel"
 
@@ -2367,6 +2440,9 @@ class NovelReaderScreenModel(
     override fun onDispose() {
         // Stop the periodic save timer.
         stopPeriodicSave()
+        // Release any loaded voice-preview engine/sink.
+        supertonicPreviewer?.release()
+        supertonicPreviewer = null
         // Save synchronously in a blocking way since the scope is about to be cancelled
         kotlinx.coroutines.runBlocking {
             positionTracker.savePosition()

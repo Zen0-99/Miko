@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,6 +69,9 @@ fun ColumnScope.NovelTtsSettingsPage(
     onInstallSupertonic: () -> Unit = {},
     onUninstallSupertonic: () -> Unit = {},
     onSelectSupertonicVoice: (String) -> Unit = {},
+    supertonicPreviewLoading: String? = null,
+    supertonicPreviewPlaying: String? = null,
+    onPreviewSupertonicVoice: (String) -> Unit = {},
 ) {
     // ---- Engine section ----
     SectionHeader("Text-to-Speech", accentColor)
@@ -223,20 +228,21 @@ fun ColumnScope.NovelTtsSettingsPage(
         val voiceName by preferences.voiceName().collectAsState()
         if (supertonicInstallState is InstallState.Installed || supertonicInstallState is InstallState.Outdated) {
             if (supertonicVoices.isNotEmpty()) {
-                val voiceLabels = supertonicVoices.map { SupertonicVoiceCatalog.labelFor(it) }
                 // Blank or stale (e.g. pocket-era) selections resolve to the
                 // locked default (supertonic:F5, D-05); the engine does the same (R6).
                 val selectedIndex = supertonicVoices.indexOfFirst { it.name == voiceName }
                     .takeIf { it >= 0 }
                     ?: supertonicVoices.indexOfFirst { it.name == SupertonicVoiceCatalog.DEFAULT_VOICE }
                         .coerceAtLeast(0)
-                SettingsDropdown(
-                    label = "Voice",
-                    selectedLabel = voiceLabels[selectedIndex],
-                    options = voiceLabels,
-                ) { index ->
-                    onSelectSupertonicVoice(supertonicVoices[index].name)
-                }
+                SupertonicVoicePicker(
+                    voices = supertonicVoices,
+                    selectedIndex = selectedIndex,
+                    accentColor = accentColor,
+                    previewLoadingStyle = supertonicPreviewLoading,
+                    previewPlayingStyle = supertonicPreviewPlaying,
+                    onPreview = onPreviewSupertonicVoice,
+                    onSelect = { index -> onSelectSupertonicVoice(supertonicVoices[index].name) },
+                )
             } else {
                 SettingsCaption("No voices found — try reinstalling the engine")
             }
@@ -378,6 +384,118 @@ private fun SettingsCaption(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )
+}
+
+/**
+ * Supertonic voice picker — same row shape as [SettingsDropdown] (label
+ * left, selected value + ">" right) but each dropdown entry carries a
+ * preview affordance: a play icon that synthesizes a short sample through
+ * the installed engine so the user hears the voice before selecting it.
+ * While a preview loads the icon becomes a spinner; while audible it
+ * becomes a stop icon — tapping it toggles the preview off.
+ */
+@Composable
+private fun SupertonicVoicePicker(
+    voices: List<SupertonicVoice>,
+    selectedIndex: Int,
+    accentColor: Color?,
+    previewLoadingStyle: String?,
+    previewPlayingStyle: String?,
+    onPreview: (String) -> Unit,
+    onSelect: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val accent = accentColor ?: MaterialTheme.colorScheme.primary
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clickable { expanded = !expanded },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = "Voice",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Box {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 16.dp),
+            ) {
+                Text(
+                    text = SupertonicVoiceCatalog.labelFor(voices[selectedIndex]),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = ">",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) {
+                voices.forEachIndexed { index, voice ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(SupertonicVoiceCatalog.labelFor(voice))
+                                Text(
+                                    text = SupertonicVoiceCatalog.descriptionFor(voice),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        },
+                        trailingIcon = {
+                            // Nested IconButton consumes the tap — the row's
+                            // own onClick (voice select) does not fire.
+                            when {
+                                previewLoadingStyle == voice.styleName -> {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = accent,
+                                        strokeWidth = 2.dp,
+                                    )
+                                }
+                                else -> {
+                                    IconButton(
+                                        onClick = { onPreview(voice.styleName) },
+                                        modifier = Modifier.size(32.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = if (previewPlayingStyle == voice.styleName) {
+                                                Icons.Filled.Stop
+                                            } else {
+                                                Icons.Filled.PlayArrow
+                                            },
+                                            contentDescription = if (previewPlayingStyle == voice.styleName) {
+                                                "Stop preview"
+                                            } else {
+                                                "Preview voice"
+                                            },
+                                            tint = accent,
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        onClick = {
+                            onSelect(index)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**

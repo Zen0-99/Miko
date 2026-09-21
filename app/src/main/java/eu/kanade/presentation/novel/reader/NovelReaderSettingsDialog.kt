@@ -77,6 +77,12 @@ class NovelReaderSettingsScreenModel(
     val onInstallSupertonic: () -> Unit = {},
     val onUninstallSupertonic: () -> Unit = {},
     val onSelectSupertonicVoice: (String) -> Unit = {},
+    // Supertonic voice previews — style name of the preview currently
+    // synthesizing (spinner) or audible (stop icon); null when idle.
+    val supertonicPreviewLoading: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null),
+    val supertonicPreviewPlaying: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null),
+    val onPreviewSupertonicVoice: (String) -> Unit = {},
+    val onStopSupertonicPreview: () -> Unit = {},
 ) : ScreenModel
 
 /**
@@ -118,6 +124,7 @@ fun NovelReaderSettingsDialog(
 
     ModalBottomSheet(
         onDismissRequest = {
+            screenModel.onStopSupertonicPreview()
             onPageSaved(pagerState.currentPage)
             onDismissRequest()
             onShowMenus()
@@ -190,6 +197,9 @@ fun NovelReaderSettingsDialog(
                         onInstallSupertonic = screenModel.onInstallSupertonic,
                         onUninstallSupertonic = screenModel.onUninstallSupertonic,
                         onSelectSupertonicVoice = screenModel.onSelectSupertonicVoice,
+                        supertonicPreviewLoading = screenModel.supertonicPreviewLoading.collectAsStateWithLifecycle().value,
+                        supertonicPreviewPlaying = screenModel.supertonicPreviewPlaying.collectAsStateWithLifecycle().value,
+                        onPreviewSupertonicVoice = screenModel.onPreviewSupertonicVoice,
                     )
                 }
             }

@@ -113,7 +113,51 @@ object SupertonicVoiceCatalog {
         return voices.filter { it.styleName in present }
     }
 
-    /** Human-facing picker label: `"F5 (Female)"`. */
-    fun labelFor(voice: SupertonicVoice): String =
-        "${voice.styleName} (${voice.gender.replaceFirstChar { it.uppercase() }})"
+    /**
+     * Short character descriptors — Supertone's own voice descriptions
+     * (supertonic-py Voices doc); the styles ship unnamed, so these are
+     * the closest thing to official names. F5 and M5 are Supertone's
+     * audiobook picks.
+     */
+    private val DESCRIPTORS = mapOf(
+        "F1" to "Calm",
+        "F2" to "Bright",
+        "F3" to "Announcer",
+        "F4" to "Confident",
+        "F5" to "Gentle",
+        "M1" to "Lively",
+        "M2" to "Deep",
+        "M3" to "Authoritative",
+        "M4" to "Soft",
+        "M5" to "Storyteller",
+    )
+
+    /** Supertone's use-case description, shown as picker subtitle. */
+    private val DESCRIPTIONS = mapOf(
+        "F1" to "Steady, composed — slightly low tone",
+        "F2" to "Cheerful, playful, youthful energy",
+        "F3" to "Articulate, broadcast-ready announcer",
+        "F4" to "Crisp, expressive, strong delivery",
+        "F5" to "Kind, soft-spoken, soothing — audiobook voice",
+        "M1" to "Upbeat, confident energy",
+        "M2" to "Deep, calm, serious and grounded",
+        "M3" to "Polished, authoritative, trustworthy",
+        "M4" to "Gentle, approachable, friendly",
+        "M5" to "Warm, calm storytelling — audiobook voice",
+    )
+
+    /** Human-facing picker label: `"F5 · Gentle female"`. */
+    fun labelFor(voice: SupertonicVoice): String {
+        val descriptor = DESCRIPTORS[voice.styleName]
+        val gender = voice.gender.replaceFirstChar { it.uppercase() }
+        return if (descriptor != null) {
+            "${voice.styleName} · $descriptor $gender"
+        } else {
+            "${voice.styleName} · $gender"
+        }
+    }
+
+    /** Human-facing picker subtitle: Supertone's one-line description. */
+    fun descriptionFor(voice: SupertonicVoice): String =
+        DESCRIPTIONS[voice.styleName] ?: ""
 }
