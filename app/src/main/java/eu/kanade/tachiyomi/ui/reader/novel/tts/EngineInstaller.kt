@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.ui.reader.novel.tts
 
-import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.PocketBundle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -168,12 +167,14 @@ object UrlHttpFetcher : HttpFetcher {
 //     │
 //     │  .install("pocket-tts-en-v2026_04") { progress -> ... }
 //     ▼
-//   PocketEngineInstaller.install(name)
+//   EngineInstaller.install(name)
 //     │
-//     ├── PocketEngineCatalog.POCKET_TTS_EN + sources()
-//     │     ──► ordered List<EngineArchiveSource> (Miko primary first once
-//     │         populated, Marmalade v21 fallback always present — D-03;
-//     │         each source carries its own sha256 pin)
+//     ├── specFor(name) ──► EngineSpec(descriptor, sources, layoutCheck)
+//     │       from the engine's catalog object
+//     │       (PocketEngineCatalog.engineSpec() / SupertonicEngineCatalog.engineSpec())
+//     │
+//     ├── spec.sources ──► ordered List<EngineArchiveSource>
+//     │       (per-engine ordering; each source carries its own sha256 pin — D-03)
 //     │
 //     ├── _state[name].value = Downloading(0, source.sizeBytes, "archive")
 //     │
@@ -238,7 +239,7 @@ sealed class InstallState {
      * + untarred into the scratch directory. [bytesExtracted] is the
      * cumulative size of files written to disk during the unpack so far;
      * [totalBytes] is the *estimated* unpacked size from
-     * `PocketEngineDescriptor.installedSizeBytes`. The estimate is cheap and
+     * `EngineDescriptor.installedSizeBytes`. The estimate is cheap and
      * accurate (we control the bundle layout); UI bars divide the two for a
      * determinate progress fraction.
      */
@@ -256,16 +257,16 @@ sealed class InstallState {
     /**
      * Files are *present on disk* but the post-install sanity check
      * couldn't find the required top-level files. Surfaced by
-     * [PocketEngineInstaller.verify] and treated by the UI the same as
+     * [EngineInstaller.verify] and treated by the UI the same as
      * NotInstalled (offer reinstall).
      */
     object Corrupt : InstallState()
 
     /**
      * Files are present on disk and pass the layout check, but the
-     * `.install_meta.json` left by [PocketEngineInstaller.install] records an
+     * `.install_meta.json` left by [EngineInstaller.install] records an
      * archive SHA-256 that doesn't match the archive the catalog would
-     * install today (the first of [PocketEngineCatalog.sources]) — the
+     * install today (the first of the engine's catalog sources) — the
      * bundle has been re-published (different URL or different contents)
      * since the last install. UI treats this as a soft prompt to update;
      * the existing files still work in the interim. The two SHA-256s are
@@ -282,13 +283,35 @@ sealed class InstallState {
 }
 
 /**
- * Engine-as-plugin installer for the Pocket TTS bundle.
+ * Everything [EngineInstaller] needs to know about one installable engine —
+ * supplied by the engine's catalog object (`PocketEngineCatalog.engineSpec()`
+ * / `SupertonicEngineCatalog.engineSpec()`) via [EngineInstaller.specFor].
+ *
+ * The download/extract/atomicity machinery is engine-generic; only the
+ * descriptor, the ordered download sources, and the post-extract structural
+ * check differ per engine (phase-05B PB-9). The meta-sha drift check
+ * (`checkInstallMeta`) stays in the installer — it is engine-generic.
+ *
+ * @property descriptor Static bundle metadata (name, sizes, license notice).
+ * @property sources Ordered download sources; each is independently
+ *           sha256-pinned (D-03).
+ * @property layoutCheck The per-engine structural check run against the
+ *           installed directory — the catalog owns its own layout knowledge.
+ */
+internal class EngineSpec(
+    val descriptor: EngineDescriptor,
+    val sources: List<EngineArchiveSource>,
+    val layoutCheck: (File) -> InstallState,
+)
+
+/**
+ * Engine-as-plugin installer — serves every engine in [specFor].
  *
  * Owns the lifecycle of `${filesDir}/engines/<engine>/` directories — the
- * UI never touches those paths directly. The contract with the pocket
- * engine is: once [install] completes successfully,
- * `PocketEngineCatalog.isInstalled(filesDir)` returns true and the engine
- * can load `engines/<name>/bundle.json`.
+ * UI never touches those paths directly. The contract with each engine is:
+ * once [install] completes successfully, the engine's catalog
+ * `isInstalled(filesDir)` returns true and the engine can load its bundle
+ * from `engines/<name>/`.
  *
  * Implementation invariants:
  *
@@ -315,11 +338,12 @@ sealed class InstallState {
  *
  * Ported from marmalade-tts-android `install/EngineInstaller.kt` minus
  * `seedFromAssets` (Miko never bakes a ~97 MB engine into the APK) and the
- * Kitten/Kokoro layout branches — this installer only ever serves
- * `pocket-tts-en-v2026_04`. `org.json` was swapped for
- * kotlinx-serialization so [verify] stays JVM-testable.
+ * Kitten/Kokoro layout branches. `org.json` was swapped for
+ * kotlinx-serialization so [verify] stays JVM-testable. Generalized in
+ * phase-05B from Pocket-only to per-engine [EngineSpec] dispatch — the
+ * Pocket behavior is preserved verbatim (D-08).
  */
-class PocketEngineInstaller(
+class EngineInstaller(
     private val filesDir: EngineFilesDir,
     private val engineHandle: NativeEngineHandle,
     private val httpFetcher: HttpFetcher,
@@ -356,12 +380,12 @@ class PocketEngineInstaller(
     /**
      * Install [engineName] from the catalog.
      *
-     * Downloads the engine's tar.bz2 archive — trying
-     * [PocketEngineCatalog.sources] in order (Miko primary first once
-     * populated, Marmalade v21 fallback last — D-03) — verifies each
-     * source's SHA-256 against its own pin, decompresses + untars it into
-     * the engine directory via a scratch dir + atomic rename. Reports
-     * progress through [onProgress] and updates the per-engine state flow.
+     * Resolves the engine's [EngineSpec] via [specFor], then downloads the
+     * engine's tar.bz2 archive — trying the spec's sources in order (D-03) —
+     * verifies each source's SHA-256 against its own pin, decompresses +
+     * untars it into the engine directory via a scratch dir + atomic rename.
+     * Reports progress through [onProgress] and updates the per-engine
+     * state flow.
      *
      * Re-running install on an already-installed engine is idempotent:
      * the existing engine directory is removed first so the new install
@@ -376,20 +400,20 @@ class PocketEngineInstaller(
         engineName: String,
         onProgress: (InstallState.Downloading) -> Unit = {},
     ): Result<Unit> {
-        if (engineName != PocketEngineCatalog.ENGINE_NAME) {
-            return failed(engineName, "Unknown engine: $engineName")
-        }
+        val spec = specFor(engineName)
+            ?: return failed(engineName, "Unknown engine: $engineName")
         return installViaDescriptor(
-            PocketEngineCatalog.POCKET_TTS_EN,
-            PocketEngineCatalog.sources(),
+            spec.descriptor,
+            spec.sources,
+            spec.layoutCheck,
             onProgress,
         )
     }
 
     /**
      * Test-friendly install that operates against caller-supplied
-     * [sources] instead of reading [PocketEngineCatalog.sources]. Used by
-     * `PocketEngineInstallerTest` to drive the installer against in-memory
+     * [sources] and [layoutCheck] instead of reading the engine's catalog.
+     * Used by `EngineInstallerTest` to drive the installer against in-memory
      * fakes without polluting the production catalog — the production
      * constants stay immutable.
      *
@@ -404,8 +428,9 @@ class PocketEngineInstaller(
      * the next [install] call then Range-resumes it.
      */
     internal suspend fun installViaDescriptor(
-        descriptor: PocketEngineDescriptor,
+        descriptor: EngineDescriptor,
         sources: List<EngineArchiveSource>,
+        layoutCheck: (File) -> InstallState,
         onProgress: (InstallState.Downloading) -> Unit,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         installMutex(descriptor.name).withLock {
@@ -520,7 +545,7 @@ class PocketEngineInstaller(
                     // proved the bytes are correct, so this just confirms the
                     // extraction produced the expected top-level layout —
                     // defensive against a malformed bundle slipping through.
-                    val verified = verifyLayout(finalDir, expectedSource = source)
+                    val verified = verifyLayout(finalDir, expectedSource = source, layoutCheck)
                     if (verified is InstallState.Corrupt) {
                         // Extracted shape doesn't match expectations. Tear down
                         // so a retry has a clean slate.
@@ -574,9 +599,10 @@ class PocketEngineInstaller(
      * a successful no-op.
      */
     suspend fun uninstall(engineName: String): Result<Unit> = withContext(Dispatchers.IO) {
-        if (engineName != PocketEngineCatalog.ENGINE_NAME) {
-            return@withContext Result.failure(IOException("Unknown engine: $engineName"))
-        }
+        // The gate exists to reject typos/bogus names fast; the single
+        // injected NativeEngineHandle is engine-agnostic (PB-13).
+        specFor(engineName)
+            ?: return@withContext Result.failure(IOException("Unknown engine: $engineName"))
 
         try {
             // Release first — deleting an mmap'd file can leak the mapping
@@ -611,34 +637,45 @@ class PocketEngineInstaller(
      * on first composition.
      */
     suspend fun verify(engineName: String): InstallState {
-        if (engineName != PocketEngineCatalog.ENGINE_NAME) return InstallState.NotInstalled
+        val spec = specFor(engineName) ?: return InstallState.NotInstalled
         // The expected sha is the source install() would try first today —
-        // the populated Miko primary, else the fallback. When the Miko
-        // mirror goes live, installs stamped with the fallback sha surface
-        // as Outdated, which is exactly the "catalog changed server-side"
-        // update prompt this check exists for.
-        val expectedSource = PocketEngineCatalog.sources().first()
-        return verifyDescriptor(PocketEngineCatalog.POCKET_TTS_EN, expectedSource)
+        // e.g. the populated Miko primary for Pocket, else the fallback.
+        // When a catalog source changes, installs stamped with the old sha
+        // surface as Outdated, which is exactly the "catalog changed
+        // server-side" update prompt this check exists for.
+        return verifyDescriptor(spec.descriptor, spec.sources.first(), spec.layoutCheck)
     }
 
     /**
      * Test-friendly verify that operates against a caller-supplied expected
-     * [expectedSource] instead of reading [PocketEngineCatalog.sources].
-     * Production code paths must go through [verify].
+     * [expectedSource] and [layoutCheck] instead of reading the engine's
+     * catalog. Production code paths must go through [verify].
      */
     internal suspend fun verifyDescriptor(
-        descriptor: PocketEngineDescriptor,
+        descriptor: EngineDescriptor,
         expectedSource: EngineArchiveSource,
+        layoutCheck: (File) -> InstallState,
     ): InstallState = withContext(Dispatchers.IO) {
         val engineName = descriptor.name
         val dir = engineDirFor(engineName)
         val computed = if (!dir.isDirectory) {
             InstallState.NotInstalled
         } else {
-            verifyLayout(dir, expectedSource)
+            verifyLayout(dir, expectedSource, layoutCheck)
         }
         stateFlow(engineName).value = computed
         computed
+    }
+
+    /**
+     * Resolve the [EngineSpec] for [engineName] — the single dispatch point
+     * that makes this installer engine-generic (PB-9). Catalog objects own
+     * their descriptor, ordered sources, and layout knowledge.
+     */
+    private fun specFor(engineName: String): EngineSpec? = when (engineName) {
+        PocketEngineCatalog.ENGINE_NAME -> PocketEngineCatalog.engineSpec()
+        SupertonicEngineCatalog.ENGINE_NAME -> SupertonicEngineCatalog.engineSpec()
+        else -> null
     }
 
     // -- internals ---------------------------------------------------------
@@ -875,72 +912,16 @@ class PocketEngineInstaller(
     /**
      * Post-extract structural check. The meta-sha drift check runs first so
      * a catalog update surfaces as Outdated even when the layout is intact;
-     * then the pocket layout check runs.
+     * then the engine-specific [layoutCheck] runs.
      */
-    private fun verifyLayout(dir: File, expectedSource: EngineArchiveSource): InstallState {
+    private fun verifyLayout(
+        dir: File,
+        expectedSource: EngineArchiveSource,
+        layoutCheck: (File) -> InstallState,
+    ): InstallState {
         val outdated = checkInstallMeta(dir, expectedSource)
         if (outdated != null) return outdated
-        return verifyPocketLayout(dir)
-    }
-
-    /**
-     * Pocket TTS layout: 5 ONNX graphs + tokenizer.model +
-     * bos_before_voice.npy + bundle.json + voices/ subdir with the six
-     * commercial-safe base WAVs. Voice cloning lands files under
-     * `voice_cache/`/`cloned_voices/` later; their absence at install time
-     * is fine, and Miko's extra `vctk_*` WAVs are optional extras — present
-     * in the Miko bundle, absent from the Marmalade fallback, required
-     * neither way.
-     */
-    private fun verifyPocketLayout(dir: File): InstallState {
-        // Always-present, variant-independent files. The 5 ONNX filenames are
-        // variant-specific (declared in bundle.json's `onnx_files` block) and
-        // checked separately below.
-        val requiredFiles = listOf(
-            "tokenizer.model",
-            "bos_before_voice.npy",
-            "bundle.json",
-        )
-        for (name in requiredFiles) {
-            val f = File(dir, name)
-            if (!f.isFile || f.length() == 0L) return InstallState.Corrupt
-        }
-        // Read the onnx filenames from bundle.json. Parse failure ⇒ corrupt.
-        val bundleSpec = runCatching {
-            PocketBundle.load(File(dir, "bundle.json"))
-        }.getOrNull() ?: return InstallState.Corrupt
-        val onnxFiles = bundleSpec.onnxFiles
-        val onnxNames = listOf(
-            onnxFiles.textConditioner,
-            onnxFiles.mimiEncoder,
-            onnxFiles.mimiDecoder,
-            onnxFiles.flowLmMain,
-            onnxFiles.flowLmFlow,
-        )
-        for (name in onnxNames) {
-            val f = File(dir, name)
-            if (!f.isFile || f.length() == 0L) return InstallState.Corrupt
-        }
-        // At least the flow_lm_main file should be appreciably-sized — guards
-        // against a truncated extraction where the headers landed but the body
-        // didn't (a minimum-model-size sanity check). flow_lm_main is the
-        // largest of the five graphs across all variants.
-        val mainOnnx = File(dir, onnxFiles.flowLmMain)
-        if (mainOnnx.length() < MIN_MODEL_BYTES) return InstallState.Corrupt
-
-        val voicesDir = File(dir, "voices")
-        if (!voicesDir.isDirectory) return InstallState.Corrupt
-        // Check the six commercial-safe Kyutai predefined names match what the
-        // voice catalog promises (PocketVoiceCatalog.baseVoices is the source
-        // of truth — the six hardcoded names here mirror it). The upstream
-        // `cosette` (Expresso) and `jean` (EARS) voices are CC-BY-NC-4.0 and
-        // are deliberately absent. Miko's `vctk_*` extras are not required.
-        val expectedVoices = listOf("alba", "azelma", "eponine", "fantine", "javert", "marius")
-        for (name in expectedVoices) {
-            val wav = File(voicesDir, "$name.wav")
-            if (!wav.isFile || wav.length() == 0L) return InstallState.Corrupt
-        }
-        return InstallState.Installed
+        return layoutCheck(dir)
     }
 
     /**
@@ -1025,11 +1006,6 @@ class PocketEngineInstaller(
         // Minimum emit interval for download progress (256 KB). Throttles
         // the StateFlow at the high end when 1% of total is < 256 KB.
         private const val PROGRESS_MIN_BYTES: Long = 256L * 1024L
-
-        // Sanity floor for the post-install layout check. Tuned to catch
-        // truncated extractions without pinning to the exact upstream
-        // numbers (which would force a code change every bundle bump).
-        private const val MIN_MODEL_BYTES: Long = 1L * 1024L * 1024L
 
         // String shown in the per-engine progress UI while the archive is
         // downloading. A single archive download is the whole download phase.

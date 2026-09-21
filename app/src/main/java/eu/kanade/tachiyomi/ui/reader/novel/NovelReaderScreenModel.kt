@@ -51,10 +51,10 @@ import uy.kohesive.injekt.api.get
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterRender
 import eu.kanade.tachiyomi.ui.reader.novel.tts.EngineFilesDir
+import eu.kanade.tachiyomi.ui.reader.novel.tts.EngineInstaller
 import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
 import eu.kanade.tachiyomi.ui.reader.novel.tts.NativeEngineHandle
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
-import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineInstaller
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.UrlHttpFetcher
@@ -453,8 +453,8 @@ class NovelReaderScreenModel(
         get() = _ttsPlaybackState.value.isInitialized || _ttsPlaybackState.value.isPlaying
 
     // ===== Pocket TTS engine management =====
-    private val pocketEngineInstaller by lazy {
-        PocketEngineInstaller(
+    private val engineInstaller by lazy {
+        EngineInstaller(
             filesDir = EngineFilesDir {
                 (context ?: Injekt.get<Context>()).filesDir
             },
@@ -469,16 +469,16 @@ class NovelReaderScreenModel(
 
     /**
      * Install state of the Pocket engine bundle. Nullable because the StateFlow
-     * starts empty and is filled by `PocketEngineInstaller.state()` — its eager
+     * starts empty and is filled by `EngineInstaller.state()` — its eager
      * disk check lands on first collection, and the one-shot [verify] launched
      * on first access refines Installed into Corrupt/Outdated when the layout
      * or install-meta check fails.
      */
     val pocketInstallState: StateFlow<InstallState?> by lazy {
         screenModelScope.launchIO {
-            pocketEngineInstaller.verify(PocketEngineCatalog.ENGINE_NAME)
+            engineInstaller.verify(PocketEngineCatalog.ENGINE_NAME)
         }
-        pocketEngineInstaller.state(PocketEngineCatalog.ENGINE_NAME)
+        engineInstaller.state(PocketEngineCatalog.ENGINE_NAME)
             .stateIn(screenModelScope, SharingStarted.Eagerly, null)
     }
 
@@ -498,7 +498,7 @@ class NovelReaderScreenModel(
     /** Download + install the Pocket engine bundle (~97 MB, sha256-pinned). */
     fun installPocketEngine() {
         screenModelScope.launchIO {
-            pocketEngineInstaller.install(PocketEngineCatalog.ENGINE_NAME)
+            engineInstaller.install(PocketEngineCatalog.ENGINE_NAME)
                 .onSuccess { refreshPocketVoices() }
                 .onFailure { error ->
                     _events.emit(NovelReaderEvent.ShowError(error.message ?: "Install failed"))
@@ -509,7 +509,7 @@ class NovelReaderScreenModel(
     /** Remove the installed Pocket engine bundle (incl. voice caches). */
     fun uninstallPocketEngine() {
         screenModelScope.launchIO {
-            pocketEngineInstaller.uninstall(PocketEngineCatalog.ENGINE_NAME)
+            engineInstaller.uninstall(PocketEngineCatalog.ENGINE_NAME)
             refreshPocketVoices()
             // If the active voice was a Pocket voice, clear the selection so
             // the picker falls back to the eponine default on next install.

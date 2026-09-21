@@ -1,11 +1,12 @@
 package eu.kanade.tachiyomi.ui.reader.novel.tts
 
+import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.PocketBundle
 import java.io.File
 
 // -----------------------------------------------------------------------------
 // Data flow
 // -----------------------------------------------------------------------------
-//   PocketEngineInstaller.install()  (plan 04-03)
+//   EngineInstaller.install()  (plan 04-03; engine-generic since 05B-02)
 //     │
 //     ├── PocketEngineCatalog.sources() ──► ordered List<EngineArchiveSource>
 //     │       (Miko-hosted primary first once populated, Marmalade v21
@@ -48,8 +49,10 @@ data class EngineArchiveSource(
 }
 
 /**
- * Static metadata for the Pocket engine bundle — the single source of truth
- * for "what does the user have to download to use Pocket TTS". No I/O.
+ * Static metadata for an engine bundle — the single source of truth
+ * for "what does the user have to download to use this engine". No I/O.
+ * Engine-generic since 05B-02 (was `PocketEngineDescriptor`); each engine's
+ * catalog object owns one instance.
  *
  * @property name Engine identifier; also the install directory under
  *                `${filesDir}/engines/`.
@@ -59,7 +62,7 @@ data class EngineArchiveSource(
  * @property installedSizeBytes Approximate on-disk size after extraction.
  * @property licenseNotice Repo-relative path to the long-form license notice.
  */
-data class PocketEngineDescriptor(
+data class EngineDescriptor(
     val name: String,
     val displayName: String,
     val downloadSizeBytes: Long,
@@ -109,7 +112,7 @@ object PocketEngineCatalog {
         archiveRoot = "pocket-tts-en/",
     )
 
-    val POCKET_TTS_EN = PocketEngineDescriptor(
+    val POCKET_TTS_EN = EngineDescriptor(
         name = ENGINE_NAME,
         displayName = "Pocket TTS (English, 2026-04)",
         downloadSizeBytes = FALLBACK_ARCHIVE.sizeBytes,
@@ -152,4 +155,79 @@ object PocketEngineCatalog {
     /** Cheap synchronous install gate for controller/UI paths. */
     fun isInstalled(filesDir: File): Boolean =
         File(engineDir(filesDir), "bundle.json").isFile
+
+    /**
+     * The [EngineSpec] [EngineInstaller] uses to serve this engine —
+     * descriptor + ordered sources + the Pocket layout check (PB-9).
+     */
+    internal fun engineSpec(): EngineSpec = EngineSpec(POCKET_TTS_EN, sources(), ::checkLayout)
+
+    /**
+     * Pocket TTS layout: 5 ONNX graphs + tokenizer.model +
+     * bos_before_voice.npy + bundle.json + voices/ subdir with the six
+     * commercial-safe base WAVs. Voice cloning lands files under
+     * `voice_cache/`/`cloned_voices/` later; their absence at install time
+     * is fine, and Miko's extra `vctk_*` WAVs are optional extras — present
+     * in the Miko bundle, absent from the Marmalade fallback, required
+     * neither way.
+     *
+     * Post-extract structural check invoked by [EngineInstaller] after the
+     * meta-sha drift check — moved here verbatim (behavior preserved, D-08)
+     * so the catalog owns its own layout knowledge (PB-9).
+     */
+    internal fun checkLayout(dir: File): InstallState {
+        // Always-present, variant-independent files. The 5 ONNX filenames are
+        // variant-specific (declared in bundle.json's `onnx_files` block) and
+        // checked separately below.
+        val requiredFiles = listOf(
+            "tokenizer.model",
+            "bos_before_voice.npy",
+            "bundle.json",
+        )
+        for (name in requiredFiles) {
+            val f = File(dir, name)
+            if (!f.isFile || f.length() == 0L) return InstallState.Corrupt
+        }
+        // Read the onnx filenames from bundle.json. Parse failure ⇒ corrupt.
+        val bundleSpec = runCatching {
+            PocketBundle.load(File(dir, "bundle.json"))
+        }.getOrNull() ?: return InstallState.Corrupt
+        val onnxFiles = bundleSpec.onnxFiles
+        val onnxNames = listOf(
+            onnxFiles.textConditioner,
+            onnxFiles.mimiEncoder,
+            onnxFiles.mimiDecoder,
+            onnxFiles.flowLmMain,
+            onnxFiles.flowLmFlow,
+        )
+        for (name in onnxNames) {
+            val f = File(dir, name)
+            if (!f.isFile || f.length() == 0L) return InstallState.Corrupt
+        }
+        // At least the flow_lm_main file should be appreciably-sized — guards
+        // against a truncated extraction where the headers landed but the body
+        // didn't (a minimum-model-size sanity check). flow_lm_main is the
+        // largest of the five graphs across all variants.
+        val mainOnnx = File(dir, onnxFiles.flowLmMain)
+        if (mainOnnx.length() < MIN_MODEL_BYTES) return InstallState.Corrupt
+
+        val voicesDir = File(dir, "voices")
+        if (!voicesDir.isDirectory) return InstallState.Corrupt
+        // Check the six commercial-safe Kyutai predefined names match what the
+        // voice catalog promises (PocketVoiceCatalog.baseVoices is the source
+        // of truth — the six hardcoded names here mirror it). The upstream
+        // `cosette` (Expresso) and `jean` (EARS) voices are CC-BY-NC-4.0 and
+        // are deliberately absent. Miko's `vctk_*` extras are not required.
+        val expectedVoices = listOf("alba", "azelma", "eponine", "fantine", "javert", "marius")
+        for (name in expectedVoices) {
+            val wav = File(voicesDir, "$name.wav")
+            if (!wav.isFile || wav.length() == 0L) return InstallState.Corrupt
+        }
+        return InstallState.Installed
+    }
+
+    // Sanity floor for the post-install layout check. Tuned to catch
+    // truncated extractions without pinning to the exact upstream
+    // numbers (which would force a code change every bundle bump).
+    private const val MIN_MODEL_BYTES: Long = 1L * 1024L * 1024L
 }

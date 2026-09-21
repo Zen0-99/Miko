@@ -5,9 +5,7 @@ import java.io.File
 /**
  * Static metadata for the Supertonic-3 engine bundle — the sherpa-onnx
  * `supertonic-3-tts-int8` release running on `onnxruntime-android`
- * (phase-05B D-02/D-03). No download sources yet — 05B-02 adds the
- * archive pin and installer wiring; until then the bundle lands via
- * `adb push` exactly like spike 002.
+ * (phase-05B D-02/D-03).
  *
  * Two on-disk layouts are recognized (PB-1, per-file int8-first):
  *
@@ -49,6 +47,39 @@ object SupertonicEngineCatalog {
         "tts.json",
         "unicode_indexer.json",
     )
+
+    /**
+     * Static descriptor for the sherpa int8 bundle. `installedSizeBytes` is
+     * the measured extracted size from 05B-01's staging; it is a progress-bar
+     * denominator, not an integrity value (PB-12).
+     */
+    val SUPERTONIC_3 = EngineDescriptor(
+        name = ENGINE_NAME,
+        displayName = "Supertonic-3 (English, int8)",
+        downloadSizeBytes = 128_774_318L,
+        installedSizeBytes = 145_316_356L,
+        licenseNotice = "LICENSES/supertonic-3.md",
+    )
+
+    /**
+     * Ordered download sources (D-03). Empty until the sherpa archive pin
+     * lands — `install` then fails cleanly with "no download sources"
+     * rather than half-wiring a success.
+     */
+    fun sources(): List<EngineArchiveSource> = emptyList()
+
+    /**
+     * Post-extract structural check invoked by [EngineInstaller] after the
+     * meta-sha drift check. Stubbed to Corrupt until the sherpa int8 layout
+     * verification lands — nothing ships half-wired.
+     */
+    internal fun checkLayout(dir: File): InstallState = InstallState.Corrupt
+
+    /**
+     * The [EngineSpec] [EngineInstaller] uses to serve this engine —
+     * descriptor + ordered sources + the supertonic layout check (PB-9).
+     */
+    internal fun engineSpec(): EngineSpec = EngineSpec(SUPERTONIC_3, sources(), ::checkLayout)
 
     /** Install directory: `${filesDir}/engines/supertonic-3-int8/`. */
     fun engineDir(filesDir: File): File = File(filesDir, "engines/$ENGINE_NAME")
