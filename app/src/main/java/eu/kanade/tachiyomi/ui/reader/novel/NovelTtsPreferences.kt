@@ -14,7 +14,7 @@ class NovelTtsPreferences(
     /** TTS engine type: "android" or "pocket" */
     fun engineType() = preferenceStore.getString("pref_novel_tts_engine", "android")
 
-    /** Speech rate (0.5 to 4.0, default 1.0) */
+    /** Speech rate (0.5 to 3.0, default 1.0) */
     fun speechRate() = preferenceStore.getFloat("pref_novel_tts_rate", 1.0f)
 
     /** Pitch (0.5 to 2.0, default 1.0) */

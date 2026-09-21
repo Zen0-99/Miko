@@ -96,9 +96,9 @@ fun ColumnScope.NovelTtsSettingsPage(
     FloatSliderItem(
         label = "Speech rate",
         value = speechRate,
-        valueRange = 0.5f..4.0f,
+        valueRange = 0.5f..3.0f,
         valueText = String.format("%.1fx", speechRate),
-        steps = 6,
+        steps = 24,
         accentColor = accentColor,
     ) { rate ->
         preferences.speechRate().set(rate)

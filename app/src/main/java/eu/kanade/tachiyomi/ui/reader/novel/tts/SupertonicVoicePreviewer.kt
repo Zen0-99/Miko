@@ -14,7 +14,7 @@ import tachiyomi.core.common.util.system.logcat
  * installed bundle (the real engine path, so previews match what
  * read-along produces) and streams the PCM through [AudioTrackPcmSink].
  *
- * The synthesized clip is cached per style for the screen model's
+ * The synthesized clip is cached per style+rate for the screen model's
  * lifetime (~350 KB each), so a second tap on the same voice is instant.
  * The engine instance is kept loaded once created — settings previews
  * cluster together, and a ~1.6 s reload per tap would feel broken.
@@ -41,14 +41,18 @@ internal class SupertonicVoicePreviewer(
     suspend fun play(styleName: String, onPlaybackStart: () -> Unit = {}) {
         logcat(LogPriority.INFO) { "VoicePreview: play($styleName)" }
         val eng = engine ?: SupertonicEngine(context, preferences).also { engine = it }
-        val pcm = cache[styleName] ?: run {
+        // Cache key includes the rate — a clip synthesized at 1.0x must not
+        // be replayed after the user moves the speech-rate slider.
+        val speed = preferences.speechRate().get().coerceIn(0.5f, 3.0f)
+        val cacheKey = "$styleName@$speed"
+        val pcm = cache[cacheKey] ?: run {
             logcat(LogPriority.INFO) { "VoicePreview: synthesizing sample for $styleName" }
             val chunks = ArrayList<ShortArray>()
             eng.synthesizeStream(
                 SAMPLE_TEXT,
                 "${SupertonicVoiceCatalog.VOICE_PREFIX}$styleName",
                 preferences.supertonicNumSteps().get(),
-                PREVIEW_SPEED,
+                speed,
             ).collect { chunks.add(it.pcm) }
             val total = chunks.sumOf { it.size }
             ShortArray(total).also { merged ->
@@ -57,7 +61,7 @@ internal class SupertonicVoicePreviewer(
                     chunk.copyInto(merged, offset)
                     offset += chunk.size
                 }
-                cache[styleName] = merged
+                cache[cacheKey] = merged
             }
         }
         currentCoroutineContext().ensureActive()
@@ -95,8 +99,5 @@ internal class SupertonicVoicePreviewer(
         /** User-requested sample — a pangram exercises most phonemes. */
         const val SAMPLE_TEXT =
             "The quick brown fox jumps over the lazy dog."
-
-        /** Neutral speed — previews show the voice, not the rate setting. */
-        const val PREVIEW_SPEED = 1.0f
     }
 }
