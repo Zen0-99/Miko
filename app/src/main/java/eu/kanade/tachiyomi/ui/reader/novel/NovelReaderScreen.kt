@@ -891,6 +891,11 @@ class NovelReaderScreen(
                         onInstallPocket = { screenModel.installPocketEngine() },
                         onUninstallPocket = { screenModel.uninstallPocketEngine() },
                         onSelectPocketVoice = { name -> screenModel.selectPocketVoice(name) },
+                        supertonicInstallState = screenModel.supertonicInstallState,
+                        supertonicVoices = screenModel.supertonicVoices,
+                        onInstallSupertonic = { screenModel.installSupertonicEngine() },
+                        onUninstallSupertonic = { screenModel.uninstallSupertonicEngine() },
+                        onSelectSupertonicVoice = { name -> screenModel.selectSupertonicVoice(name) },
                     )
                 },
             )

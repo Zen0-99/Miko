@@ -45,6 +45,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.TextAlignment
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import dev.icerock.moko.resources.StringResource
@@ -70,6 +71,12 @@ class NovelReaderSettingsScreenModel(
     val onInstallPocket: () -> Unit = {},
     val onUninstallPocket: () -> Unit = {},
     val onSelectPocketVoice: (String) -> Unit = {},
+    // Supertonic TTS engine management
+    val supertonicInstallState: kotlinx.coroutines.flow.StateFlow<InstallState?> = kotlinx.coroutines.flow.MutableStateFlow(null),
+    val supertonicVoices: kotlinx.coroutines.flow.StateFlow<List<SupertonicVoice>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList()),
+    val onInstallSupertonic: () -> Unit = {},
+    val onUninstallSupertonic: () -> Unit = {},
+    val onSelectSupertonicVoice: (String) -> Unit = {},
 ) : ScreenModel
 
 /**

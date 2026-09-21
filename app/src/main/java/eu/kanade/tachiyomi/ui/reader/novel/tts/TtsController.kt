@@ -7,8 +7,8 @@ import tachiyomi.core.common.util.system.logcat
 /**
  * Controller that manages TTS engine lifecycle, text queuing, and reading session.
  *
- * Supports both Android TTS (system) and Pocket TTS (neural) engines.
- * Handles paragraph-by-paragraph reading with auto-continue.
+ * Supports Android TTS (system) plus the neural engines (Pocket TTS,
+ * Supertonic-3). Handles paragraph-by-paragraph reading with auto-continue.
  *
  * For engines that support it ([TtsEngine.supportsQueueing] — the Android TTS
  * path), upcoming paragraphs are enqueued ahead of playback via QUEUE_ADD in a
@@ -16,7 +16,7 @@ import tachiyomi.core.common.util.system.logcat
  * paragraph while the current one is still being played, eliminating the
  * per-paragraph dead-air gap that a strict speak → onDone → speak chain
  * produces (the gap equals the full synthesis latency of the next paragraph).
- * Serial engines ([PocketTtsEngine]) play each speak() call immediately — for
+ * Serial engines ([PocketTtsEngine], [SupertonicTtsEngine]) play each speak() call immediately — for
  * them the controller synth-aheads instead: when a paragraph starts speaking,
  * [TtsEngine.prefetch] begins synthesizing the next paragraph into the
  * engine's PCM buffer so the following speak() drains it with zero wait
@@ -76,7 +76,7 @@ class TtsController(
      * Create and initialize the appropriate TTS engine based on preferences.
      *
      * When [engineOverride] is non-null it IS the engine (D-19 file playback):
-     * the pref/engineType resolution and the Pocket install-failure fallback
+     * the pref/engineType resolution and the neural-engine install-failure fallback
      * are skipped, and an initialize failure propagates to [onError] so the
      * caller can fall back to live synthesis by re-invoking this without an
      * override. Any previously active engine is released either way —
@@ -115,6 +115,7 @@ class TtsController(
         }
         val engineImpl: TtsEngine = when (engineType) {
             "pocket" -> PocketTtsEngine(context, preferences)
+            "supertonic" -> SupertonicTtsEngine(context, preferences)
             else -> AndroidTtsEngine(context)
         }
 
@@ -137,10 +138,10 @@ class TtsController(
                 onReady()
             },
             onError = { error ->
-                // Fall back to Android TTS if the neural engine fails
+                // Fall back to Android TTS if a neural engine fails
                 // (bundle missing or load failure alike — Q7).
-                if (engineType == "pocket") {
-                    logcat(LogPriority.WARN) { "Pocket TTS failed: $error — falling back to Android TTS" }
+                if (engineType == "pocket" || engineType == "supertonic") {
+                    logcat(LogPriority.WARN) { "$engineType TTS failed: $error — falling back to Android TTS" }
                     val fallback = AndroidTtsEngine(context)
                     fallback.setSpeechRate(preferences.speechRate().get())
                     fallback.setPitch(preferences.pitch().get())

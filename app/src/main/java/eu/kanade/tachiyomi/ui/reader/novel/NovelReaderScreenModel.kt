@@ -57,6 +57,9 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.NativeEngineHandle
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.UrlHttpFetcher
 import java.io.File
 
@@ -524,6 +527,64 @@ class NovelReaderScreenModel(
 
     /** Select a Pocket voice as the active TTS voice. */
     fun selectPocketVoice(name: String) {
+        ttsPreferences.voiceName().set(name)
+    }
+
+    // ===== Supertonic TTS engine management =====
+
+    /**
+     * Install state of the Supertonic engine bundle — same lazy shape as
+     * [pocketInstallState]: an eager disk check on first collection plus a
+     * one-shot [EngineInstaller.verify] refining Installed into
+     * Corrupt/Outdated.
+     */
+    val supertonicInstallState: StateFlow<InstallState?> by lazy {
+        screenModelScope.launchIO {
+            engineInstaller.verify(SupertonicEngineCatalog.ENGINE_NAME)
+        }
+        engineInstaller.state(SupertonicEngineCatalog.ENGINE_NAME)
+            .stateIn(screenModelScope, SharingStarted.Eagerly, null)
+    }
+
+    private val _supertonicVoices = MutableStateFlow<List<SupertonicVoice>>(emptyList())
+    val supertonicVoices = _supertonicVoices.asStateFlow()
+
+    /** Refresh the list of usable Supertonic voices from the installed engine dir. */
+    fun refreshSupertonicVoices() {
+        screenModelScope.launchIO {
+            val filesDir = (context ?: Injekt.get<Context>()).filesDir
+            _supertonicVoices.value = SupertonicVoiceCatalog.discoverVoices(
+                SupertonicEngineCatalog.engineDir(filesDir),
+            )
+        }
+    }
+
+    /** Download + install the Supertonic engine bundle (~129 MB, sha256-pinned). */
+    fun installSupertonicEngine() {
+        screenModelScope.launchIO {
+            engineInstaller.install(SupertonicEngineCatalog.ENGINE_NAME)
+                .onSuccess { refreshSupertonicVoices() }
+                .onFailure { error ->
+                    _events.emit(NovelReaderEvent.ShowError(error.message ?: "Install failed"))
+                }
+        }
+    }
+
+    /** Remove the installed Supertonic engine bundle (incl. voice data). */
+    fun uninstallSupertonicEngine() {
+        screenModelScope.launchIO {
+            engineInstaller.uninstall(SupertonicEngineCatalog.ENGINE_NAME)
+            refreshSupertonicVoices()
+            // If the active voice was a Supertonic voice, clear the selection
+            // so the picker falls back to the F5 default on next install.
+            if (ttsPreferences.voiceName().get().startsWith(SupertonicVoiceCatalog.VOICE_PREFIX)) {
+                ttsPreferences.voiceName().set("")
+            }
+        }
+    }
+
+    /** Select a Supertonic voice as the active TTS voice (`supertonic:*`). */
+    fun selectSupertonicVoice(name: String) {
         ttsPreferences.voiceName().set(name)
     }
 
@@ -1994,6 +2055,7 @@ class NovelReaderScreenModel(
         _isControlsVisible.value = false
         _isSettingsVisible.value = true
         refreshPocketVoices()
+        refreshSupertonicVoices()
     }
 
     fun dismissSettings() {
