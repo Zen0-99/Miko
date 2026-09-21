@@ -526,11 +526,13 @@ object HomeScreen : Screen() {
         val iconShape = RoundedCornerShape(999.dp)
 
         val interactionSource = remember { MutableInteractionSource() }
+        val tabTitle = tab.options.title
         Box(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 1.dp)
                 .padding(top = if (showLabel) 8.dp else 6.dp, bottom = if (showLabel) 4.dp else 6.dp)
+                .semantics { contentDescription = tabTitle }
                 .selectable(
                     selected = selected,
                     role = Role.Tab,
