@@ -7,11 +7,8 @@ import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.ui.reader.novel.NovelParagraphSegmenter
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PitchResampler
-import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.audio.SynthesisPipeline
-import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.PocketEngine
 import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.SynthAudio
-import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.EngineProfiles
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyApplier
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyHint
 import java.io.File
@@ -37,11 +34,19 @@ class RenderException(message: String, cause: Throwable? = null) : Exception(mes
  *
  * Pipeline: downloaded chapter text → [NovelParagraphSegmenter.paragraphTexts]
  * (the SAME segmentation the reader uses — manifest indices never drift) →
- * per-paragraph `SynthesisPipeline.prepare` → `streamFactory` (Pocket's
- * `synthesizeStream` in production) → per-chunk shaping (shapeChunk →
- * resampleLinear(rate) → PitchResampler — identical to
- * `PocketTtsEngine.shape`) → PCM16 scratch append → [ChapterAudioSink]
- * (AAC-LC 96 kbps / 24 kHz / mono `.m4a`) → manifest `uuid` atom → rename.
+ * per-paragraph `SynthesisPipeline.prepare` → the profile's `streamFactory`
+ * (the selected engine's `synthesizeStream` in production) → per-chunk
+ * shaping (shapeChunk → resampleLinear(bakeRate)
+ * → PitchResampler) → PCM16 scratch append → [ChapterAudioSink]
+ * (AAC-LC 96 kbps / mono `.m4a` at the profile's sample rate) → manifest
+ * `uuid` atom → rename.
+ *
+ * Engine selection (D-07, R4): the renderer is engine-agnostic — a
+ * per-render [EngineRenderProfile] snapshot of `pref_novel_tts_engine`
+ * (`profileFactory`) carries the sample rate, the native-vs-baked rate
+ * split, voice resolution, preprocessing rules, and the stream factory.
+ * The snapshot is taken ONCE at render start: a mid-render pref flip does
+ * not tear down in-flight work.
  *
  * Scratch checkpoint (D-10): shaped PCM16 appends to
  * `cacheDir/chapter_audio/<chapterId>.pcm` and a `.idx` sidecar records the
@@ -55,23 +60,23 @@ class RenderException(message: String, cause: Throwable? = null) : Exception(mes
  * Rate/pitch/voice are read ONCE at render start — a mid-render preference
  * change must not split the file across two regimes (SD-1).
  *
- * Test seams (research pattern 9): [streamFactory], [sinkFactory],
- * [chapterTextLoader], [scratchDir], and [engine] are injectable so JVM
- * tests exercise everything except the Android media/ORT stack.
+ * Test seams (research pattern 9): [profileFactory], [sinkFactory],
+ * [chapterTextLoader], and [scratchDir] are injectable so JVM tests
+ * exercise everything except the Android media/ORT stack.
  */
 class ChapterAudioRenderer internal constructor(
     private val context: Context,
     private val provider: NovelDownloadProvider = Injekt.get(),
     private val preferences: NovelTtsPreferences = Injekt.get(),
-    private val engine: PocketEngine = PocketEngine(context, preferences),
-    internal val streamFactory: (text: String, voiceId: String) -> Flow<SynthAudio> =
-        { text, voice -> engine.synthesizeStream(text, voice, 1.0f, null) },
-    internal val sinkFactory: (audioDir: UniFile?, finalName: String) -> ChapterAudioSink =
-        { dir, name ->
+    internal val profileFactory: (engineType: String) -> EngineRenderProfile =
+        { RenderProfiles.forEngine(it, context, preferences) },
+    internal val sinkFactory: (audioDir: UniFile?, finalName: String, sampleRate: Int) -> ChapterAudioSink =
+        { dir, name, rate ->
             SafM4aSink(
                 context,
                 dir ?: throw RenderException("downloads directory unavailable — cannot render audio"),
                 name,
+                rate,
             )
         },
     internal val chapterTextLoader: suspend (novel: Novel, chapter: NovelChapter, source: NovelSource) -> String? =
@@ -83,6 +88,14 @@ class ChapterAudioRenderer internal constructor(
         },
     internal val scratchDir: File = File(context.cacheDir, "chapter_audio"),
 ) {
+
+    /**
+     * The most recent render's profile (PB-16): a mid-render pref flip
+     * means the NEXT render's `ensureLoaded` runs on its own profile, so
+     * [releaseEngine] tracks and releases only the last-used engine —
+     * that covers the "leave reader" cleanup the queue manager needs.
+     */
+    private var lastProfile: EngineRenderProfile? = null
 
     /**
      * Render one downloaded chapter to `.m4a`. Returns the manifest that was
@@ -112,16 +125,17 @@ class ChapterAudioRenderer internal constructor(
         }
 
         // Render-time settings snapshot — read once, before the first chunk
-        // (SD-1). Voice resolves against the installed bundle WITHOUT
-        // mutating the preference.
-        engine.ensureLoaded()
-        val voice = PocketVoiceCatalog.resolveInstalledVoice(
-            preferences.voiceName().get(),
-            context.filesDir,
-        )
+        // (SD-1). The engine profile is likewise a snapshot of the engine
+        // pref (R4): a mid-render flip does NOT tear down this render.
+        // Voice resolves against the installed bundle WITHOUT mutating the
+        // preference.
+        val profile = profileFactory(preferences.engineType().get()).also { lastProfile = it }
+        profile.ensureLoaded()
+        val voice = profile.resolveVoice(preferences.voiceName().get())
         val rate = preferences.speechRate().get()
         val pitch = preferences.pitch().get()
-        val enabledRules = EngineProfiles.defaultsFor(PocketEngine.ENGINE_NAME)
+        val enabledRules = profile.preprocessingRules
+        val bakeRate = profile.bakeRateFor(rate)
 
         scratchDir.mkdirs()
         val scratch = File(scratchDir, "${chapter.id}.pcm")
@@ -157,9 +171,13 @@ class ChapterAudioRenderer internal constructor(
                 cumulativeBefore[i] = cumulativeSamples
                 val prepared = SynthesisPipeline.prepare(paragraphs[i], enabledRules)
                 if (prepared != null) {
-                    streamFactory(prepared.engineText, voice).collect { audio ->
+                    profile.streamFactory(
+                        prepared.engineText,
+                        voice,
+                        profile.nativeSpeedFor(rate),
+                    ).collect { audio ->
                         currentCoroutineContext().ensureActive()
-                        val shaped = shapeForRender(audio, prepared.hint, rate, pitch)
+                        val shaped = shapeForRender(audio, prepared.hint, bakeRate, pitch)
                         if (shaped.isNotEmpty()) {
                             scratch.appendBytes(shaped.toLittleEndianBytes())
                             cumulativeSamples += shaped.size
@@ -177,14 +195,14 @@ class ChapterAudioRenderer internal constructor(
 
             val manifest = ChapterAudioManifest(
                 voice = voice,
-                engine = PocketEngine.ENGINE_NAME,
+                engine = profile.engineName,
                 chapterTitle = chapter.name,
-                sampleRate = PocketVoiceCatalog.SAMPLE_RATE,
+                sampleRate = profile.sampleRate,
                 speechRate = rate,
                 pitch = pitch,
-                durationMs = cumulativeSamples * 1000L / PocketVoiceCatalog.SAMPLE_RATE,
+                durationMs = cumulativeSamples * 1000L / profile.sampleRate,
                 paragraphOffsetsMs = List(paragraphs.size) {
-                    cumulativeBefore[it] * 1000L / PocketVoiceCatalog.SAMPLE_RATE
+                    cumulativeBefore[it] * 1000L / profile.sampleRate
                 },
                 paragraphTexts = paragraphs,
                 text = paragraphs.joinToString("\n\n"),
@@ -194,6 +212,7 @@ class ChapterAudioRenderer internal constructor(
             sink = sinkFactory(
                 provider.getOrCreateAudioDir(novel.title, source),
                 provider.getAudioFileName(chapter.name, chapter.scanlator),
+                profile.sampleRate,
             )
             encodeScratch(scratch, sink)
             sink.finish(manifest.encode())
@@ -226,20 +245,23 @@ class ChapterAudioRenderer internal constructor(
 
     /** Release the engine — the queue manager (05-02) calls this on drain. */
     fun releaseEngine() {
-        engine.release()
+        lastProfile?.releaseEngine()
     }
 
     // -- internals --------------------------------------------------------------
 
     /**
      * Canonical per-chunk shaping, mirroring `PocketTtsEngine.shape` (keep in
-     * sync): emotion prosody → speech rate → pitch. Rate/pitch are baked
-     * into the rendered PCM (SD-1).
+     * sync): emotion prosody → baked speech rate → pitch. The rate split is
+     * the profile's (D-07): `bakeRate` is the residue the engine did NOT
+     * apply natively — Pocket bakes the whole rate, Supertonic bakes
+     * `rate / native` so 1.0 skips the resample entirely (PB-17). Pitch is
+     * always baked via [PitchResampler] for both engines.
      */
-    private fun shapeForRender(audio: SynthAudio, hint: ProsodyHint, rate: Float, pitch: Float): ShortArray {
+    private fun shapeForRender(audio: SynthAudio, hint: ProsodyHint, bakeRate: Float, pitch: Float): ShortArray {
         var pcm = SynthesisPipeline.shapeChunk(audio.pcm, audio.sampleRate, hint)
-        if (abs(rate - 1f) > 0.01f) {
-            pcm = ProsodyApplier.resampleLinear(pcm, rate)
+        if (abs(bakeRate - 1f) > 0.01f) {
+            pcm = ProsodyApplier.resampleLinear(pcm, bakeRate)
         }
         if (abs(pitch - 1f) > 0.001f) {
             val floats = FloatArray(pcm.size) { pcm[it].toFloat() }

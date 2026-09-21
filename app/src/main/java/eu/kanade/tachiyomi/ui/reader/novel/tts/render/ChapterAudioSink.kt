@@ -11,7 +11,6 @@ import android.system.Os
 import android.system.OsConstants
 import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloader
-import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -23,8 +22,8 @@ import tachiyomi.core.common.util.system.logcat
 
 /**
  * Encode-side seam of the chapter render (plan 05-01): the renderer feeds
- * shaped 24 kHz mono PCM16 via [write]; the sink owns the AAC encode, the
- * MP4 mux, and the SAF tmp→final rename.
+ * shaped mono PCM16 at the render profile's sample rate via [write]; the
+ * sink owns the AAC encode, the MP4 mux, and the SAF tmp→final rename.
  *
  * The three call sites form one transaction:
  *   write(chunk) * → finish(manifestJson)   commits: EOS → drain →
@@ -64,17 +63,22 @@ internal interface ChapterAudioSink {
  *    — waiting for stop() would fail after the whole encode (RESEARCH §3
  *    risk 8). Fallback: mux into `cacheDir`, stream-copy into the SAF doc
  *    at [finish].
- *  - AAC: `audio/mp4a-latm`, 24000 Hz, mono, AACObjectLC, 96 kbps, PCM16
- *    input (D-02; KEY_PCM_ENCODING hints the encoder to accept 16-bit PCM
- *    directly on API 24+).
+ *  - AAC: `audio/mp4a-latm`, [sampleRate] Hz, mono, AACObjectLC, 96 kbps,
+ *    PCM16 input (D-02; KEY_PCM_ENCODING hints the encoder to accept
+ *    16-bit PCM directly on API 24+).
  *  - Muxer starts exactly once, on the encoder's INFO_OUTPUT_FORMAT_CHANGED.
  *  - Presentation timestamps derive from cumulative submitted samples
- *    (`totalSamples * 1_000_000 / 24000`), never the wall clock.
+ *    (`totalSamples * 1_000_000 / sampleRate`), never the wall clock.
+ *
+ * @property sampleRate PCM rate of the incoming chunks — set from the
+ *           render profile's `sampleRate` (24 kHz pocket / 44.1 kHz
+ *           supertonic); drives the MediaFormat and all pts math (PB-18).
  */
 internal class SafM4aSink(
     private val context: Context,
     private val audioDir: UniFile,
     private val finalName: String,
+    private val sampleRate: Int,
 ) : ChapterAudioSink {
 
     private var encoder: MediaCodec? = null
@@ -106,7 +110,7 @@ internal class SafM4aSink(
                 input.put(data, offset, n)
                 // Timestamp of the FIRST sample in this queued buffer —
                 // cumulative samples submitted so far.
-                val ptsUs = totalSamplesSubmitted * 1_000_000L / PocketVoiceCatalog.SAMPLE_RATE
+                val ptsUs = totalSamplesSubmitted * 1_000_000L / sampleRate
                 enc.queueInputBuffer(inputIdx, 0, n, ptsUs, 0)
                 offset += n
                 totalSamplesSubmitted += n / BYTES_PER_SAMPLE
@@ -128,7 +132,7 @@ internal class SafM4aSink(
                     inputIdx,
                     0,
                     0,
-                    totalSamplesSubmitted * 1_000_000L / PocketVoiceCatalog.SAMPLE_RATE,
+                    totalSamplesSubmitted * 1_000_000L / sampleRate,
                     MediaCodec.BUFFER_FLAG_END_OF_STREAM,
                 )
                 break
@@ -209,7 +213,7 @@ internal class SafM4aSink(
 
         val format = MediaFormat.createAudioFormat(
             MediaFormat.MIMETYPE_AUDIO_AAC,
-            PocketVoiceCatalog.SAMPLE_RATE,
+            sampleRate,
             1,
         ).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
@@ -222,10 +226,11 @@ internal class SafM4aSink(
             enc.start()
             encoder = enc
         } catch (t: Throwable) {
-            // 24 kHz AAC is specced but not guaranteed on every vendor codec
-            // — surface it cleanly; the on-device checkpoint (plan 05-05)
-            // verifies the happy path on real hardware.
-            throw IOException("AAC encoder setup failed at ${PocketVoiceCatalog.SAMPLE_RATE} Hz", t)
+            // AAC at the render rate is specced but not guaranteed on every
+            // vendor codec — surface it cleanly; the on-device checkpoint
+            // (SafM4aSinkInstrumentedTest, V7) verifies both 24 kHz and
+            // 44.1 kHz on real hardware.
+            throw IOException("AAC encoder setup failed at $sampleRate Hz", t)
         }
     }
 

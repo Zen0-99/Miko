@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.PocketEngine
 import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.SynthAudio
+import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.EngineProfiles
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -39,11 +40,13 @@ import tachiyomi.domain.items.chapter.model.NovelChapter
  * JVM unit tests for [ChapterAudioRenderer] — the end-to-end render slice
  * (plan 05-01, Task 2 tracer).
  *
- * The Android-facing seams are injected: `streamFactory` supplies fake
+ * The Android-facing seams are injected: `profileFactory` supplies an
+ * [EngineRenderProfile] whose `streamFactory` lambda emits fake
  * `Flow<SynthAudio>` per paragraph, `sinkFactory` supplies a recording fake
  * that runs the manifest through the REAL [Mp4AtomAppender] onto a temp
  * file, `chapterTextLoader` returns fixture HTML, `scratchDir` is a temp
- * dir, and `engine` is a relaxed mock (never loads ORT). Everything else —
+ * dir, and the profile's `ensureLoaded` is a no-op (never loads ORT).
+ * Everything else —
  * the real [eu.kanade.tachiyomi.ui.reader.novel.NovelParagraphSegmenter],
  * offset math, PCM scratch checkpointing, the rate/pitch bake chain, and the
  * manifest codec — is production code.
@@ -63,8 +66,8 @@ import tachiyomi.domain.items.chapter.model.NovelChapter
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChapterAudioRendererTest {
 
-    private fun chunk(size: Int, fill: Int = 7): SynthAudio =
-        SynthAudio(ShortArray(size) { (it * fill % 1000).toShort() }, sampleRate = 24000)
+    private fun chunk(size: Int, fill: Int = 7, sampleRate: Int = 24000): SynthAudio =
+        SynthAudio(ShortArray(size) { (it * fill % 1000).toShort() }, sampleRate = sampleRate)
 
     private val novel = Novel.create().copy(id = 7L, title = "Test Novel")
     private val chapter = NovelChapter.create().copy(id = 42L, novelId = 7L, name = "Chapter 1")
@@ -124,22 +127,68 @@ class ChapterAudioRendererTest {
         return context
     }
 
+    /**
+     * Fake [EngineRenderProfile] over lambdas — pocket-shaped by default
+     * (24000 Hz, `engine` = the real Pocket engine name, whole rate baked),
+     * with the REAL [PocketVoiceCatalog.resolveInstalledVoice] running over
+     * the stubbed `filesDir` so voice resolution stays honest.
+     */
+    private fun fakeProfile(
+        context: Context,
+        streamFactory: (text: String, voiceId: String, speed: Float) -> Flow<SynthAudio>,
+        engineName: String = PocketEngine.ENGINE_NAME,
+        sampleRate: Int = 24000,
+        nativeSpeedFor: (rate: Float) -> Float = { 1f },
+        bakeRateFor: (rate: Float) -> Float = { it },
+        resolveVoice: (requested: String) -> String =
+            { PocketVoiceCatalog.resolveInstalledVoice(it, context.filesDir) },
+        preprocessingRules: Set<String> = EngineProfiles.defaultsFor(PocketEngine.ENGINE_NAME),
+        onEnsureLoaded: () -> Unit = {},
+        onRelease: () -> Unit = {},
+    ): EngineRenderProfile = EngineRenderProfile(
+        engineName = engineName,
+        sampleRate = sampleRate,
+        nativeSpeedFor = nativeSpeedFor,
+        bakeRateFor = bakeRateFor,
+        ensureLoaded = { onEnsureLoaded() },
+        releaseEngine = onRelease,
+        resolveVoice = resolveVoice,
+        preprocessingRules = preprocessingRules,
+        streamFactory = streamFactory,
+    )
+
+    /** Supertonic-shaped fake profile (D-07): 44.1 kHz, native speed 0.5..2, residue baked. */
+    private fun supertonicProfile(
+        context: Context,
+        onRelease: () -> Unit = {},
+        streamFactory: (text: String, voiceId: String, speed: Float) -> Flow<SynthAudio>,
+    ): EngineRenderProfile = fakeProfile(
+        context = context,
+        streamFactory = streamFactory,
+        engineName = "supertonic-3-int8",
+        sampleRate = 44100,
+        nativeSpeedFor = { it.coerceIn(0.5f, 2f) },
+        bakeRateFor = { rate -> rate / rate.coerceIn(0.5f, 2f) },
+        resolveVoice = { "supertonic:F5" },
+        onRelease = onRelease,
+    )
+
     private fun makeRenderer(
         scratchDir: File,
         sink: RecordingSink,
         html: String,
-        streamFactory: (text: String, voiceId: String) -> Flow<SynthAudio>,
+        streamFactory: (text: String, voiceId: String, speed: Float) -> Flow<SynthAudio>,
         preferences: NovelTtsPreferences = NovelTtsPreferences(FakePreferenceStore()),
         context: Context = contextWithVoices("eponine"),
+        profile: EngineRenderProfile? = null,
     ): ChapterAudioRenderer = ChapterAudioRenderer(
         context = context,
         provider = mockk<NovelDownloadProvider>(relaxed = true).also {
             every { it.getAudioFileName("Chapter 1", null) } returns "Chapter 1.m4a"
         },
         preferences = preferences,
-        engine = mockk<PocketEngine>(relaxed = true),
-        streamFactory = streamFactory,
-        sinkFactory = { _, _ -> sink },
+        profileFactory = { profile ?: fakeProfile(context, streamFactory) },
+        sinkFactory = { _, _, _ -> sink },
         chapterTextLoader = { _, _, _ -> html },
         scratchDir = scratchDir,
     )
@@ -159,7 +208,7 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = sink,
             html = "<p>Alpha.</p><p>Beta.</p>",
-            streamFactory = { text, voice ->
+            streamFactory = { text, voice, _ ->
                 calls += text to voice
                 if (text.contains("Alpha")) flowOf(chunk(480), chunk(480)) else flowOf(chunk(240))
             },
@@ -206,7 +255,7 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = sink,
             html = "<p>Fast.</p>",
-            streamFactory = { _, _ -> flowOf(chunk(480)) },
+            streamFactory = { _, _, _ -> flowOf(chunk(480)) },
             preferences = prefs,
         )
 
@@ -227,7 +276,7 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = sink,
             html = "<p>Alpha.</p><p>Beta.</p>",
-            streamFactory = { text, _ ->
+            streamFactory = { text, _, _ ->
                 if (text.contains("Alpha")) {
                     flowOf(chunk(480))
                 } else {
@@ -259,7 +308,7 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = sink,
             html = "<p>Alpha.</p>",
-            streamFactory = { _, _ -> flowOf(chunk(480)) },
+            streamFactory = { _, _, _ -> flowOf(chunk(480)) },
         )
 
         val job = async { renderer.renderChapter(novel, chapter, source) }
@@ -282,7 +331,7 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = firstSink,
             html = "<p>Alpha.</p><p>Beta.</p>",
-            streamFactory = { text, _ ->
+            streamFactory = { text, _, _ ->
                 if (text.contains("Alpha")) flowOf(chunk(480)) else flow { gate.await() }
             },
         )
@@ -299,7 +348,7 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = secondSink,
             html = "<p>Alpha.</p><p>Beta.</p>",
-            streamFactory = { text, voice -> calls += text to voice; flowOf(chunk(240)) },
+            streamFactory = { text, voice, _ -> calls += text to voice; flowOf(chunk(240)) },
         )
         val manifest = second.renderChapter(novel, chapter, source, resumeFromParagraph = 1)
 
@@ -322,7 +371,7 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = sink,
             html = "<p>Alpha.</p><p>Beta.</p>",
-            streamFactory = { text, _ -> calls += text; flowOf(chunk(120)) },
+            streamFactory = { text, _, _ -> calls += text; flowOf(chunk(120)) },
         )
 
         renderer.renderChapter(novel, chapter, source, resumeFromParagraph = 1)
@@ -335,13 +384,13 @@ class ChapterAudioRendererTest {
         val scratchDir = createTempDirectory().toFile()
         val sink = RecordingSink(createTempFile().toFile(), fakeMp4Prefix())
         var sinkCreated = false
+        val context = contextWithVoices("eponine")
         val renderer = ChapterAudioRenderer(
-            context = contextWithVoices("eponine"),
+            context = context,
             provider = mockk<NovelDownloadProvider>(relaxed = true),
             preferences = NovelTtsPreferences(FakePreferenceStore()),
-            engine = mockk<PocketEngine>(relaxed = true),
-            streamFactory = { _, _ -> flowOf(chunk(10)) },
-            sinkFactory = { _, _ -> sinkCreated = true; sink },
+            profileFactory = { fakeProfile(context, { _, _, _ -> flowOf(chunk(10)) }) },
+            sinkFactory = { _, _, _ -> sinkCreated = true; sink },
             chapterTextLoader = { _, _, _ -> "<p>   </p><p></p>" },
             scratchDir = scratchDir,
         )
@@ -350,6 +399,150 @@ class ChapterAudioRendererTest {
             renderer.renderChapter(novel, chapter, source)
         }
         sinkCreated shouldBe false
+    }
+
+    // -- engine profile seam (05B-03, D-07) ---------------------------------------
+
+    @Test
+    fun `supertonic profile render writes 44100 manifest and engine name`() = runTest {
+        val scratchDir = createTempDirectory().toFile()
+        val outFile = createTempFile(suffix = ".m4a").toFile()
+        val sink = RecordingSink(outFile, fakeMp4Prefix())
+        val context = contextWithVoices("eponine")
+        val renderer = makeRenderer(
+            scratchDir = scratchDir,
+            sink = sink,
+            html = "<p>Alpha.</p><p>Beta.</p>",
+            streamFactory = { _, _, _ -> flowOf() },
+            context = context,
+            profile = supertonicProfile(context) { _, _, _ ->
+                flowOf(chunk(441, sampleRate = 44100))
+            },
+        )
+
+        val manifest = renderer.renderChapter(novel, chapter, source)
+
+        manifest.engine shouldBe "supertonic-3-int8"
+        manifest.sampleRate shouldBe 44100
+        manifest.voice shouldBe "supertonic:F5"
+        // 2 paragraphs × 441 samples → offsets + duration at 44.1 kHz.
+        manifest.paragraphOffsetsMs shouldBe listOf(0L, 441L * 1000L / 44100L)
+        manifest.durationMs shouldBe 882L * 1000L / 44100L
+        sink.written.sumOf { it.size } shouldBe 882
+        decodeManifest(readAtomJson(outFile)!!) shouldBe manifest
+    }
+
+    @Test
+    fun `supertonic rate 2 rides native speed and skips the resample bake`() = runTest {
+        val prefs = NovelTtsPreferences(FakePreferenceStore())
+        prefs.speechRate().set(2.0f)
+        val scratchDir = createTempDirectory().toFile()
+        val sink = RecordingSink(createTempFile().toFile(), fakeMp4Prefix())
+        val context = contextWithVoices("eponine")
+        val speeds = mutableListOf<Float>()
+        val renderer = makeRenderer(
+            scratchDir = scratchDir,
+            sink = sink,
+            html = "<p>Fast.</p>",
+            streamFactory = { _, _, _ -> flowOf() },
+            preferences = prefs,
+            context = context,
+            profile = supertonicProfile(context) { _, _, speed ->
+                speeds += speed
+                flowOf(chunk(441, sampleRate = 44100))
+            },
+        )
+
+        renderer.renderChapter(novel, chapter, source)
+
+        // rate 2 is inside native range 0.5..2 → native=2, bake=1.
+        speeds shouldBe listOf(2.0f)
+        sink.written.sumOf { it.size } shouldBe 441 // PCM passthrough, no resample
+    }
+
+    @Test
+    fun `supertonic rate 3 clamps native speed and bakes the residue`() = runTest {
+        val prefs = NovelTtsPreferences(FakePreferenceStore())
+        prefs.speechRate().set(3.0f)
+        val scratchDir = createTempDirectory().toFile()
+        val sink = RecordingSink(createTempFile().toFile(), fakeMp4Prefix())
+        val context = contextWithVoices("eponine")
+        val speeds = mutableListOf<Float>()
+        val renderer = makeRenderer(
+            scratchDir = scratchDir,
+            sink = sink,
+            html = "<p>Faster.</p>",
+            streamFactory = { _, _, _ -> flowOf() },
+            preferences = prefs,
+            context = context,
+            profile = supertonicProfile(context) { _, _, speed ->
+                speeds += speed
+                flowOf(chunk(480, sampleRate = 44100))
+            },
+        )
+
+        renderer.renderChapter(novel, chapter, source)
+
+        // rate 3 exceeds native range → native=2, bake=3/2=1.5.
+        speeds shouldBe listOf(2.0f)
+        sink.written.sumOf { it.size } shouldBe 320 // floor(480 / 1.5)
+    }
+
+    @Test
+    fun `forEngine maps supertonic to the supertonic profile and anything else to pocket`() {
+        val context = contextWithVoices("eponine")
+        val prefs = NovelTtsPreferences(FakePreferenceStore())
+
+        val supertonic = RenderProfiles.forEngine("supertonic", context, prefs)
+        supertonic.engineName shouldBe "supertonic-3-int8"
+        supertonic.sampleRate shouldBe 44100
+        supertonic.nativeSpeedFor(3f) shouldBe 2f
+        supertonic.bakeRateFor(3f) shouldBe 1.5f
+        supertonic.bakeRateFor(2f) shouldBe 1.0f
+
+        // PB-15: "pocket", "android", "neural", unknown → pocket profile.
+        for (engineType in listOf("pocket", "android", "neural", "bogus")) {
+            val pocket = RenderProfiles.forEngine(engineType, context, prefs)
+            pocket.engineName shouldBe PocketEngine.ENGINE_NAME
+            pocket.sampleRate shouldBe 24000
+            pocket.nativeSpeedFor(3f) shouldBe 1f
+            pocket.bakeRateFor(3f) shouldBe 3f
+        }
+    }
+
+    @Test
+    fun `releaseEngine releases the most recent render's profile engine`() = runTest {
+        val scratchDir = createTempDirectory().toFile()
+        val sink = RecordingSink(createTempFile().toFile(), fakeMp4Prefix())
+        val context = contextWithVoices("eponine")
+        var releases = 0
+        val renderer = makeRenderer(
+            scratchDir = scratchDir,
+            sink = sink,
+            html = "<p>Alpha.</p>",
+            streamFactory = { _, _, _ -> flowOf() },
+            context = context,
+            profile = supertonicProfile(context, onRelease = { releases++ }) { _, _, _ ->
+                flowOf(chunk(441, sampleRate = 44100))
+            },
+        )
+
+        // Before any render there is no last profile — release is a no-op.
+        val pristine = ChapterAudioRenderer(
+            context = context,
+            provider = mockk<NovelDownloadProvider>(relaxed = true),
+            preferences = NovelTtsPreferences(FakePreferenceStore()),
+            profileFactory = { fakeProfile(context, { _, _, _ -> flowOf() }, onRelease = { releases++ }) },
+            sinkFactory = { _, _, _ -> sink },
+            chapterTextLoader = { _, _, _ -> "<p>x</p>" },
+            scratchDir = scratchDir,
+        )
+        pristine.releaseEngine()
+        releases shouldBe 0
+
+        renderer.renderChapter(novel, chapter, source)
+        renderer.releaseEngine()
+        releases shouldBe 1
     }
 
     // -- fakes -------------------------------------------------------------------
