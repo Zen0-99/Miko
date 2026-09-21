@@ -9,7 +9,6 @@ import android.os.Build
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
-import eu.kanade.tachiyomi.ui.reader.novel.tts.perf.CpuClusterDetector
 import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.EngineNotInstalledException
 import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.SynthAudio
 import java.io.File
@@ -141,12 +140,14 @@ class SupertonicEngine(
             logcat(LogPriority.INFO) { "Loading Supertonic TTS bundle from $engineDir …" }
             val t0 = System.currentTimeMillis()
             // Thread resolution (PB-5): an explicit override (instrumented-test
-            // A/B knob) wins, then the shared ORT manual pref, else the
-            // CPU-cluster autodetect.
+            // A/B knob) wins, then the shared ORT manual pref, else 2 — the
+            // V6 device matrix showed 2 threads beating perf-core autodetect
+            // by ~20% on Tensor G3 (little-core contention), matching sherpa's
+            // own 2-thread default.
             val manualThreads: Int? = preferences.pocketIntraOpThreads().get().takeIf { it > 0 }
             val threadCount = threadOverride
                 ?: manualThreads
-                ?: CpuClusterDetector.detectPerfCoreCount()
+                ?: DEFAULT_THREADS
             val xnnpackMode = preferences.pocketXnnpackMode().get().lowercase()
             try {
                 doLoad(threadCount, xnnpackMode)
@@ -703,6 +704,14 @@ class SupertonicEngine(
 
         private const val MAX_CHUNK_LENGTH = 300
         private const val INTER_CHUNK_SILENCE_SEC = 0.3f
+
+        /**
+         * Default ORT intra-op threads when neither the instrumented-test
+         * override nor the shared manual pref is set. V6 device matrix
+         * (Pixel 8 Pro): 2 threads ≈ RTF 0.49 vs autodetect(8) ≈ 0.59 —
+         * sherpa-onnx ships the same 2-thread default.
+         */
+        private const val DEFAULT_THREADS = 2
 
         /** Flip to capture ORT node placement in logcat (`adb logcat -s onnxruntime`). */
         private const val VERBOSE_ORT_DIAGNOSTIC = false
