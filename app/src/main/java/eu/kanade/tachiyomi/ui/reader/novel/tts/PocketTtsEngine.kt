@@ -364,10 +364,10 @@ class PocketTtsEngine internal constructor(
 }
 
 /**
- * PCM output sink for [PocketTtsEngine]. `fun interface` so tests inject a
- * recording fake via SAM conversion or a tiny class; production uses
- * [AudioTrackPcmSink]. [write] is the sole abstract method — the lifecycle
- * hooks have no-op defaults.
+ * PCM output sink shared by [PocketTtsEngine] and [SupertonicTtsEngine].
+ * `fun interface` so tests inject a recording fake via SAM conversion or a
+ * tiny class; production uses [AudioTrackPcmSink]. [write] is the sole
+ * abstract method — the lifecycle hooks have no-op defaults.
  */
 internal fun interface PcmSink {
     /** Write one chunk of mono PCM16 samples (blocks until consumed). */
