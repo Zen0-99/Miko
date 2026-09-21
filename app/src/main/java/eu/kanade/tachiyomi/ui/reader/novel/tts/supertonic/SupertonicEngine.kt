@@ -198,11 +198,18 @@ class SupertonicEngine(
         logcat(LogPriority.INFO) { "ORT intraOpNumThreads=$intraOpThreads (manual setting or autodetect)" }
         xnnpackOutcome.clear()
         val opts = buildSessionOptions(intraOpThreads, label = "main", xnnpackMode = xnnpackMode)
+        // ORT-1.26-android SIGSEGVs partitioning the sherpa int8 vocoder for
+        // XNNPACK at session-create time (null deref inside libonnxruntime,
+        // reproducer: load vocoder.int8.onnx with addXnnpack on Pixel 8 Pro).
+        // The other three graphs partition fine, so only the vocoder gets a
+        // CPU-EP session regardless of pocketXnnpackMode.
+        val vocoderOpts = buildSessionOptions(intraOpThreads, label = "vocoder", xnnpackMode = "off")
+        xnnpackOutcome["vocoder"] = "cpu(int8+xnnpack segv workaround)"
 
         dpSession = createSession(ort, opts, "duration_predictor")
         textEncSession = createSession(ort, opts, "text_encoder")
         vectorEstSession = createSession(ort, opts, "vector_estimator")
-        vocoderSession = createSession(ort, opts, "vocoder")
+        vocoderSession = createSession(ort, vocoderOpts, "vocoder")
 
         logcat(LogPriority.INFO) {
             "Supertonic load selection: intraOpThreads=$intraOpThreads " +
