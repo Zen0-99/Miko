@@ -109,7 +109,9 @@ internal object RenderProfiles {
      * Supertonic profile (D-07): 44.1 kHz native — zero resampling in the
      * codec path. Rate rides the model's duration-divide parameter inside
      * `0.5..2`; out-of-range residue is baked (`rate / native`). Denoise
-     * steps come from `supertonicNumSteps()` at stream time.
+     * steps come from `supertonicRenderNumSteps()` at stream time — the
+     * render-specific knob (default 8, spike-003 ear test) rather than the
+     * live-TTS `supertonicNumSteps`.
      */
     private fun supertonic(context: Context, preferences: NovelTtsPreferences): EngineRenderProfile {
         val engine = SupertonicEngine(context, preferences)
@@ -123,7 +125,7 @@ internal object RenderProfiles {
             resolveVoice = { SupertonicVoiceCatalog.resolveInstalledVoice(it, context.filesDir) },
             preprocessingRules = EngineProfiles.defaultsFor(SupertonicEngine.ENGINE_NAME),
             streamFactory = { text, voice, speed ->
-                engine.synthesizeStream(text, voice, preferences.supertonicNumSteps().get(), speed)
+                engine.synthesizeStream(text, voice, preferences.supertonicRenderNumSteps().get(), speed)
             },
         )
     }

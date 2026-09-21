@@ -87,6 +87,14 @@ class NovelTtsPreferences(
     /** Supertonic denoise steps per chunk (sherpa's proven default is 5) */
     fun supertonicNumSteps() = preferenceStore.getInt("pref_novel_tts_supertonic_steps", 5)
 
+    /**
+     * Denoise steps for offline chapter renders — the user's spike-003 ear
+     * test found steps=8 indistinguishable from converged (16-step) output
+     * while 5 was audible, so renders pay for 8; live previews keep the
+     * faster `supertonicNumSteps` knob.
+     */
+    fun supertonicRenderNumSteps() = preferenceStore.getInt("pref_novel_tts_supertonic_render_steps", 8)
+
     // Chapter audio rendering (phase 5)
 
     /** Whether the one-time render heat/battery warning was shown (D-15/D-17) */
