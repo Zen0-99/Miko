@@ -96,6 +96,86 @@ class SupertonicGpuInstrumentedTest {
         Log.i(TAG, "bench complete")
     }
 
+    /**
+     * LiteRT arm — converted vector_estimator on the Mali GPU delegate.
+     * TFLite is NHWC: ONNX [1,144,L] becomes [1,L,144]; masks [1,L,1];
+     * scalars unchanged. Push the converted models first:
+     *   adb push vector_estimator_float16.tflite \
+     *     /sdcard/Android/data/xyz.jmir.miko.dev/files/gpu-bench/
+     */
+    @Test
+    fun benchmarkVectorEstimatorLiteRtGpu() {
+        // fp32 model — the GPU delegate converts to fp16 internally; the
+        // raw fp16 export fails at CONCAT prepare (Float16 not a valid
+        // kernel input type).
+        val tfl = benchDir.resolve("vector_estimator_float32.tflite")
+        if (!tfl.isFile) {
+            report("litert-fp16-gpu: model missing at ${tfl.absolutePath}")
+            return
+        }
+        val latLen = 320
+        val txtLen = 128
+
+        val gpuOpts = org.tensorflow.lite.InterpreterApi.Options().apply {
+            addDelegate(org.tensorflow.lite.gpu.GpuDelegate())
+        }
+        val cpuOpts = org.tensorflow.lite.InterpreterApi.Options().apply {
+            setNumThreads(2)
+        }
+
+        for ((name, opts) in listOf("litert-gpu" to gpuOpts, "litert-cpu" to cpuOpts)) {
+            val interp = try {
+                org.tensorflow.lite.InterpreterApi.create(tfl, opts)
+            } catch (t: Throwable) {
+                report("$name: create FAILED — ${t.message}")
+                continue
+            }
+            try {
+                val rng = java.util.Random(42)
+                val noise = Array(1) { Array(latLen) { FloatArray(144) { rng.nextFloat() } } }
+                val emb = Array(1) { Array(txtLen) { FloatArray(256) { rng.nextFloat() * 0.3f } } }
+                val sty = Array(1) { Array(256) { FloatArray(50) { rng.nextFloat() * 0.3f } } }
+                val lMask = Array(1) { Array(latLen) { floatArrayOf(1f) } }
+                val tMask = Array(1) { Array(txtLen) { floatArrayOf(1f) } }
+                val step = floatArrayOf(2f)
+                val total = floatArrayOf(5f)
+                val out = Array(1) { Array(144) { FloatArray(latLen) } }
+
+                fun once() {
+                    val inputs = mapOf(
+                        "noisy_latent" to noise, "text_emb" to emb, "style_ttl" to sty,
+                        "latent_mask" to lMask, "text_mask" to tMask,
+                        "current_step" to step, "total_step" to total,
+                    )
+                    interp.runForMultipleInputsOutputs(
+                        inputs.values.toTypedArray(),
+                        mapOf(0 to out),
+                    )
+                }
+
+                // NOTE: input ORDER must match the model's signature order —
+                // runForMultipleInputsOutputs takes positional args.
+                once(); once() // warmup + delegate compile
+                val times = LongArray(10)
+                for (i in times.indices) {
+                    val t0 = System.nanoTime()
+                    once()
+                    times[i] = System.nanoTime() - t0
+                }
+                report(
+                    "$name: avg=${"%.0f".format(times.average() / 1e6)}ms " +
+                        "min=${"%.0f".format(times.min() / 1e6)}ms " +
+                        "(x5 = ${"%.0f".format(times.average() * 5 / 1e6)}ms/chunk)",
+                )
+            } catch (t: Throwable) {
+                report("$name: run FAILED — ${t.message}")
+            } finally {
+                interp.close()
+            }
+        }
+        report("litert bench complete")
+    }
+
     /** Logcat rotates under device noise — mirror every line to a file too. */
     private fun report(line: String) {
         Log.i(TAG, line)

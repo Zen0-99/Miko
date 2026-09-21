@@ -320,6 +320,13 @@ dependencies {
     testImplementation(libs.bundles.test)
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    // LiteRT spike: GPU-delegate feasibility for Supertonic vector_estimator
+    // (GpuBench proved NNAPI dead; LiteRT's OpenCL delegate is the last
+    // on-device GPU shot). Test-scope only — production stays on ORT.
+    androidTestImplementation("org.tensorflow:tensorflow-lite:2.17.0")
+    androidTestImplementation("org.tensorflow:tensorflow-lite-api:2.17.0")
+    androidTestImplementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
+    androidTestImplementation("org.tensorflow:tensorflow-lite-gpu-api:2.17.0")
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/
     // debugImplementation(libs.leakcanary.android)
