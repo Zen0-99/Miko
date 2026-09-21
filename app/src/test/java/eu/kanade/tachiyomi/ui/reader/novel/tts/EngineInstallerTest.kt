@@ -366,6 +366,201 @@ class EngineInstallerTest {
         File(filesDir, "engines/bogus-engine").exists() shouldBe false
     }
 
+    // -- supertonic: spec dispatch ---------------------------------------------------
+
+    @Test
+    fun `install supertonic engine name dispatches to the sherpa source not unknown engine`() = runTest {
+        // The fake fetcher has no payload registered for the real
+        // SHERPA_ARCHIVE.url, so the attempt fails on the fetch — the point
+        // is that specFor routed to the supertonic spec at all instead of
+        // failing fast with "Unknown engine".
+        val result = installer.install(SupertonicEngineCatalog.ENGINE_NAME)
+
+        result.isFailure shouldBe true
+        // Dispatch proof: the fetcher was asked for the real sherpa URL —
+        // the Result carries the last source error, the state flow the
+        // aggregated "all sources failed" reason.
+        fetcher.requestedUrls shouldBe listOf(SupertonicEngineCatalog.SHERPA_ARCHIVE.url)
+        installer.state(SupertonicEngineCatalog.ENGINE_NAME).first() shouldBe
+            InstallState.Failed("all 1 sources failed — last: ${result.exceptionOrNull()?.message}")
+    }
+
+    // -- supertonic: install ----------------------------------------------------------
+
+    @Test
+    fun `supertonic install extracts sherpa layout and stamps meta`() = runTest {
+        // Inject the test source through installViaDescriptor (same
+        // convention as the pocket cases — production constants stay
+        // immutable) while reusing the catalog's real spec for the
+        // descriptor + layout check.
+        val spec = SupertonicEngineCatalog.engineSpec()
+        val archive = buildArchive(SUPERTONIC_LAYOUT, SUPERTONIC_ARCHIVE_ROOT)
+        val source = source(
+            "https://test/supertonic.tar.bz2",
+            archive,
+            archiveRoot = SUPERTONIC_ARCHIVE_ROOT,
+        )
+        fetcher.payloads[source.url] = archive
+
+        val result = installer.installViaDescriptor(spec.descriptor, listOf(source), spec.layoutCheck) {}
+
+        result.isSuccess shouldBe true
+        val engineDir = File(filesDir, "engines/${SupertonicEngineCatalog.ENGINE_NAME}")
+        engineDir.isDirectory shouldBe true
+        // archiveRoot stripped: files land at the top level of the engine dir.
+        File(engineDir, "vector_estimator.int8.onnx").isFile shouldBe true
+        File(engineDir, "tts.json").isFile shouldBe true
+        File(engineDir, "voice.bin").isFile shouldBe true
+        File(engineDir, "unicode_indexer.bin").isFile shouldBe true
+        val meta = File(engineDir, ".install_meta.json")
+        meta.isFile shouldBe true
+        meta.readText() shouldContain source.sha256
+        installer.state(SupertonicEngineCatalog.ENGINE_NAME).first() shouldBe InstallState.Installed
+        // The cheap catalog gate agrees with the installer's verdict.
+        SupertonicEngineCatalog.isInstalled(filesDir) shouldBe true
+    }
+
+    @Test
+    fun `supertonic zip slip entry is rejected`() = runTest {
+        val maliciousLayout = mapOf("$SUPERTONIC_ARCHIVE_ROOT../evil.txt" to "haha".toByteArray())
+        val archive = buildArchive(maliciousLayout, archiveRootName = "")
+        val spec = SupertonicEngineCatalog.engineSpec()
+        val source = source(
+            "https://test/evil-supertonic.tar.bz2",
+            archive,
+            archiveRoot = SUPERTONIC_ARCHIVE_ROOT,
+        )
+        fetcher.payloads[source.url] = archive
+
+        val result = installer.installViaDescriptor(spec.descriptor, listOf(source), spec.layoutCheck) {}
+
+        result.isFailure shouldBe true
+        (result.exceptionOrNull()?.message ?: "") shouldContain "escapes destination"
+        File(filesDir, "engines/evil.txt").exists() shouldBe false
+        File(filesDir, "engines/${spec.descriptor.name}").exists() shouldBe false
+    }
+
+    // -- supertonic: verify ------------------------------------------------------------
+
+    @Test
+    fun `supertonic verify distinguishes notinstalled corrupt installed and outdated`() = runTest {
+        val spec = SupertonicEngineCatalog.engineSpec()
+        val expectedSource = source(
+            "https://test/supertonic.tar.bz2",
+            buildArchive(SUPERTONIC_LAYOUT, SUPERTONIC_ARCHIVE_ROOT),
+            archiveRoot = SUPERTONIC_ARCHIVE_ROOT,
+        )
+
+        // Absent dir.
+        installer.verifyDescriptor(spec.descriptor, expectedSource, spec.layoutCheck) shouldBe
+            InstallState.NotInstalled
+
+        // Complete layout + meta stamped with the expected sha → Installed.
+        val dir = File(filesDir, "engines/${spec.descriptor.name}").apply { mkdirs() }
+        stageSupertonicLayout(dir)
+        File(dir, ".install_meta.json")
+            .writeText("""{"archive_sha256":"${expectedSource.sha256}","archive_url":"${expectedSource.url}"}""")
+        installer.verifyDescriptor(spec.descriptor, expectedSource, spec.layoutCheck) shouldBe
+            InstallState.Installed
+
+        // Missing required file → Corrupt.
+        File(dir, "voice.bin").delete()
+        installer.verifyDescriptor(spec.descriptor, expectedSource, spec.layoutCheck) shouldBe
+            InstallState.Corrupt
+
+        // sha drift in .install_meta.json → Outdated (layout itself is intact).
+        stageSupertonicLayout(dir)
+        File(dir, ".install_meta.json")
+            .writeText("""{"archive_sha256":"${"f".repeat(64)}","archive_url":"https://test/old.tar.bz2"}""")
+        installer.verifyDescriptor(spec.descriptor, expectedSource, spec.layoutCheck) shouldBe
+            InstallState.Outdated(
+                installedSha256 = "f".repeat(64),
+                expectedSha256 = expectedSource.sha256,
+            )
+    }
+
+    @Test
+    fun `supertonic verify on wrong sample rate returns corrupt`() = runTest {
+        // V5 negative case: the sherpa docs table claims 24000 but the real
+        // int8 tts.json declares ae.sample_rate = 44100 — a 24000 bundle is
+        // corrupt, never "Installed".
+        val spec = SupertonicEngineCatalog.engineSpec()
+        val expectedSource = source(
+            "https://test/supertonic.tar.bz2",
+            buildArchive(SUPERTONIC_LAYOUT, SUPERTONIC_ARCHIVE_ROOT),
+            archiveRoot = SUPERTONIC_ARCHIVE_ROOT,
+        )
+
+        val dir = File(filesDir, "engines/${spec.descriptor.name}").apply { mkdirs() }
+        stageSupertonicLayout(dir)
+        File(dir, "tts.json").writeText(
+            """{"ae":{"sample_rate":24000,"base_chunk_size":512},"ttl":{"chunk_compress_factor":6,"latent_dim":24}}""",
+        )
+        File(dir, ".install_meta.json")
+            .writeText("""{"archive_sha256":"${expectedSource.sha256}","archive_url":"${expectedSource.url}"}""")
+
+        installer.verifyDescriptor(spec.descriptor, expectedSource, spec.layoutCheck) shouldBe
+            InstallState.Corrupt
+    }
+
+    @Test
+    fun `supertonic verify on malformed tts json returns corrupt`() = runTest {
+        val spec = SupertonicEngineCatalog.engineSpec()
+        val expectedSource = source(
+            "https://test/supertonic.tar.bz2",
+            buildArchive(SUPERTONIC_LAYOUT, SUPERTONIC_ARCHIVE_ROOT),
+            archiveRoot = SUPERTONIC_ARCHIVE_ROOT,
+        )
+
+        val dir = File(filesDir, "engines/${spec.descriptor.name}").apply { mkdirs() }
+        stageSupertonicLayout(dir)
+        File(dir, "tts.json").writeText("{not json")
+        File(dir, ".install_meta.json")
+            .writeText("""{"archive_sha256":"${expectedSource.sha256}","archive_url":"${expectedSource.url}"}""")
+
+        installer.verifyDescriptor(spec.descriptor, expectedSource, spec.layoutCheck) shouldBe
+            InstallState.Corrupt
+    }
+
+    @Test
+    fun `supertonic verify on bad voice bin length returns corrupt`() = runTest {
+        val spec = SupertonicEngineCatalog.engineSpec()
+        val expectedSource = source(
+            "https://test/supertonic.tar.bz2",
+            buildArchive(SUPERTONIC_LAYOUT, SUPERTONIC_ARCHIVE_ROOT),
+            archiveRoot = SUPERTONIC_ARCHIVE_ROOT,
+        )
+
+        val dir = File(filesDir, "engines/${spec.descriptor.name}").apply { mkdirs() }
+        stageSupertonicLayout(dir)
+        // Append one stray float: header dims no longer match the file length.
+        File(dir, "voice.bin").appendBytes(ByteArray(4))
+        File(dir, ".install_meta.json")
+            .writeText("""{"archive_sha256":"${expectedSource.sha256}","archive_url":"${expectedSource.url}"}""")
+
+        installer.verifyDescriptor(spec.descriptor, expectedSource, spec.layoutCheck) shouldBe
+            InstallState.Corrupt
+    }
+
+    @Test
+    fun `supertonic verify on undersized vector estimator returns corrupt`() = runTest {
+        val spec = SupertonicEngineCatalog.engineSpec()
+        val expectedSource = source(
+            "https://test/supertonic.tar.bz2",
+            buildArchive(SUPERTONIC_LAYOUT, SUPERTONIC_ARCHIVE_ROOT),
+            archiveRoot = SUPERTONIC_ARCHIVE_ROOT,
+        )
+
+        val dir = File(filesDir, "engines/${spec.descriptor.name}").apply { mkdirs() }
+        stageSupertonicLayout(dir)
+        File(dir, "vector_estimator.int8.onnx").writeText("too small")
+        File(dir, ".install_meta.json")
+            .writeText("""{"archive_sha256":"${expectedSource.sha256}","archive_url":"${expectedSource.url}"}""")
+
+        installer.verifyDescriptor(spec.descriptor, expectedSource, spec.layoutCheck) shouldBe
+            InstallState.Corrupt
+    }
+
     // -- fixture machinery ----------------------------------------------------------
 
     /**
@@ -404,16 +599,27 @@ class EngineInstallerTest {
         url: String,
         archive: ByteArray,
         shaOverride: String? = null,
+        archiveRoot: String = ARCHIVE_ROOT,
     ) = EngineArchiveSource(
         url = url,
         sha256 = shaOverride ?: sha256Hex(archive),
         sizeBytes = archive.size.toLong().coerceAtLeast(1L),
-        archiveRoot = ARCHIVE_ROOT,
+        archiveRoot = archiveRoot,
     )
 
     /** Write a complete pocket on-disk layout into [dir] (for verify tests). */
     private fun stagePocketLayout(dir: File) {
         for ((name, bytes) in POCKET_LAYOUT) {
+            File(dir, name).apply {
+                parentFile?.mkdirs()
+                writeBytes(bytes)
+            }
+        }
+    }
+
+    /** Write a complete supertonic on-disk layout into [dir] (for verify tests). */
+    private fun stageSupertonicLayout(dir: File) {
+        for ((name, bytes) in SUPERTONIC_LAYOUT) {
             File(dir, name).apply {
                 parentFile?.mkdirs()
                 writeBytes(bytes)
@@ -495,6 +701,60 @@ class EngineInstallerTest {
                 put("data".toByteArray())
                 putInt(0)
             }.array()
+
+        // -- supertonic fixtures -----------------------------------------------------
+
+        // Wrapper directory inside the real sherpa tarball; the installer
+        // strips it during extraction (same role as pocket's ARCHIVE_ROOT).
+        private const val SUPERTONIC_ARCHIVE_ROOT = "sherpa-onnx-supertonic-3-tts-int8-2026-05-11/"
+
+        /**
+         * Matches the real int8 bundle's tts.json shape: ae.sample_rate=44100
+         * is the V5 gate — the sherpa docs table's 24000 claim is known-wrong.
+         */
+        private const val SUPERTONIC_TTS_JSON = """
+            {"ae":{"sample_rate":44100,"base_chunk_size":512},"ttl":{"chunk_compress_factor":6,"latent_dim":24}}
+        """
+
+        /**
+         * A `voice.bin` whose 48-byte int64 dims header matches its payload:
+         * `48 + n*(ttlD1*ttlD2 + dpD1*dpD2)*4` bytes total. Payload floats are
+         * zeros — the layout check only verifies the header/length contract.
+         */
+        private fun voiceBin(n: Long, ttlD1: Long, ttlD2: Long, dpD1: Long, dpD2: Long): ByteArray {
+            val payloadFloats = (n * ttlD1 * ttlD2 + n * dpD1 * dpD2).toInt()
+            return ByteBuffer.allocate(48 + payloadFloats * 4)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .apply {
+                    putLong(n)
+                    putLong(ttlD1)
+                    putLong(ttlD2)
+                    putLong(n)
+                    putLong(dpD1)
+                    putLong(dpD2)
+                }
+                .array()
+        }
+
+        /**
+         * Synthetic supertonic payload: the int8 quartet (vector_estimator
+         * ≥ 1 MiB for the MIN_MODEL_BYTES floor) + tts.json declaring
+         * ae.sample_rate=44100 + a self-consistent voice.bin + an
+         * LE-int32 unicode_indexer.bin.
+         */
+        private val SUPERTONIC_LAYOUT: Map<String, ByteArray> = buildMap {
+            put("duration_predictor.int8.onnx", "dp".toByteArray())
+            put("text_encoder.int8.onnx", "te".toByteArray())
+            put("vector_estimator.int8.onnx", ByteArray(1_500_000) { 0x42 })
+            put("vocoder.int8.onnx", "voc".toByteArray())
+            put("tts.json", SUPERTONIC_TTS_JSON.trimIndent().toByteArray())
+            put(
+                "unicode_indexer.bin",
+                ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
+                    .putInt(32).putInt(64).array(),
+            )
+            put("voice.bin", voiceBin(n = 2, ttlD1 = 1, ttlD2 = 4, dpD1 = 1, dpD2 = 2))
+        }
     }
 }
 
