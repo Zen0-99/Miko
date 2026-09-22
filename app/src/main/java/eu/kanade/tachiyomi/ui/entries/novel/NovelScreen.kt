@@ -56,6 +56,7 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import eu.kanade.tachiyomi.ui.reader.novel.NovelHighlightsScreen
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
 import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen
 import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
@@ -95,6 +96,7 @@ class NovelScreen(
         val scope = rememberCoroutineScope()
         val lifecycleOwner = LocalLifecycleOwner.current
         val getLockedReadingOrders: GetLockedReadingOrders = remember { Injekt.get() }
+        val audiobookPlayer: AudiobookPlayerController = remember { Injekt.get() }
         var lockDialog by remember { mutableStateOf<List<ReadingOrder>>(emptyList()) }
         val screenModel =
             rememberScreenModel { NovelScreenModel(context, lifecycleOwner.lifecycle, novelId, fromSource) }
@@ -156,14 +158,15 @@ class NovelScreen(
             onDownloadChapter = screenModel::runChapterDownloadActions.takeIf { !successState.source.isLocalOrStub() },
             onAudioChapter = { items: List<NovelChapterList.Item>, action: NovelChapterAudioAction ->
                 when (action) {
-                    // SD-4: Play opens the reader with auto-start read-along —
-                    // same locked-reading-order check as onChapterClicked. The
-                    // reader's D-19 branch resolves file vs live playback.
+                    // D-04: Play opens the audiobook player overlay — same
+                    // locked-reading-order check as onChapterClicked. If the
+                    // rendered file vanished since the state refresh, fall
+                    // back to the reader's live read-along.
                     NovelChapterAudioAction.PLAY -> scope.launch {
                         val lockedOrders = getLockedReadingOrders.await(novelId)
                         if (lockedOrders.isNotEmpty()) {
                             lockDialog = lockedOrders
-                        } else {
+                        } else if (!audiobookPlayer.play(successState.novel, items.first().chapter)) {
                             navigator.push(
                                 NovelReaderScreen(
                                     novelId,

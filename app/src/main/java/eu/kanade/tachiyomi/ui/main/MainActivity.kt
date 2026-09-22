@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
@@ -72,6 +73,7 @@ import eu.kanade.presentation.components.IncognitoModeBannerBackgroundColor
 import eu.kanade.presentation.components.IndexingBannerBackgroundColor
 import eu.kanade.presentation.achievement.components.AchievementUnlockBanner
 import eu.kanade.presentation.achievement.components.AchievementGroupNotification
+import eu.kanade.presentation.novel.audiobook.AudiobookPlayerOverlay
 import eu.kanade.presentation.achievement.screen.AchievementScreenVoyager
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
@@ -316,6 +318,13 @@ class MainActivity : BaseActivity() {
                             onViewAll = {
                                 navigator?.push(AchievementScreenVoyager)
                             },
+                        )
+                        // Full-screen audiobook player (D-08): attached at root
+                        // so it covers pushed detail screens like NovelScreen.
+                        // Back/swipe-down only dismisses — playback continues.
+                        AudiobookPlayerOverlay(
+                            controller = remember { Injekt.get() },
+                            modifier = Modifier.fillMaxSize(),
                         )
                         // Draw navigation bar scrim when needed
                         if (remember { isNavigationBarNeedsScrim() }) {
