@@ -455,6 +455,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NovelDownloadManager(app) }
         addSingletonFactory { NovelDownloadCache(app) }
         addSingletonFactory { ChapterAudioRenderManager(app) }
+        addSingletonFactory { eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController(app) }
 
         addSingletonFactory { TrackerManager(app) }
         addSingletonFactory { DelayedAnimeTrackingStore(app) }
