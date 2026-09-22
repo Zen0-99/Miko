@@ -176,6 +176,76 @@ class SupertonicGpuInstrumentedTest {
         report("litert bench complete")
     }
 
+    /**
+     * soniqo's first-party LiteRT export (HF: soniqo/Supertonic-3-LiteRT) —
+     * re-authored via litert_torch, not onnx2tf, so its graph may delegate
+     * where our converted one refused. Fixed signature: latent [1,144,64],
+     * text [1,256,128]; positional inputs in interpreter order.
+     */
+    @Test
+    fun benchmarkSoniqoLiteRtGpu() {
+        val tfl = benchDir.resolve("soniqo_vector_estimator.tflite")
+        if (!tfl.isFile) {
+            report("soniqo: model missing at ${tfl.absolutePath}")
+            return
+        }
+        val gpuOpts = org.tensorflow.lite.InterpreterApi.Options().apply {
+            addDelegate(org.tensorflow.lite.gpu.GpuDelegate())
+        }
+        val cpuOpts = org.tensorflow.lite.InterpreterApi.Options().apply {
+            setNumThreads(2)
+        }
+        for ((name, opts) in listOf("soniqo-gpu" to gpuOpts, "soniqo-cpu" to cpuOpts)) {
+            val interp = try {
+                org.tensorflow.lite.InterpreterApi.create(tfl, opts)
+            } catch (t: Throwable) {
+                report("$name: create FAILED — ${t.message?.take(300)}")
+                continue
+            }
+            try {
+                // Positional inputs matching interpreter detail order —
+                // shapes fixed by the export: [1],[1,50,256],[1,1,64],
+                // [1,144,64],[1],[1,1,128],[1,256,128].
+                val shapes = interp.inputTensorCount.let { n ->
+                    (0 until n).map { interp.getInputTensor(it).shape() }
+                }
+                report("$name inputs: ${shapes.map { it.toList() }}")
+                val inputs = shapes.map { s ->
+                    Array(s[0]) { FloatArray(s.drop(1).fold(1, Int::times)) { 0.5f } }
+                        .let { if (s.size == 1) it[0] else it }
+                        .let { arr ->
+                            when (s.size) {
+                                1 -> floatArrayOf(0.5f)
+                                3 -> Array(s[0]) { Array(s[1]) { FloatArray(s[2]) { 0.5f } } }
+                                4 -> Array(s[0]) { Array(s[1]) { Array(s[2]) { FloatArray(s[3]) { 0.5f } } } }
+                                else -> arr
+                            }
+                        }
+                }.toTypedArray()
+                val out = Array(1) { Array(144) { FloatArray(64) } }
+
+                fun once() = interp.runForMultipleInputsOutputs(inputs, mapOf(0 to out))
+                once(); once()
+                val times = LongArray(10)
+                for (i in times.indices) {
+                    val t0 = System.nanoTime()
+                    once()
+                    times[i] = System.nanoTime() - t0
+                }
+                report(
+                    "$name: avg=${"%.0f".format(times.average() / 1e6)}ms " +
+                        "min=${"%.0f".format(times.min() / 1e6)}ms " +
+                        "(x5 = ${"%.0f".format(times.average() * 5 / 1e6)}ms/chunk)",
+                )
+            } catch (t: Throwable) {
+                report("$name: run FAILED — ${t.message?.take(300)}")
+            } finally {
+                interp.close()
+            }
+        }
+        report("soniqo bench complete")
+    }
+
     /** Logcat rotates under device noise — mirror every line to a file too. */
     private fun report(line: String) {
         Log.i(TAG, line)
