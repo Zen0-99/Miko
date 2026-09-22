@@ -263,7 +263,7 @@ private fun RenderedAudioIndicator(
         Icon(
             imageVector = Icons.Outlined.VolumeUp,
             contentDescription = stringResource(AYMR.strings.novel_audio_available_cd),
-            modifier = AudioGlyphModifier,
+            modifier = Modifier.size(IndicatorSize - 8.dp),
             tint = MaterialTheme.colorScheme.surface,
         )
         DropdownMenu(expanded = isMenuExpanded, onDismissRequest = { isMenuExpanded = false }) {
