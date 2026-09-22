@@ -139,6 +139,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.util.LocalReduceMotion
 import tachiyomi.presentation.core.util.collectAsState
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -575,6 +576,13 @@ class MainActivity : BaseActivity() {
             Constants.SHORTCUT_ANIME_DOWNLOADS -> {
                 navigator.popUntilRoot()
                 HomeScreen.Tab.More(toDownloads = true)
+            }
+            Constants.SHORTCUT_AUDIOBOOK -> {
+                // Media-notification tap: surface the full player overlay
+                // above whatever screen the user is on. No-op when nothing
+                // is loaded (the overlay stays hidden without a track).
+                Injekt.get<AudiobookPlayerController>().showOverlay()
+                null
             }
             Intent.ACTION_SEARCH, Intent.ACTION_SEND, "com.google.android.gms.actions.SEARCH_ACTION" -> {
                 // If the intent match the "standard" Android search intent

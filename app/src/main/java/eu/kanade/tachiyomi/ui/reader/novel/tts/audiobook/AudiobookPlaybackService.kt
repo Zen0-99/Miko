@@ -1,8 +1,12 @@
 package eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook
 
+import android.app.PendingIntent
+import android.content.Intent
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import eu.kanade.tachiyomi.core.common.Constants
+import eu.kanade.tachiyomi.ui.main.MainActivity
 
 /**
  * Media3 session service hosting the audiobook player's ExoPlayer.
@@ -30,8 +34,18 @@ class AudiobookPlaybackService : MediaSessionService() {
             .setSeekBackIncrementMs(REWIND_MS)
             .setSeekForwardIncrementMs(FORWARD_MS)
             .build()
+        // Session activity: tapping the media notification anywhere (not just
+        // a transport button) launches MainActivity with SHOW_AUDIOBOOK_PLAYER,
+        // which expands the full player overlay (REQ-008).
+        val sessionActivity = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).setAction(Constants.SHORTCUT_AUDIOBOOK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         mediaSession = MediaSession.Builder(this, player)
             .setId(SESSION_ID)
+            .setSessionActivity(sessionActivity)
             .build()
     }
 
