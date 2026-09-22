@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material3.CircularProgressIndicator
@@ -250,13 +251,19 @@ private fun RenderedAudioIndicator(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        // Same circled-headphones vector as the idle state, but full accent
-        // (idle is dimmed via secondaryItemAlpha) so rendered reads as "on".
+        // CheckCircle-style filled state: accent disc with the headphones
+        // glyph knocked out in the background colour.
         Icon(
-            painter = painterResource(R.drawable.ic_audio_item_24dp),
-            contentDescription = stringResource(AYMR.strings.novel_audio_available_cd),
+            imageVector = Icons.Filled.Circle,
+            contentDescription = null,
             modifier = Modifier.size(IndicatorSize),
             tint = tint,
+        )
+        Icon(
+            imageVector = Icons.Outlined.Headphones,
+            contentDescription = stringResource(AYMR.strings.novel_audio_available_cd),
+            modifier = AudioGlyphModifier,
+            tint = MaterialTheme.colorScheme.surface,
         )
         DropdownMenu(expanded = isMenuExpanded, onDismissRequest = { isMenuExpanded = false }) {
             // D-08 verbatim order: Play / Delete / Re-render.
