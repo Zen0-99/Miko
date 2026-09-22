@@ -34,6 +34,8 @@ import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.novel.model.NovelCover
+import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.source.novel.service.NovelSourceManager
@@ -45,6 +47,7 @@ data class AudiobookPlayerState(
     val track: AudiobookTrack? = null,
     val novelId: Long? = null,
     val novelTitle: String = "",
+    val cover: NovelCover? = null,
     val chapterIndex: Int = -1,
     val chapterCount: Int = 0,
     val isPlaying: Boolean = false,
@@ -160,6 +163,7 @@ class AudiobookPlayerController(
                 track = tracks[startIndex],
                 novelId = novel.id,
                 novelTitle = novel.title,
+                cover = novel.asNovelCover(),
                 chapterIndex = startIndex,
                 chapterCount = tracks.size,
                 positionMs = resumePosition,

@@ -1404,6 +1404,20 @@
     <string name="novel_audio_render_failed">Audio render failed</string>
     <string name="novel_audio_render_warning">Rendering runs at full speed — the device may get warm and drain the battery faster.</string>
 
+    <!-- Audiobook player -->
+    <string name="audiobook_previous_chapter_cd">Previous chapter</string>
+    <string name="audiobook_next_chapter_cd">Next chapter</string>
+    <string name="audiobook_rewind_cd">Rewind 30 seconds</string>
+    <string name="audiobook_forward_cd">Forward 10 seconds</string>
+    <string name="audiobook_seek_cd">Seek</string>
+    <string name="audiobook_speed_title">Playback speed</string>
+    <string name="audiobook_sleep_timer">Sleep timer</string>
+    <string name="audiobook_sleep_timer_minutes">%1$d minutes</string>
+    <string name="audiobook_sleep_timer_end_of_chapter">End of chapter</string>
+    <string name="audiobook_sleep_timer_off">Off</string>
+    <string name="audiobook_sleep_timer_stops_in">Stops in %1$s</string>
+    <string name="audiobook_sleep_timer_stops_at_chapter_end">Stops at chapter end</string>
+
     <!-- Library update progress overlay + Fetching tab -->
     <string name="pref_show_update_progress_overlay">Show update progress overlay</string>
     <string name="pref_show_update_progress_overlay_summary">Display a floating progress box when the library is being updated</string>

@@ -21,7 +21,8 @@ sealed interface SleepTimer {
 
     data object Off : SleepTimer
 
-    data class Minutes(val deadlineMs: Long) : SleepTimer {
+    /** [presetMinutes] remembers which preset armed it — for UI row selection. */
+    data class Minutes(val deadlineMs: Long, val presetMinutes: Int) : SleepTimer {
         override fun shouldPause(nowMs: Long): Boolean = nowMs >= deadlineMs
 
         /** Milliseconds remaining — negative once expired. For UI countdowns. */
@@ -38,6 +39,6 @@ sealed interface SleepTimer {
 
         /** Arm a minutes timer relative to [nowMs]. */
         fun armMinutes(minutes: Int, nowMs: Long): Minutes =
-            Minutes(nowMs + minutes * 60_000L)
+            Minutes(nowMs + minutes * 60_000L, minutes)
     }
 }
