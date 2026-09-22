@@ -48,6 +48,7 @@ import eu.kanade.tachiyomi.data.suggestions.util.dedupeByCleanTitle
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterRender
 import eu.kanade.tachiyomi.util.system.cancelNotification
@@ -133,6 +134,7 @@ class NovelScreenModel(
     private val downloadCache: NovelDownloadCache = Injekt.get(),
     private val downloadProvider: NovelDownloadProvider = Injekt.get(),
     private val audioRenderManager: ChapterAudioRenderManager = Injekt.get(),
+    private val audiobookPlayer: AudiobookPlayerController = Injekt.get(),
     private val fetchInterval: tachiyomi.domain.entries.novel.interactor.NovelFetchInterval = Injekt.get(),
     private val getLinkedNovels: GetLinkedNovels = Injekt.get(),
     private val getNovelLinkedId: GetNovelLinkedId = Injekt.get(),
@@ -1718,6 +1720,9 @@ class NovelScreenModel(
                     try {
                         items.forEach { item ->
                             audioRenderManager.deleteAudio(state.novel, item.chapter, state.source)
+                            // PB-21: prune the saved position and stop playback
+                            // if this chapter's file was under the playhead.
+                            audiobookPlayer.onAudioDeleted(item.chapter.id)
                         }
                     } catch (e: Throwable) {
                         logcat(LogPriority.ERROR, e)
@@ -1732,6 +1737,7 @@ class NovelScreenModel(
                     items.forEach { item ->
                         try {
                             audioRenderManager.deleteAudio(state.novel, item.chapter, state.source)
+                            audiobookPlayer.onAudioDeleted(item.chapter.id)
                             audioRenderManager.enqueueRender(state.novel, item.chapter, state.source)
                         } catch (e: Throwable) {
                             logcat(LogPriority.ERROR, e)

@@ -58,9 +58,11 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoicePreviewer
+import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import eu.kanade.tachiyomi.ui.reader.novel.tts.UrlHttpFetcher
@@ -83,7 +85,17 @@ class NovelReaderScreenModel(
     val readerPreferences: ReaderPreferences = Injekt.get(),
     val ttsPreferences: NovelTtsPreferences = Injekt.get(),
     val positionTracker: CharacterPositionTracker = Injekt.get(),
+    private val audiobookPlayer: AudiobookPlayerController = Injekt.get(),
 ) : StateScreenModel<NovelReaderScreenModel.State>(State()) {
+
+    init {
+        // D-05/PB-20: the audiobook player starting means read-along stops.
+        // The TTS service collects the same flow as a backstop for when this
+        // model is already disposed but the service is still speaking.
+        screenModelScope.launch {
+            audiobookPlayer.playbackStarted.collect { stopTtsPlayback() }
+        }
+    }
 
     private var currentChapterIndex = 0
     private var currentSource: NovelCatalogueSource? = null
@@ -726,6 +738,10 @@ class NovelReaderScreenModel(
      */
     fun startTtsPlayback() {
         val ctx = context ?: return
+        // D-05/PB-20: read-along and the audiobook player never run together.
+        // The service's startReading()/play() also pause it, covering
+        // notification + transport resumes that bypass this model.
+        audiobookPlayer.pause()
         val items = _contentItems.value
         val ttsItems = items
             .filterIsInstance<TextItem.Paragraph>()

@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioManifest
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.Mp4AtomReader
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.decodeManifest
@@ -130,6 +131,12 @@ class NovelTtsPlaybackService : Service() {
     private val sourceManager: NovelSourceManager by lazy { Injekt.get() }
     private val downloadProvider: NovelDownloadProvider by lazy { Injekt.get() }
 
+    // D-05 mutual exclusion with the audiobook player (PB-20). The service
+    // subscribes to the singleton controller's flow — no service-to-service
+    // reference — so read-along stops even when the reader (and its
+    // ScreenModel collector) is already gone.
+    private val audiobookPlayer: AudiobookPlayerController by lazy { Injekt.get() }
+
     private val _playbackState = MutableStateFlow(NovelTtsPlaybackState())
     val playbackState: StateFlow<NovelTtsPlaybackState> = _playbackState.asStateFlow()
 
@@ -158,6 +165,11 @@ class NovelTtsPlaybackService : Service() {
                 },
             )
             isActive = true
+        }
+
+        // Audiobook playback starting tears down any read-along session.
+        serviceScope.launch {
+            audiobookPlayer.playbackStarted.collect { stop() }
         }
 
         // Start foreground immediately with a placeholder notification to comply with
@@ -222,6 +234,11 @@ class NovelTtsPlaybackService : Service() {
         title: String = "",
         chapterId: Long? = null,
     ) {
+        // Read-along starting pauses the audiobook player (D-05). Pausing here
+        // — not just in the reader model — also covers resumes from the
+        // notification and Bluetooth/media-session transport.
+        audiobookPlayer.pause()
+
         this.paragraphs = paragraphs
         this.chapterTitle = title
 
@@ -414,6 +431,7 @@ class NovelTtsPlaybackService : Service() {
      */
     fun play() {
         val controller = ttsController ?: return
+        audiobookPlayer.pause()
         if (!controller.isSpeaking) {
             val granted = audioFocusManager.requestPlaybackFocus()
             if (granted) {

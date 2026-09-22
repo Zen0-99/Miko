@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -107,6 +108,13 @@ class AudiobookPlayerController(
     )
     val state: StateFlow<AudiobookPlayerState> = _state.asStateFlow()
 
+    /**
+     * Emitted whenever [play] actually starts playback — the read-along side
+     * (reader model + TTS service) collects this to stop itself, enforcing
+     * D-05's "never two audio sources" without a service-to-service reference.
+     */
+    val playbackStarted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     // ------------------------------------------------------------------
     // Playback entry point
     // ------------------------------------------------------------------
@@ -122,6 +130,7 @@ class AudiobookPlayerController(
         if (state.value.track?.chapterId == chapter.id && mediaController != null) {
             showOverlay()
             mediaController?.play()
+            playbackStarted.tryEmit(Unit)
             return true
         }
 
@@ -157,6 +166,7 @@ class AudiobookPlayerController(
         controller.setPlaybackParameters(PlaybackParameters(state.value.speed, 1f))
         controller.prepare()
         controller.play()
+        playbackStarted.tryEmit(Unit)
 
         _state.update {
             it.copy(
@@ -417,6 +427,22 @@ class AudiobookPlayerController(
     private fun pruneResumeMap(tracks: List<AudiobookTrack>) {
         val ids = tracks.map { it.chapterId }.toSet()
         if (resumeMap.keys.retainAll(ids)) persistResumeMap()
+    }
+
+    /**
+     * A chapter's rendered `.m4a` was deleted (PB-21): drop its resume entry
+     * immediately, and if it was the loaded track, stop playback and reset
+     * to idle — the file under the playhead no longer exists.
+     */
+    fun onAudioDeleted(chapterId: Long) {
+        if (resumeMap.remove(chapterId) != null) persistResumeMap()
+        if (state.value.track?.chapterId == chapterId) {
+            stopTicker()
+            mediaController?.stop()
+            mediaController?.clearMediaItems()
+            playlist = emptyList()
+            _state.value = AudiobookPlayerState(speed = state.value.speed)
+        }
     }
 
     private fun persistResumeMap() {
