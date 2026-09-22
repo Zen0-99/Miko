@@ -7,7 +7,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -170,7 +169,7 @@ private fun QueuedAudioIndicator(
         }
         val queuedDescription = stringResource(AYMR.strings.novel_audio_queued_cd)
         Icon(
-            imageVector = Icons.Outlined.Headphones,
+            imageVector = Icons.Filled.VolumeUp,
             contentDescription = null,
             modifier = AudioGlyphModifier.semantics { contentDescription = queuedDescription },
             tint = tint,
@@ -225,7 +224,7 @@ private fun RenderingAudioIndicator(
         }
         val renderingDescription = stringResource(AYMR.strings.novel_audio_rendering_cd)
         Icon(
-            imageVector = Icons.Outlined.Headphones,
+            imageVector = Icons.Filled.VolumeUp,
             contentDescription = null,
             modifier = AudioGlyphModifier.semantics { contentDescription = renderingDescription },
             tint = tint,
@@ -319,6 +318,6 @@ private fun AudioErrorIndicator(
     }
 }
 
-// Inner-glyph size for the ring states — sized so the Headphones icon matches
+// Inner-glyph size for the ring states — sized so the speaker icon matches
 // the inner glyph of ic_audio_item_24dp (~9.75dp inside the 26dp indicator).
 private val AudioGlyphModifier = Modifier.size(IndicatorSize - 13.dp)
