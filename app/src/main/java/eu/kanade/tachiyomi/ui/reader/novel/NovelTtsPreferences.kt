@@ -99,6 +99,23 @@ class NovelTtsPreferences(
 
     /** Whether the one-time render heat/battery warning was shown (D-15/D-17) */
     fun audioRenderWarned() = preferenceStore.getBoolean("pref_novel_audio_render_warned", false)
+
+    // Audiobook player (phase 6)
+
+    /**
+     * Audiobook playback speed multiplier (0.5–3.0, default 1.0). Separate
+     * from [speechRate] — that pref drives synthesis, this one only applies
+     * to rendered `.m4a` playback via PlaybackParameters (D-11).
+     */
+    fun audiobookSpeed() = preferenceStore.getFloat("pref_novel_audiobook_speed", 1.0f)
+
+    /**
+     * Per-chapter resume positions for the audiobook player — JSON
+     * `Map<Long, Long>` of chapterId → positionMs (PB-4). Written through by
+     * [eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController]
+     * on pause/stop/track-change and a periodic tick.
+     */
+    fun audiobookPositions() = preferenceStore.getString("pref_novel_audiobook_positions", "{}")
 }
 
 enum class NovelTtsHighlightMode {

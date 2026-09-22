@@ -307,6 +307,15 @@
             android:foregroundServiceType="mediaPlayback" />
 
         <service
+            android:name=".ui.reader.novel.tts.audiobook.AudiobookPlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".ui.reader.novel.tts.render.NovelAudioRenderService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
