@@ -5,9 +5,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Headphones
-import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -261,7 +261,7 @@ private fun RenderedAudioIndicator(
             tint = tint,
         )
         Icon(
-            imageVector = Icons.Outlined.VolumeUp,
+            imageVector = Icons.Filled.VolumeUp,
             contentDescription = stringResource(AYMR.strings.novel_audio_available_cd),
             modifier = Modifier.size(IndicatorSize - 8.dp),
             tint = MaterialTheme.colorScheme.surface,
