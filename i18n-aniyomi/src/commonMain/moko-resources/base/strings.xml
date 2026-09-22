@@ -1398,7 +1398,7 @@
     <string name="novel_audio_queued_cd">Chapter audio queued</string>
     <string name="novel_audio_rendering_cd">Rendering chapter audio</string>
     <string name="novel_audio_available_cd">Chapter audio available</string>
-    <string name="novel_audio_error_cd">Chapter audio render failed — tap to retry</string>
+    <string name="novel_audio_error_cd">Chapter audio render failed — tap for details</string>
     <string name="action_start_render_now">Start render now</string>
     <string name="action_re_render_audio">Re-render</string>
     <string name="novel_audio_render_failed">Audio render failed</string>

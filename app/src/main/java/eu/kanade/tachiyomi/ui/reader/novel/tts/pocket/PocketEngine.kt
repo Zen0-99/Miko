@@ -2332,5 +2332,5 @@ private data class PhaseSpan(
 class EngineNotInstalledException(engineName: String) :
     UnsupportedOperationException(
         "Engine '$engineName' is not installed. " +
-            "Install the Pocket TTS engine bundle from TTS settings.",
+            "Install the '$engineName' engine bundle from TTS settings.",
     )

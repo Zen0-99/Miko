@@ -276,6 +276,7 @@ class ChapterAudioRenderManager(
         }
 
         item.status = ChapterRender.State.RENDERING
+        item.errorMessage = null
         try {
             renderer().renderChapter(
                 novel = item.novel,

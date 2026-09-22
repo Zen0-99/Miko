@@ -7,4 +7,5 @@ enum class NovelChapterAudioAction {
     PLAY,
     DELETE,
     RE_RENDER,
+    SHOW_ERROR,
 }

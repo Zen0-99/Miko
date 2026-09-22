@@ -7,7 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Headphones
-import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -252,7 +252,7 @@ private fun RenderedAudioIndicator(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        // CheckCircle-style filled state: accent disc with the headphones
+        // CheckCircle-style filled state: accent disc with the speaker
         // glyph knocked out in the background colour.
         Icon(
             imageVector = Icons.Filled.Circle,
@@ -261,7 +261,7 @@ private fun RenderedAudioIndicator(
             tint = tint,
         )
         Icon(
-            imageVector = Icons.Outlined.RecordVoiceOver,
+            imageVector = Icons.Outlined.VolumeUp,
             contentDescription = stringResource(AYMR.strings.novel_audio_available_cd),
             modifier = AudioGlyphModifier,
             tint = MaterialTheme.colorScheme.surface,
@@ -306,7 +306,7 @@ private fun AudioErrorIndicator(
                 enabled = enabled,
                 hapticFeedback = LocalHapticFeedback.current,
                 onLongClick = { onClick(NovelChapterAudioAction.RENDER) },
-                onClick = { onClick(NovelChapterAudioAction.RENDER) },
+                onClick = { onClick(NovelChapterAudioAction.SHOW_ERROR) },
             ),
         contentAlignment = Alignment.Center,
     ) {

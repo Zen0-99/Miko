@@ -1572,6 +1572,7 @@ class NovelScreenModel(
                     .copy(
                         audioState = render.status.toAudioState(),
                         audioProgress = render.progress,
+                        audioError = render.errorMessage,
                     )
                 add(modifiedIndex, item)
             }
@@ -1592,6 +1593,7 @@ class NovelScreenModel(
                         item.copy(
                             audioState = NovelChapterAudioState.NOT_RENDERED,
                             audioProgress = 0,
+                            audioError = null,
                         )
                     } else {
                         item
@@ -1742,6 +1744,29 @@ class NovelScreenModel(
                     }
                 }
             }
+            NovelChapterAudioAction.SHOW_ERROR -> {
+                // The row icon carries no text — surface the failure reason
+                // the notification already logged, with an inline retry.
+                val item = items.singleOrNull() ?: return
+                screenModelScope.launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = item.audioError
+                            ?: context.stringResource(AYMR.strings.novel_audio_render_failed),
+                        actionLabel = context.stringResource(MR.strings.action_retry),
+                        withDismissAction = true,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        try {
+                            audioRenderManager.enqueueRender(state.novel, item.chapter, state.source)
+                        } catch (e: Throwable) {
+                            logcat(LogPriority.ERROR, e)
+                            snackbarHostState.showSnackbar(
+                                message = with(context) { e.formattedMessage },
+                            )
+                        }
+                    }
+                }
+            }
             NovelChapterAudioAction.PLAY -> Unit // handled by the screen (navigation)
         }
     }
@@ -1841,6 +1866,7 @@ class NovelScreenModel(
                 downloadProgress = activeDownload?.progress ?: 0,
                 audioState = audioState,
                 audioProgress = activeRender?.progress ?: 0,
+                audioError = activeRender?.errorMessage,
                 selected = chapter.id in selectedChapterIds,
                 readProgress = readProgress,
                 isNew = !chapter.read && newChapterTracker.isNew(novel.id, chapter.dateFetch),
@@ -2021,6 +2047,7 @@ sealed class NovelChapterList {
         val downloadProgress: Int = 0,
         val audioState: NovelChapterAudioState = NovelChapterAudioState.NOT_RENDERED,
         val audioProgress: Int = 0,
+        val audioError: String? = null,
         val readProgress: Int? = null,
         val isNew: Boolean = false,
     ) : NovelChapterList() {
