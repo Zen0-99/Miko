@@ -1417,6 +1417,8 @@
     <string name="audiobook_sleep_timer_off">Off</string>
     <string name="audiobook_sleep_timer_stops_in">Stops in %1$s</string>
     <string name="audiobook_sleep_timer_stops_at_chapter_end">Stops at chapter end</string>
+    <string name="audiobook_mini_expand_cd">Expand audiobook player</string>
+    <string name="audiobook_mini_dismiss_cd">Dismiss audiobook player</string>
 
     <!-- Library update progress overlay + Fetching tab -->
     <string name="pref_show_update_progress_overlay">Show update progress overlay</string>

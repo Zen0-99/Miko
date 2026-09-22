@@ -181,6 +181,11 @@ class AudiobookPlayerController(
         mediaController?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
+    /** Unconditional pause — swipe-away on the mini-player uses this (D-09). */
+    fun pause() {
+        mediaController?.pause()
+    }
+
     /** −30s — same increment the notification's rewind button uses. */
     fun rewind() {
         mediaController?.seekBack()

@@ -106,6 +106,7 @@ import eu.kanade.presentation.components.LocalSharedTopBar
 import eu.kanade.presentation.components.SharedTopBarState
 import eu.kanade.presentation.home.ModePill
 import eu.kanade.presentation.library.LibraryUpdateProgressOverlay
+import eu.kanade.presentation.novel.audiobook.AudiobookMiniPlayer
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
@@ -391,6 +392,14 @@ object HomeScreen : Screen() {
                                         UpdatesTab.navigateToFetchingRequested = true
                                         tabNavigator.current = UpdatesTab
                                     },
+                                    hazeState = hazeState,
+                                    tint = glassTint,
+                                    modifier = Modifier.align(Alignment.BottomCenter),
+                                )
+                                // Audiobook mini-player (D-07): sibling of the
+                                // hazeSource, main-nav-screens only — it lifts
+                                // itself above the update card when both show.
+                                AudiobookMiniPlayer(
                                     hazeState = hazeState,
                                     tint = glassTint,
                                     modifier = Modifier.align(Alignment.BottomCenter),
