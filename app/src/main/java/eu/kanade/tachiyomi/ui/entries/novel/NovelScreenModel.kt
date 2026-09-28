@@ -154,6 +154,7 @@ class NovelScreenModel(
     private val getTracks: GetNovelTracks = Injekt.get(),
     private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
     private val canonizeWork: eu.kanade.tachiyomi.data.mikodb.CanonizeWork = Injekt.get(),
+    private val mangaBakaEnrich: eu.kanade.tachiyomi.data.mikodb.MangaBakaEnrich = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
 
@@ -519,7 +520,10 @@ class NovelScreenModel(
                     runCatching {
                         eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
                             .workIdFromNovelUrl(novel.url)
-                            ?.let { canonizeWork.run(it, Carrier.BOOKS) }
+                            ?.let { workId ->
+                                mangaBakaEnrich.run(workId, novel)
+                                canonizeWork.run(workId, Carrier.BOOKS)
+                            }
                     }
                 }
             }

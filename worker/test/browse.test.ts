@@ -11,11 +11,13 @@ interface BrowseWork {
     miko_work_id: string;
     kind: string | null;
     title: string;
+    author: string | null;
     cover_url: string | null;
     rating: number | null;
     popularity: number | null;
     year: number | null;
     nsfw: boolean;
+    genres: string[];
 }
 
 async function seedWork(w: {
@@ -23,22 +25,25 @@ async function seedWork(w: {
     type: string | null;
     medium: string;
     title: string;
+    author?: string | null;
     rating?: number | null;
     popularity?: number | null;
     year?: number | null;
     nsfw?: number;
     cover_url?: string | null;
+    genres?: string | null;
 }) {
     await env.COMMENTS_DB.prepare(
         `INSERT INTO works_cache
          (miko_work_id, type, medium, nsfw, title, normalized_title, year,
-          rating, popularity, cover_url, provider_links, fetched_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?, '[]', 0)`,
+          rating, popularity, cover_url, author, genres, provider_links, fetched_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?, '[]', 0)`,
     )
         .bind(
             w.id, w.type, w.medium, w.nsfw ?? 0, w.title,
             w.title.toLowerCase(), w.year ?? null, w.rating ?? null,
             w.popularity ?? null, w.cover_url ?? null,
+            w.author ?? null, w.genres ?? null,
         )
         .run();
 }
@@ -167,23 +172,54 @@ describe('works/browse — pagination + shape', () => {
         expect(body.works).toHaveLength(1);
     });
 
-    it('emits the card shape with kind + boolean nsfw', async () => {
+    it('emits the card shape with kind + boolean nsfw + metadata', async () => {
         await seedWork({
             id: 'mk:mb:sh1', type: 'manhwa', medium: 'manga', title: 'Card',
             rating: 81.5, popularity: 7, year: 2019, nsfw: 1,
             cover_url: 'https://img.example/x250.webp',
+            author: 'Soon Tae Kim',
+            genres: '["Action","Romance"]',
         });
-        const res = await browse('?medium=manga&sort=popularity');
+        const res = await browse('?medium=manga&sort=popularity&nsfw=1');
         const body = await res.json<{ works: BrowseWork[] }>();
         expect(body.works[0]).toEqual({
             miko_work_id: 'mk:mb:sh1',
             kind: 'manhwa',
             title: 'Card',
+            author: 'Soon Tae Kim',
             cover_url: 'https://img.example/x250.webp',
             rating: 81.5,
             popularity: 7,
             year: 2019,
             nsfw: true,
+            genres: ['Action', 'Romance'],
         });
+    });
+
+    it('malformed genres json yields an empty array', async () => {
+        await seedWork({
+            id: 'mk:mb:badg', type: 'manga', medium: 'manga', title: 'G',
+            popularity: 1, genres: '{oops',
+        });
+        const res = await browse('?medium=manga&sort=popularity');
+        const body = await res.json<{ works: BrowseWork[] }>();
+        expect(body.works[0].genres).toEqual([]);
+    });
+});
+
+describe('works/browse — nsfw gate', () => {
+    it('excludes nsfw rows by default and on nsfw=0', async () => {
+        await seedWork({ id: 'mk:mb:n1', type: 'manga', medium: 'manga', title: 'SFW', popularity: 1 });
+        await seedWork({ id: 'mk:mb:n2', type: 'manga', medium: 'manga', title: 'Adult', popularity: 2, nsfw: 1 });
+        for (const qs of ['?medium=manga&sort=popularity', '?medium=manga&sort=popularity&nsfw=0']) {
+            expect(await ids(await browse(qs)), qs).toEqual(['mk:mb:n1']);
+        }
+    });
+
+    it('nsfw=1 includes adult rows in ranking order', async () => {
+        await seedWork({ id: 'mk:mb:n1', type: 'manga', medium: 'manga', title: 'SFW', popularity: 1 });
+        await seedWork({ id: 'mk:mb:n2', type: 'manga', medium: 'manga', title: 'Adult', popularity: 2, nsfw: 1 });
+        const res = await browse('?medium=manga&sort=popularity&nsfw=1');
+        expect(await ids(res)).toEqual(['mk:mb:n1', 'mk:mb:n2']);
     });
 });

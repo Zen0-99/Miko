@@ -46,7 +46,11 @@ class CanonicalCatalog {
             url = "$MANGA_URL_PREFIX${work.mikoWorkId}",
             title = work.title,
             author = work.author,
-            genre = listOfNotNull(work.type, work.year?.toString()),
+            description = work.description,
+            // Real genres when the caller carried them (browse rows);
+            // the kind tag keeps a bare type visible otherwise.
+            genre = work.genres?.takeIf { it.isNotEmpty() } ?: listOf(work.type),
+            thumbnailUrl = work.coverUrl,
             status = statusOf(work.status, manga = true),
             source = CANONICAL_SOURCE_ID,
             initialized = true,
@@ -61,7 +65,9 @@ class CanonicalCatalog {
             url = "$NOVEL_URL_PREFIX${work.mikoWorkId}",
             title = work.title,
             author = work.author,
-            genre = listOfNotNull(work.type, work.year?.toString()),
+            description = work.description,
+            genre = work.genres?.takeIf { it.isNotEmpty() } ?: listOf(work.type),
+            thumbnailUrl = work.coverUrl,
             status = statusOf(work.status, manga = false),
             source = CANONICAL_SOURCE_ID,
             initialized = true,

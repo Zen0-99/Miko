@@ -38,6 +38,7 @@ class WorksBrowseApi(
          *  was unreachable when the row was persisted). */
         val kind: String? = null,
         val title: String,
+        val author: String? = null,
         val cover_url: String? = null,
         /** MangaBaka 0–100 rating passthrough. */
         val rating: Double? = null,
@@ -45,6 +46,7 @@ class WorksBrowseApi(
         val popularity: Long? = null,
         val year: Int? = null,
         val nsfw: Boolean = false,
+        val genres: List<String> = emptyList(),
     )
 
     @Serializable
@@ -63,7 +65,9 @@ class WorksBrowseApi(
     /**
      * One catalog page, or null on failure/HTTP error. 1-based [page];
      * [kinds] empty = every kind under [medium] (worker's `kind` filter
-     * is dropped entirely rather than sent empty).
+     * is dropped entirely rather than sent empty). The worker excludes
+     * NSFW rows unless [includeNsfw] opts in — ranked discovery is a
+     * SFW surface; adult rows must be sought via the NSFW-sources pref.
      */
     suspend fun browse(
         medium: String,
@@ -71,6 +75,7 @@ class WorksBrowseApi(
         sort: String = SORT_POPULARITY,
         page: Int = 1,
         limit: Int = PAGE_LIMIT,
+        includeNsfw: Boolean = false,
     ): Page? = try {
         val url = "${identityApi.baseUrl()}$BROWSE_PATH".toHttpUrl().newBuilder()
             .addQueryParameter("medium", medium)
@@ -78,6 +83,7 @@ class WorksBrowseApi(
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", limit.toString())
             .apply { if (kinds.isNotEmpty()) addQueryParameter("kind", kinds.joinToString(",")) }
+            .apply { if (includeNsfw) addQueryParameter("nsfw", "1") }
             .build()
         val response = networkHelper.client.newCall(
             GET(url, headers = Headers.headersOf("User-Agent", WorkIdentityApi.USER_AGENT)),

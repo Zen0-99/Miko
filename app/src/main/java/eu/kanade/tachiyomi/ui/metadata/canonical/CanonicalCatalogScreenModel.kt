@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.metadata.canonical
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge.WorkRow
 import eu.kanade.tachiyomi.data.mikodb.SeenReporter
@@ -86,6 +87,7 @@ class CanonicalCatalogScreenModel(
 
     private val resolver: WorkIdResolver by injectLazy()
     private val seenReporter: SeenReporter by injectLazy()
+    private val sourcePreferences: SourcePreferences by injectLazy()
 
     /** Minted/reported ids this session — gates the resolve path; the
      *  persistent `seen_reported` table dedupes the write itself. */
@@ -241,6 +243,7 @@ class CanonicalCatalogScreenModel(
             kinds = kindsCsv.split(','),
             sort = WorksBrowseApi.SORT_POPULARITY,
             page = page,
+            includeNsfw = sourcePreferences.showNsfwSource().get(),
         )
         if (result == null) {
             mutableState.update { s ->
@@ -304,6 +307,15 @@ class CanonicalCatalogScreenModel(
                         if (seenReporter.wasReported(workId)) return@withPermit
                         val resolved = resolver.resolve(candidate) ?: return@withPermit
                         seenReporter.report(resolved.value, resolved.medium)
+                        // Identity-correct reclassification: a trending
+                        // "book" that resolve proves is a MangaBaka-known
+                        // work (light novel/manga kind) belongs under the
+                        // Novels pill, not Books — pull it from the feed.
+                        if (resolved.value.startsWith(MK_MB_PREFIX) ||
+                            (resolved.kind != null && resolved.kind != KIND_BOOK)
+                        ) {
+                            dropFeedItem(item)
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -332,14 +344,33 @@ class CanonicalCatalogScreenModel(
     suspend fun getOrCreateEntryId(work: WorkRow): Long =
         materializeEntryId(work, state.value.medium)
 
+    /**
+     * Remove a rendered catalog row from the live feed + its cache
+     * entry — used when resolve proves an OpenLibrary "book" is really
+     * a MangaBaka light novel/manga (it belongs to the Novels feed).
+     */
+    private fun dropFeedItem(item: CatalogItem) {
+        val droppedId = item.work.mikoWorkId
+        feedCache[state.value.browseFeed]?.let { cache ->
+            feedCache[state.value.browseFeed!!] =
+                cache.copy(items = cache.items.filterNot { it.work.mikoWorkId == droppedId })
+        }
+        mutableState.update { s ->
+            s.copy(browseItems = s.browseItems.filterNot { it.work.mikoWorkId == droppedId })
+        }
+    }
+
     private fun WorksBrowseApi.WorkDto.toCatalogItem() = CatalogItem(
         work = WorkRow(
             mikoWorkId = miko_work_id,
             type = kind ?: "",
             title = title,
+            author = author,
             year = year?.toLong(),
             nsfw = nsfw,
             resolutionSource = RESOLUTION_BROWSE,
+            genres = genres.takeIf { it.isNotEmpty() },
+            coverUrl = cover_url,
         ),
         coverUrl = cover_url,
     )
@@ -378,6 +409,8 @@ class CanonicalCatalogScreenModel(
         private const val RESOLUTION_BROWSE = "works_browse"
         private const val RESOLUTION_OPENLIBRARY = "openlibrary"
         private const val MK_OL_PREFIX = "mk:ol:"
+        private const val MK_MB_PREFIX = "mk:mb:"
+        private const val KIND_BOOK = "book"
         private const val OPENLIBRARY_WORK_URL = "https://openlibrary.org/works/"
         private const val FEED_ERROR = "Couldn't load the catalog"
 

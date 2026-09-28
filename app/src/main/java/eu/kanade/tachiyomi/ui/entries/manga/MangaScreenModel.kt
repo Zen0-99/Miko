@@ -142,6 +142,7 @@ class MangaScreenModel(
     private val searchFallbackEngine: MangaSearchFallbackEngine = Injekt.get(),
     private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
     private val canonizeWork: eu.kanade.tachiyomi.data.mikodb.CanonizeWork = Injekt.get(),
+    private val mangaBakaEnrich: eu.kanade.tachiyomi.data.mikodb.MangaBakaEnrich = Injekt.get(),
     private val canonicalChapterSync: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
@@ -496,6 +497,11 @@ class MangaScreenModel(
                         eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
                             .workIdFromMangaUrl(manga.url)
                             ?.let { workId ->
+                                // Seeded rows arrive with no description and
+                                // empty provider_links — detail enrichment
+                                // must run before canonize so golden-source
+                                // selection has links to bind.
+                                mangaBakaEnrich.run(workId, manga)
                                 canonizeWork.run(workId, Carrier.MANGA)
                                 canonicalChapterSync.sync(manga, workId)
                             }

@@ -38,6 +38,12 @@ class MangaNovelIdBridge(
         val providerLinks: String = "[]",
         val resolutionSource: String = "",
         val externalIds: Map<String, String> = emptyMap(),
+        /** Carry-only catalog metadata (Phase 15-07 browse rows):
+         *  populated by callers, never persisted to works_cache — the
+         *  materialize path writes them onto the entry row directly. */
+        val genres: List<String>? = null,
+        val coverUrl: String? = null,
+        val description: String? = null,
     ) {
         /** Kind vocabulary alias for [type] — same column, new name. */
         val kind: String get() = type

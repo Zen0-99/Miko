@@ -16,8 +16,9 @@ class WorksBrowseApiTest {
         val parsed = json.decodeFromString(
             WorksBrowseApi.BrowseResponse.serializer(),
             """{"works":[{"miko_work_id":"mk:mb:42","kind":"manga","title":"Solo Leveling",""" +
-                """"cover_url":"https://cdn.example.com/covers/42.jpg","rating":91.5,""" +
-                """"popularity":3,"year":2018,"nsfw":false}],"page":2,"has_more":true}""",
+                """"author":"Chugong","cover_url":"https://cdn.example.com/covers/42.jpg","rating":91.5,""" +
+                """"popularity":3,"year":2018,"nsfw":false,"genres":["Action","Fantasy"]}],""" +
+                """"page":2,"has_more":true}""",
         )
         assertEquals(2, parsed.page)
         assertTrue(parsed.has_more)
@@ -25,11 +26,13 @@ class WorksBrowseApiTest {
         assertEquals("mk:mb:42", work.miko_work_id)
         assertEquals("manga", work.kind)
         assertEquals("Solo Leveling", work.title)
+        assertEquals("Chugong", work.author)
         assertEquals("https://cdn.example.com/covers/42.jpg", work.cover_url)
         assertEquals(91.5, work.rating)
         assertEquals(3L, work.popularity)
         assertEquals(2018, work.year)
         assertFalse(work.nsfw)
+        assertEquals(listOf("Action", "Fantasy"), work.genres)
     }
 
     @Test

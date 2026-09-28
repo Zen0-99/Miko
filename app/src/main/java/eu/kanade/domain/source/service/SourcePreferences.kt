@@ -25,7 +25,7 @@ class SourcePreferences(
         LocaleHelper.getDefaultEnabledLanguages(),
     )
 
-    fun showNsfwSource() = preferenceStore.getBoolean("show_nsfw_source", true)
+    fun showNsfwSource() = preferenceStore.getBoolean("show_nsfw_source", false)
 
     fun migrationSortingMode() = preferenceStore.getEnum(
         "pref_migration_sorting",
@@ -63,7 +63,10 @@ class SourcePreferences(
     fun incognitoMangaExtensions() = preferenceStore.getStringSet("incognito_manga_extensions", emptySet())
     fun incognitoNovelExtensions() = preferenceStore.getStringSet("incognito_novel_extensions", emptySet())
 
-    fun incognitoPolicy() = preferenceStore.getEnum("incognito_policy", eu.kanade.domain.source.model.IncognitoPolicy.MANUAL_ONLY)
+    fun incognitoPolicy() = preferenceStore.getEnum(
+        "incognito_policy",
+        eu.kanade.domain.source.model.IncognitoPolicy.MANUAL_ONLY,
+    )
 
     fun pinnedAnimeSources() = preferenceStore.getStringSet("pinned_anime_catalogues", emptySet())
     fun pinnedMangaSources() = preferenceStore.getStringSet("pinned_catalogues", emptySet())

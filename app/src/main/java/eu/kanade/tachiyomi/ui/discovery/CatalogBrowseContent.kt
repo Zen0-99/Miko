@@ -344,10 +344,7 @@ private fun CatalogBrowseGrid(
                                 }
                             }
                         }
-                        val label = buildString {
-                            append(work.title)
-                            work.year?.let { append("\n$it") }
-                        }
+                        val label = work.title
 
                         when (displayMode) {
                             LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
