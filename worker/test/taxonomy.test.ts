@@ -55,7 +55,6 @@ afterAll(() => {
 
 interface WorkDto {
     miko_work_id: string;
-    type: string;
     kind: string;
     medium: string | null;
     nsfw: boolean;
@@ -75,22 +74,12 @@ describe('resolve — medium vocabulary', () => {
         expect(await res.json()).toMatchObject({ error: 'bad_medium' });
     });
 
-    it('medium=anime resolves through the shows alias', async () => {
-        await env.COMMENTS_DB.prepare(
-            `INSERT INTO works_cache
-             (miko_work_id, type, medium, title, normalized_title, provider_links, fetched_at)
-             VALUES ('mk:imdb:tt0903747', 'anime', 'shows', 'Game of Thrones', 'game of thrones', '[]', 0)`,
-        ).run();
-        await env.COMMENTS_DB.prepare(
-            `INSERT INTO works_titles (miko_work_id, title, normalized)
-             VALUES ('mk:imdb:tt0903747', 'Game of Thrones', 'game of thrones')`,
-        ).run();
-        const res = await resolve({ title: 'game of thrones!', medium: 'anime' });
-        expect(res.status).toBe(200);
-        const body = await res.json<{ work: WorkDto }>();
-        expect(body.work.miko_work_id).toBe('mk:imdb:tt0903747');
-        expect(body.work.medium).toBe('shows');
-        expect(body.work.kind).toBe('anime');
+    it('legacy anime/novel mediums are rejected (alias window closed)', async () => {
+        for (const medium of ['anime', 'novel']) {
+            const res = await resolve({ title: 'Anything', medium });
+            expect(res.status).toBe(400);
+            expect(await res.json()).toMatchObject({ error: 'bad_medium' });
+        }
     });
 
     it('a manga-medium request can no longer reach anime kinds', async () => {
@@ -113,7 +102,7 @@ describe('resolve — medium vocabulary', () => {
 });
 
 describe('resolve — taxonomy DTO', () => {
-    it('emits medium, kind, nsfw, content_rating (and legacy type)', async () => {
+    it('emits medium, kind, nsfw, content_rating (no legacy type)', async () => {
         await env.COMMENTS_DB.prepare(
             `INSERT INTO works_cache
              (miko_work_id, type, medium, nsfw, content_rating, title, normalized_title, provider_links, fetched_at)
@@ -126,7 +115,8 @@ describe('resolve — taxonomy DTO', () => {
         const res = await resolve({ title: 'ero manga!', medium: 'manga' });
         expect(res.status).toBe(200);
         const body = await res.json<{ work: WorkDto }>();
-        expect(body.work.type).toBe('manga'); // kept for old builds during the window
+        // `type` mirror is gone with the alias window — `kind` only.
+        expect((body.work as unknown as Record<string, unknown>).type).toBeUndefined();
         expect(body.work.kind).toBe('manga');
         expect(body.work.medium).toBe('manga');
         expect(body.work.nsfw).toBe(true);

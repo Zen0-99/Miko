@@ -55,21 +55,30 @@ describe('resolve — books (OpenLibrary)', () => {
             title: 'Dune', medium: 'books', kind_hint: 'book', isbn: '9780441172719',
         });
         expect(res.status).toBe(200);
-        const body = await res.json<{ work: { miko_work_id: string; type: string; external_ids: Record<string, string> } }>();
+        const body = await res.json<{ work: { miko_work_id: string; kind: string; external_ids: Record<string, string> } }>();
         expect(body.work.miko_work_id).toBe('mk:ol:OL362427W');
-        expect(body.work.type).toBe('book');
+        expect(body.work.kind).toBe('book');
         expect(body.work.external_ids.openlibrary).toBe('OL362427W');
         expect(body.work.external_ids.isbn).toBe('9780441172719');
     });
 
-    it('legacy medium=novel + kind=book still gates OpenLibrary (alias window)', async () => {
-        mockIsbn('9780553418026', '/works/OL888W');
+    it('legacy medium=novel is rejected (alias window closed)', async () => {
         const res = await resolve({
-            title: 'The Martian', medium: 'novel', kind: 'book', isbn: '9780553418026',
+            title: 'The Martian', medium: 'novel', kind_hint: 'book', isbn: '9780553418026',
+        });
+        expect(res.status).toBe(400);
+        expect(await res.json()).toMatchObject({ error: 'bad_medium' });
+    });
+
+    it('the legacy `kind` field no longer gates OpenLibrary', async () => {
+        // kind_hint only now — a `kind` request field is ignored, so a
+        // books request without kind_hint/isbn never reaches OL.
+        const res = await resolve({
+            title: 'The Martian', medium: 'books', kind: 'book',
         });
         expect(res.status).toBe(200);
-        const body = await res.json<{ work: { miko_work_id: string } }>();
-        expect(body.work.miko_work_id).toBe('mk:ol:OL888W');
+        const body = await res.json<{ work: unknown }>();
+        expect(body.work).toBeNull();
     });
 
     it('two editions of the same book converge on one work', async () => {
@@ -95,9 +104,9 @@ describe('resolve — books (OpenLibrary)', () => {
             title: 'Neuromancer', medium: 'books', kind_hint: 'book',
             author: 'William Gibson', year: 1984,
         });
-        const body = await res.json<{ work: { miko_work_id: string; type: string; year: number } }>();
+        const body = await res.json<{ work: { miko_work_id: string; kind: string; year: number } }>();
         expect(body.work.miko_work_id).toBe('mk:ol:OL123W');
-        expect(body.work.type).toBe('book');
+        expect(body.work.kind).toBe('book');
         expect(body.work.year).toBe(1984);
     });
 

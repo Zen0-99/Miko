@@ -38,14 +38,14 @@ enum class Carrier(
         val mediums: Set<String> get() = entries.mapTo(linkedSetOf()) { it.medium }
 
         /**
-         * Parses a wire medium to its carrier. Legacy `anime`/`novel`
-         * keys are honored during the one-cycle alias window (the worker
-         * accepts the same aliases); unknown keys return null.
+         * Parses a wire medium to its carrier — canonical keys only;
+         * the `anime`/`novel` alias window is closed (15-06 tail).
+         * Unknown keys return null.
          */
         fun fromMedium(medium: String?): Carrier? = when (medium?.trim()?.lowercase()) {
-            "shows", "anime" -> SHOWS
+            "shows" -> SHOWS
             "manga" -> MANGA
-            "books", "novel" -> BOOKS
+            "books" -> BOOKS
             else -> null
         }
 

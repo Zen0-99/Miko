@@ -42,18 +42,11 @@ describe('ids/seen', () => {
         expect(row?.medium).toBe('shows');
     });
 
-    it('normalizes legacy mediums to canonical carriers', async () => {
+    it('rejects legacy mediums (alias window closed)', async () => {
         const idA = `mk:m:${'e'.repeat(64)}`;
         const idB = `mk:m:${'f'.repeat(64)}`;
-        expect((await seen({ id: idA, medium: 'anime' })).status).toBe(200);
-        expect((await seen({ id: idB, medium: 'novel' })).status).toBe(200);
-
-        const rows = await env.COMMENTS_DB.prepare(
-            'SELECT work_id, medium FROM seen_ids WHERE work_id IN (?1, ?2)',
-        ).bind(idA, idB).all<{ work_id: string; medium: string }>();
-        const byId = new Map(rows.results.map((r) => [r.work_id, r.medium]));
-        expect(byId.get(idA)).toBe('shows');
-        expect(byId.get(idB)).toBe('books');
+        expect((await seen({ id: idA, medium: 'anime' })).status).toBe(400);
+        expect((await seen({ id: idB, medium: 'novel' })).status).toBe(400);
     });
 
     it('stores no user or device fields', async () => {

@@ -22,10 +22,10 @@ class CarrierTest {
     }
 
     @Test
-    fun `fromMedium honors the legacy alias window`() {
-        assertEquals(Carrier.SHOWS, Carrier.fromMedium("anime"))
-        assertEquals(Carrier.BOOKS, Carrier.fromMedium("novel"))
-        assertEquals(Carrier.SHOWS, Carrier.fromMedium(" Anime "))
+    fun `fromMedium rejects legacy alias keys (window closed)`() {
+        assertNull(Carrier.fromMedium("anime"))
+        assertNull(Carrier.fromMedium("novel"))
+        assertNull(Carrier.fromMedium(" Anime "))
     }
 
     @Test

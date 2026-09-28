@@ -73,7 +73,7 @@ class CanonicalCatalogScreenModel(
      * database id to navigate to (MangaScreen / NovelScreen).
      */
     suspend fun getOrCreateEntryId(work: MangaNovelIdBridge.WorkRow): Long =
-        if (state.value.medium == WorkIdResolver.MEDIUM_NOVEL) {
+        if (state.value.medium == WorkIdResolver.MEDIUM_BOOKS) {
             catalog.materializeNovelId(work)
         } else {
             catalog.materializeMangaId(work)

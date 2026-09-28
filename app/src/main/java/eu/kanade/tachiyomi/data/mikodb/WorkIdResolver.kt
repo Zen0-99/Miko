@@ -209,15 +209,9 @@ class WorkIdResolver {
         const val MEDIUM_BOOKS = "books"
         const val MEDIUM_SHOWS = "shows"
 
-        /** @deprecated Phase 15 renamed the novel carrier to `books`;
-         *  kept one cycle so stale call sites still emit the new key. */
-        @Deprecated("Renamed to MEDIUM_BOOKS", ReplaceWith("MEDIUM_BOOKS"))
-        const val MEDIUM_NOVEL = MEDIUM_BOOKS
-
         /** Kinds accepted for each carrier — mirrors the worker's
          *  MEDIUM_TYPES. 'oel' is a manga kind (original-English-language
-         *  comics), never books. Legacy medium keys normalize through
-         *  [Carrier.fromMedium] for the alias window. */
+         *  comics), never books. */
         internal fun allowedTypes(medium: String) =
             when (Carrier.fromMedium(medium)) {
                 Carrier.SHOWS -> setOf("anime", "movie", "series")

@@ -29,13 +29,15 @@ describe('chapters/align', () => {
         expect(await res.json()).toMatchObject({ error: 'shows_episodes_skip_alignment' });
     });
 
-    it('legacy anime alias still skips alignment during the window', async () => {
+    it('legacy anime medium no longer aliases to shows (window closed)', async () => {
+        // 'anime' is an unrecognized medium now — it doesn't trigger the
+        // shows skip, it just runs the normal alignment path.
         const res = await align({
             work_id: 'mk:imdb:tt0944947', source_key: 's1',
             medium: 'anime', numbers: [1, 2, 3],
         });
-        expect(res.status).toBe(400);
-        expect(await res.json()).toMatchObject({ error: 'shows_episodes_skip_alignment' });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ status: 'unknown' });
     });
 
     it('returns unknown with no reference and no consensus', async () => {

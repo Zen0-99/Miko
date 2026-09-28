@@ -307,6 +307,13 @@ object SettingsAdvancedScreen : SearchableSettings {
                         context.toast(MR.strings.requires_app_restart)
                     },
                 ),
+                // 15-06: BYOK TMDB key for the Discovery facet filters —
+                // overrides the bundled/BuildConfig key when set.
+                Preference.PreferenceItem.EditTextPreference(
+                    preference = networkPreferences.tmdbApiKey(),
+                    title = stringResource(AYMR.strings.pref_tmdb_api_key),
+                    subtitle = stringResource(AYMR.strings.pref_tmdb_api_key_summary),
+                ),
             ),
         )
     }

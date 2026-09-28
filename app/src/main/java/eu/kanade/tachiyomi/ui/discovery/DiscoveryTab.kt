@@ -22,7 +22,6 @@ import eu.kanade.presentation.components.useSharedTopBarWithSearch
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogContent
 import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogScreenModel
-import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseContent
 import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreenModel
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -112,8 +111,12 @@ data object DiscoveryTab : Tab {
             // restores the idle catalog (same semantics as the old Discover
             // overlay in BrowseTab).
             when (carrier) {
-                Carrier.SHOWS -> CinemetaBrowseContent(
-                    screenModel = cinemetaBrowseSM,
+                // 15-06: the facet bar + filter sheet wrap the shows
+                // catalog; an active facet set swaps the grid to TMDB
+                // discover results. manga/books keep per-source filters.
+                Carrier.SHOWS -> ShowsDiscoveryContent(
+                    discoveryScreenModel = screenModel,
+                    cinemetaScreenModel = cinemetaBrowseSM,
                     contentPadding = resolvedPadding,
                     libraryPreferences = libraryPreferences,
                 )

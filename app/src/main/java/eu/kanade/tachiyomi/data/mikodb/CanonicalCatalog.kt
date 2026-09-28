@@ -27,7 +27,7 @@ class CanonicalCatalog {
     private val networkToLocalManga: NetworkToLocalManga by injectLazy()
     private val networkToLocalNovel: NetworkToLocalNovel by injectLazy()
 
-    /** Ranked catalog hits for [medium] ("manga" | "novel"). */
+    /** Ranked catalog hits for [medium] ("manga" | "books"). */
     suspend fun search(
         query: String,
         medium: String,

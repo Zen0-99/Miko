@@ -1,12 +1,11 @@
 import type { Env } from './env';
-import { err, MEDIUM_ALIASES, now, ok } from './util';
+import { err, now, ok } from './util';
 
 // Phase 14-01: coverage-gap telemetry. Ingests ONLY the work id + medium —
 // no user id, device id, or metadata — so MikoDB can rank which uncataloged
 // (locally minted) works are popular enough to promote into the catalog.
 // Phase 15: medium vocabulary is the three carriers {shows, manga, books};
-// legacy anime/novel normalize through MEDIUM_ALIASES so only canonical
-// values are stored.
+// canonical-only ingest — legacy anime/novel requests are rejected.
 const MEDIA = new Set(['shows', 'manga', 'books']);
 const ID_MAX = 128;
 
@@ -23,8 +22,7 @@ export async function handleIdSeen(req: Request, env: Env): Promise<Response> {
         return err(400, 'bad_json');
     }
     const id = typeof body.id === 'string' ? body.id : '';
-    const rawMedium = typeof body.medium === 'string' ? body.medium : '';
-    const medium = MEDIUM_ALIASES[rawMedium] ?? rawMedium;
+    const medium = typeof body.medium === 'string' ? body.medium : '';
     if (!id.startsWith('mk:') || id.length > ID_MAX) return err(400, 'bad_id');
     if (!MEDIA.has(medium)) return err(400, 'bad_medium');
 

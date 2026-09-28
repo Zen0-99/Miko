@@ -63,7 +63,7 @@ fun CanonicalCatalogContent(
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val isNovel = medium == WorkIdResolver.MEDIUM_NOVEL
+    val isNovel = medium == WorkIdResolver.MEDIUM_BOOKS
     val columns by (
         if (isLandscape) {
             if (isNovel) libraryPreferences.novelLandscapeColumns() else libraryPreferences.mangaLandscapeColumns()

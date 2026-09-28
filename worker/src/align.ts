@@ -1,6 +1,6 @@
 import type { Env } from './env';
 import { referenceChapters } from './mangadex';
-import { err, MEDIUM_ALIASES, now, ok, sha256Hex } from './util';
+import { err, now, ok, sha256Hex } from './util';
 
 const ALIGN_THRESHOLD = 0.6;
 const PADDING_FACTOR = 3;
@@ -39,8 +39,9 @@ export async function handleAlign(req: Request, env: Env): Promise<Response> {
     ) {
         return err(400, 'bad_request');
     }
-    // Phase 15 carrier vocabulary; legacy 'anime' normalizes to 'shows'.
-    const medium = MEDIUM_ALIASES[body.medium ?? ''] ?? body.medium;
+    // Phase 15 carrier vocabulary — canonical only; anything but
+    // 'shows' falls through to the normal alignment path.
+    const medium = body.medium;
     if (medium === 'shows') {
         return err(400, 'shows_episodes_skip_alignment');
     }

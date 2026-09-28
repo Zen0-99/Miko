@@ -100,8 +100,12 @@ class WorkIdResolverTest {
     @Test
     fun `books allowedTypes accepts the books kind vocab`() {
         assertEquals(setOf("book", "novel"), WorkIdResolver.allowedTypes("books"))
-        // Legacy 'novel' key maps to the books carrier during the alias window.
-        assertEquals(setOf("book", "novel"), WorkIdResolver.allowedTypes("novel"))
+        // Alias window closed (15-06): legacy 'novel' key falls to the
+        // manga fallback like any unknown key.
+        assertEquals(
+            setOf("manga", "manhwa", "manhua", "comic", "webtoon", "oel", "other"),
+            WorkIdResolver.allowedTypes("novel"),
+        )
         assertEquals(
             setOf("manga", "manhwa", "manhua", "comic", "webtoon", "oel", "other"),
             WorkIdResolver.allowedTypes("manga"),
@@ -142,8 +146,8 @@ class WorkIdResolverTest {
         assertEquals("series", WorkIdResolver.mediumToType("shows", isBook = false, kindHint = null))
         assertEquals("manga", WorkIdResolver.mediumToType("manga", isBook = false, kindHint = null))
         assertEquals("novel", WorkIdResolver.mediumToType("books", isBook = false, kindHint = null))
-        // Legacy 'novel' key keeps hashing 'novel' mints during the alias window.
-        assertEquals("novel", WorkIdResolver.mediumToType("novel", isBook = false, kindHint = null))
+        // Legacy 'novel' key is no longer recognized (alias window closed).
+        assertEquals("manga", WorkIdResolver.mediumToType("novel", isBook = false, kindHint = null))
         assertEquals("book", WorkIdResolver.mediumToType("manga", isBook = true, kindHint = null))
         // Carrier-disjoint: a shows mk:m: mint never collides with a
         // same-titled manga mint.

@@ -18,12 +18,3 @@ export async function sha256Hex(input: string): Promise<string> {
 export function isHex64(s: unknown): s is string {
     return typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 }
-
-// DEPRECATED: one-deploy-cycle legacy alias window (15-CONTEXT.md) —
-// resolve/seen/align normalize these to canonical carriers so no legacy
-// medium values land in new rows; drop once the app-side rename ships
-// and the cleanup deploy removes this map.
-export const MEDIUM_ALIASES: Record<string, string> = {
-    anime: 'shows',
-    novel: 'books',
-};

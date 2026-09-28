@@ -56,6 +56,8 @@ import eu.kanade.tachiyomi.metadata.stream.LoadCinemetaEpisodes
 import eu.kanade.tachiyomi.metadata.stream.SourceMappingCache
 import eu.kanade.tachiyomi.metadata.stream.StreamResolver
 import eu.kanade.tachiyomi.metadata.stream.TitleMatcher
+import eu.kanade.tachiyomi.metadata.tmdb.TmdbDiscover
+import eu.kanade.tachiyomi.metadata.tmdb.TmdbKeyProvider
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbSeasonPosters
 import eu.kanade.tachiyomi.network.JavaScriptEngine
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -385,6 +387,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { LoadCinemetaEpisodes(get(), get(), get(), get(), get()) }
         addSingletonFactory { eu.kanade.tachiyomi.metadata.stream.CinemetaEntryUnifier(get(), get(), get(), get()) }
         addSingletonFactory { TmdbSeasonPosters(get(), get()) }
+        addSingletonFactory { TmdbKeyProvider(get()) }
+        addSingletonFactory { TmdbDiscover(get(), get(), get()) }
         addSingletonFactory {
             eu.kanade.tachiyomi.data.cover.HiResCoverResolver(
                 get(),

@@ -13,7 +13,7 @@ import { deriveShowKind, fetchMeta, metaYear } from './cinemeta';
 import type { CinemetaMeta } from './cinemeta';
 import { findHsEntry, hsYear, loadCatalog } from './hentaistream';
 import { normalize } from './normalize';
-import { err, MEDIUM_ALIASES, now, ok } from './util';
+import { err, now, ok } from './util';
 
 // Keep in sync with WorkIdResolver.allowedTypes + WorkIdentityApi
 // ResolveRequest/WorkDto in the app (miko_work_id snake_case JSON).
@@ -47,9 +47,6 @@ interface ResolveRequest {
      *  OpenLibrary fallthrough; 'movie'/'series' are inert until 15-02's
      *  Cinemeta path. Out-of-vocab values are ignored, not rejected. */
     kind_hint?: 'book' | 'movie' | 'series';
-    /** DEPRECATED: pre-Phase-15 name of kind_hint — accepted for one
-     *  deploy cycle, then dropped by the cleanup plan. */
-    kind?: 'book';
     /** Strong external-ID signal for books (ISBN-10/13). */
     isbn?: string;
 }
@@ -74,9 +71,8 @@ interface WorkRow {
 function toDto(row: WorkRow, externalIds: Record<string, string>) {
     return {
         miko_work_id: row.miko_work_id,
-        // DEPRECATED: `type` still emitted during the one-cycle alias
-        // window so old app builds parse; `kind` is the taxonomy name.
-        type: row.type,
+        // `kind` is the taxonomy name; the D1 column stays `type`
+        // internally.
         kind: row.type,
         medium: row.medium,
         nsfw: row.nsfw === 1,
@@ -224,15 +220,15 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
     } catch {
         return err(400, 'bad_json');
     }
-    // Alias window (one deploy cycle): legacy anime/novel normalize to
-    // the canonical carrier; anything outside the vocab is rejected —
-    // the old collapse-to-manga is gone (locked 15-CONTEXT ruling).
-    const medium = MEDIUM_ALIASES[body.medium] ?? body.medium;
+    // Canonical carriers only — the alias window is closed; anything
+    // outside the vocab is rejected (the old collapse-to-manga is gone —
+    // locked 15-CONTEXT ruling).
+    const medium = body.medium;
     const allowed = MEDIUM_TYPES[medium];
     if (!allowed) return err(400, 'bad_medium');
-    // kind_hint (or its legacy `kind` name) is advisory — it picks the
-    // upstream path, never the resolved kind.
-    const kindHint = body.kind_hint ?? body.kind;
+    // kind_hint is advisory — it picks the upstream path, never the
+    // resolved kind.
+    const kindHint = body.kind_hint;
     const normTitle = normalize(body.title);
     if (!normTitle) return err(400, 'missing_title');
 

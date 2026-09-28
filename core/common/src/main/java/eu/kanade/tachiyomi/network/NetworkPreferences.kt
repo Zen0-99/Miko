@@ -16,6 +16,10 @@ class NetworkPreferences(
         return preferenceStore.getInt("doh_provider", -1)
     }
 
+    fun tmdbApiKey(): Preference<String> {
+        return preferenceStore.getString("pref_tmdb_api_key", "")
+    }
+
     fun defaultUserAgent(): Preference<String> {
         return preferenceStore.getString(
             "default_user_agent",

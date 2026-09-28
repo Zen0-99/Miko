@@ -22,6 +22,15 @@ android {
         versionCode = 131
         versionName = "0.18.1.2"
 
+        // TMDB discover key (15-06): injected via -PTMDB_API_KEY or the
+        // TMDB_API_KEY env var (CI: secrets.TMDB_API_KEY) — never committed;
+        // empty default leaves the BYOK pref as the only runtime source and
+        // TmdbDiscover falls back to its stub path while no key resolves.
+        val tmdbApiKey = (findProperty("TMDB_API_KEY") as String?)
+            ?: System.getenv("TMDB_API_KEY")
+            ?: ""
+        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
+
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getGitSha()}\"")
         buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLastCommitTime = false)}\"")
