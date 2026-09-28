@@ -23,14 +23,14 @@ class BalancedRule(
         if (!isMatch) return RuleResult.NoChange
 
         val manga = context.getChaptersRead(AchievementCategory.MANGA)
-        val anime = context.getChaptersRead(AchievementCategory.ANIME)
+        val anime = context.getChaptersRead(AchievementCategory.SHOWS)
         val valMin = min(manga, anime)
         return RuleResult.Update(valMin)
     }
 
     override suspend fun evaluateFull(context: RuleContext): Int {
         val manga = context.getChaptersRead(AchievementCategory.MANGA)
-        val anime = context.getChaptersRead(AchievementCategory.ANIME)
+        val anime = context.getChaptersRead(AchievementCategory.SHOWS)
         return min(manga, anime)
     }
 }

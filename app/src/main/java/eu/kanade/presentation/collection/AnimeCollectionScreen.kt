@@ -16,7 +16,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import eu.kanade.presentation.collection.components.CollectionFloatingActionButton
 import eu.kanade.presentation.collection.components.CollectionListItem
-import eu.kanade.tachiyomi.ui.collection.anime.AnimeCollectionScreenState
+import eu.kanade.tachiyomi.ui.collection.shows.AnimeCollectionScreenState
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.domain.collection.model.Collection

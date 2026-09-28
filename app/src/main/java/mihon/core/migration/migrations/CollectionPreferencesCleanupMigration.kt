@@ -3,7 +3,7 @@ package mihon.core.migration.migrations
 import mihon.core.migration.Migration
 import mihon.core.migration.MigrationContext
 import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
 import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -20,9 +20,9 @@ class CollectionPreferencesCleanupMigration : Migration {
         val allAnimeCollections = getAnimeCollections.await().map { it.id.toString() }.toSet()
         val allMangaCollections = getMangaCollections.await().map { it.id.toString() }.toSet()
 
-        val defaultAnimeCollection = libraryPreferences.defaultAnimeCollection().get()
-        if (defaultAnimeCollection.toString() !in allAnimeCollections) {
-            libraryPreferences.defaultAnimeCollection().delete()
+        val defaultShowsCollection = libraryPreferences.defaultShowsCollection().get()
+        if (defaultShowsCollection.toString() !in allAnimeCollections) {
+            libraryPreferences.defaultShowsCollection().delete()
         }
         val defaultMangaCollection = libraryPreferences.defaultMangaCollection().get()
         if (defaultMangaCollection.toString() !in allMangaCollections) {
@@ -30,9 +30,9 @@ class CollectionPreferencesCleanupMigration : Migration {
         }
 
         val collectionPreferences = listOf(
-            libraryPreferences.animeUpdateCollections(),
+            libraryPreferences.showsUpdateCollections(),
             libraryPreferences.mangaUpdateCollections(),
-            libraryPreferences.animeUpdateCollectionsExclude(),
+            libraryPreferences.showsUpdateCollectionsExclude(),
             libraryPreferences.mangaUpdateCollectionsExclude(),
             downloadPreferences.removeExcludeCollections(),
             downloadPreferences.removeExcludeAnimeCollections(),

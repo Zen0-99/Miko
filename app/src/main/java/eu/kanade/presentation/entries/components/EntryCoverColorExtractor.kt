@@ -2,12 +2,16 @@ package eu.kanade.presentation.entries.components
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color as AndroidColor
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.ColorUtils
 import coil3.asDrawable
@@ -47,33 +51,101 @@ fun rememberEntryAccentColor(
     enabled: Boolean = true,
 ): Color? {
     val context = LocalContext.current
+    // The cached color is tagged with the cover it was extracted from — a
+    // cover change (e.g. Cinemeta per-season poster swap) invalidates it.
+    // The key is the *image* identity, not the whole entry object, so a
+    // metadata refresh that rewrites description/genre doesn't flash the accent.
+    val coverKey = cover?.let(::coverKeyOf)
     val colorState = remember(entryId) {
-        val cachedBase = entryId?.let { EntryCoverMetadata.getBaseColor(type, it) }
+        val cachedBase = entryId?.let { EntryCoverMetadata.getBaseColor(type, it, coverKey) }
         mutableStateOf<Color?>(
             cachedBase?.let { Color(adjustForTheme(it, isDark(context))) },
         )
     }
 
-    LaunchedEffect(entryId, cover, enabled) {
+    LaunchedEffect(entryId, coverKey, enabled) {
         if (!enabled || entryId == null || cover == null) {
             colorState.value = null
             return@LaunchedEffect
         }
 
-        // Already cached (e.g. pre-extracted while browsing) — apply synchronously.
-        val cachedBase = EntryCoverMetadata.getBaseColor(type, entryId)
+        // Already cached for this exact cover (e.g. pre-extracted while
+        // browsing) — apply synchronously.
+        val cachedBase = EntryCoverMetadata.getBaseColor(type, entryId, coverKey)
         if (cachedBase != null) {
             colorState.value = Color(adjustForTheme(cachedBase, isDark(context)))
             return@LaunchedEffect
         }
 
+        // Deliberately keep showing the previous color while the new one is
+        // extracted — never blank to the theme color mid-swap.
         val base = extractEntryCoverBaseColor(context, cover) ?: return@LaunchedEffect
-        EntryCoverMetadata.setBaseColor(type, entryId, base)
+        EntryCoverMetadata.setBaseColor(type, entryId, base, coverKey)
         EntryCoverMetadata.savePrefs(type)
         colorState.value = Color(adjustForTheme(base, isDark(context)))
     }
 
-    return colorState.value
+    // "Fadethrough" — interpolate the palette to the new accent (~400ms)
+    // instead of snapping. Consumers recompose per frame, so every accented
+    // element glides between the two colors with no blank flash.
+    return colorState.value?.let {
+        animateColorAsState(
+            targetValue = it,
+            animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing),
+            label = "entry_accent",
+        ).value
+    }
+}
+
+/**
+ * Readable content color to place on an accent-colored surface — black on
+ * light accents, white on dark ones. Part of the theme transition: it
+ * animates with the same 400ms fadethrough spec as the accent itself, so
+ * text on pills/buttons glides with the color change instead of snapping.
+ */
+@Composable
+fun rememberOnAccentColor(
+    accentColor: Color?,
+    fallback: Color = MaterialTheme.colorScheme.onPrimary,
+): Color {
+    val target = if (accentColor != null) {
+        if (accentColor.luminance() > 0.5f) Color.Black else Color.White
+    } else {
+        fallback
+    }
+    return animateColorAsState(
+        targetValue = target,
+        animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing),
+        label = "on_accent",
+    ).value
+}
+
+/**
+ * Stable identity for a cover object — the image URL + last-modified stamp.
+ * Domain entry objects (Anime/Manga/Novel) change identity on any field
+ * update, so keying on `toString()` would invalidate the cache on unrelated
+ * metadata refreshes; keying on url+lastModified only re-extracts when the
+ * actual image changes.
+ */
+private fun coverKeyOf(cover: Any): String {
+    // "v2" busts colors cached before perimeter sampling replaced the
+    // full-image palette — without it, stale logo-skewed accents persist.
+    val base = when (cover) {
+        is tachiyomi.domain.entries.shows.model.Anime ->
+            "${cover.thumbnailUrl}#${cover.coverLastModified}"
+        is tachiyomi.domain.entries.manga.model.Manga ->
+            "${cover.thumbnailUrl}#${cover.coverLastModified}"
+        is tachiyomi.domain.entries.novel.model.Novel ->
+            "${cover.thumbnailUrl}#${cover.coverLastModified}"
+        is tachiyomi.domain.entries.shows.model.AnimeCover ->
+            "${cover.url}#${cover.lastModified}"
+        is tachiyomi.domain.entries.manga.model.MangaCover ->
+            "${cover.url}#${cover.lastModified}"
+        is tachiyomi.domain.entries.novel.model.NovelCover ->
+            "${cover.url}#${cover.lastModified}"
+        else -> cover.toString()
+    }
+    return "v2|$base"
 }
 
 /**
@@ -94,9 +166,10 @@ fun PreExtractEntryCoverColor(
     val context = LocalContext.current
     LaunchedEffect(entryId, cover) {
         if (cover == null) return@LaunchedEffect
-        if (EntryCoverMetadata.getBaseColor(type, entryId) != null) return@LaunchedEffect
+        val coverKey = coverKeyOf(cover)
+        if (EntryCoverMetadata.getBaseColor(type, entryId, coverKey) != null) return@LaunchedEffect
         val base = extractEntryCoverBaseColor(context, cover, size = 64) ?: return@LaunchedEffect
-        EntryCoverMetadata.setBaseColor(type, entryId, base)
+        EntryCoverMetadata.setBaseColor(type, entryId, base, coverKey)
     }
 }
 
@@ -114,8 +187,12 @@ suspend fun extractEntryCoverBaseColor(
     return withContext(Dispatchers.IO) {
         val request = ImageRequest.Builder(context)
             .data(cover)
+            // FIT keeps the whole poster (including its colored background)
+            // in the palette input — FILL would center-crop portrait art to a
+            // square and skew the dominant swatch toward the subject, not the
+            // cover's actual dominant color.
             .size(size, size)
-            .scale(Scale.FILL)
+            .scale(Scale.FIT)
             .precision(Precision.INEXACT)
             .bitmapConfig(Bitmap.Config.ARGB_8888)
             .build()
@@ -134,12 +211,24 @@ suspend fun extractEntryCoverBaseColor(
 
         withContext(Dispatchers.Default) {
             try {
-                val palette = androidx.palette.graphics.Palette.from(safeBitmap).generate()
-                val rawColor = palette?.getBestColor()
+                // Poster art often carries a huge baked-in title logo (e.g. the
+                // orange "NARUTO" banner spanning the bottom of TMDB season
+                // posters). A full-image palette lets that logo win the vibrant
+                // or even dominant swatch, so the ambient cover color is read
+                // from the perimeter instead: the top strip plus the left/right
+                // edges of the top ~72%, which logos and subjects rarely reach.
+                val ringBitmap = edgeRingBitmap(safeBitmap)
+                val palette = androidx.palette.graphics.Palette
+                    .from(ringBitmap ?: safeBitmap)
+                    .generate()
+                val rawColor = palette?.dominantSwatch?.rgb
+                    ?: androidx.palette.graphics.Palette.from(safeBitmap)
+                        .generate()
+                        .getBestColor()
                 if (rawColor != null) {
                     injectSaturation(rawColor)
                 } else {
-                    palette?.dominantSwatch?.rgb?.let {
+                    palette?.vibrantSwatch?.rgb?.let {
                         injectSaturation(it)
                     }
                 }
@@ -148,6 +237,30 @@ suspend fun extractEntryCoverBaseColor(
             }
         }
     }
+}
+
+/**
+ * Builds a compact bitmap containing only the poster's perimeter: the top
+ * ~14% strip plus the left/right ~16% columns within the top ~72% of the
+ * image. Title logos and subjects concentrate in the center and bottom band
+ * of cover art, so the perimeter is the cleanest estimate of the cover's
+ * ambient color. Returns null for degenerate (tiny) bitmaps.
+ */
+private fun edgeRingBitmap(bitmap: Bitmap): Bitmap? {
+    val w = bitmap.width
+    val h = bitmap.height
+    if (w < 16 || h < 16) return null
+    val side = (w * 0.16f).toInt().coerceAtLeast(1)
+    val topRows = (h * 0.14f).toInt().coerceAtLeast(1)
+    val midRows = ((h * 0.72f).toInt() - topRows).coerceAtLeast(1)
+    val ring = IntArray(w * topRows + midRows * side * 2)
+    var off = 0
+    bitmap.getPixels(ring, off, w, 0, 0, w, topRows)
+    off += w * topRows
+    bitmap.getPixels(ring, off, side, 0, topRows, side, midRows)
+    off += midRows * side
+    bitmap.getPixels(ring, off, side, w - side, topRows, side, midRows)
+    return Bitmap.createBitmap(ring, w, ring.size / w, Bitmap.Config.ARGB_8888)
 }
 
 fun isDark(context: Context): Boolean {
@@ -175,15 +288,35 @@ private fun injectSaturation(color: Int): Int {
     }
 }
 
+/**
+ * Minimum accent saturation at display time. Edge-sampled covers often produce
+ * muted slate/sage hues; without a floor the accent reads as gray on surfaces
+ * and pills. Applied in [adjustForTheme] so cached base colors get the floor
+ * too — no cache invalidation needed.
+ */
+private const val MIN_ACCENT_SATURATION = 0.45f
+
+/**
+ * Maximum accent saturation at display time. Very vivid covers (e.g. bright
+ * orange key art) produce accents that overwhelm tinted surfaces and pills —
+ * cap them to a strong-but-tame saturation.
+ */
+private const val MAX_ACCENT_SATURATION = 0.65f
+
 fun adjustForTheme(color: Int, isDark: Boolean): Int {
     val luminance = ColorUtils.calculateLuminance(color).toFloat()
-    return when {
+    val hsl = FloatArray(3)
+    ColorUtils.colorToHSL(color, hsl)
+    // Lightness moves via HSL — the old ARGB white/black blend raised luminance
+    // but bled saturation out of the accent, producing the grayish tints.
+    when {
         !isDark && luminance > 0.4f -> {
-            ColorUtils.blendARGB(color, AndroidColor.BLACK, luminance * 0.5f)
+            hsl[2] = (hsl[2] * (1f - luminance * 0.5f)).coerceIn(0f, 1f)
         }
         isDark && luminance <= 0.6f -> {
-            ColorUtils.blendARGB(color, AndroidColor.WHITE, (1.0f - luminance) * 0.33f)
+            hsl[2] = (hsl[2] + (1f - hsl[2]) * (1f - luminance) * 0.33f).coerceIn(0f, 1f)
         }
-        else -> color
     }
+    hsl[1] = hsl[1].coerceIn(MIN_ACCENT_SATURATION, MAX_ACCENT_SATURATION)
+    return ColorUtils.HSLToColor(hsl)
 }

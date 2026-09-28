@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.util
 
-import eu.kanade.domain.entries.anime.interactor.UpdateAnime
-import eu.kanade.domain.entries.anime.model.hasCustomBackground
-import eu.kanade.domain.entries.anime.model.hasCustomCover
-import eu.kanade.domain.entries.anime.model.toSAnime
+import eu.kanade.domain.entries.shows.interactor.UpdateAnime
+import eu.kanade.domain.entries.shows.model.hasCustomBackground
+import eu.kanade.domain.entries.shows.model.hasCustomCover
+import eu.kanade.domain.entries.shows.model.toSAnime
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.data.cache.AnimeBackgroundCache
 import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.source.local.entries.anime.isLocal
 import tachiyomi.source.local.image.anime.LocalAnimeBackgroundManager
 import tachiyomi.source.local.image.anime.LocalAnimeCoverManager

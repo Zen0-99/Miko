@@ -1,14 +1,14 @@
 package tachiyomi.domain.library.service
 
-import miko.domain.anime.SeasonDisplayMode
+import miko.domain.shows.SeasonDisplayMode
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getEnum
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.novel.model.Novel
-import tachiyomi.domain.library.anime.model.AnimeLibrarySort
+import tachiyomi.domain.library.shows.model.AnimeLibrarySort
 import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.novel.model.NovelLibrarySort
@@ -31,7 +31,7 @@ class LibraryPreferences(
         MangaLibrarySort.Serializer::deserialize,
     )
 
-    fun animeSortingMode() = preferenceStore.getObject(
+    fun showsSortingMode() = preferenceStore.getObject(
         "animelib_sorting_mode",
         AnimeLibrarySort.default,
         AnimeLibrarySort.Serializer::serialize,
@@ -119,23 +119,23 @@ class LibraryPreferences(
 
     // Random Sort Seed
 
-    fun randomAnimeSortSeed() = preferenceStore.getInt("library_random_anime_sort_seed", 0)
+    fun randomShowsSortSeed() = preferenceStore.getInt("library_random_anime_sort_seed", 0)
     fun randomMangaSortSeed() = preferenceStore.getInt("library_random_manga_sort_seed", 0)
     fun randomNovelSortSeed() = preferenceStore.getInt("library_random_novel_sort_seed", 0)
 
     // Mixture Columns
 
-    fun animePortraitColumns() = preferenceStore.getInt("pref_animelib_columns_portrait_key", 0)
+    fun showsPortraitColumns() = preferenceStore.getInt("pref_animelib_columns_portrait_key", 0)
     fun mangaPortraitColumns() = preferenceStore.getInt("pref_library_columns_portrait_key", 0)
     fun novelPortraitColumns() = preferenceStore.getInt("pref_novellib_columns_portrait_key", 0)
 
-    fun animeLandscapeColumns() = preferenceStore.getInt("pref_animelib_columns_landscape_key", 0)
+    fun showsLandscapeColumns() = preferenceStore.getInt("pref_animelib_columns_landscape_key", 0)
     fun mangaLandscapeColumns() = preferenceStore.getInt("pref_library_columns_landscape_key", 0)
     fun novelLandscapeColumns() = preferenceStore.getInt("pref_novellib_columns_landscape_key", 0)
 
     // Mixture Filter
 
-    fun filterDownloadedAnime() =
+    fun filterDownloadedShows() =
         preferenceStore.getEnum("pref_filter_animelib_downloaded_v2", TriState.DISABLED)
 
     fun filterDownloadedManga() =
@@ -153,7 +153,7 @@ class LibraryPreferences(
     fun filterUnreadNovel() =
         preferenceStore.getEnum("pref_filter_novellib_unread_v2", TriState.DISABLED)
 
-    fun filterStartedAnime() =
+    fun filterStartedShows() =
         preferenceStore.getEnum("pref_filter_animelib_started_v2", TriState.DISABLED)
 
     fun filterStartedManga() =
@@ -162,7 +162,7 @@ class LibraryPreferences(
     fun filterStartedNovel() =
         preferenceStore.getEnum("pref_filter_novellib_started_v2", TriState.DISABLED)
 
-    fun filterBookmarkedAnime() =
+    fun filterBookmarkedShows() =
         preferenceStore.getEnum("pref_filter_animelib_bookmarked_v2", TriState.DISABLED)
 
     fun filterBookmarkedManga() =
@@ -171,7 +171,7 @@ class LibraryPreferences(
     fun filterBookmarkedNovel() =
         preferenceStore.getEnum("pref_filter_novellib_bookmarked_v2", TriState.DISABLED)
 
-    fun filterCompletedAnime() =
+    fun filterCompletedShows() =
         preferenceStore.getEnum("pref_filter_animelib_completed_v2", TriState.DISABLED)
 
     fun filterCompletedManga() =
@@ -180,7 +180,7 @@ class LibraryPreferences(
     fun filterCompletedNovel() =
         preferenceStore.getEnum("pref_filter_novellib_completed_v2", TriState.DISABLED)
 
-    fun filterTrackedAnime(id: Int) =
+    fun filterTrackedShows(id: Int) =
         preferenceStore.getEnum("pref_filter_animelib_tracked_${id}_v2", TriState.DISABLED)
 
     fun filterTrackedManga(id: Int) =
@@ -198,20 +198,20 @@ class LibraryPreferences(
     // Mixture Update Count
 
     fun newMangaUpdatesCount() = preferenceStore.getInt("library_unread_updates_count", 0)
-    fun newAnimeUpdatesCount() = preferenceStore.getInt("library_unseen_updates_count", 0)
+    fun newShowsUpdatesCount() = preferenceStore.getInt("library_unseen_updates_count", 0)
     fun newNovelUpdatesCount() = preferenceStore.getInt("library_novel_updates_count", 0)
 
     // Mixture Collection
 
-    fun defaultAnimeCollection() = preferenceStore.getInt(DEFAULT_ANIME_COLLECTION_PREF_KEY, -1)
+    fun defaultShowsCollection() = preferenceStore.getInt(DEFAULT_ANIME_COLLECTION_PREF_KEY, -1)
     fun defaultMangaCollection() = preferenceStore.getInt(DEFAULT_MANGA_COLLECTION_PREF_KEY, -1)
     fun defaultNovelCollection() = preferenceStore.getInt(DEFAULT_NOVEL_COLLECTION_PREF_KEY, -1)
 
-    fun lastUsedAnimeCollection() = preferenceStore.getInt(Preference.appStateKey("last_used_anime_category"), 0)
+    fun lastUsedShowsCollection() = preferenceStore.getInt(Preference.appStateKey("last_used_anime_category"), 0)
     fun lastUsedMangaCollection() = preferenceStore.getInt(Preference.appStateKey("last_used_category"), 0)
     fun lastUsedNovelCollection() = preferenceStore.getInt(Preference.appStateKey("last_used_novel_category"), 0)
 
-    fun animeUpdateCollections() =
+    fun showsUpdateCollections() =
         preferenceStore.getStringSet(LIBRARY_UPDATE_ANIME_COLLECTIONS_PREF_KEY, emptySet())
 
     fun mangaUpdateCollections() =
@@ -220,7 +220,7 @@ class LibraryPreferences(
     fun novelUpdateCollections() =
         preferenceStore.getStringSet(LIBRARY_UPDATE_NOVEL_COLLECTIONS_PREF_KEY, emptySet())
 
-    fun animeUpdateCollectionsExclude() =
+    fun showsUpdateCollectionsExclude() =
         preferenceStore.getStringSet(LIBRARY_UPDATE_ANIME_COLLECTIONS_EXCLUDE_PREF_KEY, emptySet())
 
     fun mangaUpdateCollectionsExclude() =

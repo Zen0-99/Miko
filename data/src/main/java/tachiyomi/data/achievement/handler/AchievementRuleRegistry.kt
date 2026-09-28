@@ -34,7 +34,7 @@ import tachiyomi.data.achievement.rules.TimeParadoxRule
 import tachiyomi.data.achievement.rules.TrinityRule
 import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.domain.achievement.rule.AchievementRule
-import tachiyomi.domain.entries.anime.repository.AnimeRepository
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 
@@ -62,13 +62,13 @@ class AchievementRuleRegistry(
             CompletionCountRule("complete_10_novel", AchievementCategory.NOVEL),
             CompletionCountRule("complete_50_novel", AchievementCategory.NOVEL),
 
-            QuantityRule("watch_10_episodes", AchievementCategory.ANIME),
-            QuantityRule("watch_50_episodes", AchievementCategory.ANIME),
-            QuantityRule("watch_100_episodes", AchievementCategory.ANIME),
-            QuantityRule("watch_500_episodes", AchievementCategory.ANIME),
-            QuantityRule("watch_1000_episodes", AchievementCategory.ANIME),
-            CompletionCountRule("complete_10_anime", AchievementCategory.ANIME),
-            CompletionCountRule("complete_50_anime", AchievementCategory.ANIME),
+            QuantityRule("watch_10_episodes", AchievementCategory.SHOWS),
+            QuantityRule("watch_50_episodes", AchievementCategory.SHOWS),
+            QuantityRule("watch_100_episodes", AchievementCategory.SHOWS),
+            QuantityRule("watch_500_episodes", AchievementCategory.SHOWS),
+            QuantityRule("watch_1000_episodes", AchievementCategory.SHOWS),
+            CompletionCountRule("complete_10_anime", AchievementCategory.SHOWS),
+            CompletionCountRule("complete_50_anime", AchievementCategory.SHOWS),
 
             QuantityRule("content_master", AchievementCategory.BOTH),
             QuantityRule("content_god", AchievementCategory.BOTH),

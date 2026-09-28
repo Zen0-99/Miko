@@ -83,7 +83,11 @@ class ExtensionRepoService(
         return try {
             val response = client.newCall(GET("$repo/index.pb")).awaitSuccess()
             val bytes = response.body.bytes()
-            logcat(LogPriority.DEBUG) { "Proto index from $repo: ${bytes.size} bytes, first bytes: ${bytes.take(2).map { b -> String.format("%02X", b) }.joinToString(" ")}" }
+            logcat(LogPriority.DEBUG) {
+                "Proto index from $repo: ${bytes.size} bytes, first bytes: ${bytes.take(2).map { b ->
+                    String.format("%02X", b)
+                }.joinToString(" ")}"
+            }
             val decompressed = maybeGunzip(bytes)
             logcat(LogPriority.DEBUG) { "After gunzip: ${decompressed.size} bytes" }
             val index = ProtoBuf.decodeFromByteArray(IndexProto.serializer(), decompressed)
@@ -147,32 +151,43 @@ class ExtensionRepoService(
             .removeSuffix("/plugins.json")
             .removeSuffix("/index.json")
 
-        // First, check if this is an LNReader plugin repo (plugins.min.json)
+        val types = mutableSetOf<String>()
+
+        // LNReader plugin index (plugins.min.json/plugins.json) marks a
+        // novel repo — but don't short-circuit: a combined repo like MikoDB
+        // ships both a plugin index AND an extension index.pb, and must
+        // register in every matching tab.
         if (hasLnReaderPluginIndex(baseUrl)) {
-            return setOf("novel")
+            types.add("novel")
         }
 
-        val entries = fetchExtensionIndex(baseUrl) ?: return setOf("manga")
-        if (entries.isEmpty()) return setOf("manga")
+        val entries = fetchExtensionIndex(baseUrl)
+        if (entries == null || entries.isEmpty()) {
+            return if (types.isEmpty()) setOf("manga") else types
+        }
 
-        val types = mutableSetOf<String>()
         for (entry in entries) {
             val pkg = entry.pkgName.lowercase()
             val name = entry.name.lowercase()
             // A single extension can match multiple categories — check each
             // independently so repos serving multiple types (e.g. Keiyoushi
             // serving both manga and anime) are detected for all types.
-            if (pkg.contains(".novel.") || pkg.contains("yokai.extension.novel") ||
-                pkg.contains("tachiyomi.novel") || name.contains("novel")
+            if (pkg.contains(".novel.") ||
+                pkg.contains("yokai.extension.novel") ||
+                pkg.contains("tachiyomi.novel") ||
+                name.contains("novel")
             ) {
                 types.add("novel")
             }
-            if (pkg.contains(".anime.") || pkg.contains("aniyomi") ||
-                pkg.contains("jmiri.anime") || name.contains("anime")
+            if (pkg.contains(".anime.") ||
+                pkg.contains("aniyomi") ||
+                pkg.contains("jmiri.anime") ||
+                name.contains("anime")
             ) {
                 types.add("anime")
             }
-            if (pkg.contains("tachiyomi.extension") || pkg.contains("tachiyomi.manga") ||
+            if (pkg.contains("tachiyomi.extension") ||
+                pkg.contains("tachiyomi.manga") ||
                 pkg.contains("keiyoushi")
             ) {
                 types.add("manga")

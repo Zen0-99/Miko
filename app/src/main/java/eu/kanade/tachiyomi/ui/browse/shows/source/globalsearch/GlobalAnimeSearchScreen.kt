@@ -1,0 +1,82 @@
+package eu.kanade.tachiyomi.ui.browse.shows.source.globalsearch
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import cafe.adriel.voyager.core.model.rememberScreenModel
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.core.util.ifAnimeSourcesLoaded
+import eu.kanade.presentation.browse.shows.GlobalAnimeSearchScreen
+import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.ui.browse.shows.source.browse.BrowseAnimeSourceScreen
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
+import tachiyomi.presentation.core.screens.LoadingScreen
+
+class GlobalAnimeSearchScreen(
+    val searchQuery: String = "",
+    private val extensionFilter: String? = null,
+) : Screen() {
+
+    @Composable
+    override fun Content() {
+        if (!ifAnimeSourcesLoaded()) {
+            LoadingScreen()
+            return
+        }
+
+        val navigator = LocalNavigator.currentOrThrow
+
+        val screenModel = rememberScreenModel {
+            GlobalAnimeSearchScreenModel(
+                initialQuery = searchQuery,
+                initialExtensionFilter = extensionFilter,
+            )
+        }
+        val state by screenModel.state.collectAsState()
+        var showSingleLoadingScreen by remember {
+            mutableStateOf(
+                searchQuery.isNotEmpty() && !extensionFilter.isNullOrEmpty() && state.total == 1,
+            )
+        }
+
+        if (showSingleLoadingScreen) {
+            LoadingScreen()
+
+            LaunchedEffect(state.items) {
+                when (val result = state.items.values.singleOrNull()) {
+                    AnimeSearchItemResult.Loading -> return@LaunchedEffect
+                    is AnimeSearchItemResult.Success -> {
+                        val anime = result.result.singleOrNull()
+                        if (anime != null) {
+                            navigator.replace(ShowsScreen(anime.id, true))
+                        } else {
+                            // Backoff to result screen
+                            showSingleLoadingScreen = false
+                        }
+                    }
+                    else -> showSingleLoadingScreen = false
+                }
+            }
+        } else {
+            GlobalAnimeSearchScreen(
+                state = state,
+                navigateUp = navigator::pop,
+                onChangeSearchQuery = screenModel::updateSearchQuery,
+                onSearch = { screenModel.search() },
+                getAnime = { screenModel.getAnime(it) },
+                onChangeSearchFilter = screenModel::setSourceFilter,
+                onToggleResults = screenModel::toggleFilterResults,
+                onClickSource = {
+                    navigator.push(BrowseAnimeSourceScreen(it.id, state.searchQuery))
+                },
+                onClickItem = { navigator.push(ShowsScreen(it.id, true)) },
+                onLongClickItem = { navigator.push(ShowsScreen(it.id, true)) },
+            )
+        }
+    }
+}

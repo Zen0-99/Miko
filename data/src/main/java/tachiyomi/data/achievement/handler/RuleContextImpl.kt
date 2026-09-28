@@ -13,7 +13,7 @@ import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.achievement.model.AchievementProgress
 import tachiyomi.domain.achievement.rule.RuleContext
-import tachiyomi.domain.entries.anime.repository.AnimeRepository
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 
@@ -36,7 +36,7 @@ class RuleContextImpl(
             AchievementCategory.MANGA -> {
                 mangaHandler.awaitOneOrNull { chaptersQueries.getTotalReadChapterCount() }?.toInt() ?: 0
             }
-            AchievementCategory.ANIME -> {
+            AchievementCategory.SHOWS -> {
                 animeHandler.awaitOneOrNull { episodesQueries.getTotalSeenEpisodeCount() }?.toInt() ?: 0
             }
             AchievementCategory.NOVEL -> {
@@ -45,7 +45,8 @@ class RuleContextImpl(
             AchievementCategory.BOTH, AchievementCategory.SECRET -> {
                 val manga = mangaHandler.awaitOneOrNull { chaptersQueries.getTotalReadChapterCount() }?.toInt() ?: 0
                 val anime = animeHandler.awaitOneOrNull { episodesQueries.getTotalSeenEpisodeCount() }?.toInt() ?: 0
-                val novel = novelHandler.awaitOneOrNull { novelchaptersQueries.getTotalReadNovelChapterCount() }?.toInt() ?: 0
+                val novel =
+                    novelHandler.awaitOneOrNull { novelchaptersQueries.getTotalReadNovelChapterCount() }?.toInt() ?: 0
                 manga + anime + novel
             }
         }
@@ -54,7 +55,7 @@ class RuleContextImpl(
     override suspend fun getLibraryCount(category: AchievementCategory): Int {
         return when (category) {
             AchievementCategory.MANGA -> mangaRepository.getLibraryManga().size
-            AchievementCategory.ANIME -> animeRepository.getLibraryAnime().size
+            AchievementCategory.SHOWS -> animeRepository.getLibraryAnime().size
             AchievementCategory.NOVEL -> novelRepository.getLibraryNovels().size
             AchievementCategory.BOTH, AchievementCategory.SECRET -> {
                 mangaRepository.getLibraryManga().size +
@@ -68,7 +69,10 @@ class RuleContextImpl(
         val completedStatus = SManga.COMPLETED.toLong()
         return when (category) {
             AchievementCategory.MANGA -> mangaRepository.getLibraryManga().count { it.manga.status == completedStatus }
-            AchievementCategory.ANIME -> animeRepository.getLibraryAnime().count { it.anime.status == SAnime.COMPLETED.toLong() }
+            AchievementCategory.SHOWS -> animeRepository.getLibraryAnime().count {
+                it.anime.status ==
+                    SAnime.COMPLETED.toLong()
+            }
             AchievementCategory.NOVEL -> novelRepository.getLibraryNovels().count { it.novel.status == completedStatus }
             AchievementCategory.BOTH, AchievementCategory.SECRET -> {
                 mangaRepository.getLibraryManga().count { it.manga.status == completedStatus } +
@@ -82,7 +86,10 @@ class RuleContextImpl(
         val ongoingStatus = SManga.ONGOING.toLong()
         return when (category) {
             AchievementCategory.MANGA -> mangaRepository.getLibraryManga().count { it.manga.status == ongoingStatus }
-            AchievementCategory.ANIME -> animeRepository.getLibraryAnime().count { it.anime.status == SAnime.ONGOING.toLong() }
+            AchievementCategory.SHOWS -> animeRepository.getLibraryAnime().count {
+                it.anime.status ==
+                    SAnime.ONGOING.toLong()
+            }
             AchievementCategory.NOVEL -> novelRepository.getLibraryNovels().count { it.novel.status == ongoingStatus }
             AchievementCategory.BOTH, AchievementCategory.SECRET -> {
                 mangaRepository.getLibraryManga().count { it.manga.status == ongoingStatus } +
@@ -95,7 +102,7 @@ class RuleContextImpl(
     override suspend fun getGenreDiversity(category: AchievementCategory): Int {
         return when (category) {
             AchievementCategory.MANGA -> diversityChecker.getMangaGenreDiversity()
-            AchievementCategory.ANIME -> diversityChecker.getAnimeGenreDiversity()
+            AchievementCategory.SHOWS -> diversityChecker.getAnimeGenreDiversity()
             AchievementCategory.NOVEL -> diversityChecker.getNovelGenreDiversity()
             AchievementCategory.BOTH, AchievementCategory.SECRET -> diversityChecker.getGenreDiversity()
         }
@@ -104,7 +111,7 @@ class RuleContextImpl(
     override suspend fun getSourceDiversity(category: AchievementCategory): Int {
         return when (category) {
             AchievementCategory.MANGA -> diversityChecker.getMangaSourceDiversity()
-            AchievementCategory.ANIME -> diversityChecker.getAnimeSourceDiversity()
+            AchievementCategory.SHOWS -> diversityChecker.getAnimeSourceDiversity()
             AchievementCategory.NOVEL -> diversityChecker.getNovelSourceDiversity()
             AchievementCategory.BOTH, AchievementCategory.SECRET -> diversityChecker.getSourceDiversity()
         }
@@ -113,18 +120,32 @@ class RuleContextImpl(
     override suspend fun hasCompletedWithMinChapters(category: AchievementCategory, minChapters: Int): Boolean {
         return when (category) {
             AchievementCategory.MANGA -> {
-                mangaHandler.awaitOneOrNull { mangasQueries.hasCompletedLibraryMangaWithMinReadChapters(minChapters.toLong()) } ?: false
+                mangaHandler.awaitOneOrNull {
+                    mangasQueries.hasCompletedLibraryMangaWithMinReadChapters(minChapters.toLong())
+                }
+                    ?: false
             }
-            AchievementCategory.ANIME -> {
+            AchievementCategory.SHOWS -> {
                 // No anime equivalent query — anime don't have "chapters"
                 false
             }
             AchievementCategory.NOVEL -> {
-                novelHandler.awaitOneOrNull { novelsQueries.hasCompletedLibraryNovelWithMinReadChapters(minChapters.toLong()) } ?: false
+                novelHandler.awaitOneOrNull {
+                    novelsQueries.hasCompletedLibraryNovelWithMinReadChapters(minChapters.toLong())
+                }
+                    ?: false
             }
             AchievementCategory.BOTH, AchievementCategory.SECRET -> {
-                val manga = mangaHandler.awaitOneOrNull { mangasQueries.hasCompletedLibraryMangaWithMinReadChapters(minChapters.toLong()) } ?: false
-                val novel = novelHandler.awaitOneOrNull { novelsQueries.hasCompletedLibraryNovelWithMinReadChapters(minChapters.toLong()) } ?: false
+                val manga =
+                    mangaHandler.awaitOneOrNull {
+                        mangasQueries.hasCompletedLibraryMangaWithMinReadChapters(minChapters.toLong())
+                    }
+                        ?: false
+                val novel =
+                    novelHandler.awaitOneOrNull {
+                        novelsQueries.hasCompletedLibraryNovelWithMinReadChapters(minChapters.toLong())
+                    }
+                        ?: false
                 manga || novel
             }
         }

@@ -6,6 +6,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.graphics.res.animatedVectorResource
+import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
+import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,13 +19,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,37 +33,29 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import tachiyomi.presentation.core.util.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -72,43 +65,43 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.animation.graphics.res.animatedVectorResource
-import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
-import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
-import eu.kanade.presentation.components.AppBarActions
-import eu.kanade.presentation.components.globalOverflowActions
-import eu.kanade.presentation.components.useSharedTopBar
-import kotlinx.collections.immutable.persistentListOf
-import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import coil3.compose.AsyncImage
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
-import eu.kanade.tachiyomi.R
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.globalOverflowActions
+import eu.kanade.presentation.components.useSharedTopBar
 import eu.kanade.presentation.util.Tab
+import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.metadata.stream.StreamResolver
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
+import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
 import eu.kanade.tachiyomi.ui.history.HistoriesTab
-import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
+import eu.kanade.tachiyomi.ui.library.shows.ShowsLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
 import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
+import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
-import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
-import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
-import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
-import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -227,119 +220,119 @@ private fun HomeHubContent(
                 ),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-            // --- Hero Card ---
-            item(key = "hero") {
-                state.hero?.let { hero ->
-                    HomeHubHeroCard(hero = hero)
-                } ?: HomeHubHeroPlaceholder()
-            }
+                // --- Hero Card ---
+                item(key = "hero") {
+                    state.hero?.let { hero ->
+                        HomeHubHeroCard(hero = hero)
+                    } ?: HomeHubHeroPlaceholder()
+                }
 
-            // --- Mode-aware section filtering ---
-            when (state.currentMode) {
-                ContentMode.ANIME -> {
-                    if (state.recentAnime.isNotEmpty()) {
-                        item(key = "recent_anime_header") {
-                            SectionHeader(
-                                title = stringResource(AYMR.strings.label_recent_anime),
-                                onViewAll = { tabNavigator.current = HistoriesTab },
-                            )
+                // --- Mode-aware section filtering ---
+                when (state.currentMode) {
+                    ContentMode.SHOWS -> {
+                        if (state.recentAnime.isNotEmpty()) {
+                            item(key = "recent_anime_header") {
+                                SectionHeader(
+                                    title = stringResource(AYMR.strings.label_recent_anime),
+                                    onViewAll = { tabNavigator.current = HistoriesTab },
+                                )
+                            }
+                            item(key = "recent_anime_row") {
+                                HistoryRow(
+                                    items = state.recentAnimeCards,
+                                    onItemClick = { navigator.push(ShowsScreen(it.id)) },
+                                    selection = state.selection,
+                                    onToggleSelection = { screenModel.toggleSelection(it) },
+                                )
+                            }
                         }
-                        item(key = "recent_anime_row") {
-                            HistoryRow(
-                                items = state.recentAnimeCards,
-                                onItemClick = { navigator.push(AnimeScreen(it.id)) },
-                                selection = state.selection,
-                                onToggleSelection = { screenModel.toggleSelection(it) },
-                            )
-                        }
-                    }
-                    if (state.recentlyAddedAnime.isNotEmpty()) {
-                        item(key = "recently_added_anime_header") {
-                            SectionHeader(
-                                title = stringResource(AYMR.strings.label_recently_added_anime),
-                                onViewAll = { tabNavigator.current = AnimeLibraryTab },
-                            )
-                        }
-                        item(key = "recently_added_anime_row") {
-                            HistoryRow(
-                                items = state.recentlyAddedAnimeCards,
-                                onItemClick = { navigator.push(AnimeScreen(it.id)) },
-                                selection = state.selection,
-                                onToggleSelection = { screenModel.toggleSelection(it) },
-                            )
-                        }
-                    }
-                }
-                ContentMode.MANGA -> {
-                    if (state.recentManga.isNotEmpty()) {
-                        item(key = "recent_manga_header") {
-                            SectionHeader(
-                                title = stringResource(MR.strings.label_recent_manga),
-                                onViewAll = { tabNavigator.current = HistoriesTab },
-                            )
-                        }
-                        item(key = "recent_manga_row") {
-                            HistoryRow(
-                                items = state.recentMangaCards,
-                                onItemClick = { navigator.push(MangaScreen(it.id)) },
-                                selection = state.selection,
-                                onToggleSelection = { screenModel.toggleSelection(it) },
-                            )
+                        if (state.recentlyAddedAnime.isNotEmpty()) {
+                            item(key = "recently_added_anime_header") {
+                                SectionHeader(
+                                    title = stringResource(AYMR.strings.label_recently_added_anime),
+                                    onViewAll = { tabNavigator.current = ShowsLibraryTab },
+                                )
+                            }
+                            item(key = "recently_added_anime_row") {
+                                HistoryRow(
+                                    items = state.recentlyAddedAnimeCards,
+                                    onItemClick = { navigator.push(ShowsScreen(it.id)) },
+                                    selection = state.selection,
+                                    onToggleSelection = { screenModel.toggleSelection(it) },
+                                )
+                            }
                         }
                     }
-                    if (state.recentlyAddedManga.isNotEmpty()) {
-                        item(key = "recently_added_manga_header") {
-                            SectionHeader(
-                                title = stringResource(AYMR.strings.label_recently_added_manga),
-                                onViewAll = { tabNavigator.current = MangaLibraryTab },
-                            )
+                    ContentMode.MANGA -> {
+                        if (state.recentManga.isNotEmpty()) {
+                            item(key = "recent_manga_header") {
+                                SectionHeader(
+                                    title = stringResource(MR.strings.label_recent_manga),
+                                    onViewAll = { tabNavigator.current = HistoriesTab },
+                                )
+                            }
+                            item(key = "recent_manga_row") {
+                                HistoryRow(
+                                    items = state.recentMangaCards,
+                                    onItemClick = { navigator.push(MangaScreen(it.id)) },
+                                    selection = state.selection,
+                                    onToggleSelection = { screenModel.toggleSelection(it) },
+                                )
+                            }
                         }
-                        item(key = "recently_added_manga_row") {
-                            HistoryRow(
-                                items = state.recentlyAddedMangaCards,
-                                onItemClick = { navigator.push(MangaScreen(it.id)) },
-                                selection = state.selection,
-                                onToggleSelection = { screenModel.toggleSelection(it) },
-                            )
+                        if (state.recentlyAddedManga.isNotEmpty()) {
+                            item(key = "recently_added_manga_header") {
+                                SectionHeader(
+                                    title = stringResource(AYMR.strings.label_recently_added_manga),
+                                    onViewAll = { tabNavigator.current = MangaLibraryTab },
+                                )
+                            }
+                            item(key = "recently_added_manga_row") {
+                                HistoryRow(
+                                    items = state.recentlyAddedMangaCards,
+                                    onItemClick = { navigator.push(MangaScreen(it.id)) },
+                                    selection = state.selection,
+                                    onToggleSelection = { screenModel.toggleSelection(it) },
+                                )
+                            }
                         }
                     }
-                }
-                ContentMode.NOVEL -> {
-                    if (state.recentNovels.isNotEmpty()) {
-                        item(key = "recent_novels_header") {
-                            SectionHeader(
-                                title = stringResource(AYMR.strings.label_recent_novels),
-                                onViewAll = { tabNavigator.current = HistoriesTab },
-                            )
+                    ContentMode.NOVEL -> {
+                        if (state.recentNovels.isNotEmpty()) {
+                            item(key = "recent_novels_header") {
+                                SectionHeader(
+                                    title = stringResource(AYMR.strings.label_recent_novels),
+                                    onViewAll = { tabNavigator.current = HistoriesTab },
+                                )
+                            }
+                            item(key = "recent_novels_row") {
+                                HistoryRow(
+                                    items = state.recentNovelCards,
+                                    onItemClick = { navigator.push(NovelScreen(it.id)) },
+                                    selection = state.selection,
+                                    onToggleSelection = { screenModel.toggleSelection(it) },
+                                )
+                            }
                         }
-                        item(key = "recent_novels_row") {
-                            HistoryRow(
-                                items = state.recentNovelCards,
-                                onItemClick = { navigator.push(NovelScreen(it.id)) },
-                                selection = state.selection,
-                                onToggleSelection = { screenModel.toggleSelection(it) },
-                            )
-                        }
-                    }
-                    if (state.recentlyAddedNovels.isNotEmpty()) {
-                        item(key = "recently_added_novels_header") {
-                            SectionHeader(
-                                title = stringResource(AYMR.strings.label_recently_added_novels),
-                                onViewAll = { tabNavigator.current = NovelLibraryTab },
-                            )
-                        }
-                        item(key = "recently_added_novels_row") {
-                            HistoryRow(
-                                items = state.recentlyAddedNovelCards,
-                                onItemClick = { navigator.push(NovelScreen(it.id)) },
-                                selection = state.selection,
-                                onToggleSelection = { screenModel.toggleSelection(it) },
-                            )
+                        if (state.recentlyAddedNovels.isNotEmpty()) {
+                            item(key = "recently_added_novels_header") {
+                                SectionHeader(
+                                    title = stringResource(AYMR.strings.label_recently_added_novels),
+                                    onViewAll = { tabNavigator.current = NovelLibraryTab },
+                                )
+                            }
+                            item(key = "recently_added_novels_row") {
+                                HistoryRow(
+                                    items = state.recentlyAddedNovelCards,
+                                    onItemClick = { navigator.push(NovelScreen(it.id)) },
+                                    selection = state.selection,
+                                    onToggleSelection = { screenModel.toggleSelection(it) },
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
         }
     }
 }
@@ -353,6 +346,9 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
     val scope = rememberCoroutineScope()
     val playerPreferences: PlayerPreferences by injectLazy()
     val uiPreferences = remember { Injekt.get<UiPreferences>() }
+    val audiobookPlayer = remember { Injekt.get<AudiobookPlayerController>() }
+    val getNovel = remember { Injekt.get<GetNovel>() }
+    val streamResolver = remember { Injekt.get<StreamResolver>() }
     val panEnabled by uiPreferences.heroImagePanEnabled().collectAsState()
 
     // Slow vertical pan with eased curve — resource efficient:
@@ -370,12 +366,31 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
     val density = LocalDensity.current
     val panOffsetPx = with(density) { panOffsetDp.dp.toPx() }
 
-    val progressLabel = when (hero.mediaType) {
-        HomeHubMediaType.ANIME -> stringResource(AYMR.strings.home_hero_episode_progress, hero.progressNumber.toFloat())
-        HomeHubMediaType.MANGA -> stringResource(AYMR.strings.home_hero_chapter_progress, hero.progressNumber.toFloat())
-        HomeHubMediaType.NOVEL -> {
-            // Prefer chapter title; fall back to "Chapter X" if no title
-            hero.chapterTitle?.takeIf { it.isNotBlank() } ?: stringResource(AYMR.strings.home_hero_chapter_progress, hero.progressNumber.toFloat())
+    val progressLabel = when {
+        // Movies have one virtual episode — "Episode 1" is meaningless,
+        // show the runtime ("2h 07min") instead.
+        hero.isCinemetaMovie ->
+            eu.kanade.presentation.util.formatRuntime(hero.runtime) ?: ""
+        hero.mediaType == HomeHubMediaType.SHOWS -> {
+            // Include the season for multi-season series ("S2 · Episode 5").
+            val epText = hero.season?.takeIf { it > 0 }
+                ?.let { "S$it · ${eu.kanade.presentation.util.formatEpisodeNumber(hero.progressNumber)}" }
+                ?: eu.kanade.presentation.util.formatEpisodeNumber(hero.progressNumber)
+            stringResource(AYMR.strings.home_hero_episode_progress, epText)
+        }
+        else -> when (hero.mediaType) {
+            HomeHubMediaType.MANGA -> stringResource(
+                AYMR.strings.home_hero_chapter_progress,
+                eu.kanade.presentation.util.formatChapterNumber(hero.progressNumber),
+            )
+            HomeHubMediaType.NOVEL -> {
+                // Prefer chapter title; fall back to "Chapter X" if no title
+                hero.chapterTitle?.takeIf { it.isNotBlank() } ?: stringResource(
+                    AYMR.strings.home_hero_chapter_progress,
+                    eu.kanade.presentation.util.formatChapterNumber(hero.progressNumber),
+                )
+            }
+            else -> ""
         }
     }
 
@@ -427,15 +442,24 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
             .clip(heroCardShape)
             .clickable {
                 when (hero.mediaType) {
-                    HomeHubMediaType.ANIME -> {
+                    HomeHubMediaType.SHOWS -> {
                         val extPlayer = playerPreferences.alwaysUseExternalPlayer().get()
                         scope.launch {
-                            MainActivity.startPlayerActivity(
-                                context = context,
-                                animeId = hero.entryId,
-                                episodeId = hero.subId,
-                                extPlayer = extPlayer,
-                            )
+                            // Cinemeta entries must resolve to the mapped
+                            // source episode before the player can open —
+                            // the stub source has no hosters. Unmapped
+                            // entries open the detail where the picker runs.
+                            val playable = streamResolver.resolvePlayableByIds(hero.entryId, hero.subId)
+                            if (playable != null) {
+                                MainActivity.startPlayerActivity(
+                                    context = context,
+                                    animeId = playable.first.id,
+                                    episodeId = playable.second.id,
+                                    extPlayer = extPlayer,
+                                )
+                            } else {
+                                navigator.push(ShowsScreen(hero.entryId))
+                            }
                         }
                     }
                     HomeHubMediaType.MANGA -> {
@@ -540,65 +564,119 @@ private fun HomeHubHeroCard(hero: HomeHubHero) {
             } else {
                 MaterialTheme.colorScheme.onPrimary
             }
+            // Continue-reading action (the current logic): resumes the entry
+            // in its reader/player.
+            val resumeRead: () -> Unit = {
+                when (hero.mediaType) {
+                    HomeHubMediaType.SHOWS -> {
+                        val extPlayer = playerPreferences.alwaysUseExternalPlayer().get()
+                        scope.launch {
+                            val playable = streamResolver.resolvePlayableByIds(hero.entryId, hero.subId)
+                            if (playable != null) {
+                                MainActivity.startPlayerActivity(
+                                    context = context,
+                                    animeId = playable.first.id,
+                                    episodeId = playable.second.id,
+                                    extPlayer = extPlayer,
+                                )
+                            } else {
+                                navigator.push(ShowsScreen(hero.entryId))
+                            }
+                        }
+                    }
+                    HomeHubMediaType.MANGA -> {
+                        context.startActivity(
+                            ReaderActivity.newIntent(context, hero.entryId, hero.subId),
+                        )
+                    }
+                    HomeHubMediaType.NOVEL -> {
+                        navigator.push(NovelReaderScreen(hero.entryId, hero.subId))
+                    }
+                }
+            }
+            // Continue-listening: resumes the *audio* position via the
+            // audiobook controller; falls back to the reader with live TTS.
+            val resumeListen: () -> Unit = {
+                scope.launch {
+                    val novel = getNovel.await(hero.entryId)
+                    if (novel != null && !audiobookPlayer.resumeListening(novel)) {
+                        navigator.push(
+                            NovelReaderScreen(hero.entryId, hero.subId, autoStartTts = true),
+                        )
+                    }
+                }
+            }
+            val isNovelHero = hero.mediaType == HomeHubMediaType.NOVEL && !hero.allRead
             Surface(
                 shape = CircleShape,
                 color = ctaColor,
-                modifier = Modifier
-                    .height(48.dp)
-                    .then(
-                        if (hero.allRead) {
-                            Modifier
-                        } else {
-                            Modifier.clickable {
-                                when (hero.mediaType) {
-                                    HomeHubMediaType.ANIME -> {
-                                        val extPlayer = playerPreferences.alwaysUseExternalPlayer().get()
-                                        scope.launch {
-                                            MainActivity.startPlayerActivity(
-                                                context = context,
-                                                animeId = hero.entryId,
-                                                episodeId = hero.subId,
-                                                extPlayer = extPlayer,
-                                            )
-                                        }
-                                    }
-                                    HomeHubMediaType.MANGA -> {
-                                        context.startActivity(
-                                            ReaderActivity.newIntent(context, hero.entryId, hero.subId),
-                                        )
-                                    }
-                                    HomeHubMediaType.NOVEL -> {
-                                        navigator.push(NovelReaderScreen(hero.entryId, hero.subId))
-                                    }
-                                }
-                            }
-                        },
-                    ),
+                modifier = Modifier.height(48.dp),
             ) {
-                Row(
-                    modifier = Modifier.padding(
-                        start = 20.dp,
-                        end = 22.dp,
-                        top = 8.dp,
-                        bottom = 8.dp,
-                    ),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (!hero.allRead) {
-                        Icon(
-                            imageVector = Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                            tint = ctaContentColor,
-                            modifier = Modifier.size(20.dp),
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isNovelHero) {
+                        Box(
+                            modifier = Modifier
+                                .height(48.dp)
+                                .clickable(onClick = resumeListen)
+                                .padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Headphones,
+                                contentDescription = stringResource(AYMR.strings.audiobook_continue_listening_cd),
+                                tint = ctaContentColor,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .height(18.dp)
+                                .width(1.dp)
+                                .background(ctaContentColor.copy(alpha = 0.35f)),
                         )
-                        Spacer(Modifier.width(8.dp))
                     }
-                    Text(
-                        text = ctaLabel,
-                        color = ctaContentColor,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .then(
+                                if (hero.allRead) {
+                                    Modifier
+                                } else {
+                                    Modifier.clickable(onClick = resumeRead)
+                                },
+                            )
+                            .padding(
+                                start = if (isNovelHero) 14.dp else 20.dp,
+                                end = if (isNovelHero) 16.dp else 22.dp,
+                                top = 8.dp,
+                                bottom = 8.dp,
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (!hero.allRead) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = if (isNovelHero) {
+                                    stringResource(MR.strings.action_resume)
+                                } else {
+                                    null
+                                },
+                                tint = ctaContentColor,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        if (!isNovelHero) {
+                            if (!hero.allRead) {
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(
+                                text = ctaLabel,
+                                color = ctaContentColor,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -803,13 +881,19 @@ private fun HistoryRow(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
-                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                else Color.Black.copy(alpha = 0.4f),
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                } else {
+                                    Color.Black.copy(alpha = 0.4f)
+                                },
                             )
                             .border(
                                 width = 3.dp,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary
-                                else Color.Transparent,
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    Color.Transparent
+                                },
                                 shape = cardShape,
                             ),
                     )
@@ -818,4 +902,3 @@ private fun HistoryRow(
         }
     }
 }
-

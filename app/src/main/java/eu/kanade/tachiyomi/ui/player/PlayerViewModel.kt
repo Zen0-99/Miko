@@ -43,7 +43,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.base.BasePreferences
-import eu.kanade.domain.entries.anime.interactor.SetAnimeViewerFlags
+import eu.kanade.domain.entries.shows.interactor.SetAnimeViewerFlags
 import eu.kanade.domain.items.episode.model.toDbEpisode
 import eu.kanade.domain.source.anime.interactor.GetAnimeIncognitoState
 import eu.kanade.domain.track.anime.interactor.TrackEpisode
@@ -63,8 +63,8 @@ import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.data.database.models.anime.Episode
 import eu.kanade.tachiyomi.data.database.models.anime.isRecognizedNumber
 import eu.kanade.tachiyomi.data.database.models.anime.toDomainEpisode
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
-import eu.kanade.tachiyomi.data.download.anime.model.AnimeDownload
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadManager
+import eu.kanade.tachiyomi.data.download.shows.model.ShowsDownload
 import eu.kanade.tachiyomi.data.saver.Image
 import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.saver.Location
@@ -115,15 +115,15 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
 import tachiyomi.domain.custombuttons.interactor.GetCustomButtons
 import tachiyomi.domain.custombuttons.model.CustomButton
 import tachiyomi.domain.download.service.DownloadPreferences
-import tachiyomi.domain.entries.anime.interactor.GetAnime
-import tachiyomi.domain.entries.anime.model.Anime
-import tachiyomi.domain.history.anime.interactor.GetNextEpisodes
-import tachiyomi.domain.history.anime.interactor.UpsertAnimeHistory
-import tachiyomi.domain.history.anime.model.AnimeHistoryUpdate
+import tachiyomi.domain.entries.shows.interactor.GetAnime
+import tachiyomi.domain.entries.shows.model.Anime
+import tachiyomi.domain.history.shows.interactor.GetNextEpisodes
+import tachiyomi.domain.history.shows.interactor.UpsertAnimeHistory
+import tachiyomi.domain.history.shows.model.AnimeHistoryUpdate
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.episode.interactor.UpdateEpisode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
@@ -155,7 +155,7 @@ class PlayerViewModel @JvmOverloads constructor(
     private val activity: PlayerActivity,
     private val savedState: SavedStateHandle,
     private val sourceManager: AnimeSourceManager = Injekt.get(),
-    private val downloadManager: AnimeDownloadManager = Injekt.get(),
+    private val downloadManager: ShowsDownloadManager = Injekt.get(),
     private val imageSaver: ImageSaver = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
     private val trackPreferences: TrackPreferences = Injekt.get(),
@@ -816,6 +816,13 @@ class PlayerViewModel @JvmOverloads constructor(
         _dismissSheet.update { _ -> false }
     }
 
+    val commentsEnabled: Boolean
+        get() = basePreferences.commentsEnabled().get()
+
+    fun showCommentsSheet() {
+        if (commentsEnabled) showSheet(Sheets.Comments)
+    }
+
     fun showSheet(sheet: Sheets) {
         sheetShown.update { sheet }
         if (sheet == Sheets.None) {
@@ -1268,7 +1275,7 @@ class PlayerViewModel @JvmOverloads constructor(
             field = value
         }
 
-    private var episodeToDownload: AnimeDownload? = null
+    private var episodeToDownload: ShowsDownload? = null
 
     private fun filterEpisodeList(episodes: List<Episode>): List<Episode> {
         val anime = currentAnime.value ?: return episodes
@@ -1407,9 +1414,12 @@ class PlayerViewModel @JvmOverloads constructor(
                     logcat(LogPriority.ERROR) {
                         "PlayerViewModel.init: episode $episodeId not found in playlist of ${currentPlaylist.value.size} episodes for anime $animeId"
                     }
-                    return Pair(defaultResult, Result.failure(
-                        RuntimeException("Episode not found in playlist (id=$episodeId, anime=$animeId)")
-                    ))
+                    return Pair(
+                        defaultResult,
+                        Result.failure(
+                            RuntimeException("Episode not found in playlist (id=$episodeId, anime=$animeId)"),
+                        ),
+                    )
                 }
                 val source = sourceManager.getOrStub(anime.source)
 
@@ -1765,7 +1775,10 @@ class PlayerViewModel @JvmOverloads constructor(
 
         val chosenEpisode = currentPlaylist.value.firstOrNull { ep -> ep.id == episodeId } ?: return null
 
-        android.util.Log.d("PlayerViewModel", "loadEpisode: anime='${anime.title}' (id=${anime.id}, source=${anime.source}), episode='${chosenEpisode.name}' (id=${chosenEpisode.id}, url='${chosenEpisode.url}'), source=${source.name} (id=${source.id})")
+        android.util.Log.d(
+            "PlayerViewModel",
+            "loadEpisode: anime='${anime.title}' (id=${anime.id}, source=${anime.source}), episode='${chosenEpisode.name}' (id=${chosenEpisode.id}, url='${chosenEpisode.url}'), source=${source.name} (id=${source.id})",
+        )
 
         _currentEpisode.update { _ -> chosenEpisode }
         updateEpisode(chosenEpisode)
@@ -1782,7 +1795,12 @@ class PlayerViewModel @JvmOverloads constructor(
                     source,
                 )
 
-                android.util.Log.d("PlayerViewModel", "loadEpisode: got ${currentHosterList?.size ?: 0} hosters, first hoster videos: ${currentHosterList?.firstOrNull()?.videoList?.take(3)?.map { it.videoUrl }}")
+                android.util.Log.d(
+                    "PlayerViewModel",
+                    "loadEpisode: got ${currentHosterList?.size ?: 0} hosters, " +
+                        "first hoster videos: " +
+                        "${currentHosterList?.firstOrNull()?.videoList?.take(3)?.map { it.videoUrl }}",
+                )
 
                 this@PlayerViewModel.episodeId = currentEpisode.id!!
             } catch (e: Exception) {

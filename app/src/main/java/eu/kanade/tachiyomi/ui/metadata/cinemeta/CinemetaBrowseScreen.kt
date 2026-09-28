@@ -28,18 +28,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
-import eu.kanade.presentation.library.components.EntryCompactGridItem
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
-import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.presentation.library.components.EntryCompactGridItem
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import tachiyomi.domain.entries.anime.model.AnimeCover
+import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.presentation.core.components.material.PullRefresh
@@ -66,11 +64,11 @@ fun CinemetaBrowseContent(
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val columns by (
         if (isLandscape) {
-            libraryPreferences.animeLandscapeColumns()
+            libraryPreferences.showsLandscapeColumns()
         } else {
-            libraryPreferences.animePortraitColumns()
+            libraryPreferences.showsPortraitColumns()
         }
-    ).collectAsState()
+        ).collectAsState()
 
     // Infinite scroll: load next page when near the end
     LaunchedEffect(gridState) {
@@ -141,136 +139,136 @@ fun CinemetaBrowseContent(
             onRefresh = { screenModel.refresh() },
             indicatorPadding = PaddingValues(top = contentPadding.calculateTopPadding()),
         ) {
-        when {
-            state.loading && state.metas.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
+            when {
+                state.loading && state.metas.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
                 }
-            }
 
-            state.error != null && state.metas.isEmpty() -> {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        text = state.error!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    Text(
-                        text = "Retry",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(top = 8.dp)
-                            .clickable { screenModel.retry() },
-                    )
-                }
-            }
-
-            state.metas.isEmpty() && !state.loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = if (state.searchQuery != null) {
-                            "No results for \"${state.searchQuery}\""
-                        } else {
-                            "No items found"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            else -> {
-                val gridColumns = if (columns > 0) columns else 3
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(gridColumns),
-                    state = gridState,
-                    contentPadding = PaddingValues(
-                        start = contentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-                        end = contentPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-                        top = 8.dp,
-                        bottom = contentPadding.calculateBottomPadding() + 8.dp,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridHorizontalSpacer),
-                    verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(state.metas.size) { index ->
-                        val meta = state.metas[index]
-                        val coverData = AnimeCover(
-                            animeId = meta.id.hashCode().toLong(),
-                            sourceId = CinemetaBrowseScreenModel.CINEMETA_SOURCE_ID,
-                            isAnimeFavorite = false,
-                            url = meta.poster,
-                            lastModified = 0L,
+                state.error != null && state.metas.isEmpty() -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = state.error!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
                         )
-                        val onClick: () -> Unit = {
-                            scope.launch {
-                                val animeId = screenModel.getOrCreateAnimeId(meta)
-                                navigator.push(AnimeScreen(animeId, true))
-                            }
-                        }
-                        val onLongClick: () -> Unit = {}
-
-                        when (displayMode) {
-                            LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
-                                EntryCompactGridItem(
-                                    coverData = coverData,
-                                    onClick = onClick,
-                                    onLongClick = onLongClick,
-                                    title = if (displayMode is LibraryDisplayMode.CompactGrid) {
-                                        meta.name
-                                    } else {
-                                        null
-                                    },
-                                )
-                            }
-
-                            LibraryDisplayMode.ComfortableGrid -> {
-                                EntryComfortableGridItem(
-                                    title = meta.name,
-                                    onClick = onClick,
-                                    onLongClick = onLongClick,
-                                    coverData = coverData,
-                                )
-                            }
-
-                            LibraryDisplayMode.List -> {
-                                // Fall back to comfortable grid for list mode in discover
-                                EntryComfortableGridItem(
-                                    title = meta.name,
-                                    onClick = onClick,
-                                    onLongClick = onLongClick,
-                                    coverData = coverData,
-                                )
-                            }
-                        }
+                        Text(
+                            text = "Retry",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .clickable { screenModel.retry() },
+                        )
                     }
-                    if (state.loading) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator()
+                }
+
+                state.metas.isEmpty() && !state.loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (state.searchQuery != null) {
+                                "No results for \"${state.searchQuery}\""
+                            } else {
+                                "No items found"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                else -> {
+                    val gridColumns = if (columns > 0) columns else 3
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(gridColumns),
+                        state = gridState,
+                        contentPadding = PaddingValues(
+                            start = contentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                            end = contentPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                            top = 8.dp,
+                            bottom = contentPadding.calculateBottomPadding() + 8.dp,
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridHorizontalSpacer),
+                        verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(state.metas.size) { index ->
+                            val meta = state.metas[index]
+                            val coverData = AnimeCover(
+                                animeId = meta.id.hashCode().toLong(),
+                                sourceId = CinemetaBrowseScreenModel.CINEMETA_SOURCE_ID,
+                                isAnimeFavorite = false,
+                                url = meta.poster,
+                                lastModified = 0L,
+                            )
+                            val onClick: () -> Unit = {
+                                scope.launch {
+                                    val animeId = screenModel.getOrCreateAnimeId(meta)
+                                    navigator.push(ShowsScreen(animeId, true))
+                                }
+                            }
+                            val onLongClick: () -> Unit = {}
+
+                            when (displayMode) {
+                                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+                                    EntryCompactGridItem(
+                                        coverData = coverData,
+                                        onClick = onClick,
+                                        onLongClick = onLongClick,
+                                        title = if (displayMode is LibraryDisplayMode.CompactGrid) {
+                                            meta.name
+                                        } else {
+                                            null
+                                        },
+                                    )
+                                }
+
+                                LibraryDisplayMode.ComfortableGrid -> {
+                                    EntryComfortableGridItem(
+                                        title = meta.name,
+                                        onClick = onClick,
+                                        onLongClick = onLongClick,
+                                        coverData = coverData,
+                                    )
+                                }
+
+                                LibraryDisplayMode.List -> {
+                                    // Fall back to comfortable grid for list mode in discover
+                                    EntryComfortableGridItem(
+                                        title = meta.name,
+                                        onClick = onClick,
+                                        onLongClick = onLongClick,
+                                        coverData = coverData,
+                                    )
+                                }
+                            }
+                        }
+                        if (state.loading) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator()
+                                }
                             }
                         }
                     }
                 }
             }
-        }
         } // PullRefresh
     }
 }

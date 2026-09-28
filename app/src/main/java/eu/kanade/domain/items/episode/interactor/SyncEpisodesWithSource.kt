@@ -1,16 +1,16 @@
 package eu.kanade.domain.items.episode.interactor
 
-import eu.kanade.domain.entries.anime.interactor.UpdateAnime
-import eu.kanade.domain.entries.anime.model.toSAnime
+import eu.kanade.domain.entries.shows.interactor.UpdateAnime
+import eu.kanade.domain.entries.shows.model.toSAnime
 import eu.kanade.domain.items.episode.model.copyFromSEpisode
 import eu.kanade.domain.items.episode.model.toSEpisode
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadProvider
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadManager
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadProvider
 import tachiyomi.data.items.episode.EpisodeSanitizer
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.episode.interactor.ShouldUpdateDbEpisode
 import tachiyomi.domain.items.episode.interactor.UpdateEpisode
@@ -26,8 +26,8 @@ import java.time.ZonedDateTime
 import java.util.TreeSet
 
 class SyncEpisodesWithSource(
-    private val downloadManager: AnimeDownloadManager,
-    private val downloadProvider: AnimeDownloadProvider,
+    private val downloadManager: ShowsDownloadManager,
+    private val downloadProvider: ShowsDownloadProvider,
     private val episodeRepository: EpisodeRepository,
     private val shouldUpdateDbEpisode: ShouldUpdateDbEpisode,
     private val updateAnime: UpdateAnime,

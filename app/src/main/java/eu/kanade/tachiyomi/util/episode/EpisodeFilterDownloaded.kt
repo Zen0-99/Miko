@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.util.episode
 
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadCache
-import tachiyomi.domain.entries.anime.model.Anime
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadCache
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.source.local.entries.anime.isLocal
 import uy.kohesive.injekt.Injekt
@@ -13,7 +13,7 @@ import uy.kohesive.injekt.api.get
 fun List<Episode>.filterDownloadedEpisodes(anime: Anime): List<Episode> {
     if (anime.isLocal()) return this
 
-    val downloadCache: AnimeDownloadCache = Injekt.get()
+    val downloadCache: ShowsDownloadCache = Injekt.get()
 
     return filter {
         downloadCache.isEpisodeDownloaded(

@@ -6,8 +6,6 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
-import miko.core.common.torrent.TorrentServerApi
-import miko.core.common.torrent.TorrentServerUtils
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import data.History
 import data.Mangas
@@ -23,59 +21,55 @@ import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.cache.MangaCoverCache
 import eu.kanade.tachiyomi.data.cache.NovelCoverCache
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadCache
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadProvider
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadCache
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadManager
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadProvider
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadProvider
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadCache
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
-import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
 import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
-import eu.kanade.tachiyomi.network.JavaScriptEngine
-import eu.kanade.tachiyomi.metadata.MetadataSourceManager
-import eu.kanade.tachiyomi.metadata.cinemeta.CinemetaMetadataSource
-import eu.kanade.tachiyomi.metadata.stream.SourceMappingCache
-import eu.kanade.tachiyomi.metadata.stream.StreamResolver
-import eu.kanade.tachiyomi.metadata.tmdb.TmdbSeasonPosters
-import eu.kanade.tachiyomi.metadata.stream.TitleMatcher
-import eu.kanade.tachiyomi.metadata.stream.LoadCinemetaEpisodes
-import eu.kanade.tachiyomi.network.NetworkHelper
-import eu.kanade.tachiyomi.source.anime.AndroidAnimeSourceManager
-import eu.kanade.tachiyomi.source.manga.AndroidMangaSourceManager
-import eu.kanade.tachiyomi.source.novel.AndroidNovelSourceManager
-import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager
+import eu.kanade.tachiyomi.extension.novel.NetworkNovelPluginDownloader
+import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.extension.novel.NovelPluginSourceFactory
+import eu.kanade.tachiyomi.extension.novel.api.NetworkNovelPluginIndexFetcher
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginApi
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginApiFacade
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginIndexFetcher
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginIndexParser
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginRepoProvider
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginRepoProviderImpl
-import eu.kanade.tachiyomi.extension.novel.api.NetworkNovelPluginIndexFetcher
+import eu.kanade.tachiyomi.extension.novel.runtime.NovelDomainAliasResolver
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelJsRuntimeFactory
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelJsSourceFactory
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginAssetBindings
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginRuntimeOverrides
-import eu.kanade.tachiyomi.extension.novel.runtime.NovelDomainAliasResolver
-import eu.kanade.tachiyomi.extension.novel.NetworkNovelPluginDownloader
-import tachiyomi.data.extension.novel.NovelPluginStorage
-import tachiyomi.data.extension.novel.AndroidNovelPluginKeyValueStore
-import tachiyomi.data.extension.novel.NovelPluginKeyValueStore
-import tachiyomi.data.extension.novel.NovelPluginDownloader
-import tachiyomi.data.extension.novel.NovelPluginInstaller
-import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
+import eu.kanade.tachiyomi.metadata.MetadataSourceManager
+import eu.kanade.tachiyomi.metadata.cinemeta.CinemetaMetadataSource
+import eu.kanade.tachiyomi.metadata.stream.LoadCinemetaEpisodes
+import eu.kanade.tachiyomi.metadata.stream.SourceMappingCache
+import eu.kanade.tachiyomi.metadata.stream.StreamResolver
+import eu.kanade.tachiyomi.metadata.stream.TitleMatcher
+import eu.kanade.tachiyomi.metadata.tmdb.TmdbSeasonPosters
+import eu.kanade.tachiyomi.network.JavaScriptEngine
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.source.anime.AndroidAnimeSourceManager
+import eu.kanade.tachiyomi.source.manga.AndroidMangaSourceManager
+import eu.kanade.tachiyomi.source.novel.AndroidNovelSourceManager
 import eu.kanade.tachiyomi.ui.player.ExternalIntents
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
 import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
-import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
+import miko.core.common.torrent.TorrentServerApi
+import miko.core.common.torrent.TorrentServerUtils
 import nl.adaptivity.xmlutil.XmlDeclMode.Charset
 import nl.adaptivity.xmlutil.core.XmlVersion
 import nl.adaptivity.xmlutil.serialization.XML
@@ -87,6 +81,12 @@ import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.NovelUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
+import tachiyomi.data.extension.novel.AndroidNovelPluginKeyValueStore
+import tachiyomi.data.extension.novel.NovelPluginDownloader
+import tachiyomi.data.extension.novel.NovelPluginInstaller
+import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
+import tachiyomi.data.extension.novel.NovelPluginKeyValueStore
+import tachiyomi.data.extension.novel.NovelPluginStorage
 import tachiyomi.data.handlers.anime.AndroidAnimeDatabaseHandler
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
 import tachiyomi.data.handlers.manga.AndroidMangaDatabaseHandler
@@ -325,6 +325,28 @@ class AppModule(val app: Application) : InjektModule {
         // --- Stream resolver wiring ---
         addSingletonFactory { TitleMatcher() }
         addSingletonFactory { SourceMappingCache(get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.MikoDbManager(app) }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge(
+                mapFile = { get<eu.kanade.tachiyomi.data.mikodb.MikoDbManager>().mangaMapFile() },
+            )
+        }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdResolver() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier(get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.GoldenSources() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterMap() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.SeriesMatcher() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalFeedCollector() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonizeWork() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.comments.CommentsApi() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.comments.DeviceIdentityProvider(app) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.comments.RulesetProvider() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.comments.ThreadIdResolver() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.comments.ChapterThreadResolver() }
         addSingletonFactory {
             StreamResolver(
                 sourceManager = get(),
@@ -334,6 +356,12 @@ class AppModule(val app: Application) : InjektModule {
                 stremioStreamAddonClient = get(),
                 stremioStreamResolver = get(),
                 stremioAddonConfig = get(),
+                mikoDbManager = get(),
+                animeExtensionManager = get(),
+                getAnime = get(),
+                getEpisode = get(),
+                getEpisodesByAnimeId = get(),
+                syncEpisodesWithSource = get(),
             )
         }
         addSingletonFactory {
@@ -354,8 +382,21 @@ class AppModule(val app: Application) : InjektModule {
                 torrentServerUtils = get(),
             )
         }
-        addSingletonFactory { LoadCinemetaEpisodes(get(), get()) }
+        addSingletonFactory { LoadCinemetaEpisodes(get(), get(), get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.metadata.stream.CinemetaEntryUnifier(get(), get(), get(), get()) }
         addSingletonFactory { TmdbSeasonPosters(get(), get()) }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.data.cover.HiResCoverResolver(
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+            )
+        }
 
         // --- JS novel plugin runtime wiring ---
         // Storage for plugin scripts and custom assets
@@ -370,7 +411,9 @@ class AppModule(val app: Application) : InjektModule {
         }
         // Network downloader for plugin scripts
         addSingletonFactory<tachiyomi.data.extension.novel.NovelPluginDownloader> {
-            eu.kanade.tachiyomi.extension.novel.NetworkNovelPluginDownloader(get<eu.kanade.tachiyomi.network.NetworkHelper>().client)
+            eu.kanade.tachiyomi.extension.novel.NetworkNovelPluginDownloader(
+                get<eu.kanade.tachiyomi.network.NetworkHelper>().client,
+            )
         }
         // Installer that downloads + verifies + stores plugin scripts
         addSingletonFactory<tachiyomi.data.extension.novel.NovelPluginInstallerFacade> {
@@ -447,9 +490,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { MangaDownloadManager(app) }
         addSingletonFactory { MangaDownloadCache(app) }
 
-        addSingletonFactory { AnimeDownloadProvider(app) }
-        addSingletonFactory { AnimeDownloadManager(app) }
-        addSingletonFactory { AnimeDownloadCache(app) }
+        addSingletonFactory { ShowsDownloadProvider(app) }
+        addSingletonFactory { ShowsDownloadManager(app) }
+        addSingletonFactory { ShowsDownloadCache(app) }
 
         addSingletonFactory { NovelDownloadProvider(app) }
         addSingletonFactory { NovelDownloadManager(app) }
@@ -475,8 +518,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory<tachiyomi.domain.entries.manga.repository.MangaRepository> {
             tachiyomi.data.entries.manga.MangaRepositoryImpl(get())
         }
-        addSingletonFactory<tachiyomi.domain.entries.anime.repository.AnimeRepository> {
-            tachiyomi.data.entries.anime.AnimeRepositoryImpl(get())
+        addSingletonFactory<tachiyomi.domain.entries.shows.repository.AnimeRepository> {
+            tachiyomi.data.entries.shows.AnimeRepositoryImpl(get())
         }
         addSingletonFactory<tachiyomi.domain.entries.novel.repository.NovelRepository> {
             tachiyomi.data.entries.novel.NovelRepositoryImpl(get())
@@ -498,7 +541,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { tachiyomi.data.achievement.handler.AchievementEventBus() }
         addSingletonFactory { tachiyomi.data.achievement.handler.FeatureUsageCollector(get()) }
         addSingletonFactory { tachiyomi.data.achievement.handler.SessionManager(get(), get()) }
-        addSingletonFactory { tachiyomi.data.achievement.handler.checkers.DiversityAchievementChecker(get(), get(), get()) }
+        addSingletonFactory {
+            tachiyomi.data.achievement.handler.checkers.DiversityAchievementChecker(get(), get(), get())
+        }
         addSingletonFactory { tachiyomi.data.achievement.handler.checkers.StreakAchievementChecker(get()) }
         addSingletonFactory { tachiyomi.data.achievement.handler.checkers.TimeBasedAchievementChecker(get(), get()) }
         addSingletonFactory { tachiyomi.data.achievement.handler.checkers.FeatureBasedAchievementChecker(get(), get()) }
@@ -569,7 +614,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { ExternalIntents() }
 
         addSingletonFactory { eu.kanade.domain.savedsearches.manga.MangaFilterSerializer() }
-        addSingletonFactory { eu.kanade.domain.savedsearches.anime.AnimeFilterSerializer() }
+        addSingletonFactory { eu.eu.kanade.domain.savedsearches.shows.AnimeFilterSerializer() }
         addSingletonFactory { eu.kanade.domain.savedsearches.novel.NovelFilterSerializer() }
 
         addSingletonFactory { TorrentServerApi(get(), get()) }
@@ -577,7 +622,7 @@ class AppModule(val app: Application) : InjektModule {
 
         // Suggestions pipeline
         addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.SuggestionCoordinator(get()) }
-        addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.anime.AnimeSearchFallbackEngine() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.shows.AnimeSearchFallbackEngine() }
         addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.manga.MangaSearchFallbackEngine() }
         addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.novel.NovelSearchFallbackEngine() }
         addSingletonFactory { eu.kanade.tachiyomi.data.suggestions.novel.NovelRelatedSuggestionCoordinator() }
@@ -593,7 +638,7 @@ class AppModule(val app: Application) : InjektModule {
             get<AnimeDatabase>()
 
             get<MangaDownloadManager>()
-            get<AnimeDownloadManager>()
+            get<ShowsDownloadManager>()
         }
     }
 }

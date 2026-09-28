@@ -1,7 +1,7 @@
 package tachiyomi.domain.items.episode.service
 
 import tachiyomi.core.common.util.lang.compareToWithCollator
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.items.episode.model.Episode
 
 fun getEpisodeSort(anime: Anime, sortDescending: Boolean = anime.sortDescending()): (

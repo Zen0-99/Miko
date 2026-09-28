@@ -44,7 +44,7 @@ import eu.kanade.presentation.track.manga.TrackDetailsItem
 import eu.kanade.presentation.track.manga.TrackInfoItemMenu
 import eu.kanade.tachiyomi.data.track.AnimeTracker
 import eu.kanade.tachiyomi.data.track.Tracker
-import eu.kanade.tachiyomi.ui.entries.anime.track.AnimeTrackItem
+import eu.kanade.tachiyomi.ui.entries.shows.track.ShowsTrackItem
 import eu.kanade.tachiyomi.util.lang.toLocalDate
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.i18n.MR
@@ -53,18 +53,18 @@ import java.time.format.DateTimeFormatter
 
 @Composable
 fun AnimeTrackInfoDialogHome(
-    trackItems: List<AnimeTrackItem>,
+    trackItems: List<ShowsTrackItem>,
     dateFormat: DateTimeFormatter,
-    onStatusClick: (AnimeTrackItem) -> Unit,
-    onEpisodeClick: (AnimeTrackItem) -> Unit,
-    onScoreClick: (AnimeTrackItem) -> Unit,
-    onStartDateEdit: (AnimeTrackItem) -> Unit,
-    onEndDateEdit: (AnimeTrackItem) -> Unit,
-    onNewSearch: (AnimeTrackItem) -> Unit,
-    onOpenInBrowser: (AnimeTrackItem) -> Unit,
-    onRemoved: (AnimeTrackItem) -> Unit,
-    onCopyLink: (AnimeTrackItem) -> Unit,
-    onTogglePrivate: (AnimeTrackItem) -> Unit,
+    onStatusClick: (ShowsTrackItem) -> Unit,
+    onEpisodeClick: (ShowsTrackItem) -> Unit,
+    onScoreClick: (ShowsTrackItem) -> Unit,
+    onStartDateEdit: (ShowsTrackItem) -> Unit,
+    onEndDateEdit: (ShowsTrackItem) -> Unit,
+    onNewSearch: (ShowsTrackItem) -> Unit,
+    onOpenInBrowser: (ShowsTrackItem) -> Unit,
+    onRemoved: (ShowsTrackItem) -> Unit,
+    onCopyLink: (ShowsTrackItem) -> Unit,
+    onTogglePrivate: (ShowsTrackItem) -> Unit,
 ) {
     if (trackItems.isEmpty()) {
         Column(

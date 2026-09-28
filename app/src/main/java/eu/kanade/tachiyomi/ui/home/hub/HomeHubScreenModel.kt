@@ -9,7 +9,6 @@ import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.ui.reader.novel.ChapterHideManager
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -17,22 +16,22 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.achievement.model.DayActivity
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
-import tachiyomi.domain.entries.anime.interactor.GetLibraryAnime
-import tachiyomi.domain.entries.anime.model.AnimeCover
+import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
+import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.model.NovelCover
-import tachiyomi.domain.history.anime.interactor.GetAnimeHistory
-import tachiyomi.domain.history.anime.model.AnimeHistoryWithRelations
-import tachiyomi.domain.history.anime.repository.AnimeHistoryRepository
+import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
+import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
+import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
 import tachiyomi.domain.history.manga.interactor.GetMangaHistory
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
 import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
 import tachiyomi.domain.history.novel.interactor.GetNovelHistory
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
 import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
-import tachiyomi.domain.library.anime.LibraryAnime
+import tachiyomi.domain.library.shows.LibraryAnime
 import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.i18n.aniyomi.AYMR
@@ -53,6 +52,7 @@ class HomeHubScreenModel(
     private val context: Context = Injekt.get<android.app.Application>(),
     private val uiPreferences: UiPreferences = Injekt.get(),
     private val getAnimeHistory: GetAnimeHistory = Injekt.get(),
+    private val cinemetaEntryUnifier: eu.kanade.tachiyomi.metadata.stream.CinemetaEntryUnifier = Injekt.get(),
     private val getMangaHistory: GetMangaHistory = Injekt.get(),
     private val getNovelHistory: GetNovelHistory = Injekt.get(),
     private val animeHistoryRepository: AnimeHistoryRepository = Injekt.get(),
@@ -77,7 +77,7 @@ class HomeHubScreenModel(
             // Only use cached hero if its media type matches the current mode
             val modeAwareHero = cached.hero?.toHomeHubHero()?.takeIf {
                 it.mediaType == when (currentMode) {
-                    ContentMode.ANIME -> HomeHubMediaType.ANIME
+                    ContentMode.SHOWS -> HomeHubMediaType.SHOWS
                     ContentMode.MANGA -> HomeHubMediaType.MANGA
                     ContentMode.NOVEL -> HomeHubMediaType.NOVEL
                 }
@@ -107,7 +107,12 @@ class HomeHubScreenModel(
         screenModelScope.launchIO {
             // combine() supports max 5 flows — nest history and library combines
             val historyFlow = combine(
-                getAnimeHistory.subscribe(""),
+                // Unify extension-source rows onto their canonical Cinemeta
+                // entry so recent/hero cards show the season-aware cover and
+                // "S2 · Ep. 5" labels instead of the duplicate's static art.
+                getAnimeHistory.subscribe("").map { list ->
+                    list.map { cinemetaEntryUnifier.unify(it) }
+                },
                 getMangaHistory.subscribe(""),
                 getNovelHistory.subscribe(""),
             ) { animeHistory, mangaHistory, novelHistory ->
@@ -136,7 +141,12 @@ class HomeHubScreenModel(
                 libraryFlow,
                 activityDataRepository.getActivityData(365),
                 achievementFlow,
-            ) { (animeHistory, mangaHistory, novelHistory), (animeLib, mangaLib, novelLib), activityData, (achievements, unlockedCount) ->
+            ) {
+                    (animeHistory, mangaHistory, novelHistory),
+                    (animeLib, mangaLib, novelLib),
+                    activityData,
+                    (achievements, unlockedCount),
+                ->
                 HomeHubCombinedData(
                     animeHistory = animeHistory,
                     mangaHistory = mangaHistory,
@@ -168,7 +178,7 @@ class HomeHubScreenModel(
                         recentlyAddedAnime = data.animeLib
                             .sortedByDescending { it.anime.dateAdded }
                             .take(10)
-                            .map { it.toRecentlyAdded(HomeHubMediaType.ANIME) },
+                            .map { it.toRecentlyAdded(HomeHubMediaType.SHOWS) },
                         recentlyAddedManga = data.mangaLib
                             .sortedByDescending { it.manga.dateAdded }
                             .take(10)
@@ -292,7 +302,7 @@ class HomeHubScreenModel(
         // placeholder is shown instead of a hero from a different mode.
         val currentMode = uiPreferences.contentMode().get()
         return when (currentMode) {
-            ContentMode.ANIME -> data.animeHistory.firstOrNull()?.let {
+            ContentMode.SHOWS -> data.animeHistory.firstOrNull()?.let {
                 val allRead = data.animeLib.find { lib -> lib.anime.id == it.animeId }
                     ?.let { lib -> lib.unseenCount == 0L && lib.totalCount > 0 } ?: false
                 HomeHubHero(
@@ -301,8 +311,11 @@ class HomeHubScreenModel(
                     progressNumber = it.episodeNumber,
                     coverData = it.coverData,
                     subId = it.episodeId,
-                    mediaType = HomeHubMediaType.ANIME,
+                    mediaType = HomeHubMediaType.SHOWS,
                     allRead = allRead,
+                    season = it.cinemetaSeason,
+                    runtime = it.runtime,
+                    isCinemetaMovie = it.isCinemetaMovie,
                 )
             }
             ContentMode.MANGA -> data.mangaHistory.firstOrNull()?.let {
@@ -377,13 +390,40 @@ class HomeHubScreenModel(
 
         val cachedHistory = buildList {
             data.animeHistory.take(6).forEach { h ->
-                add(CachedHistoryItem(h.animeId, h.title, h.episodeNumber, h.coverData.url, h.coverData.lastModified, HomeHubMediaType.ANIME.key))
+                add(
+                    CachedHistoryItem(
+                        h.animeId,
+                        h.title,
+                        h.episodeNumber,
+                        h.coverData.url,
+                        h.coverData.lastModified,
+                        HomeHubMediaType.SHOWS.key,
+                    ),
+                )
             }
             data.mangaHistory.take(6).forEach { h ->
-                add(CachedHistoryItem(h.mangaId, h.title, h.chapterNumber, h.coverData.url, h.coverData.lastModified, HomeHubMediaType.MANGA.key))
+                add(
+                    CachedHistoryItem(
+                        h.mangaId,
+                        h.title,
+                        h.chapterNumber,
+                        h.coverData.url,
+                        h.coverData.lastModified,
+                        HomeHubMediaType.MANGA.key,
+                    ),
+                )
             }
             data.novelHistory.take(6).forEach { h ->
-                add(CachedHistoryItem(h.novelId, h.title, h.chapterNumber, h.coverData.url, h.coverData.lastModified, HomeHubMediaType.NOVEL.key))
+                add(
+                    CachedHistoryItem(
+                        h.novelId,
+                        h.title,
+                        h.chapterNumber,
+                        h.coverData.url,
+                        h.coverData.lastModified,
+                        HomeHubMediaType.NOVEL.key,
+                    ),
+                )
             }
         }
 
@@ -432,7 +472,8 @@ class HomeHubScreenModel(
 
 private fun CachedHeroItem.toHomeHubHero(): HomeHubHero {
     val coverData: Any? = when (mediaType) {
-        "anime" -> AnimeCover(entryId, -1, true, coverUrl, coverLastModified)
+        // "anime" is the pre-15-04 fast-cache value — kept as a parse-boundary alias.
+        "shows", "anime" -> AnimeCover(entryId, -1, true, coverUrl, coverLastModified)
         "manga" -> MangaCover(entryId, -1, true, coverUrl, coverLastModified)
         "novel" -> NovelCover(entryId, -1, true, coverUrl, coverLastModified)
         else -> null

@@ -27,9 +27,9 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
@@ -66,17 +66,17 @@ import eu.kanade.domain.source.anime.interactor.GetAnimeIncognitoState
 import eu.kanade.domain.source.manga.interactor.GetMangaIncognitoState
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
-import eu.kanade.presentation.theme.TachiyomiTheme
+import eu.kanade.presentation.achievement.components.AchievementGroupNotification
+import eu.kanade.presentation.achievement.components.AchievementUnlockBanner
+import eu.kanade.presentation.achievement.screen.AchievementScreenVoyager
 import eu.kanade.presentation.components.AppStateBanners
 import eu.kanade.presentation.components.DownloadedOnlyBannerBackgroundColor
 import eu.kanade.presentation.components.IncognitoModeBannerBackgroundColor
 import eu.kanade.presentation.components.IndexingBannerBackgroundColor
-import eu.kanade.presentation.achievement.components.AchievementUnlockBanner
-import eu.kanade.presentation.achievement.components.AchievementGroupNotification
-import eu.kanade.presentation.novel.audiobook.AudiobookPlayerOverlay
-import eu.kanade.presentation.achievement.screen.AchievementScreenVoyager
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
+import eu.kanade.presentation.novel.audiobook.AudiobookPlayerOverlay
+import eu.kanade.presentation.theme.TachiyomiTheme
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.DefaultNavigatorScreenTransition
 import eu.kanade.tachiyomi.BuildConfig
@@ -84,7 +84,7 @@ import eu.kanade.tachiyomi.animesource.model.Hoster
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.data.cache.ChapterCache
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadCache
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadCache
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
@@ -93,20 +93,22 @@ import eu.kanade.tachiyomi.extension.anime.api.AnimeExtensionApi
 import eu.kanade.tachiyomi.extension.manga.api.MangaExtensionApi
 import eu.kanade.tachiyomi.extension.novel.api.NovelExtensionApi
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
-import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
-import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
+import eu.kanade.tachiyomi.ui.browse.shows.source.browse.BrowseAnimeSourceScreen
+import eu.kanade.tachiyomi.ui.browse.shows.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.browse.BrowseMangaSourceScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
 import eu.kanade.tachiyomi.ui.deeplink.DeepLinkScreenType
-import eu.kanade.tachiyomi.ui.deeplink.anime.DeepLinkAnimeScreen
+import eu.kanade.tachiyomi.ui.deeplink.shows.DeepLinkShowsScreen
 import eu.kanade.tachiyomi.ui.deeplink.manga.DeepLinkMangaScreen
-import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.more.NewUpdateScreen
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
 import eu.kanade.tachiyomi.ui.player.ExternalIntents
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
 import eu.kanade.tachiyomi.util.system.openInBrowser
@@ -135,11 +137,13 @@ import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.release.interactor.GetApplicationRelease
+import tachiyomi.domain.source.anime.service.AnimeSourceManager
+import tachiyomi.domain.source.manga.service.MangaSourceManager
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.util.LocalReduceMotion
 import tachiyomi.presentation.core.util.collectAsState
-import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -150,7 +154,7 @@ class MainActivity : BaseActivity() {
     private val preferences: BasePreferences by injectLazy()
     private val uiPreferences: UiPreferences by injectLazy()
 
-    private val animeDownloadCache: AnimeDownloadCache by injectLazy()
+    private val animeDownloadCache: ShowsDownloadCache by injectLazy()
     private val downloadCache: MangaDownloadCache by injectLazy()
     private val chapterCache: ChapterCache by injectLazy()
 
@@ -173,9 +177,9 @@ class MainActivity : BaseActivity() {
         // before the splash screen dismisses. The managers are singletons;
         // accessing them triggers their init block which loads installed
         // extensions into the sources map on a background coroutine.
-        val animeSourceManager = if (isLaunch) Injekt.get<tachiyomi.domain.source.anime.service.AnimeSourceManager>() else null
-        val mangaSourceManager = if (isLaunch) Injekt.get<tachiyomi.domain.source.manga.service.MangaSourceManager>() else null
-        val novelSourceManager = if (isLaunch) Injekt.get<tachiyomi.domain.source.novel.service.NovelSourceManager>() else null
+        val animeSourceManager = if (isLaunch) Injekt.get<AnimeSourceManager>() else null
+        val mangaSourceManager = if (isLaunch) Injekt.get<MangaSourceManager>() else null
+        val novelSourceManager = if (isLaunch) Injekt.get<NovelSourceManager>() else null
 
         // Prevent splash screen showing up on configuration changes
         val splashScreen = if (isLaunch) installSplashScreen() else null
@@ -251,146 +255,147 @@ class MainActivity : BaseActivity() {
             val contentMode by uiPreferences.contentMode().collectAsState()
             val reduceMotion by uiPreferences.reduceMotion().collectAsState()
             CompositionLocalProvider(LocalReduceMotion provides reduceMotion) {
-            TachiyomiTheme(contentMode = contentMode) {
-                Navigator(
-                    screen = HomeScreen,
-                    disposeBehavior = NavigatorDisposeBehavior(
-                        disposeNestedNavigators = false,
-                        disposeSteps = true,
-                    ),
-            ) { navigator ->
+                TachiyomiTheme(contentMode = contentMode) {
+                    Navigator(
+                        screen = HomeScreen,
+                        disposeBehavior = NavigatorDisposeBehavior(
+                            disposeNestedNavigators = false,
+                            disposeSteps = true,
+                        ),
+                    ) { navigator ->
 
-                LaunchedEffect(navigator) {
-                    this@MainActivity.navigator = navigator
+                        LaunchedEffect(navigator) {
+                            this@MainActivity.navigator = navigator
 
-                    if (isLaunch) {
-                        // Set start screen
-                        handleIntentAction(intent, navigator)
+                            if (isLaunch) {
+                                // Set start screen
+                                handleIntentAction(intent, navigator)
 
-                        // Reset Incognito Mode on relaunch
-                        preferences.incognitoMode().set(false)
-                    }
-                }
-                LaunchedEffect(navigator.lastItem) {
-                    (navigator.lastItem as? BrowseMangaSourceScreen)?.sourceId
-                        .let(getMangaIncognitoState::subscribe)
-                        .collectLatest { incognito = it }
-                }
-
-                LaunchedEffect(navigator.lastItem) {
-                    (navigator.lastItem as? BrowseAnimeSourceScreen)?.sourceId
-                        .let(getAnimeIncognitoState::subscribe)
-                        .collectLatest { incognitoAnime = it }
-                }
-
-                val scaffoldInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
-                Scaffold(
-                    topBar = {
-                        AppStateBanners(
-                            downloadedOnlyMode = downloadOnly,
-                            incognitoMode = incognito || incognitoAnime,
-                            indexing = indexing || indexingAnime,
-                            modifier = Modifier.windowInsetsPadding(scaffoldInsets),
-                        )
-                    },
-                    contentWindowInsets = scaffoldInsets,
-                ) { contentPadding ->
-                    // Consume insets already used by app state banners
-                    Box {
-                        // Shows current screen
-                        DefaultNavigatorScreenTransition(
-                            navigator = navigator,
-                            modifier = Modifier
-                                .padding(contentPadding)
-                                .consumeWindowInsets(contentPadding),
-                        )
-                        // Achievement unlock banners (overlaid on top center,
-                        // positioned below the status bar so they don't overlap
-                        // the time/battery/wifi indicators)
-                        AchievementUnlockBanner(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .windowInsetsPadding(WindowInsets.statusBars),
-                        )
-                        AchievementGroupNotification(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .windowInsetsPadding(WindowInsets.statusBars),
-                            onViewAll = {
-                                navigator?.push(AchievementScreenVoyager)
-                            },
-                        )
-                        // Full-screen audiobook player (D-08): attached at root
-                        // so it covers pushed detail screens like NovelScreen.
-                        // Back/swipe-down only dismisses — playback continues.
-                        AudiobookPlayerOverlay(
-                            controller = remember { Injekt.get() },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        // Draw navigation bar scrim when needed
-                        if (remember { isNavigationBarNeedsScrim() }) {
-                            Spacer(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                                    .alpha(0.8f)
-                                    .background(MaterialTheme.colorScheme.surfaceContainer),
-                            )
-                        }
-                    }
-                }
-
-                // Pop source-related screens when incognito mode is turned off
-                LaunchedEffect(Unit) {
-                    preferences.incognitoMode().changes()
-                        .drop(1)
-                        .filter { !it }
-                        .onEach {
-                            val currentScreen = navigator.lastItem
-                            if ((
-                                    currentScreen is BrowseMangaSourceScreen ||
-                                        (currentScreen is MangaScreen && currentScreen.fromSource)
-                                    ) ||
-                                (
-                                    currentScreen is BrowseAnimeSourceScreen ||
-                                        (currentScreen is AnimeScreen && currentScreen.fromSource)
-                                    )
-                            ) {
-                                navigator.popUntilRoot()
+                                // Reset Incognito Mode on relaunch
+                                preferences.incognitoMode().set(false)
                             }
                         }
-                        .launchIn(this)
-                }
+                        LaunchedEffect(navigator.lastItem) {
+                            (navigator.lastItem as? BrowseMangaSourceScreen)?.sourceId
+                                .let(getMangaIncognitoState::subscribe)
+                                .collectLatest { incognito = it }
+                        }
 
-                HandleOnNewIntent(context = context, navigator = navigator)
+                        LaunchedEffect(navigator.lastItem) {
+                            (navigator.lastItem as? BrowseAnimeSourceScreen)?.sourceId
+                                .let(getAnimeIncognitoState::subscribe)
+                                .collectLatest { incognitoAnime = it }
+                        }
 
-                CheckForUpdates()
-                ShowOnboarding()
-            }
+                        val scaffoldInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
+                        Scaffold(
+                            topBar = {
+                                AppStateBanners(
+                                    downloadedOnlyMode = downloadOnly,
+                                    incognitoMode = incognito || incognitoAnime,
+                                    indexing = indexing || indexingAnime,
+                                    modifier = Modifier.windowInsetsPadding(scaffoldInsets),
+                                )
+                            },
+                            contentWindowInsets = scaffoldInsets,
+                        ) { contentPadding ->
+                            // Consume insets already used by app state banners
+                            Box {
+                                // Shows current screen
+                                DefaultNavigatorScreenTransition(
+                                    navigator = navigator,
+                                    modifier = Modifier
+                                        .padding(contentPadding)
+                                        .consumeWindowInsets(contentPadding),
+                                )
+                                // Achievement unlock banners (overlaid on top center,
+                                // positioned below the status bar so they don't overlap
+                                // the time/battery/wifi indicators)
+                                AchievementUnlockBanner(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .windowInsetsPadding(WindowInsets.statusBars),
+                                )
+                                AchievementGroupNotification(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .windowInsetsPadding(WindowInsets.statusBars),
+                                    onViewAll = {
+                                        navigator?.push(AchievementScreenVoyager)
+                                    },
+                                )
+                                // Full-screen audiobook player (D-08): attached at root
+                                // so it covers pushed detail screens like NovelScreen.
+                                // Back/swipe-down only dismisses — playback continues.
+                                AudiobookPlayerOverlay(
+                                    controller = remember { Injekt.get() },
+                                    onOpenNovel = { navigator.push(NovelScreen(it)) },
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                // Draw navigation bar scrim when needed
+                                if (remember { isNavigationBarNeedsScrim() }) {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .fillMaxWidth()
+                                            .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                                            .alpha(0.8f)
+                                            .background(MaterialTheme.colorScheme.surfaceContainer),
+                                    )
+                                }
+                            }
+                        }
 
-            var showChangelog by remember { mutableStateOf(didMigration && !BuildConfig.DEBUG) }
-            if (showChangelog) {
-                AlertDialog(
-                    onDismissRequest = { showChangelog = false },
-                    title = {
-                        Text(
-                            text = stringResource(MR.strings.updated_version, BuildConfig.VERSION_NAME),
+                        // Pop source-related screens when incognito mode is turned off
+                        LaunchedEffect(Unit) {
+                            preferences.incognitoMode().changes()
+                                .drop(1)
+                                .filter { !it }
+                                .onEach {
+                                    val currentScreen = navigator.lastItem
+                                    if ((
+                                            currentScreen is BrowseMangaSourceScreen ||
+                                                (currentScreen is MangaScreen && currentScreen.fromSource)
+                                            ) ||
+                                        (
+                                            currentScreen is BrowseAnimeSourceScreen ||
+                                                (currentScreen is ShowsScreen && currentScreen.fromSource)
+                                            )
+                                    ) {
+                                        navigator.popUntilRoot()
+                                    }
+                                }
+                                .launchIn(this)
+                        }
+
+                        HandleOnNewIntent(context = context, navigator = navigator)
+
+                        CheckForUpdates()
+                        ShowOnboarding()
+                    }
+
+                    var showChangelog by remember { mutableStateOf(didMigration && !BuildConfig.DEBUG) }
+                    if (showChangelog) {
+                        AlertDialog(
+                            onDismissRequest = { showChangelog = false },
+                            title = {
+                                Text(
+                                    text = stringResource(MR.strings.updated_version, BuildConfig.VERSION_NAME),
+                                )
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { openInBrowser(RELEASE_URL) }) {
+                                    Text(text = stringResource(MR.strings.whats_new))
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showChangelog = false }) {
+                                    Text(text = stringResource(MR.strings.action_ok))
+                                }
+                            },
                         )
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { openInBrowser(RELEASE_URL) }) {
-                            Text(text = stringResource(MR.strings.whats_new))
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showChangelog = false }) {
-                            Text(text = stringResource(MR.strings.action_ok))
-                        }
-                    },
-                )
-            }
-            }
+                    }
+                }
             }
         }
 
@@ -550,7 +555,7 @@ class MainActivity : BaseActivity() {
         }
 
         val tabToOpen = when (intent.action) {
-            Constants.SHORTCUT_ANIMELIB -> HomeScreen.Tab.Library(mode = ContentMode.ANIME)
+            Constants.SHORTCUT_ANIMELIB -> HomeScreen.Tab.Library(mode = ContentMode.SHOWS)
             Constants.SHORTCUT_LIBRARY -> HomeScreen.Tab.Library(mode = ContentMode.MANGA)
             Constants.SHORTCUT_MANGA -> {
                 val idToOpen = intent.extras?.getLong(Constants.MANGA_EXTRA) ?: return false
@@ -560,13 +565,13 @@ class MainActivity : BaseActivity() {
             Constants.SHORTCUT_ANIME -> {
                 val idToOpen = intent.extras?.getLong(Constants.ANIME_EXTRA) ?: return false
                 navigator.popUntilRoot()
-                HomeScreen.Tab.Library(mode = ContentMode.ANIME, entryIdToOpen = idToOpen)
+                HomeScreen.Tab.Library(mode = ContentMode.SHOWS, entryIdToOpen = idToOpen)
             }
             Constants.SHORTCUT_UPDATES -> HomeScreen.Tab.Updates
             Constants.SHORTCUT_FETCHING -> HomeScreen.Tab.Fetching
             Constants.SHORTCUT_HISTORY -> HomeScreen.Tab.History
             Constants.SHORTCUT_SOURCES -> HomeScreen.Tab.Browse()
-            Constants.SHORTCUT_ANIMEEXTENSIONS -> HomeScreen.Tab.Browse(mode = ContentMode.ANIME)
+            Constants.SHORTCUT_ANIMEEXTENSIONS -> HomeScreen.Tab.Browse(mode = ContentMode.SHOWS)
             Constants.SHORTCUT_EXTENSIONS -> HomeScreen.Tab.Browse(mode = ContentMode.MANGA)
             Constants.SHORTCUT_NOVELEXTENSIONS -> HomeScreen.Tab.Browse(mode = ContentMode.NOVEL)
             Constants.SHORTCUT_DOWNLOADS -> {
@@ -596,7 +601,7 @@ class MainActivity : BaseActivity() {
                     navigator.popUntilRoot()
 
                     val screenType = intent.getStringExtra(INTENT_SEARCH_TYPE).orEmpty()
-                        .ifBlank { "ANIME" }
+                        .ifBlank { "SHOWS" }
                         .let(DeepLinkScreenType::valueOf)
 
                     when (screenType) {
@@ -604,9 +609,9 @@ class MainActivity : BaseActivity() {
                             navigator.push(GlobalMangaSearchScreen(query))
                             navigator.push(DeepLinkMangaScreen(query))
                         }
-                        DeepLinkScreenType.ANIME -> {
+                        DeepLinkScreenType.SHOWS -> {
                             navigator.push(GlobalAnimeSearchScreen(query))
-                            navigator.push(DeepLinkAnimeScreen(query))
+                            navigator.push(DeepLinkShowsScreen(query))
                         }
                     }
                 }

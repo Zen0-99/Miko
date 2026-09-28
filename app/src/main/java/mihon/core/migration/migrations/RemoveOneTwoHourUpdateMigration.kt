@@ -1,7 +1,7 @@
 package mihon.core.migration.migrations
 
 import android.app.Application
-import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
+import eu.kanade.tachiyomi.data.library.shows.ShowsLibraryUpdateJob
 import eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob
 import mihon.core.migration.Migration
 import mihon.core.migration.MigrationContext
@@ -19,7 +19,7 @@ class RemoveOneTwoHourUpdateMigration : Migration {
         if (updateInterval == 1 || updateInterval == 2) {
             libraryPreferences.autoUpdateInterval().set(3)
             MangaLibraryUpdateJob.setupTask(context, 3)
-            AnimeLibraryUpdateJob.setupTask(context, 3)
+            ShowsLibraryUpdateJob.setupTask(context, 3)
         }
 
         return true

@@ -13,9 +13,9 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.collection.anime.AnimeCollectionEvent
-import eu.kanade.tachiyomi.ui.collection.anime.AnimeCollectionScreenModel
-import eu.kanade.tachiyomi.ui.collection.anime.animeCollectionTab
+import eu.kanade.tachiyomi.ui.collection.shows.AnimeCollectionEvent
+import eu.kanade.tachiyomi.ui.collection.shows.ShowsCollectionScreenModel
+import eu.kanade.tachiyomi.ui.collection.shows.animeCollectionTab
 import eu.kanade.tachiyomi.ui.collection.manga.MangaCollectionEvent
 import eu.kanade.tachiyomi.ui.collection.manga.MangaCollectionScreenModel
 import eu.kanade.tachiyomi.ui.collection.manga.mangaCollectionTab
@@ -61,7 +61,7 @@ data object CollectionsTab : Tab {
     override fun Content() {
         val context = LocalContext.current
 
-        val animeCollectionScreenModel = rememberScreenModel { AnimeCollectionScreenModel() }
+        val animeCollectionScreenModel = rememberScreenModel { ShowsCollectionScreenModel() }
         val mangaCollectionScreenModel = rememberScreenModel { MangaCollectionScreenModel() }
         val novelCollectionScreenModel = rememberScreenModel { NovelCollectionScreenModel() }
 

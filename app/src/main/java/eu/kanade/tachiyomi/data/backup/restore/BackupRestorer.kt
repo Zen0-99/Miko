@@ -24,12 +24,11 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaCollectionsRestore
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaExtensionRepoRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelCollectionsRestorer
-import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelLinksRestorer
+import eu.kanade.tachiyomi.data.backup.restore.restorers.NovelRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
 import eu.kanade.tachiyomi.data.library.EntryRef
 import eu.kanade.tachiyomi.data.library.FailedEntry
-import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import kotlinx.coroutines.CoroutineScope
@@ -189,9 +188,15 @@ class BackupRestorer(
                 restoreSourcePreferences(backup.backupSourcePreferences)
             }
             if (options.libraryEntries) {
-                restoreAnime(backup.backupAnime, if (options.collections) backup.backupAnimeCollections else emptyList())
+                restoreAnime(
+                    backup.backupAnime,
+                    if (options.collections) backup.backupAnimeCollections else emptyList(),
+                )
                 restoreManga(backup.backupManga, if (options.collections) backup.backupCollections else emptyList())
-                restoreNovel(backup.backupNovels, if (options.collections) backup.backupNovelCollection else emptyList())
+                restoreNovel(
+                    backup.backupNovels,
+                    if (options.collections) backup.backupNovelCollection else emptyList(),
+                )
                 // Restore novel source links after novels are inserted
                 restoreNovelLinks(backup.backupNovelLinks)
             }
@@ -214,6 +219,16 @@ class BackupRestorer(
             )
 
             // TODO: optionally trigger online library + tracker update
+        }
+
+        // Phase 14-03: after a library import, mint + canonize every entry in
+        // the background — restored rows are already favorites, so the shared
+        // resolve→markSeen→canonize pass covers them without a refresh.
+        if (options.libraryEntries &&
+            Injekt.get<eu.kanade.domain.base.BasePreferences>().commentsEnabled().get()
+        ) {
+            Injekt.get<eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher>()
+                .start(canonize = true)
         }
     }
 
@@ -250,7 +265,7 @@ class BackupRestorer(
                     id = it.url.hashCode().toLong(),
                     title = it.title,
                     sourceId = it.source,
-                    kind = EntryKind.ANIME,
+                    kind = EntryKind.SHOWS,
                 )
                 try {
                     animeRestorer.restore(it, backupAnimeCollections, seasons)
@@ -473,7 +488,11 @@ class BackupRestorer(
         backupActivityLog: List<eu.kanade.tachiyomi.data.backup.models.BackupDayActivity>,
         backupStats: eu.kanade.tachiyomi.data.backup.models.BackupStats?,
     ) = launch {
-        if (backupAchievements.isEmpty() && backupUserProfile == null && backupActivityLog.isEmpty() && backupStats == null) {
+        if (backupAchievements.isEmpty() &&
+            backupUserProfile == null &&
+            backupActivityLog.isEmpty() &&
+            backupStats == null
+        ) {
             return@launch
         }
         ensureActive()

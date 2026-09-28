@@ -1,8 +1,8 @@
 package mihon.domain.items.episode.interactor
 
-import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
 import tachiyomi.domain.download.service.DownloadPreferences
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.episode.model.Episode
 

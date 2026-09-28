@@ -457,13 +457,13 @@
     <string name="chapters_episodes">Chapters and episodes</string>
     <string name="episodes">Episodes</string>
     <string name="backup_settings_warning">Warning: Backing up settings will store your track passwords as well, do not share this backup file!</string>
-    <string name="label_manga_library">Manga</string>
-    <string name="label_anime_library">Anime</string>
-    <string name="label_novel_library">Novels</string>
-    <string name="label_anime">Anime</string>
-    <string name="label_manga">Manga</string>
-    <string name="label_novel">Novels</string>
-    <string name="label_recent_anime_updates">Anime Updates</string>
+    <string name="carrier_manga_library">Manga</string>
+    <string name="carrier_shows_library">Shows</string>
+    <string name="carrier_books_library">Books</string>
+    <string name="carrier_shows">Shows</string>
+    <string name="carrier_manga">Manga</string>
+    <string name="carrier_books">Books</string>
+    <string name="carrier_shows_recent_updates">Shows Updates</string>
     <string name="label_manga_sources">Manga Sources</string>
     <string name="label_anime_sources">Anime Sources</string>
     <string name="label_novel_sources">Novel Sources</string>
@@ -492,6 +492,7 @@
     <string name="action_mark_as_seen">Mark as watched</string>
     <string name="action_mark_as_unseen">Mark as unwatched</string>
     <string name="action_mark_previous_as_seen">Mark previous as seen</string>
+    <string name="action_mark_previous_as_unseen">Mark previous as unseen</string>
     <string name="action_play_internally">Play internally</string>
     <string name="action_play_externally">Play externally</string>
     <string name="action_download_unread">Download unread chapters</string>
@@ -592,6 +593,7 @@
     <string name="episode_progress_no_total">%1$s</string>
     <string name="recent_anime_time">Ep. %1$s - %2$s</string>
     <string name="video_list_empty_error">No video found</string>
+    <string name="download_resolve_timeout">The source took too long to resolve the video</string>
     <string name="notification_new_episodes">New episodes found</string>
     <string name="information_no_recent_anime">Nothing watched recently</string>
     <string name="episode_settings_updated">Updated default episode settings</string>
@@ -600,11 +602,11 @@
     <string name="download_notifier_download_paused_episodes">Episode download paused</string>
     <string name="channel_new_chapters_episodes">Chapter/Episode updates</string>
     <string name="label_storage">Storage</string>
-    <string name="label_history">Manga</string>
-    <string name="label_anime_history">Anime</string>
-    <string name="label_updates">Manga</string>
-    <string name="label_anime_updates">Anime</string>
-    <string name="label_novel_updates">Novels</string>
+    <string name="carrier_manga_history">Manga</string>
+    <string name="carrier_shows_history">Shows</string>
+    <string name="carrier_manga_updates">Manga</string>
+    <string name="carrier_shows_updates">Shows</string>
+    <string name="carrier_books_updates">Books</string>
     <string name="action_change_intro_length">Change intro length</string>
     <string name="notification_episodes_single">Episode %1$s</string>
     <string name="notification_episodes_single_and_more">Episode %1$s and %2$d more</string>
@@ -699,8 +701,8 @@
     <string name="home_greeting_default">Welcome back</string>
     <string name="home_hero_continue_watching">Continue Watching</string>
     <string name="home_hero_continue_reading">Continue Reading</string>
-    <string name="home_hero_episode_progress">Episode %.1f</string>
-    <string name="home_hero_chapter_progress">Chapter %.1f</string>
+    <string name="home_hero_episode_progress">Episode %s</string>
+    <string name="home_hero_chapter_progress">Chapter %s</string>
     <string name="home_streak_days">%1$d day streak</string>
     <string name="home_streak_label">Streak</string>
     <string name="home_stats_episodes">Episodes</string>
@@ -1419,6 +1421,22 @@
     <string name="audiobook_sleep_timer_stops_at_chapter_end">Stops at chapter end</string>
     <string name="audiobook_mini_expand_cd">Expand audiobook player</string>
     <string name="audiobook_mini_dismiss_cd">Dismiss audiobook player</string>
+    <string name="audiobook_theme_title">Theme</string>
+    <string name="audiobook_theme_blur">Blur</string>
+    <string name="audiobook_theme_blur_card">Blur Card</string>
+    <string name="audiobook_theme_card">Card</string>
+    <string name="audiobook_theme_full">Full</string>
+    <string name="audiobook_theme_color">Color</string>
+    <string name="audiobook_theme_gradient">Gradient</string>
+    <string name="audiobook_theme_plain">Plain</string>
+    <string name="audiobook_synced_text">Synced text</string>
+    <string name="audiobook_synced_text_accent">Text accent</string>
+    <string name="action_listen">Listen</string>
+    <string name="action_read">Read</string>
+    <string name="audiobook_continue_listening_cd">Continue listening</string>
+    <string name="audiobook_open_novel_cd">Open novel details</string>
+    <string name="audiobook_auto_root">Audiobooks</string>
+    <string name="audiobook_auto_not_rendered">Not rendered</string>
 
     <!-- Library update progress overlay + Fetching tab -->
     <string name="pref_show_update_progress_overlay">Show update progress overlay</string>

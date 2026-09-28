@@ -21,7 +21,7 @@ class QuantityRule(
                 category == AchievementCategory.MANGA ||
                     category == AchievementCategory.BOTH
             is AchievementEvent.EpisodeWatched ->
-                category == AchievementCategory.ANIME ||
+                category == AchievementCategory.SHOWS ||
                     category == AchievementCategory.BOTH
             is AchievementEvent.NovelChapterRead ->
                 category == AchievementCategory.NOVEL ||

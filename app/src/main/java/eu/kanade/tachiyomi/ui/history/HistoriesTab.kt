@@ -19,9 +19,9 @@ import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.history.anime.AnimeHistoryScreenModel
-import eu.kanade.tachiyomi.ui.history.anime.animeHistoryTab
-import eu.kanade.tachiyomi.ui.history.anime.resumeLastEpisodeSeenEvent
+import eu.kanade.tachiyomi.ui.history.shows.ShowsHistoryScreenModel
+import eu.kanade.tachiyomi.ui.history.shows.animeHistoryTab
+import eu.kanade.tachiyomi.ui.history.shows.resumeLastEpisodeSeenEvent
 import eu.kanade.tachiyomi.ui.history.manga.MangaHistoryScreenModel
 import eu.kanade.tachiyomi.ui.history.manga.mangaHistoryTab
 import eu.kanade.tachiyomi.ui.history.novel.NovelHistoryScreenModel
@@ -64,8 +64,8 @@ data object HistoriesTab : Tab {
 
         // Hoist only the current mode's screen model for search-bar sharing.
         val (tab, searchQuery, onChangeSearchQuery) = when (contentMode) {
-            ContentMode.ANIME -> {
-                val screenModel = rememberScreenModel { AnimeHistoryScreenModel() }
+            ContentMode.SHOWS -> {
+                val screenModel = rememberScreenModel { ShowsHistoryScreenModel() }
                 val query by screenModel.query.collectAsState()
                 Triple(animeHistoryTab(context, fromMore = false), query, screenModel::search)
             }

@@ -7,9 +7,9 @@ import eu.kanade.tachiyomi.data.backup.models.BackupEpisode
 import eu.kanade.tachiyomi.data.backup.models.backupAnimeTrackMapper
 import eu.kanade.tachiyomi.data.backup.models.backupEpisodeMapper
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
-import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
-import tachiyomi.domain.entries.anime.model.Anime
-import tachiyomi.domain.history.anime.interactor.GetAnimeHistory
+import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
+import tachiyomi.domain.entries.shows.model.Anime
+import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

@@ -135,7 +135,7 @@
 
 
         <activity
-            android:name=".ui.deeplink.anime.DeepLinkAnimeActivity"
+            android:name=".ui.deeplink.shows.DeepLinkShowsActivity"
             android:exported="true"
             android:label="@string/action_global_anime_search"
             android:launchMode="singleTask"
@@ -314,6 +314,11 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- Android Auto: declares this a media app to Automotive OS. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
 
         <service
             android:name=".ui.reader.novel.tts.render.NovelAudioRenderService"

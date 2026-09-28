@@ -241,7 +241,7 @@ class AchievementLoader(
         return Achievement(
             id = id,
             type = AchievementType.valueOf(type.uppercase()),
-            category = AchievementCategory.valueOf(category.uppercase()),
+            category = AchievementCategory.fromString(category.uppercase()),
             threshold = threshold,
             points = points,
             title = localizedText.title,

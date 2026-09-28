@@ -1,0 +1,25 @@
+package tachiyomi.domain.history.shows.repository
+
+import kotlinx.coroutines.flow.Flow
+import tachiyomi.domain.history.shows.model.AnimeHistory
+import tachiyomi.domain.history.shows.model.AnimeHistoryUpdate
+import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
+
+interface AnimeHistoryRepository {
+
+    fun getAnimeHistory(query: String): Flow<List<AnimeHistoryWithRelations>>
+
+    suspend fun getLastAnimeHistory(): AnimeHistoryWithRelations?
+
+    suspend fun resetAnimeHistory(historyId: Long)
+
+    suspend fun getHistoryByAnimeId(animeId: Long): List<AnimeHistory>
+
+    suspend fun resetHistoryByAnimeId(animeId: Long)
+
+    suspend fun deleteHistoryByAnimeId(animeId: Long)
+
+    suspend fun deleteAllAnimeHistory(): Boolean
+
+    suspend fun upsertAnimeHistory(historyUpdate: AnimeHistoryUpdate)
+}

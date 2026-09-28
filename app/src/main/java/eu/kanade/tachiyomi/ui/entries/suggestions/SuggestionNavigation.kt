@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.ui.entries.suggestions
 
-import eu.kanade.domain.entries.anime.model.toDomainAnime
+import eu.kanade.domain.entries.shows.model.toDomainAnime
 import eu.kanade.domain.entries.manga.model.toDomainManga
 import eu.kanade.domain.entries.novel.model.toDomainNovel
 import eu.kanade.presentation.util.Screen
@@ -9,13 +9,13 @@ import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
+import eu.kanade.tachiyomi.ui.browse.shows.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
-import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
-import tachiyomi.domain.entries.anime.interactor.NetworkToLocalAnime
+import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import uy.kohesive.injekt.Injekt
@@ -23,7 +23,7 @@ import uy.kohesive.injekt.api.get
 
 /**
  * If the [SuggestionItem] has a native source target, creates a direct entry
- * screen (AnimeScreen / MangaScreen / NovelScreen) by inserting the entry
+ * screen (ShowsScreen / MangaScreen / NovelScreen) by inserting the entry
  * into the local database first. Returns `null` when the item only has an
  * external provider URL and no native source mapping.
  */
@@ -37,7 +37,7 @@ suspend fun SuggestionItem.toDirectEntryScreenOrNull(): Screen? {
                 thumbnail_url = this@toDirectEntryScreenOrNull.thumbnailUrl
             }
             val localAnime = Injekt.get<NetworkToLocalAnime>().await(anime.toDomainAnime(target.sourceId))
-            AnimeScreen(localAnime.id, fromSource = true)
+            ShowsScreen(localAnime.id, fromSource = true)
         }
         SuggestionMediaType.MANGA -> {
             val manga = SManga.create().apply {

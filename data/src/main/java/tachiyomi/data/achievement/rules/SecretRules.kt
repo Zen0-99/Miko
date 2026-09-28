@@ -7,7 +7,7 @@ import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.achievement.rule.AchievementRule
 import tachiyomi.domain.achievement.rule.RuleContext
 import tachiyomi.domain.achievement.rule.RuleResult
-import tachiyomi.domain.entries.anime.repository.AnimeRepository
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 
@@ -32,7 +32,7 @@ class SaitamaRule : AchievementRule {
 
     private suspend fun checkSaitama(context: RuleContext): Boolean {
         return context.getLibraryCount(AchievementCategory.MANGA) == 1 &&
-            context.getLibraryCount(AchievementCategory.ANIME) == 1 &&
+            context.getLibraryCount(AchievementCategory.SHOWS) == 1 &&
             context.getLibraryCount(AchievementCategory.NOVEL) == 1
     }
 }

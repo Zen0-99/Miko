@@ -1,0 +1,98 @@
+package eu.kanade.presentation.library.shows
+
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.fastAny
+import eu.kanade.presentation.library.components.DownloadsBadge
+import eu.kanade.presentation.library.components.EntryListItem
+import eu.kanade.presentation.library.components.GlobalSearchItem
+import eu.kanade.presentation.library.components.LanguageBadge
+import eu.kanade.presentation.library.components.ReadingOrderBadge
+import eu.kanade.presentation.library.components.UnviewedBadge
+import eu.kanade.tachiyomi.ui.library.shows.ShowsLibraryItem
+import tachiyomi.domain.entries.shows.model.AnimeCover
+import tachiyomi.domain.library.shows.LibraryAnime
+import tachiyomi.presentation.core.components.FastScrollLazyColumn
+import tachiyomi.presentation.core.util.plus
+
+@Composable
+internal fun ShowsLibraryList(
+    items: List<ShowsLibraryItem>,
+    entries: Int,
+    containerHeight: Int,
+    contentPadding: PaddingValues,
+    selection: List<LibraryAnime>,
+    onClick: (LibraryAnime) -> Unit,
+    onLongClick: (LibraryAnime) -> Unit,
+    onClickContinueWatching: ((LibraryAnime) -> Unit)?,
+    searchQuery: String?,
+    onGlobalSearchClicked: () -> Unit,
+    getReadingOrderLayer: ((Long) -> Int?)? = null,
+    getPreviousLayerAnimeIds: (() -> Set<Long>)? = null,
+    isEntryLocked: ((Long) -> Boolean)? = null,
+) {
+    FastScrollLazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding + PaddingValues(vertical = 8.dp),
+    ) {
+        item(key = "global_search") {
+            if (!searchQuery.isNullOrEmpty()) {
+                GlobalSearchItem(
+                    modifier = Modifier.fillMaxWidth(),
+                    searchQuery = searchQuery,
+                    onClick = onGlobalSearchClicked,
+                )
+            }
+        }
+
+        items(
+            items = items,
+            key = { it.libraryAnime.anime.id },
+            contentType = { "anime_library_list_item" },
+        ) { libraryItem ->
+            val anime = libraryItem.libraryAnime.anime
+            val isPreviousLayer = getPreviousLayerAnimeIds?.invoke()?.contains(anime.id) == true
+            EntryListItem(
+                isSelected = selection.fastAny { it.id == libraryItem.libraryAnime.id },
+                coverAlpha = if (isPreviousLayer) 0.4f else 1f,
+                title = anime.title,
+                coverData = AnimeCover(
+                    animeId = anime.id,
+                    sourceId = anime.source,
+                    isAnimeFavorite = anime.favorite,
+                    url = anime.thumbnailUrl,
+                    lastModified = anime.coverLastModified,
+                ),
+                badge = {
+                    DownloadsBadge(count = libraryItem.downloadCount)
+                    UnviewedBadge(count = libraryItem.unseenCount)
+                    LanguageBadge(
+                        isLocal = libraryItem.isLocal,
+                        sourceLanguage = libraryItem.sourceLanguage,
+                    )
+                    val roLayer = getReadingOrderLayer?.invoke(anime.id)
+                    if (roLayer != null) {
+                        ReadingOrderBadge(layer = roLayer)
+                    }
+                },
+                onLongClick = { onLongClick(libraryItem.libraryAnime) },
+                onClick = { onClick(libraryItem.libraryAnime) },
+                onClickContinueViewing = if (onClickContinueWatching != null &&
+                    libraryItem.unseenCount > 0 &&
+                    isEntryLocked?.invoke(anime.id) != true
+                ) {
+                    { onClickContinueWatching(libraryItem.libraryAnime) }
+                } else {
+                    null
+                },
+                entries = entries,
+                containerHeight = containerHeight,
+            )
+        }
+    }
+}

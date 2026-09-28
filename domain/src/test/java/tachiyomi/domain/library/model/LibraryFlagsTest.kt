@@ -5,7 +5,7 @@ import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
-import tachiyomi.domain.library.anime.model.AnimeLibrarySort
+import tachiyomi.domain.library.shows.model.AnimeLibrarySort
 import tachiyomi.domain.library.manga.model.MangaLibrarySort
 
 @Execution(ExecutionMode.CONCURRENT)
@@ -14,9 +14,9 @@ class LibraryFlagsTest {
     @Test
     fun `Check the amount of flags`() {
         LibraryDisplayMode.values.size shouldBe 4
-        MangaLibrarySort.types.size shouldBe 11
+        MangaLibrarySort.types.size shouldBe 12
         MangaLibrarySort.directions.size shouldBe 2
-        AnimeLibrarySort.types.size shouldBe 12
+        AnimeLibrarySort.types.size shouldBe 13
         AnimeLibrarySort.directions.size shouldBe 2
     }
 

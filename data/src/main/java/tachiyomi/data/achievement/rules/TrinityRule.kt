@@ -33,7 +33,7 @@ class TrinityRule(
 
     private suspend fun computeMin(context: RuleContext): Int {
         val manga = context.getChaptersRead(AchievementCategory.MANGA)
-        val anime = context.getChaptersRead(AchievementCategory.ANIME)
+        val anime = context.getChaptersRead(AchievementCategory.SHOWS)
         val novel = context.getChaptersRead(AchievementCategory.NOVEL)
         return min(min(manga, anime), novel)
     }

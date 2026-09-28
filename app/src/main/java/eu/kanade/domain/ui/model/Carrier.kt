@@ -28,9 +28,9 @@ enum class Carrier(
     val icon: ImageVector,
     val pipeline: ContentMode,
 ) {
-    SHOWS("shows", AYMR.strings.label_anime, Icons.Outlined.LiveTv, ContentMode.ANIME),
-    MANGA("manga", AYMR.strings.label_manga, Icons.Outlined.CollectionsBookmark, ContentMode.MANGA),
-    BOOKS("books", AYMR.strings.label_novel, Icons.Outlined.MenuBook, ContentMode.NOVEL),
+    SHOWS("shows", AYMR.strings.carrier_shows, Icons.Outlined.LiveTv, ContentMode.SHOWS),
+    MANGA("manga", AYMR.strings.carrier_manga, Icons.Outlined.CollectionsBookmark, ContentMode.MANGA),
+    BOOKS("books", AYMR.strings.carrier_books, Icons.Outlined.MenuBook, ContentMode.NOVEL),
     ;
 
     companion object {

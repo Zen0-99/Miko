@@ -15,13 +15,13 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.updates.fetching.FetchingScreen
-import eu.kanade.tachiyomi.ui.browse.anime.migration.search.MigrateAnimeSearchScreen
+import eu.kanade.tachiyomi.ui.browse.shows.migration.search.MigrateShowsSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaSearchScreen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelSearchScreen
-import eu.kanade.domain.ui.model.ContentMode
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.library.model.EntryKind
 import tachiyomi.i18n.MR
@@ -42,7 +42,7 @@ fun Screen.fetchingTab(
 
     // Map content mode to entry kind for filtering
     val entryKind = when (contentMode) {
-        ContentMode.ANIME -> EntryKind.ANIME
+        ContentMode.SHOWS -> EntryKind.SHOWS
         ContentMode.MANGA -> EntryKind.MANGA
         ContentMode.NOVEL -> EntryKind.NOVEL
     }
@@ -82,11 +82,12 @@ fun Screen.fetchingTab(
                 state = filteredState,
                 dialog = dialog,
                 onMigrate = { entry ->
-                    // Remove the entry from the fetching tab when migrating
-                    screenModel.deleteById(entry.id)
+                    // Don't delete the record here — enrich() drops it once
+                    // the entry's source actually changes, so backing out of
+                    // migration keeps the row.
                     val screen = when (entry.entryKind) {
                         EntryKind.MANGA -> MigrateMangaSearchScreen(entry.entryId)
-                        EntryKind.ANIME -> MigrateAnimeSearchScreen(entry.entryId)
+                        EntryKind.SHOWS -> MigrateShowsSearchScreen(entry.entryId)
                         EntryKind.NOVEL -> MigrateNovelSearchScreen(entry.entryId)
                     }
                     navigator.push(screen)

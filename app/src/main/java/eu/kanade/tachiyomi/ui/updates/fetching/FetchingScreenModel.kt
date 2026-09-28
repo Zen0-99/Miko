@@ -11,8 +11,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import tachiyomi.domain.entries.anime.interactor.GetAnime
-import tachiyomi.domain.entries.anime.model.asAnimeCover
+import tachiyomi.domain.entries.EntryCover
+import tachiyomi.domain.entries.shows.interactor.GetAnime
+import tachiyomi.domain.entries.shows.model.asAnimeCover
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.model.asMangaCover
 import tachiyomi.domain.entries.novel.interactor.GetNovel
@@ -22,7 +23,6 @@ import tachiyomi.domain.library.interactor.DeleteFailedFetch
 import tachiyomi.domain.library.interactor.GetFailedFetches
 import tachiyomi.domain.library.model.EntryKind
 import tachiyomi.domain.library.model.FailedFetch
-import tachiyomi.domain.entries.EntryCover
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -67,11 +67,18 @@ class FetchingScreenModel(
     }
 
     private suspend fun enrich(ff: FailedFetch): FailedFetchUi? {
-        val cover: EntryCover? = when (ff.entryKind) {
-            EntryKind.MANGA -> getManga.await(ff.entryId)?.asMangaCover()
-            EntryKind.ANIME -> getAnime.await(ff.entryId)?.asAnimeCover()
-            EntryKind.NOVEL -> getNovel.await(ff.entryId)?.asNovelCover()
+        val entry: Pair<EntryCover, Long>? = when (ff.entryKind) {
+            EntryKind.MANGA -> getManga.await(ff.entryId)?.let { it.asMangaCover() to it.source }
+            EntryKind.SHOWS -> getAnime.await(ff.entryId)?.let { it.asAnimeCover() to it.source }
+            EntryKind.NOVEL -> getNovel.await(ff.entryId)?.let { it.asNovelCover() to it.source }
         }
+        // Drop the record when the entry was deleted or migrated to another
+        // source since the failure — the row no longer describes reality.
+        if (entry == null || entry.second != ff.sourceId) {
+            deleteFailedFetch.awaitById(ff.id)
+            return null
+        }
+        val cover: EntryCover = entry.first
         return FailedFetchUi(
             id = ff.id,
             entryId = ff.entryId,
@@ -86,11 +93,14 @@ class FetchingScreenModel(
     }
 
     private suspend fun enrichLive(fe: eu.kanade.tachiyomi.data.library.FailedEntry): FailedFetchUi? {
-        val cover: EntryCover? = when (fe.entry.kind) {
-            EntryKind.MANGA -> getManga.await(fe.entry.id)?.asMangaCover()
-            EntryKind.ANIME -> getAnime.await(fe.entry.id)?.asAnimeCover()
-            EntryKind.NOVEL -> getNovel.await(fe.entry.id)?.asNovelCover()
+        val entry: Pair<EntryCover, Long>? = when (fe.entry.kind) {
+            EntryKind.MANGA -> getManga.await(fe.entry.id)?.let { it.asMangaCover() to it.source }
+            EntryKind.SHOWS -> getAnime.await(fe.entry.id)?.let { it.asAnimeCover() to it.source }
+            EntryKind.NOVEL -> getNovel.await(fe.entry.id)?.let { it.asNovelCover() to it.source }
         }
+        // Live rows aren't persisted — just hide once the entry moved on.
+        if (entry == null || entry.second != fe.entry.sourceId) return null
+        val cover: EntryCover = entry.first
         return FailedFetchUi(
             id = -(fe.entry.id), // Negative ID to distinguish live entries from DB ones
             entryId = fe.entry.id,

@@ -52,12 +52,12 @@ import eu.kanade.tachiyomi.data.mikodb.WorkIdResolver
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
-import eu.kanade.tachiyomi.ui.browse.anime.extension.AnimeExtensionsScreenModel
-import eu.kanade.tachiyomi.ui.browse.anime.extension.animeExtensionsTab
-import eu.kanade.tachiyomi.ui.browse.anime.source.AnimeSourcesScreenModel
-import eu.kanade.tachiyomi.ui.browse.anime.source.animeSourcesTab
-import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
-import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
+import eu.kanade.tachiyomi.ui.browse.shows.extension.AnimeExtensionsScreenModel
+import eu.kanade.tachiyomi.ui.browse.shows.extension.animeExtensionsTab
+import eu.kanade.tachiyomi.ui.browse.shows.source.AnimeSourcesScreenModel
+import eu.kanade.tachiyomi.ui.browse.shows.source.animeSourcesTab
+import eu.kanade.tachiyomi.ui.browse.shows.source.browse.BrowseAnimeSourceScreen
+import eu.kanade.tachiyomi.ui.browse.shows.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.extension.MangaExtensionsScreenModel
 import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.manga.source.MangaSourcesScreenModel
@@ -125,7 +125,7 @@ data object BrowseTab : Tab {
         // Discover is the default for anime mode; Browse is the default for manga/novel.
         var browseMode by remember {
             mutableStateOf(
-                if (contentMode == ContentMode.ANIME) BrowseMode.DISCOVER else BrowseMode.BROWSE,
+                if (contentMode == ContentMode.SHOWS) BrowseMode.DISCOVER else BrowseMode.BROWSE,
             )
         }
         // Whether the user has submitted the search (pressed enter/search on IME).
@@ -187,7 +187,7 @@ data object BrowseTab : Tab {
             if (browseMode == BrowseMode.EXTENSIONS && searchQuery != null) {
                 val query = searchQuery!!
                 when (contentMode) {
-                    ContentMode.ANIME -> animeExtSM.search(query)
+                    ContentMode.SHOWS -> animeExtSM.search(query)
                     ContentMode.MANGA -> mangaExtSM.search(query)
                     ContentMode.NOVEL -> {
                         novelExtSM.search(query)
@@ -198,7 +198,7 @@ data object BrowseTab : Tab {
 
         // Mode-aware source tab (used when search is NOT active)
         val sourceTab = when (contentMode) {
-            ContentMode.ANIME -> animeSourcesTab(animeSourceSM)
+            ContentMode.SHOWS -> animeSourcesTab(animeSourceSM)
             ContentMode.MANGA -> mangaSourcesTab(mangaSourceSM)
             ContentMode.NOVEL -> novelSourcesTab(novelSourceSM)
         }
@@ -278,7 +278,7 @@ data object BrowseTab : Tab {
                 if (query.isBlank()) return@useSharedTopBarWithSearch
                 when (browseMode) {
                     BrowseMode.DISCOVER -> {
-                        if (contentMode == ContentMode.ANIME) {
+                        if (contentMode == ContentMode.SHOWS) {
                             cinemetaBrowseSM.search(query)
                         } else {
                             canonicalSM.search(query)
@@ -290,7 +290,7 @@ data object BrowseTab : Tab {
                     }
                     BrowseMode.BROWSE -> {
                         when (contentMode) {
-                            ContentMode.ANIME -> navigator.push(GlobalAnimeSearchScreen(query))
+                            ContentMode.SHOWS -> navigator.push(GlobalAnimeSearchScreen(query))
                             ContentMode.MANGA -> navigator.push(GlobalMangaSearchScreen(query))
                             ContentMode.NOVEL -> navigator.push(GlobalNovelSearchScreen(query))
                         }
@@ -339,14 +339,14 @@ data object BrowseTab : Tab {
                 sourceTab.content(resolvedPadding, snackbarHostState)
 
                 // Discover overlay — shown on top with an opaque background.
-                // Anime mode: Cinemeta catalog; manga/novel: canonical catalog.
+                // Shows mode: Cinemeta catalog; manga/books: canonical catalog.
                 if (browseMode == BrowseMode.DISCOVER) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                     ) {
-                        if (contentMode == ContentMode.ANIME) {
+                        if (contentMode == ContentMode.SHOWS) {
                             CinemetaBrowseContent(
                                 screenModel = cinemetaBrowseSM,
                                 contentPadding = resolvedPadding,
@@ -382,7 +382,7 @@ data object BrowseTab : Tab {
                         if (browseMode == BrowseMode.DISCOVER) {
                             // Discover search results — the screen models already
                             // hold the results; just render the same content.
-                            if (contentMode == ContentMode.ANIME) {
+                            if (contentMode == ContentMode.SHOWS) {
                                 CinemetaBrowseContent(
                                     screenModel = cinemetaBrowseSM,
                                     contentPadding = resolvedPadding,
@@ -421,7 +421,7 @@ data object BrowseTab : Tab {
                                 )
                             } else {
                                 val extTab = when (contentMode) {
-                                    ContentMode.ANIME -> animeExtensionsTab(animeExtSM)
+                                    ContentMode.SHOWS -> animeExtensionsTab(animeExtSM)
                                     ContentMode.MANGA -> mangaExtensionsTab(mangaExtSM)
                                     ContentMode.NOVEL -> novelExtensionsTab(novelExtSM)
                                 }
@@ -440,7 +440,7 @@ data object BrowseTab : Tab {
                                 novelSourceManager = novelSourceManager,
                                 onSourceClick = { sourceId ->
                                     when (contentMode) {
-                                        ContentMode.ANIME -> navigator.push(
+                                        ContentMode.SHOWS -> navigator.push(
                                             BrowseAnimeSourceScreen(sourceId, GetRemoteAnime.QUERY_POPULAR),
                                         )
                                         ContentMode.MANGA -> navigator.push(
@@ -544,7 +544,7 @@ private fun BrowseSourceSearchResults(
     val query = searchQuery.trim()
     val sources = remember(contentMode, query) {
         when (contentMode) {
-            ContentMode.ANIME -> animeSourceManager.getOnlineSources()
+            ContentMode.SHOWS -> animeSourceManager.getOnlineSources()
                 .filter { it.name.contains(query, ignoreCase = true) }
                 .map { SourceSearchItem(it.id, it.name, it.lang) }
             ContentMode.MANGA -> mangaSourceManager.getOnlineSources()
@@ -629,7 +629,7 @@ private fun BrowseExtensionCardSearchResults(
     // Flatten the grouped items into a single list of extensions, filtered by
     // the search query (which is already applied by the screen model).
     val extensions: List<Any> = when (contentMode) {
-        ContentMode.ANIME -> animeState.items.values.flatten().map { it.extension }
+        ContentMode.SHOWS -> animeState.items.values.flatten().map { it.extension }
         ContentMode.MANGA -> mangaState.items.values.flatten().map { it.extension }
         ContentMode.NOVEL -> novelState.items.values.flatten().map { it.extension }
     }

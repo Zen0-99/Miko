@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.data.track
 
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.data.track.model.AnimeTrackSearch
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.track.anime.model.AnimeTrack
 
 /**

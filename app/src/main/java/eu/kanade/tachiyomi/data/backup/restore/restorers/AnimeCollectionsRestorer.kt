@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.data.backup.restore.restorers
 
 import eu.kanade.tachiyomi.data.backup.models.BackupCollection
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
-import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
 import tachiyomi.domain.library.service.LibraryPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

@@ -1,10 +1,10 @@
 package tachiyomi.domain.items.season.interactor
 
-import miko.domain.anime.SeasonDisplayMode
+import miko.domain.shows.SeasonDisplayMode
 import tachiyomi.core.common.util.lang.withNonCancellableContext
-import tachiyomi.domain.entries.anime.interactor.GetAnimeFavorites
-import tachiyomi.domain.entries.anime.interactor.SetAnimeSeasonFlags
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.interactor.GetAnimeFavorites
+import tachiyomi.domain.entries.shows.interactor.SetAnimeSeasonFlags
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.library.service.LibraryPreferences
 
 class SetAnimeDefaultSeasonFlags(

@@ -29,8 +29,8 @@ import okio.buffer
 import okio.sink
 import okio.source
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.entries.anime.model.Anime
-import tachiyomi.domain.entries.anime.model.AnimeCover
+import tachiyomi.domain.entries.shows.model.Anime
+import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import uy.kohesive.injekt.injectLazy
 import java.io.File

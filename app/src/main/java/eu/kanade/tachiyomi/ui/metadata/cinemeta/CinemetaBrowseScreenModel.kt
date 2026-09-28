@@ -3,18 +3,22 @@ package eu.kanade.tachiyomi.ui.metadata.cinemeta
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.data.mikodb.MikoDbManager
 import eu.kanade.tachiyomi.metadata.MetadataSourceManager
 import eu.kanade.tachiyomi.metadata.miko.dto.MikoMetaShort
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import tachiyomi.domain.entries.anime.interactor.NetworkToLocalAnime
-import tachiyomi.domain.entries.anime.model.Anime
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
+import tachiyomi.domain.entries.shows.model.Anime
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 class CinemetaBrowseScreenModel(
     manager: MetadataSourceManager = Injekt.get(),
     private val networkToLocalAnime: NetworkToLocalAnime = Injekt.get(),
+    private val mikoDbManager: MikoDbManager = Injekt.get(),
 ) : StateScreenModel<CinemetaBrowseScreenModel.State>(State()) {
 
     data class State(
@@ -87,10 +91,41 @@ class CinemetaBrowseScreenModel(
         }
     }
 
+    private fun describeError(e: Exception): String {
+        logcat(LogPriority.ERROR, e) { "cinemeta browse fetch failed" }
+        return e.message ?: "Unknown error (${e::class.simpleName})"
+    }
+
+    /**
+     * Collapse catalog/search results that resolve to the same canonical
+     * anime. The Stremio catalog can list one show under several IMDb ids
+     * (e.g. specials/OVAs that MikoDB folds into the parent series); clicking
+     * any of them lands on the same canonical entry, so the duplicates only
+     * clutter the grid. Keyed by the MikoDB main-entry identity (MAL id),
+     * falling back to the meta id itself when the bridge is unavailable —
+     * entries that don't map to a canonical row are never dropped.
+     */
+    private fun dedupeMetas(metas: List<MikoMetaShort>): List<MikoMetaShort> {
+        val bridge = try {
+            mikoDbManager.bridge()
+        } catch (e: Exception) {
+            null
+        } ?: return metas
+        val seen = mutableSetOf<String>()
+        return metas.filter { meta ->
+            val key = try {
+                bridge.mainEntry(meta.id)?.malId?.let { "mal:$it" } ?: "imdb:${meta.id}"
+            } catch (e: Exception) {
+                "imdb:${meta.id}"
+            }
+            seen.add(key)
+        }
+    }
+
     private suspend fun fetchFirstPage(type: String) {
         try {
             val result = source.getCatalog(type, "top", 0)
-            val metas = result.metas
+            val metas = dedupeMetas(result.metas)
             val skip = metas.size
             val hasMore = metas.isNotEmpty()
             cache[type] = CacheEntry(metas, skip, hasMore, System.currentTimeMillis())
@@ -103,7 +138,7 @@ class CinemetaBrowseScreenModel(
                 )
             }
         } catch (e: Exception) {
-            mutableState.update { it.copy(loading = false, error = e.message ?: "Unknown error") }
+            mutableState.update { it.copy(loading = false, error = describeError(e)) }
         }
     }
 
@@ -118,7 +153,7 @@ class CinemetaBrowseScreenModel(
                 } else {
                     source.getCatalog(s.type, s.catalogId, s.skip)
                 }
-                val newMetas = s.metas + result.metas
+                val newMetas = dedupeMetas(s.metas + result.metas)
                 val newSkip = s.skip + result.metas.size
                 val newHasMore = result.metas.isNotEmpty()
                 // Update cache for catalog (non-search) loads
@@ -135,7 +170,7 @@ class CinemetaBrowseScreenModel(
                     )
                 }
             } catch (e: Exception) {
-                mutableState.update { it.copy(loading = false, error = e.message ?: "Unknown error") }
+                mutableState.update { it.copy(loading = false, error = describeError(e)) }
             }
         }
     }
@@ -154,16 +189,17 @@ class CinemetaBrowseScreenModel(
             }
             try {
                 val result = source.search(state.value.type, query, 0)
+                val metas = dedupeMetas(result.metas)
                 mutableState.update {
                     it.copy(
                         loading = false,
-                        metas = result.metas,
+                        metas = metas,
                         skip = result.metas.size,
                         hasMore = result.metas.isNotEmpty(),
                     )
                 }
             } catch (e: Exception) {
-                mutableState.update { it.copy(loading = false, error = e.message ?: "Unknown error") }
+                mutableState.update { it.copy(loading = false, error = describeError(e)) }
             }
         }
     }
@@ -229,7 +265,7 @@ class CinemetaBrowseScreenModel(
     /**
      * Converts a Cinemeta catalog item into a domain [Anime] record, inserts it
      * into the database (or returns the existing record), and returns the
-     * database ID so the caller can navigate to AnimeScreen.
+     * database ID so the caller can navigate to ShowsScreen.
      */
     suspend fun getOrCreateAnimeId(meta: MikoMetaShort): Long {
         val isOngoing = meta.releaseInfo?.endsWith("-") == true

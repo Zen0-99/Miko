@@ -42,7 +42,7 @@ fun AchievementCategoryTabs(
 ) {
     val tabs = listOf(
         AchievementCategory.BOTH to stringResource(AYMR.strings.achievement_category_all),
-        AchievementCategory.ANIME to stringResource(AYMR.strings.achievement_category_anime),
+        AchievementCategory.SHOWS to stringResource(AYMR.strings.achievement_category_anime),
         AchievementCategory.MANGA to stringResource(AYMR.strings.achievement_category_manga),
         AchievementCategory.NOVEL to stringResource(AYMR.strings.achievement_category_novel),
         AchievementCategory.SECRET to stringResource(AYMR.strings.achievement_category_secret),
@@ -82,7 +82,11 @@ fun AchievementCategoryTabs(
                 tabs.forEach { (category, label) ->
                     val isSelected = category == selectedCategory
                     val textColor by animateColorAsState(
-                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        targetValue = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         label = "tab_text_color",
                     )
 

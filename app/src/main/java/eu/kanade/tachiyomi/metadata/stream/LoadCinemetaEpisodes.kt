@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.metadata.stream
 
+import eu.kanade.domain.entries.shows.interactor.UpdateAnime
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.metadata.MetadataSourceManager
+import eu.kanade.tachiyomi.metadata.tmdb.TmdbSeasonPosters
 import logcat.LogPriority
 import logcat.logcat
+import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.domain.entries.shows.model.AnimeUpdate
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.repository.EpisodeRepository
@@ -25,6 +30,9 @@ import java.util.TimeZone
 class LoadCinemetaEpisodes(
     private val metadataSourceManager: MetadataSourceManager,
     private val episodeRepository: EpisodeRepository,
+    private val updateAnime: UpdateAnime,
+    private val tmdbSeasonPosters: TmdbSeasonPosters,
+    private val preferenceStore: PreferenceStore,
 ) {
     companion object {
         private const val CINEMETA_SOURCE_ID = 0L
@@ -44,7 +52,7 @@ class LoadCinemetaEpisodes(
      * @param cinemetaAnime the Cinemeta anime entry (source == 0)
      * @return the list of virtual episodes inserted, or empty list if not a Cinemeta entry
      */
-    suspend fun await(cinemetaAnime: tachiyomi.domain.entries.anime.model.Anime): List<Episode> {
+    suspend fun await(cinemetaAnime: tachiyomi.domain.entries.shows.model.Anime): List<Episode> {
         if (cinemetaAnime.source != CINEMETA_SOURCE_ID) return emptyList()
 
         // Parse the Cinemeta URL: "cinemeta:{type}:{id}"
@@ -62,9 +70,82 @@ class LoadCinemetaEpisodes(
             return emptyList()
         }
 
+        // Refresh entry-level fields from the full meta response. Rows are
+        // created from catalog items (MikoMetaShort), which are sparse — no
+        // description, genres, or people — so this fills in what the detail
+        // screen displays (description, director/writer as author,
+        // rating||releaseInfo as artist, status, covers).
+        // Null fields are no-ops on the update.
+        try {
+            val people = meta.director?.takeIf { it.isNotEmpty() } ?: meta.writer
+            updateAnime.await(
+                AnimeUpdate(
+                    id = cinemetaAnime.id,
+                    author = people?.joinToString(", ")?.takeIf { it.isNotBlank() },
+                    artist = listOfNotNull(
+                        meta.imdbRating?.let { "★ $it" },
+                        meta.releaseInfo,
+                    ).joinToString("||").takeIf { it.isNotBlank() },
+                    description = meta.description,
+                    genre = meta.genres,
+                    status = if (meta.releaseInfo?.endsWith("-") == true) {
+                        SAnime.ONGOING.toLong()
+                    } else {
+                        SAnime.COMPLETED.toLong()
+                    },
+                    // Don't stomp the per-season cover the detail screen
+                    // persists — only fill covers that are still empty.
+                    thumbnailUrl = meta.poster?.takeIf { cinemetaAnime.thumbnailUrl.isNullOrBlank() },
+                    backgroundUrl = meta.background?.takeIf { cinemetaAnime.backgroundUrl.isNullOrBlank() },
+                    runtime = meta.runtime,
+                ),
+            )
+            // The Cinemeta clearlogo (title treatment PNG) powers the
+            // Nuvio-style movie hero — no schema column for it, so it lives
+            // in a per-entry pref that the detail screen observes.
+            preferenceStore.getString("cinemeta_logo_${cinemetaAnime.id}", "")
+                .set(meta.logo.orEmpty())
+            logcat(LogPriority.DEBUG) {
+                "LoadCinemetaEpisodes: entry meta refreshed for ${cinemetaAnime.title} " +
+                    "(author=${people?.firstOrNull()}, desc=${meta.description?.take(30)}, genres=${meta.genres?.size})"
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN) {
+                "LoadCinemetaEpisodes: entry meta refresh failed for ${cinemetaAnime.title}: ${e.message}"
+            }
+        }
+
+        // TMDB episode stills — Cinemeta's metahub CDN only proxies TMDB and
+        // has big coverage gaps (e.g. Naruto thumbs only exist for season 1),
+        // so prefer TMDB stills directly and keep metahub as fallback.
+        // TMDB stills keyed by absolute episode index — Cinemeta and TMDB
+        // split shows into different season counts (Naruto: 5 vs 4), so a
+        // season+episode lookup silently misses for all later seasons.
+        val tmdbStills = if (type == "series" && id.startsWith("tt")) {
+            try {
+                tmdbSeasonPosters.getEpisodeStillsByAbsoluteIndex(id)
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN) { "LoadCinemetaEpisodes: TMDB stills fetch failed for $id: ${e.message}" }
+                emptyMap()
+            }
+        } else {
+            emptyMap()
+        }
+
         val videos = meta.videos
         val newEpisodes = if (videos != null && videos.isNotEmpty()) {
-            videos.mapIndexed { index, video ->
+            // Order episodes by (season, episode) with season 0 (specials/OVAs)
+            // last — Cinemeta's videos array order puts specials wherever, and
+            // episodeNumber collides across seasons (S0E1 == S1E1), so without
+            // this "continue watching" surfaces an OVA instead of the next
+            // unwatched real episode.
+            var absoluteIndex = 0
+            videos.sortedWith(
+                compareBy({ if (it.season == 0) Int.MAX_VALUE else it.season }, { it.episode }),
+            ).mapIndexed { index, video ->
+                // Absolute air-order index for TMDB still lookup; specials
+                // (season 0) don't participate — TMDB orders them separately.
+                val episodeAbsIndex = if (video.season != 0) ++absoluteIndex else -1
                 Episode.create().copy(
                     animeId = cinemetaAnime.id,
                     url = "cinemeta:episode:${video.id}",
@@ -83,7 +164,8 @@ class LoadCinemetaEpisodes(
                         }
                     },
                     summary = video.overview ?: video.description,
-                    previewUrl = video.thumbnail,
+                    previewUrl = tmdbStills[episodeAbsIndex]
+                        ?: video.thumbnail,
                 )
             }
         } else if (type == "movie") {
@@ -163,7 +245,9 @@ class LoadCinemetaEpisodes(
             // Return the updated episodes from DB (re-fetch to get updated values)
             val result = episodeRepository.getEpisodeByAnimeId(cinemetaAnime.id)
             logcat(LogPriority.DEBUG) {
-                "LoadCinemetaEpisodes: result ${result.size} episodes, first 3 scanlators: ${result.take(3).map { it.scanlator }}"
+                "LoadCinemetaEpisodes: result ${result.size} episodes, first 3 scanlators: ${result.take(3).map {
+                    it.scanlator
+                }}"
             }
             return result
         }

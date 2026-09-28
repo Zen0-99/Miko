@@ -6,10 +6,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -32,7 +31,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,7 +39,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,16 +56,16 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.util.Screen
-import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
 import kotlinx.coroutines.launch
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.model.ReadingOrder
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class ReadingOrderViewerScreen(
     private val orderId: Long,
@@ -81,7 +78,8 @@ class ReadingOrderViewerScreen(
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
-        val prefs = remember { context.getSharedPreferences("reading_order_viewer", android.content.Context.MODE_PRIVATE) }
+        val prefs =
+            remember { context.getSharedPreferences("reading_order_viewer", android.content.Context.MODE_PRIVATE) }
         var isGridView by remember {
             mutableStateOf(prefs.getBoolean("grid_view", false))
         }
@@ -200,7 +198,8 @@ private fun navigateToEntry(
 ) {
     when (entryKind) {
         "manga" -> navigator.push(MangaScreen(entryId))
-        "anime" -> navigator.push(AnimeScreen(entryId))
+        // "anime" is the pre-15-04 stored value — kept as a parse-boundary alias.
+        "shows", "anime" -> navigator.push(ShowsScreen(entryId))
         "novel" -> navigator.push(NovelScreen(entryId))
     }
 }

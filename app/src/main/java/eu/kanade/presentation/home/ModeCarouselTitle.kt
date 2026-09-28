@@ -39,7 +39,6 @@ import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.domain.ui.model.ContentMode.Companion.carouselOrderFor
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -69,13 +68,13 @@ fun ModeCarouselTitle(
 ) {
     val uiPreferences = remember { Injekt.get<UiPreferences>() }
     val showManga by uiPreferences.showMangaMode().collectAsStateWithLifecycle()
-    val showAnime by uiPreferences.showAnimeMode().collectAsStateWithLifecycle()
+    val showAnime by uiPreferences.showShowsMode().collectAsStateWithLifecycle()
     val showNovel by uiPreferences.showNovelMode().collectAsStateWithLifecycle()
 
     val carousel = remember(showManga, showAnime, showNovel) {
         val visible = mutableSetOf<ContentMode>()
         if (showManga) visible.add(ContentMode.MANGA)
-        if (showAnime) visible.add(ContentMode.ANIME)
+        if (showAnime) visible.add(ContentMode.SHOWS)
         if (showNovel) visible.add(ContentMode.NOVEL)
         carouselOrderFor(visible)
     }

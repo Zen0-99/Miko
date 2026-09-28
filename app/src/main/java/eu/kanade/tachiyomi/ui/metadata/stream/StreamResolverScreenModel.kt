@@ -1,18 +1,18 @@
 package eu.kanade.tachiyomi.ui.metadata.stream
 
-import eu.kanade.domain.entries.anime.model.toSAnime
+import cafe.adriel.voyager.core.model.StateScreenModel
+import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.entries.shows.model.toSAnime
 import eu.kanade.domain.items.episode.interactor.SyncEpisodesWithSource
 import eu.kanade.tachiyomi.metadata.stream.StreamResolver
 import eu.kanade.tachiyomi.metadata.stream.stremio.StremioStreamResolver
-import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
-import tachiyomi.domain.items.episode.model.Episode
-import tachiyomi.domain.entries.anime.model.Anime
-import cafe.adriel.voyager.core.model.StateScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
 import kotlinx.coroutines.flow.update
 import logcat.LogPriority
-import tachiyomi.core.common.util.system.logcat
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.entries.shows.model.Anime
+import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
+import tachiyomi.domain.items.episode.model.Episode
 
 /**
  * Screen model for the stream resolution flow.
@@ -33,51 +33,67 @@ class StreamResolverScreenModel(
     sealed interface State {
         data object Idle : State
         data object Loading : State
-        data class Success(
+
+        /**
+         * Live source-search results. Emitted incrementally as each provider
+         * finishes — [searching] is true while providers are still in flight.
+         * [providerStatuses] drives the provider pills (greyed while LOADING).
+         */
+        data class Searching(
             val candidates: List<StreamResolver.StreamCandidate>,
+            val searching: Boolean = true,
+            val providerStatuses: Map<String, StreamResolver.ProviderStatus> = emptyMap(),
             val timedOut: Boolean = false,
             val failedSources: List<String> = emptyList(),
         ) : State
         data object Empty : State
         data class Error(val message: String) : State
         data class Resolving(val candidate: StreamResolver.StreamCandidate) : State
-        data class EpisodeResolved(val episode: Episode) : State
+        data class EpisodeResolved(val episode: Episode, val streamUrl: String? = null) : State
         data class NoMatch(val candidate: StreamResolver.StreamCandidate, val episodes: List<Episode>) : State
     }
+
+    private var resolveJob: kotlinx.coroutines.Job? = null
 
     /**
      * Start resolving streaming sources for [anime].
      * Always shows the picker — the user must explicitly select a source.
-     * Cached mappings are shown first in the list with a "Cached" badge.
+     * Results stream in per-provider (optimistic loading) and are cached per
+     * episode in [StreamResolver], so reopening the picker doesn't re-search.
      *
      * @param episodeUrl the Cinemeta episode URL (e.g. "cinemeta:episode:tt0903747:1:1")
      *                   Used to extract season/episode for Stremio series URL construction.
+     * @param episodeName the Cinemeta episode name, shown on extension rows.
      */
-    fun resolve(anime: Anime, episodeNumber: Double? = null, episodeUrl: String? = null) {
+    fun resolve(
+        anime: Anime,
+        episodeNumber: Double? = null,
+        episodeUrl: String? = null,
+        episodeName: String? = null,
+    ) {
+        resolveJob?.cancel()
         mutableState.update { State.Loading }
-        screenModelScope.launchIO {
+        resolveJob = screenModelScope.launchIO {
             try {
                 // Extract season and episode from the Cinemeta episode URL
                 // Format: "cinemeta:episode:tt0903747:1:1" (imdb:season:episode)
-                val season: Int?
-                val episode: Int?
-                if (episodeUrl != null && episodeUrl.startsWith("cinemeta:episode:")) {
-                    val episodeParts = episodeUrl.split(":")
-                    // cinemeta:episode:tt0903747:1:1 → [cinemeta, episode, tt0903747, 1, 1]
-                    season = episodeParts.getOrNull(3)?.toIntOrNull()
-                    episode = episodeParts.getOrNull(4)?.toIntOrNull()
-                } else {
-                    season = null
-                    episode = episodeNumber?.toInt()
-                }
+                val (season, parsedEpisode) = parseSeasonEpisode(episodeUrl)
+                val episode = parsedEpisode ?: episodeNumber?.toInt()
 
-                val result = streamResolver.resolve(anime, season, episode)
-                mutableState.update {
-                    when {
-                        result.candidates.isEmpty() && result.timedOut ->
-                            State.Error("Sources are taking too long. Try again or search manually.")
-                        result.candidates.isEmpty() -> State.Empty
-                        else -> State.Success(result.candidates, result.timedOut, result.failedSources)
+                streamResolver.search(anime, season, episode, episodeName).collect { progress ->
+                    mutableState.update {
+                        when {
+                            progress.finished && progress.candidates.isEmpty() && progress.timedOut ->
+                                State.Error("Sources are taking too long. Try again or search manually.")
+                            progress.finished && progress.candidates.isEmpty() -> State.Empty
+                            else -> State.Searching(
+                                candidates = progress.candidates,
+                                searching = !progress.finished,
+                                providerStatuses = progress.providerStatuses,
+                                timedOut = progress.timedOut,
+                                failedSources = progress.failedSources,
+                            )
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -106,15 +122,22 @@ class StreamResolverScreenModel(
         episodeName: String? = null,
         episodeUrl: String? = null,
     ) {
-        streamResolver.selectCandidate(cinemetaAnime, candidate)
         mutableState.update { State.Resolving(candidate) }
         screenModelScope.launchIO {
+            streamResolver.selectCandidate(cinemetaAnime, candidate)
             when (candidate) {
                 is StreamResolver.StreamCandidate.Stremio -> resolveStremioStream(
-                    candidate, episodeUrl, episodeName,
+                    candidate,
+                    cinemetaAnime,
+                    episodeUrl,
+                    episodeName,
                 )
                 is StreamResolver.StreamCandidate.Extension -> fetchAndMapEpisode(
-                    cinemetaAnime, candidate, episodeNumber, episodeName,
+                    cinemetaAnime,
+                    candidate,
+                    episodeNumber,
+                    episodeName,
+                    episodeUrl,
                 )
             }
         }
@@ -130,6 +153,7 @@ class StreamResolverScreenModel(
      */
     private suspend fun resolveStremioStream(
         candidate: StreamResolver.StreamCandidate.Stremio,
+        cinemetaAnime: Anime,
         episodeUrl: String?,
         episodeName: String?,
     ) {
@@ -139,17 +163,20 @@ class StreamResolverScreenModel(
 
             android.util.Log.d("StreamResolverSM", "resolveStremioStream: magnet=${magnetLink.take(60)}...")
 
-            // Create a synthetic Episode with the magnet link as URL.
-            // The player will resolve this via MagnetResolver at play time.
-            val episode = Episode.create().copy(
-                animeId = -1L, // Not tied to a source anime
-                url = magnetLink,
-                name = title,
-                episodeNumber = 1.0,
-                sourceOrder = 0,
-                dateFetch = System.currentTimeMillis(),
-            )
-            mutableState.update { State.EpisodeResolved(episode) }
+            // The player needs a real DB episode — resolve the Cinemeta virtual
+            // episode the user clicked (inserted by LoadCinemetaEpisodes). The magnet
+            // travels alongside as a serialized hoster list so the player's magnet
+            // pipeline (MagnetResolver → TorrServer) handles it at play time.
+            val episode = getEpisodesByAnimeId.await(cinemetaAnime.id)
+                .find { it.url == episodeUrl }
+            if (episode == null) {
+                logcat(LogPriority.ERROR) {
+                    "resolveStremioStream: no DB episode matching url=$episodeUrl for anime ${cinemetaAnime.id}"
+                }
+                mutableState.update { State.Error("Couldn't load this episode — try reopening the title") }
+                return
+            }
+            mutableState.update { State.EpisodeResolved(episode, streamUrl = magnetLink) }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Stremio stream resolution failed" }
             mutableState.update { State.Error(e.message ?: "Failed to resolve Stremio stream") }
@@ -171,10 +198,14 @@ class StreamResolverScreenModel(
         candidate: StreamResolver.StreamCandidate.Extension,
         episodeNumber: Double?,
         episodeName: String? = null,
+        episodeUrl: String? = null,
     ) {
         try {
             val source = candidate.source
-            val sourceAnime = candidate.anime
+            // Materialize the DB row now that the user picked this source —
+            // search candidates are lightweight refs so results don't spam
+            // the anime table with one row per extension per entry.
+            val sourceAnime = streamResolver.materializeExtension(candidate)
 
             // Fetch episodes from the source
             val sEpisodes = source.getEpisodeList(sourceAnime.toSAnime())
@@ -192,12 +223,17 @@ class StreamResolverScreenModel(
                 }
                 streamResolver.clearMapping(cinemetaAnime)
                 mutableState.update {
-                    State.Error("This source has only 1 episode — it may be a movie, not the series. Try a different source.")
+                    State.Error(
+                        "This source has only 1 episode — it may be a movie, not the series. Try a different source.",
+                    )
                 }
                 return
             }
 
-            android.util.Log.d("StreamResolverSM", "fetchAndMapEpisode: source=${source.name} (id=${source.id}), sourceAnime=${sourceAnime.title} (id=${sourceAnime.id}, url=${sourceAnime.url}), ${sEpisodes.size} episodes fetched, cinemetaType=${candidate.cinemetaType}")
+            android.util.Log.d(
+                "StreamResolverSM",
+                "fetchAndMapEpisode: source=${source.name} (id=${source.id}), sourceAnime=${sourceAnime.title} (id=${sourceAnime.id}, url=${sourceAnime.url}), ${sEpisodes.size} episodes fetched, cinemetaType=${candidate.cinemetaType}",
+            )
 
             // Sync episodes to the source anime (not the Cinemeta anime)
             syncEpisodesWithSource.await(
@@ -225,27 +261,37 @@ class StreamResolverScreenModel(
                     ep.name.trim().equals(cleanName, ignoreCase = true)
                 }
                 if (matchedByName != null) {
-                    android.util.Log.d("StreamResolverSM", "Matched by name: ${matchedByName.name}, id=${matchedByName.id}, animeId=${matchedByName.animeId}, url=${matchedByName.url}")
+                    android.util.Log.d(
+                        "StreamResolverSM",
+                        "Matched by name: ${matchedByName.name}, id=${matchedByName.id}, animeId=${matchedByName.animeId}, url=${matchedByName.url}",
+                    )
                     mutableState.update { State.EpisodeResolved(matchedByName) }
                     return
                 }
             }
 
-            // 2. Try exact episode number match
-            if (episodeNumber != null && episodeNumber >= 0) {
-                val matched = episodes.find { it.episodeNumber == episodeNumber }
-                if (matched != null) {
-                    android.util.Log.d("StreamResolverSM", "Matched by episodeNumber: ${matched.name}, id=${matched.id}, animeId=${matched.animeId}, url=${matched.url}")
-                    mutableState.update { State.EpisodeResolved(matched) }
-                    return
-                }
-                // 3. Try floored int match
-                val matchedInt = episodes.find { it.episodeNumber.toInt() == episodeNumber.toInt() }
-                if (matchedInt != null) {
-                    android.util.Log.d("StreamResolverSM", "Matched by floored episodeNumber: ${matchedInt.name}, id=${matchedInt.id}, animeId=${matchedInt.animeId}, url=${matchedInt.url}")
-                    mutableState.update { State.EpisodeResolved(matchedInt) }
-                    return
-                }
+            // 2. MikoDB-aware episode targets: bound-entry local number,
+            //    season number, or whole-series absolute — ordered by the
+            //    source's numbering scheme. Falls back to the bare number.
+            val imdbId = cinemetaAnime.url.split(":").getOrNull(2)
+            val (season, epFromUrl) = parseSeasonEpisode(episodeUrl)
+            val targets = streamResolver.episodeTargets(
+                source.id,
+                imdbId,
+                season,
+                epFromUrl ?: episodeNumber?.toInt(),
+            )
+
+            val matched = targets.firstNotNullOfOrNull { target ->
+                episodes.find { it.episodeNumber.toInt() == target }
+            }
+            if (matched != null) {
+                android.util.Log.d(
+                    "StreamResolverSM",
+                    "Matched by episode target: ${matched.name}, id=${matched.id}, animeId=${matched.animeId}, url=${matched.url}, targets=$targets",
+                )
+                mutableState.update { State.EpisodeResolved(matched) }
+                return
             }
 
             // 4. No match — show all episodes for manual selection
@@ -257,18 +303,32 @@ class StreamResolverScreenModel(
         }
     }
 
-    /**
-     * Clear the cached source mapping for [anime] so the picker shows again
-     * on next play. Called from the "Change source" menu option.
-     */
-    fun clearCachedMapping(anime: Anime) {
-        streamResolver.clearMapping(anime)
+    /** "cinemeta:episode:tt0903747:1:1" → (season, episode) */
+    private fun parseSeasonEpisode(episodeUrl: String?): Pair<Int?, Int?> {
+        if (episodeUrl == null || !episodeUrl.startsWith("cinemeta:episode:")) return null to null
+        val parts = episodeUrl.split(":")
+        return parts.getOrNull(3)?.toIntOrNull() to parts.getOrNull(4)?.toIntOrNull()
     }
 
     /**
-     * Reset to idle state.
+     * Clear the cached source mapping AND the resolved-results cache for
+     * [anime] so the picker re-searches on next play.
+     * Called from the "Change source" menu option.
+     */
+    fun clearCachedMapping(anime: Anime, episodeUrl: String? = null, episodeNumber: Double? = null) {
+        streamResolver.clearMapping(anime)
+        val (season, ep) = parseSeasonEpisode(episodeUrl)
+        streamResolver.invalidateSearch(anime.url, season, ep ?: episodeNumber?.toInt())
+    }
+
+    /**
+     * Reset to idle state. Stops collecting resolve progress — an in-flight
+     * search keeps running in [StreamResolver] and is re-attached on the
+     * next [resolve] call for the same episode.
      */
     fun reset() {
+        resolveJob?.cancel()
+        resolveJob = null
         mutableState.update { State.Idle }
     }
 }

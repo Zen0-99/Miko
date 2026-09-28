@@ -1,0 +1,5 @@
+-- Phase 15-04: `anime` carrier renamed to `shows`.
+-- reading_order.entry_kind stores lowercase literals; failed_fetches.entry_kind
+-- stores EntryKind.name. Manga/novel literals are unchanged (asymmetric rename).
+UPDATE reading_order SET entry_kind = 'shows' WHERE entry_kind = 'anime';
+UPDATE failed_fetches SET entry_kind = 'SHOWS' WHERE entry_kind = 'ANIME';

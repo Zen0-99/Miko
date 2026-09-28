@@ -27,6 +27,7 @@ import eu.kanade.domain.SYDomainModule
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.setAppCompatDelegateThemeMode
+import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import eu.kanade.tachiyomi.crash.CrashActivity
 import eu.kanade.tachiyomi.crash.GlobalExceptionHandler
 import eu.kanade.tachiyomi.data.coil.AnimeCoverKeyer
@@ -43,6 +44,7 @@ import eu.kanade.tachiyomi.data.coil.TachiyomiImageDecoder
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.di.AppModule
 import eu.kanade.tachiyomi.di.PreferenceModule
+import eu.kanade.tachiyomi.metadata.stream.SourceMappingCache
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.base.delegate.SecureActivityDelegate
@@ -54,19 +56,19 @@ import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import logcat.AndroidLogcatLogger
 import logcat.LogPriority
 import logcat.LogcatLogger
-import okio.Path.Companion.toOkioPath
 import mihon.core.migration.Migrator
 import mihon.core.migration.migrations.migrations
+import okio.Path.Companion.toOkioPath
 import org.conscrypt.Conscrypt
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.Preference
@@ -79,7 +81,6 @@ import tachiyomi.data.achievement.handler.SessionManager
 import tachiyomi.data.achievement.loader.AchievementLoader
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.model.AchievementEvent
-import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.widget.entries.anime.AnimeWidgetManager
 import tachiyomi.presentation.widget.entries.manga.MangaWidgetManager
@@ -207,6 +208,52 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
         initializeMigrator()
 
+        // Purge junk anime rows materialized by past stream-source
+        // resolution / extension browsing (thousands of dead rows like
+        // torrent filenames). Keeps Cinemeta/local entries, favorites, rows
+        // with episodes/history/sync/categories, season parents, and
+        // user-picked source mappings. Idempotent; runs every launch.
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val protectedIds = Injekt.get<SourceMappingCache>().allMappedAnimeIds()
+                val deleted = Injekt.get<tachiyomi.domain.entries.shows.repository.AnimeRepository>()
+                    .deleteJunkAnime(protectedIds)
+                logcat { "Junk anime purge done (protected=${protectedIds.size}, ok=$deleted)" }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Junk anime purge failed" }
+            }
+        }
+
+        // One-time sweep: covers cached while source Referer headers leaked
+        // into uploads.mangadex.org requests are "You can read this at
+        // MangaDex" placeholder files — wipe them so the library refetches
+        // real art. Guarded internally by a marker pref.
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Injekt.get<eu.kanade.tachiyomi.data.cover.HiResCoverResolver>()
+                    .apply {
+                        repairStaleMangaDexCovers()
+                        reverifyMangaDexCovers()
+                    }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "MangaDex cover repair failed" }
+            }
+        }
+
+        // Comments: refresh the shared ruleset and prefetch canonical work
+        // ids for the manga/novel library so entry-screen threads resolve
+        // instantly. Idempotent; gated by the comments kill-switch.
+        if (basePreferences.commentsEnabled().get()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    Injekt.get<eu.kanade.tachiyomi.data.comments.RulesetProvider>().refresh()
+                    Injekt.get<eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher>().start()
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e) { "Comments prefetch failed" }
+                }
+            }
+        }
+
         // Defer achievement init past the first frame so it doesn't block startup.
         // Loads achievement definitions from assets into the DB, then starts the
         // event handler so emitted events (chapter read, etc.) are processed.
@@ -228,7 +275,9 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
                         }
                     achievementHandler.start()
                 } catch (e: Exception) {
-                    logcat(LogPriority.ERROR) { "[ACHIEVEMENTS-INIT] Failed to start achievement handler: ${e.message}" }
+                    logcat(LogPriority.ERROR) {
+                        "[ACHIEVEMENTS-INIT] Failed to start achievement handler: ${e.message}"
+                    }
                 }
 
                 val hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)

@@ -19,6 +19,19 @@ class UiPreferences(
     private val preferenceStore: PreferenceStore,
 ) {
 
+    init {
+        // Phase 15-04: the `anime` carrier was renamed `shows`; enum prefs store
+        // member names, so a stored "ANIME" would silently reset to the default.
+        // Rewrite the persisted value once at init.
+        rewriteStoredEnumName("pref_content_mode")
+        rewriteStoredEnumName("start_screen")
+    }
+
+    private fun rewriteStoredEnumName(key: String) {
+        val pref = preferenceStore.getString(key)
+        if (pref.get() == "ANIME") pref.set("SHOWS")
+    }
+
     fun themeMode() = preferenceStore.getEnum("pref_theme_mode_key", ThemeMode.SYSTEM)
 
     fun appTheme() = preferenceStore.getEnum(
@@ -52,20 +65,20 @@ class UiPreferences(
 
     // --- Per-content-mode themes ---
     // Manga uses lightTheme()/darkTheme()/themeDarkAmoled() above as the default.
-    // Anime and Novel have their own theme prefs so each content type can look distinct.
+    // Shows and Novel have their own theme prefs so each content type can look distinct.
     // By default they fall back to the same value as the manga (base) theme.
 
-    fun animeLightTheme() = preferenceStore.getEnum(
+    fun showsLightTheme() = preferenceStore.getEnum(
         "pref_anime_light_theme",
         if (DeviceUtil.isDynamicColorAvailable) AppTheme.MONET else AppTheme.DEFAULT,
     )
 
-    fun animeDarkTheme() = preferenceStore.getEnum(
+    fun showsDarkTheme() = preferenceStore.getEnum(
         "pref_anime_dark_theme",
         if (DeviceUtil.isDynamicColorAvailable) AppTheme.MONET else AppTheme.DEFAULT,
     )
 
-    fun animeThemeDarkAmoled() = preferenceStore.getBoolean("pref_anime_theme_dark_amoled_key", false)
+    fun showsThemeDarkAmoled() = preferenceStore.getBoolean("pref_anime_theme_dark_amoled_key", false)
 
     fun novelLightTheme() = preferenceStore.getEnum(
         "pref_novel_light_theme",
@@ -81,21 +94,21 @@ class UiPreferences(
 
     /**
      * Resolve the light theme preference for the given [ContentMode].
-     * MANGA uses the base [lightTheme]; ANIME and NOVEL use their own.
+     * MANGA uses the base [lightTheme]; SHOWS and NOVEL use their own.
      */
     fun lightThemeFor(mode: ContentMode) = when (mode) {
         ContentMode.MANGA -> lightTheme()
-        ContentMode.ANIME -> animeLightTheme()
+        ContentMode.SHOWS -> showsLightTheme()
         ContentMode.NOVEL -> novelLightTheme()
     }
 
     /**
      * Resolve the dark theme preference for the given [ContentMode].
-     * MANGA uses the base [darkTheme]; ANIME and NOVEL use their own.
+     * MANGA uses the base [darkTheme]; SHOWS and NOVEL use their own.
      */
     fun darkThemeFor(mode: ContentMode) = when (mode) {
         ContentMode.MANGA -> darkTheme()
-        ContentMode.ANIME -> animeDarkTheme()
+        ContentMode.SHOWS -> showsDarkTheme()
         ContentMode.NOVEL -> novelDarkTheme()
     }
 
@@ -104,7 +117,7 @@ class UiPreferences(
      */
     fun amoledFor(mode: ContentMode) = when (mode) {
         ContentMode.MANGA -> themeDarkAmoled()
-        ContentMode.ANIME -> animeThemeDarkAmoled()
+        ContentMode.SHOWS -> showsThemeDarkAmoled()
         ContentMode.NOVEL -> novelThemeDarkAmoled()
     }
 
@@ -157,7 +170,7 @@ class UiPreferences(
     // mode-aware tabs (Library, Updates, History, Browse). Extensions and settings
     // for that type remain accessible.
 
-    fun showAnimeMode() = preferenceStore.getBoolean("pref_show_anime_mode", true)
+    fun showShowsMode() = preferenceStore.getBoolean("pref_show_anime_mode", true)
 
     fun showMangaMode() = preferenceStore.getBoolean("pref_show_manga_mode", true)
 
@@ -180,7 +193,7 @@ class UiPreferences(
     fun visibleContentModes(): Set<ContentMode> {
         val modes = mutableSetOf<ContentMode>()
         if (showMangaMode().get()) modes.add(ContentMode.MANGA)
-        if (showAnimeMode().get()) modes.add(ContentMode.ANIME)
+        if (showShowsMode().get()) modes.add(ContentMode.SHOWS)
         if (showNovelMode().get()) modes.add(ContentMode.NOVEL)
         if (modes.isEmpty()) modes.add(ContentMode.MANGA)
         return modes

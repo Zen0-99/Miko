@@ -1,0 +1,339 @@
+package eu.kanade.presentation.library.shows
+
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import eu.kanade.presentation.components.TabbedDialog
+import eu.kanade.presentation.components.TabbedDialogPaddings
+import eu.kanade.tachiyomi.ui.library.shows.ShowsLibrarySettingsScreenModel
+import eu.kanade.tachiyomi.util.system.isReleaseBuildType
+import kotlinx.collections.immutable.persistentListOf
+import tachiyomi.core.common.preference.TriState
+import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.library.shows.model.AnimeLibrarySort
+import tachiyomi.domain.library.shows.model.sort
+import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
+import tachiyomi.presentation.core.components.BaseSortItem
+import tachiyomi.presentation.core.components.CheckboxItem
+import tachiyomi.presentation.core.components.HeadingItem
+import tachiyomi.presentation.core.components.IconItem
+import tachiyomi.presentation.core.components.SettingsChipRow
+import tachiyomi.presentation.core.components.SliderItem
+import tachiyomi.presentation.core.components.SortItem
+import tachiyomi.presentation.core.components.TriStateItem
+import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
+
+@Composable
+fun ShowsLibrarySettingsDialog(
+    onDismissRequest: () -> Unit,
+    screenModel: ShowsLibrarySettingsScreenModel,
+    collection: Collection?,
+    onClickReadingOrders: () -> Unit,
+) {
+    TabbedDialog(
+        onDismissRequest = onDismissRequest,
+        tabTitles = persistentListOf(
+            stringResource(MR.strings.action_filter),
+            stringResource(MR.strings.action_sort),
+            stringResource(MR.strings.action_display),
+        ),
+    ) { page ->
+        Column(
+            modifier = Modifier
+                .padding(vertical = TabbedDialogPaddings.Vertical)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            when (page) {
+                0 -> FilterPage(
+                    screenModel = screenModel,
+                )
+                1 -> SortPage(
+                    collection = collection,
+                    screenModel = screenModel,
+                )
+                2 -> DisplayPage(
+                    screenModel = screenModel,
+                    onClickReadingOrders = onClickReadingOrders,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.FilterPage(
+    screenModel: ShowsLibrarySettingsScreenModel,
+) {
+    val filterDownloaded by screenModel.libraryPreferences.filterDownloadedShows().collectAsStateWithLifecycle()
+    val downloadedOnly by screenModel.preferences.downloadedOnly().collectAsStateWithLifecycle()
+    val autoUpdateAnimeRestrictions by screenModel.libraryPreferences.autoUpdateItemRestrictions()
+        .collectAsStateWithLifecycle()
+
+    TriStateItem(
+        label = stringResource(MR.strings.label_downloaded),
+        state = if (downloadedOnly) {
+            TriState.ENABLED_IS
+        } else {
+            filterDownloaded
+        },
+        enabled = !downloadedOnly,
+        onClick = { screenModel.toggleFilter(LibraryPreferences::filterDownloadedShows) },
+    )
+    val filterUnseen by screenModel.libraryPreferences.filterUnseen().collectAsStateWithLifecycle()
+    TriStateItem(
+        label = stringResource(AYMR.strings.action_filter_unseen),
+        state = filterUnseen,
+        onClick = { screenModel.toggleFilter(LibraryPreferences::filterUnseen) },
+    )
+    val filterStarted by screenModel.libraryPreferences.filterStartedShows().collectAsStateWithLifecycle()
+    TriStateItem(
+        label = stringResource(MR.strings.label_started),
+        state = filterStarted,
+        onClick = { screenModel.toggleFilter(LibraryPreferences::filterStartedShows) },
+    )
+    val filterBookmarked by screenModel.libraryPreferences.filterBookmarkedShows().collectAsStateWithLifecycle()
+    TriStateItem(
+        label = stringResource(MR.strings.action_filter_bookmarked),
+        state = filterBookmarked,
+        onClick = { screenModel.toggleFilter(LibraryPreferences::filterBookmarkedShows) },
+    )
+    val filterCompleted by screenModel.libraryPreferences.filterCompletedShows().collectAsStateWithLifecycle()
+    TriStateItem(
+        label = stringResource(MR.strings.completed),
+        state = filterCompleted,
+        onClick = { screenModel.toggleFilter(LibraryPreferences::filterCompletedShows) },
+    )
+    // TODO: re-enable when custom intervals are ready for stable
+    if ((!isReleaseBuildType) && LibraryPreferences.ENTRY_OUTSIDE_RELEASE_PERIOD in autoUpdateAnimeRestrictions) {
+        val filterIntervalCustom by screenModel.libraryPreferences.filterIntervalCustom().collectAsStateWithLifecycle()
+        TriStateItem(
+            label = stringResource(MR.strings.action_filter_interval_custom),
+            state = filterIntervalCustom,
+            onClick = { screenModel.toggleFilter(LibraryPreferences::filterIntervalCustom) },
+        )
+    }
+
+    val trackers by screenModel.trackersFlow.collectAsStateWithLifecycle()
+    when (trackers.size) {
+        0 -> {
+            // No trackers
+        }
+        1 -> {
+            val service = trackers[0]
+            val filterTracker by screenModel.libraryPreferences.filterTrackedShows(
+                service.id.toInt(),
+            ).collectAsStateWithLifecycle()
+            TriStateItem(
+                label = stringResource(MR.strings.action_filter_tracked),
+                state = filterTracker,
+                onClick = { screenModel.toggleTracker(service.id.toInt()) },
+            )
+        }
+        else -> {
+            HeadingItem(MR.strings.action_filter_tracked)
+            trackers.map { service ->
+                val filterTracker by screenModel.libraryPreferences.filterTrackedShows(
+                    service.id.toInt(),
+                ).collectAsStateWithLifecycle()
+                TriStateItem(
+                    label = service.name,
+                    state = filterTracker,
+                    onClick = { screenModel.toggleTracker(service.id.toInt()) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.SortPage(
+    collection: Collection?,
+    screenModel: ShowsLibrarySettingsScreenModel,
+) {
+    val trackers by screenModel.trackersFlow.collectAsStateWithLifecycle()
+    val sortingMode = collection.sort.type
+    val sortDescending = !collection.sort.isAscending
+
+    val options = remember(trackers.isEmpty()) {
+        val trackerMeanPair = if (trackers.isNotEmpty()) {
+            MR.strings.action_sort_tracker_score to AnimeLibrarySort.Type.TrackerMean
+        } else {
+            null
+        }
+        listOfNotNull(
+            MR.strings.action_sort_alpha to AnimeLibrarySort.Type.Alphabetical,
+            AYMR.strings.action_sort_total_episodes to AnimeLibrarySort.Type.TotalEpisodes,
+            AYMR.strings.action_sort_last_seen to AnimeLibrarySort.Type.LastSeen,
+            AYMR.strings.action_sort_last_anime_update to AnimeLibrarySort.Type.LastUpdate,
+            AYMR.strings.action_sort_unseen_count to AnimeLibrarySort.Type.UnseenCount,
+            AYMR.strings.action_sort_latest_episode to AnimeLibrarySort.Type.LatestEpisode,
+            AYMR.strings.action_sort_episode_fetch_date to AnimeLibrarySort.Type.EpisodeFetchDate,
+            MR.strings.action_sort_date_added to AnimeLibrarySort.Type.DateAdded,
+            trackerMeanPair,
+            AYMR.strings.action_sort_airing_time to AnimeLibrarySort.Type.AiringTime,
+            AYMR.strings.action_sort_custom_order to AnimeLibrarySort.Type.CustomOrder,
+            AYMR.strings.reading_order to AnimeLibrarySort.Type.ReadingOrder,
+            MR.strings.action_sort_random to AnimeLibrarySort.Type.Random,
+        )
+    }
+
+    options.map { (titleRes, mode) ->
+        if (mode == AnimeLibrarySort.Type.Random) {
+            BaseSortItem(
+                label = stringResource(titleRes),
+                icon = Icons.Default.Refresh
+                    .takeIf { sortingMode == AnimeLibrarySort.Type.Random },
+                onClick = {
+                    screenModel.setSort(collection, mode, AnimeLibrarySort.Direction.Ascending)
+                },
+            )
+            return@map
+        }
+        SortItem(
+            label = stringResource(titleRes),
+            sortDescending = sortDescending.takeIf { sortingMode == mode },
+            onClick = {
+                val isTogglingDirection = sortingMode == mode
+                val direction = when {
+                    isTogglingDirection -> if (sortDescending) {
+                        AnimeLibrarySort.Direction.Ascending
+                    } else {
+                        AnimeLibrarySort.Direction.Descending
+                    }
+                    else -> if (sortDescending) {
+                        AnimeLibrarySort.Direction.Descending
+                    } else {
+                        AnimeLibrarySort.Direction.Ascending
+                    }
+                }
+                screenModel.setSort(collection, mode, direction)
+            },
+        )
+    }
+}
+
+private val displayModes = listOf(
+    MR.strings.action_display_grid to LibraryDisplayMode.CompactGrid,
+    MR.strings.action_display_comfortable_grid to LibraryDisplayMode.ComfortableGrid,
+    MR.strings.action_display_cover_only_grid to LibraryDisplayMode.CoverOnlyGrid,
+    MR.strings.action_display_list to LibraryDisplayMode.List,
+)
+
+@Composable
+private fun ColumnScope.DisplayPage(
+    screenModel: ShowsLibrarySettingsScreenModel,
+    onClickReadingOrders: () -> Unit,
+) {
+    val displayMode by screenModel.libraryPreferences.displayMode().collectAsStateWithLifecycle()
+    SettingsChipRow(MR.strings.action_display_mode) {
+        displayModes.map { (titleRes, mode) ->
+            FilterChip(
+                selected = displayMode == mode,
+                onClick = { screenModel.setDisplayMode(mode) },
+                label = { Text(stringResource(titleRes)) },
+            )
+        }
+    }
+
+    val configuration = LocalConfiguration.current
+    val columnPreference = remember {
+        if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            screenModel.libraryPreferences.showsLandscapeColumns()
+        } else {
+            screenModel.libraryPreferences.showsPortraitColumns()
+        }
+    }
+
+    val columns by columnPreference.collectAsStateWithLifecycle()
+    if (displayMode == LibraryDisplayMode.List) {
+        SliderItem(
+            value = columns,
+            valueRange = 0..10,
+            label = stringResource(AYMR.strings.pref_library_rows),
+            valueText = if (columns > 0) {
+                columns.toString()
+            } else {
+                stringResource(MR.strings.label_auto)
+            },
+            onChange = columnPreference::set,
+            pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        )
+    } else {
+        SliderItem(
+            value = columns,
+            valueRange = 0..10,
+            label = stringResource(MR.strings.pref_library_columns),
+            valueText = if (columns > 0) {
+                columns.toString()
+            } else {
+                stringResource(MR.strings.label_auto)
+            },
+            onChange = columnPreference::set,
+            pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        )
+    }
+
+    HeadingItem(MR.strings.overlay_cover_badges)
+    CheckboxItem(
+        label = stringResource(AYMR.strings.action_display_download_badge_anime),
+        pref = screenModel.libraryPreferences.downloadBadge(),
+    )
+    CheckboxItem(
+        label = stringResource(AYMR.strings.action_display_unseen_badge),
+        pref = screenModel.libraryPreferences.unreadBadge(),
+    )
+    CheckboxItem(
+        label = stringResource(MR.strings.action_display_local_badge),
+        pref = screenModel.libraryPreferences.localBadge(),
+    )
+    CheckboxItem(
+        label = stringResource(MR.strings.action_display_language_badge),
+        pref = screenModel.libraryPreferences.languageBadge(),
+    )
+
+    HeadingItem(MR.strings.overlay_actions)
+    CheckboxItem(
+        label = stringResource(MR.strings.action_display_show_reading_number),
+        pref = screenModel.libraryPreferences.showReadingNumber(),
+    )
+    CheckboxItem(
+        label = stringResource(AYMR.strings.action_display_show_continue_reading_button),
+        pref = screenModel.libraryPreferences.showContinueViewingButton(),
+    )
+
+    HeadingItem(MR.strings.tabs_header)
+    CheckboxItem(
+        label = stringResource(MR.strings.action_display_show_tabs),
+        pref = screenModel.libraryPreferences.collectionTabs(),
+    )
+    CheckboxItem(
+        label = stringResource(MR.strings.action_display_show_number_of_items),
+        pref = screenModel.libraryPreferences.collectionNumberOfItems(),
+    )
+
+    HeadingItem(AYMR.strings.reading_order_list)
+    IconItem(
+        label = stringResource(AYMR.strings.reading_order_list),
+        icon = Icons.AutoMirrored.Outlined.List,
+        onClick = onClickReadingOrders,
+    )
+}

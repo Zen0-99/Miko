@@ -5,7 +5,6 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,36 +26,35 @@ import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.download.anime.animeDownloadTab
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
+import eu.kanade.tachiyomi.ui.download.shows.animeDownloadTab
 import eu.kanade.tachiyomi.ui.download.manga.mangaDownloadTab
 import eu.kanade.tachiyomi.ui.download.novel.novelDownloadTab
-import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
-import eu.kanade.tachiyomi.ui.history.anime.animeHistoryTab
+import eu.kanade.tachiyomi.ui.history.shows.animeHistoryTab
 import eu.kanade.tachiyomi.ui.history.manga.mangaHistoryTab
 import eu.kanade.tachiyomi.ui.history.novel.novelHistoryTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
-import eu.kanade.tachiyomi.ui.stats.anime.animeStatsTab
+import eu.kanade.tachiyomi.ui.stats.shows.animeStatsTab
 import eu.kanade.tachiyomi.ui.stats.manga.mangaStatsTab
 import eu.kanade.tachiyomi.ui.stats.novel.novelStatsTab
-import eu.kanade.tachiyomi.ui.updates.anime.animeUpdatesTab
+import eu.kanade.tachiyomi.ui.updates.shows.animeUpdatesTab
 import eu.kanade.tachiyomi.ui.updates.fetching.fetchingTab
 import eu.kanade.tachiyomi.ui.updates.manga.mangaUpdatesTab
 import eu.kanade.tachiyomi.ui.updates.novel.novelUpdatesTab
-import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
-import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
-import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
-import mihon.feature.upcoming.anime.UpcomingAnimeScreenContent
-import mihon.feature.upcoming.anime.UpcomingAnimeScreenModel
+import mihon.feature.upcoming.shows.UpcomingAnimeScreenContent
+import mihon.feature.upcoming.shows.UpcomingAnimeScreenModel
 import mihon.feature.upcoming.manga.UpcomingMangaScreenContent
 import mihon.feature.upcoming.manga.UpcomingMangaScreenModel
 import mihon.feature.upcoming.novel.UpcomingNovelScreenContent
 import mihon.feature.upcoming.novel.UpcomingNovelScreenModel
-import tachiyomi.i18n.MR
 import tachiyomi.domain.library.interactor.GetFailedFetches
+import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
@@ -107,32 +105,32 @@ data object UpdatesTab : Tab {
         // Build 5 sub-tabs: Updates, History, Downloads, Calendar, Stats
         // Override titleRes so tabs show their function name, not the content mode
         val updatesTab = when (contentMode) {
-            ContentMode.ANIME -> animeUpdatesTab(context, fromMore = false)
+            ContentMode.SHOWS -> animeUpdatesTab(context, fromMore = false)
             ContentMode.MANGA -> mangaUpdatesTab(context, fromMore = false)
             ContentMode.NOVEL -> novelUpdatesTab(context, fromMore = false)
         }.copy(titleRes = MR.strings.label_recent_updates)
 
         val historyTab = when (contentMode) {
-            ContentMode.ANIME -> animeHistoryTab(context, fromMore = false)
+            ContentMode.SHOWS -> animeHistoryTab(context, fromMore = false)
             ContentMode.MANGA -> mangaHistoryTab(context, fromMore = false)
             ContentMode.NOVEL -> novelHistoryTab(context, fromMore = false)
         }.copy(titleRes = MR.strings.history)
 
         val downloadsTab = when (contentMode) {
-            ContentMode.ANIME -> animeDownloadTab(nestedScrollConnection)
+            ContentMode.SHOWS -> animeDownloadTab(nestedScrollConnection)
             ContentMode.MANGA -> mangaDownloadTab(nestedScrollConnection)
             ContentMode.NOVEL -> novelDownloadTab(nestedScrollConnection)
         }.copy(titleRes = MR.strings.label_downloads, navigateUp = null)
 
         val statsTab = when (contentMode) {
-            ContentMode.ANIME -> animeStatsTab()
+            ContentMode.SHOWS -> animeStatsTab()
             ContentMode.MANGA -> mangaStatsTab()
             ContentMode.NOVEL -> novelStatsTab()
         }.copy(titleRes = MR.strings.label_stats_short, navigateUp = null)
 
         // Calendar tab — embeds the Upcoming screen content directly
         val calendarTab = when (contentMode) {
-            ContentMode.ANIME -> {
+            ContentMode.SHOWS -> {
                 val screenModel = rememberScreenModel { UpcomingAnimeScreenModel() }
                 val state by screenModel.state.collectAsState()
                 TabContent(
@@ -141,7 +139,7 @@ data object UpdatesTab : Tab {
                         UpcomingAnimeScreenContent(
                             state = state,
                             setSelectedYearMonth = screenModel::setSelectedYearMonth,
-                            onClickUpcoming = { navigator.push(AnimeScreen(it.id)) },
+                            onClickUpcoming = { navigator.push(ShowsScreen(it.id)) },
                             modifier = Modifier.padding(contentPadding),
                         )
                     },

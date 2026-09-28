@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,7 +26,6 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.domain.ui.model.ContentMode.Companion.carouselOrderFor
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -47,13 +45,13 @@ fun ModePill(
     val uiPreferences = remember { Injekt.get<UiPreferences>() }
     val contentMode by uiPreferences.contentMode().collectAsStateWithLifecycle()
     val showManga by uiPreferences.showMangaMode().collectAsStateWithLifecycle()
-    val showAnime by uiPreferences.showAnimeMode().collectAsStateWithLifecycle()
+    val showAnime by uiPreferences.showShowsMode().collectAsStateWithLifecycle()
     val showNovel by uiPreferences.showNovelMode().collectAsStateWithLifecycle()
 
     val visibleModes = remember(showManga, showAnime, showNovel) {
         val modes = mutableSetOf<ContentMode>()
         if (showManga) modes.add(ContentMode.MANGA)
-        if (showAnime) modes.add(ContentMode.ANIME)
+        if (showAnime) modes.add(ContentMode.SHOWS)
         if (showNovel) modes.add(ContentMode.NOVEL)
         carouselOrderFor(modes)
     }

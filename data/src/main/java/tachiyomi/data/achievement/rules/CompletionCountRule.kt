@@ -21,7 +21,7 @@ class CompletionCountRule(
                 category == AchievementCategory.MANGA ||
                     category == AchievementCategory.BOTH
             is AchievementEvent.AnimeCompleted ->
-                category == AchievementCategory.ANIME ||
+                category == AchievementCategory.SHOWS ||
                     category == AchievementCategory.BOTH
             is AchievementEvent.NovelCompleted ->
                 category == AchievementCategory.NOVEL ||

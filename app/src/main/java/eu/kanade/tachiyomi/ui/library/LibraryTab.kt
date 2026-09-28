@@ -13,12 +13,11 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
+import eu.kanade.tachiyomi.ui.library.shows.ShowsLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
 import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryTab
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -50,7 +49,7 @@ data object LibraryTab : Tab {
 
     override suspend fun onReselect(navigator: Navigator) {
         when (uiPreferences.contentMode().get()) {
-            ContentMode.ANIME -> AnimeLibraryTab.onReselect(navigator)
+            ContentMode.SHOWS -> ShowsLibraryTab.onReselect(navigator)
             ContentMode.MANGA -> MangaLibraryTab.onReselect(navigator)
             ContentMode.NOVEL -> NovelLibraryTab.onReselect(navigator)
         }
@@ -60,7 +59,7 @@ data object LibraryTab : Tab {
     override fun Content() {
         val contentMode by uiPreferences.contentMode().collectAsStateWithLifecycle()
         when (contentMode) {
-            ContentMode.ANIME -> AnimeLibraryTab.Content()
+            ContentMode.SHOWS -> ShowsLibraryTab.Content()
             ContentMode.MANGA -> MangaLibraryTab.Content()
             ContentMode.NOVEL -> NovelLibraryTab.Content()
         }
@@ -72,7 +71,7 @@ data object LibraryTab : Tab {
      */
     suspend fun search(query: String) {
         when (uiPreferences.contentMode().get()) {
-            ContentMode.ANIME -> AnimeLibraryTab.search(query)
+            ContentMode.SHOWS -> ShowsLibraryTab.search(query)
             ContentMode.MANGA -> MangaLibraryTab.search(query)
             ContentMode.NOVEL -> NovelLibraryTab.search(query)
         }

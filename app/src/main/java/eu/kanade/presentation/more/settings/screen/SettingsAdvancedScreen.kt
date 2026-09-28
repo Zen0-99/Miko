@@ -33,10 +33,10 @@ import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.advanced.ClearAnimeDatabaseScreen
 import eu.kanade.presentation.more.settings.screen.advanced.ClearDatabaseScreen
 import eu.kanade.presentation.more.settings.screen.debug.DebugInfoScreen
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadCache
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadCache
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
-import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
-import eu.kanade.tachiyomi.data.library.anime.AnimeMetadataUpdateJob
+import eu.kanade.tachiyomi.data.library.shows.ShowsLibraryUpdateJob
+import eu.kanade.tachiyomi.data.library.shows.ShowsMetadataUpdateJob
 import eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob
 import eu.kanade.tachiyomi.data.library.manga.MangaMetadataUpdateJob
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -202,7 +202,7 @@ object SettingsAdvancedScreen : SearchableSettings {
                     subtitle = stringResource(AYMR.strings.pref_invalidate_download_cache_summary),
                     onClick = {
                         Injekt.get<MangaDownloadCache>().invalidateCache()
-                        Injekt.get<AnimeDownloadCache>().invalidateCache()
+                        Injekt.get<ShowsDownloadCache>().invalidateCache()
                         context.toast(MR.strings.download_cache_invalidated)
                     },
                 ),
@@ -322,9 +322,9 @@ object SettingsAdvancedScreen : SearchableSettings {
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(MR.strings.pref_refresh_library_covers),
                     onClick = {
-                        AnimeLibraryUpdateJob.startNow(context)
+                        ShowsLibraryUpdateJob.startNow(context)
                         MangaLibraryUpdateJob.startNow(context)
-                        AnimeMetadataUpdateJob.startNow(context)
+                        ShowsMetadataUpdateJob.startNow(context)
                         MangaMetadataUpdateJob.startNow(context)
                     },
                 ),

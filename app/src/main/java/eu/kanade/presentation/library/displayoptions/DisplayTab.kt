@@ -28,7 +28,7 @@ import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
  */
 enum class LibraryType {
     MANGA,
-    ANIME,
+    SHOWS,
     NOVEL,
 }
 
@@ -62,12 +62,12 @@ fun DisplayTab(
     val columnPreference: Preference<Int> = remember(libraryType, configuration.orientation) {
         val portrait = when (libraryType) {
             LibraryType.MANGA -> libraryPreferences.mangaPortraitColumns()
-            LibraryType.ANIME -> libraryPreferences.animePortraitColumns()
+            LibraryType.SHOWS -> libraryPreferences.showsPortraitColumns()
             LibraryType.NOVEL -> libraryPreferences.novelPortraitColumns()
         }
         val landscape = when (libraryType) {
             LibraryType.MANGA -> libraryPreferences.mangaLandscapeColumns()
-            LibraryType.ANIME -> libraryPreferences.animeLandscapeColumns()
+            LibraryType.SHOWS -> libraryPreferences.showsLandscapeColumns()
             LibraryType.NOVEL -> libraryPreferences.novelLandscapeColumns()
         }
         if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) landscape else portrait
@@ -79,8 +79,11 @@ fun DisplayTab(
             value = columns,
             valueRange = 0..10,
             label = stringResource(AYMR.strings.pref_library_rows),
-            valueText = if (columns > 0) columns.toString()
-                        else stringResource(MR.strings.label_auto),
+            valueText = if (columns > 0) {
+                columns.toString()
+            } else {
+                stringResource(MR.strings.label_auto)
+            },
             onChange = columnPreference::set,
             pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         )
@@ -89,8 +92,11 @@ fun DisplayTab(
             value = columns,
             valueRange = 0..10,
             label = stringResource(MR.strings.pref_library_columns),
-            valueText = if (columns > 0) columns.toString()
-                        else stringResource(MR.strings.label_auto),
+            valueText = if (columns > 0) {
+                columns.toString()
+            } else {
+                stringResource(MR.strings.label_auto)
+            },
             onChange = columnPreference::set,
             pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         )

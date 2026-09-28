@@ -1,13 +1,13 @@
 package tachiyomi.domain.readingorder.interactor
 
-import tachiyomi.domain.entries.anime.interactor.GetAnime
+import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.novel.interactor.GetNovel
-import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
-import tachiyomi.domain.readingorder.repository.ReadingOrderRepository
+import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.readingorder.model.ReadingOrderEdge
+import tachiyomi.domain.readingorder.repository.ReadingOrderRepository
 
 class AutoRemoveCompletedReadingOrderEntries(
     private val repository: ReadingOrderRepository,
@@ -29,10 +29,10 @@ class AutoRemoveCompletedReadingOrderEntries(
         var anyRemoved = false
         val allOrders = mutableListOf<Long>()
         val mangaOrders = getReadingOrders.await("manga")
-        val animeOrders = getReadingOrders.await("anime")
+        val showsOrders = getReadingOrders.await("shows")
         val novelOrders = getReadingOrders.await("novel")
         allOrders.addAll(mangaOrders.map { it.id })
-        allOrders.addAll(animeOrders.map { it.id })
+        allOrders.addAll(showsOrders.map { it.id })
         allOrders.addAll(novelOrders.map { it.id })
 
         for (orderId in allOrders) {
@@ -84,7 +84,9 @@ class AutoRemoveCompletedReadingOrderEntries(
                 val chapters = getChaptersByMangaId.await(entryId)
                 chapters.isNotEmpty() && chapters.all { it.read }
             }
-            "anime" -> {
+            // "anime" is the pre-15-04 stored value — exported/shared reading-order
+            // JSON from older builds can still carry it.
+            "shows", "anime" -> {
                 val anime = getAnime.await(entryId) ?: return false
                 val episodes = getEpisodesByAnimeId.await(entryId)
                 episodes.isNotEmpty() && episodes.all { it.seen }

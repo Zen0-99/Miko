@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.data.suggestions
 
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
-import tachiyomi.domain.entries.anime.model.AnimeCover
+import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.entries.novel.model.NovelCover
 

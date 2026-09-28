@@ -85,7 +85,7 @@ class FailedFetchRepositoryImpl(
     ): FailedFetch = FailedFetch(
         id = id,
         entryId = entryId,
-        entryKind = EntryKind.valueOf(entryKind),
+        entryKind = EntryKind.fromString(entryKind),
         title = title,
         coverUrl = coverUrl,
         sourceId = sourceId,
@@ -94,4 +94,3 @@ class FailedFetchRepositoryImpl(
         timestamp = timestamp,
     )
 }
-

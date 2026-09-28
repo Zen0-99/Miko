@@ -1,16 +1,16 @@
 package eu.kanade.domain.items.episode.interactor
 
-import eu.kanade.domain.download.anime.interactor.DeleteEpisodeDownload
+import eu.kanade.domain.download.shows.interactor.DeleteEpisodeDownload
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.achievement.handler.AchievementEventBus
 import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.download.service.DownloadPreferences
-import tachiyomi.domain.entries.anime.model.Anime
-import tachiyomi.domain.entries.anime.repository.AnimeRepository
-import tachiyomi.domain.history.anime.interactor.UpsertAnimeHistory
-import tachiyomi.domain.history.anime.model.AnimeHistoryUpdate
+import tachiyomi.domain.entries.shows.model.Anime
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
+import tachiyomi.domain.history.shows.interactor.UpsertAnimeHistory
+import tachiyomi.domain.history.shows.model.AnimeHistoryUpdate
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.repository.EpisodeRepository

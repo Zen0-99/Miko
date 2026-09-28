@@ -1,6 +1,6 @@
 package tachiyomi.domain.items.season.interactor
 
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 
 class ShouldUpdateDbSeason {
     fun await(dbSeason: Anime, sourceSeason: Anime): Boolean {

@@ -11,9 +11,9 @@ import tachiyomi.i18n.aniyomi.AYMR
  * current mode.
  */
 enum class ContentMode(val titleRes: StringResource) {
-    ANIME(AYMR.strings.label_anime),
-    MANGA(AYMR.strings.label_manga),
-    NOVEL(AYMR.strings.label_novel),
+    SHOWS(AYMR.strings.carrier_shows),
+    MANGA(AYMR.strings.carrier_manga),
+    NOVEL(AYMR.strings.carrier_books),
     ;
 
     /** Index in [carouselOrder]; used to compute peeking neighbors with wrap-around. */
@@ -28,7 +28,7 @@ enum class ContentMode(val titleRes: StringResource) {
 
     companion object {
         /** Circular order used by the swipeable title carousel. */
-        val carouselOrder: List<ContentMode> = listOf(MANGA, ANIME, NOVEL)
+        val carouselOrder: List<ContentMode> = listOf(MANGA, SHOWS, NOVEL)
 
         /**
          * Returns the carousel order filtered to only include [visible] modes.

@@ -12,7 +12,7 @@ import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
-import tachiyomi.domain.entries.anime.repository.AnimeRepository
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -138,7 +138,8 @@ class AchievementBackupCreator(
             val animeCompleted = libraryAnime.count { it.anime.status == 2L }
 
             val chaptersRead = mangaHandler.awaitOneOrNull { chaptersQueries.getTotalReadChapterCount() }?.toInt() ?: 0
-            val episodesWatched = animeHandler.awaitOneOrNull { episodesQueries.getTotalSeenEpisodeCount() }?.toInt() ?: 0
+            val episodesWatched =
+                animeHandler.awaitOneOrNull { episodesQueries.getTotalSeenEpisodeCount() }?.toInt() ?: 0
 
             val mangaReadDuration = mangaHandler.awaitOneOrNull { historyQueries.getReadDuration() } ?: 0L
 

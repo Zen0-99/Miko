@@ -10,18 +10,18 @@ import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
+import eu.kanade.tachiyomi.ui.discovery.DiscoveryTab
 import eu.kanade.tachiyomi.ui.history.HistoriesTab
 import eu.kanade.tachiyomi.ui.home.hub.HomeHubTab
 import eu.kanade.tachiyomi.ui.library.LibraryTab
-import eu.kanade.tachiyomi.ui.more.MoreTab
 import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import tachiyomi.i18n.aniyomi.AYMR
 
 /**
  * Determines the bottom nav layout. With the More tab removed (replaced by a
  * three-dot overflow menu in each tab's top bar) and History moved into the
- * Updates tab as a sub-tab, the nav bar always shows 4 tabs:
- * Home, Library, Updates, Browse.
+ * Updates tab as a sub-tab, the nav bar always shows 5 tabs:
+ * Home, Discovery, Library, Updates, Browse.
  *
  * The enum values are kept for backward compatibility with stored preferences,
  * but no longer affect which tabs are visible.
@@ -47,6 +47,7 @@ enum class NavStyle(
         get() {
             return listOf(
                 HomeHubTab,
+                DiscoveryTab,
                 LibraryTab,
                 UpdatesTab,
                 BrowseTab,

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.PlayArrow
@@ -48,13 +49,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -71,9 +70,9 @@ import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.components.NestedMenuItem
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.download.anime.AnimeDownloadHeaderItem
-import eu.kanade.tachiyomi.ui.download.anime.AnimeDownloadQueueScreenModel
-import eu.kanade.tachiyomi.ui.download.anime.animeDownloadTab
+import eu.kanade.tachiyomi.ui.download.shows.ShowsDownloadHeaderItem
+import eu.kanade.tachiyomi.ui.download.shows.ShowsDownloadQueueScreenModel
+import eu.kanade.tachiyomi.ui.download.shows.animeDownloadTab
 import eu.kanade.tachiyomi.ui.download.manga.MangaDownloadHeaderItem
 import eu.kanade.tachiyomi.ui.download.manga.MangaDownloadQueueScreenModel
 import eu.kanade.tachiyomi.ui.download.manga.mangaDownloadTab
@@ -107,7 +106,7 @@ data object DownloadsTab : Tab {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
-        val animeScreenModel = rememberScreenModel { AnimeDownloadQueueScreenModel() }
+        val animeScreenModel = rememberScreenModel { ShowsDownloadQueueScreenModel() }
         val mangaScreenModel = rememberScreenModel { MangaDownloadQueueScreenModel() }
         val novelScreenModel = rememberScreenModel { NovelDownloadQueueScreenModel() }
         val animeDownloadListRaw by animeScreenModel.state.collectAsState()
@@ -118,22 +117,31 @@ data object DownloadsTab : Tab {
         val animeDownloadList by remember(animeDownloadListRaw, searchQuery) {
             derivedStateOf {
                 val q = searchQuery
-                if (q.isNullOrBlank()) animeDownloadListRaw
-                else animeDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+                if (q.isNullOrBlank()) {
+                    animeDownloadListRaw
+                } else {
+                    animeDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+                }
             }
         }
         val mangaDownloadList by remember(mangaDownloadListRaw, searchQuery) {
             derivedStateOf {
                 val q = searchQuery
-                if (q.isNullOrBlank()) mangaDownloadListRaw
-                else mangaDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+                if (q.isNullOrBlank()) {
+                    mangaDownloadListRaw
+                } else {
+                    mangaDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+                }
             }
         }
         val novelDownloadList by remember(novelDownloadListRaw, searchQuery) {
             derivedStateOf {
                 val q = searchQuery
-                if (q.isNullOrBlank()) novelDownloadListRaw
-                else novelDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+                if (q.isNullOrBlank()) {
+                    novelDownloadListRaw
+                } else {
+                    novelDownloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+                }
             }
         }
         val animeDownloadCount by remember {
@@ -377,7 +385,7 @@ data object DownloadsTab : Tab {
                             onClick = { scope.launch { state.animateScrollToPage(0) } },
                             text = {
                                 TabText(
-                                    text = stringResource(AYMR.strings.label_anime),
+                                    text = stringResource(AYMR.strings.carrier_shows),
                                     badgeCount = animeDownloadCount,
                                 )
                             },
@@ -399,7 +407,7 @@ data object DownloadsTab : Tab {
                             onClick = { scope.launch { state.animateScrollToPage(2) } },
                             text = {
                                 TabText(
-                                    text = stringResource(AYMR.strings.label_novel),
+                                    text = stringResource(AYMR.strings.carrier_books),
                                     badgeCount = novelDownloadCount,
                                 )
                             },
@@ -441,8 +449,8 @@ data object DownloadsTab : Tab {
 
     @Composable
     private fun AnimeActions(
-        animeScreenModel: AnimeDownloadQueueScreenModel,
-        animeDownloadList: List<AnimeDownloadHeaderItem>,
+        animeScreenModel: ShowsDownloadQueueScreenModel,
+        animeDownloadList: List<ShowsDownloadHeaderItem>,
     ) {
         if (animeDownloadList.isNotEmpty()) {
             var sortExpanded by remember { mutableStateOf(false) }

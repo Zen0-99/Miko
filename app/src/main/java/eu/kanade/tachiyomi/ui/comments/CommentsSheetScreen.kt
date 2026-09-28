@@ -26,7 +26,7 @@ import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.tachiyomi.data.comments.ChapterThreadResolver
 import eu.kanade.tachiyomi.data.comments.ThreadIdResolver
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
-import tachiyomi.domain.entries.anime.interactor.GetAnime
+import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.i18n.MR
@@ -80,7 +80,7 @@ class CommentsSheetScreen(
             entryId = entryId,
             cover = resolved?.cover,
             type = when (carrier) {
-                Carrier.SHOWS -> EntryCoverMetadata.EntryType.ANIME
+                Carrier.SHOWS -> EntryCoverMetadata.EntryType.SHOWS
                 Carrier.MANGA -> EntryCoverMetadata.EntryType.MANGA
                 Carrier.BOOKS -> EntryCoverMetadata.EntryType.NOVEL
             },
@@ -181,7 +181,7 @@ class CommentsSheetScreen(
         // colons (mk:mb:1), so strip only the first segment.
         val workId = workThread.substringAfter(':')
         val threadId = when (carrier) {
-            Carrier.SHOWS -> chapterResolver.animeEpisode(workId, chapter.number)
+            Carrier.SHOWS -> chapterResolver.episode(workId, chapter.number)
             Carrier.MANGA -> chapterResolver.chapter(
                 carrier = Carrier.MANGA,
                 workId = workId,

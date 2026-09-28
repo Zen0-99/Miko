@@ -26,7 +26,7 @@ import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.core.metadata.tachiyomi.AnimeDetails
 import tachiyomi.core.metadata.tachiyomi.EpisodeDetails
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.items.episode.service.EpisodeRecognition
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.source.local.filter.anime.AnimeOrderBy
@@ -362,6 +362,8 @@ actual class LocalAnimeSource(
     }
 }
 
-fun Anime.isLocal(): Boolean = source == LocalAnimeSource.ID
+// Cinemeta unified entries also carry source id 0 — they're remote stubs,
+// not local files, so the local badge must exclude them.
+fun Anime.isLocal(): Boolean = source == LocalAnimeSource.ID && !url.startsWith("cinemeta:")
 
 fun AnimeSource.isLocal(): Boolean = id == LocalAnimeSource.ID

@@ -19,17 +19,19 @@ import eu.kanade.presentation.collection.visualName
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.PreferenceItem
 import eu.kanade.presentation.more.settings.widget.TriStateListDialog
-import eu.kanade.tachiyomi.data.library.anime.AnimeLibraryUpdateJob
+import eu.kanade.tachiyomi.data.library.shows.ShowsLibraryUpdateJob
 import eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob
 import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.launch
-import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.shows.interactor.ResetAnimeCollectionFlags
 import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.collection.manga.interactor.ResetMangaCollectionFlags
 import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.collection.novel.interactor.ResetNovelCollectionFlags
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_CHARGING
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_NETWORK_NOT_METERED
@@ -66,7 +68,8 @@ object SettingsLibraryScreen : SearchableSettings {
         val allCollections by getCollections.subscribe().collectAsState(initial = emptyList())
         val getAnimeCollections = remember { Injekt.get<GetAnimeCollections>() }
         val allAnimeCollections by getAnimeCollections.subscribe().collectAsState(initial = emptyList())
-        val getNovelCollections = remember { Injekt.get<tachiyomi.domain.collection.novel.interactor.GetNovelCollections>() }
+        val getNovelCollections =
+            remember { Injekt.get<tachiyomi.domain.collection.novel.interactor.GetNovelCollections>() }
         val allNovelCollections by getNovelCollections.subscribe().collectAsState(initial = emptyList())
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
 
@@ -101,7 +104,7 @@ object SettingsLibraryScreen : SearchableSettings {
         // For default collection
         val mangaIds = listOf(libraryPreferences.defaultMangaCollection().defaultValue()) +
             allCollections.fastMap { it.id.toInt() }
-        val animeIds = listOf(libraryPreferences.defaultAnimeCollection().defaultValue()) +
+        val animeIds = listOf(libraryPreferences.defaultShowsCollection().defaultValue()) +
             allAnimeCollections.fastMap { it.id.toInt() }
         val novelIds = listOf(libraryPreferences.defaultNovelCollection().defaultValue()) +
             allNovelCollections.fastMap { it.id.toInt() }
@@ -126,7 +129,7 @@ object SettingsLibraryScreen : SearchableSettings {
                     onClick = { navigator.push(CollectionsTab) },
                 ),
                 Preference.PreferenceItem.ListPreference(
-                    preference = libraryPreferences.defaultAnimeCollection(),
+                    preference = libraryPreferences.defaultShowsCollection(),
                     entries = animeIds.zip(animeLabels).toMap().toImmutableMap(),
                     title = stringResource(AYMR.strings.default_anime_collection),
                 ),
@@ -171,8 +174,8 @@ object SettingsLibraryScreen : SearchableSettings {
                         if (!it) {
                             scope.launch {
                                 Injekt.get<ResetMangaCollectionFlags>().await()
-                                Injekt.get<tachiyomi.domain.collection.anime.interactor.ResetAnimeCollectionFlags>().await()
-                                Injekt.get<tachiyomi.domain.collection.novel.interactor.ResetNovelCollectionFlags>().await()
+                                Injekt.get<ResetAnimeCollectionFlags>().await()
+                                Injekt.get<ResetNovelCollectionFlags>().await()
                             }
                         }
                         true
@@ -198,9 +201,9 @@ object SettingsLibraryScreen : SearchableSettings {
         val autoUpdateIntervalPref = libraryPreferences.autoUpdateInterval()
         val autoUpdateInterval by autoUpdateIntervalPref.collectAsState()
 
-        val animeAutoUpdateCollectionsPref = libraryPreferences.animeUpdateCollections()
+        val animeAutoUpdateCollectionsPref = libraryPreferences.showsUpdateCollections()
         val animeAutoUpdateCollectionsExcludePref =
-            libraryPreferences.animeUpdateCollectionsExclude()
+            libraryPreferences.showsUpdateCollectionsExclude()
 
         val includedAnime by animeAutoUpdateCollectionsPref.collectAsState()
         val excludedAnime by animeAutoUpdateCollectionsExcludePref.collectAsState()
@@ -211,7 +214,9 @@ object SettingsLibraryScreen : SearchableSettings {
                 message = stringResource(AYMR.strings.pref_anime_library_update_collections_details),
                 items = allAnimeCollections,
                 initialChecked = includedAnime.mapNotNull { id -> allAnimeCollections.find { it.id.toString() == id } },
-                initialInversed = excludedAnime.mapNotNull { id -> allAnimeCollections.find { it.id.toString() == id } },
+                initialInversed = excludedAnime.mapNotNull { id ->
+                    allAnimeCollections.find { it.id.toString() == id }
+                },
                 itemLabel = { it.visualName },
                 onDismissRequest = { showAnimeCollectionsDialog = false },
                 onValueChanged = { newIncluded, newExcluded ->
@@ -238,7 +243,9 @@ object SettingsLibraryScreen : SearchableSettings {
                 message = stringResource(AYMR.strings.pref_manga_library_update_collections_details),
                 items = allMangaCollections,
                 initialChecked = includedManga.mapNotNull { id -> allMangaCollections.find { it.id.toString() == id } },
-                initialInversed = excludedManga.mapNotNull { id -> allMangaCollections.find { it.id.toString() == id } },
+                initialInversed = excludedManga.mapNotNull { id ->
+                    allMangaCollections.find { it.id.toString() == id }
+                },
                 itemLabel = { it.visualName },
                 onDismissRequest = { showMangaCollectionsDialog = false },
                 onValueChanged = { newIncluded, newExcluded ->
@@ -265,7 +272,9 @@ object SettingsLibraryScreen : SearchableSettings {
                 message = stringResource(AYMR.strings.pref_novel_library_update_collections_details),
                 items = allNovelCollections,
                 initialChecked = includedNovel.mapNotNull { id -> allNovelCollections.find { it.id.toString() == id } },
-                initialInversed = excludedNovel.mapNotNull { id -> allNovelCollections.find { it.id.toString() == id } },
+                initialInversed = excludedNovel.mapNotNull { id ->
+                    allNovelCollections.find { it.id.toString() == id }
+                },
                 itemLabel = { it.visualName },
                 onDismissRequest = { showNovelCollectionsDialog = false },
                 onValueChanged = { newIncluded, newExcluded ->
@@ -295,7 +304,7 @@ object SettingsLibraryScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_library_update_interval),
                     onValueChanged = {
                         MangaLibraryUpdateJob.setupTask(context, it)
-                        AnimeLibraryUpdateJob.setupTask(context, it)
+                        ShowsLibraryUpdateJob.setupTask(context, it)
                         eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob.setupTask(context, it)
                         true
                     },
@@ -314,7 +323,7 @@ object SettingsLibraryScreen : SearchableSettings {
                         // Post to event looper to allow the preference to be updated.
                         ContextCompat.getMainExecutor(context).execute {
                             MangaLibraryUpdateJob.setupTask(context)
-                            AnimeLibraryUpdateJob.setupTask(context)
+                            ShowsLibraryUpdateJob.setupTask(context)
                             eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob.setupTask(context)
                         }
                         true

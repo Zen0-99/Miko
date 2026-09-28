@@ -7,10 +7,11 @@ import eu.kanade.tachiyomi.animesource.model.Hoster.Companion.toHosterList
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadManager
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.HosterState
 import kotlinx.coroutines.CancellationException
-import tachiyomi.domain.entries.anime.model.Anime
+import okhttp3.Headers
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.source.local.entries.anime.LocalAnimeSource
 import tachiyomi.source.local.io.anime.LocalAnimeSourceFileSystem
@@ -47,7 +48,7 @@ class EpisodeLoader {
          * @param anime the anime of the episode.
          */
         fun isDownload(episode: Episode, anime: Anime): Boolean {
-            val downloadManager: AnimeDownloadManager = Injekt.get()
+            val downloadManager: ShowsDownloadManager = Injekt.get()
             return downloadManager.isEpisodeDownloaded(
                 episode.name,
                 episode.scanlator,
@@ -107,7 +108,7 @@ class EpisodeLoader {
             anime: Anime,
             source: AnimeSource,
         ): List<Hoster> {
-            val downloadManager: AnimeDownloadManager = Injekt.get()
+            val downloadManager: ShowsDownloadManager = Injekt.get()
             return try {
                 val video = downloadManager.buildVideo(source, anime, episode)
                 listOf(video).toHosterList()
@@ -159,9 +160,26 @@ class EpisodeLoader {
             }
 
             return if (source is AnimeHttpSource) {
-                source.run { videos.sortVideos() }
+                source.run { videos.withSourceHeaders(source).sortVideos() }
             } else {
                 videos
+            }
+        }
+
+        /**
+         * Merges the source's headers into each video and defaults a `Referer`
+         * to the source's base url when none is set. Extensions often omit a
+         * referer even though their media CDN requires it (e.g. vidcache).
+         */
+        private fun List<Video>.withSourceHeaders(source: AnimeHttpSource): List<Video> {
+            return map { video ->
+                val base = video.headers ?: source.headers
+                if (base != null && base.values("Referer").isNotEmpty()) return@map video
+                video.copy(
+                    headers = (base?.newBuilder() ?: Headers.Builder())
+                        .add("Referer", source.baseUrl.trimEnd('/') + "/")
+                        .build(),
+                )
             }
         }
 

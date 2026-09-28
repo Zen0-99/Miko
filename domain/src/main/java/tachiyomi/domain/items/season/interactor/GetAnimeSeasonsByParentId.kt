@@ -1,9 +1,9 @@
 package tachiyomi.domain.items.season.interactor
 
-import miko.domain.anime.SeasonAnime
 import logcat.LogPriority
+import miko.domain.shows.SeasonAnime
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.entries.anime.repository.AnimeRepository
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
 
 class GetAnimeSeasonsByParentId(
     private val animeRepository: AnimeRepository,

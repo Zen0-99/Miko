@@ -28,7 +28,7 @@ class ThreeRealmsRule(
 
     private suspend fun computeMin(context: RuleContext): Int {
         val manga = context.getLibraryCount(AchievementCategory.MANGA)
-        val anime = context.getLibraryCount(AchievementCategory.ANIME)
+        val anime = context.getLibraryCount(AchievementCategory.SHOWS)
         val novel = context.getLibraryCount(AchievementCategory.NOVEL)
         return min(min(manga, anime), novel)
     }

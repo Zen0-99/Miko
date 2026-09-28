@@ -13,7 +13,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 /**
- * Comment thread for one canonical work (`threadId` = `anime|manga|novel:<workId>`).
+ * Comment thread for one canonical work (`threadId` = `shows|manga|books:<workId>`).
  * Maps [CommentsApi.Result] onto UI state: suspension countdown, name onboarding,
  * degraded banner, per-comment `my_vote`.
  */

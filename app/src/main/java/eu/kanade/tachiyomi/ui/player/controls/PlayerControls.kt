@@ -17,6 +17,7 @@
 
 package eu.kanade.tachiyomi.ui.player.controls
 
+import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -52,13 +53,17 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.constraintlayout.compose.Dimension
+import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.more.settings.screen.player.custombutton.getButtons
 import eu.kanade.presentation.theme.playerRippleConfiguration
+import eu.kanade.tachiyomi.ui.comments.CommentsSheetScreen
 import eu.kanade.tachiyomi.ui.player.Dialogs
 import eu.kanade.tachiyomi.ui.player.Panels
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
@@ -68,12 +73,13 @@ import eu.kanade.tachiyomi.ui.player.Sheets
 import eu.kanade.tachiyomi.ui.player.VideoAspect
 import eu.kanade.tachiyomi.ui.player.controls.components.BrightnessOverlay
 import eu.kanade.tachiyomi.ui.player.controls.components.BrightnessSlider
+import eu.kanade.tachiyomi.ui.player.controls.components.CommentsDock
 import eu.kanade.tachiyomi.ui.player.controls.components.ControlsButton
-import eu.kanade.tachiyomi.ui.player.controls.components.SeekbarWithTimers
 import eu.kanade.tachiyomi.ui.player.controls.components.ResumeOverlay
+import eu.kanade.tachiyomi.ui.player.controls.components.SeekbarWithTimers
 import eu.kanade.tachiyomi.ui.player.controls.components.TextPlayerUpdate
-import eu.kanade.tachiyomi.ui.player.controls.components.UpNextOverlay
 import eu.kanade.tachiyomi.ui.player.controls.components.ThumbnailPreview
+import eu.kanade.tachiyomi.ui.player.controls.components.UpNextOverlay
 import eu.kanade.tachiyomi.ui.player.controls.components.VolumeSlider
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.toFixed
 import eu.kanade.tachiyomi.ui.player.settings.AudioPreferences
@@ -84,11 +90,11 @@ import `is`.xyz.mpv.MPVLib
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.source.local.entries.anime.LocalAnimeSource
-import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.math.pow
@@ -512,6 +518,8 @@ fun PlayerControls(
                         onAudioLongClick = { viewModel.showPanel(Panels.AudioDelay) },
                         onQualityClick = { viewModel.showSheet(Sheets.QualityTracks) },
                         isEpisodeOnline = isEpisodeOnline,
+                        onCommentsClick = { viewModel.showCommentsSheet() }
+                            .takeIf { viewModel.commentsEnabled },
                         onMoreClick = { viewModel.showSheet(Sheets.More) },
                         onMoreLongClick = { viewModel.showPanel(Panels.VideoFilters) },
                     )
@@ -689,6 +697,50 @@ fun PlayerControls(
         val dialog by viewModel.dialogShown.collectAsState()
         val anime by viewModel.currentAnime.collectAsState()
         val playlist by viewModel.currentPlaylist.collectAsState()
+        val currentEpisode by viewModel.currentEpisode.collectAsState()
+
+        if (sheetShown == Sheets.Comments) {
+            val commentsAnime = anime
+            val commentsEpisode = currentEpisode
+            val commentsSourceName = currentSource?.name
+            if (commentsAnime != null && commentsEpisode != null && commentsSourceName != null) {
+                val commentsScreen = CommentsSheetScreen(
+                    carrier = Carrier.SHOWS,
+                    entryId = commentsAnime.id,
+                    chapter = CommentsSheetScreen.ChapterRef(
+                        name = commentsEpisode.name,
+                        number = commentsEpisode.episode_number,
+                        sourceKey = commentsSourceName,
+                        allChapters = playlist.map { it.name to it.episode_number },
+                    ),
+                    // The docked panel is full-height; the sheet wraps content.
+                    fillHeight = LocalConfiguration.current.orientation ==
+                        Configuration.ORIENTATION_LANDSCAPE,
+                )
+                if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                    CommentsDock(
+                        screen = commentsScreen,
+                        onDismissRequest = { viewModel.showSheet(Sheets.None) },
+                    )
+                } else {
+                    NavigatorAdaptiveSheet(
+                        screen = commentsScreen,
+                        onDismissRequest = { viewModel.showSheet(Sheets.None) },
+                    )
+                }
+            } else {
+                viewModel.showSheet(Sheets.None)
+            }
+        }
+
+        // The comments sheet is scoped to a single episode — dismiss it if the
+        // episode changes (auto-next, playlist selection) so a stale thread
+        // isn't shown.
+        LaunchedEffect(currentEpisode?.id) {
+            if (sheetShown == Sheets.Comments) {
+                viewModel.showSheet(Sheets.None)
+            }
+        }
 
         PlayerDialogs(
             dialogShown = dialog,

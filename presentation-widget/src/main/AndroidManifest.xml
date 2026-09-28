@@ -20,7 +20,7 @@
             android:name="tachiyomi.presentation.widget.entries.anime.AnimeUpdatesGridGlanceReceiver"
             android:enabled="@bool/glance_appwidget_available"
             android:exported="false"
-            android:label="@string/label_recent_anime_updates">
+            android:label="@string/carrier_shows_recent_updates">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -53,7 +53,7 @@
             android:name="tachiyomi.presentation.widget.entries.anime.AnimeUpdatesGridCoverScreenGlanceReceiver"
             android:enabled="@bool/glance_appwidget_available"
             android:exported="false"
-            android:label="@string/label_recent_anime_updates">
+            android:label="@string/carrier_shows_recent_updates">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

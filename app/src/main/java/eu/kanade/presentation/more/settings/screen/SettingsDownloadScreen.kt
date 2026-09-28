@@ -31,7 +31,7 @@ import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toPersistentMap
-import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
+import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
 import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.download.service.DownloadPreferences
@@ -221,7 +221,9 @@ object SettingsDownloadScreen : SearchableSettings {
                 message = stringResource(MR.strings.pref_download_new_collections_details),
                 items = allAnimeCollections,
                 initialChecked = includedAnime.mapNotNull { id -> allAnimeCollections.find { it.id.toString() == id } },
-                initialInversed = excludedAnime.mapNotNull { id -> allAnimeCollections.find { it.id.toString() == id } },
+                initialInversed = excludedAnime.mapNotNull { id ->
+                    allAnimeCollections.find { it.id.toString() == id }
+                },
                 itemLabel = { it.visualName },
                 onDismissRequest = { showAnimeDialog = false },
                 onValueChanged = { newIncluded, newExcluded ->

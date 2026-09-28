@@ -13,7 +13,7 @@ import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.main.MainActivity
-import eu.kanade.tachiyomi.ui.stats.anime.animeStatsTab
+import eu.kanade.tachiyomi.ui.stats.shows.animeStatsTab
 import eu.kanade.tachiyomi.ui.stats.manga.mangaStatsTab
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR

@@ -24,7 +24,7 @@ class EventHorizonCartographerRule(
     override suspend fun evaluateFull(context: RuleContext): Int {
         return eventHorizonCartographerProgress(
             mangaCount = context.getLibraryCount(AchievementCategory.MANGA),
-            animeCount = context.getLibraryCount(AchievementCategory.ANIME),
+            animeCount = context.getLibraryCount(AchievementCategory.SHOWS),
             novelCount = context.getLibraryCount(AchievementCategory.NOVEL),
             sourceDiversity = context.getSourceDiversity(AchievementCategory.BOTH),
         )

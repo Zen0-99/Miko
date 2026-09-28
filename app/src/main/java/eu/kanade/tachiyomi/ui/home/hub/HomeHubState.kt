@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.ui.model.ContentMode
 import tachiyomi.domain.achievement.model.MonthStats
-import tachiyomi.domain.history.anime.model.AnimeHistoryWithRelations
+import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
 import tachiyomi.i18n.aniyomi.AYMR
@@ -65,7 +65,8 @@ data class HomeHubState(
         get() = recentAnime.isNotEmpty() || recentManga.isNotEmpty() || recentNovels.isNotEmpty()
 
     val hasAnyRecentlyAdded: Boolean
-        get() = recentlyAddedAnime.isNotEmpty() || recentlyAddedManga.isNotEmpty() ||
+        get() = recentlyAddedAnime.isNotEmpty() ||
+            recentlyAddedManga.isNotEmpty() ||
             recentlyAddedNovels.isNotEmpty()
 
     val isEmpty: Boolean
@@ -77,26 +78,38 @@ data class HomeHubState(
         get() = recentAnime
             .distinctBy { it.animeId }
             .map {
-                HomeHubCardItem(it.animeId, it.title, it.coverData, HomeHubMediaType.ANIME, "Ep. ${it.episodeNumber}")
+                HomeHubCardItem(it.animeId, it.title, it.coverData, HomeHubMediaType.SHOWS, animeProgressLabel(it))
             }
 
     val recentMangaCards: List<HomeHubCardItem>
         get() = recentManga
             .distinctBy { it.mangaId }
             .map {
-                HomeHubCardItem(it.mangaId, it.title, it.coverData, HomeHubMediaType.MANGA, "Ch. ${it.chapterNumber}")
+                HomeHubCardItem(
+                    it.mangaId,
+                    it.title,
+                    it.coverData,
+                    HomeHubMediaType.MANGA,
+                    "Ch. ${eu.kanade.presentation.util.formatChapterNumber(it.chapterNumber)}",
+                )
             }
 
     val recentNovelCards: List<HomeHubCardItem>
         get() = recentNovels
             .distinctBy { it.novelId }
             .map {
-                HomeHubCardItem(it.novelId, it.title, it.coverData, HomeHubMediaType.NOVEL, "Ch. ${it.chapterNumber}")
+                HomeHubCardItem(
+                    it.novelId,
+                    it.title,
+                    it.coverData,
+                    HomeHubMediaType.NOVEL,
+                    "Ch. ${eu.kanade.presentation.util.formatChapterNumber(it.chapterNumber)}",
+                )
             }
 
     val recentlyAddedAnimeCards: List<HomeHubCardItem>
         get() = recentlyAddedAnime.map {
-            HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.ANIME)
+            HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.SHOWS)
         }
 
     val recentlyAddedMangaCards: List<HomeHubCardItem>
@@ -108,6 +121,26 @@ data class HomeHubState(
         get() = recentlyAddedNovels.map {
             HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.NOVEL)
         }
+}
+
+/**
+ * Progress label for a recent-anime card / hero:
+ * - Cinemeta movies: runtime ("2h 07min") — a movie has one virtual episode,
+ *   so "Ep. 1" is meaningless.
+ * - Cinemeta series: "S2 · Ep. 5" — the season is encoded in the episode's
+ *   scanlator field ("Season N|★R.R").
+ * - Everything else: "Ep. 5".
+ */
+internal fun animeProgressLabel(item: AnimeHistoryWithRelations): String {
+    return when {
+        item.isCinemetaMovie ->
+            eu.kanade.presentation.util.formatRuntime(item.runtime) ?: "Movie"
+        else -> buildString {
+            item.cinemetaSeason?.takeIf { it > 0 }?.let { append("S$it · ") }
+            append("Ep. ")
+            append(eu.kanade.presentation.util.formatEpisodeNumber(item.episodeNumber))
+        }
+    }
 }
 
 @Immutable
@@ -133,10 +166,16 @@ data class HomeHubHero(
     val subId: Long,
     val mediaType: HomeHubMediaType,
     val allRead: Boolean = false,
+    // Anime-only extras for the resume label (season prefix, movie runtime).
+    val season: Int? = null,
+    val runtime: String? = null,
+    val isCinemetaMovie: Boolean = false,
 )
 
 enum class HomeHubMediaType {
-    ANIME, MANGA, NOVEL,
+    SHOWS,
+    MANGA,
+    NOVEL,
     ;
 
     val key: String
@@ -144,7 +183,9 @@ enum class HomeHubMediaType {
 
     companion object {
         fun fromKey(key: String): HomeHubMediaType {
-            return entries.firstOrNull { it.key == key } ?: ANIME
+            // Legacy fast-cache entries carry the pre-15-04 "anime" key.
+            if (key == "anime") return SHOWS
+            return entries.firstOrNull { it.key == key } ?: SHOWS
         }
     }
 }

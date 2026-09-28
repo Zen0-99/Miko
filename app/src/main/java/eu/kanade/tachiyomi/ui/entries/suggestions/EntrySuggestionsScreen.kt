@@ -54,8 +54,8 @@ import eu.kanade.tachiyomi.data.suggestions.SuggestionSeed
 import eu.kanade.tachiyomi.data.suggestions.SuggestionSourceWeight
 import eu.kanade.tachiyomi.data.suggestions.SuggestionState
 import eu.kanade.tachiyomi.data.suggestions.SuggestionTitleResolver
-import eu.kanade.tachiyomi.data.suggestions.anime.AnimeFallbackOutcome
-import eu.kanade.tachiyomi.data.suggestions.anime.AnimeSearchFallbackEngine
+import eu.kanade.tachiyomi.data.suggestions.shows.AnimeFallbackOutcome
+import eu.kanade.tachiyomi.data.suggestions.shows.AnimeSearchFallbackEngine
 import eu.kanade.tachiyomi.data.suggestions.manga.MangaFallbackOutcome
 import eu.kanade.tachiyomi.data.suggestions.manga.MangaSearchFallbackEngine
 import eu.kanade.tachiyomi.data.suggestions.novel.NovelFallbackOutcome
@@ -279,7 +279,7 @@ class EntrySuggestionsScreenModel(
                 val sourceManager = Injekt.get<AnimeSourceManager>()
                 val source = sourceManager.getOrStub(sourceId) as? AnimeCatalogueSource
                     ?: return emptyList()
-                val dummyAnime = tachiyomi.domain.entries.anime.model.Anime.create().copy(
+                val dummyAnime = tachiyomi.domain.entries.shows.model.Anime.create().copy(
                     url = entryUrl,
                     title = seed.primaryTitle,
                     author = seed.author,

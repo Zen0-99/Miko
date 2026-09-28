@@ -154,7 +154,7 @@ class AchievementRepositoryImpl(
         return Achievement(
             id = id,
             type = AchievementType.valueOf(type),
-            category = AchievementCategory.valueOf(category),
+            category = AchievementCategory.fromString(category),
             threshold = threshold?.toInt(),
             points = points.toInt(),
             title = title,

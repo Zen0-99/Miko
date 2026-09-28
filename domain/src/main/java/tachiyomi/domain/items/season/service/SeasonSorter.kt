@@ -1,8 +1,8 @@
 package tachiyomi.domain.items.season.service
 
-import miko.domain.anime.SeasonAnime
+import miko.domain.shows.SeasonAnime
 import tachiyomi.core.common.util.lang.compareToWithCollator
-import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.entries.shows.model.Anime
 
 val seasonSortAlphabetically: (SeasonAnime, SeasonAnime) -> Int = { i1, i2 ->
     i1.anime.title.lowercase().compareToWithCollator(i2.anime.title.lowercase())

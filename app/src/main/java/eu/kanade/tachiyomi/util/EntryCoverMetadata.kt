@@ -27,11 +27,19 @@ object EntryCoverMetadata {
     enum class EntryType(val prefKey: String) {
         NOVEL("novel_cover_colors"),
         MANGA("manga_cover_colors"),
-        ANIME("anime_cover_colors"),
+
+        /** Legacy pref key `anime_cover_colors` retained — it's a storage id. */
+        SHOWS("anime_cover_colors"),
     }
 
     private val preferenceStore: PreferenceStore by lazy { Injekt.get() }
     private val colorMaps = ConcurrentHashMap<EntryType, ConcurrentHashMap<Long, Int>>()
+
+    // Which cover the cached color was extracted from (hash of the cover
+    // data). When the cover changes — e.g. a Cinemeta anime's per-season
+    // poster swap — the cached color no longer applies and must be
+    // re-extracted.
+    private val coverKeyMaps = ConcurrentHashMap<EntryType, ConcurrentHashMap<Long, Int>>()
 
     private val loaded = java.util.Collections.synchronizedSet(mutableSetOf<EntryType>())
 
@@ -44,31 +52,45 @@ object EntryCoverMetadata {
                     val splits = entry.split("|")
                     val id = splits.firstOrNull()?.toLongOrNull()
                     val color = splits.getOrNull(1)?.toIntOrNull()
-                    if (id != null && color != null) id to color else null
-                }.toMap()
-            colorMaps[type] = ConcurrentHashMap(restored)
+                    val coverKey = splits.getOrNull(2)?.toIntOrNull()
+                    if (id != null && color != null) Triple(id, color, coverKey) else null
+                }
+            colorMaps[type] = ConcurrentHashMap(restored.associate { it.first to it.second })
+            coverKeyMaps[type] = ConcurrentHashMap(
+                restored.mapNotNull { (id, _, key) -> key?.let { id to it } }.toMap(),
+            )
             loaded.add(type)
         }
     }
 
     /**
      * Returns the cached base (raw) cover color for [entryId], or null if not yet
-     * extracted. The caller must apply theme-light/dark adjustment before use.
+     * extracted. When [coverKey] is provided, the cached color is only returned
+     * if it was extracted from that same cover — a changed cover (e.g. season
+     * poster swap) forces re-extraction. The caller must apply theme-light/dark
+     * adjustment before use.
      */
     @ColorInt
-    fun getBaseColor(type: EntryType, entryId: Long?): Int? {
+    fun getBaseColor(type: EntryType, entryId: Long?, coverKey: String? = null): Int? {
         entryId ?: return null
         ensureLoaded(type)
+        if (coverKey != null && coverKeyMaps[type]?.get(entryId) != coverKey.hashCode()) {
+            return null
+        }
         return colorMaps[type]?.get(entryId)
     }
 
     /**
-     * Stores the extracted base cover color for [entryId].
+     * Stores the extracted base cover color for [entryId], tagged with the
+     * [coverKey] it was extracted from so a cover change invalidates it.
      */
-    fun setBaseColor(type: EntryType, entryId: Long?, @ColorInt color: Int) {
+    fun setBaseColor(type: EntryType, entryId: Long?, @ColorInt color: Int, coverKey: String? = null) {
         entryId ?: return
         ensureLoaded(type)
         colorMaps[type]?.put(entryId, color)
+        if (coverKey != null) {
+            coverKeyMaps[type]?.put(entryId, coverKey.hashCode())
+        }
     }
 
     /**
@@ -78,6 +100,7 @@ object EntryCoverMetadata {
         entryId ?: return
         ensureLoaded(type)
         colorMaps[type]?.remove(entryId)
+        coverKeyMaps[type]?.remove(entryId)
     }
 
     /**
@@ -85,7 +108,9 @@ object EntryCoverMetadata {
      */
     fun savePrefs(type: EntryType) {
         ensureLoaded(type)
-        val encoded = colorMaps[type]?.map { "${it.key}|${it.value}" }?.toSet() ?: emptySet()
+        val encoded = colorMaps[type]?.map { (id, color) ->
+            "$id|$color|${coverKeyMaps[type]?.get(id) ?: ""}"
+        }?.toSet() ?: emptySet()
         preferenceStore.getStringSet(type.prefKey).set(encoded)
     }
 }

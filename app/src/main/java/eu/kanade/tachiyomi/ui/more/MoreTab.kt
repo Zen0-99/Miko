@@ -21,7 +21,7 @@ import eu.kanade.domain.base.BasePreferences
 import eu.kanade.presentation.more.MoreScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
 import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.download.DownloadsTab
@@ -83,7 +83,7 @@ data object MoreTab : Tab {
 
 private class MoreScreenModel(
     private val downloadManager: MangaDownloadManager = Injekt.get(),
-    private val animeDownloadManager: AnimeDownloadManager = Injekt.get(),
+    private val animeDownloadManager: ShowsDownloadManager = Injekt.get(),
     preferences: BasePreferences = Injekt.get(),
 ) : ScreenModel {
 

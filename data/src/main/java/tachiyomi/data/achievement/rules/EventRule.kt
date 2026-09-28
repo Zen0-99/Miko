@@ -41,10 +41,10 @@ class EventRule(
     private suspend fun checkProgress(context: RuleContext): Int {
         return when (achievementId) {
             "first_chapter" -> if (context.getChaptersRead(AchievementCategory.MANGA) > 0) 1 else 0
-            "first_episode" -> if (context.getChaptersRead(AchievementCategory.ANIME) > 0) 1 else 0
+            "first_episode" -> if (context.getChaptersRead(AchievementCategory.SHOWS) > 0) 1 else 0
             "first_novel_chapter" -> if (context.getChaptersRead(AchievementCategory.NOVEL) > 0) 1 else 0
             "complete_1_manga" -> if (context.getCompletedCount(AchievementCategory.MANGA) > 0) 1 else 0
-            "complete_1_anime" -> if (context.getCompletedCount(AchievementCategory.ANIME) > 0) 1 else 0
+            "complete_1_anime" -> if (context.getCompletedCount(AchievementCategory.SHOWS) > 0) 1 else 0
             "complete_1_novel" -> if (context.getCompletedCount(AchievementCategory.NOVEL) > 0) 1 else 0
             "read_long_manga" -> if (context.hasCompletedWithMinChapters(AchievementCategory.MANGA, 200)) 1 else 0
             "read_long_novel" -> if (context.hasCompletedWithMinChapters(AchievementCategory.NOVEL, 200)) 1 else 0
