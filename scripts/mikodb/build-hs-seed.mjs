@@ -97,10 +97,11 @@ async function build() {
     const openFile = () => {
         fileNo += 1;
         fh = fs.createWriteStream(path.join(outDir, `seed-hs-${String(fileNo).padStart(3, '0')}.sql`));
-        fh.write('BEGIN;\n');
+        // No BEGIN/COMMIT — `wrangler d1 execute --remote --file=` rejects
+        // raw transaction statements (D1 wants its JS transaction API);
+        // every statement below is OR IGNORE so re-runs are idempotent.
     };
     const closeFile = async () => {
-        fh.write('COMMIT;\n');
         await new Promise((res, rej) => { fh.once('error', rej); fh.end(res); });
     };
     const w = (line) => fh.write(line + '\n');
@@ -115,7 +116,7 @@ async function build() {
         // every hentaistream row is adult content.
         w(`INSERT OR IGNORE INTO works_cache (miko_work_id, type, title, normalized_title, year, provider_links, medium, nsfw, fetched_at) VALUES (${sql(workId)}, 'series', ${sql(title)}, ${sql(normalize(title))}, ${year ?? 'NULL'}, '[]', 'shows', 1, ${fetchedAt});`);
         works++;
-        w(`INSERT INTO works_titles (miko_work_id, title, lang, normalized) VALUES (${sql(workId)}, ${sql(title)}, NULL, ${sql(normalize(title))});`);
+        w(`INSERT OR IGNORE INTO works_titles (miko_work_id, title, lang, normalized) VALUES (${sql(workId)}, ${sql(title)}, NULL, ${sql(normalize(title))});`);
         titles++;
         const aliases = new Set([item.id, ...(idToAliases.get(item.id) ?? [])]);
         for (const alias of aliases) {

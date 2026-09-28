@@ -1,0 +1,9 @@
+name = "miko-comments"
+main = "src/index.ts"
+compatibility_date = "2025-09-06"
+
+[[d1_databases]]
+binding = "COMMENTS_DB"
+database_name = "miko-comments"
+database_id = "43cd58f5-a9fe-4e3e-8aff-35cb50bfb7a0"
+migrations_dir = "migrations"

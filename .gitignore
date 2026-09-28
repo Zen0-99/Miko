@@ -36,3 +36,11 @@ libs/
 
 # Code graph cache
 graphify-out/
+
+# Comments worker
+worker/node_modules/
+worker/.wrangler/
+
+# Regenerable catalog seeds
+seed-hs/
+seed-mb/

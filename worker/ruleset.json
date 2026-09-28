@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "comment": {
+    "min_len": 1,
+    "max_len": 2000,
+    "max_links": 3,
+    "blocklist": [],
+    "blocked_domains": [],
+    "spam_patterns": [
+      "\\b(buy|free|win)\\s+(now|here|followers|crypto)\\b",
+      "\\b(onlyfans|casino|slots|airdrop)\\b"
+    ],
+    "rate": { "posts_per_min": 3, "posts_per_hour": 20 },
+    "duplicate_window_h": 24
+  },
+  "name": {
+    "min_len": 2,
+    "max_len": 24,
+    "pattern": "^[\\p{L}\\p{N} _.-]+$",
+    "reserved": [
+      "miko", "admin", "administrator", "mod", "moderator", "system",
+      "anonymous", "staff", "support", "official", "dev", "developer",
+      "jev", "mangabaka", "cognition"
+    ]
+  }
+}

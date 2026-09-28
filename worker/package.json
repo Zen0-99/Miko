@@ -1,0 +1,20 @@
+{
+  "name": "miko-comments-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "migrate": "wrangler d1 migrations apply miko-comments",
+    "migrate:local": "wrangler d1 migrations apply miko-comments --local"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.7",
+    "@cloudflare/workers-types": "^5.20260925.1",
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.40.0"
+  }
+}
