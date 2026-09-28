@@ -44,7 +44,7 @@ import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.util.collectAsState
 
 /**
- * Discover browse content — rendered inline within BrowseTab.
+ * Shows discovery catalog — rendered inline within DiscoveryTab.
  * Uses the user's library display mode preference for the grid layout.
  */
 @Composable

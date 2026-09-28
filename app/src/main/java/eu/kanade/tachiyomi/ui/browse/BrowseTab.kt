@@ -48,7 +48,6 @@ import eu.kanade.presentation.components.useSharedTopBarWithSearch
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.data.mikodb.WorkIdResolver
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
@@ -71,13 +70,8 @@ import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.novelSourcesTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
-import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogContent
-import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogScreenModel
-import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseContent
-import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreenModel
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.collections.immutable.toImmutableList
-import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.anime.interactor.GetRemoteAnime
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.interactor.GetRemoteManga
@@ -92,7 +86,7 @@ import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-enum class BrowseMode { BROWSE, DISCOVER, EXTENSIONS }
+enum class BrowseMode { BROWSE, EXTENSIONS }
 
 data object BrowseTab : Tab {
 
@@ -122,12 +116,7 @@ data object BrowseTab : Tab {
 
         // Search state — query survives pill toggle
         var searchQuery by remember { mutableStateOf<String?>(null) }
-        // Discover is the default for anime mode; Browse is the default for manga/novel.
-        var browseMode by remember {
-            mutableStateOf(
-                if (contentMode == ContentMode.SHOWS) BrowseMode.DISCOVER else BrowseMode.BROWSE,
-            )
-        }
+        var browseMode by remember { mutableStateOf(BrowseMode.BROWSE) }
         // Whether the user has submitted the search (pressed enter/search on IME).
         // Results are only shown after submission, not while typing.
         var searchSubmitted by remember { mutableStateOf(false) }
@@ -144,34 +133,10 @@ data object BrowseTab : Tab {
         val mangaSourceSM = rememberScreenModel { MangaSourcesScreenModel() }
         val novelSourceSM = rememberScreenModel { NovelSourcesScreenModel() }
 
-        // Cinemeta discover screen model — hoisted here so search from the
-        // shared top bar can reach it, and the Movies/Series toggle doesn't
-        // navigate away (which would hide the top/bottom bars).
-        val cinemetaBrowseSM = rememberScreenModel { CinemetaBrowseScreenModel() }
-        // Canonical catalog discover — manga/novel counterpart of the
-        // Cinemeta surface, backed by miko-manga-map.db (NCM-007).
-        val canonicalSM = rememberScreenModel { CanonicalCatalogScreenModel() }
-        val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
-
         // Source managers for source search
         val animeSourceManager = remember { Injekt.get<AnimeSourceManager>() }
         val mangaSourceManager = remember { Injekt.get<MangaSourceManager>() }
         val novelSourceManager = remember { Injekt.get<NovelSourceManager>() }
-
-        // Background check for extension updates/uninstalls/errors each time the
-        // content mode changes or the tab is revisited. Installed extensions are
-        // already cached in the extension manager's StateFlow, so the UI shows
-        // them immediately; this refreshes the *available* list (which drives
-        // update detection) in the background.
-        LaunchedEffect(contentMode) {
-            canonicalSM.setMedium(
-                if (contentMode == ContentMode.NOVEL) {
-                    WorkIdResolver.MEDIUM_BOOKS
-                } else {
-                    WorkIdResolver.MEDIUM_MANGA
-                },
-            )
-        }
 
         // Push search query into the active extension screen model.
         // Extensions side: search immediately as the user types (no submit
@@ -254,7 +219,6 @@ data object BrowseTab : Tab {
             searchEnabled = true,
             searchPlaceholderText = when (browseMode) {
                 BrowseMode.EXTENSIONS -> stringResource(MR.strings.search_hint_extensions)
-                BrowseMode.DISCOVER -> stringResource(MR.strings.search_hint_browse)
                 BrowseMode.BROWSE -> stringResource(MR.strings.search_hint_browse)
             },
             searchQuery = searchQuery,
@@ -263,28 +227,10 @@ data object BrowseTab : Tab {
                 // Reset submitted flag while typing — Browse results only show
                 // after enter. Extensions side shows results immediately.
                 searchSubmitted = false
-                if (query == null) {
-                    // Search closed (X pressed) — clear Discover search if in
-                    // Discover mode, but keep the user's current browse mode.
-                    // Don't force them back to Discover.
-                    if (browseMode == BrowseMode.DISCOVER) {
-                        cinemetaBrowseSM.clearSearch()
-                        canonicalSM.clearSearch()
-                    }
-                    searchSubmitted = false
-                }
             },
             onSearch = { query ->
                 if (query.isBlank()) return@useSharedTopBarWithSearch
                 when (browseMode) {
-                    BrowseMode.DISCOVER -> {
-                        if (contentMode == ContentMode.SHOWS) {
-                            cinemetaBrowseSM.search(query)
-                        } else {
-                            canonicalSM.search(query)
-                        }
-                        searchSubmitted = true
-                    }
                     BrowseMode.EXTENSIONS -> {
                         searchSubmitted = true
                     }
@@ -303,7 +249,6 @@ data object BrowseTab : Tab {
                 BrowseSearchPill(
                     browseMode = browseMode,
                     onModeChange = { browseMode = it },
-                    showDiscover = true,
                 )
             },
         )
@@ -332,40 +277,11 @@ data object BrowseTab : Tab {
             Box(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                // Source tab — ALWAYS mounted underneath, even in Discover mode.
-                // This preserves its state (remembered bitmaps, scroll position,
-                // extension list) so switching back from Discover doesn't cause
-                // a recomposition or "installed" header jump.
+                // Source tab — ALWAYS mounted underneath, even while search is
+                // active. This preserves its state (remembered bitmaps, scroll
+                // position, extension list) so closing search just reveals it —
+                // no recomposition or "installed" header jump.
                 sourceTab.content(resolvedPadding, snackbarHostState)
-
-                // Discover overlay — shown on top with an opaque background.
-                // Shows mode: Cinemeta catalog; manga/books: canonical catalog.
-                if (browseMode == BrowseMode.DISCOVER) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background),
-                    ) {
-                        if (contentMode == ContentMode.SHOWS) {
-                            CinemetaBrowseContent(
-                                screenModel = cinemetaBrowseSM,
-                                contentPadding = resolvedPadding,
-                                libraryPreferences = libraryPreferences,
-                            )
-                        } else {
-                            CanonicalCatalogContent(
-                                screenModel = canonicalSM,
-                                medium = if (contentMode == ContentMode.NOVEL) {
-                                    WorkIdResolver.MEDIUM_BOOKS
-                                } else {
-                                    WorkIdResolver.MEDIUM_MANGA
-                                },
-                                contentPadding = resolvedPadding,
-                                libraryPreferences = libraryPreferences,
-                            )
-                        }
-                    }
-                }
 
                 // Search overlay — only present when there is actual search
                 // content to show. When typing on the Browse side (not yet
@@ -379,28 +295,7 @@ data object BrowseTab : Tab {
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                     ) {
-                        if (browseMode == BrowseMode.DISCOVER) {
-                            // Discover search results — the screen models already
-                            // hold the results; just render the same content.
-                            if (contentMode == ContentMode.SHOWS) {
-                                CinemetaBrowseContent(
-                                    screenModel = cinemetaBrowseSM,
-                                    contentPadding = resolvedPadding,
-                                    libraryPreferences = libraryPreferences,
-                                )
-                            } else {
-                                CanonicalCatalogContent(
-                                    screenModel = canonicalSM,
-                                    medium = if (contentMode == ContentMode.NOVEL) {
-                                        WorkIdResolver.MEDIUM_BOOKS
-                                    } else {
-                                        WorkIdResolver.MEDIUM_MANGA
-                                    },
-                                    contentPadding = resolvedPadding,
-                                    libraryPreferences = libraryPreferences,
-                                )
-                            }
-                        } else if (browseMode == BrowseMode.EXTENSIONS) {
+                        if (browseMode == BrowseMode.EXTENSIONS) {
                             // Extensions side: show results immediately as the
                             // user types — no submit needed.
                             if (cardDesign) {
@@ -474,14 +369,10 @@ data object BrowseTab : Tab {
 private fun BrowseSearchPill(
     browseMode: BrowseMode,
     onModeChange: (BrowseMode) -> Unit,
-    showDiscover: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val options = buildList {
         add(stringResource(MR.strings.browse) to BrowseMode.BROWSE)
-        if (showDiscover) {
-            add(stringResource(MR.strings.discover) to BrowseMode.DISCOVER)
-        }
         add(stringResource(MR.strings.label_extensions) to BrowseMode.EXTENSIONS)
     }
     val containerShape = RoundedCornerShape(999.dp)

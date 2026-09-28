@@ -48,5 +48,13 @@ enum class Carrier(
             "books", "novel" -> BOOKS
             else -> null
         }
+
+        /**
+         * Maps a UI [ContentMode] preference value to its carrier — the
+         * inverse of [pipeline]. Single mapping helper; callers keying UI
+         * surfaces by carrier (e.g. DiscoveryTab) should use this instead of
+         * sprinkling their own `when`s.
+         */
+        fun fromContentMode(mode: ContentMode): Carrier = entries.first { it.pipeline == mode }
     }
 }
