@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.discovery
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -128,9 +130,13 @@ fun DiscoveryFilterSheet(
 
                 item(key = "genres") {
                     FilterSectionLabel(stringResource(AYMR.strings.discovery_filter_genre))
-                    FlowRow(
+                    // Horizontal pill scroll — one scrolling row instead of
+                    // a wrapping FlowRow so the sheet stays compact.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         TmdbGenres.forType(mediaType).forEach { genre ->
                             val state = filter.genreStates[genre.id] ?: TriState.DISABLED
@@ -146,9 +152,12 @@ fun DiscoveryFilterSheet(
                     }
                 }
 
-                val subGenreGroups = TmdbSubGenreKeywords.groupsFor(
-                    TmdbGenres.forType(mediaType).map { it.name },
-                )
+                // Sub-genre rows appear only under included (ENABLED_IS)
+                // genres — nothing renders until a genre is chosen.
+                val includedGenreNames = TmdbGenres.forType(mediaType)
+                    .filter { filter.genreStates[it.id] == TriState.ENABLED_IS }
+                    .map { it.name }
+                val subGenreGroups = TmdbSubGenreKeywords.groupsFor(includedGenreNames)
                 if (subGenreGroups.isNotEmpty()) {
                     item(key = "subgenres") {
                         FilterSectionLabel(stringResource(AYMR.strings.discovery_filter_subgenre))
@@ -159,9 +168,11 @@ fun DiscoveryFilterSheet(
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                FlowRow(
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     subGenres.forEach { sub ->
                                         val state = filter.keywordStates[sub.keywordId]

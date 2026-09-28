@@ -1,0 +1,24 @@
+-- Mint/seen-report dedupe for mint-on-browse (Phase 15-07 follow-up).
+-- markSeen is a Worker write per call; the old dedupe was an in-memory
+-- set, so every app restart re-reported every rendered catalog row.
+-- This table persists "we already reported this id" for the lifetime
+-- of the install — renders of the same work never hit the network twice.
+-- Backup note: not serialized into backups — a restore re-reports each
+-- rendered work once, which is the correct signal anyway (a fresh
+-- install IS renewed interest in that work).
+
+CREATE TABLE seen_reported(
+    work_id TEXT NOT NULL PRIMARY KEY,
+    medium TEXT NOT NULL,
+    reported_at INTEGER NOT NULL
+);
+
+existsReported:
+SELECT EXISTS(SELECT 1 FROM seen_reported WHERE work_id = :workId);
+
+insertReported:
+INSERT OR IGNORE INTO seen_reported(work_id, medium, reported_at)
+VALUES (:workId, :medium, :reportedAt);
+
+count:
+SELECT COUNT(*) FROM seen_reported;

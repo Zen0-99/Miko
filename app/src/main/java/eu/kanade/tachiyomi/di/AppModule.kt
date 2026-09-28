@@ -21,15 +21,15 @@ import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.cache.MangaCoverCache
 import eu.kanade.tachiyomi.data.cache.NovelCoverCache
-import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadCache
-import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadManager
-import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadProvider
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadProvider
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadCache
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadCache
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadManager
+import eu.kanade.tachiyomi.data.download.shows.ShowsDownloadProvider
 import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
@@ -334,6 +334,8 @@ class AppModule(val app: Application) : InjektModule {
             )
         }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.SeenReporter() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorksBrowseApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdResolver() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier(get(), get(), get()) }
@@ -389,6 +391,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { TmdbSeasonPosters(get(), get()) }
         addSingletonFactory { TmdbKeyProvider(get()) }
         addSingletonFactory { TmdbDiscover(get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.metadata.openlibrary.OpenLibraryTrending() }
         addSingletonFactory {
             eu.kanade.tachiyomi.data.cover.HiResCoverResolver(
                 get(),

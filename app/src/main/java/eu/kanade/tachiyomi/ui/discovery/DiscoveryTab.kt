@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.ui.discovery
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,18 +18,20 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.LocalHostScaffoldContentPadding
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBarWithSearch
 import eu.kanade.presentation.util.Tab
-import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogContent
 import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogScreenModel
 import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreenModel
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import kotlinx.collections.immutable.toPersistentList
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.theme.active
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -68,11 +72,31 @@ data object DiscoveryTab : Tab {
             }
         }
 
+        // Shared top bar — the filter action follows the library-tab
+        // pattern (icon tints when facets are active) but only exists on
+        // the shows carrier; manga/books keep their per-source filters.
+        val showsFilter = state.filters[Carrier.SHOWS] ?: DiscoveryFilter()
+        val actions = buildList {
+            if (carrier == Carrier.SHOWS) {
+                add(
+                    AppBar.Action(
+                        title = stringResource(MR.strings.action_filter),
+                        icon = Icons.Outlined.FilterList,
+                        iconTint = if (showsFilter.isActive) MaterialTheme.colorScheme.active else null,
+                        onClick = { screenModel.setFilterSheetVisible(true) },
+                    ),
+                )
+            }
+            addAll(
+                globalOverflowActions(
+                    onClickSettings = { navigator.push(SettingsScreen()) },
+                ),
+            )
+        }.toPersistentList()
+
         useSharedTopBarWithSearch(
             title = stringResource(MR.strings.discovery),
-            actions = globalOverflowActions(
-                onClickSettings = { navigator.push(SettingsScreen()) },
-            ),
+            actions = actions,
             searchEnabled = true,
             searchPlaceholderText = stringResource(MR.strings.search_hint_browse),
             searchQuery = state.searchQuery,
@@ -120,9 +144,15 @@ data object DiscoveryTab : Tab {
                     contentPadding = resolvedPadding,
                     libraryPreferences = libraryPreferences,
                 )
-                Carrier.MANGA, Carrier.BOOKS -> CanonicalCatalogContent(
+                // 15-07: the manga/books carriers mount the ranked
+                // catalog surface — sub-type pills (Manga|Comics,
+                // Novels|Books) over the worker's /v1/works/browse feed
+                // or OpenLibrary trending; search swaps to the
+                // canonical map results inline.
+                Carrier.MANGA, Carrier.BOOKS -> CatalogBrowseContent(
+                    carrier = carrier,
+                    discoveryScreenModel = screenModel,
                     screenModel = canonicalSM,
-                    medium = carrier.medium,
                     contentPadding = resolvedPadding,
                     libraryPreferences = libraryPreferences,
                 )

@@ -184,10 +184,12 @@ class TmdbDiscover(
             query.yearLte?.let { params[dateLte] = "$it-12-31" }
             query.voteAverageGte?.let { params["vote_average.gte"] = it.toString() }
             // Vote floor rides the rating facet AND rating sort so a
-            // 10.0-from-3-votes can't top the list.
+            // 10.0-from-3-votes can't top the list. Top-rated sorts need
+            // the heavier floor — at 100 votes TMDB still surfaces
+            // obscure festival films (9.9 avg / ~143 votes).
             val voteFloor = query.voteCountGte
+                ?: TOP_RATED_VOTE_COUNT_GTE.takeIf { query.sortBy.startsWith("vote_average") }
                 ?: (query.voteAverageGte?.let { DEFAULT_VOTE_COUNT_GTE })
-                ?: DEFAULT_VOTE_COUNT_GTE.takeIf { query.sortBy.startsWith("vote_average") }
             voteFloor?.let { params["vote_count.gte"] = it.toString() }
             params["sort_by"] = query.sortBy
             return params
@@ -205,5 +207,9 @@ class TmdbDiscover(
 
         /** Default vote-count floor when a rating filter/sort is active. */
         const val DEFAULT_VOTE_COUNT_GTE = 100
+
+        /** Vote-count floor for top-rated (`vote_average.*`) sorts — the
+         *  100 default still lets obscure few-votes titles top the list. */
+        const val TOP_RATED_VOTE_COUNT_GTE = 500
     }
 }

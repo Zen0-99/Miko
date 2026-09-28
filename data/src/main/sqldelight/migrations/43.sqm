@@ -1,0 +1,7 @@
+-- Phase 15-07 follow-up: persistent dedupe for markSeen reports so
+-- mint-on-browse stops re-POSTing already-reported ids every session.
+CREATE TABLE seen_reported(
+    work_id TEXT NOT NULL PRIMARY KEY,
+    medium TEXT NOT NULL,
+    reported_at INTEGER NOT NULL
+);

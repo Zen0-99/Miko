@@ -80,16 +80,34 @@ class TmdbDiscoverTest {
     }
 
     @Test
-    fun `rating sort implies the vote-count floor`() {
+    fun `rating sort implies the top-rated vote-count floor`() {
         val params = TmdbDiscover.queryParams(
             MediaType.TV,
             TmdbDiscover.DiscoverQuery(sortBy = "vote_average.desc"),
         )
         assertEquals(
-            TmdbDiscover.DEFAULT_VOTE_COUNT_GTE.toString(),
+            TmdbDiscover.TOP_RATED_VOTE_COUNT_GTE.toString(),
             params["vote_count.gte"],
         )
         assertFalse("vote_average.gte" in params)
+    }
+
+    @Test
+    fun `rating sort wins over the rating-facet floor`() {
+        // Sorting by rating needs the heavier 500-vote floor even when a
+        // rating facet is set (its implied 100 is too low for top-rated).
+        val params = TmdbDiscover.queryParams(
+            MediaType.MOVIE,
+            TmdbDiscover.DiscoverQuery(
+                voteAverageGte = 7.0,
+                sortBy = "vote_average.desc",
+            ),
+        )
+        assertEquals(
+            TmdbDiscover.TOP_RATED_VOTE_COUNT_GTE.toString(),
+            params["vote_count.gte"],
+        )
+        assertEquals("7.0", params["vote_average.gte"])
     }
 
     @Test

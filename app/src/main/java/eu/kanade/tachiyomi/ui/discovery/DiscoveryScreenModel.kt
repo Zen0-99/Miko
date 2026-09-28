@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.tachiyomi.data.mikodb.SeenReporter
+import eu.kanade.tachiyomi.data.mikodb.WorkIdResolver
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbDiscover
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbGenres.MediaType
 import kotlinx.collections.immutable.PersistentMap
@@ -12,8 +14,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import logcat.LogPriority
+import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Discovery surface state for [DiscoveryTab] (Phase 15-05, extended by
@@ -51,6 +60,9 @@ class DiscoveryScreenModel(
         val subTypeSelections: PersistentMap<Carrier, Int> = persistentMapOf(),
         /** Facet filters per carrier — only SHOWS is consumed (TMDB). */
         val filters: PersistentMap<Carrier, DiscoveryFilter> = persistentMapOf(),
+        /** Filter sheet visibility — hoisted so the shared-top-bar filter
+         *  action (living outside the content composable) can open it. */
+        val showFilterSheet: Boolean = false,
         /** TMDB discover surface — populated while a shows filter is active. */
         val discoverItems: List<TmdbDiscover.Item> = emptyList(),
         val discoverPage: Int = 0,
@@ -62,6 +74,16 @@ class DiscoveryScreenModel(
     )
 
     private var reloadJob: Job? = null
+
+    // Mint-on-browse deps are lazy so unit tests can construct the model
+    // with only a TmdbDiscover fake (Injekt is never touched until a
+    // rendered item actually mints).
+    private val workIdResolver: WorkIdResolver by injectLazy()
+    private val seenReporter: SeenReporter by injectLazy()
+
+    /** Minted/reported ids this session — 'tmdb:{type}:{id}' keys. */
+    private val mintedDiscoverIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val mintPermits = Semaphore(MINT_CONCURRENCY)
 
     fun setSearchQuery(query: String?) {
         // Typing un-submits — catalog results only swap in on submit; closing
@@ -90,6 +112,10 @@ class DiscoveryScreenModel(
      */
     fun setFilter(carrier: Carrier, filter: DiscoveryFilter) {
         mutableState.update { it.copy(filters = it.filters.put(carrier, filter)) }
+    }
+
+    fun setFilterSheetVisible(visible: Boolean) {
+        mutableState.update { it.copy(showFilterSheet = visible) }
     }
 
     /**
@@ -125,6 +151,40 @@ class DiscoveryScreenModel(
     /** TMDB → IMDB link for a tapped discover result (null = non-navigable). */
     suspend fun resolveImdbId(type: MediaType, tmdbId: Long): String? =
         tmdbDiscover.imdbId(type, tmdbId)
+
+    /**
+     * Mint-on-browse (Phase 15-07): TMDB discover rows aren't canonical
+     * works, so each rendered item resolves once per session — the
+     * `external_ids` lookup carries the imdb id into the resolver's
+     * `cinemeta:{type}:{ttid}` path when there is one (mints the
+     * `mk:imdb:` row server-side), otherwise the bare-title resolve
+     * falls back to a local `mk:m:` mint. Either way the id is then
+     * reported via [SeenReporter] — persisted in `seen_reported`, so a
+     * work is POSTed at most once per install lifetime, not once per
+     * session. Semaphore-capped, fire-and-forget — never blocks the UI.
+     */
+    fun onDiscoverItemRendered(item: TmdbDiscover.Item) {
+        if (!mintedDiscoverIds.add("tmdb:${item.mediaType}:${item.id}")) return
+        screenModelScope.launchIO {
+            try {
+                mintPermits.withPermit {
+                    val kind = TmdbDiscover.cinemetaType(item.mediaType)
+                    val imdb = tmdbDiscover.imdbId(item.mediaType, item.id)
+                    val resolved = workIdResolver.resolve(
+                        WorkIdResolver.Candidate(
+                            medium = WorkIdResolver.MEDIUM_SHOWS,
+                            title = item.title,
+                            url = imdb?.let { "cinemeta:$kind:$it" },
+                            kindHint = kind,
+                        ),
+                    ) ?: return@withPermit
+                    seenReporter.report(resolved.value, resolved.medium)
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.DEBUG) { "discovery mint-on-browse failed for tmdb ${item.id}: ${e.message}" }
+            }
+        }
+    }
 
     private fun resetDiscover() {
         mutableState.update {
@@ -184,5 +244,8 @@ class DiscoveryScreenModel(
 
     companion object {
         const val FILTER_DEBOUNCE_MS = 300L
+
+        /** Mint-on-browse caps concurrent resolve calls. */
+        private const val MINT_CONCURRENCY = 2
     }
 }

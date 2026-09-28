@@ -84,6 +84,16 @@ class WorkIdResolverTest {
     }
 
     @Test
+    fun `extracts openlibrary work id`() {
+        assertEquals(
+            listOf("openlibrary" to "OL45883W"),
+            extract("https://openlibrary.org/works/OL45883W/Dune"),
+        )
+        // Edition keys (…M) are not work identity — ignored.
+        assertTrue(extract("https://openlibrary.org/books/OL27918581M.json").isEmpty())
+    }
+
+    @Test
     fun `cinemetaRef parses the url type and ttid`() {
         assertEquals("series" to "tt0903747", WorkIdResolver.cinemetaRef("cinemeta:series:tt0903747"))
         assertEquals("movie" to "tt0113243", WorkIdResolver.cinemetaRef("cinemeta:movie:tt0113243"))

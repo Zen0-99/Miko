@@ -12,29 +12,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,7 +82,6 @@ fun ShowsDiscoveryContent(
 
     val filter = state.filters[Carrier.SHOWS] ?: DiscoveryFilter()
     val mediaType = if (cinemetaState.type == "movie") MediaType.MOVIE else MediaType.TV
-    var showSheet by remember { mutableStateOf(false) }
 
     // Single funnel for filter/type changes — the model debounces the
     // discover reload so chip toggles don't fire a request per tap.
@@ -98,25 +89,42 @@ fun ShowsDiscoveryContent(
         discoveryScreenModel.onDiscoverInputsChanged(mediaType)
     }
 
+    // When the active-facet chip row is hidden it can't consume the top
+    // inset — hand it back to the catalog/discover content.
     val innerPadding = PaddingValues(
         start = contentPadding.calculateLeftPadding(LayoutDirection.Ltr),
         end = contentPadding.calculateRightPadding(LayoutDirection.Ltr),
+        top = if (filter.isActive) 0.dp else contentPadding.calculateTopPadding(),
         bottom = contentPadding.calculateBottomPadding(),
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
-        DiscoveryFilterBar(
-            filter = filter,
-            mediaType = mediaType,
-            topPadding = contentPadding.calculateTopPadding(),
-            onOpenSheet = { showSheet = true },
-            onClear = { discoveryScreenModel.setFilter(Carrier.SHOWS, DiscoveryFilter()) },
-            onRemoveGenre = { discoveryScreenModel.setFilter(Carrier.SHOWS, filter.withGenreState(it, TriState.DISABLED)) },
-            onRemoveKeyword = { discoveryScreenModel.setFilter(Carrier.SHOWS, filter.withKeywordState(it, TriState.DISABLED)) },
-            onRemoveYear = { discoveryScreenModel.setFilter(Carrier.SHOWS, filter.copy(yearFrom = null, yearTo = null)) },
-            onRemoveRating = { discoveryScreenModel.setFilter(Carrier.SHOWS, filter.copy(voteAverageGte = null, voteCountGte = null)) },
-            onRemoveSort = { discoveryScreenModel.setFilter(Carrier.SHOWS, filter.copy(sort = DiscoverySort.POPULARITY)) },
-        )
+        if (filter.isActive) {
+            DiscoveryFilterBar(
+                filter = filter,
+                mediaType = mediaType,
+                topPadding = contentPadding.calculateTopPadding(),
+                onClear = { discoveryScreenModel.setFilter(Carrier.SHOWS, DiscoveryFilter()) },
+                onRemoveGenre = {
+                    discoveryScreenModel.setFilter(Carrier.SHOWS, filter.withGenreState(it, TriState.DISABLED))
+                },
+                onRemoveKeyword = {
+                    discoveryScreenModel.setFilter(Carrier.SHOWS, filter.withKeywordState(it, TriState.DISABLED))
+                },
+                onRemoveYear = {
+                    discoveryScreenModel.setFilter(Carrier.SHOWS, filter.copy(yearFrom = null, yearTo = null))
+                },
+                onRemoveRating = {
+                    discoveryScreenModel.setFilter(
+                        Carrier.SHOWS,
+                        filter.copy(voteAverageGte = null, voteCountGte = null),
+                    )
+                },
+                onRemoveSort = {
+                    discoveryScreenModel.setFilter(Carrier.SHOWS, filter.copy(sort = DiscoverySort.POPULARITY))
+                },
+            )
+        }
         Box(modifier = Modifier.weight(1f)) {
             if (filter.isActive) {
                 TmdbDiscoverContent(
@@ -136,27 +144,27 @@ fun ShowsDiscoveryContent(
         }
     }
 
-    if (showSheet) {
+    if (state.showFilterSheet) {
         DiscoveryFilterSheet(
             filter = filter,
             mediaType = mediaType,
             onFilterChange = { discoveryScreenModel.setFilter(Carrier.SHOWS, it) },
-            onDismiss = { showSheet = false },
+            onDismiss = { discoveryScreenModel.setFilterSheetVisible(false) },
         )
     }
 }
 
 /**
- * Quick-filter row over the grid — the collapsed `PersistentFilterSheet`
- * idiom: a filter icon (opens the sheet) followed by the active facets
- * as removable chips, and an inline clear affordance.
+ * Active-facet row over the grid — the collapsed `PersistentFilterSheet`
+ * idiom minus the icon (that moved to the shared top bar): the active
+ * facets as removable chips plus an inline clear affordance. Only
+ * composed while [DiscoveryFilter.isActive].
  */
 @Composable
 private fun DiscoveryFilterBar(
     filter: DiscoveryFilter,
     mediaType: MediaType,
     topPadding: androidx.compose.ui.unit.Dp,
-    onOpenSheet: () -> Unit,
     onClear: () -> Unit,
     onRemoveGenre: (Int) -> Unit,
     onRemoveKeyword: (Int) -> Unit,
@@ -173,28 +181,6 @@ private fun DiscoveryFilterBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable(onClick = onOpenSheet)
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.FilterList,
-                contentDescription = stringResource(MR.strings.action_filter),
-                tint = if (filter.isActive) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(20.dp),
-            )
-        }
-
         filter.genreStates.forEach { (id, triState) ->
             if (triState == TriState.DISABLED) return@forEach
             FilterTagChip(
@@ -427,6 +413,15 @@ private fun TmdbDiscoverContent(
                     ) {
                         items(state.discoverItems.size) { index ->
                             val item = state.discoverItems[index]
+
+                            // Mint-on-browse: TMDB discover rows aren't
+                            // canonical works — resolve once per item
+                            // (imdb → mk:imdb: mint) then markSeen. The
+                            // model dedupes and throttles off-thread.
+                            LaunchedEffect(item.id, mediaType) {
+                                discoveryScreenModel.onDiscoverItemRendered(item)
+                            }
+
                             val coverData = AnimeCover(
                                 animeId = item.id,
                                 sourceId = CinemetaBrowseScreenModel.CINEMETA_SOURCE_ID,

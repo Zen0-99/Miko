@@ -243,6 +243,10 @@ class WorkIdResolver {
         private val GENRE_ISBN = Regex("""^isbn:([0-9Xx-]{9,17})$""", RegexOption.IGNORE_CASE)
         private val ISBN_SHAPE = Regex("""\d{9}[\dX]|\d{13}""")
 
+        // openlibrary.org/works/OL…W — published-book identity; the
+        // worker stores them under provider 'openlibrary' (mk:ol: mints).
+        private val OL_WORK_ID = Regex("""openlibrary\.org/works/(OL\d+W)""", RegexOption.IGNORE_CASE)
+
         // "cinemeta:series:tt0903747" / "cinemeta:episode:tt0903747:1:1"
         private val CINEMETA_URL =
             Regex("""^cinemeta:(series|movie|episode):(tt\d+)""", RegexOption.IGNORE_CASE)
@@ -290,6 +294,7 @@ class WorkIdResolver {
                 NU_ID.find(url)?.let { add("novelupdates" to it.groupValues[1]) }
                 RR_ID.find(url)?.let { add("royalroad" to it.groupValues[1]) }
                 HS_URL_SLUG.find(u)?.let { add("hs" to it.groupValues[1]) }
+                OL_WORK_ID.find(url)?.let { add("openlibrary" to it.groupValues[1].uppercase()) }
             }
         }
     }
