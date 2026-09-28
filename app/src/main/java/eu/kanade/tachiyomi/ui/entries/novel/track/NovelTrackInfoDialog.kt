@@ -51,7 +51,6 @@ import eu.kanade.presentation.track.novel.NovelTrackerSearch
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.data.track.DeletableMangaTracker
 import eu.kanade.tachiyomi.data.track.MangaTracker
-import eu.kanade.tachiyomi.data.track.NovelTracker
 import eu.kanade.tachiyomi.data.track.Tracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.data.track.model.MangaTrackSearch
@@ -72,8 +71,6 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.entries.novel.interactor.GetNovel
-import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.track.novel.interactor.DeleteNovelTrack
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
 import tachiyomi.domain.track.novel.model.NovelTrack
@@ -412,7 +409,9 @@ private data class TrackScoreSelectorScreen(
     private class Model(
         private val track: DbNovelTrack,
         private val tracker: Tracker,
-    ) : StateScreenModel<Model.State>(State(tracker.mangaService.displayScore(track.toDbTrack().toDomainTrack(idRequired = false)!!))) {
+    ) : StateScreenModel<Model.State>(
+        State(tracker.mangaService.displayScore(track.toDbTrack().toDomainTrack(idRequired = false)!!)),
+    ) {
 
         fun getSelections(): ImmutableList<String> {
             return tracker.mangaService.getScoreList()

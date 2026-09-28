@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge.WorkRow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -22,7 +23,8 @@ import uy.kohesive.injekt.injectLazy
 class WorkIdResolver {
 
     data class Candidate(
-        /** "manga" | "novel" | "shows" — entry's medium, never mixed. */
+        /** Carrier key — "shows" | "manga" | "books"
+         *  ([eu.kanade.domain.ui.model.Carrier.medium]); never mixed. */
         val medium: String,
         val title: String,
         val url: String? = null,
@@ -45,6 +47,10 @@ class WorkIdResolver {
         val value: String,
         val medium: String,
         val confidence: Confidence,
+        /** Worker-assigned kind when a catalog row resolved; null on
+         *  LOCAL_MINT/honest-null works (never re-derived client-side). */
+        val kind: String? = null,
+        val nsfw: Boolean = false,
         /** Colliding title keys — later phases can disambiguate. */
         val ambiguous: Boolean = false,
     )
@@ -63,7 +69,13 @@ class WorkIdResolver {
         for ((provider, id) in ids) {
             val row = bridge.byExternalId(provider, id)
             if (row != null && row.type in allowedTypes) {
-                return CanonicalWorkId(row.mikoWorkId, candidate.medium, Confidence.EXTERNAL_ID)
+                return CanonicalWorkId(
+                    row.mikoWorkId,
+                    candidate.medium,
+                    Confidence.EXTERNAL_ID,
+                    kind = row.type,
+                    nsfw = row.nsfw,
+                )
             }
         }
 
@@ -71,7 +83,13 @@ class WorkIdResolver {
         val titleHits = bridge.byNormalizedTitle(norm)
             .filter { it.type in allowedTypes }
         if (titleHits.size == 1) {
-            return CanonicalWorkId(titleHits.single().mikoWorkId, candidate.medium, Confidence.TITLE)
+            return CanonicalWorkId(
+                titleHits.single().mikoWorkId,
+                candidate.medium,
+                Confidence.TITLE,
+                kind = titleHits.single().type,
+                nsfw = titleHits.single().nsfw,
+            )
         }
 
         // 3. Worker resolve — tries providers then title server-side.
@@ -85,6 +103,8 @@ class WorkIdResolver {
                 titleHits.first().mikoWorkId,
                 candidate.medium,
                 Confidence.TITLE,
+                kind = titleHits.first().type,
+                nsfw = titleHits.first().nsfw,
                 ambiguous = true,
             )
         }
@@ -141,7 +161,13 @@ class WorkIdResolver {
             // kind-null rows skip the local upsert — works_cache.type is
             // NOT NULL and caching an unconfirmed kind would lie.
             if (dtoKind != null) bridge.upsert(dto.toWorkRow(dtoKind))
-            return CanonicalWorkId(dto.miko_work_id, candidate.medium, Confidence.WORKER)
+            return CanonicalWorkId(
+                dto.miko_work_id,
+                candidate.medium,
+                Confidence.WORKER,
+                kind = dtoKind,
+                nsfw = dto.nsfw,
+            )
         }
         return null
     }
@@ -151,6 +177,7 @@ class WorkIdResolver {
         type = kind, title = title,
         romanizedTitle = romanized_title, nativeTitle = native_title,
         year = year?.toLong(), totalChapters = total_chapters, author = author,
+        nsfw = nsfw,
         providerLinks = provider_links,
         resolutionSource = "worker",
         externalIds = external_ids + linkExternalIds(provider_links),
@@ -179,25 +206,37 @@ class WorkIdResolver {
 
     companion object {
         const val MEDIUM_MANGA = "manga"
-        const val MEDIUM_NOVEL = "novel"
+        const val MEDIUM_BOOKS = "books"
         const val MEDIUM_SHOWS = "shows"
 
-        /** MangaBaka/OpenLibrary types accepted for each entry medium. */
-        internal fun allowedTypes(medium: String) = when (medium) {
-            MEDIUM_SHOWS -> setOf("anime", "movie", "series")
-            // 'book' rows (OpenLibrary works) count as novel-medium.
-            MEDIUM_NOVEL -> setOf("novel", "oel", "book")
-            else -> setOf("manga", "manhwa", "manhua", "oel", "other")
-        }
+        /** @deprecated Phase 15 renamed the novel carrier to `books`;
+         *  kept one cycle so stale call sites still emit the new key. */
+        @Deprecated("Renamed to MEDIUM_BOOKS", ReplaceWith("MEDIUM_BOOKS"))
+        const val MEDIUM_NOVEL = MEDIUM_BOOKS
+
+        /** Kinds accepted for each carrier — mirrors the worker's
+         *  MEDIUM_TYPES. 'oel' is a manga kind (original-English-language
+         *  comics), never books. Legacy medium keys normalize through
+         *  [Carrier.fromMedium] for the alias window. */
+        internal fun allowedTypes(medium: String) =
+            when (Carrier.fromMedium(medium)) {
+                Carrier.SHOWS -> setOf("anime", "movie", "series")
+                Carrier.BOOKS -> setOf("book", "novel")
+                else -> setOf("manga", "manhwa", "manhua", "comic", "webtoon", "oel", "other")
+            }
 
         /** Kind stamped into local `mk:m:` fallback mints. Shows mints
-         *  carry a shows kind (kindHint ?: "series") so mk:m: hashes
-         *  stay carrier-disjoint from same-titled manga mints. */
-        internal fun mediumToType(medium: String, isBook: Boolean, kindHint: String?) = when {
-            medium == MEDIUM_SHOWS -> kindHint ?: "series"
-            isBook -> "book"
-            medium == MEDIUM_NOVEL -> "novel"
-            else -> "manga"
+         *  carry a shows kind (kindHint ?: "series") and books mints
+         *  keep 'novel' so mk:m: hashes stay carrier-disjoint AND stable
+         *  across the rename (mk:m: hashes `title|type|…`). */
+        internal fun mediumToType(medium: String, isBook: Boolean, kindHint: String?): String {
+            val carrier = Carrier.fromMedium(medium)
+            return when {
+                carrier == Carrier.SHOWS -> kindHint ?: "series"
+                isBook -> "book"
+                carrier == Carrier.BOOKS -> "novel"
+                else -> "manga"
+            }
         }
 
         private val MANGADEX_UUID = Regex("""/manga/([0-9a-f-]{36})""", RegexOption.IGNORE_CASE)

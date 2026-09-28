@@ -53,6 +53,10 @@ class WorkIdentityApi {
         /** Carrier: "shows" | "manga" | "books" (post-15-01 workers). */
         val medium: String? = null,
         val nsfw: Boolean = false,
+        /** Raw MangaBaka rating passthrough (erotica/pornographic/
+         *  suggestive) — kept so the borderline 'suggestive' tag can be
+         *  surfaced later without re-deriving nsfw. */
+        val content_rating: String? = null,
         val title: String,
         val romanized_title: String? = null,
         val native_title: String? = null,

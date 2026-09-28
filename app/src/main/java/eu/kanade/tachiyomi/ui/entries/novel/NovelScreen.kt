@@ -7,17 +7,15 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import eu.kanade.presentation.entries.novel.components.rememberNovelAccentColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,43 +26,43 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifNovelSourcesLoaded
 import eu.kanade.domain.entries.novel.model.hasCustomCover
 import eu.kanade.domain.entries.novel.model.toSNovel
-import eu.kanade.presentation.entries.EditCoverAction
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
-import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
-import eu.kanade.tachiyomi.source.novel.isLocalOrStub
+import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.novel.NovelScreen
-import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
-import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
-import eu.kanade.tachiyomi.ui.entries.novel.track.NovelTrackInfoDialogHomeScreen
-import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
-import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
-import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
+import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
+import eu.kanade.presentation.entries.novel.components.rememberNovelAccentColor
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
-import tachiyomi.presentation.core.screens.LoadingScreen
+import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import eu.kanade.tachiyomi.ui.browse.novel.migration.all.MigrateNovelAllScreen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialog
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialogScreenModel
-import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelSearchScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
-import eu.kanade.domain.ui.UiPreferences
-import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
+import eu.kanade.tachiyomi.ui.comments.CommentsSheetScreen
+import eu.kanade.tachiyomi.ui.entries.novel.track.NovelTrackInfoDialogHomeScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.library.LibraryTab
-import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import eu.kanade.tachiyomi.ui.reader.novel.NovelHighlightsScreen
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
-import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen
 import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
+import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
@@ -102,6 +100,13 @@ class NovelScreen(
             rememberScreenModel { NovelScreenModel(context, lifecycleOwner.lifecycle, novelId, fromSource) }
 
         val state by screenModel.state.collectAsStateWithLifecycle()
+        val redirectId by screenModel.redirectToEntryId.collectAsStateWithLifecycle()
+
+        // Extension-source duplicate of a canonical `miko:` entry — swap
+        // to the canonical entry so there's one entry per work.
+        LaunchedEffect(redirectId) {
+            redirectId?.let { navigator.replace(NovelScreen(it, fromSource)) }
+        }
 
         if (state is NovelScreenModel.State.Loading) {
             LoadingScreen()
@@ -196,9 +201,9 @@ class NovelScreen(
             onBookmarkFilterClicked = {
                 screenModel.setBookmarkedFilter(
                     when (successState.novel.bookmarkedFilter) {
-                        tachiyomi.core.common.preference.TriState.DISABLED -> tachiyomi.core.common.preference.TriState.ENABLED_IS
-                        tachiyomi.core.common.preference.TriState.ENABLED_IS -> tachiyomi.core.common.preference.TriState.DISABLED
-                        tachiyomi.core.common.preference.TriState.ENABLED_NOT -> tachiyomi.core.common.preference.TriState.DISABLED
+                        TriState.DISABLED -> TriState.ENABLED_IS
+                        TriState.ENABLED_IS -> TriState.DISABLED
+                        TriState.ENABLED_NOT -> TriState.DISABLED
                     },
                 )
             },
@@ -206,10 +211,31 @@ class NovelScreen(
                 navigator.push(NovelHighlightsScreen(successState.novel.title, successState.novel.id))
             }.takeIf { successState.novel.favorite },
             onTrackingClicked = { screenModel.showTrackSheet() },
+            onCommentsClicked = screenModel::showCommentsDialog
+                .takeIf { screenModel.commentsEnabled },
             onRefresh = screenModel::fetchAllFromSource,
             onContinueReading = {
                 val firstUnread = successState.nextContinueChapter
                 navigator.push(NovelReaderScreen(novelId, firstUnread?.chapter?.id))
+            },
+            // Same routing as the chapter-row Play action: rendered audio →
+            // player overlay; otherwise the reader opens with live TTS on.
+            onContinueListening = {
+                val chapter = successState.nextContinueChapter?.chapter
+                scope.launch {
+                    val lockedOrders = getLockedReadingOrders.await(novelId)
+                    if (lockedOrders.isNotEmpty()) {
+                        lockDialog = lockedOrders
+                    } else if (!audiobookPlayer.resumeListening(successState.novel)) {
+                        navigator.push(
+                            NovelReaderScreen(
+                                novelId,
+                                chapter?.id,
+                                autoStartTts = true,
+                            ),
+                        )
+                    }
+                }
             },
             onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
             onShareClicked = { shareNovel(context, screenModel.novel, screenModel.source) }.takeIf { isHttpSource },
@@ -223,7 +249,6 @@ class NovelScreen(
             }.takeIf { successState.novel.favorite },
             onMarkAllReadClicked = { screenModel.markAllRead() },
             onMarkAllUnreadClicked = { screenModel.markAllUnread() },
-            onRefreshTrackingClicked = { screenModel.refreshTracking() },
             onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
                 .takeIf { !successState.source.isLocalOrStub() },
             onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
@@ -233,7 +258,7 @@ class NovelScreen(
             onClickLinkedSources = { screenModel.showLinkedSourcesDialog() },
             onMultiBookmarkClicked = screenModel::bookmarkChapters,
             onMultiMarkAsReadClicked = screenModel::markChaptersRead,
-            onMarkPreviousAsReadClicked = screenModel::markPreviousChapterRead,
+            onMarkPreviousAsReadClicked = screenModel::markPreviousChaptersRead,
             onMultiDeleteClicked = screenModel::showDeleteChapterDialog,
             onChapterSwipe = screenModel::chapterSwipe,
             onChapterSelected = screenModel::toggleSelection,
@@ -265,11 +290,6 @@ class NovelScreen(
                 }
             },
             onRetrySuggestions = { screenModel.retrySuggestions() },
-            onOpenChapterInWebView = { chapter: tachiyomi.domain.items.chapter.model.NovelChapter ->
-                openChapterInWebView(navigator, chapter, screenModel.source)
-            }.takeIf { isHttpSource },
-            onMarkPreviousChaptersAsRead = screenModel::markPreviousChaptersAsRead,
-            onMarkChapterRangeAsRead = screenModel::markChapterRangeAsRead,
             onDownloadBook = { screenModel.downloadBook() }
                 .takeIf { successState.isBookSource },
             onDeleteBook = { screenModel.deleteBook() }
@@ -393,6 +413,15 @@ class NovelScreen(
                     onDismissRequest = onDismissRequest,
                 )
             }
+            NovelScreenModel.Dialog.Comments -> {
+                NavigatorAdaptiveSheet(
+                    screen = CommentsSheetScreen(
+                        carrier = Carrier.BOOKS,
+                        entryId = successState.novel.id,
+                    ),
+                    onDismissRequest = onDismissRequest,
+                )
+            }
         }
 
         if (lockDialog.isNotEmpty()) {
@@ -426,30 +455,6 @@ class NovelScreen(
                     sourceId = (source_ as? NovelHttpSource)?.id,
                 ),
             )
-        }
-    }
-
-    private fun openChapterInWebView(
-        navigator: Navigator,
-        chapter: tachiyomi.domain.items.chapter.model.NovelChapter,
-        source_: Any?,
-    ) {
-        val source = source_ as? NovelHttpSource ?: return
-        try {
-            val sChapter = eu.kanade.tachiyomi.novelsource.model.SNovelChapter.create().apply {
-                url = chapter.url
-                name = chapter.name
-            }
-            val url = source.getChapterUrl(sChapter)
-            navigator.push(
-                WebViewScreen(
-                    url = url,
-                    initialTitle = chapter.name,
-                    sourceId = source.id,
-                ),
-            )
-        } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "Failed to get novel chapter URL" }
         }
     }
 

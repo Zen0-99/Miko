@@ -14,7 +14,6 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.preference.asState
 import eu.kanade.core.util.addOrRemove
-import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.entries.manga.interactor.GetExcludedScanlators
 import eu.kanade.domain.entries.manga.interactor.SetExcludedScanlators
 import eu.kanade.domain.entries.manga.interactor.UpdateManga
@@ -24,12 +23,13 @@ import eu.kanade.domain.entries.manga.model.toSManga
 import eu.kanade.domain.items.chapter.interactor.GetAvailableScanlators
 import eu.kanade.domain.items.chapter.interactor.SetReadStatus
 import eu.kanade.domain.items.chapter.interactor.SyncChaptersWithSource
-import eu.kanade.domain.track.manga.interactor.AddMangaTracks
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.domain.track.manga.interactor.AddMangaTracks
 import eu.kanade.domain.track.manga.interactor.RefreshMangaTracks
 import eu.kanade.domain.track.manga.interactor.TrackChapter
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
+import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
@@ -96,7 +96,6 @@ import tachiyomi.domain.items.chapter.interactor.UpdateChapter
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.items.chapter.model.ChapterUpdate
 import tachiyomi.domain.items.chapter.model.NoChaptersException
-import tachiyomi.domain.items.chapter.service.calculateChapterGap
 import tachiyomi.domain.items.chapter.service.getChapterSort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.manga.service.MangaSourceManager
@@ -106,7 +105,6 @@ import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.source.local.entries.manga.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import kotlin.math.floor
 
 class MangaScreenModel(
     private val context: Context,
@@ -114,6 +112,7 @@ class MangaScreenModel(
     private val mangaId: Long,
     private val isFromSource: Boolean,
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
+    private val basePreferences: eu.kanade.domain.base.BasePreferences = Injekt.get(),
     private val trackPreferences: TrackPreferences = Injekt.get(),
     readerPreferences: ReaderPreferences = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
@@ -141,8 +140,18 @@ class MangaScreenModel(
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
     private val searchFallbackEngine: MangaSearchFallbackEngine = Injekt.get(),
+    private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
+    private val canonizeWork: eu.kanade.tachiyomi.data.mikodb.CanonizeWork = Injekt.get(),
+    private val canonicalChapterSync: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
+
+    /**
+     * Set when this entry resolves to a materialized canonical `miko:`
+     * row — the screen replaces itself with that entry so there's one
+     * entry per real work instead of a duplicate per extension.
+     */
+    val redirectToEntryId = kotlinx.coroutines.flow.MutableStateFlow<Long?>(null)
 
     private val successState: State.Success?
         get() = state.value as? State.Success
@@ -336,7 +345,9 @@ class MangaScreenModel(
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                logcat(LogPriority.DEBUG) { "[MangaScreenModel] Native search fallback failed: ${e.message}" }
+                                logcat(LogPriority.DEBUG) {
+                                    "[MangaScreenModel] Native search fallback failed: ${e.message}"
+                                }
                             }
                         }
                     }
@@ -416,6 +427,23 @@ class MangaScreenModel(
 
         screenModelScope.launchIO {
             val manga = getMangaAndChapters.awaitManga(mangaId)
+
+            // Unify extension-source entries with a materialized canonical
+            // `miko:` row (MikoDB identity). Redirect instead of loading
+            // this duplicate — one entry per real work.
+            val canonical = try {
+                canonicalEntryUnifier.resolve(manga)
+            } catch (e: Exception) {
+                null
+            }
+            if (canonical != null && canonical.id != mangaId) {
+                logcat(LogPriority.DEBUG) {
+                    "MangaScreenModel: redirecting '${manga.title}' (id=$mangaId, source=${manga.source}) to canonical entry id=${canonical.id}"
+                }
+                redirectToEntryId.value = canonical.id
+                return@launchIO
+            }
+
             val chapters = getMangaAndChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
                 .toChapterListItems(manga)
 
@@ -423,8 +451,12 @@ class MangaScreenModel(
                 setMangaDefaultChapterFlags.await(manga)
             }
 
-            val needRefreshInfo = !manga.initialized
-            val needRefreshChapter = chapters.isEmpty()
+            // Canonical rows have no backing extension — details/chapters
+            // come from the canonical chapter pipeline (12-04), not the
+            // stub source.
+            val isCanonical = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.isCanonicalUrl(manga.url)
+            val needRefreshInfo = !manga.initialized && !isCanonical
+            val needRefreshChapter = chapters.isEmpty() && !isCanonical
 
             // Show what we have earlier
             val intervalDays = fetchInterval.calculateInterval(
@@ -451,6 +483,35 @@ class MangaScreenModel(
 
             // Start observe tracking since it only needs mangaId
             observeTrackers()
+
+            // Canonical rows collect+canonize chapter feeds in the
+            // background (13-02): cached sequence serves immediately,
+            // a stale/absent one recanonizes off the render path.
+            // The merged sequence is then materialized as chapter rows
+            // (13-03) so the unified list renders through the normal
+            // chapter pipeline.
+            if (isCanonical) {
+                screenModelScope.launchIO {
+                    runCatching {
+                        eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                            .workIdFromMangaUrl(manga.url)
+                            ?.let { workId ->
+                                canonizeWork.run(workId, Carrier.MANGA)
+                                canonicalChapterSync.sync(manga, workId)
+                            }
+                    }
+                }
+            }
+
+            // Upgrade the cover to hi-res artwork (AniList -> MangaDex -> Jikan)
+            // for the full-bleed enhanced hero; no-op if already hi-res,
+            // custom, or checked recently.
+            screenModelScope.launchIO {
+                runCatching {
+                    Injekt.get<eu.kanade.tachiyomi.data.cover.HiResCoverResolver>()
+                        .upgradeMangaCover(manga)
+                }
+            }
 
             // Fetch suggestions asynchronously
             loadSuggestions(buildSuggestionSeed(manga))
@@ -953,12 +1014,22 @@ class MangaScreenModel(
         updateDownloadState(activeDownload.apply { status = MangaDownload.State.NOT_DOWNLOADED })
     }
 
-    fun markPreviousChapterRead(pointer: Chapter) {
+    fun markPreviousChapterRead(pointer: Chapter, read: Boolean = true) {
         val manga = successState?.manga ?: return
         val chapters = filteredChapters.orEmpty().map { it.chapter }
-        val prevChapters = if (manga.sortDescending()) chapters.asReversed() else chapters
+        // Chapter-group pills (Volume/Book/Season…): scope "previous" to
+        // the pointer's own group — marking must not leak across groups.
+        val pointerGroup = eu.kanade.tachiyomi.util.chapter.ChapterNameGroup.parse(pointer.name)
+        val scoped = if (pointerGroup != null) {
+            chapters.filter {
+                eu.kanade.tachiyomi.util.chapter.ChapterNameGroup.parse(it.name) == pointerGroup
+            }
+        } else {
+            chapters
+        }
+        val prevChapters = if (manga.sortDescending()) scoped.asReversed() else scoped
         val pointerPos = prevChapters.indexOf(pointer)
-        if (pointerPos != -1) markChaptersRead(prevChapters.take(pointerPos), true)
+        if (pointerPos != -1) markChaptersRead(prevChapters.take(pointerPos), read)
     }
 
     /**
@@ -1358,6 +1429,7 @@ class MangaScreenModel(
         data class SetMangaFetchInterval(val manga: Manga) : Dialog
         data object SettingsSheet : Dialog
         data object TrackSheet : Dialog
+        data object Comments : Dialog
         data object FullCover : Dialog
     }
 
@@ -1376,6 +1448,13 @@ class MangaScreenModel(
     fun showTrackDialog() {
         updateSuccessState { it.copy(dialog = Dialog.TrackSheet) }
     }
+
+    fun showCommentsDialog() {
+        updateSuccessState { it.copy(dialog = Dialog.Comments) }
+    }
+
+    val commentsEnabled: Boolean
+        get() = basePreferences.commentsEnabled().get()
 
     fun showCoverDialog() {
         updateSuccessState { it.copy(dialog = Dialog.FullCover) }
@@ -1422,32 +1501,9 @@ class MangaScreenModel(
                 chapters.fastAny { it.selected }
             }
 
-            val chapterListItems by lazy {
-                processedChapters.insertSeparators { before, after ->
-                    val (lowerChapter, higherChapter) = if (manga.sortDescending()) {
-                        after to before
-                    } else {
-                        before to after
-                    }
-                    if (higherChapter == null) return@insertSeparators null
-
-                    if (lowerChapter == null) {
-                        floor(higherChapter.chapter.chapterNumber)
-                            .toInt()
-                            .minus(1)
-                            .coerceAtLeast(0)
-                    } else {
-                        calculateChapterGap(higherChapter.chapter, lowerChapter.chapter)
-                    }
-                        .takeIf { it > 0 }
-                        ?.let { missingCount ->
-                            ChapterList.MissingCount(
-                                id = "${lowerChapter?.id}-${higherChapter.id}",
-                                count = missingCount,
-                            )
-                        }
-                }
-            }
+            // "Missing X chapters" gap rows are disabled — sources with sparse
+            // numbering produced noisy rows the user doesn't want.
+            val chapterListItems by lazy { processedChapters }
 
             val scanlatorFilterActive: Boolean
                 get() = excludedScanlators.intersect(availableScanlators).isNotEmpty()

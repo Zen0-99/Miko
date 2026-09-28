@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.domain.ui.model.Carrier
 import logcat.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -41,12 +42,12 @@ class CanonizeWork(
         data object UnsupportedMedium : Outcome
     }
 
-    suspend fun run(workId: String, medium: String = "manga"): Outcome {
-        if (medium == WorkIdResolver.MEDIUM_SHOWS) return Outcome.UnsupportedMedium
+    suspend fun run(workId: String, carrier: Carrier = Carrier.MANGA): Outcome {
+        if (carrier == Carrier.SHOWS) return Outcome.UnsupportedMedium
         if (!chapterMap.isStale(workId)) return Outcome.Fresh
         val work = bridge.byWorkId(workId) ?: return Outcome.NoWork
 
-        val r = collector.collect(work, medium)
+        val r = collector.collect(work, carrier.medium)
         if (r.feeds.isEmpty() && r.failed.size > MAX_FAILURES) return Outcome.TooManyFailures
         if (r.feeds.isEmpty()) return Outcome.NoVerifiedFeeds
 

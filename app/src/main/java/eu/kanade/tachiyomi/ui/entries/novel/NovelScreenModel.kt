@@ -1,28 +1,25 @@
 package eu.kanade.tachiyomi.ui.entries.novel
 
 import android.content.Context
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import eu.kanade.tachiyomi.ui.reader.novel.ChapterHideManager
-import eu.kanade.tachiyomi.ui.reader.novel.NewChapterTracker
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
-import eu.kanade.presentation.entries.components.adjustForTheme
-import eu.kanade.tachiyomi.util.novel.NovelCoverMetadata
 import androidx.compose.ui.util.fastAny
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.util.addOrRemove
+import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.domain.entries.novel.model.chaptersFiltered
 import eu.kanade.domain.entries.novel.model.toSNovel
-import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
 import eu.kanade.domain.source.service.SourcePreferences
-import tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter
+import eu.kanade.domain.track.novel.interactor.RefreshNovelTracks
+import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.presentation.entries.DownloadAction
+import eu.kanade.presentation.entries.components.adjustForTheme
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioState
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadAction
@@ -46,17 +43,21 @@ import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import eu.kanade.tachiyomi.data.suggestions.util.bestMatchScoreFor
 import eu.kanade.tachiyomi.data.suggestions.util.dedupeByCleanTitle
 import eu.kanade.tachiyomi.data.track.TrackerManager
-import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.network.HttpException
+import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
+import eu.kanade.tachiyomi.novelsource.NovelSource
+import eu.kanade.tachiyomi.ui.reader.novel.ChapterHideManager
+import eu.kanade.tachiyomi.ui.reader.novel.NewChapterTracker
 import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterRender
+import eu.kanade.tachiyomi.util.lang.chop
+import eu.kanade.tachiyomi.util.novel.NovelCoverMetadata
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
 import eu.kanade.tachiyomi.util.system.toast
-import eu.kanade.tachiyomi.util.lang.chop
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.async
@@ -76,37 +77,37 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
-import tachiyomi.domain.entries.applyFilter
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
+import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.novel.interactor.GetDuplicateLibraryNovel
 import tachiyomi.domain.entries.novel.interactor.GetLinkedNovels
-import tachiyomi.domain.entries.novel.interactor.GetNovelLinkedId
 import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
+import tachiyomi.domain.entries.novel.interactor.GetNovelLinkedId
+import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.interactor.LinkNovels
-import tachiyomi.domain.entries.novel.interactor.UnlinkNovel
 import tachiyomi.domain.entries.novel.interactor.MakeLinkedPrimary
 import tachiyomi.domain.entries.novel.interactor.MergeLinkedNovelChapters
-import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.interactor.SetNovelChapterFlags
 import tachiyomi.domain.entries.novel.interactor.SetNovelDefaultChapterFlags
+import tachiyomi.domain.entries.novel.interactor.UnlinkNovel
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelLink
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
+import tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter
+import tachiyomi.domain.items.chapter.model.NoChaptersException
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.items.chapter.service.getNovelChapterSort
 import tachiyomi.domain.library.service.LibraryPreferences
-import eu.kanade.tachiyomi.novelsource.NovelSource
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
-import eu.kanade.domain.track.novel.interactor.RefreshNovelTracks
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
@@ -118,6 +119,7 @@ class NovelScreenModel(
     private val novelId: Long,
     private val isFromSource: Boolean,
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
+    private val basePreferences: eu.kanade.domain.base.BasePreferences = Injekt.get(),
     private val getNovelAndChapters: GetNovelWithChapters = Injekt.get(),
     private val getDuplicateLibraryNovel: GetDuplicateLibraryNovel = Injekt.get(),
     private val setNovelChapterFlags: SetNovelChapterFlags = Injekt.get(),
@@ -150,8 +152,17 @@ class NovelScreenModel(
     private val relatedSuggestionCoordinator: NovelRelatedSuggestionCoordinator = Injekt.get(),
     private val trackerManager: TrackerManager = Injekt.get(),
     private val getTracks: GetNovelTracks = Injekt.get(),
+    private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
+    private val canonizeWork: eu.kanade.tachiyomi.data.mikodb.CanonizeWork = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
+
+    /**
+     * Set when this entry resolves to a materialized canonical `miko:`
+     * row — the screen replaces itself with that entry so there's one
+     * entry per real work instead of a duplicate per extension.
+     */
+    val redirectToEntryId = kotlinx.coroutines.flow.MutableStateFlow<Long?>(null)
 
     private val chapterHideManager = ChapterHideManager(context)
     private val newChapterTracker = NewChapterTracker(context)
@@ -336,7 +347,9 @@ class NovelScreenModel(
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                logcat(LogPriority.DEBUG) { "[NovelScreenModel] Native search fallback failed: ${e.message}" }
+                                logcat(LogPriority.DEBUG) {
+                                    "[NovelScreenModel] Native search fallback failed: ${e.message}"
+                                }
                             }
                         }
                     }
@@ -351,7 +364,9 @@ class NovelScreenModel(
                                     seed = seed,
                                     maxResults = 20,
                                 )
-                                if (relatedOutcome is NovelFallbackOutcome.Success && relatedOutcome.items.isNotEmpty()) {
+                                if (relatedOutcome is NovelFallbackOutcome.Success &&
+                                    relatedOutcome.items.isNotEmpty()
+                                ) {
                                     synchronized(suggestionsList) {
                                         val existingUrls = suggestionsList.map { it.providerUrl }.toSet()
                                         val newItems = relatedOutcome.items.filter { it.providerUrl !in existingUrls }
@@ -362,7 +377,9 @@ class NovelScreenModel(
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                logcat(LogPriority.DEBUG) { "[NovelScreenModel] Related novels fetch failed: ${e.message}" }
+                                logcat(LogPriority.DEBUG) {
+                                    "[NovelScreenModel] Related novels fetch failed: ${e.message}"
+                                }
                             }
                         }
                     }
@@ -424,24 +441,46 @@ class NovelScreenModel(
 
         screenModelScope.launchIO {
             val novel = getNovelAndChapters.awaitNovel(novelId)
+
+            // Unify extension-source entries with a materialized canonical
+            // `miko:` row (MikoDB identity). Redirect instead of loading
+            // this duplicate — one entry per real work.
+            val canonical = try {
+                canonicalEntryUnifier.resolve(novel)
+            } catch (e: Exception) {
+                null
+            }
+            if (canonical != null && canonical.id != novelId) {
+                logcat(LogPriority.DEBUG) {
+                    "NovelScreenModel: redirecting '${novel.title}' (id=$novelId, source=${novel.source}) to canonical entry id=${canonical.id}"
+                }
+                redirectToEntryId.value = canonical.id
+                return@launchIO
+            }
+
             val chapters = getNovelAndChapters.awaitChapters(novelId)
                 .toNovelChapterListItems(novel)
 
-            val needRefreshInfo = !novel.initialized
+            // Canonical rows have no backing extension — details/chapters
+            // come from the canonical chapter pipeline (12-04), not the
+            // stub source.
+            val isCanonical = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.isCanonicalUrl(novel.url)
+            val needRefreshInfo = !novel.initialized && !isCanonical
             // For book sources (Anna's Archive), don't auto-fetch chapters when
             // empty — the user must manually press "Download book" to trigger
             // the EPUB download + splitting, since it's a heavy operation.
             val source = Injekt.get<NovelSourceManager>().getOrStub(novel.source)
             val isBookSource = source.id == 6400L
-            val needRefreshChapter = chapters.isEmpty() && !isBookSource
+            val needRefreshChapter = chapters.isEmpty() && !isBookSource && !isCanonical
 
             if (!novel.favorite) {
                 setNovelDefaultChapterFlags.await(novel)
             }
 
             // Load cached accent color synchronously to avoid flash on open
-            val isDark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-                android.content.res.Configuration.UI_MODE_NIGHT_YES
+            val isDark =
+                (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                    android.content.res.Configuration.UI_MODE_NIGHT_YES
             val cachedAccentColor = NovelCoverMetadata.getBaseColor(novel.id)?.let {
                 Color(adjustForTheme(it, isDark))
             }
@@ -471,6 +510,20 @@ class NovelScreenModel(
             // Start observe tracking since it only needs novelId
             observeTrackers()
 
+            // Canonical rows collect+canonize chapter feeds in the
+            // background (13-02), same as the manga entry path.
+            // Novel-side materialization awaits the novel chapter
+            // pipeline (canonize itself is a safe no-op for now).
+            if (isCanonical) {
+                screenModelScope.launchIO {
+                    runCatching {
+                        eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                            .workIdFromNovelUrl(novel.url)
+                            ?.let { canonizeWork.run(it, Carrier.BOOKS) }
+                    }
+                }
+            }
+
             // Fetch suggestions asynchronously
             loadSuggestions(buildSuggestionSeed(novel))
 
@@ -492,7 +545,10 @@ class NovelScreenModel(
             withIOContext {
                 val source = state.source as? NovelCatalogueSource ?: return@withIOContext
                 val networkNovel = source.getNovelDetails(state.novel.toSNovel())
-                android.util.Log.d("NovelScreenModel", "fetchNovelFromSource: novel=${state.novel.title} remoteThumbnailUrl=${networkNovel.thumbnail_url} localThumbnailUrl=${state.novel.thumbnailUrl}")
+                android.util.Log.d(
+                    "NovelScreenModel",
+                    "fetchNovelFromSource: novel=${state.novel.title} remoteThumbnailUrl=${networkNovel.thumbnail_url} localThumbnailUrl=${state.novel.thumbnailUrl}",
+                )
                 updateNovel.awaitUpdateFromSource(
                     localNovel = state.novel,
                     remoteTitle = networkNovel.title,
@@ -529,7 +585,7 @@ class NovelScreenModel(
                 val remoteChapters = source.getChapterList(state.novel.toSNovel())
 
                 if (remoteChapters.isEmpty()) {
-                    throw tachiyomi.domain.items.chapter.model.NoChaptersException()
+                    throw NoChaptersException()
                 }
 
                 val localChapters = state.chapters.map { it.chapter }
@@ -563,17 +619,19 @@ class NovelScreenModel(
                     novelChapterRepository.addAllNovelChapters(toAdd)
                 }
                 if (toUpdate.isNotEmpty()) {
-                    updateNovelChapter.awaitAll(toUpdate.map {
-                        NovelChapterUpdate(
-                            id = it.id,
-                            name = it.name,
-                            url = it.url,
-                            chapterNumber = it.chapterNumber,
-                            dateFetch = it.dateFetch,
-                            dateUpload = it.dateUpload,
-                            sourceOrder = it.sourceOrder,
-                        )
-                    })
+                    updateNovelChapter.awaitAll(
+                        toUpdate.map {
+                            NovelChapterUpdate(
+                                id = it.id,
+                                name = it.name,
+                                url = it.url,
+                                chapterNumber = it.chapterNumber,
+                                dateFetch = it.dateFetch,
+                                dateUpload = it.dateUpload,
+                                sourceOrder = it.sourceOrder,
+                            )
+                        },
+                    )
                 }
                 if (toDelete.isNotEmpty()) {
                     novelChapterRepository.removeChaptersWithIds(toDelete)
@@ -604,7 +662,7 @@ class NovelScreenModel(
                 // Both primary and linked failed — surface the primary error
                 logcat(LogPriority.ERROR, primaryError)
                 screenModelScope.launch {
-                    val message = if (primaryError is tachiyomi.domain.items.chapter.model.NoChaptersException) {
+                    val message = if (primaryError is NoChaptersException) {
                         with(context) { primaryError.formattedMessage }
                     } else {
                         with(context) { primaryError.formattedMessage }
@@ -661,17 +719,19 @@ class NovelScreenModel(
                     collectedNew.addAll(toAdd)
                 }
                 if (toUpdate.isNotEmpty()) {
-                    updateNovelChapter.awaitAll(toUpdate.map {
-                        NovelChapterUpdate(
-                            id = it.id,
-                            name = it.name,
-                            url = it.url,
-                            chapterNumber = it.chapterNumber,
-                            dateFetch = it.dateFetch,
-                            dateUpload = it.dateUpload,
-                            sourceOrder = it.sourceOrder,
-                        )
-                    })
+                    updateNovelChapter.awaitAll(
+                        toUpdate.map {
+                            NovelChapterUpdate(
+                                id = it.id,
+                                name = it.name,
+                                url = it.url,
+                                chapterNumber = it.chapterNumber,
+                                dateFetch = it.dateFetch,
+                                dateUpload = it.dateUpload,
+                                sourceOrder = it.sourceOrder,
+                            )
+                        },
+                    )
                 }
             } catch (t: Throwable) {
                 logcat(LogPriority.WARN, t) {
@@ -757,9 +817,13 @@ class NovelScreenModel(
                     val source = state.source as? NovelCatalogueSource ?: return@withIOContext
                     val existingCount = state.chapters.size
 
-                    logcat(LogPriority.DEBUG) { "NovelScreenModel: fetchNewChapters source=${source.name} existingCount=$existingCount" }
+                    logcat(LogPriority.DEBUG) {
+                        "NovelScreenModel: fetchNewChapters source=${source.name} existingCount=$existingCount"
+                    }
                     val remoteChapters = source.getLatestChapters(state.novel.toSNovel(), existingCount)
-                    logcat(LogPriority.DEBUG) { "NovelScreenModel: fetchNewChapters got ${remoteChapters.size} remote chapters" }
+                    logcat(LogPriority.DEBUG) {
+                        "NovelScreenModel: fetchNewChapters got ${remoteChapters.size} remote chapters"
+                    }
 
                     if (remoteChapters.isNotEmpty()) {
                         val localChapters = state.chapters.map { it.chapter }
@@ -784,17 +848,19 @@ class NovelScreenModel(
                             novelChapterRepository.addAllNovelChapters(toAdd)
                         }
                         if (toUpdate.isNotEmpty()) {
-                            updateNovelChapter.awaitAll(toUpdate.map {
-                                NovelChapterUpdate(
-                                    id = it.id,
-                                    name = it.name,
-                                    url = it.url,
-                                    chapterNumber = it.chapterNumber,
-                                    dateFetch = it.dateFetch,
-                                    dateUpload = it.dateUpload,
-                                    sourceOrder = it.sourceOrder,
-                                )
-                            })
+                            updateNovelChapter.awaitAll(
+                                toUpdate.map {
+                                    NovelChapterUpdate(
+                                        id = it.id,
+                                        name = it.name,
+                                        url = it.url,
+                                        chapterNumber = it.chapterNumber,
+                                        dateFetch = it.dateFetch,
+                                        dateUpload = it.dateUpload,
+                                        sourceOrder = it.sourceOrder,
+                                    )
+                                },
+                            )
                         }
 
                         screenModelScope.launch {
@@ -811,7 +877,9 @@ class NovelScreenModel(
                     }
                 }
             } catch (e: Throwable) {
-                logcat(LogPriority.ERROR) { "NovelScreenModel: fetchNewChapters error: ${e::class.simpleName}: ${e.message}" }
+                logcat(LogPriority.ERROR) {
+                    "NovelScreenModel: fetchNewChapters error: ${e::class.simpleName}: ${e.message}"
+                }
                 logcat(LogPriority.ERROR, e)
                 screenModelScope.launch {
                     snackbarHostState.showSnackbar(message = with(context) { e.formattedMessage })
@@ -863,11 +931,15 @@ class NovelScreenModel(
                         if (page == 1) {
                             totalPages = pageResult.totalPages
                             if (totalPages <= 0) totalPages = 1
-                            logcat(LogPriority.DEBUG) { "NovelScreenModel: fetchAllChaptersWithProgress totalPages=$totalPages" }
+                            logcat(LogPriority.DEBUG) {
+                                "NovelScreenModel: fetchAllChaptersWithProgress totalPages=$totalPages"
+                            }
                         }
 
                         if (pageResult.chapters.isEmpty()) {
-                            logcat(LogPriority.DEBUG) { "NovelScreenModel: page $page/${totalPages} returned 0 chapters, skipping" }
+                            logcat(LogPriority.DEBUG) {
+                                "NovelScreenModel: page $page/$totalPages returned 0 chapters, skipping"
+                            }
                             if (page >= totalPages) break
                             continue
                         }
@@ -894,10 +966,14 @@ class NovelScreenModel(
                             }
 
                         if (newChapters.isEmpty()) {
-                            logcat(LogPriority.DEBUG) { "NovelScreenModel: page $page returned only duplicates, incrementing duplicate counter" }
+                            logcat(LogPriority.DEBUG) {
+                                "NovelScreenModel: page $page returned only duplicates, incrementing duplicate counter"
+                            }
                             consecutiveDuplicatePages++
                             if (consecutiveDuplicatePages >= 2) {
-                                logcat(LogPriority.DEBUG) { "NovelScreenModel: 2 consecutive duplicate pages, stopping fetch" }
+                                logcat(LogPriority.DEBUG) {
+                                    "NovelScreenModel: 2 consecutive duplicate pages, stopping fetch"
+                                }
                                 break
                             }
                             if (page >= totalPages) break
@@ -914,17 +990,19 @@ class NovelScreenModel(
                             novelChapterRepository.addAllNovelChapters(toAdd)
                         }
                         if (toUpdate.isNotEmpty()) {
-                            updateNovelChapter.awaitAll(toUpdate.map {
-                                NovelChapterUpdate(
-                                    id = it.id,
-                                    name = it.name,
-                                    url = it.url,
-                                    chapterNumber = it.chapterNumber,
-                                    dateFetch = it.dateFetch,
-                                    dateUpload = it.dateUpload,
-                                    sourceOrder = it.sourceOrder,
-                                )
-                            })
+                            updateNovelChapter.awaitAll(
+                                toUpdate.map {
+                                    NovelChapterUpdate(
+                                        id = it.id,
+                                        name = it.name,
+                                        url = it.url,
+                                        chapterNumber = it.chapterNumber,
+                                        dateFetch = it.dateFetch,
+                                        dateUpload = it.dateUpload,
+                                        sourceOrder = it.sourceOrder,
+                                    )
+                                },
+                            )
                         }
 
                         totalAdded += toAdd.size
@@ -933,11 +1011,13 @@ class NovelScreenModel(
 
                         // Update notification with progress
                         notificationBuilder
-                            .setContentText("Page $page/$totalPages — ${totalFetched} chapters fetched")
+                            .setContentText("Page $page/$totalPages — $totalFetched chapters fetched")
                             .setProgress(totalPages, page, false)
                         context.notify(Notifications.ID_NOVEL_CHAPTER_FETCH, notificationBuilder.build())
 
-                        logcat(LogPriority.DEBUG) { "NovelScreenModel: page $page/$totalPages done, +${toAdd.size} new, +${toUpdate.size} updated" }
+                        logcat(LogPriority.DEBUG) {
+                            "NovelScreenModel: page $page/$totalPages done, +${toAdd.size} new, +${toUpdate.size} updated"
+                        }
 
                         if (page >= totalPages) break
                     }
@@ -956,10 +1036,12 @@ class NovelScreenModel(
                     }
                 }
             } catch (e: Throwable) {
-                logcat(LogPriority.ERROR) { "NovelScreenModel: fetchAllChaptersWithProgress error: ${e::class.simpleName}: ${e.message}" }
+                logcat(LogPriority.ERROR) {
+                    "NovelScreenModel: fetchAllChaptersWithProgress error: ${e::class.simpleName}: ${e.message}"
+                }
                 logcat(LogPriority.ERROR, e)
                 val errorText = when (e) {
-                    is tachiyomi.domain.items.chapter.model.NoChaptersException -> "No chapters found (site may be blocking requests)"
+                    is NoChaptersException -> "No chapters found (site may be blocking requests)"
                     else -> "Error: ${e.message ?: e::class.simpleName}"
                 }
                 notificationBuilder
@@ -1290,6 +1372,13 @@ class NovelScreenModel(
         updateSuccessState { it.copy(dialog = Dialog.TrackSheet) }
     }
 
+    fun showCommentsDialog() {
+        updateSuccessState { it.copy(dialog = Dialog.Comments) }
+    }
+
+    val commentsEnabled: Boolean
+        get() = basePreferences.commentsEnabled().get()
+
     // Track sheet - end
 
     fun updateNovelMetadata(
@@ -1315,42 +1404,29 @@ class NovelScreenModel(
     }
 
     fun markPreviousChapterRead(chapter: NovelChapter) {
-        val state = successState ?: return
-        val novel = state.novel
-        val chapters = state.processedChapters
-        val prevChapters = if (novel.sortDescending()) chapters.asReversed() else chapters
-        val chapterIndex = prevChapters.indexOfFirst { it.chapter.id == chapter.id }
-        if (chapterIndex == -1) return
-        val chaptersToMark = prevChapters.take(chapterIndex).map { it.chapter }
-        if (chaptersToMark.isNotEmpty()) {
-            markChaptersRead(chaptersToMark, true)
-        }
+        markPreviousChaptersRead(chapter, true)
     }
 
-    fun markPreviousChaptersAsRead(chapter: NovelChapter, read: Boolean) {
+    fun markPreviousChaptersRead(chapter: NovelChapter, read: Boolean) {
         val state = successState ?: return
         val novel = state.novel
         val chapters = state.processedChapters
-        val prevChapters = if (novel.sortDescending()) chapters.asReversed() else chapters
+        // Chapter-group pills (Book/Volume…): scope "previous" to the
+        // pointer's own group — marking must not leak across groups.
+        val pointerGroup = eu.kanade.tachiyomi.util.chapter.ChapterNameGroup.parse(chapter.name)
+        val scoped = if (pointerGroup != null) {
+            chapters.filter {
+                eu.kanade.tachiyomi.util.chapter.ChapterNameGroup.parse(it.chapter.name) == pointerGroup
+            }
+        } else {
+            chapters
+        }
+        val prevChapters = if (novel.sortDescending()) scoped.asReversed() else scoped
         val chapterIndex = prevChapters.indexOfFirst { it.chapter.id == chapter.id }
         if (chapterIndex == -1) return
         val chaptersToMark = prevChapters.take(chapterIndex).map { it.chapter }
         if (chaptersToMark.isNotEmpty()) {
             markChaptersRead(chaptersToMark, read)
-        }
-    }
-
-    fun markChapterRangeAsRead(startChapter: NovelChapter, endChapter: NovelChapter, read: Boolean) {
-        val state = successState ?: return
-        val chapters = state.processedChapters
-        val startIndex = chapters.indexOfFirst { it.chapter.id == startChapter.id }
-        val endIndex = chapters.indexOfFirst { it.chapter.id == endChapter.id }
-        if (startIndex == -1 || endIndex == -1) return
-        val from = minOf(startIndex, endIndex)
-        val to = maxOf(startIndex, endIndex)
-        val rangeChapters = chapters.subList(from, to + 1).map { it.chapter }
-        if (rangeChapters.isNotEmpty()) {
-            markChaptersRead(rangeChapters, read)
         }
     }
 
@@ -1976,6 +2052,7 @@ class NovelScreenModel(
         data object FullCover : Dialog
         data object LinkedSources : Dialog
         data object TrackSheet : Dialog
+        data object Comments : Dialog
     }
 
     sealed interface State {

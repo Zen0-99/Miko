@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -96,10 +98,51 @@ class WorkIdResolverTest {
     }
 
     @Test
+    fun `books allowedTypes accepts the books kind vocab`() {
+        assertEquals(setOf("book", "novel"), WorkIdResolver.allowedTypes("books"))
+        // Legacy 'novel' key maps to the books carrier during the alias window.
+        assertEquals(setOf("book", "novel"), WorkIdResolver.allowedTypes("novel"))
+        assertEquals(
+            setOf("manga", "manhwa", "manhua", "comic", "webtoon", "oel", "other"),
+            WorkIdResolver.allowedTypes("manga"),
+        )
+    }
+
+    @Test
+    fun `resolve request sends kindHint as kind_hint on the wire`() {
+        val body = Json.encodeToString(
+            WorkIdentityApi.ResolveRequest.serializer(),
+            WorkIdentityApi.ResolveRequest(
+                title = "Dune",
+                medium = "books",
+                kindHint = "book",
+            ),
+        )
+        assertTrue("\"kind_hint\":\"book\"" in body)
+        assertFalse("\"kind\":" in body.replace("\"kind_hint\"", "\"\""))
+        assertTrue("\"medium\":\"books\"" in body)
+    }
+
+    @Test
+    fun `work dto parses kind nsfw medium and content_rating`() {
+        val dto = Json.decodeFromString(
+            WorkIdentityApi.WorkDto.serializer(),
+            """{"miko_work_id":"mk:mb:1","title":"T","type":"manhwa","kind":"manhwa",""" +
+                """"medium":"manga","nsfw":true,"content_rating":"pornographic"}""",
+        )
+        assertEquals("manhwa", dto.kind)
+        assertEquals("manga", dto.medium)
+        assertTrue(dto.nsfw)
+        assertEquals("pornographic", dto.content_rating)
+    }
+
+    @Test
     fun `mediumToType gives shows mints a carrier-disjoint kind`() {
         assertEquals("movie", WorkIdResolver.mediumToType("shows", isBook = false, kindHint = "movie"))
         assertEquals("series", WorkIdResolver.mediumToType("shows", isBook = false, kindHint = null))
         assertEquals("manga", WorkIdResolver.mediumToType("manga", isBook = false, kindHint = null))
+        assertEquals("novel", WorkIdResolver.mediumToType("books", isBook = false, kindHint = null))
+        // Legacy 'novel' key keeps hashing 'novel' mints during the alias window.
         assertEquals("novel", WorkIdResolver.mediumToType("novel", isBook = false, kindHint = null))
         assertEquals("book", WorkIdResolver.mediumToType("manga", isBook = true, kindHint = null))
         // Carrier-disjoint: a shows mk:m: mint never collides with a

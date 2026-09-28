@@ -1,0 +1,106 @@
+-- Canonical work identity cache for manga/novel/comic entries (NCM-001).
+-- Grows via per-work deltas from the comments Worker's /v1/works/resolve
+-- endpoint; covered-by-design notes in
+-- .planning/phases/07-manga-novel-canonical-id-pipeline/07-CONTEXT.md
+
+CREATE TABLE works_cache(
+    miko_work_id TEXT NOT NULL PRIMARY KEY,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    romanized_title TEXT,
+    native_title TEXT,
+    year INTEGER,
+    total_chapters TEXT,
+    author TEXT,
+    provider_links TEXT NOT NULL DEFAULT '[]',
+    normalized_title TEXT NOT NULL,
+    resolution_source TEXT NOT NULL,
+    resolved_at INTEGER NOT NULL,
+    nsfw INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX works_cache_normalized_idx ON works_cache(normalized_title);
+
+CREATE TABLE works_cache_external_ids(
+    provider TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    miko_work_id TEXT NOT NULL,
+    PRIMARY KEY(provider, external_id),
+    FOREIGN KEY(miko_work_id) REFERENCES works_cache(miko_work_id)
+    ON DELETE CASCADE
+);
+
+selectByWorkId:
+SELECT * FROM works_cache WHERE miko_work_id = :workId;
+
+selectByNormalizedTitle:
+SELECT * FROM works_cache
+WHERE normalized_title = :normalized
+AND (:type IS NULL OR type = :type);
+
+selectByExternalId:
+SELECT w.* FROM works_cache w
+JOIN works_cache_external_ids e ON e.miko_work_id = w.miko_work_id
+WHERE e.provider = :provider AND e.external_id = :externalId;
+
+searchByNormalized:
+SELECT * FROM works_cache
+WHERE normalized_title LIKE :prefix
+   OR normalized_title LIKE :word
+ORDER BY LENGTH(title) ASC, year DESC
+LIMIT :limit;
+
+selectExternalIdsByWork:
+SELECT provider, external_id FROM works_cache_external_ids
+WHERE miko_work_id = :workId;
+
+upsertWork:
+INSERT OR REPLACE INTO works_cache(
+    miko_work_id, type, title, romanized_title, native_title, year,
+    total_chapters, author, provider_links, normalized_title,
+    resolution_source, resolved_at, nsfw
+) VALUES (
+    :workId, :type, :title, :romanizedTitle, :nativeTitle, :year,
+    :totalChapters, :author, :providerLinks, :normalizedTitle,
+    :resolutionSource, :resolvedAt, :nsfw
+);
+
+upsertExternalId:
+INSERT OR REPLACE INTO works_cache_external_ids(provider, external_id, miko_work_id)
+VALUES (:provider, :externalId, :workId);
+
+deleteWork:
+DELETE FROM works_cache WHERE miko_work_id = :workId;
+
+count:
+SELECT COUNT(*) FROM works_cache;
+
+-- Per-(work, source) chapter-thread alignment verdicts from
+-- /v1/chapters/align (NCM-002). `misaligned` disables chapter comments
+-- for that source; absent rows mean "not yet checked" (allowed).
+CREATE TABLE chapter_alignment(
+    work_id TEXT NOT NULL,
+    source_key TEXT NOT NULL,
+    fingerprint_hash TEXT NOT NULL,
+    status TEXT NOT NULL,
+    score REAL,
+    reference TEXT,
+    checked_at INTEGER NOT NULL,
+    PRIMARY KEY(work_id, source_key, fingerprint_hash)
+);
+
+selectAlignment:
+SELECT * FROM chapter_alignment
+WHERE work_id = :workId AND source_key = :sourceKey AND fingerprint_hash = :fingerprintHash;
+
+latestAlignment:
+SELECT * FROM chapter_alignment
+WHERE work_id = :workId AND source_key = :sourceKey
+ORDER BY checked_at DESC LIMIT 1;
+
+upsertAlignment:
+INSERT OR REPLACE INTO chapter_alignment(
+    work_id, source_key, fingerprint_hash, status, score, reference, checked_at
+) VALUES (
+    :workId, :sourceKey, :fingerprintHash, :status, :score, :reference, :checkedAt
+);

@@ -1,11 +1,6 @@
 package eu.kanade.tachiyomi.ui.browse
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.graphics.res.animatedVectorResource
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.background
@@ -17,14 +12,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,50 +30,51 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
-import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.ContentMode
-import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.browse.components.ExtensionCard
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
+import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBarWithSearch
 import eu.kanade.presentation.more.settings.screen.browse.ConsolidatedExtensionReposScreen
-import eu.kanade.presentation.browse.components.ExtensionCard
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.mikodb.WorkIdResolver
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
-import eu.kanade.tachiyomi.ui.browse.anime.extension.animeExtensionsTab
-import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseContent
-import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreenModel
 import eu.kanade.tachiyomi.ui.browse.anime.extension.AnimeExtensionsScreenModel
+import eu.kanade.tachiyomi.ui.browse.anime.extension.animeExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.anime.source.AnimeSourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.anime.source.animeSourcesTab
 import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
-import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
-import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
-import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.manga.extension.MangaExtensionsScreenModel
+import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.manga.source.MangaSourcesScreenModel
-import eu.kanade.tachiyomi.ui.browse.manga.source.mangaSourcesTab
 import eu.kanade.tachiyomi.ui.browse.manga.source.browse.BrowseMangaSourceScreen
-import eu.kanade.tachiyomi.ui.browse.novel.extension.novelExtensionsTab
+import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
+import eu.kanade.tachiyomi.ui.browse.manga.source.mangaSourcesTab
 import eu.kanade.tachiyomi.ui.browse.novel.extension.NovelExtensionsScreenModel
+import eu.kanade.tachiyomi.ui.browse.novel.extension.novelExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.novel.source.NovelSourcesScreenModel
-import eu.kanade.tachiyomi.ui.browse.novel.source.novelSourcesTab
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
+import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
+import eu.kanade.tachiyomi.ui.browse.novel.source.novelSourcesTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogContent
+import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogScreenModel
+import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseContent
+import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreenModel
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.collections.immutable.toImmutableList
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -93,8 +87,8 @@ import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.screens.EmptyScreen
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -129,9 +123,11 @@ data object BrowseTab : Tab {
         // Search state — query survives pill toggle
         var searchQuery by remember { mutableStateOf<String?>(null) }
         // Discover is the default for anime mode; Browse is the default for manga/novel.
-        var browseMode by remember { mutableStateOf(
-            if (contentMode == ContentMode.ANIME) BrowseMode.DISCOVER else BrowseMode.BROWSE,
-        ) }
+        var browseMode by remember {
+            mutableStateOf(
+                if (contentMode == ContentMode.ANIME) BrowseMode.DISCOVER else BrowseMode.BROWSE,
+            )
+        }
         // Whether the user has submitted the search (pressed enter/search on IME).
         // Results are only shown after submission, not while typing.
         var searchSubmitted by remember { mutableStateOf(false) }
@@ -152,6 +148,9 @@ data object BrowseTab : Tab {
         // shared top bar can reach it, and the Movies/Series toggle doesn't
         // navigate away (which would hide the top/bottom bars).
         val cinemetaBrowseSM = rememberScreenModel { CinemetaBrowseScreenModel() }
+        // Canonical catalog discover — manga/novel counterpart of the
+        // Cinemeta surface, backed by miko-manga-map.db (NCM-007).
+        val canonicalSM = rememberScreenModel { CanonicalCatalogScreenModel() }
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
 
         // Source managers for source search
@@ -165,10 +164,13 @@ data object BrowseTab : Tab {
         // them immediately; this refreshes the *available* list (which drives
         // update detection) in the background.
         LaunchedEffect(contentMode) {
-            // Reset to Discover for anime, Browse for manga/novel when content mode changes
-            if (browseMode == BrowseMode.DISCOVER && contentMode != ContentMode.ANIME) {
-                browseMode = BrowseMode.BROWSE
-            }
+            canonicalSM.setMedium(
+                if (contentMode == ContentMode.NOVEL) {
+                    WorkIdResolver.MEDIUM_BOOKS
+                } else {
+                    WorkIdResolver.MEDIUM_MANGA
+                },
+            )
         }
 
         // Push search query into the active extension screen model.
@@ -240,9 +242,11 @@ data object BrowseTab : Tab {
         } else {
             emptyList()
         }
-        val allActions = (sourceTab.actions + columnSelectorAction + extensionAction + globalOverflowActions(
-            onClickSettings = { navigator.push(SettingsScreen()) },
-        )).toImmutableList()
+        val allActions = (
+            sourceTab.actions + columnSelectorAction + extensionAction + globalOverflowActions(
+                onClickSettings = { navigator.push(SettingsScreen()) },
+            )
+            ).toImmutableList()
 
         useSharedTopBarWithSearch(
             title = stringResource(titleRes),
@@ -260,11 +264,12 @@ data object BrowseTab : Tab {
                 // after enter. Extensions side shows results immediately.
                 searchSubmitted = false
                 if (query == null) {
-                    // Search closed (X pressed) — clear Cinemeta search if in
+                    // Search closed (X pressed) — clear Discover search if in
                     // Discover mode, but keep the user's current browse mode.
                     // Don't force them back to Discover.
                     if (browseMode == BrowseMode.DISCOVER) {
                         cinemetaBrowseSM.clearSearch()
+                        canonicalSM.clearSearch()
                     }
                     searchSubmitted = false
                 }
@@ -273,7 +278,11 @@ data object BrowseTab : Tab {
                 if (query.isBlank()) return@useSharedTopBarWithSearch
                 when (browseMode) {
                     BrowseMode.DISCOVER -> {
-                        cinemetaBrowseSM.search(query)
+                        if (contentMode == ContentMode.ANIME) {
+                            cinemetaBrowseSM.search(query)
+                        } else {
+                            canonicalSM.search(query)
+                        }
                         searchSubmitted = true
                     }
                     BrowseMode.EXTENSIONS -> {
@@ -294,7 +303,7 @@ data object BrowseTab : Tab {
                 BrowseSearchPill(
                     browseMode = browseMode,
                     onModeChange = { browseMode = it },
-                    showDiscover = contentMode == ContentMode.ANIME,
+                    showDiscover = true,
                 )
             },
         )
@@ -329,19 +338,32 @@ data object BrowseTab : Tab {
                 // a recomposition or "installed" header jump.
                 sourceTab.content(resolvedPadding, snackbarHostState)
 
-                // Discover overlay — shown on top with an opaque background
-                // when in Discover mode (anime only).
+                // Discover overlay — shown on top with an opaque background.
+                // Anime mode: Cinemeta catalog; manga/novel: canonical catalog.
                 if (browseMode == BrowseMode.DISCOVER) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                     ) {
-                        CinemetaBrowseContent(
-                            screenModel = cinemetaBrowseSM,
-                            contentPadding = resolvedPadding,
-                            libraryPreferences = libraryPreferences,
-                        )
+                        if (contentMode == ContentMode.ANIME) {
+                            CinemetaBrowseContent(
+                                screenModel = cinemetaBrowseSM,
+                                contentPadding = resolvedPadding,
+                                libraryPreferences = libraryPreferences,
+                            )
+                        } else {
+                            CanonicalCatalogContent(
+                                screenModel = canonicalSM,
+                                medium = if (contentMode == ContentMode.NOVEL) {
+                                    WorkIdResolver.MEDIUM_BOOKS
+                                } else {
+                                    WorkIdResolver.MEDIUM_MANGA
+                                },
+                                contentPadding = resolvedPadding,
+                                libraryPreferences = libraryPreferences,
+                            )
+                        }
                     }
                 }
 
@@ -358,14 +380,26 @@ data object BrowseTab : Tab {
                             .background(MaterialTheme.colorScheme.background),
                     ) {
                         if (browseMode == BrowseMode.DISCOVER) {
-                            // Discover search results — the Cinemeta screen model
-                            // already has the search results in its state; just
-                            // render the same browse content.
-                            CinemetaBrowseContent(
-                                screenModel = cinemetaBrowseSM,
-                                contentPadding = resolvedPadding,
-                                libraryPreferences = libraryPreferences,
-                            )
+                            // Discover search results — the screen models already
+                            // hold the results; just render the same content.
+                            if (contentMode == ContentMode.ANIME) {
+                                CinemetaBrowseContent(
+                                    screenModel = cinemetaBrowseSM,
+                                    contentPadding = resolvedPadding,
+                                    libraryPreferences = libraryPreferences,
+                                )
+                            } else {
+                                CanonicalCatalogContent(
+                                    screenModel = canonicalSM,
+                                    medium = if (contentMode == ContentMode.NOVEL) {
+                                        WorkIdResolver.MEDIUM_BOOKS
+                                    } else {
+                                        WorkIdResolver.MEDIUM_MANGA
+                                    },
+                                    contentPadding = resolvedPadding,
+                                    libraryPreferences = libraryPreferences,
+                                )
+                            }
                         } else if (browseMode == BrowseMode.EXTENSIONS) {
                             // Extensions side: show results immediately as the
                             // user types — no submit needed.

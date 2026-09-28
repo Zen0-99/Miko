@@ -1,0 +1,26 @@
+-- Canonical work identity cache for manga/novel/comic entries (NCM-001).
+CREATE TABLE works_cache(
+    miko_work_id TEXT NOT NULL PRIMARY KEY,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    romanized_title TEXT,
+    native_title TEXT,
+    year INTEGER,
+    total_chapters TEXT,
+    author TEXT,
+    provider_links TEXT NOT NULL DEFAULT '[]',
+    normalized_title TEXT NOT NULL,
+    resolution_source TEXT NOT NULL,
+    resolved_at INTEGER NOT NULL
+);
+
+CREATE INDEX works_cache_normalized_idx ON works_cache(normalized_title);
+
+CREATE TABLE works_cache_external_ids(
+    provider TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    miko_work_id TEXT NOT NULL,
+    PRIMARY KEY(provider, external_id),
+    FOREIGN KEY(miko_work_id) REFERENCES works_cache(miko_work_id)
+    ON DELETE CASCADE
+);

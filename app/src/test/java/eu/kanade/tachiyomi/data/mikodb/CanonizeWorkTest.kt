@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.domain.ui.model.Carrier
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -66,7 +67,7 @@ class CanonizeWorkTest {
 
     @Test
     fun `shows medium is rejected at the entry — canonize is chapter-shaped`() = runBlocking {
-        val out = canonize.run("mk:imdb:tt0903747", WorkIdResolver.MEDIUM_SHOWS)
+        val out = canonize.run("mk:imdb:tt0903747", Carrier.SHOWS)
         assertEquals(CanonizeWork.Outcome.UnsupportedMedium, out)
         coVerify(exactly = 0) { collector.collect(any(), any(), any()) }
         coVerify(exactly = 0) { api.canonize(any()) }

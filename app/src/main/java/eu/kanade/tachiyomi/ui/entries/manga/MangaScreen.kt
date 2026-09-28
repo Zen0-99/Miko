@@ -27,13 +27,15 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifMangaSourcesLoaded
 import eu.kanade.domain.entries.manga.model.hasCustomCover
 import eu.kanade.domain.entries.manga.model.toSManga
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.collection.components.ChangeCollectionDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
 import eu.kanade.presentation.entries.components.SetIntervalDialog
 import eu.kanade.presentation.entries.components.rememberEntryAccentColor
-import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.presentation.entries.manga.ChapterSettingsDialog
 import eu.kanade.presentation.entries.manga.DuplicateMangaDialog
 import eu.kanade.presentation.entries.manga.MangaScreen
@@ -45,37 +47,36 @@ import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.manga.isLocalOrStub
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
-import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
-import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
-import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.migration.all.MigrateMangaAllScreen
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialog
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaDialogScreenModel
-import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.browse.BrowseMangaSourceScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
 import eu.kanade.tachiyomi.ui.collection.CollectionsTab
+import eu.kanade.tachiyomi.ui.comments.CommentsSheetScreen
 import eu.kanade.tachiyomi.ui.entries.manga.track.MangaTrackInfoDialogHomeScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
-import eu.kanade.domain.ui.UiPreferences
-import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
+import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.launch
-import tachiyomi.core.common.util.lang.launchIO
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.items.chapter.model.Chapter
+import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
@@ -105,10 +106,19 @@ class MangaScreen(
         val screenModel =
             rememberScreenModel { MangaScreenModel(context, lifecycleOwner.lifecycle, mangaId, fromSource) }
 
-        val getLockedReadingOrders: tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders = uy.kohesive.injekt.Injekt.get()
-        var lockDialog by remember { androidx.compose.runtime.mutableStateOf<List<tachiyomi.domain.readingorder.model.ReadingOrder>>(emptyList()) }
+        val getLockedReadingOrders: GetLockedReadingOrders = Injekt.get()
+        var lockDialog by remember {
+            androidx.compose.runtime.mutableStateOf<List<tachiyomi.domain.readingorder.model.ReadingOrder>>(emptyList())
+        }
 
         val state by screenModel.state.collectAsStateWithLifecycle()
+        val redirectId by screenModel.redirectToEntryId.collectAsStateWithLifecycle()
+
+        // Extension-source duplicate of a canonical `miko:` entry — swap
+        // to the canonical entry so there's one entry per work.
+        LaunchedEffect(redirectId) {
+            redirectId?.let { navigator.replace(MangaScreen(it, fromSource)) }
+        }
 
         if (state is MangaScreenModel.State.Loading) {
             LoadingScreen()
@@ -180,6 +190,8 @@ class MangaScreen(
                     screenModel.showTrackDialog()
                 }
             },
+            onCommentsClicked = screenModel::showCommentsDialog
+                .takeIf { screenModel.commentsEnabled },
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
             onFilterButtonClicked = screenModel::showSettingsDialog,
             onRefresh = screenModel::fetchAllFromSource,
@@ -205,7 +217,6 @@ class MangaScreen(
             onInvertSelection = screenModel::invertSelection,
             onMarkAllReadClicked = { screenModel.markAllRead() },
             onMarkAllUnreadClicked = { screenModel.markAllUnread() },
-            onRefreshTrackingClicked = { screenModel.refreshTracking() },
             onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
                 .takeIf { !successState.source.isLocalOrStub() },
             onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
@@ -310,6 +321,15 @@ class MangaScreen(
                         sourceId = successState.source.id,
                     ),
                     enableSwipeDismiss = { it.lastItem is MangaTrackInfoDialogHomeScreen },
+                    onDismissRequest = onDismissRequest,
+                )
+            }
+            MangaScreenModel.Dialog.Comments -> {
+                NavigatorAdaptiveSheet(
+                    screen = CommentsSheetScreen(
+                        carrier = Carrier.MANGA,
+                        entryId = successState.manga.id,
+                    ),
                     onDismissRequest = onDismissRequest,
                 )
             }

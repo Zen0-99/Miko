@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.domain.ui.model.Carrier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -98,7 +99,7 @@ class LibraryWorkPrefetcher {
         for (novel in favorites) {
             resolveQuietly(
                 WorkIdResolver.Candidate(
-                    medium = WorkIdResolver.MEDIUM_NOVEL,
+                    medium = WorkIdResolver.MEDIUM_BOOKS,
                     title = novel.title,
                     url = novel.url,
                     author = novel.author,
@@ -143,12 +144,14 @@ class LibraryWorkPrefetcher {
                 api.markSeen(resolved.value, resolved.medium)
             }
             delay(150) // keep bursts off the Worker/MangaBaka path
+            // resolved.medium is a carrier key (shows|manga|books).
+            val carrier = Carrier.fromMedium(resolved.medium) ?: Carrier.MANGA
             if (canonizeRequested.get() &&
-                resolved.medium != WorkIdResolver.MEDIUM_SHOWS &&
+                carrier != Carrier.SHOWS &&
                 resolved.confidence != WorkIdResolver.Confidence.LOCAL_MINT
             ) {
                 try {
-                    canonizeWork.run(resolved.value, resolved.medium)
+                    canonizeWork.run(resolved.value, carrier)
                 } catch (e: Exception) {
                     logcat { "prefetch canonize failed for '${candidate.title}': ${e.message}" }
                 }

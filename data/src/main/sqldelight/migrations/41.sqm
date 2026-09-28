@@ -1,0 +1,4 @@
+-- Phase 15-03: unified taxonomy — orthogonal nsfw flag on the work
+-- identity cache (medium stays a request-side carrier key; `type` IS
+-- the kind column on the wire — no rename).
+ALTER TABLE works_cache ADD COLUMN nsfw INTEGER NOT NULL DEFAULT 0;

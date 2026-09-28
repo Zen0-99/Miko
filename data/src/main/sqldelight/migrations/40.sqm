@@ -1,0 +1,11 @@
+-- Per-(work, source) chapter-thread alignment verdicts (Phase 10, NCM-002).
+CREATE TABLE chapter_alignment(
+    work_id TEXT NOT NULL,
+    source_key TEXT NOT NULL,
+    fingerprint_hash TEXT NOT NULL,
+    status TEXT NOT NULL,
+    score REAL,
+    reference TEXT,
+    checked_at INTEGER NOT NULL,
+    PRIMARY KEY(work_id, source_key, fingerprint_hash)
+);
