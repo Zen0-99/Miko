@@ -24,6 +24,11 @@ export default defineWorkersConfig(async () => {
                             MANGABAKA_BASE: 'http://127.0.0.1:59999',
                             // Book tests intercept this origin via fetchMock.
                             OPENLIBRARY_BASE: 'http://ol.test',
+                            // Shows tests intercept these via fetchMock;
+                            // the catalog URL serves plain JSON (the
+                            // loader sniffs the gzip magic).
+                            CINEMETA_BASE: 'http://cinemeta.test',
+                            HENTAISTREAM_CATALOG_URL: 'http://hs.test/catalog.json',
                             // Appeals tests intercept api.typesafe.ai via
                             // fetchMock; a non-empty key enables the path.
                             JEV_MODERATION_KEY: 'test-key',

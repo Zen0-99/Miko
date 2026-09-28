@@ -5,9 +5,9 @@ import com.woowla.compose.icon.collections.tabler.Tabler
 import com.woowla.compose.icon.collections.tabler.tabler.Outline
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Anchor
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Award
+import com.woowla.compose.icon.collections.tabler.tabler.outline.Bolt
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Book2
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Books
-import com.woowla.compose.icon.collections.tabler.tabler.outline.Bolt
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Broadcast
 import com.woowla.compose.icon.collections.tabler.tabler.outline.ChartBar
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Chess
@@ -31,8 +31,8 @@ import com.woowla.compose.icon.collections.tabler.tabler.outline.Map2
 import com.woowla.compose.icon.collections.tabler.tabler.outline.MasksTheater
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Medal
 import com.woowla.compose.icon.collections.tabler.tabler.outline.MilitaryRank
-import com.woowla.compose.icon.collections.tabler.tabler.outline.Moon
 import com.woowla.compose.icon.collections.tabler.tabler.outline.MoodCry
+import com.woowla.compose.icon.collections.tabler.tabler.outline.Moon
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Notes
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Palette
 import com.woowla.compose.icon.collections.tabler.tabler.outline.Rocket

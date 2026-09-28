@@ -9,6 +9,9 @@ import {
     searchWorks,
     workIdFromKey,
 } from './openlibrary';
+import { deriveShowKind, fetchMeta, metaYear } from './cinemeta';
+import type { CinemetaMeta } from './cinemeta';
+import { findHsEntry, hsYear, loadCatalog } from './hentaistream';
 import { normalize } from './normalize';
 import { err, MEDIUM_ALIASES, now, ok } from './util';
 
@@ -53,7 +56,9 @@ interface ResolveRequest {
 
 interface WorkRow {
     miko_work_id: string;
-    type: string;
+    /** The kind column — NULL for honest-null mints (identity persisted
+     *  while the upstream meta source was unreachable). */
+    type: string | null;
     medium: string | null;
     nsfw: number;
     content_rating: string | null;
@@ -238,7 +243,10 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
              JOIN external_ids e ON e.miko_work_id = w.miko_work_id
              WHERE e.provider = ? AND e.external_id = ?`,
         ).bind(body.provider, body.external_id).first<WorkRow>();
-        if (row && allowed.has(row.type)) {
+        // Carrier check first — the medium column vouches null-kind
+        // rows (honest-null mints); the kind set is the fallback for
+        // legacy rows whose medium was backfilled by guesswork.
+        if (row && (row.medium === medium || (row.type != null && allowed.has(row.type)))) {
             return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
         }
     }
@@ -249,7 +257,9 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
          JOIN works_titles t ON t.miko_work_id = w.miko_work_id
          WHERE t.normalized = ? GROUP BY w.miko_work_id`,
     ).bind(normTitle).all<WorkRow>();
-    const typed = titleHits.filter((r) => allowed.has(r.type));
+    const typed = titleHits.filter(
+        (r) => r.medium === medium || (r.type != null && allowed.has(r.type)),
+    );
     if (typed.length === 1) {
         return ok({ work: toDto(typed[0], await externalIdsFor(env, typed[0].miko_work_id)) });
     }
@@ -258,7 +268,13 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
         return ok({ work: null });
     }
 
-    // 3. MangaBaka fetch once → persist.
+    // 3. Shows path — Cinemeta (imdb) / hentaistream (hs). Shows never
+    //    hit MangaBaka: bare-title resolves return null by design.
+    if (medium === 'shows') {
+        return resolveShow(body, env);
+    }
+
+    // 4. MangaBaka fetch once → persist.
     let series: MbSeries[] = [];
     try {
         series = await searchSeries(body.title, 10, env.MANGABAKA_BASE);
@@ -310,6 +326,122 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
         }
     }
     const row = await persistSeries(env, best.s, medium);
+    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+}
+
+// ---------- shows (Cinemeta / hentaistream) ----------
+
+interface ShowWrite {
+    workId: string;
+    /** Resolved kind — NULL on upstream outage (honest-null ruling). */
+    kind: string | null;
+    title: string;
+    year: number | null;
+    nsfw: number;
+    titles: string[];
+    externalIds: Array<[string, string]>;
+    providerLinks: Array<{ provider: string; external_id: string | null; url: string }>;
+}
+
+/** Persist a `mk:imdb:`/`mk:hs:` row + titles + external IDs. On
+ *  re-resolve a previously honest-null row picks up the confirmed kind
+ *  (COALESCE keeps the old kind when the new fetch is null again). */
+async function persistShow(env: Env, w: ShowWrite): Promise<WorkRow> {
+    await env.COMMENTS_DB.prepare(
+        `INSERT INTO works_cache
+         (miko_work_id, type, title, romanized_title, native_title,
+          normalized_title, year, total_chapters, author, provider_links,
+          medium, nsfw, content_rating, fetched_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(miko_work_id) DO UPDATE SET
+           fetched_at = excluded.fetched_at,
+           type = COALESCE(excluded.type, works_cache.type)`,
+    ).bind(
+        w.workId, w.kind, w.title, null, null, normalize(w.title),
+        w.year, null, null, JSON.stringify(w.providerLinks),
+        'shows', w.nsfw, null, now(),
+    ).run();
+
+    for (const t of new Set(w.titles.filter((t) => t && normalize(t)))) {
+        await env.COMMENTS_DB.prepare(
+            'INSERT INTO works_titles (miko_work_id, title, lang, normalized) VALUES (?,?,?,?)',
+        ).bind(w.workId, t, null, normalize(t)).run();
+    }
+    for (const [provider, id] of w.externalIds) {
+        await env.COMMENTS_DB.prepare(
+            'INSERT OR IGNORE INTO external_ids (provider, external_id, miko_work_id) VALUES (?,?,?)',
+        ).bind(provider, id, w.workId).run();
+    }
+
+    return {
+        miko_work_id: w.workId, type: w.kind, title: w.title,
+        romanized_title: null, native_title: null,
+        year: w.year, total_chapters: null, author: null,
+        provider_links: JSON.stringify(w.providerLinks),
+        medium: 'shows', nsfw: w.nsfw, content_rating: null,
+    };
+}
+
+/** Shows dispatcher — only provider-carried requests mint; bare-title
+ *  shows resolves return null by design (no shows title-search backend;
+ *  MangaBaka is manga/books only). */
+async function resolveShow(body: ResolveRequest, env: Env): Promise<Response> {
+    if (body.provider === 'imdb' && body.external_id) {
+        return resolveImdbShow(body, env);
+    }
+    if (body.provider === 'hs' && body.external_id) {
+        return resolveHsShow(body, env);
+    }
+    return ok({ work: null });
+}
+
+async function resolveImdbShow(body: ResolveRequest, env: Env): Promise<Response> {
+    const ttid = (body.external_id ?? '').toLowerCase();
+    if (!/^tt\d+$/.test(ttid)) return ok({ work: null });
+    // kind_hint is a fetch-order hint only — never the stored kind.
+    const order: Array<'series' | 'movie'> =
+        body.kind_hint === 'movie' ? ['movie', 'series'] : ['series', 'movie'];
+    let meta: CinemetaMeta | null = null;
+    for (const type of order) {
+        meta = await fetchMeta(type, ttid, env.CINEMETA_BASE);
+        if (meta) break;
+    }
+    const row = await persistShow(env, {
+        workId: `mk:imdb:${ttid}`,
+        kind: meta ? deriveShowKind(meta) : null,
+        title: meta?.name || body.title,
+        year: metaYear(meta),
+        nsfw: 0,
+        titles: [meta?.name ?? '', body.title],
+        externalIds: [['imdb', ttid]],
+        providerLinks: [
+            { provider: 'imdb', external_id: ttid, url: `https://www.imdb.com/title/${ttid}/` },
+        ],
+    });
+    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+}
+
+async function resolveHsShow(body: ResolveRequest, env: Env): Promise<Response> {
+    const idx = await loadCatalog(env.HENTAISTREAM_CATALOG_URL);
+    // Upstream unreachable / slug unknown → null; the app falls back to
+    // a provisional mk:m: mint so NSFW works stay functional (NCM-010).
+    if (!idx) return ok({ work: null });
+    const found = findHsEntry(idx, body.external_id ?? '');
+    if (!found) return ok({ work: null });
+    const { item, aliases } = found;
+    const row = await persistShow(env, {
+        workId: `mk:hs:${item.id}`,
+        // Catalog `type` is always 'series' — and `genres` can't be
+        // trusted (studio names leak in). nsfw=1 stamped at persistence
+        // per the locked caveat: every catalog row is adult content.
+        kind: 'series',
+        title: item.name || (body.external_id ?? ''),
+        year: hsYear(item),
+        nsfw: 1,
+        titles: [item.name ?? '', body.title],
+        externalIds: aliases.map((a) => ['hs', a] as [string, string]),
+        providerLinks: [],
+    });
     return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
 }
 

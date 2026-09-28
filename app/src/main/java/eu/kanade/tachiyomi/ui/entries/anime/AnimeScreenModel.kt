@@ -8,10 +8,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
-import miko.core.common.torrent.TorrentPreferences
-import miko.core.common.torrent.TorrentServerUtils
-import miko.domain.anime.SeasonAnime
-import miko.domain.anime.SeasonDisplayMode
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.util.addOrRemove
@@ -83,6 +79,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.domain.items.episode.interactor.FilterEpisodesForDownload
+import miko.core.common.torrent.TorrentPreferences
+import miko.core.common.torrent.TorrentServerUtils
+import miko.domain.anime.SeasonAnime
+import miko.domain.anime.SeasonDisplayMode
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
@@ -96,11 +96,11 @@ import tachiyomi.domain.collection.anime.interactor.GetAnimeCollections
 import tachiyomi.domain.collection.anime.interactor.SetAnimeCollections
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.download.service.DownloadPreferences
+import tachiyomi.domain.entries.anime.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.anime.interactor.GetAnimeWithEpisodesAndSeasons
 import tachiyomi.domain.entries.anime.interactor.GetDuplicateLibraryAnime
 import tachiyomi.domain.entries.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.entries.anime.interactor.SetAnimeSeasonFlags
-import tachiyomi.domain.entries.anime.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.NoSeasonsException
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
@@ -133,6 +133,7 @@ class AnimeScreenModel(
     private val animeId: Long,
     private val isFromSource: Boolean,
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
+    private val basePreferences: eu.kanade.domain.base.BasePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val trackPreferences: TrackPreferences = Injekt.get(),
     internal val playerPreferences: PlayerPreferences = Injekt.get(),
@@ -168,8 +169,21 @@ class AnimeScreenModel(
     private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
     private val searchFallbackEngine: AnimeSearchFallbackEngine = Injekt.get(),
     private val loadCinemetaEpisodes: eu.kanade.tachiyomi.metadata.stream.LoadCinemetaEpisodes = Injekt.get(),
+    private val cinemetaEntryUnifier: eu.kanade.tachiyomi.metadata.stream.CinemetaEntryUnifier = Injekt.get(),
+    private val streamResolver: eu.kanade.tachiyomi.metadata.stream.StreamResolver = Injekt.get(),
+    private val sourceMappingCache: eu.kanade.tachiyomi.metadata.stream.SourceMappingCache = Injekt.get(),
+    private val workIdResolver: eu.kanade.tachiyomi.data.mikodb.WorkIdResolver = Injekt.get(),
+    private val workIdentityApi: eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi = Injekt.get(),
+    private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<AnimeScreenModel.State>(State.Loading) {
+
+    /**
+     * Set when this entry resolves to a canonical Cinemeta entry — the
+     * screen replaces itself with that entry so there's one entry per
+     * real anime instead of a duplicate per extension.
+     */
+    val redirectToAnimeId = kotlinx.coroutines.flow.MutableStateFlow<Long?>(null)
 
     private val successState: State.Success?
         get() = state.value as? State.Success
@@ -362,7 +376,9 @@ class AnimeScreenModel(
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                logcat(LogPriority.DEBUG) { "[AnimeScreenModel] Native search fallback failed: ${e.message}" }
+                                logcat(LogPriority.DEBUG) {
+                                    "[AnimeScreenModel] Native search fallback failed: ${e.message}"
+                                }
                             }
                         }
                     }
@@ -421,6 +437,34 @@ class AnimeScreenModel(
 
         screenModelScope.launchIO {
             val anime = getAnimeAndEpisodesAndSeasons.awaitAnime(animeId)
+
+            // Phase 15-02: cinemeta-bound entries resolve mk:imdb: +
+            // markSeen DIRECTLY — CinemetaEntryUnifier.resolve early-returns
+            // on cinemeta: urls, so entry-open can't rely on it firing.
+            // Extension entries still go through the unifier first; on
+            // redirect, the canonical entry's own open performs the resolve.
+            if (eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.cinemetaRef(anime.url) == null) {
+                // Unify extension-source entries with the canonical Cinemeta
+                // entry (MikoDB identity). Redirect instead of loading this
+                // duplicate — one entry per real anime.
+                val canonical = try {
+                    cinemetaEntryUnifier.resolve(anime)
+                } catch (e: Exception) {
+                    null
+                }
+                if (canonical != null && canonical.id != animeId) {
+                    logcat(LogPriority.DEBUG) {
+                        "AnimeScreenModel: redirecting '${anime.title}' (id=$animeId, source=${anime.source}) to canonical Cinemeta entry id=${canonical.id}"
+                    }
+                    redirectToAnimeId.value = canonical.id
+                    return@launchIO
+                }
+            }
+
+            // Resolve + report the shows work id (ID-only telemetry,
+            // fire-and-forget — never blocks the screen).
+            screenModelScope.launchIO { resolveShowsWorkId(anime) }
+
             val source = sourceManager.getOrStub(anime.source)
 
             val episodes = if (anime.fetchType == FetchType.Seasons) {
@@ -451,10 +495,16 @@ class AnimeScreenModel(
             // since source 0 is a stub for Cinemeta entries.
             // Always call loadCinemetaEpisodes — it updates existing episodes' metadata
             // (ratings, thumbnails, dates) to keep them in sync with Cinemeta.
+            // Cinemeta entries (source == 0, URL starts with "cinemeta:") — load virtual
+            // episodes from Cinemeta metadata. Skip source-based episode/season/info fetching
+            // since source 0 is a stub for Cinemeta entries.
+            // Always call loadCinemetaEpisodes — it updates existing episodes' metadata
+            // (ratings, thumbnails, dates) to keep them in sync with Cinemeta.
+            // It runs AFTER the success state emits — the network fetches
+            // (Cinemeta meta + TMDB stills) would otherwise keep the screen
+            // on the loading spinner; the anime/episodes subscribe flow
+            // picks the results up as they land in the DB.
             val isCinemetaEntry = anime.source == 0L && anime.url.startsWith("cinemeta:")
-            if (isCinemetaEntry) {
-                loadCinemetaEpisodes.await(anime)
-            }
 
             // Show what we have earlier
             val intervalDays = fetchInterval.calculateInterval(
@@ -477,6 +527,16 @@ class AnimeScreenModel(
                     showInterval = showInterval,
                 )
             }
+
+            // Cinemeta meta/episode sync in the background — the screen shows
+            // what's already in the DB immediately; DB writes flow through
+            // the subscribe flow above as they land.
+            if (isCinemetaEntry) {
+                screenModelScope.launchIO {
+                    loadCinemetaEpisodes.await(anime)
+                }
+            }
+
             // Start observe tracking since it only needs animeId
             observeTrackers()
 
@@ -494,6 +554,54 @@ class AnimeScreenModel(
 
             // Initial loading finished
             updateSuccessState { it.copy(isRefreshingData = false) }
+        }
+    }
+
+    /**
+     * Phase 15-02 shows work identity — resolve to a canonical work id
+     * and report it via `/v1/ids/seen` (ID-only contract: work_id +
+     * medium; silent on failure).
+     *
+     * `cinemeta:{type}:{ttid}` urls feed ('imdb', ttid) straight into the
+     * resolver's external-ID mining; the url's type also seeds
+     * `kind_hint` (fetch-order only — the worker is the kind authority).
+     * For extension entries the anime map bridges tracker-bound ids
+     * (anilist > mal, then title) to an imdb id; genuinely uncovered
+     * shows fall back to a shows-kind `mk:m:` mint. canonize never runs
+     * for shows — it's chapter-shaped (CanonizeWork guards anyway).
+     */
+    private suspend fun resolveShowsWorkId(anime: Anime) {
+        try {
+            val ref = eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.cinemetaRef(anime.url)
+            var kindHint = ref?.first
+            var url = anime.url
+            if (ref == null) {
+                val bridge = mikoDbManager.bridge()
+                if (bridge != null) {
+                    val tracks = runCatching { getTracks.await(anime.id) }.getOrDefault(emptyList())
+                    val mapping = tracks
+                        .firstOrNull { it.trackerId == TrackerManager.ANILIST }?.remoteId
+                        ?.let(bridge::byAnilist)
+                        ?: tracks.firstOrNull { it.trackerId == MAL_TRACKER_ID }?.remoteId
+                            ?.let(bridge::byMal)
+                        ?: bridge.byTitle(anime.title)
+                    mapping?.imdbId?.let { imdbId ->
+                        if (kindHint == null && mapping.animeMediaType == "MOVIE") kindHint = "movie"
+                        url = "cinemeta:${kindHint ?: "series"}:$imdbId"
+                    }
+                }
+            }
+            val resolved = workIdResolver.resolve(
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.Candidate(
+                    medium = eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_SHOWS,
+                    title = anime.title,
+                    url = url,
+                    kindHint = kindHint,
+                ),
+            ) ?: return
+            workIdentityApi.markSeen(resolved.value, resolved.medium)
+        } catch (e: Exception) {
+            logcat(LogPriority.DEBUG) { "shows work resolve failed for '${anime.title}': ${e.message}" }
         }
     }
 
@@ -747,7 +855,13 @@ class AnimeScreenModel(
     private fun observeDownloads() {
         screenModelScope.launchIO {
             downloadManager.statusFlow()
-                .filter { it.anime.id == successState?.anime?.id }
+                // Cinemeta downloads queue against the source anime's
+                // episode — a ref maps it back to the displayed Cinemeta
+                // episode, so let those through too.
+                .filter {
+                    it.anime.id == successState?.anime?.id ||
+                        sourceMappingCache.cinemetaEpisodeIdFor(it.episode.id) != null
+                }
                 .catch { error -> logcat(LogPriority.ERROR, error) }
                 .flowWithLifecycle(lifecycle)
                 .collect {
@@ -759,7 +873,10 @@ class AnimeScreenModel(
 
         screenModelScope.launchIO {
             downloadManager.progressFlow()
-                .filter { it.anime.id == successState?.anime?.id }
+                .filter {
+                    it.anime.id == successState?.anime?.id ||
+                        sourceMappingCache.cinemetaEpisodeIdFor(it.episode.id) != null
+                }
                 .catch { error -> logcat(LogPriority.ERROR, error) }
                 .flowWithLifecycle(lifecycle)
                 .collect {
@@ -772,7 +889,13 @@ class AnimeScreenModel(
 
     private fun updateDownloadState(download: AnimeDownload) {
         updateSuccessState { successState ->
-            val modifiedIndex = successState.episodes.indexOfFirst { it.id == download.episode.id }
+            // Cinemeta downloads run against the source anime's episode —
+            // remap to the Cinemeta episode the card displays.
+            val episodeId = download.episode.id.takeIf { id ->
+                successState.episodes.any { it.id == id }
+            } ?: sourceMappingCache.cinemetaEpisodeIdFor(download.episode.id)
+                ?: return@updateSuccessState successState
+            val modifiedIndex = successState.episodes.indexOfFirst { it.id == episodeId }
             if (modifiedIndex < 0) return@updateSuccessState successState
 
             val newEpisodes = successState.episodes.toMutableList().apply {
@@ -784,21 +907,22 @@ class AnimeScreenModel(
         }
     }
 
-    private fun List<Episode>.toEpisodeListItems(anime: Anime): List<EpisodeList.Item> {
+    private suspend fun List<Episode>.toEpisodeListItems(anime: Anime): List<EpisodeList.Item> {
         val isLocal = anime.isLocal()
         // Cinemeta entries also have source == 0 (same as LocalAnimeSource.ID),
         // but their URL starts with "cinemeta:" — distinguish them from local.
         val isCinemeta = anime.source == 0L && anime.url.startsWith("cinemeta:")
+        val cinemetaDownloads = if (isCinemeta) cinemetaDownloadStates() else emptyMap()
         return map { episode ->
-            val activeDownload = if (isLocal || isCinemeta) {
-                null
-            } else {
-                downloadManager.getQueuedDownloadOrNull(episode.id)
+            val activeDownload = when {
+                isCinemeta -> cinemetaDownloads[episode.id]?.activeDownload
+                isLocal -> null
+                else -> downloadManager.getQueuedDownloadOrNull(episode.id)
             }
-            val downloaded = if (isLocal) {
+            val downloaded = if (isLocal && !isCinemeta) {
                 true
             } else if (isCinemeta) {
-                false
+                cinemetaDownloads[episode.id]?.downloaded == true
             } else {
                 downloadManager.isEpisodeDownloaded(
                     episode.name,
@@ -819,6 +943,240 @@ class AnimeScreenModel(
                 downloadProgress = activeDownload?.progress ?: 0,
                 selected = episode.id in selectedEpisodeIds,
             )
+        }
+    }
+
+    private data class CinemetaDownloadState(
+        val activeDownload: AnimeDownload?,
+        val downloaded: Boolean,
+    )
+
+    /**
+     * Download state for Cinemeta virtual episodes. Episodes queued through
+     * a source download carry a ref to the real source episode — resolve
+     * queue + filesystem state from that entry, dropping stale refs.
+     */
+    private suspend fun cinemetaDownloadStates(): Map<Long, CinemetaDownloadState> {
+        val refs = sourceMappingCache.episodeDownloadRefs()
+        if (refs.isEmpty()) return emptyMap()
+        val result = mutableMapOf<Long, CinemetaDownloadState>()
+        refs.entries.groupBy { it.value.sourceAnimeId }.forEach { (sourceAnimeId, entries) ->
+            val sourceAnime = try {
+                animeRepository.getAnimeById(sourceAnimeId)
+            } catch (e: Exception) {
+                null
+            } ?: return@forEach
+            val sourceEpisodes = getEpisodesByAnimeId.await(sourceAnimeId).associateBy { it.id }
+            entries.forEach { (cinemetaEpisodeId, ref) ->
+                val sourceEpisode = sourceEpisodes[ref.sourceEpisodeId]
+                if (sourceEpisode == null) {
+                    sourceMappingCache.removeEpisodeDownload(cinemetaEpisodeId)
+                    return@forEach
+                }
+                val queued = downloadManager.getQueuedDownloadOrNull(sourceEpisode.id)
+                val downloaded = downloadManager.isEpisodeDownloaded(
+                    sourceEpisode.name,
+                    sourceEpisode.scanlator,
+                    sourceAnime.title,
+                    ref.sourceId,
+                )
+                result[cinemetaEpisodeId] = CinemetaDownloadState(queued, downloaded)
+            }
+        }
+        return result
+    }
+
+    /**
+     * Queue Cinemeta episode downloads from a user-picked extension source.
+     * Materializes the source anime, syncs its episode list, resolves each
+     * Cinemeta episode to its source counterpart, records the mapping so
+     * the cards can reflect queue/downloaded state, then enqueues real
+     * downloads via [AnimeDownloadManager].
+     */
+    fun downloadCinemetaEpisodes(
+        items: List<EpisodeList.Item>,
+        candidate: eu.kanade.tachiyomi.metadata.stream.StreamResolver.StreamCandidate.Extension,
+    ) {
+        val anime = successState?.anime ?: return
+        screenModelScope.launchIO {
+            try {
+                // Cache the pick as this entry's source mapping — the user
+                // chose this source, so resume/continue paths can resolve
+                // it without re-showing the picker.
+                streamResolver.selectCandidate(anime, candidate)
+                val sourceAnime = streamResolver.materializeExtension(candidate)
+                val sEpisodes = candidate.source.getEpisodeList(sourceAnime.toSAnime())
+                if (sEpisodes.isEmpty()) {
+                    withUIContext { context.toast("No episodes on ${candidate.source.name}") }
+                    return@launchIO
+                }
+                syncEpisodesWithSource.await(
+                    sEpisodes,
+                    sourceAnime,
+                    candidate.source,
+                    manualFetch = false,
+                )
+                val sourceEpisodes = getEpisodesByAnimeId.await(sourceAnime.id)
+
+                val resolved = items.mapNotNull { item ->
+                    resolveCinemetaEpisodeTarget(
+                        item.episode,
+                        sourceEpisodes,
+                        anime,
+                        candidate.source.id,
+                    )?.let { item.episode to it }
+                }
+                if (resolved.isEmpty()) {
+                    withUIContext {
+                        context.toast("Couldn't match episodes on ${candidate.source.name}")
+                    }
+                    return@launchIO
+                }
+                resolved.forEach { (cinemetaEpisode, sourceEpisode) ->
+                    sourceMappingCache.putEpisodeDownload(
+                        cinemetaEpisodeId = cinemetaEpisode.id,
+                        ref = eu.kanade.tachiyomi.metadata.stream.SourceMappingCache.EpisodeDownloadRef(
+                            sourceId = candidate.source.id,
+                            sourceAnimeId = sourceAnime.id,
+                            sourceEpisodeId = sourceEpisode.id,
+                        ),
+                    )
+                }
+                downloadManager.downloadEpisodes(
+                    sourceAnime,
+                    resolved.map { it.second },
+                    autoStart = true,
+                )
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Cinemeta source download failed" }
+                withUIContext { context.toast("Download failed: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * Non-START download actions on Cinemeta entries (CANCEL queued,
+     * DELETE downloaded). The real download lives on the resolved source
+     * episode — look it up via the ref recorded at queue time.
+     */
+    fun runCinemetaDownloadActions(
+        items: List<EpisodeList.Item>,
+        action: EpisodeDownloadAction,
+    ) {
+        screenModelScope.launchIO {
+            try {
+                when (action) {
+                    EpisodeDownloadAction.CANCEL -> {
+                        items.forEach { item ->
+                            val ref = sourceMappingCache.episodeDownloadRef(item.episode.id)
+                                ?: return@forEach
+                            downloadManager.getQueuedDownloadOrNull(ref.sourceEpisodeId)
+                                ?.let { downloadManager.cancelQueuedDownloads(listOf(it)) }
+                        }
+                    }
+                    EpisodeDownloadAction.DELETE -> {
+                        val pairs = items.mapNotNull { item ->
+                            sourceMappingCache.episodeDownloadRef(item.episode.id)
+                                ?.let { item.episode.id to it }
+                        }
+                        pairs.groupBy({ it.second.sourceAnimeId }, { it })
+                            .forEach { (sourceAnimeId, group) ->
+                                val sourceAnime = try {
+                                    animeRepository.getAnimeById(sourceAnimeId)
+                                } catch (e: Exception) {
+                                    null
+                                } ?: return@forEach
+                                val source = sourceManager.get(group.first().second.sourceId)
+                                    ?: return@forEach
+                                val sourceEpisodes = getEpisodesByAnimeId.await(sourceAnimeId)
+                                    .associateBy { it.id }
+                                val episodes = group.mapNotNull { sourceEpisodes[it.second.sourceEpisodeId] }
+                                if (episodes.isNotEmpty()) {
+                                    downloadManager.deleteEpisodes(episodes, sourceAnime, source)
+                                }
+                                group.forEach { (cinemetaEpisodeId, _) ->
+                                    sourceMappingCache.removeEpisodeDownload(cinemetaEpisodeId)
+                                }
+                            }
+                    }
+                    else -> {}
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Cinemeta download action failed" }
+            }
+        }
+    }
+
+    /**
+     * Match a Cinemeta virtual episode to a real source episode — exact
+     * name first, then MikoDB-aware numbering targets (bound-entry local
+     * number, season number, absolute), same order as the playback
+     * stream-resolution path.
+     */
+    private fun resolveCinemetaEpisodeTarget(
+        cinemetaEpisode: Episode,
+        sourceEpisodes: List<Episode>,
+        cinemetaAnime: Anime,
+        sourceId: Long,
+    ): Episode? {
+        val name = cinemetaEpisode.name.trim()
+        if (name.isNotEmpty()) {
+            sourceEpisodes.find { it.name.trim().equals(name, ignoreCase = true) }
+                ?.let { return it }
+        }
+        val imdbId = cinemetaAnime.url.split(":").getOrNull(2)
+        val (season, epFromUrl) = cinemetaSeasonEpisode(cinemetaEpisode.url)
+        val targets = streamResolver.episodeTargets(
+            sourceId,
+            imdbId,
+            season,
+            epFromUrl ?: cinemetaEpisode.episodeNumber.toInt(),
+        )
+        return targets.firstNotNullOfOrNull { target ->
+            sourceEpisodes.find { it.episodeNumber.toInt() == target }
+        }
+    }
+
+    /** "cinemeta:episode:tt0903747:1:1" → (season, episode) */
+    private fun cinemetaSeasonEpisode(episodeUrl: String?): Pair<Int?, Int?> {
+        if (episodeUrl == null || !episodeUrl.startsWith("cinemeta:episode:")) return null to null
+        val parts = episodeUrl.split(":")
+        return parts.getOrNull(3)?.toIntOrNull() to parts.getOrNull(4)?.toIntOrNull()
+    }
+
+    /**
+     * Delete source downloads backing Cinemeta episodes — resolves each
+     * ref, removes the real downloaded files, and drops the mapping.
+     */
+    fun deleteCinemetaDownloads(items: List<EpisodeList.Item>) {
+        screenModelScope.launchIO {
+            items.forEach { item ->
+                val ref = sourceMappingCache.episodeDownloadRef(item.episode.id)
+                    ?: return@forEach
+                try {
+                    val sourceAnime = animeRepository.getAnimeById(ref.sourceAnimeId)
+                    val sourceEpisode = getEpisodesByAnimeId.await(ref.sourceAnimeId)
+                        .find { it.id == ref.sourceEpisodeId }
+                    val source = sourceManager.get(ref.sourceId)
+                    if (sourceEpisode != null && source != null) {
+                        downloadManager.deleteEpisodes(listOf(sourceEpisode), sourceAnime, source)
+                    }
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e) { "Failed to delete source download" }
+                }
+                sourceMappingCache.removeEpisodeDownload(item.episode.id)
+            }
+        }
+    }
+
+    /** Cancel in-flight source downloads backing Cinemeta episodes. */
+    fun cancelCinemetaDownloads(items: List<EpisodeList.Item>) {
+        items.forEach { item ->
+            val ref = sourceMappingCache.episodeDownloadRef(item.episode.id)
+                ?: return@forEach
+            val activeDownload = downloadManager.getQueuedDownloadOrNull(ref.sourceEpisodeId)
+                ?: return@forEach
+            downloadManager.cancelQueuedDownloads(listOf(activeDownload))
         }
     }
 
@@ -1116,12 +1474,26 @@ class AnimeScreenModel(
         updateDownloadState(activeDownload.apply { status = AnimeDownload.State.NOT_DOWNLOADED })
     }
 
-    fun markPreviousEpisodeSeen(pointer: Episode) {
+    fun markPreviousEpisodeSeen(pointer: Episode, seen: Boolean = true) {
         val anime = successState?.anime ?: return
         val episodes = processedEpisodes.orEmpty().map { it.episode }.toList()
-        val prevEpisodes = if (anime.sortDescending()) episodes.asReversed() else episodes
+        // Cinemeta season pills: scope "previous" to the pointer's own
+        // season — marking must not leak across seasons.
+        val scoped = if (anime.source == 0L && anime.url.startsWith("cinemeta:")) {
+            val season = cinemetaSeasonOf(pointer.scanlator)
+            episodes.filter { cinemetaSeasonOf(it.scanlator) == season }
+        } else {
+            episodes
+        }
+        val prevEpisodes = if (anime.sortDescending()) scoped.asReversed() else scoped
         val pointerPos = prevEpisodes.indexOf(pointer)
-        if (pointerPos != -1) markEpisodesSeen(prevEpisodes.take(pointerPos), true)
+        if (pointerPos != -1) markEpisodesSeen(prevEpisodes.take(pointerPos), seen)
+    }
+
+    /** Parse the season out of a Cinemeta episode scanlator ("Season 3|★8.1"). */
+    private fun cinemetaSeasonOf(scanlator: String?): Int {
+        if (scanlator.isNullOrBlank()) return 1
+        return scanlator.substringBefore("|").removePrefix("Season ").trim().toIntOrNull() ?: 1
     }
 
     /**
@@ -1832,7 +2204,8 @@ class AnimeScreenModel(
         data object EpisodeSettingsSheet : Dialog
         data object SeasonSettingsSheet : Dialog
         data object TrackSheet : Dialog
-        data object FullImages : Dialog
+        data object Comments : Dialog
+        data class FullImages(val coverData: Any? = null) : Dialog
     }
 
     fun dismissDialog() {
@@ -1856,8 +2229,15 @@ class AnimeScreenModel(
         updateSuccessState { it.copy(dialog = Dialog.TrackSheet) }
     }
 
-    fun showImagesDialog() {
-        updateSuccessState { it.copy(dialog = Dialog.FullImages) }
+    fun showCommentsDialog() {
+        updateSuccessState { it.copy(dialog = Dialog.Comments) }
+    }
+
+    val commentsEnabled: Boolean
+        get() = basePreferences.commentsEnabled().get()
+
+    fun showImagesDialog(coverData: Any? = null) {
+        updateSuccessState { it.copy(dialog = Dialog.FullImages(coverData)) }
     }
 
     fun showMigrateDialog(duplicate: Anime) {
@@ -2022,6 +2402,9 @@ class AnimeScreenModel(
         }
     }
 }
+
+/** MyAnimeList tracker id — same constant as ThreadIdResolver.MAL_TRACKER. */
+private const val MAL_TRACKER_ID = 1L
 
 @Immutable
 sealed class EpisodeList {
