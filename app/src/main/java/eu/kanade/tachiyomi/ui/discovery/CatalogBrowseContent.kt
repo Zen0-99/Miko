@@ -133,7 +133,9 @@ private fun pillsFor(carrier: Carrier): List<SubPill> = when (carrier) {
     )
     else -> listOf(
         SubPill(AYMR.strings.carrier_manga, "manga,manhwa,manhua"),
-        SubPill(AYMR.strings.discovery_pill_comics, "comic,webtoon,oel,other"),
+        // MangaBaka's type vocab has no comic/webtoon — webtoon-flavored
+        // rows land in `oel`/`other`, which is what this pill queries.
+        SubPill(AYMR.strings.discovery_pill_webtoons, "webtoon,oel,other"),
     )
 }
 

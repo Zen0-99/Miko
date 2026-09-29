@@ -13,13 +13,24 @@ import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.repository.NovelRepository
+import tachiyomi.domain.items.chapter.model.Chapter
+import tachiyomi.domain.items.chapter.repository.ChapterRepository
+import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 
 class CanonicalEntryUnifierTest {
 
     private val mangaRepository = mockk<MangaRepository>()
     private val novelRepository = mockk<NovelRepository>()
     private val workIdResolver = mockk<WorkIdResolver>()
-    private val unifier = CanonicalEntryUnifier(mangaRepository, novelRepository, workIdResolver)
+    private val chapterRepository = mockk<ChapterRepository>()
+    private val novelChapterRepository = mockk<NovelChapterRepository>()
+    private val unifier = CanonicalEntryUnifier(
+        mangaRepository,
+        novelRepository,
+        workIdResolver,
+        chapterRepository,
+        novelChapterRepository,
+    )
 
     private fun extensionManga(id: Long = 7L) = Manga.create().copy(
         id = id,
@@ -98,7 +109,48 @@ class CanonicalEntryUnifierTest {
                 CanonicalCatalog.CANONICAL_SOURCE_ID,
             )
         } returns canonical
+        coEvery { chapterRepository.getChapterByMangaId(canonical.id) } returns
+            listOf(Chapter.create())
         assertEquals(canonical, unifier.resolve(extensionManga()))
+    }
+
+    @Test
+    fun `chapter-less canonical stub never redirects`() = runBlocking {
+        val canonical = canonicalManga()
+        coEvery { workIdResolver.resolve(any()) } returns
+            CanonicalWorkId("mk:mb:333", "manga", Confidence.EXTERNAL_ID)
+        coEvery { mangaRepository.getMangaByUrlAndSourceId(any(), any()) } returns canonical
+        coEvery { chapterRepository.getChapterByMangaId(canonical.id) } returns emptyList()
+        assertNull(unifier.resolve(extensionManga()))
+    }
+
+    @Test
+    fun `favorite entry never redirects`() = runBlocking {
+        val manga = extensionManga().copy(favorite = true)
+        assertNull(unifier.resolve(manga))
+        coVerify(exactly = 0) { workIdResolver.resolve(any()) }
+    }
+
+    @Test
+    fun `chapter-less novel canonical stub never redirects`() = runBlocking {
+        val novel = Novel.create().copy(
+            id = 3L,
+            url = "/book/dune",
+            title = "Dune",
+            source = 6400L,
+        )
+        val canonicalNovel = Novel.create().copy(
+            id = 77L,
+            url = "${CanonicalCatalog.NOVEL_URL_PREFIX}mk:ol:OL1W",
+            source = CanonicalCatalog.CANONICAL_SOURCE_ID,
+        )
+        coEvery { workIdResolver.resolve(any()) } returns
+            CanonicalWorkId("mk:ol:OL1W", "books", Confidence.EXTERNAL_ID)
+        coEvery { novelRepository.getNovelByUrlAndSourceId(any(), any()) } returns canonicalNovel
+        coEvery {
+            novelChapterRepository.getNovelChaptersByNovelId(canonicalNovel.id)
+        } returns emptyList()
+        assertNull(unifier.resolve(novel))
     }
 
     @Test
@@ -126,6 +178,8 @@ class CanonicalEntryUnifierTest {
         coEvery { workIdResolver.resolve(any()) } returns
             CanonicalWorkId("mk:mb:333", "manga", Confidence.EXTERNAL_ID)
         coEvery { mangaRepository.getMangaByUrlAndSourceId(any(), any()) } returns canonical
+        coEvery { chapterRepository.getChapterByMangaId(canonical.id) } returns
+            listOf(Chapter.create())
 
         val manga = extensionManga()
         assertEquals(canonical, unifier.resolve(manga))

@@ -478,7 +478,7 @@
     <string name="discovery_tmdb_missing_key">TMDB API key required — set one in Settings › Advanced › Network</string>
     <string name="discovery_tmdb_error">Couldn\'t load TMDB results</string>
     <string name="discovery_tmdb_empty">No results for these filters</string>
-    <string name="discovery_pill_comics">Comics</string>
+    <string name="discovery_pill_webtoons">Webtoons</string>
     <string name="discovery_pill_novels">Novels</string>
     <string name="discovery_catalog_error">Couldn\'t load the catalog</string>
     <string name="discovery_catalog_empty">Nothing here yet</string>

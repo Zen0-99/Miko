@@ -4,6 +4,9 @@ import eu.kanade.domain.items.chapter.interactor.SyncChaptersWithSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import logcat.logcat
 import tachiyomi.domain.entries.manga.model.Manga
+import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.items.chapter.model.NovelChapter
+import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -31,6 +34,7 @@ class CanonicalChapterSync(
     private val syncChaptersWithSource: SyncChaptersWithSource = Injekt.get(),
     private val sourceManager: MangaSourceManager = Injekt.get(),
     private val goldenSources: GoldenSources = Injekt.get(),
+    private val novelChapterRepository: NovelChapterRepository = Injekt.get(),
 ) {
 
     /** Sync a canonical entry's chapter rows from the canon sequence.
@@ -48,7 +52,57 @@ class CanonicalChapterSync(
         }.onFailure { e ->
             logcat { "canonChapterSync $workId: ${e.message}" }
         }.getOrElse { return -1 }
+        // This stub is now serviceable — entries that cached "no
+        // canonical" while it was chapter-less must re-evaluate.
+        if (added.isNotEmpty()) Injekt.get<CanonicalEntryUnifier>().invalidate()
         return added.size
+    }
+
+    /**
+     * Novel counterpart of [sync]: materializes canon rows as
+     * [NovelChapter] rows on the canonical novel entry so its screen
+     * has a chapter list. Novels have no SyncChaptersWithSource
+     * equivalent — missing canon urls are inserted directly; existing
+     * rows (canon or extension-fed) are left alone. `scanlator` carries
+     * the installed carrier list so the reader can fan out per chapter.
+     */
+    suspend fun syncNovel(novel: Novel, workId: String): Int {
+        val canon = chapterMap.forWork(workId)
+        if (canon.isEmpty()) return 0
+        val installed = goldenSources.forWork(workId, WorkIdResolver.MEDIUM_BOOKS)
+            .map { it.pkgName }
+            .toSet()
+        val existingUrls = novelChapterRepository.getNovelChaptersByNovelId(novel.id)
+            .mapTo(HashSet()) { it.url }
+
+        // Newest-first so sourceOrder 0 = latest — matches extension feeds.
+        val now = System.currentTimeMillis()
+        val newChapters = canon.sortedByDescending { it.seq }.mapIndexedNotNull { i, c ->
+            val url = canonUrl(workId, c.seq)
+            if (url in existingUrls) return@mapIndexedNotNull null
+            NovelChapter.create().copy(
+                novelId = novel.id,
+                url = url,
+                name = c.label,
+                chapterNumber = c.number ?: 0.0,
+                sourceOrder = i.toLong(),
+                dateFetch = now,
+                dateUpload = 0L,
+                scanlator = c.refs.keys
+                    .filter { it in installed }
+                    .joinToString(", ")
+                    .ifBlank { null },
+            )
+        }
+        if (newChapters.isNotEmpty()) {
+            runCatching { novelChapterRepository.addAllNovelChapters(newChapters) }
+                .onFailure { e ->
+                    logcat { "canonChapterSync novel $workId: ${e.message}" }
+                    return 0
+                }
+            Injekt.get<CanonicalEntryUnifier>().invalidate()
+        }
+        return newChapters.size
     }
 
     companion object {

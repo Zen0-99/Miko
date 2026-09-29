@@ -11,14 +11,17 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.source.manga.service.MangaSourceManager
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 
 class CanonicalChapterRouterTest {
 
     private val chapterMap = mockk<CanonicalChapterMap>()
     private val goldenSources = mockk<GoldenSources>()
     private val sourceManager = mockk<MangaSourceManager>()
+    private val novelSourceManager = mockk<NovelSourceManager>()
 
-    private val router = CanonicalChapterRouter(chapterMap, goldenSources, sourceManager)
+    private val router =
+        CanonicalChapterRouter(chapterMap, goldenSources, sourceManager, novelSourceManager)
 
     private fun canonRow(refs: Map<String, String>) = CanonicalChapterMap.CanonChapter(
         seq = 29, number = 30.0, part = null, volume = null,

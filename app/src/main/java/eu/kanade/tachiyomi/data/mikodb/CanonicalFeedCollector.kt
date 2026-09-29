@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
+import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
+import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
@@ -9,6 +12,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import logcat.logcat
 import tachiyomi.domain.source.manga.service.MangaSourceManager
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -30,6 +34,7 @@ import uy.kohesive.injekt.api.get
 class CanonicalFeedCollector(
     private val goldenSources: GoldenSources = Injekt.get(),
     private val sourceManager: MangaSourceManager = Injekt.get(),
+    private val novelSourceManager: NovelSourceManager = Injekt.get(),
     private val matcher: SeriesMatcher = Injekt.get(),
 ) {
 
@@ -79,10 +84,17 @@ class CanonicalFeedCollector(
         val rejected = mutableListOf<Feed>()
         val failed = mutableMapOf<String, String>()
 
+        val isBooks = medium == WorkIdResolver.MEDIUM_BOOKS
         coroutineScope {
             goldens.map { g ->
                 async {
-                    runCatching { collectFrom(g, query, work.title ?: "") }
+                    runCatching {
+                        if (isBooks) {
+                            collectNovelFrom(g, query, work.title ?: "")
+                        } else {
+                            collectFrom(g, query, work.title ?: "")
+                        }
+                    }
                         .getOrElse { e ->
                             failed[g.pkgName] = e.message ?: e.javaClass.simpleName
                             null
@@ -117,23 +129,34 @@ class CanonicalFeedCollector(
         val source = g.sourceIds.firstNotNullOfOrNull { id -> sourceManager.get(id) }
             as? CatalogueSource ?: return null
 
-        // Provider-linked sources skip search — url is the canonical entry.
-        val candidates: List<SManga> = if (!g.url.isNullOrBlank()) {
-            listOf(SManga.create().apply { url = g.url!! })
-        } else {
-            val page = source.getSearchManga(1, searchTitle, FilterList())
-            page.mangas.take(TOP_CANDIDATES)
+        // Provider-linked url tried first — but a carrier URL is usually
+        // not the extension's internal url shape, so a failed or rejected
+        // direct lookup falls back to title search rather than dying.
+        if (!g.url.isNullOrBlank()) {
+            evalMangaFeed(source, g, query, listOf(SManga.create().apply { url = g.url!! }))
+                ?.takeIf { it.verdict != SeriesMatcher.Decision.REJECT }
+                ?.let { return it }
         }
-        if (candidates.isEmpty()) return null
+        val page = runCatching { source.getSearchManga(1, searchTitle, FilterList()) }
+            .getOrNull() ?: return null
+        return evalMangaFeed(source, g, query, page.mangas.take(TOP_CANDIDATES))
+    }
 
-        // Fetch details for each candidate; verify pairwise for margin.
+    /** Details → pairwise verify → chapter list for [candidates]. */
+    private suspend fun evalMangaFeed(
+        source: CatalogueSource,
+        g: GoldenSources.GoldenSource,
+        query: SeriesMatcher.Query,
+        candidates: List<SManga>,
+    ): Feed? {
+        if (candidates.isEmpty()) return null
         val detailed = candidates.mapNotNull { sm ->
             runCatching { source.getMangaDetails(sm) to sm }
                 .getOrNull()
         }
         if (detailed.isEmpty()) return null
 
-        val matchCands = detailed.map { (d, sm) ->
+        val matchCands = detailed.map { (d, _) ->
             SeriesMatcher.Candidate(
                 title = d.title,
                 author = d.author,
@@ -169,6 +192,86 @@ class CanonicalFeedCollector(
             pkgName = g.pkgName,
             tier = g.tier,
             url = sm.url,
+            seriesTitle = details.title,
+            chapters = chapters,
+            verdict = verdict.decision,
+            score = verdict.score,
+            reasons = verdict.reasons,
+        )
+    }
+
+    /**
+     * Book/novel collection — same shape as [collectFrom] but drives
+     * [NovelCatalogueSource] via [NovelSourceManager]: search → details
+     * → verify → chapter list.
+     */
+    private suspend fun collectNovelFrom(
+        g: GoldenSources.GoldenSource,
+        query: SeriesMatcher.Query,
+        searchTitle: String,
+    ): Feed? {
+        val source = g.sourceIds.firstNotNullOfOrNull { id -> novelSourceManager.get(id) }
+            as? NovelCatalogueSource ?: return null
+
+        if (!g.url.isNullOrBlank()) {
+            evalNovelFeed(source, g, query, listOf(SNovel.create().apply { url = g.url!! }))
+                ?.takeIf { it.verdict != SeriesMatcher.Decision.REJECT }
+                ?.let { return it }
+        }
+        val page = runCatching {
+            source.getSearchNovels(1, searchTitle, NovelFilterList(emptyList()))
+        }.getOrNull() ?: return null
+        return evalNovelFeed(source, g, query, page.novels.take(TOP_CANDIDATES))
+    }
+
+    private suspend fun evalNovelFeed(
+        source: NovelCatalogueSource,
+        g: GoldenSources.GoldenSource,
+        query: SeriesMatcher.Query,
+        candidates: List<SNovel>,
+    ): Feed? {
+        if (candidates.isEmpty()) return null
+        val detailed = candidates.mapNotNull { sn ->
+            runCatching { source.getNovelDetails(sn) to sn }
+                .getOrNull()
+        }
+        if (detailed.isEmpty()) return null
+
+        val matchCands = detailed.map { (d, _) ->
+            SeriesMatcher.Candidate(
+                title = d.title,
+                author = d.author,
+                artist = d.artist,
+                chapterCount = null,
+            )
+        }
+        val verdicts = matcher.verifyAll(query, matchCands)
+
+        val idx = verdicts.indices.firstOrNull {
+            verdicts[it].decision != SeriesMatcher.Decision.REJECT
+        } ?: verdicts.indices.maxByOrNull { verdicts[it].score } ?: return null
+        val verdict = verdicts[idx]
+        val (details, sn) = detailed[idx]
+
+        if (verdict.decision == SeriesMatcher.Decision.REJECT) {
+            return Feed(
+                source.id, g.pkgName, g.tier, sn.url, details.title,
+                emptyList(), verdict.decision, verdict.score, verdict.reasons,
+            )
+        }
+
+        val chapters = runCatching { source.getChapterList(sn) }
+            .getOrElse { e ->
+                logcat { "canonicalFeed(novel) ${g.pkgName} chapterlist: ${e.message}" }
+                emptyList()
+            }
+            .map { WorkIdentityApi.FeedChapter(name = it.name, url = it.url) }
+
+        return Feed(
+            sourceId = source.id,
+            pkgName = g.pkgName,
+            tier = g.tier,
+            url = sn.url,
             seriesTitle = details.title,
             chapters = chapters,
             verdict = verdict.decision,

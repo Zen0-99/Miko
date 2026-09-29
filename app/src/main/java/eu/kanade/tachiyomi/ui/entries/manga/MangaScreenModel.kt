@@ -505,6 +505,8 @@ class MangaScreenModel(
                                 canonizeWork.run(workId, Carrier.MANGA)
                                 canonicalChapterSync.sync(manga, workId)
                             }
+                    }.onFailure { e ->
+                        logcat(LogPriority.WARN) { "[MangaScreenModel] canonical pipeline failed: ${e.message}" }
                     }
                 }
             }

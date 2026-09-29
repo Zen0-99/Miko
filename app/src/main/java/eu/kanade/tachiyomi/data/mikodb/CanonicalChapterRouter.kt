@@ -1,11 +1,15 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
+import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.online.HttpSource
 import logcat.logcat
 import tachiyomi.domain.entries.manga.model.Manga
+import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.source.manga.service.MangaSourceManager
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
@@ -30,6 +34,7 @@ class CanonicalChapterRouter(
     private val chapterMap: CanonicalChapterMap = Injekt.get(),
     private val goldenSources: GoldenSources = Injekt.get(),
     private val sourceManager: MangaSourceManager = Injekt.get(),
+    private val novelSourceManager: NovelSourceManager = Injekt.get(),
 ) {
 
     data class Candidate(
@@ -50,13 +55,25 @@ class CanonicalChapterRouter(
     private val lastWorking = ConcurrentHashMap<String, String>()
 
     /** Ordered candidates for a canonical row — refs ∩ installed. */
-    suspend fun candidates(workId: String, seq: Int): List<Candidate> {
+    suspend fun candidates(workId: String, seq: Int): List<Candidate> =
+        candidatesFor(workId, seq, WorkIdResolver.MEDIUM_MANGA) { sourceManager.get(it) != null }
+
+    /** Ordered candidates for a canonical book/novel row — refs ∩ installed. */
+    suspend fun novelCandidates(workId: String, seq: Int): List<Candidate> =
+        candidatesFor(workId, seq, WorkIdResolver.MEDIUM_BOOKS) { novelSourceManager.get(it) != null }
+
+    private suspend fun candidatesFor(
+        workId: String,
+        seq: Int,
+        medium: String,
+        isInstalled: (Long) -> Boolean,
+    ): List<Candidate> {
         val row = chapterMap.forWork(workId).firstOrNull { it.seq == seq } ?: return emptyList()
-        val byPkg = goldenSources.forWork(workId, "manga").associateBy { it.pkgName }
+        val byPkg = goldenSources.forWork(workId, medium).associateBy { it.pkgName }
         val sticky = lastWorking[workId]
         return row.refs.mapNotNull { (pkg, url) ->
             val g = byPkg[pkg] ?: return@mapNotNull null
-            val sourceId = g.sourceIds.firstOrNull { sourceManager.get(it) != null }
+            val sourceId = g.sourceIds.firstOrNull(isInstalled)
                 ?: return@mapNotNull null
             Candidate(sourceId, pkg, g.tier, url)
         }.sortedWith(
@@ -95,6 +112,32 @@ class CanonicalChapterRouter(
         val workId = CanonicalCatalog.workIdFromMangaUrl(manga.url) ?: return null
         val seq = seqFromCanonUrl(workId, chapterUrl) ?: return null
         return resolve(workId, seq, label)
+    }
+
+    /**
+     * Novel counterpart of [resolveForRead]: canon chapter → best
+     * installed novel carrier → `getChapterText`, walking candidates
+     * on failure. Returns the chapter text, or null when no installed
+     * carrier serves it.
+     */
+    suspend fun resolveNovelText(novel: Novel, chapterUrl: String, label: String): String? {
+        val workId = CanonicalCatalog.workIdFromNovelUrl(novel.url) ?: return null
+        val seq = seqFromCanonUrl(workId, chapterUrl) ?: return null
+        for (c in novelCandidates(workId, seq)) {
+            val src = novelSourceManager.get(c.sourceId) as? NovelCatalogueSource ?: continue
+            val sch = SNovelChapter.create().apply {
+                url = c.chapterUrl
+                name = label
+            }
+            val text = runCatching { src.getChapterText(sch) }
+                .onFailure { logcat { "canonRouter(novel) $workId@${c.pkgName}: ${it.message}" } }
+                .getOrNull()
+                ?: continue
+            if (text.isBlank()) continue
+            lastWorking[workId] = c.pkgName
+            return text
+        }
+        return null
     }
 
     companion object {

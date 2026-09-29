@@ -61,14 +61,14 @@ class GoldenSources(
     }
 
     suspend fun forWorkRow(work: MangaNovelIdBridge.WorkRow, medium: String): List<GoldenSource> {
-        val links = providerLinksOf(work.providerLinks)
-        if (links.isEmpty()) return emptyList()
-
         val installed = installedPkgs(medium)
         if (installed.isEmpty()) return emptyList()
+        val links = providerLinksOf(work.providerLinks)
+        val meta = mikoDbManager.allSourceMeta()
 
+        // Declared path: miko.json `providers` ∩ provider_links ∩ installed.
         val byProvider = mutableMapOf<String, MutableList<GoldenSource>>()
-        for ((pkg, m) in mikoDbManager.allSourceMeta()) {
+        for ((pkg, m) in meta) {
             if (pkg !in installed) continue
             for (provider in m.providers) {
                 byProvider.getOrPut(provider) { mutableListOf() }
@@ -85,17 +85,81 @@ class GoldenSources(
                     )
             }
         }
-
-        return links.flatMap { link ->
+        val declared = links.flatMap { link ->
             val candidates = byProvider[link.provider] ?: return@flatMap emptyList()
             candidates.map { it.copy(externalId = link.externalId, url = link.url) }
         }
-            .distinctBy { it.pkgName }
-            .sortedBy { tierRank(it.tier) }
-            .let { ranked ->
-                ranked.filter { tierRank(it.tier) <= 1 }.ifEmpty { ranked }
+
+        // Heuristic path: miko.json ships no `providers` rows for text
+        // extensions today, so bind installed packages whose identity
+        // matches the carrier — pkg last segment vs provider slug or
+        // link host ("...all.webtoons" ↔ "webtoons" ↔ webtoons.com).
+        val declaredPkgs = declared.mapTo(HashSet()) { it.pkgName }
+        val heuristic = links.flatMap { link ->
+            val hostSlug = hostSlugOf(link.url)
+            installed.filterKeys { pkg ->
+                pkg !in declaredPkgs && pkgMatchesProvider(pkg, link.provider, hostSlug)
+            }.map { (pkg, ids) ->
+                GoldenSource(
+                    pkgName = pkg,
+                    sourceIds = ids,
+                    name = meta[pkg]?.name ?: pkg.substringAfterLast('.'),
+                    tier = meta[pkg]?.tier ?: "",
+                    provider = link.provider,
+                    externalId = link.externalId,
+                    url = link.url,
+                )
+            }
+        }
+
+        val bound = (declared + heuristic).distinctBy { it.pkgName }
+        if (bound.isNotEmpty()) {
+            val ranked = bound.sortedBy { tierRank(it.tier) }
+            return ranked.filter { tierRank(it.tier) <= 1 }.ifEmpty { ranked }
+                .take(MAX_BOUND_SOURCES)
+        }
+
+        // Broad fallback: nothing link-bound — either no provider_links
+        // or no carrier extension installed. Let the highest-tier
+        // installed extensions title-search the work; SeriesMatcher
+        // still gates identity downstream, so wrong-series feeds are
+        // rejected rather than merged.
+        return installed.entries
+            .sortedWith(compareBy({ tierRank(meta[it.key]?.tier ?: "") }, { it.key }))
+            .take(BROAD_FALLBACK_MAX)
+            .map { (pkg, ids) ->
+                GoldenSource(
+                    pkgName = pkg,
+                    sourceIds = ids,
+                    name = meta[pkg]?.name ?: pkg.substringAfterLast('.'),
+                    tier = meta[pkg]?.tier ?: "",
+                    provider = "",
+                    externalId = null,
+                    url = null,
+                )
             }
     }
+
+    /** Second-level host label of a carrier URL ("www.webtoons.com" →
+     *  "webtoons"), normalized for comparison with package segments. */
+    internal fun hostSlugOf(url: String?): String? = url
+        ?.let { runCatching { java.net.URI(it).host }.getOrNull() }
+        ?.lowercase()
+        ?.removePrefix("www.")
+        ?.split('.')
+        ?.let { labels -> if (labels.size >= 2) labels[labels.size - 2] else labels.firstOrNull() }
+        ?.let(::normalizeKey)
+
+    /** Normalized package tail ↔ provider slug / host match:
+     *  `eu.kanade.tachiyomi.extension.all.webtoons` ↔ "webtoons",
+     *  `yokai.extension.novel.en.annasarchive` ↔ "annas-archive". */
+    internal fun pkgMatchesProvider(pkgName: String, provider: String, hostSlug: String?): Boolean {
+        val seg = normalizeKey(pkgName.substringAfterLast('.'))
+        return seg.isNotEmpty() &&
+            (seg == normalizeKey(provider) || (hostSlug != null && seg == hostSlug))
+    }
+
+    private fun normalizeKey(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")
 
     internal data class ProviderLink(
         val provider: String,
@@ -115,6 +179,15 @@ class GoldenSources(
         }
     } catch (_: Exception) {
         emptyList()
+    }
+
+    private companion object {
+        /** Cap on link-bound sources — bounds parallel collector fan-out. */
+        const val MAX_BOUND_SOURCES = 6
+
+        /** Cap on broad-fallback search candidates — every candidate is
+         *  a getSearchManga + details + chapterList round trip. */
+        const val BROAD_FALLBACK_MAX = 4
     }
 
     /** Installed extension pkg → its source ids, for the medium. */

@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.reader.loader
 import android.content.Context
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadProvider
+import eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.reader.model.ReaderChapter
@@ -102,6 +103,11 @@ class ChapterLoader(
                     is Format.Epub -> EpubPageLoader(format.file.epubReader(context))
                 }
             }
+            // Canonical rows (canon:{work}:{seq}) fan out to the best
+            // installed carrier source (13-04) — never served by the
+            // entry's stub source directly.
+            CanonicalChapterRouter.isCanonUrl(dbChapter.url) ->
+                CanonicalPageLoader(chapter, manga)
             source is HttpSource -> HttpPageLoader(chapter, source)
             source is StubMangaSource -> error(
                 context.stringResource(MR.strings.source_not_installed, source.toString()),

@@ -63,36 +63,52 @@ class MangaBakaEnrich(
      *  non-`mk:mb:` ids, already-enriched rows, or fetch failure. */
     suspend fun run(workId: String, manga: Manga): Boolean {
         val detail = fetchDetail(workId) ?: return false
-        enrichBridgeRow(workId, detail)
-        mangaRepository.updateManga(
-            MangaUpdate(
-                id = manga.id,
-                author = detail.author,
-                description = detail.description,
-                genre = detail.genres.takeIf { it.isNotEmpty() },
-                thumbnailUrl = detail.coverUrl,
-                coverLastModified = detail.coverUrl?.let { System.currentTimeMillis() },
-                status = detail.status?.let { CanonicalCatalog.statusOf(it, manga = true) },
-            ),
-        )
+        // Entry metadata first — the user-facing fix. A bridge-row write
+        // failure must not starve the visible update (and vice versa).
+        runCatching {
+            mangaRepository.updateManga(
+                MangaUpdate(
+                    id = manga.id,
+                    author = detail.author,
+                    description = detail.description,
+                    genre = detail.genres.takeIf { it.isNotEmpty() },
+                    thumbnailUrl = detail.coverUrl,
+                    coverLastModified = detail.coverUrl?.let { System.currentTimeMillis() },
+                    status = detail.status?.let { CanonicalCatalog.statusOf(it, manga = true) },
+                ),
+            )
+        }.onFailure { e ->
+            logcat(LogPriority.WARN) { "MangaBakaEnrich: entry update failed for $workId: ${e.message}" }
+        }
+        runCatching { enrichBridgeRow(workId, detail) }
+            .onFailure { e ->
+                logcat(LogPriority.WARN) { "MangaBakaEnrich: bridge write failed for $workId: ${e.message}" }
+            }
         return true
     }
 
     /** Same as [run] for novels/books (`mk:mb:` novel rows). */
     suspend fun run(workId: String, novel: Novel): Boolean {
         val detail = fetchDetail(workId) ?: return false
-        enrichBridgeRow(workId, detail)
-        novelRepository.updateNovel(
-            NovelUpdate(
-                id = novel.id,
-                author = detail.author,
-                description = detail.description,
-                genre = detail.genres.takeIf { it.isNotEmpty() },
-                thumbnailUrl = detail.coverUrl,
-                coverLastModified = detail.coverUrl?.let { System.currentTimeMillis() },
-                status = detail.status?.let { CanonicalCatalog.statusOf(it, manga = false) },
-            ),
-        )
+        runCatching {
+            novelRepository.updateNovel(
+                NovelUpdate(
+                    id = novel.id,
+                    author = detail.author,
+                    description = detail.description,
+                    genre = detail.genres.takeIf { it.isNotEmpty() },
+                    thumbnailUrl = detail.coverUrl,
+                    coverLastModified = detail.coverUrl?.let { System.currentTimeMillis() },
+                    status = detail.status?.let { CanonicalCatalog.statusOf(it, manga = false) },
+                ),
+            )
+        }.onFailure { e ->
+            logcat(LogPriority.WARN) { "MangaBakaEnrich: entry update failed for $workId: ${e.message}" }
+        }
+        runCatching { enrichBridgeRow(workId, detail) }
+            .onFailure { e ->
+                logcat(LogPriority.WARN) { "MangaBakaEnrich: bridge write failed for $workId: ${e.message}" }
+            }
         return true
     }
 
@@ -112,7 +128,7 @@ class MangaBakaEnrich(
             ).awaitSuccess()
             with(json) { response.parseAs<SeriesEnvelope>().data }?.toDetail()
         } catch (e: Exception) {
-            logcat(LogPriority.DEBUG) { "MangaBakaEnrich: detail fetch failed for $workId: ${e.message}" }
+            logcat(LogPriority.WARN) { "MangaBakaEnrich: detail fetch failed for $workId: ${e.message}" }
             null
         }
     }

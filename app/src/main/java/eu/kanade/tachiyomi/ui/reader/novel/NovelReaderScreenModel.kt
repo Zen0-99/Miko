@@ -75,6 +75,7 @@ class NovelReaderScreenModel(
     private val getNovelWithChapters: GetNovelWithChapters = Injekt.get(),
     private val getNovelChapter: GetNovelChapter = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
+    private val canonicalChapterRouter: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter = Injekt.get(),
     private val setReadStatus: SetNovelReadStatus = Injekt.get(),
     private val upsertNovelHistory: UpsertNovelHistory = Injekt.get(),
     private val downloadManager: eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager = Injekt.get(),
@@ -1196,7 +1197,11 @@ class NovelReaderScreenModel(
 
                 val source = sourceManager.getOrStub(novel.source) as? NovelCatalogueSource
                 currentSource = source
-                if (source == null) {
+                // Canonical rows have a stub source — the chapter fan-out
+                // resolves a real carrier per canon: url instead.
+                val isCanonical = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                    .isCanonicalUrl(novel.url)
+                if (source == null && !isCanonical) {
                     mutableState.update { it.copy(loading = false, error = "Source not available") }
                     return@launchIO
                 }
@@ -1208,8 +1213,11 @@ class NovelReaderScreenModel(
 
                 // 05-04 SD-3: seed the rendered-audio set once (one SAF audio/
                 // listing) and keep it fresh via DONE events for the chapters
-                // sheet's read-only glyph.
-                loadRenderedAudioChapterIds(novel, source)
+                // sheet's read-only glyph. Canonical rows have no stable
+                // carrier source to key renders on — skip.
+                if (source != null) {
+                    loadRenderedAudioChapterIds(novel, source)
+                }
                 observeAudioRenderCompletions()
 
                 val targetChapter = if (chapterId != null) {
@@ -1258,6 +1266,31 @@ class NovelReaderScreenModel(
         }
     }
 
+    /**
+     * Fetch chapter text. `canon:{workId}:{seq}` urls fan out to an
+     * installed carrier via the canonical router (13-04); ordinary
+     * urls go to the entry's own source. Throws when no carrier serves
+     * the chapter — callers' existing error paths handle it.
+     */
+    private suspend fun fetchChapterText(
+        chapter: NovelChapter,
+        source: NovelCatalogueSource?,
+    ): String {
+        val novel = _novel.value
+        if (novel != null &&
+            eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCanonUrl(chapter.url)
+        ) {
+            return canonicalChapterRouter.resolveNovelText(novel, chapter.url, chapter.name)
+                ?: error("No installed carrier serves ${chapter.name}")
+        }
+        source ?: error("No source available")
+        val sChapter = SNovelChapterImpl().apply {
+            url = chapter.url
+            name = chapter.name
+        }
+        return source.getChapterText(sChapter)
+    }
+
     private suspend fun loadChapter(chapter: NovelChapter) {
         android.util.Log.d("NovelReader", "loadChapter: '${chapter.name}' (id=${chapter.id})")
         _currentChapter.value = chapter
@@ -1285,7 +1318,9 @@ class NovelReaderScreenModel(
         upsertHistory(chapter)
 
         try {
-            if (source == null) {
+            val isCanonChapter = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                .isCanonUrl(chapter.url)
+            if (source == null && !isCanonChapter) {
                 mutableState.update { it.copy(loading = false, error = "No source available") }
                 return
             }
@@ -1330,12 +1365,11 @@ class NovelReaderScreenModel(
                 // Fall back to fetching from source
                 if (htmlContent == null) {
                     android.util.Log.d("NovelReader", "loadChapter: fetching from source (network)")
-                    val sChapter = SNovelChapterImpl().apply {
-                        url = chapter.url
-                        name = chapter.name
-                    }
-                    htmlContent = source.getChapterText(sChapter)
-                    android.util.Log.d("NovelReader", "loadChapter: source returned content length=${htmlContent?.length}")
+                    htmlContent = fetchChapterText(chapter, source)
+                    android.util.Log.d(
+                        "NovelReader",
+                        "loadChapter: source returned content length=${htmlContent?.length}",
+                    )
                 }
 
                 // Progressive parsing: parse the first 30 paragraphs instantly,
@@ -1852,17 +1886,15 @@ class NovelReaderScreenModel(
                         )
                         if (chapterFile != null) {
                             val fileContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }
+                            val fileContent = chapterFile.openInputStream().use {
+                                it.readBytes().toString(Charsets.UTF_8)
                             htmlContent = fileContent.takeIf { it.isNotBlank() }
                         }
                     }
                 }
                 // Fall back to fetching from source
                 if (htmlContent.isNullOrBlank()) {
-                    val sChapter = SNovelChapterImpl().apply {
-                        url = nextChapter.url
-                        name = nextChapter.name
-                    }
-                    htmlContent = source.getChapterText(sChapter)
+                    htmlContent = fetchChapterText(nextChapter, source)
                 }
                 val nextItems = parseHtmlToParagraphs(htmlContent, nextChapter.id)
                 // Skip appending if the chapter has no content (empty/corrupt)
@@ -1946,17 +1978,15 @@ class NovelReaderScreenModel(
                         )
                         if (chapterFile != null) {
                             val fileContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }
+                            val fileContent = chapterFile.openInputStream().use {
+                                it.readBytes().toString(Charsets.UTF_8)
                             htmlContent = fileContent.takeIf { it.isNotBlank() }
                         }
                     }
                 }
                 // Fall back to fetching from source
                 if (htmlContent.isNullOrBlank()) {
-                    val sChapter = SNovelChapterImpl().apply {
-                        url = prevChapter.url
-                        name = prevChapter.name
-                    }
-                    htmlContent = source.getChapterText(sChapter)
+                    htmlContent = fetchChapterText(prevChapter, source)
                 }
                 val prevItems = parseHtmlToParagraphs(htmlContent, prevChapter.id)
                 // Skip prepending if the chapter has no content (empty/corrupt)
@@ -2046,11 +2076,7 @@ class NovelReaderScreenModel(
                         )
                         if (isDownloaded) return@launchIO // Will load from disk instantly
                     }
-                    val sChapter = SNovelChapterImpl().apply {
-                        url = chapter.url
-                        name = chapter.name
-                    }
-                    val htmlContent = source.getChapterText(sChapter)
+                    val htmlContent = fetchChapterText(chapter, source)
                     // Evict oldest entries if cache is full
                     if (prefetchedChapterCache.size >= MAX_PREFETCH_CACHE_SIZE) {
                         prefetchedChapterCache.keys.firstOrNull()?.let {

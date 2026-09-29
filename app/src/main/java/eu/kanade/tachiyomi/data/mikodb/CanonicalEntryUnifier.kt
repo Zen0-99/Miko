@@ -6,6 +6,8 @@ import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.entries.novel.repository.NovelRepository
+import tachiyomi.domain.items.chapter.repository.ChapterRepository
+import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
 import java.util.concurrent.ConcurrentHashMap
@@ -31,6 +33,8 @@ class CanonicalEntryUnifier(
     private val mangaRepository: MangaRepository,
     private val novelRepository: NovelRepository,
     private val workIdResolver: WorkIdResolver,
+    private val chapterRepository: ChapterRepository,
+    private val novelChapterRepository: NovelChapterRepository,
 ) {
 
     // entryId -> canonical Manga/Novel, or NoCanonical for "checked, no
@@ -42,9 +46,17 @@ class CanonicalEntryUnifier(
      * Returns the canonical [Manga] row for [manga], or null if the entry
      * is already canonical, unmapped, ambiguously mapped, or no canonical
      * row was materialized yet.
+     *
+     * Redirect is gated on the canonical row actually being serviceable:
+     * it must carry synced chapter rows. A materialized-but-empty stub
+     * would otherwise hijack a working extension entry and show "0
+     * chapters" — the stub is strictly worse than the extension row.
+     * Favorites are never redirected either way: read state, tracking
+     * and downloads live on the extension entry and do not transfer.
      */
     suspend fun resolve(manga: Manga): Manga? {
-        if (manga.source == CanonicalCatalog.CANONICAL_SOURCE_ID ||
+        if (manga.favorite ||
+            manga.source == CanonicalCatalog.CANONICAL_SOURCE_ID ||
             CanonicalCatalog.isCanonicalUrl(manga.url)
         ) {
             return null
@@ -61,14 +73,17 @@ class CanonicalEntryUnifier(
                 mangaRepository.getMangaByUrlAndSourceId(
                     CanonicalCatalog.MANGA_URL_PREFIX + workId,
                     CanonicalCatalog.CANONICAL_SOURCE_ID,
-                )
+                )?.takeIf { canonical ->
+                    chapterRepository.getChapterByMangaId(canonical.id).isNotEmpty()
+                }
             }
         } as? Manga
     }
 
     /** Same as [resolve] for novels and books (`mk:ol:` works). */
     suspend fun resolve(novel: Novel): Novel? {
-        if (novel.source == CanonicalCatalog.CANONICAL_SOURCE_ID ||
+        if (novel.favorite ||
+            novel.source == CanonicalCatalog.CANONICAL_SOURCE_ID ||
             CanonicalCatalog.isCanonicalUrl(novel.url)
         ) {
             return null
@@ -86,7 +101,9 @@ class CanonicalEntryUnifier(
                 novelRepository.getNovelByUrlAndSourceId(
                     CanonicalCatalog.NOVEL_URL_PREFIX + workId,
                     CanonicalCatalog.CANONICAL_SOURCE_ID,
-                )
+                )?.takeIf { canonical ->
+                    novelChapterRepository.getNovelChaptersByNovelId(canonical.id).isNotEmpty()
+                }
             }
         } as? Novel
     }

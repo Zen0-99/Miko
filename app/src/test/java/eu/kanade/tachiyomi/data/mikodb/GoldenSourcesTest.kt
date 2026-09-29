@@ -126,4 +126,81 @@ class GoldenSourcesTest {
         assertEquals(1, out.size)
         assertEquals("Weak", out[0].name)
     }
+
+    @Test
+    fun `host slug extracts second-level label`() {
+        assertEquals("webtoons", golden.hostSlugOf("https://www.webtoons.com/en/x?title_no=1"))
+        assertEquals("mangadex", golden.hostSlugOf("https://mangadex.org/title/abc"))
+        assertEquals("naver", golden.hostSlugOf("https://comic.naver.com/webtoon/list?titleId=1"))
+        assertEquals(null, golden.hostSlugOf(null))
+    }
+
+    @Test
+    fun `pkg tail matches provider slug or link host`() {
+        assertTrue(
+            golden.pkgMatchesProvider(
+                "eu.kanade.tachiyomi.extension.all.webtoons",
+                "webtoons",
+                "webtoons",
+            ),
+        )
+        assertTrue(
+            golden.pkgMatchesProvider(
+                "yokai.extension.novel.en.annasarchive",
+                "unknown",
+                "annasarchive",
+            ),
+        )
+        assertTrue(
+            !golden.pkgMatchesProvider(
+                "eu.kanade.tachiyomi.extension.all.mangadex",
+                "webtoons",
+                "webtoons",
+            ),
+        )
+    }
+
+    @Test
+    fun `heuristic binds installed pkg to carrier without providers meta`() = runBlocking {
+        every { mangaExtensions.installedExtensionsFlow } returns
+            MutableStateFlow(
+                listOf(
+                    ext("eu.kanade.tachiyomi.extension.all.webtoons", 7L),
+                    ext("eu.kanade.tachiyomi.extension.en.mangabat", 8L),
+                ),
+            )
+        every { mikoDbManager.allSourceMeta() } returns mapOf(
+            // miko.json ships tier but no providers for text extensions.
+            "eu.kanade.tachiyomi.extension.all.webtoons" to meta(emptyList(), "S", "Webtoons"),
+            "eu.kanade.tachiyomi.extension.en.mangabat" to meta(emptyList(), "B", "MangaBat"),
+        )
+        val w = work(
+            """[{"provider":"webtoons","external_id":"123","url":"https://www.webtoons.com/en/x?title_no=123"}]""",
+        )
+
+        val out = golden.forWorkRow(w, WorkIdResolver.MEDIUM_MANGA)
+        assertEquals(listOf("Webtoons"), out.map { it.name })
+        assertEquals(listOf(7L), out[0].sourceIds)
+        assertEquals("123", out[0].externalId)
+    }
+
+    @Test
+    fun `broad fallback returns tier-sorted installed when nothing link-bound`() = runBlocking {
+        every { mangaExtensions.installedExtensionsFlow } returns
+            MutableStateFlow(
+                listOf(
+                    ext("eu.kanade.tachiyomi.extension.en.lowtier", 1L),
+                    ext("eu.kanade.tachiyomi.extension.all.mangadex", 2L),
+                ),
+            )
+        every { mikoDbManager.allSourceMeta() } returns mapOf(
+            "eu.kanade.tachiyomi.extension.en.lowtier" to meta(emptyList(), "C", "LowTier"),
+            "eu.kanade.tachiyomi.extension.all.mangadex" to meta(emptyList(), "S", "MangaDex"),
+        )
+        // Provider link exists but no installed carrier matches it.
+        val w = work("""[{"provider":"royalroad","url":"https://www.royalroad.com/fiction/1"}]""")
+
+        val out = golden.forWorkRow(w, WorkIdResolver.MEDIUM_MANGA)
+        assertEquals(listOf("MangaDex", "LowTier"), out.map { it.name })
+    }
 }

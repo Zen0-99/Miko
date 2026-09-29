@@ -155,6 +155,7 @@ class NovelScreenModel(
     private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
     private val canonizeWork: eu.kanade.tachiyomi.data.mikodb.CanonizeWork = Injekt.get(),
     private val mangaBakaEnrich: eu.kanade.tachiyomi.data.mikodb.MangaBakaEnrich = Injekt.get(),
+    private val canonicalChapterSync: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
 
@@ -512,9 +513,8 @@ class NovelScreenModel(
             observeTrackers()
 
             // Canonical rows collect+canonize chapter feeds in the
-            // background (13-02), same as the manga entry path.
-            // Novel-side materialization awaits the novel chapter
-            // pipeline (canonize itself is a safe no-op for now).
+            // background (13-02), same as the manga entry path, then
+            // materialize canon rows as chapter list entries.
             if (isCanonical) {
                 screenModelScope.launchIO {
                     runCatching {
@@ -523,7 +523,10 @@ class NovelScreenModel(
                             ?.let { workId ->
                                 mangaBakaEnrich.run(workId, novel)
                                 canonizeWork.run(workId, Carrier.BOOKS)
+                                canonicalChapterSync.syncNovel(novel, workId)
                             }
+                    }.onFailure { e ->
+                        logcat(LogPriority.WARN) { "[NovelScreenModel] canonical pipeline failed: ${e.message}" }
                     }
                 }
             }

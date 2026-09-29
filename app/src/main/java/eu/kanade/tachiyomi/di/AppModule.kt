@@ -338,13 +338,15 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorksBrowseApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdResolver() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog() }
-        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier(get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier(get(), get(), get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.MangaBakaEnrich() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.GoldenSources() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterMap() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.SeriesMatcher() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalFeedCollector() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonizeWork() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher() }
         addSingletonFactory { eu.kanade.tachiyomi.data.comments.CommentsApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.comments.DeviceIdentityProvider(app) }
