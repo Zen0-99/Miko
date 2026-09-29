@@ -161,8 +161,19 @@ class MangaSearchFallbackEngine {
 
                             val scoredItems = page.mangas.mapNotNull { sManga ->
                                 if (sManga.url == manga.url) return@mapNotNull null
-                                if (SuggestionTitleResolver.isFranchiseDuplicate(sManga.title, manga.title)) return@mapNotNull null
-                                if (synchronized(uniqueResults) { uniqueResults.containsKey(sManga.url) }) return@mapNotNull null
+                                if (SuggestionTitleResolver.isFranchiseDuplicate(
+                                        sManga.title,
+                                        manga.title,
+                                    )
+                                ) {
+                                    return@mapNotNull null
+                                }
+                                if (synchronized(uniqueResults) {
+                                        uniqueResults.containsKey(sManga.url)
+                                    }
+                                ) {
+                                    return@mapNotNull null
+                                }
 
                                 val bestScore = candidatesToScore.maxOfOrNull { candidate ->
                                     SuggestionTitleResolver.scoreMatch(candidate, sManga.title)
@@ -202,8 +213,14 @@ class MangaSearchFallbackEngine {
                                 if (isAuthorQuery && authorAdded >= maxAuthor) return@launch
                                 var addedAny = false
                                 scoredItems.sortedByDescending { it.second }.forEach { (item, _) ->
-                                    if (!uniqueResults.containsKey(item.providerUrl) && uniqueResults.size < boundedMaxResults) {
-                                        if ((isGenreQuery && genreAdded >= maxGenre) || (isAuthorQuery && authorAdded >= maxAuthor)) return@forEach
+                                    if (!uniqueResults.containsKey(item.providerUrl) &&
+                                        uniqueResults.size < boundedMaxResults
+                                    ) {
+                                        if ((isGenreQuery && genreAdded >= maxGenre) ||
+                                            (isAuthorQuery && authorAdded >= maxAuthor)
+                                        ) {
+                                            return@forEach
+                                        }
                                         uniqueResults[item.providerUrl] = item
                                         addedAny = true
                                         if (isGenreQuery) genreAdded++

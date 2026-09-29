@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloader
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
-import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +28,7 @@ import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.File
 
 /**
  * In-memory chapter-audio render queue (plan 05-02): the

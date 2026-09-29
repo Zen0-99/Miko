@@ -6,13 +6,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderPreferences
-import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
-import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsHighlightMode
-import eu.kanade.tachiyomi.ui.reader.novel.TextAlignment
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReadingMode
+import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsHighlightMode
+import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
+import eu.kanade.tachiyomi.ui.reader.novel.TextAlignment
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableMap
-import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
@@ -67,7 +66,10 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     ),
                     Preference.PreferenceItem.ListPreference(
                         preference = pref.textAlignment(),
-                        entries = TextAlignment.entries.associate { it to it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }.toImmutableMap(),
+                        entries = TextAlignment.entries.associate {
+                            it to
+                                it.name.lowercase().replaceFirstChar { c -> c.uppercase() }
+                        }.toImmutableMap(),
                         title = "Text alignment",
                     ),
                 ),
@@ -77,7 +79,10 @@ object SettingsNovelReaderScreen : SearchableSettings {
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.ListPreference(
                         preference = pref.readingMode(),
-                        entries = NovelReadingMode.entries.associate { it to it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }.toImmutableMap(),
+                        entries = NovelReadingMode.entries.associate {
+                            it to
+                                it.name.lowercase().replaceFirstChar { c -> c.uppercase() }
+                        }.toImmutableMap(),
                         title = "Reading mode",
                     ),
                     Preference.PreferenceItem.SwitchPreference(

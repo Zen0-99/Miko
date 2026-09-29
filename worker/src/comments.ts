@@ -182,6 +182,38 @@ export async function handleGetComments(req: Request, _p: unknown, url: URL, env
     });
 }
 
+// ---------- thread counts ----------
+
+/**
+ * Batch comment counts for thread badges ("View comments (N)"). Readers
+ * need no auth; only `visible` comments count — deleted tombstones and
+ * hidden comments stay out of the number even though the list endpoint
+ * surfaces them to their author.
+ */
+export async function handleThreadCounts(
+    _req: Request,
+    _p: unknown,
+    url: URL,
+    env: Env,
+): Promise<Response> {
+    const ids = (url.searchParams.get('ids') ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && THREAD_RE.test(s))
+        .slice(0, 50);
+    if (ids.length === 0) return ok({ counts: {} });
+
+    const { results } = await env.COMMENTS_DB.prepare(
+        `SELECT thread_id, COUNT(*) AS n FROM comments
+         WHERE status = 'visible' AND thread_id IN (${ids.map(() => '?').join(',')})
+         GROUP BY thread_id`,
+    ).bind(...ids).all<{ thread_id: string; n: number }>();
+
+    const counts: Record<string, number> = {};
+    for (const r of results) counts[r.thread_id] = r.n;
+    return ok({ counts });
+}
+
 // ---------- votes ----------
 
 export async function handleVote(

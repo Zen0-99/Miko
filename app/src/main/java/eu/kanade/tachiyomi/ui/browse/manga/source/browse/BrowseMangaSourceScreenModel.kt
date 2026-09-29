@@ -24,7 +24,6 @@ import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.data.cache.MangaCoverCache
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.collections.immutable.ImmutableList
@@ -53,12 +52,12 @@ import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.model.toMangaUpdate
 import tachiyomi.domain.items.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.source.manga.interactor.GetRemoteManga
-import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.savedsearches.manga.interactor.DeleteMangaSavedSearch
 import tachiyomi.domain.savedsearches.manga.interactor.GetMangaSavedSearches
 import tachiyomi.domain.savedsearches.manga.interactor.InsertMangaSavedSearch
 import tachiyomi.domain.savedsearches.model.SavedSearch
+import tachiyomi.domain.source.manga.interactor.GetRemoteManga
+import tachiyomi.domain.source.manga.service.MangaSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.Instant

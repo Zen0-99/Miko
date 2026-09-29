@@ -113,7 +113,7 @@ fun NovelChaptersSheet(
                                 )
                             }
                             Text(
-                                text = "Ch. ${chapter.chapterNumber}",
+                                text = "Ch. ${eu.kanade.presentation.util.formatChapterNumber(chapter.chapterNumber)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (isSelected) {
                                     accentColor ?: MaterialTheme.colorScheme.primary

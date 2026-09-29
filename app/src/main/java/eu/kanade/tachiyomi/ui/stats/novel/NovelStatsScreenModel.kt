@@ -18,6 +18,7 @@ import tachiyomi.domain.items.chapter.interactor.BackfillNovelCharCounts
 import tachiyomi.domain.items.chapter.interactor.GetTotalReadNovelCharCount
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
+import tachiyomi.domain.track.novel.model.NovelTrack
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -105,7 +106,9 @@ class NovelStatsScreenModel(
         }
     }
 
-    private suspend fun getNovelTrackMap(libraryNovels: List<LibraryNovel>): Map<Long, List<tachiyomi.domain.track.novel.model.NovelTrack>> {
+    private suspend fun getNovelTrackMap(
+        libraryNovels: List<LibraryNovel>,
+    ): Map<Long, List<NovelTrack>> {
         val loggedInTrackerIds = loggedInTrackers.map { it.id }.toHashSet()
         return libraryNovels.associate { novel ->
             val tracks = getTracks.await(novel.id)
@@ -115,7 +118,9 @@ class NovelStatsScreenModel(
         }
     }
 
-    private fun getScoredNovelTrackMap(novelTrackMap: Map<Long, List<tachiyomi.domain.track.novel.model.NovelTrack>>): Map<Long, List<tachiyomi.domain.track.novel.model.NovelTrack>> {
+    private fun getScoredNovelTrackMap(
+        novelTrackMap: Map<Long, List<NovelTrack>>,
+    ): Map<Long, List<NovelTrack>> {
         return novelTrackMap.mapNotNull { (novelId, tracks) ->
             val trackList = tracks.mapNotNull { track ->
                 track.takeIf { it.score > 0.0 }
@@ -125,7 +130,9 @@ class NovelStatsScreenModel(
         }.toMap()
     }
 
-    private fun getTrackMeanScore(scoredNovelTrackMap: Map<Long, List<tachiyomi.domain.track.novel.model.NovelTrack>>): Double {
+    private fun getTrackMeanScore(
+        scoredNovelTrackMap: Map<Long, List<NovelTrack>>,
+    ): Double {
         return scoredNovelTrackMap
             .map { (_, tracks) ->
                 tracks.map { it.score }.average()

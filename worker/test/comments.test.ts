@@ -95,6 +95,26 @@ describe('comments', () => {
         expect(body.comments[0].body).toBe('great chapter');
     });
 
+    it('returns per-thread counts and skips malformed ids', async () => {
+        const token = await namedUser('c'.repeat(64));
+        await post('/v1/comments', { thread_id: THREAD, body: 'one' }, token);
+        await post('/v1/comments', { thread_id: THREAD, body: 'two' }, token);
+        await post('/v1/comments', { thread_id: 'shows:mk:imdb:tt1', body: 'hi' }, token);
+
+        const res = await SELF.fetch(
+            `http://test/v1/threads/counts?ids=${THREAD},shows:mk:imdb:tt1,bad%20id,`,
+        );
+        expect(res.status).toBe(200);
+        const { counts } = await res.json<{ counts: Record<string, number> }>();
+        expect(counts[THREAD]).toBe(2);
+        expect(counts['shows:mk:imdb:tt1']).toBe(1);
+        expect(Object.keys(counts)).toHaveLength(2);
+
+        const empty = await SELF.fetch('http://test/v1/threads/counts?ids=');
+        expect((await empty.json<{ counts: Record<string, number> }>()).counts)
+            .toEqual({});
+    });
+
     it('rejects posting without a display name', async () => {
         const token = await register();
         const res = await post('/v1/comments', { thread_id: THREAD, body: 'hi' }, token);

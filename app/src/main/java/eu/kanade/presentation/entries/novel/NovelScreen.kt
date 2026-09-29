@@ -1,20 +1,20 @@
 package eu.kanade.presentation.entries.novel
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Comment
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -36,20 +36,27 @@ import eu.kanade.presentation.components.relativeDateTimeText
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.components.ChapterGroupPillRow
-import eu.kanade.presentation.entries.components.EnhancedEntryActionRow
 import eu.kanade.presentation.entries.components.EnhancedEntryInfoBox
+import eu.kanade.presentation.entries.components.EntryChapterCarouselCard
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryGenreRow
-import eu.kanade.presentation.entries.components.EntryIconAction
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.enhancedEntryStatusText
 import eu.kanade.presentation.entries.novel.components.ExpandableNovelDescription
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadAction
+import eu.kanade.presentation.entries.novel.components.NovelChapterAudioIndicator
+import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadIndicator
 import eu.kanade.presentation.entries.novel.components.NovelChapterHeader
-import eu.kanade.presentation.entries.novel.components.NovelChapterListItem
-import eu.kanade.presentation.entries.novel.components.NovelContinueButton
 import eu.kanade.presentation.entries.novel.components.NovelEditDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Headphones
+import eu.kanade.presentation.entries.components.EntryContinueRow
+import eu.kanade.presentation.entries.components.EntryNextUpAction
+import eu.kanade.presentation.entries.components.EntryViewCommentsButton
+import tachiyomi.i18n.aniyomi.AYMR
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
 import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
@@ -57,11 +64,11 @@ import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import eu.kanade.tachiyomi.ui.entries.novel.NovelChapterList
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreenModel
 import eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
+import eu.kanade.presentation.util.formatChapterNumber
 import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
-import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
@@ -81,7 +88,6 @@ fun NovelScreen(
     onAddToLibraryClicked: () -> Unit,
     onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
-    onWebViewLongClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
     onBookmarkFilterClicked: () -> Unit,
@@ -102,7 +108,6 @@ fun NovelScreen(
     onRemoveAllDownloadsClicked: (() -> Unit)?,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
     onRemoveReadDownloadsClicked: (() -> Unit)?,
-    onClickLinkedSources: (() -> Unit)? = null,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter, Boolean) -> Unit,
@@ -134,7 +139,6 @@ fun NovelScreen(
             onAddToLibraryClicked = onAddToLibraryClicked,
             onCoverClick = onCoverClick,
             onWebViewClicked = onWebViewClicked,
-            onWebViewLongClicked = onWebViewLongClicked,
             onTagSearch = onTagSearch,
             onFilterButtonClicked = onFilterButtonClicked,
             onBookmarkFilterClicked = onBookmarkFilterClicked,
@@ -155,7 +159,6 @@ fun NovelScreen(
             onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
             onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
             onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
-            onClickLinkedSources = onClickLinkedSources,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -187,7 +190,6 @@ fun NovelScreen(
             onAddToLibraryClicked = onAddToLibraryClicked,
             onCoverClick = onCoverClick,
             onWebViewClicked = onWebViewClicked,
-            onWebViewLongClicked = onWebViewLongClicked,
             onTagSearch = onTagSearch,
             onFilterButtonClicked = onFilterButtonClicked,
             onBookmarkFilterClicked = onBookmarkFilterClicked,
@@ -208,7 +210,6 @@ fun NovelScreen(
             onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
             onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
             onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
-            onClickLinkedSources = onClickLinkedSources,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -243,7 +244,6 @@ private fun NovelScreenSmallImpl(
     onAddToLibraryClicked: () -> Unit,
     onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
-    onWebViewLongClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
     onBookmarkFilterClicked: () -> Unit,
@@ -264,7 +264,6 @@ private fun NovelScreenSmallImpl(
     onRemoveAllDownloadsClicked: (() -> Unit)?,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
     onRemoveReadDownloadsClicked: (() -> Unit)?,
-    onClickLinkedSources: (() -> Unit)? = null,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter, Boolean) -> Unit,
@@ -289,12 +288,11 @@ private fun NovelScreenSmallImpl(
     val isAnySelected = remember(state) { state.isAnySelected }
 
     // Chapter-group pills — "Volume N"/"Book N"/etc. parsed from chapter
-    // names; the ungrouped remainder lands in a trailing "Chapters" pill.
+    // names. All-or-nothing: any unmarked chapter disables the row.
     val ungroupedChaptersLabel = stringResource(MR.strings.chapters)
     val chapterGroups = remember(chapters) {
         ChapterNameGroup.computeGroups(
             chapters.map { it.chapter.name },
-            ungroupedChaptersLabel,
         )
     }
     // Reading position is progress-derived — the group holding the newest
@@ -435,8 +433,10 @@ private fun NovelScreenSmallImpl(
                     },
                     onClickMigrate = onMigrateClicked,
                     onClickSettings = null,
-                    onClickMarkAllRead = onMarkAllReadClicked,
-                    onClickMarkAllUnread = onMarkAllUnreadClicked,
+                    // Mark-all lives on the next-up card's checkmark toggle;
+                    // web view / highlights moved here from the action row.
+                    onClickWebView = onWebViewClicked,
+                    onClickHighlights = onHighlightsClicked,
                     // For book sources, hide the "remove downloads" menu items since
                     // the download button already handles deletion.
                     onClickRemoveAllDownloads = if (state.isBookSource) null else onRemoveAllDownloadsClicked,
@@ -446,7 +446,6 @@ private fun NovelScreenSmallImpl(
                         onRemoveNonBookmarkedDownloadsClicked
                     },
                     onClickRemoveReadDownloads = onRemoveReadDownloadsClicked,
-                    onClickLinkedSources = onClickLinkedSources,
                     onClickUnhideChapters = onUnhideChapters,
                     changeAnimeSkipIntro = null,
                     actionModeCounter = selectedChapterCount,
@@ -553,59 +552,108 @@ private fun NovelScreenSmallImpl(
                     key = EntryScreenItem.ACTION_ROW,
                     contentType = EntryScreenItem.ACTION_ROW,
                 ) {
-                    // Enhanced order: wide continue button first, then the
-                    // in-library heart and icon actions, with genre pills in
-                    // a horizontal scroll row below.
+                    // Continue row: accent action bar flanked by
+                    // favourite / mark-all toggle boxes. Genre pills
+                    // stay in the row below.
                     Column {
                         // For book sources (Anna's Archive) with no
-                        // chapters, the Start button becomes "Download
+                        // chapters, the action zone becomes "Download
                         // book" and triggers the EPUB download + splitting
                         // instead of opening the reader.
                         val isBookSourceEmpty = state.isBookSource && chapters.isEmpty()
-                        EnhancedEntryActionRow(
-                            favorite = state.novel.favorite,
-                            onAddToLibraryClicked = onAddToLibraryClicked,
-                            onWebViewClicked = onWebViewClicked,
-                            accentColor = state.accentColor,
-                            extraActions = {
-                                EntryIconAction(
-                                    icon = Icons.AutoMirrored.Outlined.MenuBook,
-                                    contentDescription = stringResource(AYMR.strings.highlights),
-                                    tint = state.accentColor
-                                        ?: MaterialTheme.colorScheme.primary,
-                                    onClick = onHighlightsClicked,
-                                )
-                                EntryIconAction(
-                                    icon = Icons.AutoMirrored.Outlined.Comment,
-                                    contentDescription = stringResource(MR.strings.comments_title),
-                                    tint = state.accentColor
-                                        ?: MaterialTheme.colorScheme.primary,
-                                    onClick = onCommentsClicked,
-                                )
-                            },
-                        ) {
-                            NovelContinueButton(
-                                chapterItem = state.nextContinueChapter,
-                                hasReadChapters = remember(state.chapters) {
-                                    state.chapters.fastAny { it.chapter.read }
-                                },
-                                allChaptersRead = state.allChaptersRead,
-                                accentColor = state.accentColor,
-                                onClick = if (isBookSourceEmpty) {
-                                    {
+                        val allRead = state.allChaptersRead
+                        val nextChapter = state.nextContinueChapter?.chapter
+                        val actions = when {
+                            isBookSourceEmpty -> listOf(
+                                EntryNextUpAction(
+                                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                                    label = stringResource(MR.strings.download_book),
+                                    onClickLabel = stringResource(MR.strings.download_book),
+                                    onClick = {
                                         onDownloadBook?.invoke()
                                         Unit
-                                    }
-                                } else {
-                                    onContinueReading
-                                },
-                                modifier = Modifier.weight(1.6f),
-                                isBookSource = state.isBookSource,
-                                isDownloadingBook = state.isBookSource && state.isRefreshingData,
-                                horizontalPadding = 0.dp,
-                                onListenClick = onContinueListening,
+                                    },
+                                ),
+                            )
+                            allRead -> listOf(
+                                EntryNextUpAction(
+                                    icon = Icons.Filled.CheckCircle,
+                                    label = stringResource(
+                                        AYMR.strings.fetching_overlay_all_up_to_date,
+                                    ),
+                                    onClickLabel = stringResource(
+                                        AYMR.strings.fetching_overlay_all_up_to_date,
+                                    ),
+                                    onClick = {},
+                                ),
+                            )
+                            nextChapter != null && onContinueListening != null -> listOf(
+                                EntryNextUpAction(
+                                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                                    label = stringResource(AYMR.strings.action_read),
+                                    onClickLabel = stringResource(MR.strings.action_resume),
+                                    onClick = onContinueReading,
+                                ),
+                                EntryNextUpAction(
+                                    icon = Icons.Filled.Headphones,
+                                    label = stringResource(AYMR.strings.action_listen),
+                                    onClickLabel = stringResource(
+                                        AYMR.strings.audiobook_continue_listening_cd,
+                                    ),
+                                    onClick = onContinueListening,
+                                ),
+                            )
+                            else -> listOf(
+                                EntryNextUpAction(
+                                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                                    label = stringResource(
+                                        if (nextChapter != null && state.chapters.fastAny {
+                                                it.chapter.read
+                                            }
+                                        ) {
+                                            MR.strings.action_continue
+                                        } else {
+                                            MR.strings.action_start
+                                        },
+                                    ),
+                                    onClickLabel = stringResource(MR.strings.action_resume),
+                                    onClick = onContinueReading,
+                                ),
                             )
                         }
+                        EntryContinueRow(
+                            actions = actions,
+                            actionsEnabled = when {
+                                isBookSourceEmpty -> !state.isRefreshingData
+                                allRead -> false
+                                else -> nextChapter != null
+                            },
+                            accentColor = state.accentColor,
+                            favorite = state.novel.favorite,
+                            allDone = allRead,
+                            favoriteContentDescription = stringResource(
+                                if (state.novel.favorite) {
+                                    MR.strings.in_library
+                                } else {
+                                    MR.strings.add_to_library
+                                },
+                            ),
+                            doneContentDescription = stringResource(
+                                if (allRead) {
+                                    MR.strings.action_mark_all_as_unread
+                                } else {
+                                    MR.strings.action_mark_all_as_read
+                                },
+                            ),
+                            onFavoriteClick = onAddToLibraryClicked,
+                            onToggleDoneClick = {
+                                if (allRead) {
+                                    onMarkAllUnreadClicked?.invoke()
+                                } else {
+                                    onMarkAllReadClicked?.invoke()
+                                }
+                            },
+                        )
                         EntryGenreRow(
                             pills = state.novel.genre.orEmpty(),
                             onPillClick = { onSearch(it, true) },
@@ -670,57 +718,113 @@ private fun NovelScreenSmallImpl(
                     }
                 }
 
-                items(
-                    items = filteredChapters,
-                    key = { it.id },
-                    contentType = { EntryScreenItem.ITEM },
-                ) { chapterItem ->
-                    val haptic = LocalHapticFeedback.current
-                    NovelChapterListItem(
-                        item = chapterItem,
-                        isFromSource = state.isFromSource,
-                        // Hide per-chapter download indicators for book sources
-                        // (Anna's Archive) — the whole book is downloaded at once.
-                        downloadIndicatorEnabled = !state.source.isLocalOrStub() && !state.isBookSource,
-                        // No upload timestamp → no date shown; the card keeps
-                        // the meta line's height regardless.
-                        date = chapterItem.chapter.dateUpload
-                            .takeIf { it > 0L }
-                            ?.let { relativeDateTimeText(it) },
-                        readProgress = chapterItem.readProgress?.let {
-                            stringResource(MR.strings.novel_chapter_progress, it)
-                        },
-                        scanlator = chapterItem.chapter.scanlator,
-                        onClick = {
-                            if (isAnySelected) {
-                                onChapterSelected(chapterItem, !chapterItem.selected, true, false)
-                            } else {
-                                onChapterClicked(chapterItem.chapter)
+                // Horizontal chapter carousel — Nuvio episode-card styling
+                // without a still. Opens snapped to the next unread chapter;
+                // long-press still drives selection, swipe actions are gone
+                // (they collide with horizontal scrolling).
+                if (filteredChapters.isNotEmpty()) {
+                    item(
+                        key = "chapter-carousel",
+                        contentType = EntryScreenItem.ITEM,
+                    ) {
+                        // Land on the lowest-numbered unread chapter —
+                        // "next up" regardless of sort direction.
+                        val nextIndex = filteredChapters.mapIndexedNotNull { index, item ->
+                            item.takeIf { !it.chapter.read }
+                                ?.let { index to it.chapter.chapterNumber }
+                        }.minByOrNull { it.second }?.first ?: 0
+                        val rowState = rememberLazyListState(
+                            initialFirstVisibleItemIndex = nextIndex,
+                        )
+                        LazyRow(
+                            state = rowState,
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            flingBehavior = rememberSnapFlingBehavior(lazyListState = rowState),
+                        ) {
+                            items(
+                                items = filteredChapters,
+                                key = { it.id },
+                                contentType = { EntryScreenItem.ITEM },
+                            ) { chapterItem ->
+                                val haptic = LocalHapticFeedback.current
+                                // Per-chapter download indicators stay hidden
+                                // for book sources — the whole book downloads
+                                // at once.
+                                val downloadIndicatorEnabled =
+                                    !state.source.isLocalOrStub() && !state.isBookSource
+                                EntryChapterCarouselCard(
+                                    title = chapterItem.chapter.name,
+                                    date = chapterItem.chapter.dateUpload
+                                        .takeIf { it > 0L }
+                                        ?.let { relativeDateTimeText(it) },
+                                    metaParts = listOfNotNull(
+                                        chapterItem.readProgress?.let {
+                                            stringResource(MR.strings.novel_chapter_progress, it)
+                                        },
+                                        chapterItem.chapter.scanlator?.takeIf { it.isNotBlank() },
+                                    ),
+                                    progressFraction = chapterItem.readProgress
+                                        ?.let { it / 100f },
+                                    read = chapterItem.chapter.read,
+                                    bookmark = chapterItem.chapter.bookmark,
+                                    selected = chapterItem.selected,
+                                    onLongClick = {
+                                        onChapterSelected(chapterItem, !chapterItem.selected, true, true)
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    },
+                                    onClick = {
+                                        if (chapterItem.selected) {
+                                            onChapterSelected(chapterItem, false, true, false)
+                                        } else if (isAnySelected) {
+                                            onChapterSelected(chapterItem, true, true, false)
+                                        } else {
+                                            onChapterClicked(chapterItem.chapter)
+                                        }
+                                    },
+                                    accentColor = state.accentColor,
+                                    trailing = {
+                                        if (downloadIndicatorEnabled &&
+                                            chapterItem.downloadState == NovelDownload.State.DOWNLOADED
+                                        ) {
+                                            NovelChapterAudioIndicator(
+                                                enabled = downloadIndicatorEnabled,
+                                                audioStateProvider = { chapterItem.audioState },
+                                                audioProgressProvider = { chapterItem.audioProgress },
+                                                onClick = { onAudioChapter?.invoke(listOf(chapterItem), it) },
+                                                accentColor = state.accentColor,
+                                            )
+                                        }
+                                        if (downloadIndicatorEnabled) {
+                                            NovelChapterDownloadIndicator(
+                                                enabled = downloadIndicatorEnabled,
+                                                downloadStateProvider = { chapterItem.downloadState },
+                                                downloadProgressProvider = { chapterItem.downloadProgress },
+                                                onClick = { onDownloadChapter?.invoke(listOf(chapterItem), it) },
+                                                accentColor = state.accentColor,
+                                            )
+                                        }
+                                    },
+                                )
                             }
-                        },
-                        onLongClick = {
-                            onChapterSelected(chapterItem, !chapterItem.selected, true, true)
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        },
-                        onDownloadClick = if (onDownloadChapter != null) {
-                            { onDownloadChapter(listOf(chapterItem), it) }
-                        } else {
-                            null
-                        },
-                        onAudioClick = if (onAudioChapter != null) {
-                            { onAudioChapter(listOf(chapterItem), it) }
-                        } else {
-                            null
-                        },
-                        audioStateProvider = { chapterItem.audioState },
-                        audioProgressProvider = { chapterItem.audioProgress },
-                        onSwipeLeft = { onChapterSwipe(chapterItem, chapterSwipeStartAction) },
-                        onSwipeRight = { onChapterSwipe(chapterItem, chapterSwipeEndAction) },
-                        onSelect = { selected -> onChapterSelected(chapterItem, selected, true, false) },
-                        chapterSwipeStartAction = chapterSwipeStartAction,
-                        chapterSwipeEndAction = chapterSwipeEndAction,
-                        accentColor = state.accentColor,
-                    )
+                        }
+                    }
+                }
+
+                // Comments live under the chapter cards — accent-outlined
+                // button, same bottom sheet as the removed header icon.
+                if (onCommentsClicked != null) {
+                    item(
+                        key = "chapter-comments-button",
+                        contentType = EntryScreenItem.ITEM,
+                    ) {
+                        EntryViewCommentsButton(
+                            commentsCount = state.commentsCount,
+                            accentColor = state.accentColor,
+                            onClick = onCommentsClicked,
+                        )
+                    }
                 }
             }
         }
@@ -740,7 +844,6 @@ private fun NovelScreenLargeImpl(
     onAddToLibraryClicked: () -> Unit,
     onCoverClick: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
-    onWebViewLongClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
     onBookmarkFilterClicked: () -> Unit,
@@ -761,7 +864,6 @@ private fun NovelScreenLargeImpl(
     onRemoveAllDownloadsClicked: (() -> Unit)?,
     onRemoveNonBookmarkedDownloadsClicked: (() -> Unit)?,
     onRemoveReadDownloadsClicked: (() -> Unit)?,
-    onClickLinkedSources: (() -> Unit)? = null,
     onMultiBookmarkClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<NovelChapter>, Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (NovelChapter, Boolean) -> Unit,
@@ -792,7 +894,6 @@ private fun NovelScreenLargeImpl(
         onAddToLibraryClicked = onAddToLibraryClicked,
         onCoverClick = onCoverClick,
         onWebViewClicked = onWebViewClicked,
-        onWebViewLongClicked = onWebViewLongClicked,
         onTagSearch = onTagSearch,
         onFilterButtonClicked = onFilterButtonClicked,
         onBookmarkFilterClicked = onBookmarkFilterClicked,
@@ -813,7 +914,6 @@ private fun NovelScreenLargeImpl(
         onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
         onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
         onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
-        onClickLinkedSources = onClickLinkedSources,
         onMultiBookmarkClicked = onMultiBookmarkClicked,
         onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
         onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,

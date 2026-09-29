@@ -2,7 +2,6 @@ package eu.kanade.domain.track.novel.interactor
 
 import eu.kanade.domain.track.novel.model.toDbTrack
 import eu.kanade.domain.track.novel.model.toNovelTrack
-import eu.kanade.tachiyomi.data.track.MangaTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

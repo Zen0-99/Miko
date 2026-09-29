@@ -84,7 +84,9 @@ class SuggestionCoordinator(
         val enrichedSeed = seed.copy(candidateTitles = enrichedCandidates)
 
         logcat {
-            "[Coordinator] Fetching '${enrichedSeed.primaryTitle}' (${enrichedSeed.mediaType}) via ${sources.map { it.name }}" +
+            "[Coordinator] Fetching '${enrichedSeed.primaryTitle}' (${enrichedSeed.mediaType}) via ${sources.map {
+                it.name
+            }}" +
                 " | candidates=${enrichedSeed.candidateTitles}"
         }
 

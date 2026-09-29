@@ -2,11 +2,7 @@ package eu.kanade.tachiyomi.data.track
 
 import eu.kanade.domain.track.novel.model.toNovelTrack
 import eu.kanade.tachiyomi.data.database.models.manga.MangaTrack
-import logcat.LogPriority
-import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 

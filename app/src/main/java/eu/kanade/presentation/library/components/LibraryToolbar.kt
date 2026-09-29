@@ -127,24 +127,32 @@ private fun LibraryRegularToolbar(
             val globalActions = globalOverflowActions(onClickSettings = onClickSettings)
             AppBarActions(
                 buildList {
-                    add(AppBar.Action(
-                        title = stringResource(MR.strings.action_filter),
-                        icon = Icons.Outlined.FilterList,
-                        iconTint = filterTint,
-                        onClick = onClickFilter,
-                    ))
-                    add(AppBar.OverflowAction(
-                        title = stringResource(MR.strings.action_update_library),
-                        onClick = onClickGlobalUpdate,
-                    ))
-                    add(AppBar.OverflowAction(
-                        title = stringResource(MR.strings.action_update_collection),
-                        onClick = onClickRefresh,
-                    ))
-                    add(AppBar.OverflowAction(
-                        title = stringResource(MR.strings.action_open_random_manga),
-                        onClick = onClickOpenRandomEntry,
-                    ))
+                    add(
+                        AppBar.Action(
+                            title = stringResource(MR.strings.action_filter),
+                            icon = Icons.Outlined.FilterList,
+                            iconTint = filterTint,
+                            onClick = onClickFilter,
+                        ),
+                    )
+                    add(
+                        AppBar.OverflowAction(
+                            title = stringResource(MR.strings.action_update_library),
+                            onClick = onClickGlobalUpdate,
+                        ),
+                    )
+                    add(
+                        AppBar.OverflowAction(
+                            title = stringResource(MR.strings.action_update_collection),
+                            onClick = onClickRefresh,
+                        ),
+                    )
+                    add(
+                        AppBar.OverflowAction(
+                            title = stringResource(MR.strings.action_open_random_manga),
+                            onClick = onClickOpenRandomEntry,
+                        ),
+                    )
                     addAll(globalActions)
                 }.toPersistentList(),
             )

@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.ui.browse.novel.source
 
 import android.util.Log
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.TravelExplore
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -19,18 +16,17 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.browse.manga.ExtensionTrustDialog
 import eu.kanade.presentation.browse.novel.NovelSourceOptionsDialog
 import eu.kanade.presentation.browse.novel.NovelSourcesScreen
-import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
-import eu.kanade.domain.source.service.SourcePreferences
-import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
-import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
-import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
-import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelExtensionDetailsScreen
-import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.extension.InstallStep
+import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
+import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
+import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelExtensionDetailsScreen
+import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
+import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
@@ -38,7 +34,6 @@ import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
-import eu.kanade.tachiyomi.util.system.toast
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -78,7 +73,9 @@ fun Screen.novelSourcesTab(
     // Map source ID → JS plugin info for card rendering (JS plugins)
     val jsSourcePluginMap by remember(jsInstalledPlugins) {
         derivedStateOf {
-            jsInstalledPlugins.associateBy { eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginId.toSourceId(it.id) }
+            jsInstalledPlugins.associateBy {
+                eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginId.toSourceId(it.id)
+            }
         }
     }
 
@@ -87,6 +84,16 @@ fun Screen.novelSourcesTab(
     val cardColumnsPref = sourcePreferences.browseCardColumns()
     val cardDesign by cardDesignPref.changes().collectAsState(cardDesignPref.get())
     val cardColumns by cardColumnsPref.changes().collectAsState(cardColumnsPref.get())
+
+    // MikoDB per-extension ranking metadata (tier badges on cards).
+    val mikoDbManager = remember { Injekt.get<eu.kanade.tachiyomi.data.mikodb.MikoDbManager>() }
+    val sourceMeta by androidx.compose.runtime.produceState(
+        initialValue = emptyMap<String, eu.kanade.tachiyomi.data.mikodb.MikoDbManager.SourceMeta>(),
+    ) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            mikoDbManager.allSourceMeta()
+        }
+    }
 
     return TabContent(
         titleRes = AYMR.strings.label_novel_sources,
@@ -105,6 +112,7 @@ fun Screen.novelSourcesTab(
                 cardColumns = cardColumns,
                 sourceExtensionMap = sourceExtensionMap,
                 jsSourcePluginMap = jsSourcePluginMap,
+                sourceMeta = sourceMeta,
                 onRefresh = screenModel::findAvailableExtensions,
                 onClickUpdateAll = {
                     installedExtensions.filter { it.hasUpdate }.forEach { ext ->
@@ -119,7 +127,10 @@ fun Screen.novelSourcesTab(
                     }
                 },
                 onClickItem = { source, listing ->
-                    Log.d("NovelSearch", "[novelSourcesTab] onClickItem - source=${source.name} (id=${source.id}), listing.query='${listing.query}', pushing BrowseNovelSourceScreen")
+                    Log.d(
+                        "NovelSearch",
+                        "[novelSourcesTab] onClickItem - source=${source.name} (id=${source.id}), listing.query='${listing.query}', pushing BrowseNovelSourceScreen",
+                    )
                     navigator.push(BrowseNovelSourceScreen(source.id, listing.query))
                 },
                 onClickPin = screenModel::togglePin,

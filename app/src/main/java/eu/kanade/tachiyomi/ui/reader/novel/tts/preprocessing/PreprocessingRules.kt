@@ -62,6 +62,7 @@ object PreprocessingRules {
         "", "", "twenty", "thirty", "forty", "fifty",
         "sixty", "seventy", "eighty", "ninety",
     )
+
     // Cardinal → ordinal substitution for the simple word forms. Anything
     // else gets "th" appended (matches num2words' en behaviour: "forty-two"
     // → "forty-second" handled by suffixing the units word's ordinal form).
@@ -111,8 +112,11 @@ object PreprocessingRules {
         }
         val h = (n / 100).toInt()
         val rest = n % 100
-        return if (rest == 0L) "${ONES[h]} hundred"
-        else "${ONES[h]} hundred ${spellUnder1000(rest)}"
+        return if (rest == 0L) {
+            "${ONES[h]} hundred"
+        } else {
+            "${ONES[h]} hundred ${spellUnder1000(rest)}"
+        }
     }
 
     /** Spell out a non-negative integer as English words. */
@@ -252,8 +256,11 @@ object PreprocessingRules {
                 minute == 0L && hour >= 13L -> "$h hundred"
                 minute == 0L -> "$h o'clock"
                 else -> {
-                    val mi = if (minute < 10L) "oh ${spellCardinal(minute)}"
-                    else spellCardinal(minute)
+                    val mi = if (minute < 10L) {
+                        "oh ${spellCardinal(minute)}"
+                    } else {
+                        spellCardinal(minute)
+                    }
                     if (suffix.isNotEmpty()) "$h $mi $suffix" else "$h $mi"
                 }
             }
@@ -470,13 +477,17 @@ object PreprocessingRules {
             val cp = m.groupValues[1].toIntOrNull()
             if (cp != null && cp in 0..0x10FFFF) {
                 String(Character.toChars(cp))
-            } else m.value
+            } else {
+                m.value
+            }
         }
         out = hexEntityRegex.replace(out) { m ->
             val cp = m.groupValues[1].toIntOrNull(16)
             if (cp != null && cp in 0..0x10FFFF) {
                 String(Character.toChars(cp))
-            } else m.value
+            } else {
+                m.value
+            }
         }
         return out
     }

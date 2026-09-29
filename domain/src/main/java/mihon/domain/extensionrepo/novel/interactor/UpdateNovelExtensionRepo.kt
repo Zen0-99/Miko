@@ -3,8 +3,8 @@ package mihon.domain.extensionrepo.novel.interactor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import mihon.domain.extensionrepo.novel.repository.NovelExtensionRepoRepository
 import mihon.domain.extensionrepo.model.ExtensionRepo
+import mihon.domain.extensionrepo.novel.repository.NovelExtensionRepoRepository
 import mihon.domain.extensionrepo.service.ExtensionRepoService
 
 class UpdateNovelExtensionRepo(

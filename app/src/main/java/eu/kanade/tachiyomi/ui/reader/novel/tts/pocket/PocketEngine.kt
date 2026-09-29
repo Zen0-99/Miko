@@ -11,13 +11,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.audio.TextChunker
 import eu.kanade.tachiyomi.ui.reader.novel.tts.perf.CpuClusterDetector
-import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.coroutineContext
-import kotlin.math.sqrt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +27,13 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.coroutineContext
+import kotlin.math.sqrt
 
 /**
  * Pocket TTS engine — Kyutai Labs' Latent Space Diffusion TTS running
@@ -777,7 +777,9 @@ open class PocketEngine(
                 )
                 val arMs = (System.nanoTime() - arStartNs) / 1_000_000
                 logcat(LogPriority.DEBUG) {
-                    "pocket chunk=$idx ar=${arMs}ms (text='${miniChunk.take(40)}${if (miniChunk.length > 40) "…" else ""}')"
+                    "pocket chunk=$idx ar=${arMs}ms (text='${miniChunk.take(
+                        40,
+                    )}${if (miniChunk.length > 40) "…" else ""}')"
                 }
 
                 // 2. K is fixed at 1 — emit-as-ready. The adaptive pre-roll
@@ -906,7 +908,10 @@ open class PocketEngine(
                 frameTimes.add(System.currentTimeMillis() - tStart)
             }
             for (v in step.latent) {
-                if (!v.isFinite()) { sawNonFinite = true; continue }
+                if (!v.isFinite()) {
+                    sawNonFinite = true
+                    continue
+                }
                 val a = if (v < 0f) -v else v
                 if (a > peakLatentAbs) peakLatentAbs = a
             }
@@ -1114,7 +1119,9 @@ open class PocketEngine(
             flowLmMainSession,
             flowLmFlowSession,
         ).forEach { s ->
-            try { s?.close() } catch (_: Throwable) {}
+            try {
+                s?.close()
+            } catch (_: Throwable) {}
         }
         textCondSession = null
         mimiEncoderSession = null
@@ -1565,7 +1572,9 @@ open class PocketEngine(
     ): FloatArray {
         val tokensLong = LongArray(tokens.size) { tokens[it].toLong() }
         val tokT = directLongTensor(
-            ort, tokensLong, longArrayOf(1, tokens.size.toLong()),
+            ort,
+            tokensLong,
+            longArrayOf(1, tokens.size.toLong()),
         )
         try {
             session.run(mapOf("token_ids" to tokT)).use { result ->
@@ -1610,8 +1619,12 @@ open class PocketEngine(
         val seqT = directFloatTensor(ort, sequenceData, sequenceShape)
         val textT = directFloatTensor(ort, textEmbedsData, textEmbedsShape)
         return runFlowLmMainWithTensors(
-            session = session, bundle = bundle, ort = ort, state = state,
-            seqT = seqT, textT = textT,
+            session = session,
+            bundle = bundle,
+            ort = ort,
+            state = state,
+            seqT = seqT,
+            textT = textT,
             captureConditioning = captureConditioning,
         )
     }
@@ -1720,14 +1733,18 @@ open class PocketEngine(
             }
         } finally {
             for (t in inputs.values) {
-                try { t.close() } catch (_: Throwable) {}
+                try {
+                    t.close()
+                } catch (_: Throwable) {}
             }
             // Close pinned-output wrappers AFTER the result (their
             // underlying ByteBuffers stay live; only the JNI wrapper is
             // released — same per-call lifetime we use for inputs, which
             // P-M proved is the safe pattern on ORT-Android 1.26).
             pinnedOutputs?.values?.forEach {
-                try { it.close() } catch (_: Throwable) {}
+                try {
+                    it.close()
+                } catch (_: Throwable) {}
             }
         }
     }
@@ -1774,7 +1791,9 @@ open class PocketEngine(
         scratch.cFloatBuf.put(conditioning)
         scratch.cFloatBuf.rewind()
         val cTensor = OnnxTensor.createTensor(
-            ort, scratch.cFloatBuf, longArrayOf(1, conditioning.size.toLong()),
+            ort,
+            scratch.cFloatBuf,
+            longArrayOf(1, conditioning.size.toLong()),
         )
 
         try {
@@ -1839,7 +1858,8 @@ open class PocketEngine(
         val session = mimiDecoderSession ?: error("mimi decoder session missing")
         val inputs = LinkedHashMap<String, OnnxTensor>(mimiState.size + 1)
         val latT = directFloatTensor(
-            ort, latents,
+            ort,
+            latents,
             longArrayOf(1, numFrames.toLong(), bundle.latentDim.toLong()),
         )
         inputs["latent"] = latT
@@ -1856,7 +1876,9 @@ open class PocketEngine(
             return out
         } finally {
             for (t in inputs.values) {
-                try { t.close() } catch (_: Throwable) {}
+                try {
+                    t.close()
+                } catch (_: Throwable) {}
             }
         }
     }
@@ -1912,8 +1934,10 @@ open class PocketEngine(
             val batchPcm = decodeMimiChunk(bundle, batchData, nb, mimiState)
             val keepFromFrame = leadEnd - pos
             System.arraycopy(
-                batchPcm, keepFromFrame * spf,
-                pcm, leadEnd * spf,
+                batchPcm,
+                keepFromFrame * spf,
+                pcm,
+                leadEnd * spf,
                 (batchEnd - leadEnd) * spf,
             )
             pos = batchEnd
@@ -1926,7 +1950,7 @@ open class PocketEngine(
     /**
      * Pocket's text preprocessing pre-tokenizer. Mirrors Python's
      * `prepare_text_prompt`: trim, collapse internal whitespace,
-     * optionally swap `;`→`,`, capitalize the first letter, append `.`
+     * optionally swap `;`→`, `, capitalize the first letter, append `.`
      * if the input ends in an alphanumeric char, optionally prepend
      * 8 spaces for <5-word inputs.
      */
@@ -2288,11 +2312,10 @@ open class PocketEngine(
          */
         private const val POCKET_MIN_CHARS_PER_CHUNK = 40
 
-
         /** Sentence boundary: `.`, `!`, or `?` followed by whitespace. */
         private val SENTENCE_SPLIT_REGEX = Regex("(?<=[.!?])\\s+")
 
-        /** Sub-sentence boundary: `,`, `;`, or `:` followed by whitespace. */
+        /** Sub-sentence boundary: `, `, `;`, or `:` followed by whitespace. */
         private val COMMA_SPLIT_REGEX = Regex("(?<=[,;:])\\s+")
 
         /** Generic whitespace splitter for word-level fallback. */

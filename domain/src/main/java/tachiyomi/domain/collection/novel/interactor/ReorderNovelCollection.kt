@@ -5,9 +5,9 @@ import kotlinx.coroutines.sync.withLock
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
+import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 
 class ReorderNovelCollection(
     private val collectionRepository: NovelCollectionRepository,

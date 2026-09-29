@@ -105,8 +105,11 @@ class RenderedAudioEngine internal constructor(
     private var player: ExoPlayer? = null
 
     @Volatile private var ready = false
+
     @Volatile private var currentIdx = -1
+
     @Volatile private var currentUtteranceId: String? = null
+
     @Volatile private var currentCallback: TtsCallback? = null
     private var pollerJob: Job? = null
     private var initErrorHandler: ((String) -> Unit)? = null

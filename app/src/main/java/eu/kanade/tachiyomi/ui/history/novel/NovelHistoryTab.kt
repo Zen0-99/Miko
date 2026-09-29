@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,13 +45,11 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import java.time.format.DateTimeFormatter
-import java.util.Date
 
 val resumeLastNovelChapterReadEvent = Channel<Unit>()
 
@@ -75,7 +72,7 @@ fun Screen.novelHistoryTab(
     val scope = rememberCoroutineScope()
 
     return TabContent(
-        titleRes = AYMR.strings.label_history,
+        titleRes = AYMR.strings.carrier_manga_history,
         searchEnabled = true,
         searchAvailable = true,
         searchPlaceholderText = MR.strings.search_hint_history,
@@ -246,7 +243,7 @@ private fun NovelHistoryItem(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "Chapter ${item.chapterNumber}",
+                text = "Chapter ${eu.kanade.presentation.util.formatChapterNumber(item.chapterNumber)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -254,7 +251,9 @@ private fun NovelHistoryItem(
             )
             item.readAt?.let { readAt ->
                 Text(
-                    text = "Read at ${dateFormatter.format(readAt.toInstant().atZone(java.time.ZoneId.systemDefault()))}",
+                    text = "Read at ${dateFormatter.format(
+                        readAt.toInstant().atZone(java.time.ZoneId.systemDefault()),
+                    )}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -291,9 +290,11 @@ private fun NovelHistoryBatchItem(
     }
     val chapterRange = remember(batch.firstChapter, batch.lastChapter) {
         if (batch.firstChapter == batch.lastChapter) {
-            "Chapter ${batch.firstChapter}"
+            "Chapter ${eu.kanade.presentation.util.formatChapterNumber(batch.firstChapter)}"
         } else {
-            "Chapter ${batch.firstChapter} - ${batch.lastChapter}"
+            "Chapter ${eu.kanade.presentation.util.formatChapterNumber(
+                batch.firstChapter,
+            )} - ${eu.kanade.presentation.util.formatChapterNumber(batch.lastChapter)}"
         }
     }
     Row(

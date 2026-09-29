@@ -176,13 +176,6 @@ class MangaScreen(
                     screenModel.source,
                 )
             }.takeIf { isHttpSource },
-            onWebViewLongClicked = {
-                copyMangaUrl(
-                    context,
-                    screenModel.manga,
-                    screenModel.source,
-                )
-            }.takeIf { isHttpSource },
             onTrackingClicked = {
                 if (!successState.hasLoggedInTrackers) {
                     navigator.push(SettingsScreen(SettingsScreen.Destination.Tracking))
@@ -508,15 +501,5 @@ class MangaScreen(
         } else {
             performSearch(navigator, genreName, global = false)
         }
-    }
-
-    /**
-     * Copy Manga URL to Clipboard
-     */
-    private fun copyMangaUrl(context: Context, manga_: Manga?, source_: MangaSource?) {
-        val manga = manga_ ?: return
-        val source = source_ as? HttpSource ?: return
-        val url = source.getMangaUrl(manga.toSManga())
-        context.copyToClipboard(url, url)
     }
 }

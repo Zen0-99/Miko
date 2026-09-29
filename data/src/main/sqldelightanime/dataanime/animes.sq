@@ -35,7 +35,8 @@ CREATE TABLE animes(
     season_number REAL NOT NULL,
     season_source_order INTEGER NOT NULL,
     background_url TEXT,
-    background_last_modified INTEGER NOT NULL
+    background_last_modified INTEGER NOT NULL,
+    runtime TEXT
 );
 
 CREATE INDEX animelib_favorite_index ON animes(favorite) WHERE favorite = 1;
@@ -161,9 +162,24 @@ deleteAnimesNotInLibraryByAnimeIds:
 DELETE FROM animes
 WHERE favorite = 0 AND _id IN :animeIds;
 
+-- Removes materialized search/browse residue: extension-source rows that
+-- were inserted as a side effect of source resolution or catalog browsing,
+-- and never gained episodes, history, sync bindings, or categories.
+-- Cinemeta (source=0 cinemeta:*) and Local entries are never touched;
+-- user-picked source mappings are excluded via :protectedIds.
+deleteJunkAnime:
+DELETE FROM animes
+WHERE favorite = 0
+AND source != 0
+AND _id NOT IN :protectedIds
+AND _id NOT IN (SELECT anime_id FROM episodes)
+AND _id NOT IN (SELECT anime_id FROM animes_categories)
+AND _id NOT IN (SELECT anime_id FROM anime_sync)
+AND _id NOT IN (SELECT parent_id FROM animes WHERE parent_id IS NOT NULL);
+
 insert:
-INSERT INTO animes(source, url, artist, author, description, genre, title, status, thumbnail_url, favorite, last_update, next_update, initialized, viewer, episode_flags, cover_last_modified, date_added, update_strategy, calculate_interval, last_modified_at, version, fetch_type, parent_id, season_flags, season_number, season_source_order, background_url, background_last_modified)
-VALUES (:source, :url, :artist, :author, :description, :genre, :title, :status, :thumbnailUrl, :favorite, :lastUpdate, :nextUpdate, :initialized, :viewerFlags, :episodeFlags, :coverLastModified,:dateAdded, :updateStrategy, :calculateInterval, 0, :version, :fetchType, :parentId, :seasonFlags, :seasonNumber, :seasonSourceOrder, :backgroundUrl, :backgroundLastModified);
+INSERT INTO animes(source, url, artist, author, description, genre, title, status, thumbnail_url, favorite, last_update, next_update, initialized, viewer, episode_flags, cover_last_modified, date_added, update_strategy, calculate_interval, last_modified_at, version, fetch_type, parent_id, season_flags, season_number, season_source_order, background_url, background_last_modified, runtime)
+VALUES (:source, :url, :artist, :author, :description, :genre, :title, :status, :thumbnailUrl, :favorite, :lastUpdate, :nextUpdate, :initialized, :viewerFlags, :episodeFlags, :coverLastModified,:dateAdded, :updateStrategy, :calculateInterval, 0, :version, :fetchType, :parentId, :seasonFlags, :seasonNumber, :seasonSourceOrder, :backgroundUrl, :backgroundLastModified, :runtime);
 
 update:
 UPDATE animes SET
@@ -194,7 +210,8 @@ UPDATE animes SET
     season_number = coalesce(:seasonNumber, season_number),
     season_source_order = coalesce(:seasonSourceOrder, season_source_order),
     background_url = coalesce(:backgroundUrl, background_url),
-    background_last_modified = coalesce(:backgroundLastModified, background_last_modified)
+    background_last_modified = coalesce(:backgroundLastModified, background_last_modified),
+    runtime = coalesce(:runtime, runtime)
 WHERE _id = :animeId;
 
 selectLastInsertedRowId:

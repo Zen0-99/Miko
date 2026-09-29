@@ -71,6 +71,7 @@ class AndroidTtsEngine(
         val file: File,
     ) {
         val ready = CountDownLatch(1)
+
         @Volatile var failed: Boolean = false
 
         /** Sentence char ranges within [text], computed lazily on play. */
@@ -87,10 +88,15 @@ class AndroidTtsEngine(
     private val queueSignal = playerLock.newCondition()
 
     @Volatile private var playerThread: Thread? = null
+
     @Volatile private var playerStopped = false
+
     @Volatile private var playerPaused = false
+
     @Volatile private var currentTrack: AudioTrack? = null
+
     @Volatile private var fileMode = true
+
     @Volatile private var activeUtterance: QueuedUtterance? = null
 
     private val cacheDir: File
@@ -436,7 +442,11 @@ class AndroidTtsEngine(
                         callback?.onStart(item.utteranceId)
                     }
                     lastSentence = emitRangeForPosition(
-                        item, track, itemStartFrame, itemFrames, lastSentence,
+                        item,
+                        track,
+                        itemStartFrame,
+                        itemFrames,
+                        lastSentence,
                     )
                 }
             }
@@ -455,7 +465,11 @@ class AndroidTtsEngine(
                 }
                 if (head >= itemEndFrame) break
                 lastSentence = emitRangeForPosition(
-                    item, track, itemStartFrame, itemFrames, lastSentence,
+                    item,
+                    track,
+                    itemStartFrame,
+                    itemFrames,
+                    lastSentence,
                 )
                 Thread.sleep(20)
             }
@@ -609,9 +623,14 @@ class AndroidTtsEngine(
                     // Chunks are word-aligned.
                     if (size % 2 == 1) raf.skipBytes(1)
                 }
-                if (sampleRate <= 0 || channels !in 1..2 || dataSize <= 0 || bits != 16 ||
+                if (sampleRate <= 0 ||
+                    channels !in 1..2 ||
+                    dataSize <= 0 ||
+                    bits != 16 ||
                     dataSize % (channels * 2) != 0
-                ) return null
+                ) {
+                    return null
+                }
                 WavData(dataOffset, dataSize, sampleRate, channels, bits)
             }
         }.onFailure { logcat(LogPriority.WARN, it) { "readWav failed for ${file.name}" } }

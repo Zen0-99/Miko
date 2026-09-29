@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.ui.reader.novel.tts.supertonic
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
-import java.io.File
-import java.io.IOException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
@@ -12,6 +10,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
+import java.io.IOException
 
 /**
  * Byte-format contract tests for the sherpa `.bin` parsers (validation
@@ -29,7 +29,12 @@ class SupertonicBinFormatsTest {
     fun `voice bin parses header dims and slices per-sid rows`() {
         val file = File(dir, "voice.bin")
         val expected = SupertonicTestFixtures.writeVoiceBin(
-            file, n = 2, ttlD1 = 2, ttlD2 = 3, dpD1 = 1, dpD2 = 4,
+            file,
+            n = 2,
+            ttlD1 = 2,
+            ttlD2 = 3,
+            dpD1 = 1,
+            dpD2 = 4,
         )
 
         val data = VoiceBinReader.parse(file)
@@ -58,15 +63,24 @@ class SupertonicBinFormatsTest {
         // voice_styles/<name>.json payload the fp32 layout ships.
         val bin = File(dir, "voice.bin")
         val expected = SupertonicTestFixtures.writeVoiceBin(
-            bin, n = 10, ttlD1 = 4, ttlD2 = 5, dpD1 = 2, dpD2 = 7,
+            bin,
+            n = 10,
+            ttlD1 = 4,
+            ttlD2 = 5,
+            dpD1 = 2,
+            dpD2 = 7,
         )
         val sid = 4 // F5
 
         val styleJson = File(dir, "F5.json")
         SupertonicTestFixtures.writeVoiceStyleJson(
             styleJson,
-            ttlData = expected.ttlRow(sid), ttlD1 = 4, ttlD2 = 5,
-            dpData = expected.dpRow(sid), dpD1 = 2, dpD2 = 7,
+            ttlData = expected.ttlRow(sid),
+            ttlD1 = 4,
+            ttlD2 = 5,
+            dpData = expected.dpRow(sid),
+            dpD1 = 2,
+            dpD2 = 7,
         )
 
         // Flatten the JSON the same way the engine's fp32 fallback does.
@@ -132,8 +146,12 @@ class SupertonicBinFormatsTest {
         val buf = java.nio.ByteBuffer.allocate(48 + 16)
             .order(java.nio.ByteOrder.LITTLE_ENDIAN)
         // ttl dims [2, 0, 3] — non-positive middle dim
-        buf.putLong(2); buf.putLong(0); buf.putLong(3)
-        buf.putLong(2); buf.putLong(1); buf.putLong(4)
+        buf.putLong(2)
+        buf.putLong(0)
+        buf.putLong(3)
+        buf.putLong(2)
+        buf.putLong(1)
+        buf.putLong(4)
         file.writeBytes(buf.array())
         shouldThrow<IOException> { VoiceBinReader.parse(file) }
     }

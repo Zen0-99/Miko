@@ -25,7 +25,7 @@ fun Screen.mangaStatsTab(): TabContent {
     }
 
     return TabContent(
-        titleRes = AYMR.strings.label_manga,
+        titleRes = AYMR.strings.carrier_manga,
         content = { contentPadding, _ ->
 
             if (state is StatsScreenState.Loading) {

@@ -1,13 +1,10 @@
 package eu.kanade.tachiyomi.data.backup.restore
 
-import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.data.backup.models.BackupAnimeSource
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelSource
 import eu.kanade.tachiyomi.data.backup.models.BackupSource
-import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
-import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
@@ -40,7 +37,10 @@ class SourceIdMapper {
         val installedSources = sourceManager.getOnlineSources()
         return buildMapping(
             backupSources = backupSources.associate { it.sourceId to SourceInfo(it.name, it.baseUrl) },
-            installedSources = installedSources.associate { it.id to SourceInfo(it.name, (it as? HttpSource)?.baseUrl ?: "") },
+            installedSources = installedSources.associate {
+                it.id to
+                    SourceInfo(it.name, (it as? HttpSource)?.baseUrl ?: "")
+            },
         )
     }
 
@@ -54,7 +54,10 @@ class SourceIdMapper {
         val installedSources = sourceManager.getOnlineSources()
         return buildMapping(
             backupSources = backupSources.associate { it.sourceId to SourceInfo(it.name, it.baseUrl) },
-            installedSources = installedSources.associate { it.id to SourceInfo(it.name, (it as? AnimeHttpSource)?.baseUrl ?: "") },
+            installedSources = installedSources.associate {
+                it.id to
+                    SourceInfo(it.name, (it as? AnimeHttpSource)?.baseUrl ?: "")
+            },
         )
     }
 
@@ -68,7 +71,10 @@ class SourceIdMapper {
         val installedSources = sourceManager.getOnlineSources()
         return buildMapping(
             backupSources = backupSources.associate { it.sourceId to SourceInfo(it.name, it.baseUrl) },
-            installedSources = installedSources.associate { it.id to SourceInfo(it.name, (it as? NovelHttpSource)?.baseUrl ?: "") },
+            installedSources = installedSources.associate {
+                it.id to
+                    SourceInfo(it.name, (it as? NovelHttpSource)?.baseUrl ?: "")
+            },
         )
     }
 

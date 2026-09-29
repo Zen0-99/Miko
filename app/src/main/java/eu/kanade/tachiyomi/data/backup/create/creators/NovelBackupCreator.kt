@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupNovelHistory
-import eu.kanade.tachiyomi.data.backup.models.BackupNovelTracking
 import eu.kanade.tachiyomi.data.backup.models.backupNovelChapterMapper
 import eu.kanade.tachiyomi.data.backup.models.backupNovelTrackMapper
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler

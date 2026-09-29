@@ -25,11 +25,9 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioManifest
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.Mp4AtomReader
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.decodeManifest
 import eu.kanade.tachiyomi.util.system.notificationBuilder
-import java.io.FileInputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +42,7 @@ import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.FileInputStream
 
 /** Transport actions for the TTS media notification and media session. */
 enum class NovelTtsTransportAction {

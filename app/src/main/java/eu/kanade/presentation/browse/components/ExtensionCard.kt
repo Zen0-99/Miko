@@ -8,12 +8,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Comment
@@ -34,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -50,7 +47,7 @@ import tachiyomi.presentation.core.i18n.stringResource
 /**
  * Extension card with a two-row layout:
  *
- *  [icon]                                [cog]
+ *  [icon] [cog]
  *
  *  lang - version [comments icon]
  *  Title
@@ -72,7 +69,7 @@ fun ExtensionCard(
     isObsolete: Boolean = false,
     isUntrusted: Boolean = false,
     supportsComments: Boolean = false,
-    /** MikoDB source rank (S/A/B/C) - small outlined chip in the lang row. */
+    /** MikoDB source rank (S/A/B/C) — small outlined chip in the lang row. */
     tier: String? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
@@ -162,8 +159,18 @@ fun ExtensionCard(
                     ) {
                         Icon(
                             imageVector = if (hasUpdate) Icons.Outlined.Download else Icons.Outlined.Settings,
-                            contentDescription = if (hasUpdate) "Update" else stringResource(MR.strings.label_extension_info),
-                            tint = if (hasUpdate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription = if (hasUpdate) {
+                                "Update"
+                            } else {
+                                stringResource(
+                                    MR.strings.label_extension_info,
+                                )
+                            },
+                            tint = if (hasUpdate) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                             modifier = Modifier.size(22.dp),
                         )
                     }
@@ -219,7 +226,7 @@ fun ExtensionCard(
     }
 }
 
-/** Tiny outlined rank chip - S stands out, A is primary, B muted, C faded error. */
+/** Tiny outlined rank chip — S stands out, A is primary, B muted, C faded error. */
 @Composable
 private fun TierBadge(tier: String) {
     val color = when (tier.uppercase()) {

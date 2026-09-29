@@ -13,6 +13,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @Composable
 fun relativeDateText(
@@ -25,6 +27,31 @@ fun relativeDateText(
         )
             .takeIf { dateEpochMillis > 0L },
     )
+}
+
+/**
+ * Full, locale-aware date (e.g. "Jun 4, 2003" / "04.06.2003"), matching the
+ * date style the user's phone uses. For episode air dates where a complete
+ * day/month/year is wanted rather than relative text.
+ */
+@Composable
+fun fullDateText(
+    dateEpochMillis: Long,
+): String {
+    val text = remember(dateEpochMillis) {
+        if (dateEpochMillis <= 0L) {
+            null
+        } else {
+            DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+                .format(
+                    LocalDate.ofInstant(
+                        Instant.ofEpochMilli(dateEpochMillis),
+                        ZoneId.systemDefault(),
+                    ),
+                )
+        }
+    }
+    return text ?: stringResource(MR.strings.not_applicable)
 }
 
 // For use in chapter/episode release time

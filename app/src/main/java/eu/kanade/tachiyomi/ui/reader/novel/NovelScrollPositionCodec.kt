@@ -18,9 +18,9 @@ package eu.kanade.tachiyomi.ui.reader.novel
  */
 object NovelScrollPositionCodec {
 
-    private const val SCROLL_MARKER = 100_000_000_000L  // 100 billion
-    private const val OFFSET_BASE = 10_000L             // pixel offset + item index range
-    private const val CHAR_BASE = 100_000_000L          // 10_000 * 10_000
+    private const val SCROLL_MARKER = 100_000_000_000L // 100 billion
+    private const val OFFSET_BASE = 10_000L // pixel offset + item index range
+    private const val CHAR_BASE = 100_000_000L // 10_000 * 10_000
 
     /**
      * Encode character position, item index, and pixel offset into a single Long.
@@ -59,7 +59,7 @@ object NovelScrollPositionCodec {
         return if (decoded != null) {
             decoded.characterPosition.toLong()
         } else {
-            value  // Legacy: the value IS the character position
+            value // Legacy: the value IS the character position
         }
     }
 

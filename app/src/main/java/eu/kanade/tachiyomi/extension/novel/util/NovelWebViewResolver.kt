@@ -15,7 +15,6 @@ import tachiyomi.core.common.util.system.logcat
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
 /**

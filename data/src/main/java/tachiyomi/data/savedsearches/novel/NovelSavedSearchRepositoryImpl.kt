@@ -2,8 +2,8 @@ package tachiyomi.data.savedsearches.novel
 
 import kotlinx.coroutines.flow.Flow
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
-import tachiyomi.domain.savedsearches.novel.repository.NovelSavedSearchRepository
 import tachiyomi.domain.savedsearches.model.SavedSearch
+import tachiyomi.domain.savedsearches.novel.repository.NovelSavedSearchRepository
 
 class NovelSavedSearchRepositoryImpl(
     private val handler: NovelDatabaseHandler,

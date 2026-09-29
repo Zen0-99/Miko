@@ -3,7 +3,6 @@ package eu.kanade.presentation.updates.manga
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -12,13 +11,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
-import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
-import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
 import eu.kanade.tachiyomi.ui.updates.manga.MangaUpdatesItem
 import eu.kanade.tachiyomi.ui.updates.manga.MangaUpdatesScreenModel

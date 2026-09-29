@@ -57,7 +57,7 @@ data class PocketBundle(
      * quality regression.
      */
     val insertBosBeforeVoice: Boolean,
-    /** When true, replace `;` with `,` before tokenizing. */
+    /** When true, replace `;` with `, ` before tokenizing. */
     val removeSemicolons: Boolean,
     /** When true, prepend 8 spaces to inputs with <5 words. */
     val padWithSpacesForShortInputs: Boolean,
@@ -138,7 +138,12 @@ data class PocketBundle(
                 shape.contentEquals(other.shape)
 
         override fun hashCode(): Int =
-            31 * (31 * (31 * (31 * (31 * index + inputName.hashCode()) + outputName.hashCode()) + dtype.hashCode()) + fill.hashCode()) + shape.contentHashCode()
+            31 *
+                (
+                    31 * (31 * (31 * (31 * index + inputName.hashCode()) + outputName.hashCode()) + dtype.hashCode()) +
+                        fill.hashCode()
+                    ) +
+                shape.contentHashCode()
     }
 
     enum class StateDtype { FLOAT32, INT64, BOOL }

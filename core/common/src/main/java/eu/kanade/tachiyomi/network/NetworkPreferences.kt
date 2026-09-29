@@ -16,6 +16,10 @@ class NetworkPreferences(
         return preferenceStore.getInt("doh_provider", -1)
     }
 
+    fun metronApiToken(): Preference<String> {
+        return preferenceStore.getString("metron_api_token", "")
+    }
+
     fun tmdbApiKey(): Preference<String> {
         return preferenceStore.getString("pref_tmdb_api_key", "")
     }

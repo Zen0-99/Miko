@@ -12,7 +12,10 @@ class GetRemoteNovel(
 ) {
 
     fun subscribe(sourceId: Long, query: String, filterList: NovelFilterList): NovelSourcePagingSourceType {
-        Log.d("NovelSearch", "[GetRemoteNovel] subscribe - sourceId=$sourceId, query='$query', filters=${filterList.size}")
+        Log.d(
+            "NovelSearch",
+            "[GetRemoteNovel] subscribe - sourceId=$sourceId, query='$query', filters=${filterList.size}",
+        )
         return when (query) {
             QUERY_POPULAR -> {
                 Log.d("NovelSearch", "[GetRemoteNovel] subscribe - fetching POPULAR novels for sourceId=$sourceId")
@@ -23,7 +26,10 @@ class GetRemoteNovel(
                 repository.getLatestNovels(sourceId)
             }
             else -> {
-                Log.d("NovelSearch", "[GetRemoteNovel] subscribe - SEARCHING novels for sourceId=$sourceId, query='$query'")
+                Log.d(
+                    "NovelSearch",
+                    "[GetRemoteNovel] subscribe - SEARCHING novels for sourceId=$sourceId, query='$query'",
+                )
                 repository.searchNovels(sourceId, query, filterList)
             }
         }

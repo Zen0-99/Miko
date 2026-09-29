@@ -292,7 +292,8 @@ internal object NovelExtensionLoader {
                     resolveSources(obj)
                 } catch (e: LinkageError) {
                     try {
-                        val fallBackClassLoader = ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
+                        val fallBackClassLoader =
+                            ChildFirstPathClassLoader(appInfo.sourceDir, null, context.classLoader)
                         val obj = Class.forName(className, false, fallBackClassLoader)
                             .getDeclaredConstructor().newInstance()
                         resolveSources(obj)
@@ -384,6 +385,7 @@ internal object NovelExtensionLoader {
             // Extension-lib factory: reflectively create sources and wrap each one.
             classHierarchyContains(obj.javaClass, "NovelSourceFactory") -> {
                 val method = obj.javaClass.getMethod("createSources")
+
                 @Suppress("UNCHECKED_CAST")
                 val extSources = method.invoke(obj) as List<Any>
                 extSources.map { NovelSourceAdapter(it) }

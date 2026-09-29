@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -108,86 +107,90 @@ fun PersistentFilterSheet(
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                 .padding(bottom = bottomOffset),
         ) {
-        // Quick filter chips row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            // Filter icon button
-            FilterIconButton(
-                onClick = onFilterButtonClick,
-                onLongClick = onClearFilters,
-                hasActiveFilters = hasActiveFilters,
-            )
-
-            // Filter chips
-            orderedFilters.forEach { filter ->
-                FilterTagChip(
-                    label = stringResource(filter.labelRes),
-                    state = filter.state,
-                    enabled = filter.enabled,
-                    onToggle = filter.onToggle,
-                )
-            }
-
-            // Clear filters button (inline, only when active)
-            if (hasActiveFilters) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(MR.strings.clear_filters),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .clickable(onClick = onClearFilters)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                )
-            }
-        }
-
-        // Action buttons (only when expanded)
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = fadeIn(tween(200)) + expandVertically(tween(200)),
-            exit = fadeOut(tween(200)) + shrinkVertically(tween(200)),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
+            // Quick filter chips row
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    )
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FilterMenuButton(
-                    icon = Icons.Outlined.Label,
-                    text = stringResource(MR.strings.group_library_by),
-                    onClick = onGroupByClick,
+                // Filter icon button
+                FilterIconButton(
+                    onClick = onFilterButtonClick,
+                    onLongClick = onClearFilters,
+                    hasActiveFilters = hasActiveFilters,
                 )
-                FilterMenuButton(
-                    icon = Icons.Outlined.Tune,
-                    text = stringResource(MR.strings.action_display),
-                    onClick = onDisplayClick,
-                )
-                if (showExpandCollapse && allExpanded != null) {
-                    FilterMenuButton(
-                        icon = if (allExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                        text = stringResource(
-                            if (allExpanded) MR.strings.collapse_all_categories else MR.strings.expand_all_categories,
-                        ),
-                        onClick = onExpandCollapseClick,
+
+                // Filter chips
+                orderedFilters.forEach { filter ->
+                    FilterTagChip(
+                        label = stringResource(filter.labelRes),
+                        state = filter.state,
+                        enabled = filter.enabled,
+                        onToggle = filter.onToggle,
+                    )
+                }
+
+                // Clear filters button (inline, only when active)
+                if (hasActiveFilters) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(MR.strings.clear_filters),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable(onClick = onClearFilters)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                     )
                 }
             }
-        }
+
+            // Action buttons (only when expanded)
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn(tween(200)) + expandVertically(tween(200)),
+                exit = fadeOut(tween(200)) + shrinkVertically(tween(200)),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    FilterMenuButton(
+                        icon = Icons.Outlined.Label,
+                        text = stringResource(MR.strings.group_library_by),
+                        onClick = onGroupByClick,
+                    )
+                    FilterMenuButton(
+                        icon = Icons.Outlined.Tune,
+                        text = stringResource(MR.strings.action_display),
+                        onClick = onDisplayClick,
+                    )
+                    if (showExpandCollapse && allExpanded != null) {
+                        FilterMenuButton(
+                            icon = if (allExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            text = stringResource(
+                                if (allExpanded) {
+                                    MR.strings.collapse_all_categories
+                                } else {
+                                    MR.strings.expand_all_categories
+                                },
+                            ),
+                            onClick = onExpandCollapseClick,
+                        )
+                    }
+                }
+            }
         }
     }
 }

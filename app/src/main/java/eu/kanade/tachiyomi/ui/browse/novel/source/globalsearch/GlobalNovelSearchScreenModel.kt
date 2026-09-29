@@ -13,24 +13,36 @@ class GlobalNovelSearchScreenModel(
 ) {
 
     init {
-        Log.d("NovelSearch", "[GlobalNovelSearchScreenModel] init - initialQuery='$initialQuery', initialExtensionFilter='$initialExtensionFilter'")
+        Log.d(
+            "NovelSearch",
+            "[GlobalNovelSearchScreenModel] init - initialQuery='$initialQuery', initialExtensionFilter='$initialExtensionFilter'",
+        )
         extensionFilter = initialExtensionFilter
         if (initialQuery.isNotBlank() || !initialExtensionFilter.isNullOrBlank()) {
             if (extensionFilter != null) {
-                Log.d("NovelSearch", "[GlobalNovelSearchScreenModel] init - extensionFilter set, calling setSourceFilter(All)")
+                Log.d(
+                    "NovelSearch",
+                    "[GlobalNovelSearchScreenModel] init - extensionFilter set, calling setSourceFilter(All)",
+                )
                 setSourceFilter(NovelSourceFilter.All)
             }
             Log.d("NovelSearch", "[GlobalNovelSearchScreenModel] init - triggering initial search()")
             search()
         } else {
-            Log.d("NovelSearch", "[GlobalNovelSearchScreenModel] init - no initial query/filter, waiting for user input")
+            Log.d(
+                "NovelSearch",
+                "[GlobalNovelSearchScreenModel] init - no initial query/filter, waiting for user input",
+            )
         }
     }
 
     override fun getEnabledSources(): List<NovelCatalogueSource> {
         val result = super.getEnabledSources()
             .filter { state.value.sourceFilter != NovelSourceFilter.PinnedOnly || "${it.id}" in pinnedSources }
-        Log.d("NovelSearch", "[GlobalNovelSearchScreenModel] getEnabledSources - after PinnedOnly filter: ${result.size} sources, sourceFilter=${state.value.sourceFilter}")
+        Log.d(
+            "NovelSearch",
+            "[GlobalNovelSearchScreenModel] getEnabledSources - after PinnedOnly filter: ${result.size} sources, sourceFilter=${state.value.sourceFilter}",
+        )
         return result
     }
 }

@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.ui.browse.novel.migration
 
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.entries.novel.model.hasCustomCover
-import tachiyomi.domain.entries.novel.model.Novel
-import tachiyomi.i18n.MR
 import eu.kanade.tachiyomi.data.cache.NovelCoverCache
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadCache
+import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.injectLazy
 
 data class NovelMigrationFlag(

@@ -168,7 +168,7 @@ class PocketBundleTest {
 
     @Test
     fun `unknown manifest dtype throws IllegalStateException`() {
-        val json = syntheticJson().replace("\"dtype\": \"float32\"", "\"dtype\": \"bfloat16\"",)
+        val json = syntheticJson().replace("\"dtype\": \"float32\"", "\"dtype\": \"bfloat16\"")
         shouldThrow<IllegalStateException> { load(json) }
     }
 

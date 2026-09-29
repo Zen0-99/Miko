@@ -45,7 +45,6 @@ data class LegacyBackup(
             backupNovels = backupNovels,
             backupNovelCollection = backupNovelCollections,
             backupNovelSources = backupNovelSources,
-            backupNovelLinks = emptyList(),
         )
     }
 }
@@ -73,7 +72,8 @@ data class Backup(
     @ProtoNumber(600) val backupNovels: List<BackupNovel> = emptyList(),
     @ProtoNumber(601) var backupNovelCollection: List<BackupCollection> = emptyList(),
     @ProtoNumber(602) var backupNovelSources: List<BackupNovelSource> = emptyList(),
-    @ProtoNumber(603) var backupNovelLinks: List<BackupNovelLink> = emptyList(),
+    // @ProtoNumber(603) backupNovelLinks — retired; linked-sources feature removed.
+    // Number stays reserved so old backups decode without colliding.
 
     // Achievement / stats values
     @ProtoNumber(700) val backupAchievements: List<BackupAchievement> = emptyList(),

@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.data.track.novelupdates
 
 import android.graphics.Color
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.track.novel.model.toNovelTrack
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.manga.MangaTrack
 import eu.kanade.tachiyomi.data.track.BaseTracker
-import eu.kanade.tachiyomi.data.track.MangaTracker
 import eu.kanade.tachiyomi.data.track.NovelTracker
 import eu.kanade.tachiyomi.data.track.model.MangaTrackSearch
 import eu.kanade.tachiyomi.network.GET
@@ -20,10 +20,8 @@ import okhttp3.Headers
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
-import tachiyomi.domain.track.novel.model.NovelTrack as DomainNovelTrack
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.injectLazy
-import dev.icerock.moko.resources.StringResource
 import tachiyomi.domain.track.manga.model.MangaTrack as DomainTrack
 
 class NovelUpdates(id: Long) : BaseTracker(id, "NovelUpdates"), NovelTracker {

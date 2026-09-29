@@ -93,7 +93,13 @@ fun AchievementCard(
                 ) {
                     Text(
                         text = AchievementRevealHelper.getDisplayName(achievement, progress),
-                        color = if (isUnlocked) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        color = if (isUnlocked) {
+                            MaterialTheme.colorScheme.onBackground
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.8f,
+                            )
+                        },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -104,7 +110,13 @@ fun AchievementCard(
                     if (achievement.points > 0) {
                         Text(
                             text = "+${achievement.points} XP",
-                            color = if (isUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            color = if (isUnlocked) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                    alpha = 0.5f,
+                                )
+                            },
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                         )

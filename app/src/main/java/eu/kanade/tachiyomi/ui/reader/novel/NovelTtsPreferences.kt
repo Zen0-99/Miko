@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.novel
 
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerTheme
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
 
@@ -116,6 +117,37 @@ class NovelTtsPreferences(
      * on pause/stop/track-change and a periodic tick.
      */
     fun audiobookPositions() = preferenceStore.getString("pref_novel_audiobook_positions", "{}")
+
+    /**
+     * Last-listened chapter per novel — JSON `Map<Long, Long>` of
+     * novelId → chapterId. Written by [AudiobookPlayerController] whenever a
+     * track is set; read by "continue listening" to resume the *audio*
+     * position instead of the reading one.
+     */
+    fun audiobookLastPlayed() = preferenceStore.getString("pref_novel_audiobook_last_played", "{}")
+
+    /**
+     * Full-overlay now-playing theme (Retro Music Player port). Stored as the
+     * [AudiobookPlayerTheme] name.
+     */
+    fun audiobookPlayerTheme() =
+        preferenceStore.getEnum("pref_novel_audiobook_theme", AudiobookPlayerTheme.BLUR)
+
+    /**
+     * Show synced paragraph text in the full overlay — Retro's synced-lyrics
+     * mode adapted to chapter text (full-width list driven by manifest
+     * offsets, replaces the cover area while on).
+     */
+    fun audiobookSyncedText() =
+        preferenceStore.getBoolean("pref_novel_audiobook_synced_text_enabled", false)
+
+    /**
+     * Tint the active synced paragraph with the cover accent. When off the
+     * highlight falls back to plain white. Only meaningful while synced text
+     * is on — the menu entry hides otherwise.
+     */
+    fun audiobookSyncedTextAccent() =
+        preferenceStore.getBoolean("pref_novel_audiobook_synced_text_accent", true)
 }
 
 enum class NovelTtsHighlightMode {

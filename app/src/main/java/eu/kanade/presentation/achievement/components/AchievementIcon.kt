@@ -107,8 +107,11 @@ fun AchievementIcon(
                     }
 
                     // Optional faint fill for legendary/mythic unlocked
-                    if (isUnlocked && (achievement.rarity == AchievementRarity.LEGENDARY ||
-                            achievement.rarity == AchievementRarity.MYTHIC)
+                    if (isUnlocked &&
+                        (
+                            achievement.rarity == AchievementRarity.LEGENDARY ||
+                                achievement.rarity == AchievementRarity.MYTHIC
+                            )
                     ) {
                         drawPath(
                             path = path,

@@ -9,6 +9,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
@@ -17,7 +18,6 @@ import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
 import tachiyomi.domain.track.novel.model.NovelTrack
-import org.junit.jupiter.api.Assertions.assertEquals
 
 class SyncNovelChapterProgressWithTrackTest {
 

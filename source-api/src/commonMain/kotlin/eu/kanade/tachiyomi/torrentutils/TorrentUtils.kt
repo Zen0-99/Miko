@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.torrentutils
 
-import miko.core.common.torrent.DisabledTorrServerException
-import miko.core.common.torrent.TorrentServerApi
 import eu.kanade.tachiyomi.torrentutils.model.DeadTorrentException
 import eu.kanade.tachiyomi.torrentutils.model.TorrentFile
 import eu.kanade.tachiyomi.torrentutils.model.TorrentInfo
+import miko.core.common.torrent.DisabledTorrServerException
+import miko.core.common.torrent.TorrentServerApi
 import uy.kohesive.injekt.injectLazy
 import java.net.SocketTimeoutException
 

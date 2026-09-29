@@ -195,7 +195,9 @@ class NovelJsRuntimeFactory(
             val value = webStorageBridge.localStorageGet(key)
             if (key == "auth") {
                 logcat(LogPriority.DEBUG) {
-                    "NovelStorage: plugin=$pluginId key=auth valueLen=${value?.length ?: 0} valuePreview=${value?.take(80) ?: "null"}"
+                    "NovelStorage: plugin=$pluginId key=auth valueLen=${value?.length ?: 0} valuePreview=${value?.take(
+                        80,
+                    ) ?: "null"}"
                 }
             }
             return value

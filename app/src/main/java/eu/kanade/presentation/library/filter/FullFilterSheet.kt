@@ -102,7 +102,10 @@ fun FullFilterSheet(
                         )
                     }
                     IconButton(onClick = {
-                        scope.launch { sheetState.hide(); onDismiss() }
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
                     }) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -147,7 +150,10 @@ fun FullFilterSheet(
                 }
                 Button(
                     onClick = {
-                        scope.launch { sheetState.hide(); onDismiss() }
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(24.dp),
@@ -198,8 +204,11 @@ private fun FilterOptionRow(option: FilterOptionData) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(
-                if (option.isSelected) MaterialTheme.colorScheme.surfaceVariant
-                else androidx.compose.ui.graphics.Color.Transparent,
+                if (option.isSelected) {
+                    MaterialTheme.colorScheme.surfaceVariant
+                } else {
+                    androidx.compose.ui.graphics.Color.Transparent
+                },
             )
             .clickable(onClick = option.onClick)
             .padding(vertical = 12.dp, horizontal = 12.dp),

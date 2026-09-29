@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,6 +37,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.presentation.browse.InLibraryBadge
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.EntryCompactGridItem
@@ -79,9 +82,25 @@ fun CatalogBrowseContent(
     val pills = pillsFor(carrier)
     val selectedIndex = (discoveryState.subTypeSelections[carrier] ?: 0)
         .coerceIn(0, pills.lastIndex)
+    val scope = rememberCoroutineScope()
 
-    // The feed follows the pill — the medium rides along so a carrier
-    // switch can never fire a stale-medium request.
+    // Library-collection-style paging: pill taps animate the pager and
+    // the settled page commits the selection — each page keeps its own
+    // grid state, so scroll positions never transfer between pills.
+    val pagerState = rememberPagerState(initialPage = selectedIndex) { pills.size }
+    LaunchedEffect(pagerState.settledPage) {
+        val settled = pagerState.settledPage
+        if (settled != selectedIndex) discoveryScreenModel.selectSubType(carrier, settled)
+    }
+    // Programmatic selection (restored state, carrier switch) → pager.
+    LaunchedEffect(selectedIndex) {
+        if (pagerState.currentPage != selectedIndex) {
+            pagerState.animateScrollToPage(selectedIndex)
+        }
+    }
+
+    // The feed follows the committed selection — the medium rides along
+    // so a carrier switch can never fire a stale-medium request.
     LaunchedEffect(carrier, selectedIndex) {
         screenModel.setCatalogFeed(carrier.medium, pills[selectedIndex].kindsCsv)
     }
@@ -89,9 +108,9 @@ fun CatalogBrowseContent(
     Column(modifier = Modifier.fillMaxSize()) {
         SubTypePillRow(
             pills = pills,
-            selectedIndex = selectedIndex,
+            selectedIndex = pagerState.currentPage.coerceIn(0, pills.lastIndex),
             topPadding = contentPadding.calculateTopPadding(),
-            onSelect = { discoveryScreenModel.selectSubType(carrier, it) },
+            onSelect = { scope.launch { pagerState.animateScrollToPage(it) } },
         )
         // Pills consumed the top inset — the grid/search branches get
         // start/end/bottom only.
@@ -110,12 +129,19 @@ fun CatalogBrowseContent(
                     libraryPreferences = libraryPreferences,
                 )
             } else {
-                CatalogBrowseGrid(
-                    carrier = carrier,
-                    screenModel = screenModel,
-                    contentPadding = innerPadding,
-                    libraryPreferences = libraryPreferences,
-                )
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                ) { page ->
+                    CatalogBrowseGrid(
+                        carrier = carrier,
+                        feedKindsCsv = pills[page].kindsCsv,
+                        live = page == selectedIndex,
+                        screenModel = screenModel,
+                        contentPadding = innerPadding,
+                        libraryPreferences = libraryPreferences,
+                    )
+                }
             }
         }
     }
@@ -207,6 +233,8 @@ private fun SubTypePillRow(
 @Composable
 private fun CatalogBrowseGrid(
     carrier: Carrier,
+    feedKindsCsv: String?,
+    live: Boolean,
     screenModel: CanonicalCatalogScreenModel,
     contentPadding: PaddingValues,
     libraryPreferences: LibraryPreferences,
@@ -217,6 +245,16 @@ private fun CatalogBrowseGrid(
 
     val gridState = rememberLazyGridState()
     val displayMode by libraryPreferences.displayMode().collectAsState()
+
+    // The settled page reads the live feed; incoming pages preview their
+    // own pill's cached items so the outgoing feed never bleeds across.
+    val items = if (live) {
+        state.browseItems
+    } else {
+        screenModel.peekCachedFeed(carrier.medium, feedKindsCsv)
+    }
+    val loading = live && state.browseLoading
+    val error = if (live) state.browseError else null
 
     val isNovel = carrier == Carrier.BOOKS
     val configuration = LocalConfiguration.current
@@ -229,7 +267,8 @@ private fun CatalogBrowseGrid(
         }
         ).collectAsState()
 
-    // Infinite scroll: load next page when near the end
+    // Infinite scroll: load next page when near the end — live page only,
+    // a preview page's scroll must not page the other pill's feed.
     LaunchedEffect(gridState) {
         snapshotFlow {
             val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -238,20 +277,20 @@ private fun CatalogBrowseGrid(
         }
             .distinctUntilChanged()
             .collect { shouldLoad ->
-                if (shouldLoad && state.browseHasMore && !state.browseLoading && state.browseError == null) {
+                if (shouldLoad && live && state.browseHasMore && !state.browseLoading && state.browseError == null) {
                     screenModel.loadNextBrowsePage()
                 }
             }
     }
 
     PullRefresh(
-        refreshing = state.browseLoading && state.browseItems.isNotEmpty(),
-        enabled = state.browseItems.isNotEmpty(),
+        refreshing = live && state.browseLoading && items.isNotEmpty(),
+        enabled = live && items.isNotEmpty(),
         onRefresh = { screenModel.refreshBrowse() },
         indicatorPadding = PaddingValues(top = contentPadding.calculateTopPadding()),
     ) {
         when {
-            state.browseLoading && state.browseItems.isEmpty() -> {
+            loading && items.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
@@ -260,7 +299,7 @@ private fun CatalogBrowseGrid(
                 }
             }
 
-            state.browseError != null && state.browseItems.isEmpty() -> {
+            error != null && items.isEmpty() -> {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -282,16 +321,18 @@ private fun CatalogBrowseGrid(
                 }
             }
 
-            state.browseItems.isEmpty() && !state.browseLoading -> {
+            items.isEmpty() && !loading -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = stringResource(AYMR.strings.discovery_catalog_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    if (live) {
+                        Text(
+                            text = stringResource(AYMR.strings.discovery_catalog_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -310,9 +351,10 @@ private fun CatalogBrowseGrid(
                     verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(state.browseItems.size) { index ->
-                        val item = state.browseItems[index]
+                    items(items.size) { index ->
+                        val item = items[index]
                         val work = item.work
+                        val bound = live && work.mikoWorkId in state.boundEntryIds
 
                         // Mint-on-browse: once per work id per session;
                         // the model dedupes and throttles off-thread.
@@ -324,7 +366,7 @@ private fun CatalogBrowseGrid(
                             NovelCover(
                                 novelId = work.mikoWorkId.hashCode().toLong(),
                                 sourceId = CanonicalCatalog.CANONICAL_SOURCE_ID,
-                                isNovelFavorite = false,
+                                isNovelFavorite = bound,
                                 url = item.coverUrl,
                                 lastModified = 0L,
                             )
@@ -332,7 +374,7 @@ private fun CatalogBrowseGrid(
                             MangaCover(
                                 mangaId = work.mikoWorkId.hashCode().toLong(),
                                 sourceId = CanonicalCatalog.CANONICAL_SOURCE_ID,
-                                isMangaFavorite = false,
+                                isMangaFavorite = bound,
                                 url = item.coverUrl,
                                 lastModified = 0L,
                             )
@@ -360,6 +402,12 @@ private fun CatalogBrowseGrid(
                                     } else {
                                         null
                                     },
+                                    coverAlpha = if (bound) {
+                                        CommonEntryItemDefaults.BrowseFavoriteCoverAlpha
+                                    } else {
+                                        1f
+                                    },
+                                    coverBadgeStart = { InLibraryBadge(enabled = bound) },
                                 )
                             }
 
@@ -369,11 +417,17 @@ private fun CatalogBrowseGrid(
                                     onClick = onClick,
                                     onLongClick = {},
                                     coverData = coverData,
+                                    coverAlpha = if (bound) {
+                                        CommonEntryItemDefaults.BrowseFavoriteCoverAlpha
+                                    } else {
+                                        1f
+                                    },
+                                    coverBadgeStart = { InLibraryBadge(enabled = bound) },
                                 )
                             }
                         }
                     }
-                    if (state.browseLoading) {
+                    if (loading) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Box(
                                 modifier = Modifier

@@ -193,9 +193,6 @@ class NovelScreen(
             onWebViewClicked = {
                 openNovelInWebView(navigator, screenModel.novel, screenModel.source)
             }.takeIf { isHttpSource },
-            onWebViewLongClicked = {
-                copyNovelUrl(context, screenModel.novel, screenModel.source)
-            }.takeIf { isHttpSource },
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
             onFilterButtonClicked = screenModel::showSettingsDialog,
             onBookmarkFilterClicked = {
@@ -255,7 +252,6 @@ class NovelScreen(
                 .takeIf { !successState.source.isLocalOrStub() },
             onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
                 .takeIf { !successState.source.isLocalOrStub() },
-            onClickLinkedSources = { screenModel.showLinkedSourcesDialog() },
             onMultiBookmarkClicked = screenModel::bookmarkChapters,
             onMultiMarkAsReadClicked = screenModel::markChaptersRead,
             onMarkPreviousAsReadClicked = screenModel::markPreviousChaptersRead,
@@ -390,18 +386,6 @@ class NovelScreen(
                     LoadingScreen(Modifier.systemBarsPadding())
                 }
             }
-            NovelScreenModel.Dialog.LinkedSources -> {
-                eu.kanade.presentation.entries.novel.LinkedSourcesDialog(
-                    loadLinked = { screenModel.loadLinkedNovelsForDialog() },
-                    loadCandidates = { screenModel.loadFavoritesForLinking() },
-                    onLink = screenModel::linkNovelSource,
-                    onUnlink = screenModel::unlinkNovelSource,
-                    onMakePrimary = screenModel::makeLinkedPrimary,
-                    onOpenNovel = { navigator.push(NovelScreen(it)) },
-                    onRefreshAll = screenModel::refreshLinkedSources,
-                    onDismissRequest = onDismissRequest,
-                )
-            }
             NovelScreenModel.Dialog.TrackSheet -> {
                 NavigatorAdaptiveSheet(
                     screen = NovelTrackInfoDialogHomeScreen(
@@ -517,12 +501,5 @@ class NovelScreen(
         } else {
             performSearch(navigator, genreName, global = false)
         }
-    }
-
-    private fun copyNovelUrl(context: Context, novel_: Novel?, source_: Any?) {
-        val novel = novel_ ?: return
-        val source = source_ as? NovelHttpSource ?: return
-        val url = source.getNovelUrl(novel.toSNovel())
-        context.copyToClipboard(url, url)
     }
 }

@@ -249,13 +249,6 @@ class ShowsScreen(
                     screenModel.source,
                 )
             }.takeIf { isAnimeHttpSource },
-            onWebViewLongClicked = {
-                copyAnimeUrl(
-                    context,
-                    screenModel.anime,
-                    screenModel.source,
-                )
-            }.takeIf { isAnimeHttpSource },
             onTrackingClicked = {
                 if (!successState.hasLoggedInTrackers) {
                     navigator.push(SettingsScreen(SettingsScreen.Destination.Tracking))
@@ -752,15 +745,5 @@ class ShowsScreen(
         } else {
             performSearch(navigator, genreName, global = false)
         }
-    }
-
-    /**
-     * Copy Anime URL to Clipboard
-     */
-    private fun copyAnimeUrl(context: Context, anime_: Anime?, source_: AnimeSource?) {
-        val anime = anime_ ?: return
-        val source = source_ as? AnimeHttpSource ?: return
-        val url = source.getAnimeUrl(anime.toSAnime())
-        context.copyToClipboard(url, url)
     }
 }

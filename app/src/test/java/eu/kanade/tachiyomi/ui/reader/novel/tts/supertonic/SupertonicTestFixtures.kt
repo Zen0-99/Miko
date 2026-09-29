@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.ui.reader.novel.tts.supertonic
 
-import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * Synthetic-fixture builders for the sherpa `.bin` formats — shared by

@@ -30,7 +30,7 @@ class RenameEnumMigration : Migration {
             }
             val newAnimeSortingMode = when (
                 val oldSortingMode = prefs.getString(
-                    libraryPreferences.animeSortingMode().key(),
+                    libraryPreferences.showsSortingMode().key(),
                     "ALPHABETICAL",
                 )
             ) {
@@ -40,7 +40,7 @@ class RenameEnumMigration : Migration {
                 else -> oldSortingMode
             }
             putString(libraryPreferences.mangaSortingMode().key(), newMangaSortingMode)
-            putString(libraryPreferences.animeSortingMode().key(), newAnimeSortingMode)
+            putString(libraryPreferences.showsSortingMode().key(), newAnimeSortingMode)
         }
 
         return true

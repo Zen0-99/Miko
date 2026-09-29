@@ -19,7 +19,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,12 +41,10 @@ import coil3.imageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.size.Size
+import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.AppBar
-import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.AppBarActions
-import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.DropdownMenu
-import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import kotlinx.collections.immutable.persistentListOf

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.HorizontalPager
@@ -71,7 +70,9 @@ fun TabbedDialog(
                         Box(
                             Modifier
                                 .tabIndicatorLayout { measurable, constraints, tabPositions ->
-                                    val targetPos = tabPositions.getOrElse(pagerState.currentPage) { tabPositions.first() }
+                                    val targetPos = tabPositions.getOrElse(pagerState.currentPage) {
+                                        tabPositions.first()
+                                    }
                                     val fraction = pagerState.currentPageOffsetFraction
                                     val left = targetPos.left + targetPos.width * fraction
                                     val width = targetPos.width

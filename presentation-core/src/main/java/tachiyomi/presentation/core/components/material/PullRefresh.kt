@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -27,9 +28,9 @@ fun PullRefresh(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
     indicatorPadding: PaddingValues = PaddingValues(0.dp),
+    state: PullToRefreshState = rememberPullToRefreshState(),
     content: @Composable () -> Unit,
 ) {
-    val state = rememberPullToRefreshState()
     val overlaySlot = LocalPullRefreshOverlay.current
 
     Box(

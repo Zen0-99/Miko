@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.track.novellist
 
 import android.graphics.Color
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.track.novel.model.toNovelTrack
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.manga.MangaTrack
@@ -27,7 +28,6 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.injectLazy
-import dev.icerock.moko.resources.StringResource
 import tachiyomi.domain.track.manga.model.MangaTrack as DomainTrack
 
 class NovelList(id: Long) : BaseTracker(id, "NovelList"), NovelTracker {

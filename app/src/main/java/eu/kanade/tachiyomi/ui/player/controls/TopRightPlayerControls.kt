@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.MoreVert
@@ -53,6 +54,9 @@ fun TopRightPlayerControls(
     // video
     onQualityClick: () -> Unit,
     isEpisodeOnline: Boolean?,
+
+    // comments
+    onCommentsClick: (() -> Unit)?,
 
     // more
     onMoreClick: () -> Unit,
@@ -89,6 +93,13 @@ fun TopRightPlayerControls(
                 icon = Icons.Default.HighQuality,
                 onClick = onQualityClick,
                 onLongClick = onQualityClick,
+                horizontalSpacing = MaterialTheme.padding.mediumSmall,
+            )
+        }
+        onCommentsClick?.let {
+            ControlsButton(
+                icon = Icons.AutoMirrored.Outlined.Comment,
+                onClick = it,
                 horizontalSpacing = MaterialTheme.padding.mediumSmall,
             )
         }

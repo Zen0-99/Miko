@@ -209,6 +209,24 @@ class CommentsApi {
         ),
     )
 
+    @Serializable
+    data class ThreadCountsResponse(val counts: Map<String, Long> = emptyMap())
+
+    /**
+     * Batch visible-comment counts for thread badges
+     * (`View comments (N)`). Unknown/absent threads simply don't appear
+     * in [ThreadCountsResponse.counts] — treat missing as zero.
+     */
+    suspend fun threadCounts(threadIds: List<String>): Result<ThreadCountsResponse> = call(
+        authed(
+            "${base()}/v1/threads/counts?ids=" +
+                threadIds.take(50).joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") },
+            null,
+            "GET",
+            null,
+        ),
+    )
+
     suspend fun vote(token: String, commentId: Long, value: Int): Result<VoteResponse> =
         call(
             authed(

@@ -16,12 +16,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.net.toUri
-import miko.core.common.torrent.ProxyMode
-import miko.core.common.torrent.TorrentPreferences
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
 import eu.kanade.tachiyomi.data.torrent.service.TorrentServerService
 import kotlinx.collections.immutable.toPersistentMap
+import miko.core.common.torrent.ProxyMode
+import miko.core.common.torrent.TorrentPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.padding

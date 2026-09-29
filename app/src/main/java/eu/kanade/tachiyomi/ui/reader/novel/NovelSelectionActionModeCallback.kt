@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.ui.reader.novel
 
 import android.app.Activity
-import android.content.Intent
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Build
 import android.text.Spannable
 import android.view.ActionMode
@@ -141,7 +139,12 @@ class NovelSelectionActionModeCallback(
 
         buildMainState(container, textView, selectedText, density)
 
-        val popup = PopupWindow(container, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, false).apply {
+        val popup = PopupWindow(
+            container,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            false,
+        ).apply {
             isOutsideTouchable = true
             isFocusable = false
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))

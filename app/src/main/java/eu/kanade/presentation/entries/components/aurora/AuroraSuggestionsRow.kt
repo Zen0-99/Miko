@@ -25,8 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,7 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.MaterialTheme
 import coil3.compose.AsyncImage
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.data.suggestions.SuggestionState
@@ -155,7 +153,13 @@ fun AuroraSuggestionsRow(
                     ) {
                         Text(
                             text = state.message ?: stringResource(AYMR.strings.suggestions_empty_state),
-                            color = if (isDark) Color.White.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isDark) {
+                                Color.White.copy(
+                                    alpha = 0.6f,
+                                )
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                             fontSize = 13.sp,
                         )
                     }
@@ -170,7 +174,13 @@ fun AuroraSuggestionsRow(
                     ) {
                         Text(
                             text = state.message,
-                            color = if (isDark) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onBackground,
+                            color = if (isDark) {
+                                Color.White.copy(
+                                    alpha = 0.8f,
+                                )
+                            } else {
+                                MaterialTheme.colorScheme.onBackground
+                            },
                             fontSize = 13.sp,
                         )
                     }

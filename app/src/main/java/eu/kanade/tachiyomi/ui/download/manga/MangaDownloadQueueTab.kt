@@ -29,8 +29,11 @@ fun Screen.mangaDownloadTab(
     val downloadList by remember(downloadListRaw, searchQuery) {
         derivedStateOf {
             val q = searchQuery
-            if (q.isNullOrBlank()) downloadListRaw
-            else downloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+            if (q.isNullOrBlank()) {
+                downloadListRaw
+            } else {
+                downloadListRaw.filter { it.name.contains(q, ignoreCase = true) }
+            }
         }
     }
     val downloadCount by remember {
@@ -38,7 +41,7 @@ fun Screen.mangaDownloadTab(
     }
 
     return TabContent(
-        titleRes = AYMR.strings.label_manga,
+        titleRes = AYMR.strings.carrier_manga,
         searchAvailable = true,
         searchQuery = searchQuery,
         onSearchQueryChange = { searchQuery = it },

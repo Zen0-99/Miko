@@ -15,7 +15,10 @@ class NovelHighlightManager(context: Context) {
 
     private val appContext = context.applicationContext
     private val highlightsDir = File(appContext.getExternalFilesDir(null), "highlights")
-    private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
+    private val json = Json {
+        prettyPrint = true
+        ignoreUnknownKeys = true
+    }
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
     companion object {
@@ -113,7 +116,9 @@ class NovelHighlightManager(context: Context) {
             val updatedHighlights = chapter.highlights.map {
                 if (it.text == highlightText && it.timestamp == timestamp) {
                     it.copy(note = note)
-                } else it
+                } else {
+                    it
+                }
             }
             val updatedChapter = chapter.copy(highlights = updatedHighlights)
             val updatedChapters = data.chapters.filter { it.chapterNumber != chapterNumber } + updatedChapter
@@ -151,7 +156,9 @@ class NovelHighlightManager(context: Context) {
             try {
                 val data = json.decodeFromString(NovelHighlightsData.serializer(), file.readText())
                 if (data.chapters.any { it.highlights.isNotEmpty() }) data else null
-            } catch (_: Exception) { null }
+            } catch (_: Exception) {
+                null
+            }
         }.sortedByDescending { novel ->
             novel.chapters.flatMap { it.highlights }.maxOfOrNull { it.timestamp } ?: 0L
         }
@@ -198,10 +205,12 @@ class NovelHighlightManager(context: Context) {
     private fun loadData(novelKey: NovelKey): NovelHighlightsData {
         val titleOnlyFile = File(highlightsDir, "${novelKey.titleFileName()}.json")
 
-        if (!titleOnlyFile.exists()) return NovelHighlightsData(
-            novelTitle = novelKey.title,
-            chapters = emptyList(),
-        )
+        if (!titleOnlyFile.exists()) {
+            return NovelHighlightsData(
+                novelTitle = novelKey.title,
+                chapters = emptyList(),
+            )
+        }
         return try {
             json.decodeFromString(NovelHighlightsData.serializer(), titleOnlyFile.readText())
         } catch (e: Exception) {
@@ -228,7 +237,11 @@ class NovelHighlightManager(context: Context) {
         val sortedChapters = data.chapters.sortedBy { it.chapterNumber }
         for (ch in sortedChapters) {
             if (ch.highlights.isEmpty()) continue
-            sb.appendLine("### ${ch.chapterTitle.ifBlank { "Chapter ${ch.chapterNumber}" }}")
+            sb.appendLine(
+                "### ${ch.chapterTitle.ifBlank {
+                    "Chapter ${eu.kanade.presentation.util.formatChapterNumber(ch.chapterNumber)}"
+                }}",
+            )
             for (hl in ch.highlights) {
                 val colorBar = hl.color?.let { "![color]($it) " } ?: ""
                 sb.appendLine("> $colorBar\"${hl.text}\" — ${dateFormat.format(Date(hl.timestamp))}")

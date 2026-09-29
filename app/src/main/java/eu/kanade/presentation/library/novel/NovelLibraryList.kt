@@ -82,7 +82,10 @@ internal fun NovelLibraryList(
                 },
                 onLongClick = { onLongClick(libraryItem.libraryNovel) },
                 onClick = { onClick(libraryItem.libraryNovel) },
-                onClickContinueViewing = if (onClickContinueReading != null && libraryItem.unreadCount > 0 && isEntryLocked?.invoke(novel.id) != true) {
+                onClickContinueViewing = if (onClickContinueReading != null &&
+                    libraryItem.unreadCount > 0 &&
+                    isEntryLocked?.invoke(novel.id) != true
+                ) {
                     { onClickContinueReading(libraryItem.libraryNovel) }
                 } else {
                     null

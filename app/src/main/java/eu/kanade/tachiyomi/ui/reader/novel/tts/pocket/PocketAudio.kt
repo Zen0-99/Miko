@@ -45,12 +45,16 @@ object PocketAudio {
 
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         require(
-            bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
-                bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte(),
+            bytes[0] == 'R'.code.toByte() &&
+                bytes[1] == 'I'.code.toByte() &&
+                bytes[2] == 'F'.code.toByte() &&
+                bytes[3] == 'F'.code.toByte(),
         ) { "$file: not a RIFF file" }
         require(
-            bytes[8] == 'W'.code.toByte() && bytes[9] == 'A'.code.toByte() &&
-                bytes[10] == 'V'.code.toByte() && bytes[11] == 'E'.code.toByte(),
+            bytes[8] == 'W'.code.toByte() &&
+                bytes[9] == 'A'.code.toByte() &&
+                bytes[10] == 'V'.code.toByte() &&
+                bytes[11] == 'E'.code.toByte(),
         ) { "$file: not a WAVE file" }
 
         // Walk the chunks looking for `fmt ` and `data`. We can't rely on

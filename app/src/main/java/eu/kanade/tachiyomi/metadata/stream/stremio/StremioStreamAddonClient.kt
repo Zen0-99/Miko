@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.metadata.stream.stremio
 
+import eu.kanade.tachiyomi.metadata.miko.dto.StremioManifestDto
 import eu.kanade.tachiyomi.metadata.miko.dto.StremioStreamDto
 import eu.kanade.tachiyomi.metadata.miko.dto.StremioStreamResponse
 import eu.kanade.tachiyomi.network.GET
@@ -25,6 +26,25 @@ class StremioStreamAddonClient(
     private val json: Json,
 ) {
     private val client: OkHttpClient get() = networkHelper.client
+
+    private val manifestCache = java.util.concurrent.ConcurrentHashMap<String, StremioManifestDto?>()
+
+    /**
+     * Fetch an addon's manifest (name + logo), cached per base URL.
+     * Null when the addon doesn't serve a manifest.
+     */
+    suspend fun getManifest(addonBaseUrl: String): StremioManifestDto? {
+        if (manifestCache.containsKey(addonBaseUrl)) return manifestCache[addonBaseUrl]
+        val manifest = try {
+            val response = client.newCall(GET("$addonBaseUrl/manifest.json")).awaitSuccess()
+            with(json) { response.parseAs<StremioManifestDto>() }
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN, e) { "StremioStreamAddonClient: manifest fetch failed for $addonBaseUrl" }
+            null
+        }
+        manifestCache[addonBaseUrl] = manifest
+        return manifest
+    }
 
     /**
      * Fetch streams for a movie from a Stremio addon.

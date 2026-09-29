@@ -4,9 +4,9 @@ import eu.kanade.domain.source.service.SourcePreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import tachiyomi.domain.source.novel.model.NovelSource
 import tachiyomi.domain.source.novel.model.Pin
 import tachiyomi.domain.source.novel.model.Pins
-import tachiyomi.domain.source.novel.model.NovelSource
 import tachiyomi.domain.source.novel.repository.NovelSourceRepository
 
 class GetEnabledNovelSources(

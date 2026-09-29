@@ -8,10 +8,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import miko.core.common.torrent.ProxyMode
-import miko.core.common.torrent.TorrentPreferences
-import miko.core.common.torrent.TorrentServerApi
-import miko.core.common.torrent.TorrentServerUtils
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.network.NetworkPreferences
@@ -21,6 +17,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import logcat.LogPriority
+import miko.core.common.torrent.ProxyMode
+import miko.core.common.torrent.TorrentPreferences
+import miko.core.common.torrent.TorrentServerApi
+import miko.core.common.torrent.TorrentServerUtils
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR

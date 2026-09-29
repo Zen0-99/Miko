@@ -58,13 +58,18 @@ class MigrateMangaAllScreenModel(
 
             val loadStart = System.currentTimeMillis()
             val mangas = mangaIds.mapNotNull { getManga.await(it) }
-            android.util.Log.i("MigrateManga", "getManga.await took ${System.currentTimeMillis() - loadStart}ms for ${mangas.size} mangas")
+            android.util.Log.i(
+                "MigrateManga",
+                "getManga.await took ${System.currentTimeMillis() - loadStart}ms for ${mangas.size} mangas",
+            )
 
             val items = mangas.map { manga ->
                 val cached = getCachedResult(manga.id)
                 val localCount = try {
                     getMangaWithChapters.awaitChapters(manga.id).size
-                } catch (_: Exception) { 0 }
+                } catch (_: Exception) {
+                    0
+                }
                 MigrationItem(
                     oldManga = manga,
                     oldChapterCount = oldChapterCountCache[manga.id] ?: localCount,
@@ -91,7 +96,10 @@ class MigrateMangaAllScreenModel(
                         mangaSemaphore.withPermit {
                             if (!isActive) return@withPermit
                             if (getCachedResult(manga.id) != null) {
-                                android.util.Log.i("MigrateManga", "Manga ${manga.id} '${manga.title}' — CACHED, skipping")
+                                android.util.Log.i(
+                                    "MigrateManga",
+                                    "Manga ${manga.id} '${manga.title}' — CACHED, skipping",
+                                )
                                 return@withPermit
                             }
                             if (mangaIds.size > 1) {
@@ -103,7 +111,10 @@ class MigrateMangaAllScreenModel(
                 }
                 jobs.awaitAll()
             }
-            android.util.Log.i("MigrateManga", "=== All searches done in ${System.currentTimeMillis() - searchAllStart}ms ===")
+            android.util.Log.i(
+                "MigrateManga",
+                "=== All searches done in ${System.currentTimeMillis() - searchAllStart}ms ===",
+            )
             mutableState.update { it.copy(allDone = true) }
             android.util.Log.i("MigrateManga", "=== init DONE total=${System.currentTimeMillis() - initStart}ms ===")
         }
@@ -129,7 +140,10 @@ class MigrateMangaAllScreenModel(
         if (sources.isEmpty()) {
             cacheResult(oldManga.id, MigrationStatus.NotFound, null, 0)
             updateItem(oldManga.id) { it.copy(status = MigrationStatus.NotFound, searchPhase = "") }
-            android.util.Log.i("MigrateManga", "searchForMatches — no sources, done in ${System.currentTimeMillis() - searchStart}ms")
+            android.util.Log.i(
+                "MigrateManga",
+                "searchForMatches — no sources, done in ${System.currentTimeMillis() - searchStart}ms",
+            )
             return
         }
 
@@ -153,19 +167,27 @@ class MigrateMangaAllScreenModel(
                         }
                         val searchMs = System.currentTimeMillis() - searchReqStart
                         val done = searchedCount.incrementAndGet()
-                        updateItem(oldManga.id) { it.copy(searchPhase = "Searching sources... ($done/${sources.size})") }
+                        updateItem(oldManga.id) {
+                            it.copy(searchPhase = "Searching sources... ($done/${sources.size})")
+                        }
 
                         if (results == null) {
                             android.util.Log.w("MigrateManga", "  [${source.name}] search TIMEOUT (${searchMs}ms)")
                             return@async
                         }
-                        android.util.Log.i("MigrateManga", "  [${source.name}] search=${searchMs}ms, ${results.mangas.size} results")
+                        android.util.Log.i(
+                            "MigrateManga",
+                            "  [${source.name}] search=${searchMs}ms, ${results.mangas.size} results",
+                        )
                         val best = results.mangas
                             .minByOrNull { result ->
                                 titleDistance(result.title, oldManga.title)
                             }
                         if (best == null) {
-                            android.util.Log.i("MigrateManga", "  [${source.name}] no best match from ${results.mangas.size} results")
+                            android.util.Log.i(
+                                "MigrateManga",
+                                "  [${source.name}] no best match from ${results.mangas.size} results",
+                            )
                             return@async
                         }
                         val dist = titleDistance(best.title, oldManga.title)
@@ -176,7 +198,7 @@ class MigrateMangaAllScreenModel(
                             source.getChapterList(localManga.toSManga()).size
                         } ?: 0
                         val chapMs = System.currentTimeMillis() - chapStart
-                        android.util.Log.i("MigrateManga", "  [${source.name}] chapters=${chapterCount} (${chapMs}ms)")
+                        android.util.Log.i("MigrateManga", "  [${source.name}] chapters=$chapterCount (${chapMs}ms)")
                         if (chapterCount > 0) {
                             matches.add(MatchCandidate(localManga, source, chapterCount))
                         }
@@ -208,7 +230,10 @@ class MigrateMangaAllScreenModel(
                 searchPhase = "",
             )
         }
-        android.util.Log.i("MigrateManga", "searchForMatches('${oldManga.title}') DONE in ${System.currentTimeMillis() - searchStart}ms — ${matches.size} matches, recommended=${recommended?.source?.name} (${recommended?.chapterCount} ch)")
+        android.util.Log.i(
+            "MigrateManga",
+            "searchForMatches('${oldManga.title}') DONE in ${System.currentTimeMillis() - searchStart}ms — ${matches.size} matches, recommended=${recommended?.source?.name} (${recommended?.chapterCount} ch)",
+        )
     }
 
     private fun getEnabledSources(): List<CatalogueSource> {

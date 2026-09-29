@@ -62,7 +62,7 @@ fun Screen.mangaUpdatesTab(
     }
 
     return TabContent(
-        titleRes = AYMR.strings.label_updates,
+        titleRes = AYMR.strings.carrier_manga_updates,
         searchEnabled = false,
         searchAvailable = true,
         searchPlaceholderText = MR.strings.search_hint_updates,

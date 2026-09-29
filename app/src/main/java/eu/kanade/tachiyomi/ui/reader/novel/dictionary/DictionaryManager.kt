@@ -3,10 +3,10 @@ package eu.kanade.tachiyomi.ui.reader.novel.dictionary
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
+import org.json.JSONArray
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.GZIPInputStream
-import org.json.JSONArray
 
 class DictionaryManager private constructor(context: Context) {
     private val appContext = context.applicationContext
@@ -117,7 +117,7 @@ class DictionaryManager private constructor(context: Context) {
         val stems = mutableListOf<String>()
 
         // 1. Irregular verb forms — check first, before suffix rules.
-        IRREGULAR_VERBS[word]?.let { stems.add(it) }
+        irregularVerbs[word]?.let { stems.add(it) }
 
         // 2. Doubled consonant patterns (e.g. "shrugged" → "shrug", "stopped" → "stop")
         //    "shrugged" → drop "ed" → "shrugg" → not a word, but "shrug" is
@@ -207,7 +207,7 @@ class DictionaryManager private constructor(context: Context) {
      * cannot — e.g. "fought" → "fight", "shrugged" → "shrug" (though
      * "shrugged" is also handled by the doubled-consonant rule above).
      */
-    private val IRREGULAR_VERBS = mapOf(
+    private val irregularVerbs = mapOf(
         // A
         "arose" to "arise", "arisen" to "arise",
         "am" to "be", "is" to "be", "are" to "be", "was" to "be", "were" to "be", "been" to "be",

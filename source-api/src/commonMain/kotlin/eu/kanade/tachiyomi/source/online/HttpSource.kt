@@ -11,6 +11,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,9 +20,12 @@ import okhttp3.Response
 import rx.Observable
 import tachiyomi.core.common.util.lang.awaitSingle
 import uy.kohesive.injekt.injectLazy
+import java.lang.reflect.Modifier
 import java.net.URI
 import java.net.URISyntaxException
 import java.security.MessageDigest
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 /**
  * A simple implementation for sources from a website.
@@ -116,6 +121,152 @@ abstract class HttpSource : CatalogueSource {
     override fun toString() = "$name (${lang.uppercase()})"
 
     /**
+     * New-style generated sources (keiyoushi `Generated` factories) implement
+     * the renamed suspend API instead of the legacy `*Request`/`*Parse`
+     * abstract methods, so a legacy dispatch hits AbstractMethodError.
+     * Details + chapters are fetched through a combined
+     * `getMangaUpdate(manga, chapters, updateDetails, updateChapters)`
+     * endpoint returning a Pair (or a manga/chapter DTO); some variants
+     * instead expose separate `fetchDetails`/`fetchChapters` suspends.
+     * Probed once per instance; entry points below delegate accordingly.
+     */
+    private val generatedUpdateMethod by lazy {
+        // `getMangaUpdate` on older generated builds, `fetchMangaUpdate` on
+        // newer KeiSource builds — same (manga, chapters, fetchDetails,
+        // fetchChapters) signature.
+        javaClass.methods.firstOrNull {
+            (it.name == "getMangaUpdate" || it.name == "fetchMangaUpdate") && it.parameterCount == 5
+        }
+    }
+    private val generatedFetchChapters by lazy {
+        javaClass.methods.firstOrNull { it.name == "fetchChapters" && it.parameterCount == 2 }
+    }
+    private val generatedFetchDetails by lazy {
+        javaClass.methods.firstOrNull { it.name == "fetchDetails" && it.parameterCount == 2 }
+    }
+    private val generatedSearchMangaList by lazy {
+        // KeiSource exposes search as `getSearchMangaList` rather than `getSearchManga`.
+        javaClass.methods.firstOrNull { it.name == "getSearchMangaList" && it.parameterCount == 4 }
+    }
+
+    /**
+     * True when the concrete class actually implemented the given legacy
+     * `*Parse` method. Generated sources skip the abstract parsers entirely
+     * (some implement `getMangaUpdate`, others only override the suspend
+     * entry points) — dispatching to an unimplemented parser is what caused
+     * AbstractMethodError at runtime.
+     */
+    private fun isParseMethodImplemented(name: String): Boolean {
+        var c: Class<*>? = javaClass
+        while (c != null) {
+            try {
+                return !Modifier.isAbstract(
+                    c.getDeclaredMethod(name, Response::class.java).modifiers,
+                )
+            } catch (e: NoSuchMethodException) {
+                c = c.superclass
+            }
+        }
+        return false
+    }
+
+    /** Invokes a suspend function reflectively (args + trailing Continuation). */
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun <T> callGeneratedSuspend(name: String, vararg args: Any?): T {
+        val method = javaClass.methods.first { it.name == name && it.parameterCount == args.size + 1 }
+        return try {
+            suspendCoroutine<Any?> { cont ->
+                val result = method.invoke(this, *args, cont)
+                if (result !== kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED) cont.resume(result)
+            } as T
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            throw e.cause ?: e
+        }
+    }
+
+    /** Extracts the manga half of a getMangaUpdate result (Pair or DTO). */
+    private fun generatedManga(result: Any?): SManga? {
+        if (result is Pair<*, *>) return result.first as? SManga
+        if (result == null) return null
+        return runCatching { result.javaClass.getMethod("component1").invoke(result) }.getOrNull() as? SManga
+            ?: runCatching { result.javaClass.getMethod("getManga").invoke(result) }.getOrNull() as? SManga
+    }
+
+    /** Extracts the chapter list half of a getMangaUpdate result (Pair or DTO). */
+    @Suppress("UNCHECKED_CAST")
+    private fun generatedChapters(result: Any?): List<SChapter> {
+        if (result is Pair<*, *>) return result.second as? List<SChapter> ?: emptyList()
+        if (result == null) return emptyList()
+        return (
+            runCatching { result.javaClass.getMethod("component2").invoke(result) }.getOrNull()
+                ?: runCatching { result.javaClass.getMethod("getChapters").invoke(result) }.getOrNull()
+            ) as? List<SChapter> ?: emptyList()
+    }
+
+    /**
+     * Generated sources guard the combined update endpoint against concurrent
+     * calls for the same manga (`getMangaUpdate must not be called
+     * concurrently`), and the detail refresh path issues getMangaDetails +
+     * getChapterList in parallel — both of which route here. Serialize calls
+     * and share one result over a short window so the parallel pair costs a
+     * single fetch instead of throwing.
+     */
+    private val generatedUpdateMutex = kotlinx.coroutines.sync.Mutex()
+    private val generatedUpdateCache = HashMap<String, Pair<Long, Any?>>()
+
+    private companion object {
+        const val UPDATE_CACHE_MS = 30_000L
+    }
+
+    private suspend fun generatedMangaUpdate(manga: SManga): Any? {
+        return generatedUpdateMutex.withLock {
+            val cached = generatedUpdateCache[manga.url]
+            if (cached != null &&
+                System.currentTimeMillis() - cached.first < UPDATE_CACHE_MS
+            ) {
+                return@withLock cached.second
+            }
+            callGeneratedSuspend<Any?>(
+                generatedUpdateMethod!!.name,
+                manga,
+                emptyList<SChapter>(),
+                true,
+                true,
+            ).also { generatedUpdateCache[manga.url] = System.currentTimeMillis() to it }
+        }
+    }
+
+    // Recursion guards — generated sources that don't override these suspend
+    // entry points would otherwise bounce fetch* → get* → fetch* forever.
+
+    @Suppress("DEPRECATION")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        if (!isParseMethodImplemented("popularMangaParse")) {
+            error("Source ${javaClass.name} implements no supported popular-manga API")
+        }
+        return fetchPopularManga(page).awaitSingle()
+    }
+
+    @Suppress("DEPRECATION")
+    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
+        if (generatedSearchMangaList != null) {
+            return callGeneratedSuspend("getSearchMangaList", page, query, filters)
+        }
+        if (!isParseMethodImplemented("searchMangaParse")) {
+            error("Source ${javaClass.name} implements no supported search API")
+        }
+        return fetchSearchManga(page, query, filters).awaitSingle()
+    }
+
+    @Suppress("DEPRECATION")
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (!isParseMethodImplemented("latestUpdatesParse")) {
+            error("Source ${javaClass.name} implements no supported latest-updates API")
+        }
+        return fetchLatestUpdates(page).awaitSingle()
+    }
+
+    /**
      * Returns an observable containing a page with a list of manga. Normally it's not needed to
      * override this method.
      *
@@ -123,6 +274,9 @@ abstract class HttpSource : CatalogueSource {
      */
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getPopularManga"))
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        if (!isParseMethodImplemented("popularMangaParse")) {
+            return Observable.fromCallable { runBlocking { getPopularManga(page) } }
+        }
         return client.newCall(popularMangaRequest(page))
             .asObservableSuccess()
             .map { response ->
@@ -158,6 +312,9 @@ abstract class HttpSource : CatalogueSource {
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
+        if (!isParseMethodImplemented("searchMangaParse")) {
+            return Observable.fromCallable { runBlocking { getSearchManga(page, query, filters) } }
+        }
         return Observable.defer {
             try {
                 client.newCall(searchMangaRequest(page, query, filters)).asObservableSuccess()
@@ -195,6 +352,9 @@ abstract class HttpSource : CatalogueSource {
      */
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getLatestUpdates"))
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        if (!isParseMethodImplemented("latestUpdatesParse")) {
+            return Observable.fromCallable { runBlocking { getLatestUpdates(page) } }
+        }
         return client.newCall(latestUpdatesRequest(page))
             .asObservableSuccess()
             .map { response ->
@@ -225,11 +385,25 @@ abstract class HttpSource : CatalogueSource {
      */
     @Suppress("DEPRECATION")
     override suspend fun getMangaDetails(manga: SManga): SManga {
+        if (generatedFetchDetails != null) {
+            return generatedUpdateMutex.withLock {
+                callGeneratedSuspend("fetchDetails", manga)
+            }
+        }
+        if (generatedUpdateMethod != null) {
+            return generatedManga(generatedMangaUpdate(manga)) ?: manga
+        }
+        if (!isParseMethodImplemented("mangaDetailsParse")) {
+            error("Source ${javaClass.name} implements no supported manga-details API")
+        }
         return fetchMangaDetails(manga).awaitSingle()
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getMangaDetails"))
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        if (!isParseMethodImplemented("mangaDetailsParse")) {
+            return Observable.fromCallable { runBlocking { getMangaDetails(manga) } }
+        }
         return client.newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
             .map { response ->
@@ -263,11 +437,25 @@ abstract class HttpSource : CatalogueSource {
      */
     @Suppress("DEPRECATION")
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
+        if (generatedFetchChapters != null) {
+            return generatedUpdateMutex.withLock {
+                callGeneratedSuspend("fetchChapters", manga)
+            }
+        }
+        if (generatedUpdateMethod != null) {
+            return generatedChapters(generatedMangaUpdate(manga))
+        }
+        if (!isParseMethodImplemented("chapterListParse")) {
+            error("Source ${javaClass.name} implements no supported chapter-list API")
+        }
         return fetchChapterList(manga).awaitSingle()
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getChapterList"))
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        if (!isParseMethodImplemented("chapterListParse")) {
+            return Observable.fromCallable { runBlocking { getChapterList(manga) } }
+        }
         return client.newCall(chapterListRequest(manga))
             .asObservableSuccess()
             .map { response ->
@@ -308,11 +496,17 @@ abstract class HttpSource : CatalogueSource {
      */
     @Suppress("DEPRECATION")
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (!isParseMethodImplemented("pageListParse")) {
+            error("Source ${javaClass.name} implements no supported page-list API")
+        }
         return fetchPageList(chapter).awaitSingle()
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getPageList"))
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        if (!isParseMethodImplemented("pageListParse")) {
+            return Observable.fromCallable { runBlocking { getPageList(chapter) } }
+        }
         return client.newCall(pageListRequest(chapter))
             .asObservableSuccess()
             .map { response ->

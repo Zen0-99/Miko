@@ -1,8 +1,8 @@
 package eu.kanade.domain.entries.novel.model
 
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.data.cache.NovelCoverCache
 import eu.kanade.tachiyomi.novelsource.model.SNovel
-import eu.kanade.domain.base.BasePreferences
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.entries.novel.model.Novel
 import uy.kohesive.injekt.Injekt

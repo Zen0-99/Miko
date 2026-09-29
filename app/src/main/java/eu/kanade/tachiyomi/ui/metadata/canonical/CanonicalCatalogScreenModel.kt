@@ -83,6 +83,13 @@ class CanonicalCatalogScreenModel(
         val browseHasMore: Boolean = false,
         val browseLoading: Boolean = false,
         val browseError: String? = null,
+        /**
+         * `mikoWorkId` → local library entry id for works a favorited
+         * extension row already covers (normalized-title match). Cards
+         * show the in-library badge and taps open the local entry — the
+         * canonical row would fork library state.
+         */
+        val boundEntryIds: Map<String, Long> = emptyMap(),
     )
 
     private val resolver: WorkIdResolver by injectLazy()
@@ -111,6 +118,7 @@ class CanonicalCatalogScreenModel(
             it.copy(
                 medium = medium,
                 results = emptyList(),
+                boundEntryIds = emptyMap(),
                 // The feed is carrier-keyed — drop it; the composable
                 // selects the new carrier's feed right after.
                 browseFeed = null,
@@ -132,7 +140,10 @@ class CanonicalCatalogScreenModel(
             }
             try {
                 val results = catalog.search(query, state.value.medium)
-                mutableState.update { it.copy(loading = false, results = results) }
+                val bound = catalog.localLibraryEntryIds(results, state.value.medium)
+                mutableState.update {
+                    it.copy(loading = false, results = results, boundEntryIds = bound)
+                }
             } catch (e: Exception) {
                 logcat(LogPriority.ERROR, e) { "canonical catalog search failed" }
                 mutableState.update {
@@ -146,7 +157,15 @@ class CanonicalCatalogScreenModel(
     }
 
     fun clearSearch() {
-        mutableState.update { it.copy(results = emptyList(), searchQuery = null, loading = false, error = null) }
+        mutableState.update {
+            it.copy(
+                results = emptyList(),
+                searchQuery = null,
+                loading = false,
+                error = null,
+                boundEntryIds = emptyMap(),
+            )
+        }
     }
 
     fun retry() {
@@ -177,12 +196,35 @@ class CanonicalCatalogScreenModel(
                 browseHasMore = cached?.hasMore ?: false,
                 browseLoading = cached == null,
                 browseError = null,
+                // Binding set is recomputed when the page lands —
+                // a cached page's ids can sit stale until then.
+                boundEntryIds = emptyMap(),
             )
         }
         if (cached == null) {
             screenModelScope.launch { loadBrowsePage(feed, kindsCsv, page = 1, append = false) }
+        } else {
+            screenModelScope.launch {
+                val bound = catalog.localLibraryEntryIds(
+                    cached.items.map { it.work }, feed.substringBefore(FEED_SEPARATOR),
+                )
+                mutableState.update { s ->
+                    if (s.browseFeed == feed) s.copy(boundEntryIds = bound) else s
+                }
+            }
         }
     }
+
+    /**
+     * Snapshot of a feed's cached items without making it live — pager
+     * pages preview their own pill's feed during a swipe (the settled
+     * page owns [State.browseItems]). Empty when nothing is cached.
+     */
+    fun peekCachedFeed(medium: String, kindsCsv: String?): List<CatalogItem> =
+        feedCache[feedKey(medium, kindsCsv)]
+            ?.takeIf { System.currentTimeMillis() - it.timestamp < CACHE_MS }
+            ?.items
+            .orEmpty()
 
     /** Next page for the live feed — no-op while a load runs or the
      *  feed is single-page (OpenLibrary trending has no offset). */
@@ -227,11 +269,19 @@ class CanonicalCatalogScreenModel(
                 return
             }
             feedCache[feed] = FeedCache(items, page = 1, hasMore = false, timestamp = System.currentTimeMillis())
+            val medium = feed.substringBefore(FEED_SEPARATOR)
+            val bound = catalog.localLibraryEntryIds(items.map { it.work }, medium)
             mutableState.update { s ->
                 if (s.browseFeed != feed) {
                     s
                 } else {
-                    s.copy(browseItems = items, browsePage = 1, browseHasMore = false, browseLoading = false)
+                    s.copy(
+                        browseItems = items,
+                        browsePage = 1,
+                        browseHasMore = false,
+                        browseLoading = false,
+                        boundEntryIds = bound,
+                    )
                 }
             }
             return
@@ -262,6 +312,7 @@ class CanonicalCatalogScreenModel(
             result.items.map { it.toCatalogItem() }
         }
         feedCache[feed] = FeedCache(merged, result.page, result.hasMore, System.currentTimeMillis())
+        val bound = catalog.localLibraryEntryIds(merged.map { it.work }, medium)
         mutableState.update { s ->
             if (s.browseFeed != feed) {
                 s
@@ -272,6 +323,7 @@ class CanonicalCatalogScreenModel(
                     browseHasMore = result.hasMore,
                     browseLoading = false,
                     browseError = null,
+                    boundEntryIds = bound,
                 )
             }
         }
@@ -329,13 +381,21 @@ class CanonicalCatalogScreenModel(
      * database id to navigate to (MangaScreen / NovelScreen). The
      * explicit [medium] keeps the pick correct even if the row was
      * tapped while a carrier switch is still settling.
+     *
+     * When a favorited extension row already covers the work the tap
+     * opens THAT row instead — the library and discovery surfaces point
+     * at one entry, and read/tracking/download state is untouched. A
+     * canonical row here would fork the user's progress.
      */
-    suspend fun materializeEntryId(work: WorkRow, medium: String): Long =
-        if (medium == WorkIdResolver.MEDIUM_BOOKS) {
+    suspend fun materializeEntryId(work: WorkRow, medium: String): Long {
+        state.value.boundEntryIds[work.mikoWorkId]?.let { return it }
+        catalog.localLibraryEntryId(work, medium)?.let { return it }
+        return if (medium == WorkIdResolver.MEDIUM_BOOKS) {
             catalog.materializeNovelId(work)
         } else {
             catalog.materializeMangaId(work)
         }
+    }
 
     /**
      * Materializes the canonical entry row for [work] and returns the

@@ -6,14 +6,12 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.Spannable
 import android.text.SpannableString
-import android.text.Spanned
-import android.text.style.BackgroundColorSpan
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -160,6 +158,7 @@ class TextAdapter(
     @Volatile
     var ttsRangeStart: Int = -1
         private set
+
     @Volatile
     var ttsRangeEnd: Int = -1
         private set
@@ -173,9 +172,13 @@ class TextAdapter(
      * Rebinds the previous and current rows so the highlight moves.
      */
     fun setTtsPlayback(position: Int, rangeStart: Int, rangeEnd: Int, color: Int) {
-        if (position == ttsActivePosition && rangeStart == ttsRangeStart &&
-            rangeEnd == ttsRangeEnd && color == ttsHighlightColor
-        ) return
+        if (position == ttsActivePosition &&
+            rangeStart == ttsRangeStart &&
+            rangeEnd == ttsRangeEnd &&
+            color == ttsHighlightColor
+        ) {
+            return
+        }
         val previous = ttsActivePosition
         ttsActivePosition = position
         ttsRangeStart = rangeStart
@@ -232,6 +235,7 @@ class TextAdapter(
 
         // Track the latest touch position for use in onLongClick.
         @Volatile private var latestTouchX: Float = 0f
+
         @Volatile private var latestTouchY: Float = 0f
 
         // Re-enable text selection when the view is (re-)attached to the window.
@@ -340,11 +344,14 @@ class TextAdapter(
                 textView.setTextIsSelectable(config.isTextSelectable)
 
                 if (config.isTextSelectable && activity != null) {
-                    val colors = if (highlightColors.isNotEmpty()) highlightColors
-                    else HighlightColorUtils.computeColors(
-                        android.graphics.Color.parseColor("#3E7BFA"),
-                        config.backgroundColor,
-                    )
+                    val colors = if (highlightColors.isNotEmpty()) {
+                        highlightColors
+                    } else {
+                        HighlightColorUtils.computeColors(
+                            android.graphics.Color.parseColor("#3E7BFA"),
+                            config.backgroundColor,
+                        )
+                    }
                     val callback = NovelSelectionActionModeCallback(
                         activity = activity,
                         textView = textView,
@@ -390,7 +397,11 @@ class TextAdapter(
                                 // range-select mode and the user taps a paragraph,
                                 // complete the range selection.
                                 val adapter = getAdapter?.invoke()
-                                if (adapter != null && adapter.rangeSelectStart != null && duration < 400 && distance < touchSlop * 2) {
+                                if (adapter != null &&
+                                    adapter.rangeSelectStart != null &&
+                                    duration < 400 &&
+                                    distance < touchSlop * 2
+                                ) {
                                     val start = adapter.rangeSelectStart!!
                                     if (bindingAdapterPosition != start) {
                                         adapter.completeRangeSelection(bindingAdapterPosition)
@@ -412,7 +423,15 @@ class TextAdapter(
                                             val spanStart = spannable.getSpanStart(span)
                                             val spanEnd = spannable.getSpanEnd(span)
                                             val highlightText = spannable.substring(spanStart, spanEnd)
-                                            showHighlightActions(textView, highlightText, spanStart, spanEnd, item, event.rawX, event.rawY)
+                                            showHighlightActions(
+                                                textView,
+                                                highlightText,
+                                                spanStart,
+                                                spanEnd,
+                                                item,
+                                                event.rawX,
+                                                event.rawY,
+                                            )
                                             return@setOnTouchListener true
                                         }
                                     }

@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,7 +15,6 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
-import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,9 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import eu.kanade.presentation.collection.visualName
 import tachiyomi.domain.collection.model.Collection
-import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.TabText
-import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
 internal fun LibraryTabs(
@@ -111,8 +106,11 @@ internal fun LibraryTabs(
                 ) {
                     if (sortDescending != null) {
                         Icon(
-                            imageVector = if (sortDescending) Icons.Outlined.ArrowDownward
-                                          else Icons.Outlined.ArrowUpward,
+                            imageVector = if (sortDescending) {
+                                Icons.Outlined.ArrowDownward
+                            } else {
+                                Icons.Outlined.ArrowUpward
+                            },
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,

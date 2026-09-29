@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +47,7 @@ fun ReaderAppBars(
     onClickTopAppBar: () -> Unit,
     bookmarked: Boolean,
     onToggleBookmarked: () -> Unit,
+    onOpenComments: (() -> Unit)?,
     onOpenInWebView: (() -> Unit)?,
     onOpenInBrowser: (() -> Unit)?,
     onShare: (() -> Unit)?,
@@ -120,6 +122,15 @@ fun ReaderAppBars(
                                         onClick = onToggleBookmarked,
                                     ),
                                 )
+                                onOpenComments?.let {
+                                    add(
+                                        AppBar.Action(
+                                            title = stringResource(MR.strings.comments_title),
+                                            icon = Icons.AutoMirrored.Outlined.Comment,
+                                            onClick = it,
+                                        ),
+                                    )
+                                }
                                 onOpenInWebView?.let {
                                     add(
                                         AppBar.OverflowAction(

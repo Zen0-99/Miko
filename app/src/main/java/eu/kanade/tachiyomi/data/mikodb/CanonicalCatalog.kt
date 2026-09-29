@@ -4,8 +4,10 @@ import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.source.model.SManga
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.entries.manga.model.Manga
+import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.novel.repository.NovelRepository
 import uy.kohesive.injekt.injectLazy
 
 /**
@@ -26,6 +28,8 @@ class CanonicalCatalog {
     private val bridge: MangaNovelIdBridge by injectLazy()
     private val networkToLocalManga: NetworkToLocalManga by injectLazy()
     private val networkToLocalNovel: NetworkToLocalNovel by injectLazy()
+    private val mangaRepository: MangaRepository by injectLazy()
+    private val novelRepository: NovelRepository by injectLazy()
 
     /** Ranked catalog hits for [medium] ("manga" | "books"). */
     suspend fun search(
@@ -74,6 +78,63 @@ class CanonicalCatalog {
         )
         return networkToLocalNovel.await(novel).id
     }
+
+    /**
+     * Local library rows bound to [works] — favorited extension entries
+     * whose normalized title matches any of the work's titles, keyed by
+     * `mikoWorkId`. Discovery routes a bound work's tap to the local row
+     * instead of materializing a parallel canonical one: read/tracking/
+     * download state lives on the user's entry, and the unifier's
+     * favorites-never-redirect rule already names it the right surface
+     * (same proven-carrier signal [GoldenSources] uses, resolved to
+     * rows). Author is checked when both sides carry one — extension
+     * author strings differ in shape, so containment counts as a match.
+     */
+    suspend fun localLibraryEntryIds(
+        works: List<MangaNovelIdBridge.WorkRow>,
+        medium: String,
+    ): Map<String, Long> {
+        if (works.isEmpty()) return emptyMap()
+        val rows: List<BoundRow> = if (medium == WorkIdResolver.MEDIUM_BOOKS) {
+            novelRepository.getNovelFavorites()
+                .filter { it.source != CANONICAL_SOURCE_ID }
+                .map { BoundRow(it.id, it.title, it.author) }
+        } else {
+            mangaRepository.getMangaFavorites()
+                .filter { it.source != CANONICAL_SOURCE_ID }
+                .map { BoundRow(it.id, it.title, it.author) }
+        }
+        if (rows.isEmpty()) return emptyMap()
+
+        val bound = HashMap<String, Long>()
+        for (work in works) {
+            val wanted = listOfNotNull(work.title, work.romanizedTitle, work.nativeTitle)
+                .map(TitleNormalizer::normalize)
+                .filter { it.isNotEmpty() }
+                .toSet()
+            if (wanted.isEmpty()) continue
+            val workAuthor = TitleNormalizer.normalize(work.author)
+            val hit = rows.firstOrNull { row ->
+                TitleNormalizer.normalize(row.title) in wanted &&
+                    authorFits(row.author, workAuthor)
+            } ?: continue
+            bound[work.mikoWorkId] = hit.id
+        }
+        return bound
+    }
+
+    /** Single-work convenience of [localLibraryEntryIds]. */
+    suspend fun localLibraryEntryId(work: MangaNovelIdBridge.WorkRow, medium: String): Long? =
+        localLibraryEntryIds(listOf(work), medium)[work.mikoWorkId]
+
+    private fun authorFits(entryAuthor: String?, workAuthor: String): Boolean =
+        workAuthor.isEmpty() ||
+            entryAuthor.isNullOrBlank() ||
+            TitleNormalizer.normalize(entryAuthor).let {
+                it == workAuthor || it.contains(workAuthor) || workAuthor.contains(it)
+            }
+
+    private class BoundRow(val id: Long, val title: String?, val author: String?)
 
     companion object {
         /**

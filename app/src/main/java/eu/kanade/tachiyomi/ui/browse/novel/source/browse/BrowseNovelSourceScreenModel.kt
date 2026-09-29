@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.ui.browse.novel.source.browse
 
-import android.util.Log
 import android.content.res.Configuration
+import android.util.Log
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -10,16 +10,14 @@ import androidx.compose.ui.unit.dp
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
-import androidx.paging.filter
 import androidx.paging.map
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.preference.asState
+import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.domain.entries.novel.model.toDomainNovel
 import eu.kanade.domain.savedsearches.novel.NovelFilterSerializer
 import eu.kanade.domain.source.service.SourcePreferences
-import eu.kanade.domain.entries.novel.interactor.UpdateNovel
-import tachiyomi.domain.entries.novel.model.NovelUpdate
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
@@ -29,9 +27,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
@@ -44,13 +41,14 @@ import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.source.novel.interactor.GetRemoteNovel
-import tachiyomi.domain.source.novel.service.NovelSourceManager
+import tachiyomi.domain.savedsearches.model.SavedSearch
 import tachiyomi.domain.savedsearches.novel.interactor.DeleteNovelSavedSearch
 import tachiyomi.domain.savedsearches.novel.interactor.GetNovelSavedSearches
 import tachiyomi.domain.savedsearches.novel.interactor.InsertNovelSavedSearch
-import tachiyomi.domain.savedsearches.model.SavedSearch
+import tachiyomi.domain.source.novel.interactor.GetRemoteNovel
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

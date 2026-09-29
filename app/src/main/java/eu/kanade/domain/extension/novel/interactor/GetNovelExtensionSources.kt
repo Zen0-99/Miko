@@ -1,8 +1,8 @@
 package eu.kanade.domain.extension.novel.interactor
 
 import eu.kanade.domain.source.service.SourcePreferences
-import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
+import eu.kanade.tachiyomi.novelsource.NovelSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 

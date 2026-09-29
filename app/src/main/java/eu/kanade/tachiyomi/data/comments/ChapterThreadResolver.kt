@@ -28,7 +28,7 @@ class ChapterThreadResolver(
      * unusable. No alignment check — episode numbers come from Cinemeta
      * (canonical), not from sources.
      */
-    fun animeEpisode(workId: String, episodeNumber: Float): String? {
+    fun episode(workId: String, episodeNumber: Float): String? {
         if (episodeNumber <= 0f) return null
         return ChapterBinder.bindEpisode(workId, episodeNumber)
     }

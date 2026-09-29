@@ -1,24 +1,39 @@
 ﻿package eu.kanade.tachiyomi.ui.reader.novel
 
 import android.app.Activity
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.graphics.Typeface
-import android.os.IBinder
-import android.text.Spanned
+import android.speech.tts.TextToSpeech
 import android.text.Html
 import android.text.SpannableString
-import android.speech.tts.TextToSpeech
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import android.text.Spanned
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.tachiyomi.novelsource.model.NovelComment
-import eu.kanade.tachiyomi.novelsource.model.SNovelChapterImpl
+import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
-import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
+import eu.kanade.tachiyomi.novelsource.model.SNovelChapterImpl
+import eu.kanade.tachiyomi.ui.reader.novel.tts.EngineFilesDir
+import eu.kanade.tachiyomi.ui.reader.novel.tts.EngineInstaller
+import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NativeEngineHandle
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackService
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackState
+import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsServiceConnection
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
+import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
+import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoicePreviewer
+import eu.kanade.tachiyomi.ui.reader.novel.tts.UrlHttpFetcher
+import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
+import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterRender
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.tachiyomi.ui.webview.WebViewActivity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,43 +45,22 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.asNovelCover
-import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
-import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
-import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
-import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackService
-import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackState
-import eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsServiceConnection
-import eu.kanade.tachiyomi.ui.webview.WebViewActivity
-import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.history.novel.interactor.UpsertNovelHistory
 import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
+import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
+import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
-import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterRender
-import eu.kanade.tachiyomi.ui.reader.novel.tts.EngineFilesDir
-import eu.kanade.tachiyomi.ui.reader.novel.tts.EngineInstaller
-import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
-import eu.kanade.tachiyomi.ui.reader.novel.tts.NativeEngineHandle
-import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketEngineCatalog
-import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
-import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoiceCatalog
-import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
-import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
-import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
-import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
-import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoicePreviewer
-import kotlinx.coroutines.launch
-import logcat.LogPriority
-import tachiyomi.core.common.util.system.logcat
-import eu.kanade.tachiyomi.ui.reader.novel.tts.UrlHttpFetcher
-import java.io.File
 
 class NovelReaderScreenModel(
     private val novelId: Long,
@@ -82,6 +76,7 @@ class NovelReaderScreenModel(
     private val downloadProvider: eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider = Injekt.get(),
     private val audioRenderManager: ChapterAudioRenderManager = Injekt.get(),
     private val updateNovelChapter: tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter = Injekt.get(),
+    private val basePreferences: eu.kanade.domain.base.BasePreferences = Injekt.get(),
     val preferences: NovelReaderPreferences = Injekt.get(),
     val readerPreferences: ReaderPreferences = Injekt.get(),
     val ttsPreferences: NovelTtsPreferences = Injekt.get(),
@@ -141,22 +136,17 @@ class NovelReaderScreenModel(
     private val _isChaptersSheetVisible = MutableStateFlow(false)
     val isChaptersSheetVisible = _isChaptersSheetVisible.asStateFlow()
 
-    // ===== Comments state =====
-    private val _isCommentsDialogVisible = MutableStateFlow(false)
-    val isCommentsDialogVisible = _isCommentsDialogVisible.asStateFlow()
+    // ===== Comments =====
+    private val _isCommentsSheetVisible = MutableStateFlow(false)
+    val isCommentsSheetVisible = _isCommentsSheetVisible.asStateFlow()
 
-    private val _comments = MutableStateFlow<List<NovelComment>>(emptyList())
-    val comments = _comments.asStateFlow()
+    /** Whether the native comments feature is enabled. */
+    val commentsEnabled: Boolean
+        get() = basePreferences.commentsEnabled().get()
 
-    private val _isLoadingComments = MutableStateFlow(false)
-    val isLoadingComments = _isLoadingComments.asStateFlow()
-
-    private val _commentsError = MutableStateFlow<String?>(null)
-    val commentsError = _commentsError.asStateFlow()
-
-    /** Whether the current source supports comments. */
-    val supportsComments: Boolean
-        get() = currentSource?.supportsComments == true
+    /** Name of the current chapter's source, used for comment thread resolution. */
+    val commentsSourceKey: String?
+        get() = currentSource?.name
 
     private val _progressPercent = MutableStateFlow(0)
     val progressPercent = _progressPercent.asStateFlow()
@@ -168,7 +158,7 @@ class NovelReaderScreenModel(
     // Theme colors pushed from the Compose side (MaterialTheme.colorScheme).
     // Updated via refreshTextConfig(themeBg, themeText) â€” kept as a StateFlow
     // so the combined textConfig flow below reacts to theme changes too.
-    private val _themeColors = MutableStateFlow<Pair<Int?, Int?>>(null to null)
+    private val themeColorsState = MutableStateFlow<Pair<Int?, Int?>>(null to null)
 
     /**
      * Flow-based TextConfig: auto-rebuilds whenever any text-affecting
@@ -238,7 +228,7 @@ class NovelReaderScreenModel(
         combine(
             preferences.pageEdgeShadowEnabled().changes(),
             preferences.pageEdgeShadowAlpha().changes(),
-            _themeColors,
+            themeColorsState,
         ) { pageShadowOn, pageShadowAlpha, (themeBg, themeText) ->
             buildTextConfigFromValues(
                 textSize = b5.b4.b3.b2.b1.textSize,
@@ -281,28 +271,41 @@ class NovelReaderScreenModel(
 
     // Intermediate batch data classes for the chained combine pattern.
     private data class TextConfigBatch1(
-        val textSize: Float, val lineHeight: Float,
-        val paragraphSpacing: Int, val sidePadding: Int,
+        val textSize: Float,
+        val lineHeight: Float,
+        val paragraphSpacing: Int,
+        val sidePadding: Int,
         val textAlignment: TextAlignment,
     )
     private data class TextConfigBatch2(
         val b1: TextConfigBatch1,
-        val bionicReading: Boolean, val forceBold: Boolean, val forceItalic: Boolean,
-        val forceParagraphIndent: Boolean, val preserveSourceTextAlign: Boolean,
+        val bionicReading: Boolean,
+        val forceBold: Boolean,
+        val forceItalic: Boolean,
+        val forceParagraphIndent: Boolean,
+        val preserveSourceTextAlign: Boolean,
     )
     private data class TextConfigBatch3(
         val b2: TextConfigBatch2,
-        val isTextSelectable: Boolean, val textShadowEnabled: Boolean,
-        val textShadowBlur: Float, val textShadowY: Float, val textShadowColor: String,
+        val isTextSelectable: Boolean,
+        val textShadowEnabled: Boolean,
+        val textShadowBlur: Float,
+        val textShadowY: Float,
+        val textShadowColor: String,
     )
     private data class TextConfigBatch4(
         val b3: TextConfigBatch3,
         val backgroundColorMode: NovelReaderBackgroundColor,
-        val backgroundColorCustom: Int, val textColorCustom: Int,
-        val eInkBinarization: Boolean, val smartFitMargins: Boolean,
+        val backgroundColorCustom: Int,
+        val textColorCustom: Int,
+        val eInkBinarization: Boolean,
+        val smartFitMargins: Boolean,
     )
     private data class Quad<A, B, C, D>(
-        val first: A, val second: B, val third: C, val fourth: D,
+        val first: A,
+        val second: B,
+        val third: C,
+        val fourth: D,
     )
 
     private data class TextConfigBatch5(
@@ -310,7 +313,8 @@ class NovelReaderScreenModel(
         val typographyPreset: NovelReaderTypographyPreset,
         val customFontFamily: String,
         val backgroundTexture: NovelReaderBackgroundTexture,
-        val textureStrength: Int, val oledEdgeGradient: Boolean,
+        val textureStrength: Int,
+        val oledEdgeGradient: Boolean,
         val edgeFadeEnabled: Boolean,
     )
 
@@ -430,7 +434,10 @@ class NovelReaderScreenModel(
         val targetLang = preferences.selectedTextTranslationTargetLang().get()
         _translationState.value = TranslationState.Loading(text)
         screenModelScope.launchIO {
-            val result = eu.kanade.tachiyomi.ui.reader.novel.translation.NovelTextTranslationService.translate(text, targetLang)
+            val result = eu.kanade.tachiyomi.ui.reader.novel.translation.NovelTextTranslationService.translate(
+                text,
+                targetLang,
+            )
             _translationState.value = if (result != null) {
                 TranslationState.Result(text, result, targetLang)
             } else {
@@ -939,7 +946,8 @@ class NovelReaderScreenModel(
         val (backgroundColor, textColor) = when (backgroundColorMode) {
             NovelReaderBackgroundColor.WHITE -> android.graphics.Color.WHITE to android.graphics.Color.BLACK
             NovelReaderBackgroundColor.BLACK -> android.graphics.Color.BLACK to android.graphics.Color.WHITE
-            NovelReaderBackgroundColor.GRAY -> android.graphics.Color.parseColor("#FF202020") to android.graphics.Color.WHITE
+            NovelReaderBackgroundColor.GRAY -> android.graphics.Color.parseColor("#FF202020") to
+                android.graphics.Color.WHITE
             NovelReaderBackgroundColor.CUSTOM -> backgroundColorCustom to textColorCustom
             NovelReaderBackgroundColor.SMART_THEME -> {
                 if (themeBackgroundColor != null && themeTextColor != null) {
@@ -1026,7 +1034,8 @@ class NovelReaderScreenModel(
         val (backgroundColor, textColor) = when (bgColorMode) {
             NovelReaderBackgroundColor.WHITE -> android.graphics.Color.WHITE to android.graphics.Color.BLACK
             NovelReaderBackgroundColor.BLACK -> android.graphics.Color.BLACK to android.graphics.Color.WHITE
-            NovelReaderBackgroundColor.GRAY -> android.graphics.Color.parseColor("#FF202020") to android.graphics.Color.WHITE
+            NovelReaderBackgroundColor.GRAY -> android.graphics.Color.parseColor("#FF202020") to
+                android.graphics.Color.WHITE
             NovelReaderBackgroundColor.CUSTOM -> {
                 preferences.backgroundColor().get() to preferences.textColor().get()
             }
@@ -1145,7 +1154,7 @@ class NovelReaderScreenModel(
      * are collected via flows, and theme changes flow through here.
      */
     fun refreshTextConfig(themeBackgroundColor: Int? = null, themeTextColor: Int? = null) {
-        _themeColors.value = themeBackgroundColor to themeTextColor
+        themeColorsState.value = themeBackgroundColor to themeTextColor
     }
 
     private fun isDark(context: Context): Boolean {
@@ -1301,15 +1310,20 @@ class NovelReaderScreenModel(
         val novel = _novel.value
         val source = currentSource
         val isLoadedCached = loadedChapterCache.containsKey(chapter.id)
-        val isDownloaded = novel != null && source != null && downloadManager.isChapterDownloaded(
-            chapterName = chapter.name,
-            chapterScanlator = chapter.scanlator,
-            novelTitle = novel.title,
-            sourceId = source.id,
-        )
+        val isDownloaded = novel != null &&
+            source != null &&
+            downloadManager.isChapterDownloaded(
+                chapterName = chapter.name,
+                chapterScanlator = chapter.scanlator,
+                novelTitle = novel.title,
+                sourceId = source.id,
+            )
         val isPrefetched = prefetchedChapterCache.containsKey(chapter.id)
         val isCached = isLoadedCached || isDownloaded || isPrefetched
-        android.util.Log.d("NovelReader", "loadChapter: isCached=$isCached (loadedCached=$isLoadedCached downloaded=$isDownloaded prefetched=$isPrefetched)")
+        android.util.Log.d(
+            "NovelReader",
+            "loadChapter: isCached=$isCached (loadedCached=$isLoadedCached downloaded=$isDownloaded prefetched=$isPrefetched)",
+        )
 
         if (!isCached) {
             _isLoading.value = true
@@ -1348,16 +1362,25 @@ class NovelReaderScreenModel(
                         // A blank/empty file means the download failed silently —
                         // fall back to prefetch cache or source fetch below.
                         htmlContent = fileContent.takeIf { it.isNotBlank() }
-                        android.util.Log.d("NovelReader", "loadChapter: downloaded file content length=${fileContent.length}, usable=${htmlContent != null}")
+                        android.util.Log.d(
+                            "NovelReader",
+                            "loadChapter: downloaded file content length=${fileContent.length}, usable=${htmlContent != null}",
+                        )
                     } else {
-                        android.util.Log.w("NovelReader", "loadChapter: isDownloaded=true but findChapterDir returned null!")
+                        android.util.Log.w(
+                            "NovelReader",
+                            "loadChapter: isDownloaded=true but findChapterDir returned null!",
+                        )
                     }
                 }
 
                 // Fall back to prefetched cache (instant load if prefetched)
                 if (htmlContent.isNullOrBlank()) {
                     prefetchedChapterCache.remove(chapter.id)?.let { cached ->
-                        android.util.Log.d("NovelReader", "loadChapter: using prefetched cache (length=${cached.length})")
+                        android.util.Log.d(
+                            "NovelReader",
+                            "loadChapter: using prefetched cache (length=${cached.length})",
+                        )
                         htmlContent = cached
                     }
                 }
@@ -1386,7 +1409,10 @@ class NovelReaderScreenModel(
                 ) { batch ->
                     // Phase 1 callback: show the initial batch immediately.
                     val batchWrapped = wrapWithNavigation(batch, chapter)
-                    android.util.Log.d("NovelReader", "loadChapter: initial batch ${batch.size} items shown in ${System.currentTimeMillis() - parseStart}ms")
+                    android.util.Log.d(
+                        "NovelReader",
+                        "loadChapter: initial batch ${batch.size} items shown in ${System.currentTimeMillis() - parseStart}ms",
+                    )
                     _contentItems.value = batchWrapped
                     resetLoadedChapters(chapter.id)
                     mutableState.update { it.copy(loading = false, error = null) }
@@ -1396,7 +1422,10 @@ class NovelReaderScreenModel(
                     // Restore saved scroll position after the initial batch is shown.
                     val saved = positionTracker.loadSavedPosition(chapter)
                     if (saved != null && (saved.characterPosition > 0 || saved.itemIndex > 0)) {
-                        android.util.Log.d("NovelReader", "loadChapter: restoring scroll pos (progressive) itemIndex=${saved.itemIndex} pixelOffset=${saved.pixelOffset}")
+                        android.util.Log.d(
+                            "NovelReader",
+                            "loadChapter: restoring scroll pos (progressive) itemIndex=${saved.itemIndex} pixelOffset=${saved.pixelOffset}",
+                        )
                         positionTracker.startReadingSession(saved.characterPosition)
                         pendingScrollRestore = Pair(saved.itemIndex, saved.pixelOffset)
                     } else {
@@ -1404,7 +1433,10 @@ class NovelReaderScreenModel(
                     }
                 }
 
-                android.util.Log.d("NovelReader", "loadChapter: full parse complete ${items.size} items in ${System.currentTimeMillis() - parseStart}ms")
+                android.util.Log.d(
+                    "NovelReader",
+                    "loadChapter: full parse complete ${items.size} items in ${System.currentTimeMillis() - parseStart}ms",
+                )
 
                 // If parsing yielded no paragraphs, the content is empty/corrupt.
                 if (items.isEmpty()) {
@@ -1412,7 +1444,8 @@ class NovelReaderScreenModel(
                         mutableState.update {
                             it.copy(
                                 loading = false,
-                                error = "This chapter has no readable content. The download may be corrupt or the source returned empty text.",
+                                error = "This chapter has no readable content. The download may be " +
+                                    "corrupt or the source returned empty text.",
                             )
                         }
                         _events.emit(NovelReaderEvent.ShowError("Chapter content is empty"))
@@ -1423,7 +1456,8 @@ class NovelReaderScreenModel(
                 wrappedItems = wrapWithNavigation(items, chapter)
 
                 // Persist total character count so the detail screen can show "% Read".
-                val totalCharCount = items.filterIsInstance<TextItem.Paragraph>().lastOrNull()?.endCharIndex?.plus(1) ?: 0
+                val totalCharCount =
+                    items.filterIsInstance<TextItem.Paragraph>().lastOrNull()?.endCharIndex?.plus(1) ?: 0
                 if (totalCharCount > 0 && chapter.id > 0) {
                     updateNovelChapter.await(
                         tachiyomi.domain.items.chapter.model.NovelChapterUpdate(
@@ -1449,17 +1483,26 @@ class NovelReaderScreenModel(
                 // the full list (92 items) is available, re-set
                 // pendingScrollRestore so the update callback can scroll to the
                 // correct position.
-                android.util.Log.d("NovelReader", "loadChapter: replacing initial batch with full list (${wrappedItems.size} items)")
+                android.util.Log.d(
+                    "NovelReader",
+                    "loadChapter: replacing initial batch with full list (${wrappedItems.size} items)",
+                )
                 val saved = positionTracker.loadSavedPosition(chapter)
                 if (saved != null && saved.itemIndex >= wrappedItems.size) {
                     // Saved index is beyond even the full list — it was from
                     // infinite scroll mode. Clamp to the last item.
-                    android.util.Log.d("NovelReader", "loadChapter: saved itemIndex=${saved.itemIndex} > full list size=${wrappedItems.size}, clamping")
+                    android.util.Log.d(
+                        "NovelReader",
+                        "loadChapter: saved itemIndex=${saved.itemIndex} > full list size=${wrappedItems.size}, clamping",
+                    )
                     pendingScrollRestore = Pair(wrappedItems.size - 1, saved.pixelOffset)
                 } else if (saved != null && saved.itemIndex > 0) {
                     // Saved index is within the full list — re-set it so the
                     // update callback scrolls to the right position.
-                    android.util.Log.d("NovelReader", "loadChapter: re-setting pendingScrollRestore for full list (index=${saved.itemIndex})")
+                    android.util.Log.d(
+                        "NovelReader",
+                        "loadChapter: re-setting pendingScrollRestore for full list (index=${saved.itemIndex})",
+                    )
                     pendingScrollRestore = Pair(saved.itemIndex, saved.pixelOffset)
                 }
                 _contentItems.value = wrappedItems
@@ -1474,7 +1517,10 @@ class NovelReaderScreenModel(
                 // Restore saved scroll position for this chapter.
                 val saved = positionTracker.loadSavedPosition(chapter)
                 if (saved != null && (saved.characterPosition > 0 || saved.itemIndex > 0)) {
-                    android.util.Log.d("NovelReader", "loadChapter: restoring scroll pos itemIndex=${saved.itemIndex} pixelOffset=${saved.pixelOffset} charPos=${saved.characterPosition}")
+                    android.util.Log.d(
+                        "NovelReader",
+                        "loadChapter: restoring scroll pos itemIndex=${saved.itemIndex} pixelOffset=${saved.pixelOffset} charPos=${saved.characterPosition}",
+                    )
                     positionTracker.startReadingSession(saved.characterPosition)
                     pendingScrollRestore = Pair(saved.itemIndex, saved.pixelOffset)
                 } else {
@@ -1500,7 +1546,9 @@ class NovelReaderScreenModel(
         }
     }
 
-    private suspend fun parseHtmlToParagraphs(html: String, chapterId: Long): List<TextItem> = withContext(Dispatchers.Default) {
+    private suspend fun parseHtmlToParagraphs(html: String, chapterId: Long): List<TextItem> = withContext(
+        Dispatchers.Default,
+    ) {
         @Suppress("DEPRECATION")
         fun renderHtml(source: String): Spanned {
             return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
@@ -1752,16 +1800,18 @@ class NovelReaderScreenModel(
                 // Only clear content if the chapter is NOT cached.
                 val isCached = loadedChapterCache.containsKey(chapter.id) ||
                     prefetchedChapterCache.containsKey(chapter.id) ||
-                    (_novel.value?.let { novel ->
-                        currentSource?.let { src ->
-                            downloadManager.isChapterDownloaded(
-                                chapterName = chapter.name,
-                                chapterScanlator = chapter.scanlator,
-                                novelTitle = novel.title,
-                                sourceId = src.id,
-                            )
-                        }
-                    } ?: false)
+                    (
+                        _novel.value?.let { novel ->
+                            currentSource?.let { src ->
+                                downloadManager.isChapterDownloaded(
+                                    chapterName = chapter.name,
+                                    chapterScanlator = chapter.scanlator,
+                                    novelTitle = novel.title,
+                                    sourceId = src.id,
+                                )
+                            }
+                        } ?: false
+                        )
 
                 if (preferences.readingMode().get() != NovelReadingMode.INFINITE_SCROLL && !isCached) {
                     _contentItems.value = emptyList()
@@ -1783,16 +1833,18 @@ class NovelReaderScreenModel(
                 // Only clear content if the chapter is NOT cached.
                 val isCached = loadedChapterCache.containsKey(chapter.id) ||
                     prefetchedChapterCache.containsKey(chapter.id) ||
-                    (_novel.value?.let { novel ->
-                        currentSource?.let { src ->
-                            downloadManager.isChapterDownloaded(
-                                chapterName = chapter.name,
-                                chapterScanlator = chapter.scanlator,
-                                novelTitle = novel.title,
-                                sourceId = src.id,
-                            )
-                        }
-                    } ?: false)
+                    (
+                        _novel.value?.let { novel ->
+                            currentSource?.let { src ->
+                                downloadManager.isChapterDownloaded(
+                                    chapterName = chapter.name,
+                                    chapterScanlator = chapter.scanlator,
+                                    novelTitle = novel.title,
+                                    sourceId = src.id,
+                                )
+                            }
+                        } ?: false
+                        )
 
                 if (preferences.readingMode().get() != NovelReadingMode.INFINITE_SCROLL && !isCached) {
                     _contentItems.value = emptyList()
@@ -1814,18 +1866,24 @@ class NovelReaderScreenModel(
 
     /** Chapter IDs currently loaded into the content list (for dedup). */
     private val loadedChapterIds = mutableSetOf<Long>()
+
     /** Cache of prefetched chapter HTML content (chapterId → htmlContent). */
     private val prefetchedChapterCache = mutableMapOf<Long, String>()
+
     /** Cache of fully loaded chapters: chapterId → parsed TextItems. */
     private val loadedChapterCache = mutableMapOf<Long, List<TextItem>>()
 
     /** Max chapters to prefetch ahead (QuickNovel-style preload range). */
-    private val PREFETCH_AHEAD = 5
+    private val prefetchAhead = 5
+
     /** Max chapters to prefetch behind. */
-    private val PREFETCH_BEHIND = 1
+    private val prefetchBehind = 1
+
     /** Max entries in the prefetch cache before eviction. */
-    private val MAX_PREFETCH_CACHE_SIZE = 12
+    private val maxPrefetchCacheSize = 12
+
     @Volatile private var isLoadingNextChapter = false
+
     @Volatile private var isLoadingPreviousChapter = false
 
     /** Current reading mode (read from preferences). */
@@ -1871,7 +1929,8 @@ class NovelReaderScreenModel(
                 // Try downloaded file next (offline reading)
                 if (htmlContent.isNullOrBlank()) {
                     val novel = _novel.value
-                    if (novel != null && downloadManager.isChapterDownloaded(
+                    if (novel != null &&
+                        downloadManager.isChapterDownloaded(
                             chapterName = nextChapter.name,
                             chapterScanlator = nextChapter.scanlator,
                             novelTitle = novel.title,
@@ -1885,9 +1944,9 @@ class NovelReaderScreenModel(
                             source = source,
                         )
                         if (chapterFile != null) {
-                            val fileContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }
                             val fileContent = chapterFile.openInputStream().use {
                                 it.readBytes().toString(Charsets.UTF_8)
+                            }
                             htmlContent = fileContent.takeIf { it.isNotBlank() }
                         }
                     }
@@ -1963,7 +2022,8 @@ class NovelReaderScreenModel(
                 // Try downloaded file next (offline reading)
                 if (htmlContent.isNullOrBlank()) {
                     val novel = _novel.value
-                    if (novel != null && downloadManager.isChapterDownloaded(
+                    if (novel != null &&
+                        downloadManager.isChapterDownloaded(
                             chapterName = prevChapter.name,
                             chapterScanlator = prevChapter.scanlator,
                             novelTitle = novel.title,
@@ -1977,9 +2037,9 @@ class NovelReaderScreenModel(
                             source = source,
                         )
                         if (chapterFile != null) {
-                            val fileContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }
                             val fileContent = chapterFile.openInputStream().use {
                                 it.readBytes().toString(Charsets.UTF_8)
+                            }
                             htmlContent = fileContent.takeIf { it.isNotBlank() }
                         }
                     }
@@ -2048,12 +2108,12 @@ class NovelReaderScreenModel(
         // and any already loaded/cached chapters.
         val indicesToPrefetch = mutableListOf<Int>()
         // Behind
-        for (i in 1..PREFETCH_BEHIND) {
+        for (i in 1..prefetchBehind) {
             val idx = currentChapterIndex - i
             if (idx >= 0) indicesToPrefetch.add(idx)
         }
         // Ahead
-        for (i in 1..PREFETCH_AHEAD) {
+        for (i in 1..prefetchAhead) {
             val idx = currentChapterIndex + i
             if (idx < chapters.size) indicesToPrefetch.add(idx)
         }
@@ -2078,7 +2138,7 @@ class NovelReaderScreenModel(
                     }
                     val htmlContent = fetchChapterText(chapter, source)
                     // Evict oldest entries if cache is full
-                    if (prefetchedChapterCache.size >= MAX_PREFETCH_CACHE_SIZE) {
+                    if (prefetchedChapterCache.size >= maxPrefetchCacheSize) {
                         prefetchedChapterCache.keys.firstOrNull()?.let {
                             prefetchedChapterCache.remove(it)
                         }
@@ -2192,43 +2252,13 @@ class NovelReaderScreenModel(
         _isChaptersSheetVisible.value = false
     }
 
-    // ===== Comments =====
-
     fun showComments() {
-        if (!supportsComments) return
-        _isCommentsDialogVisible.value = true
-        if (_comments.value.isEmpty()) {
-            loadComments()
-        }
+        if (!commentsEnabled) return
+        _isCommentsSheetVisible.value = true
     }
 
     fun dismissComments() {
-        _isCommentsDialogVisible.value = false
-    }
-
-    fun refreshComments() {
-        loadComments()
-    }
-
-    private fun loadComments() {
-        val source = currentSource ?: return
-        val chapter = _currentChapter.value ?: return
-        _isLoadingComments.value = true
-        _commentsError.value = null
-        screenModelScope.launchIO {
-            try {
-                val sChapter = SNovelChapterImpl().apply {
-                    url = chapter.url
-                    name = chapter.name
-                }
-                val result = source.getChapterComments(sChapter)
-                _comments.value = result
-            } catch (e: Throwable) {
-                _commentsError.value = e.message ?: "Failed to load comments"
-            } finally {
-                _isLoadingComments.value = false
-            }
-        }
+        _isCommentsSheetVisible.value = false
     }
 
     fun openChapterInWebView() {
@@ -2428,7 +2458,10 @@ class NovelReaderScreenModel(
         }
         // Also save position as complete
         if (chapterParagraphs.isNotEmpty()) {
-            val chapterTotalChars = (chapterParagraphs.last().endCharIndex - chapterParagraphs.first().startCharIndex + 1)
+            val chapterTotalChars = (
+                chapterParagraphs.last().endCharIndex - chapterParagraphs.first().startCharIndex +
+                    1
+                )
                 .coerceAtLeast(1)
             positionTracker.updatePosition(
                 novelId = novel.id,
@@ -2504,8 +2537,10 @@ sealed interface NovelReaderEvent {
     data class ShowError(val message: String) : NovelReaderEvent
     data class ShowMessage(val message: String) : NovelReaderEvent
     data class ChapterChanged(val title: String) : NovelReaderEvent
+
     /** Scroll to a position: 0 = top, -1 = bottom. */
     data class ScrollToPosition(val position: Int) : NovelReaderEvent
+
     /** Scroll to a specific character offset within the current chapter. */
     data class ScrollToCharacter(val characterPosition: Int) : NovelReaderEvent
 }

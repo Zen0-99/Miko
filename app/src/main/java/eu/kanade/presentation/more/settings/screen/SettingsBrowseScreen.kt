@@ -150,6 +150,22 @@ object SettingsBrowseScreen : SearchableSettings {
                     ),
                 ),
             ),
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.comments_title),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = Injekt.get<eu.kanade.domain.base.BasePreferences>().commentsEnabled(),
+                        title = stringResource(MR.strings.comments_enabled),
+                        subtitle = stringResource(MR.strings.comments_enabled_summary),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = Injekt.get<eu.kanade.domain.base.BasePreferences>().offlineMangaMap(),
+                        title = stringResource(MR.strings.comments_offline_map),
+                        subtitle = stringResource(MR.strings.comments_offline_map_summary),
+                        onValueChanged = { true },
+                    ),
+                ),
+            ),
         )
     }
 }

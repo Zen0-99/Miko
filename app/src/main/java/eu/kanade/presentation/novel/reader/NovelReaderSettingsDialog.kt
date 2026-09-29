@@ -23,36 +23,37 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.ScreenModel
-import eu.kanade.tachiyomi.ui.reader.novel.NovelOrientation
-import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundColor
-import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderPreferences
-import eu.kanade.tachiyomi.ui.reader.novel.NovelReadingMode
-import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderTypographyPreset
-import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture
 import eu.kanade.tachiyomi.ui.reader.novel.NovelAutoScrollChapterEndBehavior
+import eu.kanade.tachiyomi.ui.reader.novel.NovelOrientation
 import eu.kanade.tachiyomi.ui.reader.novel.NovelPageTransitionStyle
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundColor
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderPreferences
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderTypographyPreset
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReadingMode
 import eu.kanade.tachiyomi.ui.reader.novel.TextAlignment
-import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.InstallState
 import eu.kanade.tachiyomi.ui.reader.novel.tts.PocketVoice
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoice
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -66,21 +67,33 @@ class NovelReaderSettingsScreenModel(
     val readerPreferences: ReaderPreferences = Injekt.get(),
     val ttsPreferences: eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences = Injekt.get(),
     // Pocket TTS engine management
-    val pocketInstallState: kotlinx.coroutines.flow.StateFlow<InstallState?> = kotlinx.coroutines.flow.MutableStateFlow(null),
-    val pocketVoices: kotlinx.coroutines.flow.StateFlow<List<PocketVoice>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList()),
+    val pocketInstallState: StateFlow<InstallState?> = MutableStateFlow(
+        null,
+    ),
+    val pocketVoices: StateFlow<List<PocketVoice>> = MutableStateFlow(
+        emptyList(),
+    ),
     val onInstallPocket: () -> Unit = {},
     val onUninstallPocket: () -> Unit = {},
     val onSelectPocketVoice: (String) -> Unit = {},
     // Supertonic TTS engine management
-    val supertonicInstallState: kotlinx.coroutines.flow.StateFlow<InstallState?> = kotlinx.coroutines.flow.MutableStateFlow(null),
-    val supertonicVoices: kotlinx.coroutines.flow.StateFlow<List<SupertonicVoice>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList()),
+    val supertonicInstallState: StateFlow<InstallState?> = MutableStateFlow(
+        null,
+    ),
+    val supertonicVoices: StateFlow<List<SupertonicVoice>> = MutableStateFlow(
+        emptyList(),
+    ),
     val onInstallSupertonic: () -> Unit = {},
     val onUninstallSupertonic: () -> Unit = {},
     val onSelectSupertonicVoice: (String) -> Unit = {},
     // Supertonic voice previews — style name of the preview currently
     // synthesizing (spinner) or audible (stop icon); null when idle.
-    val supertonicPreviewLoading: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null),
-    val supertonicPreviewPlaying: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null),
+    val supertonicPreviewLoading: StateFlow<String?> = MutableStateFlow(
+        null,
+    ),
+    val supertonicPreviewPlaying: StateFlow<String?> = MutableStateFlow(
+        null,
+    ),
     val onPreviewSupertonicVoice: (String) -> Unit = {},
     val onStopSupertonicPreview: () -> Unit = {},
 ) : ScreenModel
@@ -197,8 +210,10 @@ fun NovelReaderSettingsDialog(
                         onInstallSupertonic = screenModel.onInstallSupertonic,
                         onUninstallSupertonic = screenModel.onUninstallSupertonic,
                         onSelectSupertonicVoice = screenModel.onSelectSupertonicVoice,
-                        supertonicPreviewLoading = screenModel.supertonicPreviewLoading.collectAsStateWithLifecycle().value,
-                        supertonicPreviewPlaying = screenModel.supertonicPreviewPlaying.collectAsStateWithLifecycle().value,
+                        supertonicPreviewLoading = screenModel.supertonicPreviewLoading
+                            .collectAsStateWithLifecycle().value,
+                        supertonicPreviewPlaying = screenModel.supertonicPreviewPlaying
+                            .collectAsStateWithLifecycle().value,
                         onPreviewSupertonicVoice = screenModel.onPreviewSupertonicVoice,
                     )
                 }
@@ -329,7 +344,7 @@ private fun ColumnScope.NovelGeneralSettingsPage(
         label = "Texture strength",
         value = textureStrength,
         valueRange = 0..100,
-        valueText = "${textureStrength}%",
+        valueText = "$textureStrength%",
         steps = 99,
         accentColor = accentColor,
     ) { newValue ->
@@ -439,8 +454,11 @@ private fun ColumnScope.NovelGeneralSettingsPage(
     // Combined labels: Infinite scroll + all page transition styles
     val readingModeLabels = listOf("Infinite scroll", "Instant", "Slide", "Depth", "Book")
     // Index 0 = Infinite scroll, 1-6 = page transition styles (DEFAULT mode)
-    val currentReadingModeIndex = if (novelReadingMode == NovelReadingMode.INFINITE_SCROLL) 0
-        else 1 + NovelPageTransitionStyle.entries.indexOf(pageTransition)
+    val currentReadingModeIndex = if (novelReadingMode == NovelReadingMode.INFINITE_SCROLL) {
+        0
+    } else {
+        1 + NovelPageTransitionStyle.entries.indexOf(pageTransition)
+    }
     SettingsDropdown(
         label = "Page transition",
         selectedLabel = readingModeLabels[currentReadingModeIndex],
@@ -492,7 +510,7 @@ private fun ColumnScope.NovelGeneralSettingsPage(
             label = "Tap scroll amount",
             value = tapAmount,
             valueRange = 10..100,
-            valueText = "${tapAmount}%",
+            valueText = "$tapAmount%",
             steps = 89,
             accentColor = accentColor,
         ) { newValue ->

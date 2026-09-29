@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -21,6 +22,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.presentation.util.ScreenTransition
 import eu.kanade.presentation.util.isTabletUi
+import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import tachiyomi.presentation.core.components.AdaptiveSheet as AdaptiveSheetImpl
 
 @OptIn(InternalVoyagerApi::class)
@@ -81,6 +83,13 @@ fun AdaptiveSheet(
     content: @Composable () -> Unit,
 ) {
     val isTabletUi = isTabletUi()
+
+    // While any sheet is open, floating overlays (mini-player, update progress)
+    // fade out so they don't sit on top of the sheet content.
+    DisposableEffect(Unit) {
+        LibraryUpdateProgressBus.sheetOpened()
+        onDispose { LibraryUpdateProgressBus.sheetClosed() }
+    }
 
     if (isTabletUi) {
         // Tablet: centered dialog-style sheet (unchanged)

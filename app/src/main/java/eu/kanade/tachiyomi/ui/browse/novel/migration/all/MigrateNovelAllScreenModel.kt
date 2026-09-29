@@ -65,13 +65,18 @@ class MigrateNovelAllScreenModel(
             // to this screen so re-entering doesn't restart every search.
             val loadStart = System.currentTimeMillis()
             val novels = novelIds.mapNotNull { getNovel.await(it) }
-            android.util.Log.i("MigrateNovel", "getNovel.await took ${System.currentTimeMillis() - loadStart}ms for ${novels.size} novels")
+            android.util.Log.i(
+                "MigrateNovel",
+                "getNovel.await took ${System.currentTimeMillis() - loadStart}ms for ${novels.size} novels",
+            )
 
             val items = novels.map { novel ->
                 val cached = getCachedResult(novel.id)
                 val localCount = try {
                     getNovelWithChapters.awaitChapters(novel.id).size
-                } catch (_: Exception) { 0 }
+                } catch (_: Exception) {
+                    0
+                }
                 MigrationItem(
                     oldNovel = novel,
                     oldChapterCount = oldChapterCountCache[novel.id] ?: localCount,
@@ -101,7 +106,10 @@ class MigrateNovelAllScreenModel(
                             if (!isActive) return@withPermit
                             // Already resolved on a previous visit — nothing to redo.
                             if (getCachedResult(novel.id) != null) {
-                                android.util.Log.i("MigrateNovel", "Novel ${novel.id} '${novel.title}' — CACHED, skipping")
+                                android.util.Log.i(
+                                    "MigrateNovel",
+                                    "Novel ${novel.id} '${novel.title}' — CACHED, skipping",
+                                )
                                 return@withPermit
                             }
                             // Skip the old-chapter-count refresh for single-entry
@@ -116,7 +124,10 @@ class MigrateNovelAllScreenModel(
                 }
                 jobs.awaitAll()
             }
-            android.util.Log.i("MigrateNovel", "=== All searches done in ${System.currentTimeMillis() - searchAllStart}ms ===")
+            android.util.Log.i(
+                "MigrateNovel",
+                "=== All searches done in ${System.currentTimeMillis() - searchAllStart}ms ===",
+            )
             mutableState.update { it.copy(allDone = true) }
             android.util.Log.i("MigrateNovel", "=== init DONE total=${System.currentTimeMillis() - initStart}ms ===")
         }
@@ -148,7 +159,10 @@ class MigrateNovelAllScreenModel(
         if (sources.isEmpty()) {
             cacheResult(oldNovel.id, MigrationStatus.NotFound, null, 0)
             updateItem(oldNovel.id) { it.copy(status = MigrationStatus.NotFound, searchPhase = "") }
-            android.util.Log.i("MigrateNovel", "searchForMatches — no sources, done in ${System.currentTimeMillis() - searchStart}ms")
+            android.util.Log.i(
+                "MigrateNovel",
+                "searchForMatches — no sources, done in ${System.currentTimeMillis() - searchStart}ms",
+            )
             return
         }
 
@@ -175,19 +189,27 @@ class MigrateNovelAllScreenModel(
                         }
                         val searchMs = System.currentTimeMillis() - searchReqStart
                         val done = searchedCount.incrementAndGet()
-                        updateItem(oldNovel.id) { it.copy(searchPhase = "Searching sources... ($done/${sources.size})") }
+                        updateItem(oldNovel.id) {
+                            it.copy(searchPhase = "Searching sources... ($done/${sources.size})")
+                        }
 
                         if (results == null) {
                             android.util.Log.w("MigrateNovel", "  [${source.name}] search TIMEOUT (${searchMs}ms)")
                             return@async
                         }
-                        android.util.Log.i("MigrateNovel", "  [${source.name}] search=${searchMs}ms, ${results.novels.size} results")
+                        android.util.Log.i(
+                            "MigrateNovel",
+                            "  [${source.name}] search=${searchMs}ms, ${results.novels.size} results",
+                        )
                         val best = results.novels
                             .minByOrNull { result ->
                                 titleDistance(result.title, oldNovel.title)
                             }
                         if (best == null) {
-                            android.util.Log.i("MigrateNovel", "  [${source.name}] no best match from ${results.novels.size} results")
+                            android.util.Log.i(
+                                "MigrateNovel",
+                                "  [${source.name}] no best match from ${results.novels.size} results",
+                            )
                             return@async
                         }
                         val dist = titleDistance(best.title, oldNovel.title)
@@ -199,7 +221,7 @@ class MigrateNovelAllScreenModel(
                             source.getChapterList(localNovel.toSNovel()).size
                         } ?: 0
                         val chapMs = System.currentTimeMillis() - chapStart
-                        android.util.Log.i("MigrateNovel", "  [${source.name}] chapters=${chapterCount} (${chapMs}ms)")
+                        android.util.Log.i("MigrateNovel", "  [${source.name}] chapters=$chapterCount (${chapMs}ms)")
                         if (chapterCount > 0) {
                             matches.add(MatchCandidate(localNovel, source, chapterCount))
                         }
@@ -233,7 +255,10 @@ class MigrateNovelAllScreenModel(
                 searchPhase = "",
             )
         }
-        android.util.Log.i("MigrateNovel", "searchForMatches('${oldNovel.title}') DONE in ${System.currentTimeMillis() - searchStart}ms — ${matches.size} matches, recommended=${recommended?.source?.name} (${recommended?.chapterCount} ch)")
+        android.util.Log.i(
+            "MigrateNovel",
+            "searchForMatches('${oldNovel.title}') DONE in ${System.currentTimeMillis() - searchStart}ms — ${matches.size} matches, recommended=${recommended?.source?.name} (${recommended?.chapterCount} ch)",
+        )
     }
 
     private fun getEnabledSources(): List<NovelCatalogueSource> {
@@ -353,6 +378,7 @@ class MigrateNovelAllScreenModel(
     companion object {
         private const val MAX_CONCURRENT_NOVELS = 3
         private const val MAX_CONCURRENT_SOURCES_PER_NOVEL = 5
+
         // 5-second timeout for source search — all sources are searched in
         // parallel, and the one with the most chapters is recommended.
         private const val SEARCH_TIMEOUT_MS = 5_000L

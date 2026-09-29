@@ -62,7 +62,9 @@ internal fun MangaLibraryComfortableGrid(
                     ).joinToString(", ").takeIf { it.isNotBlank() }
                 }
                 authorArtist
-            } else null
+            } else {
+                null
+            }
             EntryComfortableGridItem(
                 isSelected = selection.fastAny { it.id == libraryItem.libraryManga.id },
                 coverAlpha = if (isPreviousLayer) 0.4f else 1f,

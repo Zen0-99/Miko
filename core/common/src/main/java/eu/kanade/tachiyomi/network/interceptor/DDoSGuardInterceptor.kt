@@ -112,7 +112,10 @@ class DDoSGuardInterceptor(
 
 private const val SERVER_CHECK = "ddos-guard"
 internal val DDG_ERROR_CODES = listOf(403, 503, 429)
-private val DDG_COOKIE_NAMES = listOf("__ddgid_", "__ddg8_", "__ddg9_", "__ddg10_", "__ddg5_", "__ddgmark_", "__ddg1_", "__ddg2_", "__ddg3_", "__ddg4_", "__ddg6_", "__ddg7_")
+private val DDG_COOKIE_NAMES = listOf(
+    "__ddgid_", "__ddg8_", "__ddg9_", "__ddg10_", "__ddg5_", "__ddgmark_",
+    "__ddg1_", "__ddg2_", "__ddg3_", "__ddg4_", "__ddg6_", "__ddg7_",
+)
 internal const val DDG_COOKIE_NAME = "__ddg1_"
 
 // Body markers for DDoS-Guard challenge pages

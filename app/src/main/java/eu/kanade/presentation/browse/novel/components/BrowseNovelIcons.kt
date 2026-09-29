@@ -6,8 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -29,7 +27,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.imageResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import coil3.compose.AsyncImage
@@ -38,7 +35,6 @@ import eu.kanade.presentation.util.rememberResourceBitmapPainter
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.extension.novel.util.NovelExtensionLoader
-import eu.kanade.tachiyomi.novelsource.NovelSource
 import tachiyomi.core.common.util.lang.withIOContext
 
 private val defaultModifier = Modifier
@@ -66,11 +62,14 @@ fun NovelExtensionIcon(
     density: Int = DisplayMetrics.DENSITY_DEFAULT,
     showCommentsBadge: Boolean = true,
 ) {
-    val supportsComments = (showCommentsBadge && when (extension) {
-        is NovelExtension.Installed -> extension.supportsComments()
-        is NovelExtension.Available -> extension.supportsComments()
-        else -> false
-    })
+    val supportsComments = (
+        showCommentsBadge &&
+            when (extension) {
+                is NovelExtension.Installed -> extension.supportsComments()
+                is NovelExtension.Available -> extension.supportsComments()
+                else -> false
+            }
+        )
 
     Box(modifier = modifier) {
         when (extension) {
@@ -138,7 +137,9 @@ fun NovelExtensionIcon(
 }
 
 @Composable
-private fun NovelExtension.Installed.getIcon(density: Int = DisplayMetrics.DENSITY_DEFAULT): State<NovelIconResult<ImageBitmap>> {
+private fun NovelExtension.Installed.getIcon(
+    density: Int = DisplayMetrics.DENSITY_DEFAULT,
+): State<NovelIconResult<ImageBitmap>> {
     val context = LocalContext.current
     return produceState<NovelIconResult<ImageBitmap>>(initialValue = NovelIconResult.Loading, this) {
         withIOContext {

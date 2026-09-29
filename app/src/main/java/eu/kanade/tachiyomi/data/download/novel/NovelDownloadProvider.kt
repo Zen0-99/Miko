@@ -60,7 +60,11 @@ class NovelDownloadProvider(
             .firstOrNull()
     }
 
-    fun findChapterDirs(chapters: List<NovelChapter>, novel: Novel, source: NovelSource): Pair<UniFile?, List<UniFile>> {
+    fun findChapterDirs(
+        chapters: List<NovelChapter>,
+        novel: Novel,
+        source: NovelSource,
+    ): Pair<UniFile?, List<UniFile>> {
         val novelDir = findNovelDir(novel.title, source) ?: return null to emptyList()
         return novelDir to chapters.mapNotNull { chapter ->
             getValidChapterDirNames(chapter.name, chapter.scanlator).asSequence()

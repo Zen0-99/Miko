@@ -795,7 +795,8 @@ class EngineInstaller(
             var bytesSoFar = if (resumeOk) partialBytes else 0L
             var bytesSinceEmit = 0L
             // Append in resume mode, truncate-and-write otherwise.
-            java.io.FileOutputStream(target, /* append = */ resumeOk).use { output ->
+            val appendMode = resumeOk
+            java.io.FileOutputStream(target, appendMode).use { output ->
                 val buf = ByteArray(BUFFER_SIZE)
                 while (true) {
                     val read = input.read(buf)

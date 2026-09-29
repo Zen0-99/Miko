@@ -5,8 +5,7 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.tachiyomi.util.lang.toLocalDate
-import java.time.LocalDate
-import kotlinx.collections.immutable.ImmutableList
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,23 +18,24 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.Dispatchers
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.history.novel.interactor.GetNovelHistory
 import tachiyomi.domain.history.novel.interactor.GetNextNovelChapters
+import tachiyomi.domain.history.novel.interactor.GetNovelHistory
 import tachiyomi.domain.history.novel.interactor.RemoveNovelHistory
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.time.LocalDate
 
 class NovelHistoryScreenModel(
     private val getHistory: GetNovelHistory = Injekt.get(),
     private val getNextChapters: GetNextNovelChapters = Injekt.get(),
     private val removeHistory: RemoveNovelHistory = Injekt.get(),
+    private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelHistoryScreenModel.State>(State()) {
 
@@ -49,6 +49,9 @@ class NovelHistoryScreenModel(
         screenModelScope.launchIO {
             _query.collectLatest { query ->
                 getHistory.subscribe(query ?: "")
+                    // Unify extension-source rows onto their canonical
+                    // `miko:` entry (title + cover from the canonical row).
+                    .map { list -> list.map { canonicalEntryUnifier.unify(it) } }
                     .distinctUntilChanged()
                     .catch { error ->
                         logcat(LogPriority.ERROR, error)
@@ -69,12 +72,12 @@ class NovelHistoryScreenModel(
 
     private fun List<NovelHistoryWithRelations>.toHistoryUiModels(): List<NovelHistoryUiModel> {
         // Group consecutive entries from the same novel whose readAt timestamps
-        // fall within BATCH_WINDOW_MS. If a group has >= BATCH_MIN_SIZE entries,
+        // fall within batchWindowMs. If a group has >= batchMinSize entries,
         // collapse it into a single NovelHistoryUiModel.Batch; otherwise emit
         // individual items. Date headers are inserted between groups/items that
         // cross a day boundary.
-        val BATCH_WINDOW_MS = 60_000L // 1 minute
-        val BATCH_MIN_SIZE = 5
+        val batchWindowMs = 60_000L // 1 minute
+        val batchMinSize = 5
 
         if (isEmpty()) return emptyList()
 
@@ -90,7 +93,7 @@ class NovelHistoryScreenModel(
         var windowStart: Long = 0L
         for (entry in this) {
             val t = entry.readAt?.time ?: 0L
-            if (current != null && entry.novelId == currentNovelId && t - windowStart <= BATCH_WINDOW_MS) {
+            if (current != null && entry.novelId == currentNovelId && t - windowStart <= batchWindowMs) {
                 current!!.add(entry)
             } else {
                 if (current != null) {
@@ -115,7 +118,7 @@ class NovelHistoryScreenModel(
                 result.add(NovelHistoryUiModel.Header(firstDate))
                 lastDate = firstDate
             }
-            if (entries.size >= BATCH_MIN_SIZE) {
+            if (entries.size >= batchMinSize) {
                 result.add(
                     NovelHistoryUiModel.Batch(
                         novelId = group.novelId,

@@ -73,11 +73,11 @@ import uy.kohesive.injekt.api.get
 import java.io.File
 import java.time.Instant
 import java.time.ZonedDateTime
-import kotlin.time.Duration.Companion.seconds
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 
 class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerParameters) :
     CoroutineWorker(context, workerParams) {
@@ -92,6 +92,9 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private val syncChaptersWithSource: SyncChaptersWithSource = Injekt.get()
     private val mangaFetchInterval: MangaFetchInterval = Injekt.get()
     private val filterChaptersForDownload: FilterChaptersForDownload = Injekt.get()
+    private val hiResCoverResolver: eu.kanade.tachiyomi.data.cover.HiResCoverResolver = Injekt.get()
+    private val basePreferences: eu.kanade.domain.base.BasePreferences = Injekt.get()
+    private val workPrefetcher: eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher = Injekt.get()
 
     private val notifier = MangaLibraryUpdateNotifier(context)
 
@@ -298,75 +301,78 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                         return@forEach
                                     }
 
-                                val publishState: () -> Unit = {
-                                    LibraryUpdateProgressBus.updateProgress(
-                                        processed = progressCount.get(),
-                                        currentlyUpdating = currentlyUpdatingManga.map {
-                                            eu.kanade.tachiyomi.data.library.EntryRef(
-                                                id = it.id,
-                                                title = it.title,
-                                                sourceId = it.source,
-                                                kind = tachiyomi.domain.library.model.EntryKind.MANGA,
-                                            )
-                                        },
-                                        failedSoFar = failedUpdates.map { (m, reason) ->
-                                            eu.kanade.tachiyomi.data.library.FailedEntry(
-                                                entry = eu.kanade.tachiyomi.data.library.EntryRef(
-                                                    id = m.id,
-                                                    title = m.title,
-                                                    sourceId = m.source,
+                                    val publishState: () -> Unit = {
+                                        LibraryUpdateProgressBus.updateProgress(
+                                            processed = progressCount.get(),
+                                            currentlyUpdating = currentlyUpdatingManga.map {
+                                                eu.kanade.tachiyomi.data.library.EntryRef(
+                                                    id = it.id,
+                                                    title = it.title,
+                                                    sourceId = it.source,
                                                     kind = tachiyomi.domain.library.model.EntryKind.MANGA,
-                                                ),
-                                                reason = reason ?: context.stringResource(MR.strings.unknown_error),
-                                                sourceName = sourceManager.getOrStub(m.source).name,
-                                            )
-                                        },
-                                        totalEntries = mangaToUpdate.size,
-                                        source = "Manga",
-                                    )
-                                }
+                                                )
+                                            },
+                                            failedSoFar = failedUpdates.map { (m, reason) ->
+                                                eu.kanade.tachiyomi.data.library.FailedEntry(
+                                                    entry = eu.kanade.tachiyomi.data.library.EntryRef(
+                                                        id = m.id,
+                                                        title = m.title,
+                                                        sourceId = m.source,
+                                                        kind = tachiyomi.domain.library.model.EntryKind.MANGA,
+                                                    ),
+                                                    reason = reason ?: context.stringResource(MR.strings.unknown_error),
+                                                    sourceName = sourceManager.getOrStub(m.source).name,
+                                                )
+                                            },
+                                            totalEntries = mangaToUpdate.size,
+                                            source = "Manga",
+                                        )
+                                    }
 
-                                withUpdateNotification(
-                                    currentlyUpdatingManga,
-                                    progressCount,
-                                    manga,
-                                    publishState,
-                                ) {
-                                    try {
-                                        val newChapters = updateManga(manga, fetchWindow)
-                                            .sortedByDescending { it.sourceOrder }
+                                    withUpdateNotification(
+                                        currentlyUpdatingManga,
+                                        progressCount,
+                                        manga,
+                                        publishState,
+                                    ) {
+                                        try {
+                                            val newChapters = updateManga(manga, fetchWindow)
+                                                .sortedByDescending { it.sourceOrder }
 
-                                        if (newChapters.isNotEmpty()) {
-                                            val chaptersToDownload = filterChaptersForDownload.await(manga, newChapters)
-                                            if (chaptersToDownload.isNotEmpty()) {
-                                                downloadChapters(manga, chaptersToDownload)
-                                                hasDownloads.set(true)
+                                            if (newChapters.isNotEmpty()) {
+                                                val chaptersToDownload = filterChaptersForDownload.await(
+                                                    manga,
+                                                    newChapters,
+                                                )
+                                                if (chaptersToDownload.isNotEmpty()) {
+                                                    downloadChapters(manga, chaptersToDownload)
+                                                    hasDownloads.set(true)
+                                                }
+                                                libraryPreferences.newMangaUpdatesCount()
+                                                    .getAndSet { it + newChapters.size }
+
+                                                // Convert to the manga that contains new chapters
+                                                newUpdates.add(manga to newChapters.toTypedArray())
                                             }
-                                            libraryPreferences.newMangaUpdatesCount()
-                                                .getAndSet { it + newChapters.size }
-
-                                            // Convert to the manga that contains new chapters
-                                            newUpdates.add(manga to newChapters.toTypedArray())
+                                        } catch (e: Throwable) {
+                                            val errorMessage = when (e) {
+                                                is NoChaptersException -> context.stringResource(
+                                                    MR.strings.no_chapters_error,
+                                                )
+                                                // failedUpdates will already have the source, don't need to copy it into the message
+                                                is SourceNotInstalledException -> context.stringResource(
+                                                    MR.strings.loader_not_implemented_error,
+                                                )
+                                                else -> e.message
+                                            }
+                                            failedUpdates.add(manga to errorMessage)
                                         }
-                                    } catch (e: Throwable) {
-                                        val errorMessage = when (e) {
-                                            is NoChaptersException -> context.stringResource(
-                                                MR.strings.no_chapters_error,
-                                            )
-                                            // failedUpdates will already have the source, don't need to copy it into the message
-                                            is SourceNotInstalledException -> context.stringResource(
-                                                MR.strings.loader_not_implemented_error,
-                                            )
-                                            else -> e.message
-                                        }
-                                        failedUpdates.add(manga to errorMessage)
                                     }
                                 }
                             }
                         }
                     }
-                }
-                .awaitAll()
+                    .awaitAll()
             }
         } finally {
             // Ensure completeRun is ALWAYS called, even if the coroutineScope
@@ -403,6 +409,12 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     errorFile.getUriCompat(context),
                 )
             }
+
+            // Phase 14-02: a completed refresh mints + canonizes the whole
+            // library in the background (resolve → markSeen → canonize).
+            if (basePreferences.commentsEnabled().get()) {
+                workPrefetcher.start(canonize = true)
+            }
         }
     }
 
@@ -431,7 +443,10 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         // always be fetched.
         val coverFileExists = coverCache.getCoverFile(manga.thumbnailUrl)?.exists() == true
         val hasLocalThumbnailUrl = !manga.thumbnailUrl.isNullOrEmpty()
-        android.util.Log.d("MangaCoverCheck", "manga=${manga.title} id=${manga.id} thumbnailUrl=${manga.thumbnailUrl} coverFileExists=$coverFileExists hasLocalThumbnailUrl=$hasLocalThumbnailUrl autoUpdateMetadata=${libraryPreferences.autoUpdateMetadata().get()}")
+        android.util.Log.d(
+            "MangaCoverCheck",
+            "manga=${manga.title} id=${manga.id} thumbnailUrl=${manga.thumbnailUrl} coverFileExists=$coverFileExists hasLocalThumbnailUrl=$hasLocalThumbnailUrl autoUpdateMetadata=${libraryPreferences.autoUpdateMetadata().get()}",
+        )
 
         // Update manga metadata if needed
         if (libraryPreferences.autoUpdateMetadata().get()) {
@@ -439,7 +454,10 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 val networkManga = source.getMangaDetails(manga.toSManga())
                 updateManga.awaitUpdateFromSource(manga, networkManga, manualFetch = false, coverCache)
             } catch (e: Throwable) {
-                android.util.Log.e("MangaCoverCheck", "getMangaDetails FAILED for manga=${manga.title}: ${e::class.simpleName}: ${e.message}")
+                android.util.Log.e(
+                    "MangaCoverCheck",
+                    "getMangaDetails FAILED for manga=${manga.title}: ${e::class.simpleName}: ${e.message}",
+                )
                 logcat(LogPriority.ERROR, e) { "Metadata update failed for manga ${manga.id}" }
                 context.maybeShowDnsToast(e, manga.thumbnailUrl)
                 // getMangaDetails failed — still try to fix missing covers
@@ -447,9 +465,15 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     try {
                         coverCache.deleteFromCache(manga, false)
                         updateManga.awaitUpdateCoverLastModified(manga.id)
-                        android.util.Log.d("MangaCoverCheck", "Cover refresh triggered (catch block) for manga=${manga.title}")
+                        android.util.Log.d(
+                            "MangaCoverCheck",
+                            "Cover refresh triggered (catch block) for manga=${manga.title}",
+                        )
                     } catch (e2: Throwable) {
-                        android.util.Log.e("MangaCoverCheck", "Cover refresh FAILED for manga=${manga.title}: ${e2::class.simpleName}: ${e2.message}")
+                        android.util.Log.e(
+                            "MangaCoverCheck",
+                            "Cover refresh FAILED for manga=${manga.title}: ${e2::class.simpleName}: ${e2.message}",
+                        )
                         logcat(LogPriority.ERROR, e2) { "Cover refresh failed for manga ${manga.id}" }
                     }
                 }
@@ -462,7 +486,10 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             // view does. This matches the user's expectation: refreshing
             // the library should fetch covers just like opening the detail
             // page does.
-            android.util.Log.d("MangaCoverCheck", "autoUpdateMetadata off, fetching fresh details for cover for manga=${manga.title}")
+            android.util.Log.d(
+                "MangaCoverCheck",
+                "autoUpdateMetadata off, fetching fresh details for cover for manga=${manga.title}",
+            )
             try {
                 val networkManga = source.getMangaDetails(manga.toSManga())
                 updateManga.awaitUpdateFromSource(manga, networkManga, manualFetch = false, coverCache)
@@ -470,12 +497,18 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             } catch (e: Throwable) {
                 // getMangaDetails failed — fall back to just updating
                 // coverLastModified with the existing (possibly stale) URL
-                android.util.Log.e("MangaCoverCheck", "getMangaDetails failed for cover refresh, falling back: manga=${manga.title}: ${e::class.simpleName}: ${e.message}")
+                android.util.Log.e(
+                    "MangaCoverCheck",
+                    "getMangaDetails failed for cover refresh, falling back: manga=${manga.title}: ${e::class.simpleName}: ${e.message}",
+                )
                 try {
                     coverCache.deleteFromCache(manga, false)
                     updateManga.awaitUpdateCoverLastModified(manga.id)
                 } catch (e2: Throwable) {
-                    android.util.Log.e("MangaCoverCheck", "Cover refresh fallback FAILED for manga=${manga.title}: ${e2::class.simpleName}: ${e2.message}")
+                    android.util.Log.e(
+                        "MangaCoverCheck",
+                        "Cover refresh fallback FAILED for manga=${manga.title}: ${e2::class.simpleName}: ${e2.message}",
+                    )
                 }
             }
         }
@@ -490,6 +523,17 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         // Get manga from database to account for if it was removed during the update and
         // to get latest data so it doesn't get overwritten later on
         val dbManga = getManga.await(manga.id)?.takeIf { it.favorite } ?: return emptyList()
+
+        // Upgrade the cover only when the entry doesn't already have one
+        // from a preferred provider (cheap local check — no API churn on
+        // every refresh). Non-fatal.
+        if (hiResCoverResolver.shouldUpgradeCover(dbManga)) {
+            try {
+                hiResCoverResolver.upgradeMangaCover(dbManga)
+            } catch (e: Throwable) {
+                logcat(LogPriority.DEBUG, e) { "Hi-res cover fetch failed for manga ${manga.id}" }
+            }
+        }
 
         return syncChaptersWithSource.await(chapters, dbManga, source, false, fetchWindow)
     }

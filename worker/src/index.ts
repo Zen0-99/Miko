@@ -9,6 +9,7 @@ import {
     handlePostComment,
     handleReport,
     handleSetName,
+    handleThreadCounts,
     handleVote,
 } from './comments';
 import type { Env } from './env';
@@ -31,6 +32,7 @@ const router = new Router<Env>()
     .add('POST', '/v1/device/register', (req, _p, _u, env) => handleRegister(req, env))
     .add('POST', '/v1/names', (req, _p, _u, env) => handleSetName(req, env))
     .add('GET', '/v1/comments', (req, _p, url, env) => handleGetComments(req, _p, url, env))
+    .add('GET', '/v1/threads/counts', (_req, _p, url, env) => handleThreadCounts(_req, _p, url, env))
     .add('POST', '/v1/comments', (req, _p, _u, env) => handlePostComment(req, env))
     .add('POST', '/v1/comments/:id/vote', handleVote)
     .add('POST', '/v1/comments/:id/report', handleReport)

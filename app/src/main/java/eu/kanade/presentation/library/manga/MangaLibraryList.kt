@@ -263,7 +263,9 @@ internal fun buildListSubtitle(
                 eu.kanade.tachiyomi.source.model.SManga.ONGOING -> stringResource(tachiyomi.i18n.MR.strings.ongoing)
                 eu.kanade.tachiyomi.source.model.SManga.COMPLETED -> stringResource(tachiyomi.i18n.MR.strings.completed)
                 eu.kanade.tachiyomi.source.model.SManga.LICENSED -> stringResource(tachiyomi.i18n.MR.strings.licensed)
-                eu.kanade.tachiyomi.source.model.SManga.PUBLISHING_FINISHED -> stringResource(tachiyomi.i18n.MR.strings.publishing_finished)
+                eu.kanade.tachiyomi.source.model.SManga.PUBLISHING_FINISHED -> stringResource(
+                    tachiyomi.i18n.MR.strings.publishing_finished,
+                )
                 eu.kanade.tachiyomi.source.model.SManga.CANCELLED -> stringResource(tachiyomi.i18n.MR.strings.cancelled)
                 eu.kanade.tachiyomi.source.model.SManga.ON_HIATUS -> stringResource(tachiyomi.i18n.MR.strings.on_hiatus)
                 else -> null

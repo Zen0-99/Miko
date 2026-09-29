@@ -231,10 +231,14 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
             if (hasMethod) {
                 val result = invokeSuspendMethodWithStringInt("getChapterListPage", novel.url, page)
                 if (result != null) {
-                    val chapters = (getProp(result, "chapters") as? List<*>)?.filterNotNull()?.map { toSNovelChapter(it) } ?: emptyList()
+                    val chapters =
+                        (getProp(result, "chapters") as? List<*>)?.filterNotNull()?.map { toSNovelChapter(it) }
+                            ?: emptyList()
                     val totalPages = (getProp(result, "totalPages") as? Number)?.toInt() ?: 1
                     val currentPage = (getProp(result, "currentPage") as? Number)?.toInt() ?: page
-                    logcat(LogPriority.DEBUG) { "$tag getChapterListPage got ${chapters.size} chapters, totalPages=$totalPages" }
+                    logcat(LogPriority.DEBUG) {
+                        "$tag getChapterListPage got ${chapters.size} chapters, totalPages=$totalPages"
+                    }
                     NovelChapterPage(chapters, totalPages, currentPage)
                 } else {
                     logcat(LogPriority.DEBUG) { "$tag getChapterListPage returned null, falling back" }
@@ -250,13 +254,17 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
         }
     }
 
-    override suspend fun getLatestChapters(novel: SNovel, existingCount: Int): List<SNovelChapter> = withContext(Dispatchers.IO) {
+    override suspend fun getLatestChapters(novel: SNovel, existingCount: Int): List<SNovelChapter> = withContext(
+        Dispatchers.IO,
+    ) {
         logcat(LogPriority.DEBUG) { "$tag getLatestChapters url=${novel.url} existingCount=$existingCount" }
         try {
             // Log all methods with this name for debugging
             source.javaClass.methods.filter { it.name == "getLatestChapters" }.forEach { m ->
                 logcat(LogPriority.DEBUG) {
-                    "$tag   Found: ${m.name}(${m.parameterTypes.joinToString(", ") { it.simpleName }}) paramCount=${m.parameterCount}"
+                    "$tag   Found: ${m.name}(${m.parameterTypes.joinToString(", ") {
+                        it.simpleName
+                    }}) paramCount=${m.parameterCount}"
                 }
             }
 
@@ -275,7 +283,9 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
                 getChapterList(novel)
             }
         } catch (e: Throwable) {
-            logcat(LogPriority.ERROR, e) { "$tag getLatestChapters failed for ${novel.url}, falling back to getChapterList" }
+            logcat(LogPriority.ERROR, e) {
+                "$tag getLatestChapters failed for ${novel.url}, falling back to getChapterList"
+            }
             getChapterList(novel)
         }
     }
@@ -376,7 +386,9 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
                     }
 
                     val finalResult = invokeSuspendSearchIncremental(method, query, page, callback)
-                    logcat(LogPriority.DEBUG) { "$tag searchFlow search completed, finalResult type=${finalResult?.javaClass?.name}" }
+                    logcat(LogPriority.DEBUG) {
+                        "$tag searchFlow search completed, finalResult type=${finalResult?.javaClass?.name}"
+                    }
                 } catch (e: Throwable) {
                     logcat(LogPriority.ERROR, e) { "$tag searchFlow search failed" }
                     trySend(emptyList<SNovel>())
@@ -534,7 +546,10 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
         artist = getProp(obj, "artist") as? String
         description = getProp(obj, "description") as? String
         thumbnail_url = getProp(obj, "coverUrl") as? String
-        val genres = (getProp(obj, "genres") as? List<*>)?.filterNotNull()?.map { it.toString() }
+        val genres = (getProp(obj, "genres") as? List<*>)
+            ?.filterNotNull()
+            ?.map { it.toString() }
+            ?.filterNot(::isJunkGenre)
         if (!genres.isNullOrEmpty()) genre = genres.joinToString(", ")
         status = mapStatus(getProp(obj, "status"))
         initialized = true
@@ -553,7 +568,8 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
      * Handles nested replies recursively.
      */
     private fun toNovelComment(obj: Any): NovelComment {
-        val repliesList = (getProp(obj, "replies") as? List<*>)?.filterNotNull()?.map { toNovelComment(it) } ?: emptyList()
+        val repliesList =
+            (getProp(obj, "replies") as? List<*>)?.filterNotNull()?.map { toNovelComment(it) } ?: emptyList()
         val dateLong = (getProp(obj, "date") as? Number)?.toLong() ?: 0L
         return NovelComment(
             id = getProp(obj, "id")?.toString() ?: "",
@@ -602,6 +618,16 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
             }.getOrNull()?.let { return it }
         }
         return 0L
+    }
+
+    /**
+     * Some plugins (e.g. Anna's Archive) stuff file metadata into the genres
+     * array — file formats, language codes, and publication years are not
+     * genres and produce junk tags like "epub", "it", "2025" on the entry.
+     */
+    private fun isJunkGenre(tag: String): Boolean {
+        val t = tag.trim().lowercase()
+        return t in JUNK_GENRE_TAGS || YEAR_REGEX.matches(t)
     }
 
     private fun mapStatus(statusObj: Any?): Int {
@@ -658,23 +684,32 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
             try {
                 source.javaClass.methods.filter { it.name == methodName }.forEach { m ->
                     logcat(LogPriority.DEBUG) {
-                        "$tag   Found: ${m.name}(${m.parameterTypes.joinToString(", ") { it.simpleName }}) paramCount=${m.parameterCount}"
+                        "$tag   Found: ${m.name}(${m.parameterTypes.joinToString(", ") {
+                            it.simpleName
+                        }}) paramCount=${m.parameterCount}"
                     }
                 }
 
                 val method = source.javaClass.methods.find { m ->
                     m.name == methodName &&
                         m.parameterCount == 2 &&
-                        (m.parameterTypes[0] == Int::class.javaPrimitiveType || m.parameterTypes[0] == Int::class.java) &&
+                        (
+                            m.parameterTypes[0] == Int::class.javaPrimitiveType ||
+                                m.parameterTypes[0] == Int::class.java
+                            ) &&
                         m.parameterTypes[1].name.contains("Continuation")
                 }
 
                 if (method == null) {
-                    logcat(LogPriority.WARN) { "$tag Could not find suspend method $methodName(int, Continuation) for $name" }
+                    logcat(LogPriority.WARN) {
+                        "$tag Could not find suspend method $methodName(int, Continuation) for $name"
+                    }
                     val anyMethod = source.javaClass.methods.find { it.name == methodName }
                     if (anyMethod != null) {
                         logcat(LogPriority.DEBUG) {
-                            "$tag Found method with name $methodName: ${anyMethod.parameterTypes.joinToString(", ") { it.name }}"
+                            "$tag Found method with name $methodName: ${anyMethod.parameterTypes.joinToString(", ") {
+                                it.name
+                            }}"
                         }
                     }
                     cont.resume(emptyList())
@@ -765,7 +800,10 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
                     m.name == methodName &&
                         m.parameterCount == 3 &&
                         m.parameterTypes[0] == String::class.java &&
-                        (m.parameterTypes[1] == Int::class.javaPrimitiveType || m.parameterTypes[1] == Int::class.java) &&
+                        (
+                            m.parameterTypes[1] == Int::class.javaPrimitiveType ||
+                                m.parameterTypes[1] == Int::class.java
+                            ) &&
                         m.parameterTypes[2].name.contains("Continuation")
                 }
 
@@ -833,7 +871,10 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
                     m.name == methodName &&
                         m.parameterCount == 3 &&
                         m.parameterTypes[0] == String::class.java &&
-                        (m.parameterTypes[1] == Int::class.javaPrimitiveType || m.parameterTypes[1] == Int::class.java) &&
+                        (
+                            m.parameterTypes[1] == Int::class.javaPrimitiveType ||
+                                m.parameterTypes[1] == Int::class.java
+                            ) &&
                         m.parameterTypes[2].name.contains("Continuation")
                 }
 
@@ -1018,5 +1059,19 @@ class NovelSourceAdapter(private val source: Any) : NovelHttpSource() {
                 if (!cont.isCompleted) cont.resume(emptyList())
             }
         }
+    }
+
+    private companion object {
+        private val YEAR_REGEX = Regex("^(19|20)\\d{2}$")
+        private val JUNK_GENRE_TAGS = setOf(
+            // File formats
+            "epub", "mobi", "pdf", "azw", "azw3", "azw4", "txt", "doc", "docx", "rtf",
+            "fb2", "cbz", "cbr", "odt", "lit", "pdb", "lrf", "prc", "html", "djvu",
+            // Language codes / names Anna's Archive-style sources tag books with
+            "en", "it", "fr", "de", "es", "pt", "ru", "ja", "zh", "ko", "pl", "tr",
+            "nl", "sv", "ar", "hi", "id", "vi", "th", "uk", "cs", "da", "fi", "no",
+            "ro", "hu", "el", "he", "bg", "hr", "sk", "sl", "et", "lv", "lt", "fa",
+            "ms", "tl", "ca", "sr", "la", "jp", "cn",
+        )
     }
 }

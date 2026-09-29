@@ -91,7 +91,10 @@ class NovelExtensionManager(
                 val hasOldRepo = repos.any { it.baseUrl == oldUrl }
                 val hasNewRepo = repos.any { it.baseUrl == DEFAULT_REPO_URL }
 
-                android.util.Log.i("NovelExtMgr", "seedDefaultRepo: seeded=${seeded.get()}, repos=${repos.size}, hasOld=$hasOldRepo, hasNew=$hasNewRepo")
+                android.util.Log.i(
+                    "NovelExtMgr",
+                    "seedDefaultRepo: seeded=${seeded.get()}, repos=${repos.size}, hasOld=$hasOldRepo, hasNew=$hasNewRepo",
+                )
                 repos.forEach { repo ->
                     android.util.Log.i("NovelExtMgr", "  existing repo: ${repo.baseUrl}")
                 }

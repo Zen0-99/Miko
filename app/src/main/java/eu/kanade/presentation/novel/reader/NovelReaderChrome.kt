@@ -18,7 +18,6 @@ import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.outlined.FormatListNumbered
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,20 +31,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture
 
 @Composable
 fun NovelReaderTopBar(
@@ -181,7 +182,7 @@ fun NovelReaderChrome(
     showPhoneInfo: Boolean = false,
     estimatedReadingTime: Int = -1,
     readerBackgroundColor: Color = MaterialTheme.colorScheme.background,
-    backgroundTexture: eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture = eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE,
+    backgroundTexture: NovelReaderBackgroundTexture = NovelReaderBackgroundTexture.NONE,
     textureStrength: Int = 0,
     edgeFadeEnabled: Boolean = false,
     showCommentsButton: Boolean = false,
@@ -271,7 +272,7 @@ fun NovelPhoneInfoOverlay(
     accentColor: Color? = null,
     fullscreen: Boolean = false,
     backgroundColor: Color = MaterialTheme.colorScheme.background,
-    backgroundTexture: eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture = eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE,
+    backgroundTexture: NovelReaderBackgroundTexture = NovelReaderBackgroundTexture.NONE,
     textureStrength: Int = 0,
     estimatedReadingTime: Int = -1,
     edgeFadeEnabled: Boolean = false,
@@ -286,8 +287,11 @@ fun NovelPhoneInfoOverlay(
     // Time
     val timeText = remember {
         val format = android.text.format.DateFormat.is24HourFormat(context)
-        if (format) java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-        else java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+        if (format) {
+            java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        } else {
+            java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+        }
     }
     var currentTime by remember { mutableStateOf(timeText.format(java.util.Date())) }
 
@@ -339,14 +343,17 @@ fun NovelPhoneInfoOverlay(
     val totalHeight = fadeHeight + infoContentHeight
 
     // Build texture brush in composable context (imageResource is @Composable)
-    val textureBrush: ShaderBrush? = if (backgroundTexture != eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE && textureStrength > 0) {
+    val textureBrush: ShaderBrush? = if (backgroundTexture !=
+        NovelReaderBackgroundTexture.NONE &&
+        textureStrength > 0
+    ) {
         val imageRes = when (backgroundTexture) {
-            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.PAPER_GRAIN -> eu.kanade.tachiyomi.R.drawable.texture_paper
-            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.LINEN -> eu.kanade.tachiyomi.R.drawable.texture_linen
-            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.CANVAS -> eu.kanade.tachiyomi.R.drawable.texture_canvas
-            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.KRAFT -> eu.kanade.tachiyomi.R.drawable.texture_kraft
-            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.DOTTED -> eu.kanade.tachiyomi.R.drawable.texture_dotted
-            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture.NONE -> null
+            NovelReaderBackgroundTexture.PAPER_GRAIN -> R.drawable.texture_paper
+            NovelReaderBackgroundTexture.LINEN -> R.drawable.texture_linen
+            NovelReaderBackgroundTexture.CANVAS -> R.drawable.texture_canvas
+            NovelReaderBackgroundTexture.KRAFT -> R.drawable.texture_kraft
+            NovelReaderBackgroundTexture.DOTTED -> R.drawable.texture_dotted
+            NovelReaderBackgroundTexture.NONE -> null
         }
         if (imageRes != null) {
             val imageBitmap = ImageBitmap.imageResource(id = imageRes)

@@ -7,13 +7,11 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
-import java.io.File
-import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +22,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import java.io.File
+import kotlin.io.path.createTempDirectory
 
 /**
  * JVM unit tests for [PocketTtsEngine] — the `TtsEngine` adapter over
@@ -78,7 +78,12 @@ class PocketTtsEngineTest {
         sink: RecordingSink,
         calls: MutableList<Pair<String, String>>,
         context: Context = contextWithVoices(
-            "alba", "azelma", "eponine", "fantine", "javert", "marius",
+            "alba",
+            "azelma",
+            "eponine",
+            "fantine",
+            "javert",
+            "marius",
         ),
     ): PocketTtsEngine = PocketTtsEngine(
         context = context,

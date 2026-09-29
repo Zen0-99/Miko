@@ -175,6 +175,8 @@ class ShowsScreenModel(
     private val workIdResolver: eu.kanade.tachiyomi.data.mikodb.WorkIdResolver = Injekt.get(),
     private val workIdentityApi: eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi = Injekt.get(),
     private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
+    private val threadIdResolver: eu.kanade.tachiyomi.data.comments.ThreadIdResolver = Injekt.get(),
+    private val commentsApi: eu.kanade.tachiyomi.data.comments.CommentsApi = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<ShowsScreenModel.State>(State.Loading) {
 
@@ -539,6 +541,20 @@ class ShowsScreenModel(
 
             // Start observe tracking since it only needs animeId
             observeTrackers()
+
+            // "View comments (N)" badge — resolves the work thread once
+            // and counts its visible comments. ID-only, silent on failure.
+            if (commentsEnabled) {
+                screenModelScope.launchIO {
+                    val threadId = threadIdResolver.forShows(anime) ?: return@launchIO
+                    val result = commentsApi.threadCounts(listOf(threadId))
+                    if (result is eu.kanade.tachiyomi.data.comments.CommentsApi.Result.Ok) {
+                        updateSuccessState {
+                            it.copy(commentsCount = result.value.counts[threadId] ?: 0L)
+                        }
+                    }
+                }
+            }
 
             // Fetch suggestions asynchronously
             loadSuggestions(buildSuggestionSeed(anime))
@@ -2278,6 +2294,7 @@ class ShowsScreenModel(
             val intervalDays: Int? = null,
             val showInterval: Boolean = true,
             val suggestions: SuggestionState = SuggestionState.Idle,
+            val commentsCount: Long? = null,
         ) : State {
 
             val processedSeasons by lazy {

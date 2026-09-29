@@ -12,8 +12,6 @@ import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
-import uy.kohesive.injekt.injectLazy
-import java.util.regex.Pattern
 
 internal class NovelDownloadNotifier(private val context: Context) {
 

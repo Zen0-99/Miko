@@ -25,6 +25,7 @@ import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.saver.Location
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.ui.comments.CommentsSheetScreen
 import eu.kanade.tachiyomi.ui.reader.loader.ChapterLoader
 import eu.kanade.tachiyomi.ui.reader.loader.DownloadPageLoader
 import eu.kanade.tachiyomi.ui.reader.model.InsertPage
@@ -788,6 +789,26 @@ class ReaderViewModel @JvmOverloads constructor(
         mutableState.update { it.copy(dialog = Dialog.Settings) }
     }
 
+    val commentsEnabled: Boolean
+        get() = basePreferences.commentsEnabled().get()
+
+    fun openCommentsDialog() {
+        val chapter = state.value.currentChapter?.chapter ?: return
+        val sourceName = manga?.source?.let { sourceManager.getOrStub(it) }?.name ?: return
+        mutableState.update {
+            it.copy(
+                dialog = Dialog.Comments(
+                    CommentsSheetScreen.ChapterRef(
+                        name = chapter.name,
+                        number = chapter.chapter_number,
+                        sourceKey = sourceName,
+                        allChapters = chapterList.map { c -> c.chapter.name to c.chapter.chapter_number },
+                    ),
+                ),
+            )
+        }
+    }
+
     fun closeDialog() {
         mutableState.update { it.copy(dialog = null) }
     }
@@ -980,6 +1001,7 @@ class ReaderViewModel @JvmOverloads constructor(
         data object Settings : Dialog
         data object ReadingModeSelect : Dialog
         data object OrientationModeSelect : Dialog
+        data class Comments(val chapter: CommentsSheetScreen.ChapterRef) : Dialog
         data class PageActions(val page: ReaderPage) : Dialog
     }
 

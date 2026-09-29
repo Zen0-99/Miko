@@ -9,13 +9,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
-import tachiyomi.domain.source.novel.model.NovelSource as DomainNovelSource
 import tachiyomi.domain.source.novel.model.StubNovelSource
 import tachiyomi.domain.source.novel.repository.NovelSourcePagingSourceType
 import tachiyomi.domain.source.novel.repository.NovelSourceRepository
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import tachiyomi.domain.source.novel.model.NovelSource as DomainNovelSource
 
 class NovelSourceRepositoryImpl(
     private val sourceManager: NovelSourceManager = Injekt.get(),

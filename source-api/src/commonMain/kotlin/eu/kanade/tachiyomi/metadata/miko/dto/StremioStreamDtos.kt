@@ -8,6 +8,13 @@ data class StremioStreamResponse(
 )
 
 @Serializable
+data class StremioManifestDto(
+    val id: String? = null,
+    val name: String? = null,
+    val logo: String? = null,
+)
+
+@Serializable
 data class StremioStreamDto(
     val name: String,
     val title: String? = null,

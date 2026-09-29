@@ -3,8 +3,8 @@ package tachiyomi.domain.collection.novel.interactor
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
-import tachiyomi.domain.library.novel.model.NovelLibrarySort
 import tachiyomi.domain.library.model.plus
+import tachiyomi.domain.library.novel.model.NovelLibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
 import kotlin.random.Random
 

@@ -1,9 +1,9 @@
 package eu.kanade.presentation.util
 
 import android.content.Context
-import miko.core.common.torrent.DisabledTorrServerException
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.util.system.isOnline
+import miko.core.common.torrent.DisabledTorrServerException
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.items.chapter.model.NoChaptersException
 import tachiyomi.domain.items.episode.model.NoEpisodesException

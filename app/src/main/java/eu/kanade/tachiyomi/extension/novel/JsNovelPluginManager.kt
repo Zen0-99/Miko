@@ -9,7 +9,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -37,19 +36,19 @@ class JsNovelPluginManager(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val _installedPlugins = MutableStateFlow<List<NovelPlugin.Installed>>(emptyList())
-    val installedPluginsFlow: Flow<List<NovelPlugin.Installed>> = _installedPlugins.asStateFlow()
+    private val _installedPluginsFlow = MutableStateFlow<List<NovelPlugin.Installed>>(emptyList())
+    val installedPluginsFlow: Flow<List<NovelPlugin.Installed>> = _installedPluginsFlow.asStateFlow()
 
-    private val _availablePlugins = MutableStateFlow<List<NovelPlugin.Available>>(emptyList())
-    val availablePluginsFlow: Flow<List<NovelPlugin.Available>> = _availablePlugins.asStateFlow()
+    private val _availablePluginsFlow = MutableStateFlow<List<NovelPlugin.Available>>(emptyList())
+    val availablePluginsFlow: Flow<List<NovelPlugin.Available>> = _availablePluginsFlow.asStateFlow()
 
-    private val _updates = MutableStateFlow<List<NovelPlugin.Installed>>(emptyList())
-    val updatesFlow: Flow<List<NovelPlugin.Installed>> = _updates.asStateFlow()
+    private val _updatesFlow = MutableStateFlow<List<NovelPlugin.Installed>>(emptyList())
+    val updatesFlow: Flow<List<NovelPlugin.Installed>> = _updatesFlow.asStateFlow()
 
     init {
         scope.launch {
             repository.subscribeAll().collect { plugins ->
-                _installedPlugins.value = plugins.map { it.withNormalizedLang() }
+                _installedPluginsFlow.value = plugins.map { it.withNormalizedLang() }
                 updatePendingUpdates()
             }
         }
@@ -60,7 +59,7 @@ class JsNovelPluginManager(
      * The user must manually add repos — no default repo is seeded.
      */
     suspend fun refreshAvailablePlugins() {
-        _availablePlugins.value = api.fetchAvailablePlugins().map { it.withNormalizedLang() }
+        _availablePluginsFlow.value = api.fetchAvailablePlugins().map { it.withNormalizedLang() }
         updatePendingUpdates()
     }
 
@@ -70,7 +69,7 @@ class JsNovelPluginManager(
      */
     suspend fun installPlugin(plugin: NovelPlugin.Available): NovelPlugin.Installed {
         val installed = installer.install(plugin).withNormalizedLang()
-        _installedPlugins.value = _installedPlugins.value
+        _installedPluginsFlow.value = _installedPluginsFlow.value
             .filterNot { it.id == installed.id } + installed
         updatePendingUpdates()
         return installed
@@ -89,7 +88,7 @@ class JsNovelPluginManager(
      */
     suspend fun uninstallPlugin(pluginId: String) {
         installer.uninstall(pluginId)
-        _installedPlugins.value = _installedPlugins.value.filterNot { it.id == pluginId }
+        _installedPluginsFlow.value = _installedPluginsFlow.value.filterNot { it.id == pluginId }
         updatePendingUpdates()
     }
 
@@ -109,7 +108,7 @@ class JsNovelPluginManager(
      * Check if an update is available for the given installed plugin.
      */
     fun hasUpdate(installed: NovelPlugin.Installed): Boolean {
-        return _availablePlugins.value.any { available ->
+        return _availablePluginsFlow.value.any { available ->
             available.id == installed.id && available.versionCode > installed.versionCode
         }
     }
@@ -118,7 +117,7 @@ class JsNovelPluginManager(
      * Get the best available update for an installed plugin, if any.
      */
     fun getAvailableUpdate(installed: NovelPlugin.Installed): NovelPlugin.Available? {
-        return _availablePlugins.value
+        return _availablePluginsFlow.value
             .filter { it.id == installed.id && it.versionCode > installed.versionCode }
             .maxByOrNull { it.versionCode }
     }
@@ -127,14 +126,14 @@ class JsNovelPluginManager(
      * Get the installed plugin by ID.
      */
     fun getInstalledPlugin(pluginId: String): NovelPlugin.Installed? {
-        return _installedPlugins.value.firstOrNull { it.id == pluginId }
+        return _installedPluginsFlow.value.firstOrNull { it.id == pluginId }
     }
 
     /**
      * Get the installed plugin by ID as a flow.
      */
     fun getInstalledPluginAsFlow(pluginId: String): Flow<NovelPlugin.Installed?> {
-        return _installedPlugins.map { plugins ->
+        return _installedPluginsFlow.map { plugins ->
             plugins.firstOrNull { it.id == pluginId }
         }.distinctUntilChanged()
     }
@@ -143,14 +142,14 @@ class JsNovelPluginManager(
      * Get the available plugin by ID.
      */
     fun getAvailablePlugin(pluginId: String): NovelPlugin.Available? {
-        return _availablePlugins.value.firstOrNull { it.id == pluginId }
+        return _availablePluginsFlow.value.firstOrNull { it.id == pluginId }
     }
 
     private fun updatePendingUpdates() {
-        val bestAvailableByIdVersion = _availablePlugins.value
+        val bestAvailableByIdVersion = _availablePluginsFlow.value
             .groupBy { it.id }
             .mapValues { (_, plugins) -> plugins.maxByOrNull { it.versionCode } }
-        _updates.value = _installedPlugins.value.filter { installed ->
+        _updatesFlow.value = _installedPluginsFlow.value.filter { installed ->
             val best = bestAvailableByIdVersion[installed.id] ?: return@filter false
             best.versionCode > installed.versionCode
         }

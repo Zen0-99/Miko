@@ -112,6 +112,11 @@ fun LibraryUpdateProgressOverlay(
     hazeState: HazeState? = null,
     tint: Color = Color.Unspecified,
     modifier: Modifier = Modifier,
+    /**
+     * Extra bottom lift — HomeScreen passes the mini-player's height here so
+     * this card stacks *above* the audiobook mini-player when both show.
+     */
+    liftBy: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
     val enabled by libraryPreferences.showUpdateProgressOverlay().collectAsState()
@@ -250,7 +255,11 @@ fun LibraryUpdateProgressOverlay(
     // LaunchedEffect which runs after composition).
     val dragProgress by remember {
         derivedStateOf {
-            val offset = try { draggableState.requireOffset() } catch (_: IllegalStateException) { 0f }
+            val offset = try {
+                draggableState.requireOffset()
+            } catch (_: IllegalStateException) {
+                0f
+            }
             (kotlin.math.abs(offset) / dismissDistance).coerceIn(0f, 1f)
         }
     }
@@ -265,7 +274,7 @@ fun LibraryUpdateProgressOverlay(
         exit = fadeOut(animationSpec = tween(200)),
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = navBarBottom + 12.dp)
+            .padding(bottom = navBarBottom + 12.dp + liftBy)
             .padding(horizontal = 16.dp),
     ) {
         GlassOverlayCard(
@@ -285,7 +294,11 @@ fun LibraryUpdateProgressOverlay(
             },
             modifier = Modifier
                 .offset {
-                    val ox = try { draggableState.requireOffset() } catch (_: IllegalStateException) { 0f }
+                    val ox = try {
+                        draggableState.requireOffset()
+                    } catch (_: IllegalStateException) {
+                        0f
+                    }
                     IntOffset(ox.roundToInt(), 0)
                 }
                 .graphicsLayer {
@@ -475,8 +488,13 @@ private fun SourceProgressSection(
     // Pick the first non-timed-out title to display. If all are timed out
     // and there's only one entry, show it anyway (better than showing nothing).
     val displayTitle = currentTitles.firstOrNull { it !in timedOutTitles }
-        ?: if (currentTitles.size <= 1) currentTitles.firstOrNull()
-        else if (!isCompleted) lastTitle else null
+        ?: if (currentTitles.size <= 1) {
+            currentTitles.firstOrNull()
+        } else if (!isCompleted) {
+            lastTitle
+        } else {
+            null
+        }
 
     Column {
         // Source label + progress count + per-section cancel button

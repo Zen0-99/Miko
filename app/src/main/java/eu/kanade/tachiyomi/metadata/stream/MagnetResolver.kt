@@ -74,7 +74,8 @@ class MagnetResolver(
     fun needsResolution(url: String): Boolean {
         return url.startsWith("magnet") ||
             url.endsWith(".torrent") ||
-            url.startsWith(torrentServerApi.hostUrl).not() && url.contains("infoHash")
+            url.startsWith(torrentServerApi.hostUrl).not() &&
+            url.contains("infoHash")
     }
 
     private suspend fun waitForTorrentServer(): Boolean {

@@ -65,7 +65,10 @@ class NovelCoverFetcher(
         get() = diskCacheKeyLazy.value
 
     override suspend fun fetch(): FetchResult {
-        android.util.Log.d("NovelCoverFetcher", "fetch: url=$url isLibraryNovel=$isLibraryNovel diskCacheKey=$diskCacheKey")
+        android.util.Log.d(
+            "NovelCoverFetcher",
+            "fetch: url=$url isLibraryNovel=$isLibraryNovel diskCacheKey=$diskCacheKey",
+        )
         // Use custom cover if exists
         val useCustomCover = options.extras.getOrDefault(USE_CUSTOM_COVER_KEY)
         if (useCustomCover) {
@@ -116,7 +119,10 @@ class NovelCoverFetcher(
             null
         }
         val coverExists = libraryCoverCacheFile?.exists() == true
-        android.util.Log.d("NovelCoverFetcher", "httpLoader: url=$url coverExists=$coverExists coverFile=$libraryCoverCacheFile")
+        android.util.Log.d(
+            "NovelCoverFetcher",
+            "httpLoader: url=$url coverExists=$coverExists coverFile=$libraryCoverCacheFile",
+        )
         if (coverExists && options.diskCachePolicy.readEnabled) {
             android.util.Log.d("NovelCoverFetcher", "httpLoader: returning from cover cache")
             return fileLoader(libraryCoverCacheFile!!)
@@ -185,7 +191,10 @@ class NovelCoverFetcher(
                 throw e
             }
         } catch (e: Exception) {
-            android.util.Log.e("NovelCoverFetcher", "httpLoader: FAILED for url=$url: ${e::class.simpleName}: ${e.message}")
+            android.util.Log.e(
+                "NovelCoverFetcher",
+                "httpLoader: FAILED for url=$url: ${e::class.simpleName}: ${e.message}",
+            )
             snapshot?.close()
             throw e
         }

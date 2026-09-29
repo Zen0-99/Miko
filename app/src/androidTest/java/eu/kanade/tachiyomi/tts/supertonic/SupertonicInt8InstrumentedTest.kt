@@ -5,10 +5,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.supertonic.SupertonicEngine
-import java.io.File
-import java.io.RandomAccessFile
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
@@ -22,6 +18,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.File
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * Phase-05B on-device proof (validation rows V1/V2): the production
@@ -89,19 +89,19 @@ class SupertonicInt8InstrumentedTest {
     @Test
     fun int8SessionsExposeExpectedInputNames() {
         runBlocking {
-        val loadStart = System.currentTimeMillis()
-        val engine = newEngine()
-        engine.ensureLoaded()
-        val loadMs = System.currentTimeMillis() - loadStart
-        Log.i(TAG, "engine load: ${loadMs}ms, sampleRate=${engine.sampleRate}")
+            val loadStart = System.currentTimeMillis()
+            val engine = newEngine()
+            engine.ensureLoaded()
+            val loadMs = System.currentTimeMillis() - loadStart
+            Log.i(TAG, "engine load: ${loadMs}ms, sampleRate=${engine.sampleRate}")
 
-        val names = engine.sessionInputNames()
-        assertInputs("duration_predictor", names["duration_predictor"], DP_INPUTS)
-        assertInputs("text_encoder", names["text_encoder"], TEXT_ENC_INPUTS)
-        assertInputs("vector_estimator", names["vector_estimator"], VECTOR_EST_INPUTS)
-        assertInputs("vocoder", names["vocoder"], VOCODER_INPUTS)
+            val names = engine.sessionInputNames()
+            assertInputs("duration_predictor", names["duration_predictor"], DP_INPUTS)
+            assertInputs("text_encoder", names["text_encoder"], TEXT_ENC_INPUTS)
+            assertInputs("vector_estimator", names["vector_estimator"], VECTOR_EST_INPUTS)
+            assertInputs("vocoder", names["vocoder"], VOCODER_INPUTS)
 
-        engine.release()
+            engine.release()
         }
     }
 
@@ -109,67 +109,67 @@ class SupertonicInt8InstrumentedTest {
     @Test
     fun synthesizeEndToEnd() {
         runBlocking {
-        val engine = newEngine()
-        val loadStart = System.currentTimeMillis()
-        engine.ensureLoaded()
-        val loadMs = System.currentTimeMillis() - loadStart
-        Log.i(
-            TAG,
-            "engine load: ${loadMs}ms, sampleRate=${engine.sampleRate}, " +
-                "steps=$steps, threads=${threads ?: "auto"}",
-        )
-
-        val results = mutableListOf<JsonObject>()
-        paragraphs.forEachIndexed { idx, text ->
-            val t0 = System.currentTimeMillis()
-            val chunks = engine.synthesizeStream(text, "supertonic:F5", steps, 1.0f).toList()
-            val elapsedMs = System.currentTimeMillis() - t0
-
-            val total = chunks.sumOf { it.pcm.size }
-            val pcm = ShortArray(total)
-            var pos = 0
-            for (c in chunks) {
-                c.pcm.copyInto(pcm, pos)
-                pos += c.pcm.size
-            }
-            assertTrue("paragraph $idx produced no audio", pcm.isNotEmpty())
-
-            val audioSec = pcm.size.toFloat() / engine.sampleRate
-            val rtf = elapsedMs / 1000f / audioSec
-
-            val wavFile = File(stagingDir, "out_int8_F5_p$idx.wav")
-            writeWav(wavFile, pcm, engine.sampleRate)
-            wavFile.setReadable(true, false)
-
+            val engine = newEngine()
+            val loadStart = System.currentTimeMillis()
+            engine.ensureLoaded()
+            val loadMs = System.currentTimeMillis() - loadStart
             Log.i(
                 TAG,
-                "int8 F5 p$idx: ${chunks.size} chunk(s), ${elapsedMs}ms synth, " +
-                    "${"%.2f".format(audioSec)}s audio, RTF=${"%.3f".format(rtf)}",
+                "engine load: ${loadMs}ms, sampleRate=${engine.sampleRate}, " +
+                    "steps=$steps, threads=${threads ?: "auto"}",
             )
-            results.add(
-                buildJsonObject {
-                    put("voice", JsonPrimitive("F5"))
-                    put("paragraph", JsonPrimitive(idx))
-                    put("chunks", JsonPrimitive(chunks.size))
-                    put("steps", JsonPrimitive(steps))
-                    put("threads", JsonPrimitive(threads ?: 0))
-                    put("load_ms", JsonPrimitive(loadMs))
-                    put("elapsed_ms", JsonPrimitive(elapsedMs))
-                    put("audio_sec", JsonPrimitive(audioSec.toDouble()))
-                    put("rtf", JsonPrimitive(rtf.toDouble()))
-                },
-            )
-            // Smoke bound — the precise number is logged for the 05B-05 V6
-            // A/B, not gated here beyond faster-than-realtime.
-            assertTrue("int8 RTF $rtf >= 1.0 on paragraph $idx", rtf < 1.0f)
-        }
 
-        File(stagingDir, "rtf-int8.json").let {
-            it.writeText(JsonArray(results).toString())
-            it.setReadable(true, false)
-        }
-        engine.release()
-        Log.i(TAG, "done — results in ${stagingDir.absolutePath}")
+            val results = mutableListOf<JsonObject>()
+            paragraphs.forEachIndexed { idx, text ->
+                val t0 = System.currentTimeMillis()
+                val chunks = engine.synthesizeStream(text, "supertonic:F5", steps, 1.0f).toList()
+                val elapsedMs = System.currentTimeMillis() - t0
+
+                val total = chunks.sumOf { it.pcm.size }
+                val pcm = ShortArray(total)
+                var pos = 0
+                for (c in chunks) {
+                    c.pcm.copyInto(pcm, pos)
+                    pos += c.pcm.size
+                }
+                assertTrue("paragraph $idx produced no audio", pcm.isNotEmpty())
+
+                val audioSec = pcm.size.toFloat() / engine.sampleRate
+                val rtf = elapsedMs / 1000f / audioSec
+
+                val wavFile = File(stagingDir, "out_int8_F5_p$idx.wav")
+                writeWav(wavFile, pcm, engine.sampleRate)
+                wavFile.setReadable(true, false)
+
+                Log.i(
+                    TAG,
+                    "int8 F5 p$idx: ${chunks.size} chunk(s), ${elapsedMs}ms synth, " +
+                        "${"%.2f".format(audioSec)}s audio, RTF=${"%.3f".format(rtf)}",
+                )
+                results.add(
+                    buildJsonObject {
+                        put("voice", JsonPrimitive("F5"))
+                        put("paragraph", JsonPrimitive(idx))
+                        put("chunks", JsonPrimitive(chunks.size))
+                        put("steps", JsonPrimitive(steps))
+                        put("threads", JsonPrimitive(threads ?: 0))
+                        put("load_ms", JsonPrimitive(loadMs))
+                        put("elapsed_ms", JsonPrimitive(elapsedMs))
+                        put("audio_sec", JsonPrimitive(audioSec.toDouble()))
+                        put("rtf", JsonPrimitive(rtf.toDouble()))
+                    },
+                )
+                // Smoke bound — the precise number is logged for the 05B-05 V6
+                // A/B, not gated here beyond faster-than-realtime.
+                assertTrue("int8 RTF $rtf >= 1.0 on paragraph $idx", rtf < 1.0f)
+            }
+
+            File(stagingDir, "rtf-int8.json").let {
+                it.writeText(JsonArray(results).toString())
+                it.setReadable(true, false)
+            }
+            engine.release()
+            Log.i(TAG, "done — results in ${stagingDir.absolutePath}")
         }
     }
 
@@ -215,8 +215,13 @@ class SupertonicInt8InstrumentedTest {
         private val DP_INPUTS = setOf("text_ids", "style_dp", "text_mask")
         private val TEXT_ENC_INPUTS = setOf("text_ids", "style_ttl", "text_mask")
         private val VECTOR_EST_INPUTS = setOf(
-            "noisy_latent", "text_emb", "style_ttl", "latent_mask",
-            "text_mask", "current_step", "total_step",
+            "noisy_latent",
+            "text_emb",
+            "style_ttl",
+            "latent_mask",
+            "text_mask",
+            "current_step",
+            "total_step",
         )
         private val VOCODER_INPUTS = setOf("latent")
 

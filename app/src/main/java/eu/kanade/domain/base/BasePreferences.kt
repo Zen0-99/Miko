@@ -40,4 +40,10 @@ class BasePreferences(
     fun hardwareBitmapThreshold() = preferenceStore.getInt("pref_hardware_bitmap_threshold", GLUtil.SAFE_TEXTURE_LIMIT)
 
     fun alwaysDecodeLongStripWithSSIV() = preferenceStore.getBoolean("pref_always_decode_long_strip_with_ssiv", false)
+
+    /** Kill-switch for the Miko comments feature — hides the entry action + gates prefetch. */
+    fun commentsEnabled() = preferenceStore.getBoolean("comments_enabled", true)
+
+    /** Opt-in: download the full ~170 MB manga/novel identity map for offline canonicalization. */
+    fun offlineMangaMap() = preferenceStore.getBoolean("mikodb_manga_offline", false)
 }

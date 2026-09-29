@@ -134,7 +134,7 @@ private fun AppThemesList(
     }
 }
 
-private const val SecondaryItemAlpha = 0.78f
+private const val SECONDARY_ITEM_ALPHA = 0.78f
 
 @Composable
 fun AppThemePreviewItem(
@@ -209,7 +209,7 @@ fun AppThemePreviewItem(
                         .height(24.dp)
                         .fillMaxWidth()
                         .background(
-                            color = colorScheme.onSurface.copy(alpha = SecondaryItemAlpha),
+                            color = colorScheme.onSurface.copy(alpha = SECONDARY_ITEM_ALPHA),
                             shape = RoundedCornerShape(8.dp),
                         ),
                 )
@@ -289,7 +289,7 @@ fun AppThemePreviewItem(
                                 .fillMaxSize()
                                 .padding(6.dp)
                                 .background(
-                                    color = colorScheme.onSurface.copy(alpha = SecondaryItemAlpha),
+                                    color = colorScheme.onSurface.copy(alpha = SECONDARY_ITEM_ALPHA),
                                     shape = CircleShape,
                                 ),
                         )
@@ -319,7 +319,7 @@ fun AppThemePreviewItem(
                                 .fillMaxSize()
                                 .padding(6.dp)
                                 .background(
-                                    color = colorScheme.onSurface.copy(alpha = SecondaryItemAlpha),
+                                    color = colorScheme.onSurface.copy(alpha = SECONDARY_ITEM_ALPHA),
                                     shape = CircleShape,
                                 ),
                         )

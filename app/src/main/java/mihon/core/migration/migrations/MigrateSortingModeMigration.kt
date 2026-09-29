@@ -21,7 +21,7 @@ class MigrateSortingModeMigration : Migration {
             0,
         )
         val oldAnimeSortingMode = prefs.getInt(
-            libraryPreferences.animeSortingMode().key(),
+            libraryPreferences.showsSortingMode().key(),
             0,
         )
         val oldSortingDirection = prefs.getBoolean("library_sorting_ascending", true)
@@ -57,13 +57,13 @@ class MigrateSortingModeMigration : Migration {
 
         prefs.edit(commit = true) {
             remove(libraryPreferences.mangaSortingMode().key())
-            remove(libraryPreferences.animeSortingMode().key())
+            remove(libraryPreferences.showsSortingMode().key())
             remove("library_sorting_ascending")
         }
 
         prefs.edit {
             putString(libraryPreferences.mangaSortingMode().key(), newMangaSortingMode)
-            putString(libraryPreferences.animeSortingMode().key(), newAnimeSortingMode)
+            putString(libraryPreferences.showsSortingMode().key(), newAnimeSortingMode)
             putString("library_sorting_ascending", newSortingDirection)
         }
 

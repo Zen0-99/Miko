@@ -221,11 +221,13 @@ class NovelPluginSettingsBridge(
             ?: key
         val type = item["type"]?.jsonPrimitive?.contentOrNull ?: "text"
         val options = (item["options"] as? JsonArray)
-            ?.mapNotNull { (it as? JsonObject)?.let { opt ->
-                val label = opt["label"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                val value = opt["value"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                PluginSettingOption(label, value)
-            }}
+            ?.mapNotNull {
+                (it as? JsonObject)?.let { opt ->
+                    val label = opt["label"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    val value = opt["value"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    PluginSettingOption(label, value)
+                }
+            }
         val default = item["default"] ?: item["value"]
         return PluginSettingDefinition(
             key = key,
@@ -241,11 +243,13 @@ class NovelPluginSettingsBridge(
         val title = item["label"]?.jsonPrimitive?.contentOrNull ?: key
         val type = item["type"]?.jsonPrimitive?.contentOrNull ?: "text"
         val options = (item["options"] as? JsonArray)
-            ?.mapNotNull { (it as? JsonObject)?.let { opt ->
-                val label = opt["label"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                val value = opt["value"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                PluginSettingOption(label, value)
-            }}
+            ?.mapNotNull {
+                (it as? JsonObject)?.let { opt ->
+                    val label = opt["label"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    val value = opt["value"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    PluginSettingOption(label, value)
+                }
+            }
         val default = item["default"] ?: item["value"]
         return PluginSettingDefinition(
             key = key,

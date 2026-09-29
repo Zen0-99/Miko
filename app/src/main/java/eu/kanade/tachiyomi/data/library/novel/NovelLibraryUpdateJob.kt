@@ -65,10 +65,10 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.Instant
 import java.time.ZonedDateTime
-import kotlin.time.Duration.Companion.seconds
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 
 class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerParameters) :
     CoroutineWorker(context, workerParams) {
@@ -79,6 +79,8 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private val getNovel: GetNovel = Injekt.get()
     private val novelChapterRepository: NovelChapterRepository = Injekt.get()
     private val novelFetchInterval: NovelFetchInterval = Injekt.get()
+    private val basePreferences: eu.kanade.domain.base.BasePreferences = Injekt.get()
+    private val workPrefetcher: eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher = Injekt.get()
 
     private var novelsToUpdate: List<LibraryNovel> = mutableListOf()
 
@@ -150,7 +152,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      */
     private suspend fun addNovelsToQueue(collectionId: Long) {
         val libraryNovels = getLibraryNovels.await()
-        android.util.Log.i("NovelUpdateJob", "addNovelsToQueue: ${libraryNovels.size} library novels, collectionId=$collectionId")
+        android.util.Log.i(
+            "NovelUpdateJob",
+            "addNovelsToQueue: ${libraryNovels.size} library novels, collectionId=$collectionId",
+        )
 
         val listToUpdate = if (collectionId != -1L) {
             libraryNovels.filter { it.collection == collectionId }
@@ -171,7 +176,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
             android.util.Log.i("NovelUpdateJob", "  Collections to update: $collectionsToUpdate")
             android.util.Log.i("NovelUpdateJob", "  Collections to exclude: $collectionsToExclude")
-            android.util.Log.i("NovelUpdateJob", "  After collection filter: ${includedNovels.size} included, ${excludedNovelIds.size} excluded")
+            android.util.Log.i(
+                "NovelUpdateJob",
+                "  After collection filter: ${includedNovels.size} included, ${excludedNovelIds.size} excluded",
+            )
 
             includedNovels
                 .filterNot { it.novel.id in excludedNovelIds }
@@ -192,7 +200,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             .filter {
                 when {
                     it.novel.updateStrategy != NovelUpdateStrategy.ALWAYS_UPDATE -> {
-                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': updateStrategy=${it.novel.updateStrategy}")
+                        android.util.Log.i(
+                            "NovelUpdateJob",
+                            "  SKIP '${it.novel.title}': updateStrategy=${it.novel.updateStrategy}",
+                        )
                         skippedUpdates.add(
                             it.novel to context.stringResource(MR.strings.skipped_reason_not_always_update),
                         )
@@ -208,7 +219,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     }
 
                     ENTRY_HAS_UNVIEWED in restrictions && it.unreadCount != 0L -> {
-                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': has unviewed (unreadCount=${it.unreadCount})")
+                        android.util.Log.i(
+                            "NovelUpdateJob",
+                            "  SKIP '${it.novel.title}': has unviewed (unreadCount=${it.unreadCount})",
+                        )
                         skippedUpdates.add(
                             it.novel to context.stringResource(MR.strings.skipped_reason_not_caught_up),
                         )
@@ -216,7 +230,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     }
 
                     ENTRY_NON_VIEWED in restrictions && it.totalChapters > 0L && !it.hasStarted -> {
-                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': not started (totalChapters=${it.totalChapters})")
+                        android.util.Log.i(
+                            "NovelUpdateJob",
+                            "  SKIP '${it.novel.title}': not started (totalChapters=${it.totalChapters})",
+                        )
                         skippedUpdates.add(
                             it.novel to context.stringResource(MR.strings.skipped_reason_not_started),
                         )
@@ -224,7 +241,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     }
 
                     ENTRY_OUTSIDE_RELEASE_PERIOD in restrictions && it.novel.nextUpdate > fetchWindowUpperBound -> {
-                        android.util.Log.i("NovelUpdateJob", "  SKIP '${it.novel.title}': outside release period (nextUpdate=${it.novel.nextUpdate})")
+                        android.util.Log.i(
+                            "NovelUpdateJob",
+                            "  SKIP '${it.novel.title}': outside release period (nextUpdate=${it.novel.nextUpdate})",
+                        )
                         skippedUpdates.add(
                             it.novel to context.stringResource(MR.strings.skipped_reason_not_in_release_period),
                         )
@@ -232,14 +252,20 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     }
 
                     else -> {
-                        android.util.Log.i("NovelUpdateJob", "  INCLUDE '${it.novel.title}': status=${it.novel.status}, unreadCount=${it.unreadCount}, hasStarted=${it.hasStarted}")
+                        android.util.Log.i(
+                            "NovelUpdateJob",
+                            "  INCLUDE '${it.novel.title}': status=${it.novel.status}, unreadCount=${it.unreadCount}, hasStarted=${it.hasStarted}",
+                        )
                         true
                     }
                 }
             }
             .sortedBy { it.novel.title }
 
-        android.util.Log.i("NovelUpdateJob", "  Final: ${novelsToUpdate.size} novels to update out of ${libraryNovels.size} library novels")
+        android.util.Log.i(
+            "NovelUpdateJob",
+            "  Final: ${novelsToUpdate.size} novels to update out of ${libraryNovels.size} library novels",
+        )
 
         if (skippedUpdates.isNotEmpty()) {
             logcat {
@@ -379,6 +405,12 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     "Failed updates: ${failedUpdates.joinToString { "${it.first.title}: ${it.second}" }}"
                 }
             }
+
+            // Phase 14-02: a completed refresh mints + canonizes the whole
+            // library in the background (resolve → markSeen → canonize).
+            if (basePreferences.commentsEnabled().get()) {
+                workPrefetcher.start(canonize = true)
+            }
         }
     }
 
@@ -398,7 +430,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val coverCache = Injekt.get<eu.kanade.tachiyomi.data.cache.NovelCoverCache>()
         val coverFileExists = coverCache.getCoverFile(novel.thumbnailUrl)?.exists() == true
         val hasLocalThumbnailUrl = !novel.thumbnailUrl.isNullOrEmpty()
-        android.util.Log.d("NovelCoverCheck", "novel=${novel.title} id=${novel.id} thumbnailUrl=${novel.thumbnailUrl} coverFileExists=$coverFileExists hasLocalThumbnailUrl=$hasLocalThumbnailUrl autoUpdateMetadata=${libraryPreferences.autoUpdateMetadata().get()}")
+        android.util.Log.d(
+            "NovelCoverCheck",
+            "novel=${novel.title} id=${novel.id} thumbnailUrl=${novel.thumbnailUrl} coverFileExists=$coverFileExists hasLocalThumbnailUrl=$hasLocalThumbnailUrl autoUpdateMetadata=${libraryPreferences.autoUpdateMetadata().get()}",
+        )
 
         // Update novel metadata if needed
         if (libraryPreferences.autoUpdateMetadata().get()) {
@@ -414,9 +449,13 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 val hasRemoteThumbnailUrl = !networkNovel.thumbnail_url.isNullOrEmpty()
                 val thumbnailUrl = if (novel.favorite) {
                     if (!coverFileExists) {
-                        if (hasRemoteThumbnailUrl) networkNovel.thumbnail_url
-                        else if (hasLocalThumbnailUrl) null // keep local, just force cover refresh
-                        else null
+                        if (hasRemoteThumbnailUrl) {
+                            networkNovel.thumbnail_url
+                        } else if (hasLocalThumbnailUrl) {
+                            null // keep local, just force cover refresh
+                        } else {
+                            null
+                        }
                     } else {
                         null // cover exists, don't overwrite
                     }
@@ -447,7 +486,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 val novelRepository = Injekt.get<tachiyomi.domain.entries.novel.repository.NovelRepository>()
                 novelRepository.updateNovel(update)
             } catch (e: Throwable) {
-                android.util.Log.e("NovelCoverCheck", "getNovelDetails FAILED for novel=${novel.title}: ${e::class.simpleName}: ${e.message}")
+                android.util.Log.e(
+                    "NovelCoverCheck",
+                    "getNovelDetails FAILED for novel=${novel.title}: ${e::class.simpleName}: ${e.message}",
+                )
                 logcat(LogPriority.ERROR, e) { "Metadata update failed for novel ${novel.id}" }
                 context.maybeShowDnsToast(e, novel.thumbnailUrl)
                 // getNovelDetails failed (e.g. Anna's Archive may not support it).
@@ -462,9 +504,15 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                 coverLastModified = java.time.Instant.now().toEpochMilli(),
                             ),
                         )
-                        android.util.Log.d("NovelCoverCheck", "Cover refresh triggered (catch block) for novel=${novel.title}")
+                        android.util.Log.d(
+                            "NovelCoverCheck",
+                            "Cover refresh triggered (catch block) for novel=${novel.title}",
+                        )
                     } catch (e2: Throwable) {
-                        android.util.Log.e("NovelCoverCheck", "Cover refresh FAILED for novel=${novel.title}: ${e2::class.simpleName}: ${e2.message}")
+                        android.util.Log.e(
+                            "NovelCoverCheck",
+                            "Cover refresh FAILED for novel=${novel.title}: ${e2::class.simpleName}: ${e2.message}",
+                        )
                         logcat(LogPriority.ERROR, e2) { "Cover refresh failed for novel ${novel.id}" }
                     }
                 }
@@ -474,7 +522,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             // thumbnailUrl may be stale. Call getNovelDetails to get a fresh
             // URL (some sources change CDN hosts), then update both
             // thumbnailUrl and coverLastModified — same as the detail view.
-            android.util.Log.d("NovelCoverCheck", "autoUpdateMetadata off, fetching fresh details for cover for novel=${novel.title}")
+            android.util.Log.d(
+                "NovelCoverCheck",
+                "autoUpdateMetadata off, fetching fresh details for cover for novel=${novel.title}",
+            )
             try {
                 val networkNovel = source.getNovelDetails(novel.toSNovel())
                 val updateNovelInteractor = Injekt.get<eu.kanade.domain.entries.novel.interactor.UpdateNovel>()
@@ -494,7 +545,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             } catch (e: Throwable) {
                 // getNovelDetails failed — fall back to just updating
                 // coverLastModified with the existing URL
-                android.util.Log.e("NovelCoverCheck", "getNovelDetails failed for cover refresh, falling back: novel=${novel.title}: ${e::class.simpleName}: ${e.message}")
+                android.util.Log.e(
+                    "NovelCoverCheck",
+                    "getNovelDetails failed for cover refresh, falling back: novel=${novel.title}: ${e::class.simpleName}: ${e.message}",
+                )
                 context.maybeShowDnsToast(e, novel.thumbnailUrl)
                 try {
                     coverCache.deleteFromCache(novel, false)
@@ -506,7 +560,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                         ),
                     )
                 } catch (e2: Throwable) {
-                    android.util.Log.e("NovelCoverCheck", "Cover refresh fallback FAILED for novel=${novel.title}: ${e2::class.simpleName}: ${e2.message}")
+                    android.util.Log.e(
+                        "NovelCoverCheck",
+                        "Cover refresh fallback FAILED for novel=${novel.title}: ${e2::class.simpleName}: ${e2.message}",
+                    )
                 }
             }
         }
@@ -633,6 +690,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val WORK_NAME_MANUAL = "NovelLibraryUpdate-$TAG-manual"
         private const val WORK_NAME_AUTO = "NovelLibraryUpdate-$TAG-auto"
         private const val KEY_COLLECTION = "collection"
+
         // 1-minute hard timeout per novel fetch
         private const val PER_NOVEL_TIMEOUT_MS = 60_000L
 
@@ -745,4 +803,3 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
     }
 }
-

@@ -56,7 +56,11 @@ class NovelFilterSerializer {
                 val subStates = filter.state.mapNotNull { subFilter ->
                     if (subFilter is NovelFilter<*>) encodeFilter(subFilter) else null
                 }
-                NovelFilterState(filter.name, "Group", json.encodeToString(ListSerializer(NovelFilterState.serializer()), subStates))
+                NovelFilterState(
+                    filter.name,
+                    "Group",
+                    json.encodeToString(ListSerializer(NovelFilterState.serializer()), subStates),
+                )
             }
             else -> null
         }

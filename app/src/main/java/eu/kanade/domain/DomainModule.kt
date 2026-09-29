@@ -106,7 +106,6 @@ import tachiyomi.data.collection.novel.NovelCollectionRepositoryImpl
 import tachiyomi.data.custombutton.CustomButtonRepositoryImpl
 import tachiyomi.data.entries.shows.AnimeRepositoryImpl
 import tachiyomi.data.entries.manga.MangaRepositoryImpl
-import tachiyomi.data.entries.novel.NovelLinkRepositoryImpl
 import tachiyomi.data.entries.novel.NovelRepositoryImpl
 import tachiyomi.data.extension.novel.NovelPluginRepositoryImpl
 import tachiyomi.data.history.shows.AnimeHistoryRepositoryImpl
@@ -211,25 +210,15 @@ import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.entries.manga.interactor.ResetMangaViewerFlags
 import tachiyomi.domain.entries.manga.interactor.SetMangaChapterFlags
 import tachiyomi.domain.entries.manga.repository.MangaRepository
-import tachiyomi.domain.entries.novel.interactor.GetAllNovelLinks
 import tachiyomi.domain.entries.novel.interactor.GetDuplicateLibraryNovel
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
-import tachiyomi.domain.entries.novel.interactor.GetLinkedNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovelByUrlAndSourceId
 import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
-import tachiyomi.domain.entries.novel.interactor.GetNovelLinkedId
-import tachiyomi.domain.entries.novel.interactor.GetNovelLinks
 import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
-import tachiyomi.domain.entries.novel.interactor.LinkNovels
-import tachiyomi.domain.entries.novel.interactor.MakeLinkedPrimary
-import tachiyomi.domain.entries.novel.interactor.MergeLinkedNovelChapters
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.interactor.SetNovelChapterFlags
 import tachiyomi.domain.entries.novel.interactor.SetNovelDefaultChapterFlags
-import tachiyomi.domain.entries.novel.interactor.SetNovelSourcePriority
-import tachiyomi.domain.entries.novel.interactor.UnlinkNovel
-import tachiyomi.domain.entries.novel.repository.NovelLinkRepository
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
 import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
@@ -602,7 +591,6 @@ class DomainModule : InjektModule {
         addFactory { NovelExtensionListingInteractor() }
 
         addSingletonFactory<NovelRepository> { NovelRepositoryImpl(get(), get()) }
-        addSingletonFactory<NovelLinkRepository> { NovelLinkRepositoryImpl(get()) }
         addSingletonFactory<NovelChapterRepository> { NovelChapterRepositoryImpl(get()) }
         addSingletonFactory<NovelCollectionRepository> { NovelCollectionRepositoryImpl(get()) }
         addFactory { GetNovel(get()) }
@@ -614,15 +602,6 @@ class DomainModule : InjektModule {
         addFactory { BackfillNovelCharCounts(get()) }
         addFactory { GetNovelCollections(get()) }
         addFactory { GetNovelCustomOrder(get()) }
-        addFactory { GetLinkedNovels(get()) }
-        addFactory { GetNovelLinks(get()) }
-        addFactory { GetNovelLinkedId(get()) }
-        addFactory { LinkNovels(get()) }
-        addFactory { UnlinkNovel(get()) }
-        addFactory { GetAllNovelLinks(get()) }
-        addFactory { SetNovelSourcePriority(get()) }
-        addFactory { MergeLinkedNovelChapters() }
-        addFactory { MakeLinkedPrimary(get()) }
         addFactory { GetLibraryNovels(get()) }
         addFactory { GetVisibleNovelCollections(get()) }
         addFactory { SetNovelCollections(get()) }

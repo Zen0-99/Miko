@@ -106,7 +106,8 @@ object PocketEngineCatalog {
 
     /** Marmalade engines-repo v21 release — the effective source today. */
     val FALLBACK_ARCHIVE = EngineArchiveSource(
-        url = "https://github.com/maxwhipw/marmalade-tts-android-engines/releases/download/v21/pocket-tts-en-v2026_04-mixed.tar.bz2",
+        url = "https://github.com/maxwhipw/marmalade-tts-android-engines/releases/download/" +
+            "v21/pocket-tts-en-v2026_04-mixed.tar.bz2",
         sha256 = "3a3ed2810afbae1f963f4f4e3ebde767c2d3c7c622cc544f23170f0ca755b452",
         sizeBytes = 97_291_178L,
         archiveRoot = "pocket-tts-en/",

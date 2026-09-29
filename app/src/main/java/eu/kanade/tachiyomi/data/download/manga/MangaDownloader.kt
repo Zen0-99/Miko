@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.data.download.manga
 
 import android.content.Context
-import miko.util.DataSaver
-import miko.util.DataSaver.Companion.getImage
 import com.hippo.unifile.UniFile
 import eu.kanade.domain.entries.manga.model.getComicInfo
 import eu.kanade.domain.items.chapter.model.toSChapter
@@ -42,6 +40,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import logcat.LogPriority
 import mihon.core.archive.ZipWriter
+import miko.util.DataSaver
+import miko.util.DataSaver.Companion.getImage
 import nl.adaptivity.xmlutil.serialization.XML
 import okhttp3.Response
 import okio.Throttler

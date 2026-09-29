@@ -75,7 +75,7 @@ fun Screen.mangaHistoryTab(
     }
 
     return TabContent(
-        titleRes = AYMR.strings.label_history,
+        titleRes = AYMR.strings.carrier_manga_history,
         searchEnabled = true,
         searchAvailable = true,
         searchPlaceholderText = MR.strings.search_hint_history,

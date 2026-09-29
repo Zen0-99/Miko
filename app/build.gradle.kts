@@ -1,4 +1,5 @@
 import mihon.buildlogic.Config
+import mihon.buildlogic.Relro16kFix
 import mihon.buildlogic.getBuildTime
 import mihon.buildlogic.getCommitCount
 import mihon.buildlogic.getGitSha
@@ -282,7 +283,11 @@ dependencies {
     // Pinned to 1.26.0 for port parity with marmalade-tts-android — all of its
     // perf tuning was validated on that version; upgrading is a deliberate
     // follow-up, not a drive-by.
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.26.0")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.30.0")
+    // graphics-path is pulled transitively by animation-graphics; 1.0.1's
+    // libandroidx.graphics.path.so fails the 16 KB RELRO-end check — pin the
+    // rebuild.
+    implementation("androidx.graphics:graphics-path:1.1.0")
 
     // Disk
     implementation(libs.disklrucache)
@@ -347,8 +352,8 @@ dependencies {
     // mpv-android
     implementation(aniyomilibs.aniyomi.mpv)
     // FFmpeg-kit (must match the version aniyomi-mpv-lib was built against)
-        // libffmpegkit.so/libffmpegkit_abidetect.so with p_align=4096 (not 16KB
-        implementation(aniyomilibs.ffmpeg.kit)
+    // libffmpegkit.so/libffmpegkit_abidetect.so with p_align=4096 (not 16KB
+    implementation(aniyomilibs.ffmpeg.kit)
     implementation(aniyomilibs.arthenica.smartexceptions)
     // TorrServer
     implementation("local.lib:torrserver:0.1.0-16kb@aar")
@@ -369,6 +374,28 @@ dependencies {
     implementation(libs.play.services.cast)
     implementation(libs.play.services.cast.framework)
     implementation("androidx.mediarouter:mediarouter:1.7.0")
+}
+
+// Align PT_GNU_RELRO segment ends to 16 KB in every packaged .so — several
+// bundled prebuilts were linked before LLD 18 and trip Android's 16 KB
+// page-size compatibility check. Patches intermediates in place right before
+// packaging; the rewritten headers are semantically identical to a relink.
+tasks.matching { it.name.startsWith("package") }.configureEach {
+    doFirst {
+        listOf(
+            "intermediates/stripped_native_libs",
+            "intermediates/merged_native_libs",
+            "intermediates/merged_jni_libs",
+        )
+            .map { layout.buildDirectory.dir(it).get().asFile }
+            .flatMap { dir -> Relro16kFix.patchTree(dir) }
+            .forEach { r ->
+                logger.lifecycle(
+                    "16 KB RELRO fix: ${r.lib} -> " +
+                        if (r.nulled) "segment dropped" else "end aligned",
+                )
+            }
+    }
 }
 
 androidComponents {

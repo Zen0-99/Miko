@@ -20,12 +20,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,12 +52,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import eu.kanade.presentation.util.Screen
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -229,7 +227,9 @@ class NovelHighlightsScreen(
                 entry = entry,
                 onDismiss = { showActionsFor = null },
                 onCopy = {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clipboard = context.getSystemService(
+                        android.content.Context.CLIPBOARD_SERVICE,
+                    ) as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Highlight", entry.text))
                     showActionsFor = null
                 },
@@ -401,7 +401,13 @@ class NovelHighlightsScreen(
         val items = mutableListOf<HighlightListItem>()
         val sortedChapters = data.chapters.filter { it.highlights.isNotEmpty() }.sortedBy { it.chapterNumber }
         for (ch in sortedChapters) {
-            items.add(HighlightListItem.ChapterHeader(ch.chapterTitle.ifBlank { "Chapter ${ch.chapterNumber}" }))
+            items.add(
+                HighlightListItem.ChapterHeader(
+                    ch.chapterTitle.ifBlank {
+                        "Chapter ${eu.kanade.presentation.util.formatChapterNumber(ch.chapterNumber)}"
+                    },
+                ),
+            )
             for (hl in ch.highlights.sortedBy { it.timestamp }) {
                 items.add(HighlightListItem.Highlight(hl, ch.chapterNumber))
             }

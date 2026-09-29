@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.ui.reader.novel.tts.supertonic
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
 import io.kotest.matchers.shouldBe
-import java.io.File
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
 
 /**
  * JVM tests for [SupertonicVoiceCatalog] (namespaced voices, F5 fallback)

@@ -4,11 +4,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -312,9 +310,12 @@ private fun MonthLineChart(
                                 val curr = points[i]
                                 val midX = (prev.x + curr.x) / 2f
                                 cubicTo(
-                                    midX, prev.y,
-                                    midX, curr.y,
-                                    curr.x, curr.y,
+                                    midX,
+                                    prev.y,
+                                    midX,
+                                    curr.y,
+                                    curr.x,
+                                    curr.y,
                                 )
                             }
                         }
@@ -329,9 +330,12 @@ private fun MonthLineChart(
                                 val curr = points[i]
                                 val midX = (prev.x + curr.x) / 2f
                                 cubicTo(
-                                    midX, prev.y,
-                                    midX, curr.y,
-                                    curr.x, curr.y,
+                                    midX,
+                                    prev.y,
+                                    midX,
+                                    curr.y,
+                                    curr.x,
+                                    curr.y,
                                 )
                             }
                             // Close to bottom

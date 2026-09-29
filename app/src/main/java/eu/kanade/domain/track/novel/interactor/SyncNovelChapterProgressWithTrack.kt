@@ -69,7 +69,8 @@ class SyncNovelChapterProgressWithTrack(
 
             // Update total chapter count if the local source has more chapters than tracked
             if (action !is ResolveTrackProgressSync.SyncAction.PushRemoteTo &&
-                remoteTrack.totalChapters > 0 && sortedChapters.isNotEmpty()
+                remoteTrack.totalChapters > 0 &&
+                sortedChapters.isNotEmpty()
             ) {
                 val latestChapterNumber = sortedChapters.last().chapterNumber
                 if (latestChapterNumber > remoteTrack.totalChapters) {

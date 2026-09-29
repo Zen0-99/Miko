@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,12 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.EntryCompactGridItem
+import eu.kanade.tachiyomi.metadata.miko.dto.MikoMetaShort
 import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -57,7 +61,6 @@ fun CinemetaBrowseContent(
     val navigator = LocalNavigator.currentOrThrow
     val scope = rememberCoroutineScope()
 
-    val gridState = rememberLazyGridState()
     val displayMode by libraryPreferences.displayMode().collectAsState()
 
     val configuration = LocalConfiguration.current
@@ -70,19 +73,21 @@ fun CinemetaBrowseContent(
         }
         ).collectAsState()
 
-    // Infinite scroll: load next page when near the end
-    LaunchedEffect(gridState) {
-        snapshotFlow {
-            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val totalItems = gridState.layoutInfo.totalItemsCount
-            lastVisible >= totalItems - 6
+    // Library-collection-style paging between the type pills: each page
+    // keeps its own grid state, so scroll positions never transfer, and
+    // the settled page commits the type to the screen model.
+    val typeOptions = listOf("Movies" to "movie", "Series" to "series")
+    val selectedIndex = typeOptions.indexOfFirst { it.second == state.type }
+        .coerceAtLeast(0)
+    val pagerState = rememberPagerState(initialPage = selectedIndex) { typeOptions.size }
+    LaunchedEffect(pagerState.settledPage) {
+        val type = typeOptions[pagerState.settledPage].second
+        if (type != state.type) screenModel.changeType(type)
+    }
+    LaunchedEffect(state.type) {
+        if (typeOptions.getOrNull(pagerState.currentPage)?.second != state.type) {
+            pagerState.animateScrollToPage(selectedIndex)
         }
-            .distinctUntilChanged()
-            .collect { shouldLoad ->
-                if (shouldLoad && state.hasMore && !state.loading && state.error == null) {
-                    screenModel.loadNextPage()
-                }
-            }
     }
 
     Column(
@@ -91,7 +96,6 @@ fun CinemetaBrowseContent(
             .padding(top = contentPadding.calculateTopPadding()),
     ) {
         // Type toggle: Movies | Series — custom pill, no checkmark icon
-        val typeOptions = listOf("Movies" to "movie", "Series" to "series")
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -101,8 +105,9 @@ fun CinemetaBrowseContent(
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            typeOptions.forEach { (label, value) ->
-                val isSelected = state.type == value
+            typeOptions.forEachIndexed { index, option ->
+                val (label, _) = option
+                val isSelected = index == pagerState.currentPage
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -114,7 +119,7 @@ fun CinemetaBrowseContent(
                                 Modifier
                             },
                         )
-                        .clickable { screenModel.changeType(value) }
+                        .clickable { scope.launch { pagerState.animateScrollToPage(index) } }
                         .padding(vertical = 7.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -133,142 +138,222 @@ fun CinemetaBrowseContent(
             }
         }
 
-        PullRefresh(
-            refreshing = state.loading && state.metas.isNotEmpty(),
-            enabled = state.metas.isNotEmpty(),
-            onRefresh = { screenModel.refresh() },
-            indicatorPadding = PaddingValues(top = contentPadding.calculateTopPadding()),
-        ) {
-            when {
-                state.loading && state.metas.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
+        val emptyText = if (state.searchQuery != null) {
+            "No results for \"${state.searchQuery}\""
+        } else {
+            "No items found"
+        }
 
-                state.error != null && state.metas.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = state.error!!,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        Text(
-                            text = "Retry",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .padding(top = 8.dp)
-                                .clickable { screenModel.retry() },
-                        )
+        if (state.searchQuery != null) {
+            // Search results are type-scoped already — a single grid, no
+            // paging between pills while a query is live.
+            CinemetaCatalogGrid(
+                metas = state.metas,
+                loading = state.loading,
+                error = state.error,
+                hasMore = state.hasMore,
+                pagingEnabled = true,
+                onLoadNext = { screenModel.loadNextPage() },
+                onRefresh = { screenModel.refresh() },
+                onRetry = { screenModel.retry() },
+                onMetaClick = { meta ->
+                    scope.launch {
+                        navigator.push(ShowsScreen(screenModel.getOrCreateAnimeId(meta), true))
                     }
-                }
+                },
+                emptyText = emptyText,
+                columns = columns,
+                displayMode = displayMode,
+                contentPadding = contentPadding,
+            )
+        } else {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                val type = typeOptions[page].second
+                val live = type == state.type
+                CinemetaCatalogGrid(
+                    metas = if (live) state.metas else screenModel.peekCachedMetas(type),
+                    loading = live && state.loading,
+                    error = if (live) state.error else null,
+                    hasMore = live && state.hasMore,
+                    pagingEnabled = live,
+                    onLoadNext = { screenModel.loadNextPage() },
+                    onRefresh = { screenModel.refresh() },
+                    onRetry = { screenModel.retry() },
+                    onMetaClick = { meta ->
+                        scope.launch {
+                            navigator.push(ShowsScreen(screenModel.getOrCreateAnimeId(meta), true))
+                        }
+                    },
+                    emptyText = emptyText,
+                    columns = columns,
+                    displayMode = displayMode,
+                    contentPadding = contentPadding,
+                )
+            }
+        }
+    }
+}
 
-                state.metas.isEmpty() && !state.loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
+/**
+ * One catalog grid page — items, paging, pull-refresh and the loading/
+ * error/empty chrome. [pagingEnabled] is false for pager pages that
+ * preview a cached, non-live type: their scroll must not page the live
+ * feed and pull-refresh stays disabled until they settle.
+ */
+@Composable
+private fun CinemetaCatalogGrid(
+    metas: List<MikoMetaShort>,
+    loading: Boolean,
+    error: String?,
+    hasMore: Boolean,
+    pagingEnabled: Boolean,
+    onLoadNext: () -> Unit,
+    onRefresh: () -> Unit,
+    onRetry: () -> Unit,
+    onMetaClick: (MikoMetaShort) -> Unit,
+    emptyText: String,
+    columns: Int,
+    displayMode: LibraryDisplayMode,
+    contentPadding: PaddingValues,
+) {
+    val gridState = rememberLazyGridState()
+
+    // Infinite scroll: load next page when near the end
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = gridState.layoutInfo.totalItemsCount
+            lastVisible >= totalItems - 6
+        }
+            .distinctUntilChanged()
+            .collect { shouldLoad ->
+                if (shouldLoad && pagingEnabled && hasMore && !loading && error == null) {
+                    onLoadNext()
+                }
+            }
+    }
+
+    PullRefresh(
+        refreshing = loading && metas.isNotEmpty(),
+        enabled = pagingEnabled && metas.isNotEmpty(),
+        onRefresh = onRefresh,
+        indicatorPadding = PaddingValues(top = contentPadding.calculateTopPadding()),
+    ) {
+        when {
+            loading && metas.isEmpty() -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            error != null && metas.isEmpty() -> {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        text = "Retry",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clickable { onRetry() },
+                    )
+                }
+            }
+
+            metas.isEmpty() && !loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (pagingEnabled) {
                         Text(
-                            text = if (state.searchQuery != null) {
-                                "No results for \"${state.searchQuery}\""
-                            } else {
-                                "No items found"
-                            },
+                            text = emptyText,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+            }
 
-                else -> {
-                    val gridColumns = if (columns > 0) columns else 3
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(gridColumns),
-                        state = gridState,
-                        contentPadding = PaddingValues(
-                            start = contentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-                            end = contentPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-                            top = 8.dp,
-                            bottom = contentPadding.calculateBottomPadding() + 8.dp,
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridHorizontalSpacer),
-                        verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(state.metas.size) { index ->
-                            val meta = state.metas[index]
-                            val coverData = AnimeCover(
-                                animeId = meta.id.hashCode().toLong(),
-                                sourceId = CinemetaBrowseScreenModel.CINEMETA_SOURCE_ID,
-                                isAnimeFavorite = false,
-                                url = meta.poster,
-                                lastModified = 0L,
-                            )
-                            val onClick: () -> Unit = {
-                                scope.launch {
-                                    val animeId = screenModel.getOrCreateAnimeId(meta)
-                                    navigator.push(ShowsScreen(animeId, true))
-                                }
+            else -> {
+                val gridColumns = if (columns > 0) columns else 3
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(gridColumns),
+                    state = gridState,
+                    contentPadding = PaddingValues(
+                        start = contentPadding.calculateLeftPadding(LayoutDirection.Ltr),
+                        end = contentPadding.calculateRightPadding(LayoutDirection.Ltr),
+                        top = 8.dp,
+                        bottom = contentPadding.calculateBottomPadding() + 8.dp,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridHorizontalSpacer),
+                    verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(metas.size) { index ->
+                        val meta = metas[index]
+                        val coverData = AnimeCover(
+                            animeId = meta.id.hashCode().toLong(),
+                            sourceId = CinemetaBrowseScreenModel.CINEMETA_SOURCE_ID,
+                            isAnimeFavorite = false,
+                            url = meta.poster,
+                            lastModified = 0L,
+                        )
+                        val onClick: () -> Unit = { onMetaClick(meta) }
+                        val onLongClick: () -> Unit = {}
+
+                        when (displayMode) {
+                            LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+                                EntryCompactGridItem(
+                                    coverData = coverData,
+                                    onClick = onClick,
+                                    onLongClick = onLongClick,
+                                    title = if (displayMode is LibraryDisplayMode.CompactGrid) {
+                                        meta.name
+                                    } else {
+                                        null
+                                    },
+                                )
                             }
-                            val onLongClick: () -> Unit = {}
 
-                            when (displayMode) {
-                                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
-                                    EntryCompactGridItem(
-                                        coverData = coverData,
-                                        onClick = onClick,
-                                        onLongClick = onLongClick,
-                                        title = if (displayMode is LibraryDisplayMode.CompactGrid) {
-                                            meta.name
-                                        } else {
-                                            null
-                                        },
-                                    )
-                                }
-
-                                LibraryDisplayMode.ComfortableGrid -> {
-                                    EntryComfortableGridItem(
-                                        title = meta.name,
-                                        onClick = onClick,
-                                        onLongClick = onLongClick,
-                                        coverData = coverData,
-                                    )
-                                }
-
-                                LibraryDisplayMode.List -> {
-                                    // Fall back to comfortable grid for list mode in discover
-                                    EntryComfortableGridItem(
-                                        title = meta.name,
-                                        onClick = onClick,
-                                        onLongClick = onLongClick,
-                                        coverData = coverData,
-                                    )
-                                }
+                            else -> {
+                                EntryComfortableGridItem(
+                                    title = meta.name,
+                                    onClick = onClick,
+                                    onLongClick = onLongClick,
+                                    coverData = coverData,
+                                )
                             }
                         }
-                        if (state.loading) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator()
-                                }
+                    }
+                    if (loading) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator()
                             }
                         }
                     }
                 }
             }
-        } // PullRefresh
-    }
+        }
+    } // PullRefresh
 }

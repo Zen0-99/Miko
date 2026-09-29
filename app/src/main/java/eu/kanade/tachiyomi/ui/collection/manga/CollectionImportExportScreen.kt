@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.ui.collection.manga
 
-import android.content.Context
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -154,7 +152,8 @@ class CollectionImportExportScreen : Screen() {
                             Text(stringResource(AYMR.strings.collection_cross_collection_warning_body))
                             pendingWarnings.forEach { warning ->
                                 Text(
-                                    text = "\n• ${warning.readingOrderName}: ${warning.orphanedMangaTitles.joinToString()}",
+                                    text = "\n• ${warning.readingOrderName}: " +
+                                        warning.orphanedMangaTitles.joinToString(),
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.padding(top = 8.dp),
                                 )
@@ -164,7 +163,9 @@ class CollectionImportExportScreen : Screen() {
                     confirmButton = {
                         TextButton(onClick = {
                             screenModel.dismissWarning()
-                            exportLauncher.launch(generateExportFileName(state.selectedCollectionIds, state.collections))
+                            exportLauncher.launch(
+                                generateExportFileName(state.selectedCollectionIds, state.collections),
+                            )
                         }) {
                             Text(stringResource(AYMR.strings.collection_export_anyway))
                         }

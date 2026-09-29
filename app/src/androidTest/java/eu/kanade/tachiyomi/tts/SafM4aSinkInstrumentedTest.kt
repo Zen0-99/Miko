@@ -11,11 +11,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.render.Mp4AtomReader
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.SafM4aSink
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.decodeManifest
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.encode
-import java.io.File
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
-import kotlin.math.PI
-import kotlin.math.sin
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -23,6 +18,11 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  * Phase-05B on-device proof (validation row V7): [SafM4aSink] parameterized
@@ -124,7 +124,10 @@ class SafM4aSinkInstrumentedTest {
                         val n = extractor.readSampleData(buf, 0)
                         if (n < 0) {
                             codec.queueInputBuffer(
-                                inIdx, 0, 0, 0,
+                                inIdx,
+                                0,
+                                0,
+                                0,
                                 MediaCodec.BUFFER_FLAG_END_OF_STREAM,
                             )
                             inputDone = true
@@ -142,7 +145,7 @@ class SafM4aSinkInstrumentedTest {
                 }
             }
             assertTrue(
-                "decoded only ${decodedSamples} samples at $sampleRate Hz",
+                "decoded only $decodedSamples samples at $sampleRate Hz",
                 decodedSamples >= (sampleRate * 0.9).toLong(),
             )
         } finally {

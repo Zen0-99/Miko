@@ -157,8 +157,10 @@ object TextChunker {
     // whitespace in Japanese/Chinese — "文。文。" — so they split as a
     // zero-width boundary after the ender rather than the ASCII `…\s+` rule.
     private val SENTENCE_END = Regex("(?<=[.!?])\\s+|(?<=[。！？])")
+
     /** Stricter boundary for engines that want pause-only splits — `.!?;:` + newlines + CJK sentence enders. Commas and em-dashes do NOT trigger a split. */
     private val CLAUSE_END = Regex("(?<=[.!?:;])\\s+|(?<=[。！？])|\\n+")
+
     /**
      * Terminal sentence marks + newlines ONLY — `:` and `;` stay inside
      * their sentence. Per-sentence style rows need the split to match the
@@ -239,8 +241,14 @@ object TextChunker {
             // chunk — later paragraphs merge normally.
             return paragraphs.flatMapIndexed { i, p ->
                 chunk(
-                    p, maxChars, packSentences, sentenceOnly, allowWordSplits,
-                    minChars, minCharsExemptFirst && i == 0, terminalMarksOnly,
+                    p,
+                    maxChars,
+                    packSentences,
+                    sentenceOnly,
+                    allowWordSplits,
+                    minChars,
+                    minCharsExemptFirst && i == 0,
+                    terminalMarksOnly,
                 )
             }
         }

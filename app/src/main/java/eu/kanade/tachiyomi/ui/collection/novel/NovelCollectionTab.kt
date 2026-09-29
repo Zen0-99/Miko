@@ -25,7 +25,7 @@ fun Screen.novelCollectionTab(): TabContent {
     val state by screenModel.state.collectAsState()
 
     return TabContent(
-        titleRes = AYMR.strings.label_novel,
+        titleRes = AYMR.strings.carrier_books,
         searchEnabled = false,
         content = { contentPadding, _ ->
             if (state is NovelCollectionScreenState.Loading) {

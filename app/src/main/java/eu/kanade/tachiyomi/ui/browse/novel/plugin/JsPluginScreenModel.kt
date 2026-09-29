@@ -33,10 +33,16 @@ class JsPluginScreenModel(
         }
             .distinctUntilChanged()
             .map { (installed, available, query) ->
-                val filteredInstalled = if (query.isBlank()) installed
-                else installed.filter { it.name.contains(query, ignoreCase = true) }
-                val filteredAvailable = if (query.isBlank()) available
-                else available.filter { it.name.contains(query, ignoreCase = true) }
+                val filteredInstalled = if (query.isBlank()) {
+                    installed
+                } else {
+                    installed.filter { it.name.contains(query, ignoreCase = true) }
+                }
+                val filteredAvailable = if (query.isBlank()) {
+                    available
+                } else {
+                    available.filter { it.name.contains(query, ignoreCase = true) }
+                }
                 State(
                     isLoading = false,
                     installed = filteredInstalled,

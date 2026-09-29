@@ -180,6 +180,10 @@ fun PlayerSheets(
             )
         }
 
+        Sheets.Comments -> {
+            // Rendered in PlayerControls — it's a navigator-based sheet, not a
+            // player-internal sheet.
+        }
         Sheets.Screenshot -> {
             ScreenshotSheet(
                 isLocalSource = isLocalSource,

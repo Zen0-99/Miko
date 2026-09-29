@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import logcat.LogPriority
 import okhttp3.CacheControl
 import okhttp3.Call
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import okio.FileSystem
@@ -61,7 +62,10 @@ class MangaCoverFetcher(
         get() = diskCacheKeyLazy.value
 
     override suspend fun fetch(): FetchResult {
-        android.util.Log.d("MangaCoverFetcher", "fetch: url=$url isLibraryManga=$isLibraryManga diskCacheKey=$diskCacheKey")
+        android.util.Log.d(
+            "MangaCoverFetcher",
+            "fetch: url=$url isLibraryManga=$isLibraryManga diskCacheKey=$diskCacheKey",
+        )
         // Use custom cover if exists
         val useCustomCover = options.extras.getOrDefault(USE_CUSTOM_COVER_KEY)
         if (useCustomCover) {
@@ -111,7 +115,10 @@ class MangaCoverFetcher(
             null
         }
         val coverExists = libraryCoverCacheFile?.exists() == true
-        android.util.Log.d("MangaCoverFetcher", "httpLoader: url=$url coverExists=$coverExists coverFile=$libraryCoverCacheFile")
+        android.util.Log.d(
+            "MangaCoverFetcher",
+            "httpLoader: url=$url coverExists=$coverExists coverFile=$libraryCoverCacheFile",
+        )
         if (coverExists && options.diskCachePolicy.readEnabled) {
             android.util.Log.d("MangaCoverFetcher", "httpLoader: returning from cover cache")
             return fileLoader(libraryCoverCacheFile!!)
@@ -170,14 +177,25 @@ class MangaCoverFetcher(
                 throw e
             }
         } catch (e: Exception) {
-            android.util.Log.e("MangaCoverFetcher", "httpLoader: FAILED for url=$url: ${e::class.simpleName}: ${e.message}")
+            android.util.Log.e(
+                "MangaCoverFetcher",
+                "httpLoader: FAILED for url=$url: ${e::class.simpleName}: ${e.message}",
+            )
             snapshot?.close()
             throw e
         }
     }
 
+    // uploads.mangadex.org serves a "You can read this at MangaDex"
+    // placeholder banner when the request carries a foreign Referer — the
+    // source's own headers (and client interceptors) leak one in, so MangaDex
+    // URLs bypass the source entirely: app client + no source headers.
+    private val isMangaDex = runCatching {
+        url?.toHttpUrl()?.host?.endsWith("mangadex.org")
+    }.getOrDefault(false) == true
+
     private suspend fun executeNetworkRequest(): Response {
-        val client = sourceLazy.value?.client ?: callFactoryLazy.value
+        val client = if (isMangaDex) callFactoryLazy.value else sourceLazy.value?.client ?: callFactoryLazy.value
         val response = client.newCall(newRequest()).await()
         if (!response.isSuccessful && response.code != HTTP_NOT_MODIFIED) {
             response.close()
@@ -190,9 +208,11 @@ class MangaCoverFetcher(
         val request = Request.Builder().apply {
             url(url!!)
 
-            val sourceHeaders = sourceLazy.value?.headers
-            if (sourceHeaders != null) {
-                headers(sourceHeaders)
+            if (!isMangaDex) {
+                val sourceHeaders = sourceLazy.value?.headers
+                if (sourceHeaders != null) {
+                    headers(sourceHeaders)
+                }
             }
         }
 

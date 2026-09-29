@@ -115,8 +115,10 @@ object SupertonicEngineCatalog {
             if (!f.isFile || f.length() == 0L) return InstallState.Corrupt
         }
         val sampleRate = runCatching {
-            ((TTS_JSON.parseToJsonElement(File(dir, "tts.json").readText()) as? JsonObject)
-                ?.get("ae") as? JsonObject)
+            (
+                (TTS_JSON.parseToJsonElement(File(dir, "tts.json").readText()) as? JsonObject)
+                    ?.get("ae") as? JsonObject
+                )
                 ?.get("sample_rate")?.jsonPrimitive?.intOrNull
         }.getOrNull()
         if (sampleRate != SAMPLE_RATE) return InstallState.Corrupt

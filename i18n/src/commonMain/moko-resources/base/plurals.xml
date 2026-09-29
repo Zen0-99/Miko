@@ -95,4 +95,9 @@
         <item quantity="one">%d repo</item>
         <item quantity="other">%d repos</item>
     </plurals>
+
+    <plurals name="comment_replies">
+        <item quantity="one">%d reply</item>
+        <item quantity="other">%d replies</item>
+    </plurals>
 </resources>

@@ -42,7 +42,11 @@ class PlayerObserver(val activity: PlayerActivity) :
         }
         logcat(LogPriority.ERROR) { errorMessage }
         activity.runOnUiThread {
-            activity.toast(errorMessage, Toast.LENGTH_LONG)
+            // A recoverable load failure (torrent retry / Auto → ExoPlayer
+            // fallback) silently heals — don't scare the user with a toast.
+            if (!activity.willRecoverMpvLoad()) {
+                activity.toast(errorMessage, Toast.LENGTH_LONG)
+            }
         }
     }
 

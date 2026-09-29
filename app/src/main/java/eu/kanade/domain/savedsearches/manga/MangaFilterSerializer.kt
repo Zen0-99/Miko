@@ -56,7 +56,11 @@ class MangaFilterSerializer {
                 val subStates = filter.state.mapNotNull { subFilter ->
                     if (subFilter is Filter<*>) encodeFilter(subFilter) else null
                 }
-                MangaFilterState(filter.name, "Group", json.encodeToString(ListSerializer(MangaFilterState.serializer()), subStates))
+                MangaFilterState(
+                    filter.name,
+                    "Group",
+                    json.encodeToString(ListSerializer(MangaFilterState.serializer()), subStates),
+                )
             }
             else -> null
         }

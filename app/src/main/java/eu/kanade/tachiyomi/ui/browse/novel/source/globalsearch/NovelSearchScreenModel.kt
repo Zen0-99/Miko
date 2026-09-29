@@ -95,7 +95,11 @@ abstract class NovelSearchScreenModel(
             )
         Log.d(
             "NovelSearch",
-            "[NovelSearchScreenModel] getEnabledSources - total catalogue sources=${allCatalogueSources.size}, enabled=${result.size}, enabledLanguages=$enabledLanguages, disabledSourcesCount=${disabledSources.size}, names=${result.map { it.name }}",
+            "[NovelSearchScreenModel] getEnabledSources - total catalogue " +
+                "sources=${allCatalogueSources.size}, enabled=${result.size}, " +
+                "enabledLanguages=$enabledLanguages, " +
+                "disabledSourcesCount=${disabledSources.size}, " +
+                "names=${result.map { it.name }}",
         )
         return result
     }
@@ -105,7 +109,10 @@ abstract class NovelSearchScreenModel(
 
         val filter = extensionFilter
         if (filter.isNullOrEmpty()) {
-            Log.d("NovelSearch", "[NovelSearchScreenModel] getSelectedSources - no extensionFilter, returning all ${enabledSources.size} enabled sources")
+            Log.d(
+                "NovelSearch",
+                "[NovelSearchScreenModel] getSelectedSources - no extensionFilter, returning all ${enabledSources.size} enabled sources",
+            )
             return enabledSources
         }
 
@@ -114,7 +121,12 @@ abstract class NovelSearchScreenModel(
             .flatMap { it.sources }
             .filterIsInstance<NovelCatalogueSource>()
             .filter { it in enabledSources }
-        Log.d("NovelSearch", "[NovelSearchScreenModel] getSelectedSources - extensionFilter='$filter', matched ${filtered.size} sources from filter, names=${filtered.map { it.name }}")
+        Log.d(
+            "NovelSearch",
+            "[NovelSearchScreenModel] getSelectedSources - " +
+                "extensionFilter='$filter', matched ${filtered.size} sources " +
+                "from filter, names=${filtered.map { it.name }}",
+        )
         return filtered
     }
 
@@ -135,14 +147,23 @@ abstract class NovelSearchScreenModel(
         val query = state.value.searchQuery
         val sourceFilter = state.value.sourceFilter
 
-        Log.d("NovelSearch", "[NovelSearchScreenModel] search() - query='$query', sourceFilter=$sourceFilter, lastQuery='$lastQuery', lastSourceFilter=$lastSourceFilter")
+        Log.d(
+            "NovelSearch",
+            "[NovelSearchScreenModel] search() - query='$query', sourceFilter=$sourceFilter, lastQuery='$lastQuery', lastSourceFilter=$lastSourceFilter",
+        )
         if (query.isNullOrBlank()) {
-            Log.w("NovelSearch", "[NovelSearchScreenModel] search() - query is null/blank, returning early (NO SEARCH PERFORMED)")
+            Log.w(
+                "NovelSearch",
+                "[NovelSearchScreenModel] search() - query is null/blank, returning early (NO SEARCH PERFORMED)",
+            )
             return
         }
         val sameQuery = this.lastQuery == query
         if (sameQuery && this.lastSourceFilter == sourceFilter) {
-            Log.d("NovelSearch", "[NovelSearchScreenModel] search() - same query and filter as last time, returning early")
+            Log.d(
+                "NovelSearch",
+                "[NovelSearchScreenModel] search() - same query and filter as last time, returning early",
+            )
             return
         }
 
@@ -173,7 +194,10 @@ abstract class NovelSearchScreenModel(
                     if (state.value.items[source] !is NovelSearchItemResult.Loading) {
                         return@async
                     }
-                    Log.d("NovelSearch", "[NovelSearchScreenModel] search() - querying source=${source.name} (id=${source.id}, lang=${source.lang})")
+                    Log.d(
+                        "NovelSearch",
+                        "[NovelSearchScreenModel] search() - querying source=${source.name} (id=${source.id}, lang=${source.lang})",
+                    )
                     try {
                         val page = withTimeoutOrNull(60_000L) {
                             withContext(coroutineDispatcher) {
@@ -182,7 +206,10 @@ abstract class NovelSearchScreenModel(
                         }
 
                         if (page == null) {
-                            Log.e("NovelSearch", "[NovelSearchScreenModel] search() - TIMEOUT (60s) querying source=${source.name}")
+                            Log.e(
+                                "NovelSearch",
+                                "[NovelSearchScreenModel] search() - TIMEOUT (60s) querying source=${source.name}",
+                            )
                             if (isActive) {
                                 updateItem(source, NovelSearchItemResult.Error(Exception("Search timed out")))
                             }
@@ -193,12 +220,19 @@ abstract class NovelSearchScreenModel(
                             networkToLocalNovel.await(it.toDomainNovel(source.id))
                         }
 
-                        Log.d("NovelSearch", "[NovelSearchScreenModel] search() - source=${source.name} returned ${titles.size} novels")
+                        Log.d(
+                            "NovelSearch",
+                            "[NovelSearchScreenModel] search() - source=${source.name} returned ${titles.size} novels",
+                        )
                         if (isActive) {
                             updateItem(source, NovelSearchItemResult.Success(titles))
                         }
                     } catch (e: Exception) {
-                        Log.e("NovelSearch", "[NovelSearchScreenModel] search() - ERROR querying source=${source.name}: ${e.message}", e)
+                        Log.e(
+                            "NovelSearch",
+                            "[NovelSearchScreenModel] search() - ERROR querying source=${source.name}: ${e.message}",
+                            e,
+                        )
                         if (isActive) {
                             updateItem(source, NovelSearchItemResult.Error(e))
                         }

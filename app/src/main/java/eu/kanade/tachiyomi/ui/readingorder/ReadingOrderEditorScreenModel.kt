@@ -5,9 +5,9 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.model.Manga
-import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
 import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes

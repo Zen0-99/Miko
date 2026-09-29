@@ -119,12 +119,14 @@ class TitleMatcher {
             for (i in 1..a.length) {
                 val cost = if (a[i - 1] == b[j - 1]) 0 else 1
                 curr[i] = minOf(
-                    prev[i] + 1,        // deletion
-                    curr[i - 1] + 1,    // insertion
+                    prev[i] + 1, // deletion
+                    curr[i - 1] + 1, // insertion
                     prev[i - 1] + cost, // substitution
                 )
             }
-            val tmp = prev; prev = curr; curr = tmp
+            val tmp = prev
+            prev = curr
+            curr = tmp
         }
         return prev[a.length]
     }

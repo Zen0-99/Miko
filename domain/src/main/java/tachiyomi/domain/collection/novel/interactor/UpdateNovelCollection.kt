@@ -1,8 +1,8 @@
 package tachiyomi.domain.collection.novel.interactor
 
 import tachiyomi.core.common.util.lang.withNonCancellableContext
-import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.collection.model.CollectionUpdate
+import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 
 class UpdateNovelCollection(
     private val collectionRepository: NovelCollectionRepository,

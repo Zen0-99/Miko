@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.contentColorFor
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -202,12 +202,12 @@ fun FloatingGlassNavigationBarWithModes(
 
                 // Nav row
                 Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(navRowHeight)
-                    .selectableGroup(),
-                content = content,
-            )
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(navRowHeight)
+                        .selectableGroup(),
+                    content = content,
+                )
             }
         }
     }

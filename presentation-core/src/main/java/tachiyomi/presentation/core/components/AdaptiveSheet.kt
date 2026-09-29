@@ -125,7 +125,10 @@ fun AdaptiveSheet(
             )
         }
         val internalOnDismissRequest = {
-            android.util.Log.d("AdaptiveSheet", "internalOnDismissRequest called. settledValue=${anchoredDraggableState.settledValue}")
+            android.util.Log.d(
+                "AdaptiveSheet",
+                "internalOnDismissRequest called. settledValue=${anchoredDraggableState.settledValue}",
+            )
             if (anchoredDraggableState.settledValue == 0) {
                 scope.launch { anchoredDraggableState.animateTo(1) }
             }
@@ -221,10 +224,16 @@ fun AdaptiveSheet(
             )
 
             LaunchedEffect(anchoredDraggableState) {
-                android.util.Log.d("AdaptiveSheet", "LaunchedEffect: animateTo(0) start. state=${anchoredDraggableState.settledValue}")
+                android.util.Log.d(
+                    "AdaptiveSheet",
+                    "LaunchedEffect: animateTo(0) start. state=${anchoredDraggableState.settledValue}",
+                )
                 scope.launch {
                     anchoredDraggableState.animateTo(0)
-                    android.util.Log.d("AdaptiveSheet", "animateTo(0) done. state=${anchoredDraggableState.settledValue} offset=${anchoredDraggableState.offset}")
+                    android.util.Log.d(
+                        "AdaptiveSheet",
+                        "animateTo(0) done. state=${anchoredDraggableState.settledValue} offset=${anchoredDraggableState.offset}",
+                    )
                 }
                 snapshotFlow { anchoredDraggableState.settledValue }
                     .drop(1)

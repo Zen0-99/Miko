@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -26,18 +26,15 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VerifiedUser
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -66,8 +63,6 @@ import tachiyomi.domain.source.manga.model.Pin
 import tachiyomi.domain.source.manga.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
-import androidx.compose.foundation.lazy.LazyColumn
-import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
@@ -99,7 +94,7 @@ fun MangaSourcesScreen(
     onClickUpdate: (Source) -> Unit = {},
     onRefresh: () -> Unit = {},
     onClickUpdateAll: () -> Unit = {},
-    /** MikoDB per-package ranking metadata - pkg -> tier/name. */
+    /** MikoDB per-package ranking metadata — pkg → tier/name. */
     sourceMeta: Map<String, eu.kanade.tachiyomi.data.mikodb.MikoDbManager.SourceMeta> = emptyMap(),
 ) {
     // When there are no installed extensions (only the local source), hide
@@ -116,7 +111,10 @@ fun MangaSourcesScreen(
     val visibleItems = remember(state.items, notInstalledExpanded, hasInstalledExtensions) {
         if (notInstalledExpanded) {
             if (!hasInstalledExtensions) {
-                state.items.filterNot { it is MangaSourceUiModel.Header && it.language == MangaSourcesScreenModel.INSTALLED_KEY }
+                state.items.filterNot {
+                    it is MangaSourceUiModel.Header &&
+                        it.language == MangaSourcesScreenModel.INSTALLED_KEY
+                }
             } else {
                 state.items
             }
@@ -142,7 +140,11 @@ fun MangaSourcesScreen(
                 }
                 if (inNotInstalled) {
                     if (item is MangaSourceUiModel.AvailableExtension) continue
-                    if (item is MangaSourceUiModel.Header && item.language != MangaSourcesScreenModel.NOT_INSTALLED_KEY) continue
+                    if (item is MangaSourceUiModel.Header &&
+                        item.language != MangaSourcesScreenModel.NOT_INSTALLED_KEY
+                    ) {
+                        continue
+                    }
                 }
                 result.add(item)
             }
@@ -182,95 +184,97 @@ fun MangaSourcesScreen(
                         sourceMeta = sourceMeta,
                     )
                 } else {
-                LazyColumn(
-                    contentPadding = contentPadding + topSmallPaddingValues,
-                ) {
-                itemsIndexed(
-                    items = visibleItems,
-                    contentType = { _, it ->
-                        when (it) {
-                            is MangaSourceUiModel.Header -> "header"
-                            is MangaSourceUiModel.Item -> "item"
-                            is MangaSourceUiModel.AvailableExtension -> "available-extension"
-                            is MangaSourceUiModel.UntrustedExtension -> "untrusted-extension"
-                        }
-                    },
-                    key = { index, it ->
-                        when (it) {
-                            is MangaSourceUiModel.Header -> "header-$index-${it.language}"
-                            is MangaSourceUiModel.Item -> "source-${it.source.key()}"
-                            is MangaSourceUiModel.AvailableExtension -> "available-${it.extension.pkgName}"
-                            is MangaSourceUiModel.UntrustedExtension -> "untrusted-${it.extension.pkgName}"
-                        }
-                    },
-                ) { _, model ->
-                    when (model) {
-                        is MangaSourceUiModel.Header -> {
-                            when (model.language) {
-                                MangaSourcesScreenModel.NOT_INSTALLED_KEY -> {
-                                    MangaSourceSectionHeader(
+                    LazyColumn(
+                        contentPadding = contentPadding + topSmallPaddingValues,
+                    ) {
+                        itemsIndexed(
+                            items = visibleItems,
+                            contentType = { _, it ->
+                                when (it) {
+                                    is MangaSourceUiModel.Header -> "header"
+                                    is MangaSourceUiModel.Item -> "item"
+                                    is MangaSourceUiModel.AvailableExtension -> "available-extension"
+                                    is MangaSourceUiModel.UntrustedExtension -> "untrusted-extension"
+                                }
+                            },
+                            key = { index, it ->
+                                when (it) {
+                                    is MangaSourceUiModel.Header -> "header-$index-${it.language}"
+                                    is MangaSourceUiModel.Item -> "source-${it.source.key()}"
+                                    is MangaSourceUiModel.AvailableExtension -> "available-${it.extension.pkgName}"
+                                    is MangaSourceUiModel.UntrustedExtension -> "untrusted-${it.extension.pkgName}"
+                                }
+                            },
+                        ) { _, model ->
+                            when (model) {
+                                is MangaSourceUiModel.Header -> {
+                                    when (model.language) {
+                                        MangaSourcesScreenModel.NOT_INSTALLED_KEY -> {
+                                            MangaSourceSectionHeader(
+                                                modifier = Modifier.animateItem(),
+                                                text = stringResource(MR.strings.ext_not_installed),
+                                                expanded = notInstalledExpanded,
+                                                onClick = { notInstalledExpanded = !notInstalledExpanded },
+                                            )
+                                        }
+                                        MangaSourcesScreenModel.INSTALLED_KEY -> {
+                                            MangaSourceSectionHeader(
+                                                modifier = Modifier.animateItem(),
+                                                text = stringResource(MR.strings.ext_installed),
+                                                action = {
+                                                    if (sourcesWithUpdates.isNotEmpty()) {
+                                                        IconButton(onClick = onClickUpdateAll) {
+                                                            Icon(
+                                                                imageVector = Icons.Outlined.Download,
+                                                                contentDescription = stringResource(
+                                                                    MR.strings.ext_update_all,
+                                                                ),
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                            )
+                                        }
+                                        else -> {
+                                            SourceHeader(
+                                                modifier = Modifier.animateItem(),
+                                                language = model.language,
+                                            )
+                                        }
+                                    }
+                                }
+                                is MangaSourceUiModel.Item -> SourceItem(
+                                    modifier = Modifier.animateItem(),
+                                    source = model.source,
+                                    onClickItem = onClickItem,
+                                    onLongClickItem = onLongClickItem,
+                                    onClickPin = onClickPin,
+                                    onSwipeHide = onSwipeHide,
+                                    swipeToHideEnabled = swipeToHideEnabled,
+                                    onClickExtension = onClickExtension,
+                                    hasUpdate = model.source.id in sourcesWithUpdates,
+                                )
+                                is MangaSourceUiModel.AvailableExtension -> {
+                                    MangaAvailableExtensionItem(
                                         modifier = Modifier.animateItem(),
-                                        text = stringResource(MR.strings.ext_not_installed),
-                                        expanded = notInstalledExpanded,
-                                        onClick = { notInstalledExpanded = !notInstalledExpanded },
+                                        extension = model.extension,
+                                        onClickInstall = onClickInstallExtension,
+                                        installStep = downloadStates[model.extension.pkgName] ?: InstallStep.Idle,
                                     )
                                 }
-                                MangaSourcesScreenModel.INSTALLED_KEY -> {
-                                    MangaSourceSectionHeader(
+                                is MangaSourceUiModel.UntrustedExtension -> {
+                                    MangaUntrustedExtensionItem(
                                         modifier = Modifier.animateItem(),
-                                        text = stringResource(MR.strings.ext_installed),
-                                        action = {
-                                            if (sourcesWithUpdates.isNotEmpty()) {
-                                                IconButton(onClick = onClickUpdateAll) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Download,
-                                                        contentDescription = stringResource(MR.strings.ext_update_all),
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                    )
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
-                                else -> {
-                                    SourceHeader(
-                                        modifier = Modifier.animateItem(),
-                                        language = model.language,
+                                        extension = model.extension,
+                                        onClickTrust = onClickTrustExtension,
                                     )
                                 }
                             }
                         }
-                        is MangaSourceUiModel.Item -> SourceItem(
-                            modifier = Modifier.animateItem(),
-                            source = model.source,
-                            onClickItem = onClickItem,
-                            onLongClickItem = onLongClickItem,
-                            onClickPin = onClickPin,
-                            onSwipeHide = onSwipeHide,
-                            swipeToHideEnabled = swipeToHideEnabled,
-                            onClickExtension = onClickExtension,
-                            hasUpdate = model.source.id in sourcesWithUpdates,
-                        )
-                        is MangaSourceUiModel.AvailableExtension -> {
-                            MangaAvailableExtensionItem(
-                                modifier = Modifier.animateItem(),
-                                extension = model.extension,
-                                onClickInstall = onClickInstallExtension,
-                                installStep = downloadStates[model.extension.pkgName] ?: InstallStep.Idle,
-                            )
-                        }
-                        is MangaSourceUiModel.UntrustedExtension -> {
-                            MangaUntrustedExtensionItem(
-                                modifier = Modifier.animateItem(),
-                                extension = model.extension,
-                                onClickTrust = onClickTrustExtension,
-                            )
-                        }
                     }
                 }
             }
-            }
-        }
         }
     }
 }
@@ -372,9 +376,10 @@ private fun MangaSourcesCardView(
                                     is MangaSourceUiModel.Item -> {
                                         val ext = sourceExtensionMap[model.source.id]
                                         val hasUpdate = model.source.id in sourcesWithUpdates
-                                        val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
-                                            it == InstallStep.Pending || it == InstallStep.Downloading
-                                        } == true
+                                        val isUpdating = ext != null &&
+                                            downloadStates[ext.pkgName]?.let {
+                                                it == InstallStep.Pending || it == InstallStep.Downloading
+                                            } == true
                                         ExtensionCard(
                                             modifier = Modifier.weight(1f),
                                             title = model.source.name,
@@ -389,8 +394,11 @@ private fun MangaSourcesCardView(
                                             onClick = { onClickItem(model.source, Listing.Popular) },
                                             onLongClick = { onLongClickItem(model.source) },
                                             onCogClick = {
-                                                if (hasUpdate) onClickUpdate(model.source)
-                                                else onClickExtension(model.source)
+                                                if (hasUpdate) {
+                                                    onClickUpdate(model.source)
+                                                } else {
+                                                    onClickExtension(model.source)
+                                                }
                                             },
                                         )
                                     }
@@ -492,8 +500,11 @@ private fun SourceItem(
                         Icon(
                             imageVector = if (hasUpdate) Icons.Outlined.Download else Icons.Outlined.Settings,
                             contentDescription = stringResource(MR.strings.label_extension_info),
-                            tint = if (hasUpdate) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                            tint = if (hasUpdate) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA)
+                            },
                         )
                     }
                 }
@@ -577,23 +588,35 @@ fun MangaSourceOptionsDialog(
             MangaSourceSheetOption(
                 label = pinText,
                 icon = if (Pin.Pinned in source.pin) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                onClick = { onClickPin(); onDismiss() },
+                onClick = {
+                    onClickPin()
+                    onDismiss()
+                },
             )
             if (source.id != LocalMangaSource.ID) {
                 MangaSourceSheetOption(
                     label = stringResource(MR.strings.action_migrate),
                     icon = Icons.Outlined.SwapHoriz,
-                    onClick = { onClickMigrate(); onDismiss() },
+                    onClick = {
+                        onClickMigrate()
+                        onDismiss()
+                    },
                 )
                 MangaSourceSheetOption(
                     label = stringResource(MR.strings.action_disable),
                     icon = Icons.Outlined.Block,
-                    onClick = { onClickDisable(); onDismiss() },
+                    onClick = {
+                        onClickDisable()
+                        onDismiss()
+                    },
                 )
                 MangaSourceSheetOption(
                     label = stringResource(MR.strings.action_uninstall),
                     icon = Icons.Outlined.Delete,
-                    onClick = { onClickUninstall(); onDismiss() },
+                    onClick = {
+                        onClickUninstall()
+                        onDismiss()
+                    },
                 )
             }
             // SY -->
@@ -605,7 +628,10 @@ fun MangaSourceOptionsDialog(
                         stringResource(AYMR.strings.data_saver_exclude)
                     },
                     icon = Icons.Outlined.Settings,
-                    onClick = { onClickToggleDataSaver(); onDismiss() },
+                    onClick = {
+                        onClickToggleDataSaver()
+                        onDismiss()
+                    },
                 )
             }
             // SY <--

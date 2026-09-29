@@ -45,6 +45,9 @@ import com.hippo.unifile.UniFile
 import dev.chrisbanes.insetter.applyInsetter
 import eu.kanade.core.util.ifMangaSourcesLoaded
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.presentation.achievement.components.AchievementBannerManager
+import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.reader.DisplayRefreshHost
 import eu.kanade.presentation.reader.OrientationSelectDialog
 import eu.kanade.presentation.reader.PageIndicatorText
@@ -61,6 +64,7 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.databinding.ReaderActivityBinding
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
+import eu.kanade.tachiyomi.ui.comments.CommentsSheetScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.reader.ReaderViewModel.SetAsCoverResult.AddToLibraryFirst
 import eu.kanade.tachiyomi.ui.reader.ReaderViewModel.SetAsCoverResult.Error
@@ -99,7 +103,6 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import java.io.ByteArrayOutputStream
 
 class ReaderActivity : BaseActivity() {
@@ -402,6 +405,7 @@ class ReaderActivity : BaseActivity() {
                 onClickTopAppBar = ::openMangaScreen,
                 bookmarked = state.bookmarked,
                 onToggleBookmarked = viewModel::toggleChapterBookmark,
+                onOpenComments = viewModel::openCommentsDialog.takeIf { viewModel.commentsEnabled },
                 onOpenInWebView = ::openChapterInWebView.takeIf { isHttpSource },
                 onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
                 onShare = ::shareChapter.takeIf { isHttpSource },
@@ -443,7 +447,7 @@ class ReaderActivity : BaseActivity() {
             }
 
             val onDismissRequest = viewModel::closeDialog
-            when (state.dialog) {
+            when (val dialog = state.dialog) {
                 is ReaderViewModel.Dialog.Loading -> {
                     AlertDialog(
                         onDismissRequest = {},
@@ -488,6 +492,19 @@ class ReaderActivity : BaseActivity() {
                             menuToggleToast = toast(stringRes)
                         },
                     )
+                }
+                is ReaderViewModel.Dialog.Comments -> {
+                    val commentsManga = state.manga
+                    if (commentsManga != null) {
+                        NavigatorAdaptiveSheet(
+                            screen = CommentsSheetScreen(
+                                carrier = Carrier.MANGA,
+                                entryId = commentsManga.id,
+                                chapter = dialog.chapter,
+                            ),
+                            onDismissRequest = onDismissRequest,
+                        )
+                    }
                 }
                 is ReaderViewModel.Dialog.PageActions -> {
                     ReaderPageActionsDialog(

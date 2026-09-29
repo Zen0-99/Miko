@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNames
 
 /**
  * Lightweight SharedPreferences + memory cache for the Home Hub.

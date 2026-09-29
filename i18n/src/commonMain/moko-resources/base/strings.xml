@@ -113,6 +113,10 @@
     <string name="action_remove_read_downloads">All read chapters</string>
     <string name="action_remove_custom_range_downloads">Custom range</string>
     <string name="action_mark_previous_as_read">Mark previous as read</string>
+    <string name="action_mark_previous_as_unread">Mark previous as unread</string>
+    <string name="action_select">Select</string>
+    <string name="action_open_in_webview">Open in WebView</string>
+    <string name="action_hide_chapters">Hide</string>
     <string name="action_download">Download</string>
     <string name="action_bookmark">Bookmark chapter</string>
     <string name="action_remove_bookmark">Unbookmark chapter</string>
@@ -675,6 +679,10 @@
     <string name="error_user_agent_string_blank">User agent string can not be blank</string>
     <string name="error_user_agent_string_invalid">Invalid user agent string</string>
     <string name="pref_reset_user_agent_string">Reset default user agent string</string>
+    <string name="pref_category_metadata">Metadata</string>
+    <string name="pref_metadata_summary">Cover and metadata providers</string>
+    <string name="pref_metron_api_token">Metron API token</string>
+    <string name="pref_metron_api_token_summary">Token from your metron.cloud account — enables western-comic cover lookups</string>
     <string name="requires_app_restart">Requires app restart to take effect</string>
     <string name="cookies_cleared">Cookies cleared</string>
     <string name="pref_invalidate_download_cache">Reindex downloads</string>
@@ -769,6 +777,7 @@
     <string name="popular">Popular</string>
     <string name="browse">Browse</string>
     <string name="discover">Discover</string>
+    <string name="discovery">Discovery</string>
     <string name="has_results">Has results</string>
     <string name="local_source_help_guide">Local source guide</string>
     <string name="no_pinned_sources">You have no pinned sources</string>
@@ -806,7 +815,7 @@
     <string name="source_not_installed">Source not installed: %1$s</string>
     <string name="snack_add_to_library">Add to library?</string>
     <string name="description_placeholder">No description</string>
-    <string name="about_this_novel">About this novel</string>
+    <string name="description">Description</string>
 
     <!-- Manga chapters -->
     <string name="display_mode_chapter">Chapter %1$s</string>
@@ -1079,23 +1088,62 @@
     <string name="exception_unknown_host">Couldn\'t reach %s</string>
     <string name="dns_blocked_toast">DNS blocked for %s — check if VPN is interfering</string>
 
-    <!-- Linked sources -->
-    <string name="action_linked_sources">Linked sources</string>
-    <string name="action_link_from_library">Link from library</string>
-    <string name="linked_sources_summary">Mirror entries from other sources for this same series. Useful as fallback if a source goes offline.</string>
-    <string name="linked_sources_empty">No linked sources yet.</string>
-    <string name="linked_sources_no_candidates">No other favorites available to link.</string>
-    <string name="linked_sources_refreshed">Linked sources refreshed.</string>
-    <string name="action_refresh_linked">Refresh linked</string>
-    <string name="action_make_primary">Make primary</string>
-    <string name="linked_sources_make_primary_confirm">Make %1$s the primary entry for this cluster? Its title, cover, and description will replace the current ones.</string>
-    <string name="linked_sources_primary_changed">Primary entry updated.</string>
-    <string name="linked_sources_make_primary_failed">Could not promote linked entry.</string>
-
     <!-- Home Hub -->
     <string name="action_view_all">View All</string>
     <string name="home_welcome">Welcome!</string>
     <string name="home_welcome_message">Start by browsing sources and adding to your library.</string>
     <string name="home_browse_sources">Browse Sources</string>
     <string name="home_recommendations">Recommendations</string>
+
+    <!-- Comments -->
+    <string name="comments_title">Comments</string>
+    <string name="comments_empty">No comments yet — be the first</string>
+    <string name="comments_load_more">Load more</string>
+    <string name="comments_degraded">Comments are unavailable right now</string>
+    <string name="comments_unavailable_entry">Comments aren\'t available for this entry</string>
+    <string name="comments_enabled">Comments</string>
+    <string name="comments_enabled_summary">Show community comments on entries</string>
+    <string name="comments_offline_map">Offline manga/novel identity map</string>
+    <string name="comments_offline_map_summary">Download the full ~170 MB map so comments resolve without network. Off by default — works resolve on demand instead.</string>
+    <string name="comment_hint">Write a comment…</string>
+    <string name="comment_reply_hint">Reply to %s…</string>
+    <string name="comment_send">Send</string>
+    <string name="comment_reply">Reply</string>
+    <string name="comment_report">Report</string>
+    <string name="comment_reported">Reported</string>
+    <string name="comment_delete">Delete</string>
+    <string name="comment_deleted">[deleted]</string>
+    <string name="comment_hidden">[hidden by moderation]</string>
+    <string name="comment_appeal">Appeal</string>
+    <string name="comment_appeal_title">Appeal this decision</string>
+    <string name="comment_appeal_body">This comment was hidden by automated moderation. If you think that’s a mistake, explain why and it will be reviewed.</string>
+    <string name="comment_appeal_hint">Why is this a mistake? (optional)</string>
+    <string name="comment_appeal_pending">Appeal under review</string>
+    <string name="comment_appeal_upheld">Appeal denied</string>
+    <string name="chapter_comments">Comments</string>
+    <string name="comment_upvote">Upvote</string>
+    <string name="comment_downvote">Downvote</string>
+    <string name="comment_suspended">Commenting is suspended until %s</string>
+    <string name="comment_rule_min_len">Comment is too short</string>
+    <string name="comment_rule_max_len">Comment is too long</string>
+    <string name="comment_rule_max_links">Too many links</string>
+    <string name="comment_rule_blocked">Comment blocked by community rules</string>
+    <string name="comment_name_title">Choose a display name</string>
+    <string name="comment_name_body">This is shown next to your comments.</string>
+    <string name="comment_name_taken">That name is taken</string>
+    <string name="comment_name_rule_len">Use 2–24 characters</string>
+    <string name="comment_name_rule_pattern">Letters, numbers, spaces and . _ - only</string>
+    <string name="comment_name_reserved">That name is reserved</string>
+    <string name="comment_name_failed">Couldn\'t set that name — try another</string>
+    <string name="comment_edited">edited</string>
+    <string name="comment_you">you</string>
+    <string name="comment_sort_new">Newest</string>
+    <string name="comment_sort_oldest">Oldest</string>
+    <string name="comment_sort_top">Top</string>
+    <string name="comment_sort_lowest">Lowest</string>
+    <string name="comment_replying_to">Replying to %s</string>
+    <string name="comment_collapse">Collapse</string>
+    <string name="comment_hide_replies">Hide replies</string>
+    <string name="comment_options">Comment options</string>
+    <string name="comment_scroll_to_latest">Scroll to latest</string>
 </resources>

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.ui.history.novel
 
-import java.time.LocalDate
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
+import java.time.LocalDate
 
 sealed interface NovelHistoryUiModel {
     data class Header(val date: LocalDate) : NovelHistoryUiModel

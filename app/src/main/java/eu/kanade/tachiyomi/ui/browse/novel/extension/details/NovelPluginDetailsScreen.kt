@@ -11,7 +11,6 @@ import eu.kanade.presentation.browse.novel.NovelPluginDetailsScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.all.MigrateNovelAllScreen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelSearchScreen
-import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.collectLatest
 import tachiyomi.presentation.core.screens.LoadingScreen
 

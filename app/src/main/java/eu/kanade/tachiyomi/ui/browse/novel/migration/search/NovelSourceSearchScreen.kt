@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.ui.browse.novel.migration.search
 
-import androidx.compose.material3.SnackbarHost
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -9,13 +9,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.padding
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifNovelSourcesLoaded
-import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
+import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreenModel
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen

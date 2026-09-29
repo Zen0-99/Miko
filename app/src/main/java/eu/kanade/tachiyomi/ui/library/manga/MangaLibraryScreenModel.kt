@@ -46,8 +46,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
-import tachiyomi.domain.library.model.LibraryGroupMode
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.util.lang.compareToWithCollator
@@ -56,19 +56,6 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
-import logcat.LogPriority
-import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
-import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
-import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
-import tachiyomi.domain.readingorder.interactor.GetReadingOrders
-import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes
-import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
-import tachiyomi.domain.readingorder.interactor.AutoRemoveCompletedReadingOrderEntries
-import tachiyomi.domain.readingorder.interactor.GetReadingOrderProgress
-import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderNode
-import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
-import tachiyomi.domain.readingorder.interactor.UpdateReadingOrder
-import tachiyomi.domain.readingorder.model.ReadingOrder
 import tachiyomi.domain.collection.manga.interactor.GetMangaCustomOrder
 import tachiyomi.domain.collection.manga.interactor.GetVisibleMangaCollections
 import tachiyomi.domain.collection.manga.interactor.SetMangaCollections
@@ -87,11 +74,24 @@ import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.manga.model.sort
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroupMode
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.i18n.MR
+import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
+import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
+import tachiyomi.domain.readingorder.interactor.AutoRemoveCompletedReadingOrderEntries
+import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
+import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderProgress
+import tachiyomi.domain.readingorder.interactor.GetReadingOrders
+import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderNode
+import tachiyomi.domain.readingorder.interactor.UpdateReadingOrder
+import tachiyomi.domain.readingorder.model.ReadingOrder
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.track.manga.interactor.GetTracksPerManga
 import tachiyomi.domain.track.manga.model.MangaTrack
+import tachiyomi.i18n.MR
 import tachiyomi.source.local.entries.manga.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -865,7 +865,13 @@ class MangaLibraryScreenModel(
         }
         if (existingDepth >= 0 && existingDepth != state.readingOrderCurrentLayer) {
             mutableState.update {
-                it.copy(dialog = Dialog.ReadingOrderMoveDepth(manga, existingDepth + 1, state.readingOrderCurrentLayer + 1))
+                it.copy(
+                    dialog = Dialog.ReadingOrderMoveDepth(
+                        manga,
+                        existingDepth + 1,
+                        state.readingOrderCurrentLayer + 1,
+                    ),
+                )
             }
             return
         }
@@ -897,7 +903,9 @@ class MangaLibraryScreenModel(
         }
     }
 
-    private fun compactLayers(layers: PersistentList<PersistentList<LibraryManga>>): PersistentList<PersistentList<LibraryManga>> {
+    private fun compactLayers(
+        layers: PersistentList<PersistentList<LibraryManga>>,
+    ): PersistentList<PersistentList<LibraryManga>> {
         return layers.filter { it.isNotEmpty() }.toPersistentList()
     }
 
@@ -973,14 +981,20 @@ class MangaLibraryScreenModel(
             }
         }
         val nodesJson = nodes.joinToString(",") { node ->
-            """{"entryId":${node.entryId},"position":${node.position},"title":"${entryTitles[node.entryId]?.replace("\"", "\\\"") ?: ""}","url":"${entryUrls[node.entryId]?.replace("\"", "\\\"") ?: ""}"}"""
+            """{"entryId":${node.entryId},"position":${node.position},"title":"${entryTitles[node.entryId]?.replace(
+                "\"",
+                "\\\"",
+            ) ?: ""}","url":"${entryUrls[node.entryId]?.replace("\"", "\\\"") ?: ""}"}"""
         }
         val edgesJson = edges.joinToString(",") { edge ->
             """{"fromEntryId":${edge.fromEntryId},"toEntryId":${edge.toEntryId}}"""
         }
         val desc = order.description
         val descJson = if (desc != null) "\"${desc.replace("\"", "\\\"")}\"" else "null"
-        return """{"name":"${order.name.replace("\"", "\\\"")}","description":$descJson,"entryKind":"${order.entryKind}","nodes":[$nodesJson],"edges":[$edgesJson]}"""
+        return """{"name":"${order.name.replace(
+            "\"",
+            "\\\"",
+        )}","description":$descJson,"entryKind":"${order.entryKind}","nodes":[$nodesJson],"edges":[$edgesJson]}"""
     }
 
     suspend fun importReadingOrder(json: String): Boolean {
@@ -988,7 +1002,10 @@ class MangaLibraryScreenModel(
             try {
                 val nameMatch = Regex(""""name"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
                 val name = nameMatch?.groupValues?.get(1)?.replace("\\\"", "\"") ?: "Imported Reading Order"
-                val nodeRegex = Regex("""\{"entryId":(\d+),"position":\d+,"title":"((?:[^"\\]|\\.)*)","url":"((?:[^"\\]|\\.)*)"\}""")
+                val nodeRegex =
+                    Regex(
+                        """\{"entryId":(\d+),"position":\d+,"title":"((?:[^"\\]|\\.)*)","url":"((?:[^"\\]|\\.)*)"\}""",
+                    )
                 val nodes = nodeRegex.findAll(json).map { match ->
                     match.groupValues[1].toLong() to match.groupValues[2].replace("\\\"", "\"")
                 }.toList()
@@ -1193,7 +1210,9 @@ class MangaLibraryScreenModel(
         }
 
         val name = state.readingOrderName.ifBlank {
-            "Reading Order ${java.text.SimpleDateFormat.getDateTimeInstance().format(java.util.Date(System.currentTimeMillis()))}"
+            "Reading Order ${java.text.SimpleDateFormat.getDateTimeInstance().format(
+                java.util.Date(System.currentTimeMillis()),
+            )}"
         }
         val editingId = state.editingReadingOrderId
 

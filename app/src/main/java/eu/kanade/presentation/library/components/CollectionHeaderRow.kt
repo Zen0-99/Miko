@@ -84,8 +84,11 @@ fun CollectionHeaderRow(
             ) {
                 if (sortDescending != null) {
                     Icon(
-                        imageVector = if (sortDescending) Icons.Outlined.ArrowDownward
-                                      else Icons.Outlined.ArrowUpward,
+                        imageVector = if (sortDescending) {
+                            Icons.Outlined.ArrowDownward
+                        } else {
+                            Icons.Outlined.ArrowUpward
+                        },
                         contentDescription = stringResource(MR.strings.action_sort),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,

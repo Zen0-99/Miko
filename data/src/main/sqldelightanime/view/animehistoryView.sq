@@ -8,7 +8,10 @@ SELECT
     animes.source,
     animes.favorite,
     animes.cover_last_modified,
+    animes.url AS animeUrl,
+    animes.runtime AS runtime,
     episodes.episode_number AS episodeNumber,
+    episodes.scanlator AS episodeScanlator,
     animehistory.last_seen AS seenAt,
     max_last_seen.last_seen AS maxSeenAt,
     max_last_seen.episode_id AS maxSeenAtEpisodeId
@@ -35,7 +38,10 @@ thumbnailUrl,
 source,
 favorite,
 cover_last_modified,
+animeUrl,
+runtime,
 episodeNumber,
+episodeScanlator,
 seenAt
 FROM animehistoryView
 WHERE animehistoryView.seenAt > 0
@@ -52,7 +58,10 @@ thumbnailUrl,
 source,
 favorite,
 cover_last_modified,
+animeUrl,
+runtime,
 episodeNumber,
+episodeScanlator,
 seenAt
 FROM animehistoryView
 WHERE animehistoryView.seenAt > 0

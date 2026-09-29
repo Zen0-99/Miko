@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -72,8 +71,36 @@ object LibraryUpdateProgressBus {
     private val _sheetVisible = MutableStateFlow(false)
     val sheetVisible: StateFlow<Boolean> = _sheetVisible.asStateFlow()
 
+    private val sheetVisibleLock = Any()
+    private var manualSheetVisible = false
+    private var openSheetCount = 0
+
     fun setSheetVisible(visible: Boolean) {
-        _sheetVisible.value = visible
+        synchronized(sheetVisibleLock) {
+            manualSheetVisible = visible
+            publishSheetVisible()
+        }
+    }
+
+    // Automatic tracking: AdaptiveSheet registers itself while composed so any
+    // sheet anywhere hides the floating overlays — no per-site bookkeeping.
+    // Counted, so overlapping sheets don't clear the flag for each other.
+    fun sheetOpened() {
+        synchronized(sheetVisibleLock) {
+            openSheetCount++
+            publishSheetVisible()
+        }
+    }
+
+    fun sheetClosed() {
+        synchronized(sheetVisibleLock) {
+            openSheetCount = (openSheetCount - 1).coerceAtLeast(0)
+            publishSheetVisible()
+        }
+    }
+
+    private fun publishSheetVisible() {
+        _sheetVisible.value = manualSheetVisible || openSheetCount > 0
     }
 
     // Synchronizes all _states map read-modify-write operations to prevent
@@ -132,7 +159,12 @@ object LibraryUpdateProgressBus {
         totalEntries: Int,
         source: String,
     ) {
-        Log.d("ProgressBus", "updateProgress: source=$source processed=$processed total=$totalEntries titles=${currentlyUpdating.map { it.title }}")
+        Log.d(
+            "ProgressBus",
+            "updateProgress: source=$source processed=$processed total=$totalEntries titles=${currentlyUpdating.map {
+                it.title
+            }}",
+        )
         // Update single state flow (backward compat) — only if the current
         // state belongs to this source, to prevent cross-source contamination.
         val current = _state.value
@@ -226,9 +258,10 @@ object LibraryUpdateProgressBus {
      * for per-mode cancellation.
      */
     fun isCancelRequested(source: String): Boolean {
-        return cancelRequested.get() || synchronized(cancelRequestedBySource) {
-            cancelRequestedBySource[source] == true
-        }
+        return cancelRequested.get() ||
+            synchronized(cancelRequestedBySource) {
+                cancelRequestedBySource[source] == true
+            }
     }
 
     // ---- UI-side API ----
@@ -285,8 +318,10 @@ object LibraryUpdateProgressBus {
 
     sealed interface Command {
         object Cancel : Command
+
         /** Cancel only a specific source (e.g. "Manga" but not "Anime") */
         data class CancelSource(val source: String) : Command
+
         /**
          * Emitted when the user taps "view failures" on the progress overlay.
          * Observed by [eu.kanade.tachiyomi.ui.home.HomeScreen] to switch to the

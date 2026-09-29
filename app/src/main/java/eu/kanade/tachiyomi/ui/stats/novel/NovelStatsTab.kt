@@ -25,7 +25,7 @@ fun Screen.novelStatsTab(): TabContent {
     }
 
     return TabContent(
-        titleRes = AYMR.strings.label_novel_updates,
+        titleRes = AYMR.strings.carrier_books_updates,
         content = { contentPadding, _ ->
             if (state is StatsScreenState.Loading) {
                 LoadingScreen()

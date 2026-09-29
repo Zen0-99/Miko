@@ -2,29 +2,37 @@ package eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook
 
 import android.app.PendingIntent
 import android.content.Intent
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.ui.main.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 /**
- * Media3 session service hosting the audiobook player's ExoPlayer.
+ * Media3 library session service hosting the audiobook player's ExoPlayer.
  *
  * This is deliberately a NEW service rather than an extension of
  * [eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackService] (which
  * owns the MediaSessionCompat + live/rendered TTS pipeline for read-along).
- * The audiobook player is plain media playback — MediaSessionService gives
- * it the foreground lifecycle, a media notification, and lock-screen/
- * Bluetooth transport for free (REQ-008).
+ * The audiobook player is plain media playback — MediaLibraryService gives
+ * it the foreground lifecycle, a media notification, lock-screen/Bluetooth
+ * transport, AND an Android Auto browse tree (library novels as albums,
+ * chapters as tracks — see [AudiobookLibraryCallback]).
  *
  * All control flows through the Media3 session: [AudiobookPlayerController]
  * connects with a `MediaController` client, and external controllers (lock
  * screen, BT headsets, Android Auto) attach through the session directly.
  */
-class AudiobookPlaybackService : MediaSessionService() {
+@UnstableApi
+class AudiobookPlaybackService : MediaLibraryService() {
 
-    private var mediaSession: MediaSession? = null
+    private var mediaSession: MediaLibrarySession? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -43,17 +51,22 @@ class AudiobookPlaybackService : MediaSessionService() {
             Intent(this, MainActivity::class.java).setAction(Constants.SHORTCUT_AUDIOBOOK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        mediaSession = MediaSession.Builder(this, player)
+        mediaSession = MediaLibrarySession.Builder(
+            this,
+            player,
+            AudiobookLibraryCallback(this, serviceScope),
+        )
             .setId(SESSION_ID)
             .setSessionActivity(sessionActivity)
             .build()
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
         return mediaSession
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         mediaSession?.run {
             player.release()
             release()

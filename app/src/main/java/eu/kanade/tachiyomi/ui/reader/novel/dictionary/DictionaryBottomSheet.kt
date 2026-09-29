@@ -100,7 +100,8 @@ fun DictionaryBottomSheet(
                 }
                 IconButton(onClick = {
                     val query = "Define $selectedText"
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=${Uri.encode(query)}"))
+                    val intent =
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=${Uri.encode(query)}"))
                     if (intent.resolveActivity(context.packageManager) != null) {
                         context.startActivity(intent)
                     }

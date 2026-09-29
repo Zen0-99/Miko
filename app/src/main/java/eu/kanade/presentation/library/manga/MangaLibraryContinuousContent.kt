@@ -1,52 +1,37 @@
 package eu.kanade.presentation.library.manga
 
 import android.content.res.Configuration
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastAny
-import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.i18n.stringResource
 import eu.kanade.core.preference.PreferenceMutableState
-import eu.kanade.presentation.library.components.EntryCompactGridItem
-import eu.kanade.presentation.library.components.EntryComfortableGridItem
-import eu.kanade.presentation.library.components.EntryListItem
-import eu.kanade.presentation.library.components.DownloadsBadge
-import eu.kanade.presentation.library.components.UnviewedBadge
-import eu.kanade.presentation.library.components.LanguageBadge
-import eu.kanade.presentation.library.components.PinnedBadge
 import eu.kanade.presentation.library.components.CollectionHeaderRow
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
+import eu.kanade.presentation.library.components.DownloadsBadge
+import eu.kanade.presentation.library.components.EntryComfortableGridItem
+import eu.kanade.presentation.library.components.EntryCompactGridItem
+import eu.kanade.presentation.library.components.EntryListItem
+import eu.kanade.presentation.library.components.LanguageBadge
+import eu.kanade.presentation.library.components.PinnedBadge
+import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.manga.buildListSubtitle
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryItem
 import kotlinx.coroutines.delay
@@ -129,8 +114,11 @@ fun MangaLibraryContinuousContent(
         enabled = notSelectionMode,
     ) {
         LazyVerticalGrid(
-            columns = if (effectiveColumns > 0) GridCells.Fixed(effectiveColumns)
-                      else GridCells.Adaptive(128.dp),
+            columns = if (effectiveColumns > 0) {
+                GridCells.Fixed(effectiveColumns)
+            } else {
+                GridCells.Adaptive(128.dp)
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
@@ -144,8 +132,12 @@ fun MangaLibraryContinuousContent(
                 end = if (isListMode) 0.dp else 8.dp,
                 bottom = 8.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(if (isListMode) 0.dp else CommonEntryItemDefaults.GridVerticalSpacer),
-            horizontalArrangement = Arrangement.spacedBy(if (isListMode) 0.dp else CommonEntryItemDefaults.GridHorizontalSpacer),
+            verticalArrangement = Arrangement.spacedBy(
+                if (isListMode) 0.dp else CommonEntryItemDefaults.GridVerticalSpacer,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(
+                if (isListMode) 0.dp else CommonEntryItemDefaults.GridHorizontalSpacer,
+            ),
         ) {
             collections.forEachIndexed { index, collection ->
                 val items = getLibraryForPage(index)
@@ -194,7 +186,11 @@ fun MangaLibraryContinuousContent(
                         )
                     }
                     val topEndBadge: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? =
-                        if (libraryItem.pinned) { { PinnedBadge() } } else null
+                        if (libraryItem.pinned) {
+                            { PinnedBadge() }
+                        } else {
+                            null
+                        }
 
                     when (displayMode) {
                         LibraryDisplayMode.List -> {
@@ -217,7 +213,9 @@ fun MangaLibraryContinuousContent(
                                     isEntryLocked?.invoke(manga.id) != true
                                 ) {
                                     { onContinueReadingClicked(libraryItem.libraryManga) }
-                                } else null,
+                                } else {
+                                    null
+                                },
                                 subtitle = subtitle,
                             )
                         }
@@ -256,7 +254,9 @@ fun MangaLibraryContinuousContent(
                                     ).joinToString(", ").takeIf { it.isNotBlank() }
                                 }
                                 authorArtist
-                            } else null
+                            } else {
+                                null
+                            }
                             EntryComfortableGridItem(
                                 isSelected = isSelected,
                                 title = manga.title,

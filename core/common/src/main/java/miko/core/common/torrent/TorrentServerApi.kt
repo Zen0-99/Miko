@@ -1,7 +1,5 @@
 package miko.core.common.torrent
 
-import miko.core.common.torrent.model.Torrent
-import miko.core.common.torrent.model.TorrentRequest
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.POST
@@ -9,6 +7,8 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import logcat.LogPriority
+import miko.core.common.torrent.model.Torrent
+import miko.core.common.torrent.model.TorrentRequest
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody

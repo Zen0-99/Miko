@@ -188,8 +188,11 @@ private fun DraggableFilterItem(
             },
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isDragging) MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.surface,
+            containerColor = if (isDragging) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
         ),
     ) {
         Row(

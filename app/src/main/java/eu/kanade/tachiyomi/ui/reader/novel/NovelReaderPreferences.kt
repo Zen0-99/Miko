@@ -126,7 +126,10 @@ class NovelReaderPreferences(
     fun autoScrollOffset() = preferenceStore.getInt("pref_novel_auto_scroll_offset", 60)
 
     /** Auto-scroll chapter end behavior. */
-    fun autoScrollChapterEndBehavior() = preferenceStore.getEnum("pref_novel_auto_scroll_end_behavior", NovelAutoScrollChapterEndBehavior.StopAtEnd)
+    fun autoScrollChapterEndBehavior() = preferenceStore.getEnum(
+        "pref_novel_auto_scroll_end_behavior",
+        NovelAutoScrollChapterEndBehavior.StopAtEnd,
+    )
 
     /** Show auto-scroll floating button for quick toggle. */
     fun showAutoScrollFloatingButton() = preferenceStore.getBoolean("pref_novel_auto_scroll_fab", false)

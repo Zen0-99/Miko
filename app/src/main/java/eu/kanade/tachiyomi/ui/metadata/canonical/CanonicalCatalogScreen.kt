@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.presentation.browse.InLibraryBadge
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.EntryCompactGridItem
@@ -148,11 +149,12 @@ fun CanonicalCatalogContent(
                     ) {
                         items(state.results.size) { index ->
                             val work = state.results[index]
+                            val bound = work.mikoWorkId in state.boundEntryIds
                             val coverData = if (isNovel) {
                                 NovelCover(
                                     novelId = work.mikoWorkId.hashCode().toLong(),
                                     sourceId = CanonicalCatalog.CANONICAL_SOURCE_ID,
-                                    isNovelFavorite = false,
+                                    isNovelFavorite = bound,
                                     url = null,
                                     lastModified = 0L,
                                 )
@@ -160,7 +162,7 @@ fun CanonicalCatalogContent(
                                 MangaCover(
                                     mangaId = work.mikoWorkId.hashCode().toLong(),
                                     sourceId = CanonicalCatalog.CANONICAL_SOURCE_ID,
-                                    isMangaFavorite = false,
+                                    isMangaFavorite = bound,
                                     url = null,
                                     lastModified = 0L,
                                 )
@@ -192,6 +194,12 @@ fun CanonicalCatalogContent(
                                         } else {
                                             null
                                         },
+                                        coverAlpha = if (bound) {
+                                            CommonEntryItemDefaults.BrowseFavoriteCoverAlpha
+                                        } else {
+                                            1f
+                                        },
+                                        coverBadgeStart = { InLibraryBadge(enabled = bound) },
                                     )
                                 }
 
@@ -201,6 +209,12 @@ fun CanonicalCatalogContent(
                                         onClick = onClick,
                                         onLongClick = onLongClick,
                                         coverData = coverData,
+                                        coverAlpha = if (bound) {
+                                            CommonEntryItemDefaults.BrowseFavoriteCoverAlpha
+                                        } else {
+                                            1f
+                                        },
+                                        coverBadgeStart = { InLibraryBadge(enabled = bound) },
                                     )
                                 }
                             }

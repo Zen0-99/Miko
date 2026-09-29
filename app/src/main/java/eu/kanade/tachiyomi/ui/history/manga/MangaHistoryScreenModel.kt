@@ -56,6 +56,7 @@ class MangaHistoryScreenModel(
     private val getNextChapters: GetNextChapters = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val removeHistory: RemoveMangaHistory = Injekt.get(),
+    private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
     private val setMangaCollections: SetMangaCollections = Injekt.get(),
     private val updateManga: UpdateManga = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
@@ -72,6 +73,9 @@ class MangaHistoryScreenModel(
         screenModelScope.launch {
             _query.collectLatest { query ->
                 getHistory.subscribe(query ?: "")
+                    // Unify extension-source rows onto their canonical
+                    // `miko:` entry (title + cover from the canonical row).
+                    .map { list -> list.map { canonicalEntryUnifier.unify(it) } }
                     .distinctUntilChanged()
                     .catch { error ->
                         logcat(LogPriority.ERROR, error)
@@ -92,12 +96,12 @@ class MangaHistoryScreenModel(
 
     private fun List<MangaHistoryWithRelations>.toHistoryUiModels(): List<MangaHistoryUiModel> {
         // Group consecutive entries from the same manga whose readAt timestamps
-        // fall within BATCH_WINDOW_MS. If a group has >= BATCH_MIN_SIZE entries,
+        // fall within batchWindowMs. If a group has >= batchMinSize entries,
         // collapse it into a single MangaHistoryUiModel.Batch; otherwise emit
         // individual items. Date headers are inserted between groups/items that
         // cross a day boundary.
-        val BATCH_WINDOW_MS = 60_000L // 1 minute
-        val BATCH_MIN_SIZE = 5
+        val batchWindowMs = 60_000L // 1 minute
+        val batchMinSize = 5
 
         if (isEmpty()) return emptyList()
 
@@ -113,7 +117,7 @@ class MangaHistoryScreenModel(
         var windowStart: Long = 0L
         for (entry in this) {
             val t = entry.readAt?.time ?: 0L
-            if (current != null && entry.mangaId == currentMangaId && t - windowStart <= BATCH_WINDOW_MS) {
+            if (current != null && entry.mangaId == currentMangaId && t - windowStart <= batchWindowMs) {
                 current!!.add(entry)
             } else {
                 if (current != null) {
@@ -138,7 +142,7 @@ class MangaHistoryScreenModel(
                 result.add(MangaHistoryUiModel.Header(firstDate))
                 lastDate = firstDate
             }
-            if (entries.size >= BATCH_MIN_SIZE) {
+            if (entries.size >= batchMinSize) {
                 result.add(
                     MangaHistoryUiModel.Batch(
                         mangaId = group.mangaId,

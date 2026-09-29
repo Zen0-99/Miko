@@ -8,9 +8,6 @@ import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Sort
@@ -31,15 +28,11 @@ import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,18 +41,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
-import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
-import tachiyomi.domain.readingorder.model.ReadingOrder
-import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
-import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import androidx.compose.ui.util.fastAll
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
@@ -67,21 +56,22 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.presentation.collection.components.ChangeCollectionDialog
-import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
+import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBar
 import eu.kanade.presentation.components.useSharedTopBarWithSearch
+import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.components.LibraryBottomActionMenu
 import eu.kanade.presentation.entries.components.ReadingOrderBottomBar
+import eu.kanade.presentation.entries.components.ReadingOrderMoveDepthDialog
 import eu.kanade.presentation.entries.components.ReadingOrderPickerDialog
 import eu.kanade.presentation.entries.components.ReadingOrderRemoveConfirmDialog
-import eu.kanade.presentation.entries.components.ReadingOrderMoveDepthDialog
-import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.library.DeleteLibraryEntryDialog
-import eu.kanade.presentation.library.components.LibraryToolbar
 import eu.kanade.presentation.library.components.SortBottomSheet
 import eu.kanade.presentation.library.components.SortModeOption
+import eu.kanade.presentation.library.displayoptions.DisplayOptionsSheet
+import eu.kanade.presentation.library.displayoptions.LibraryType
 import eu.kanade.presentation.library.filter.FilterChipData
 import eu.kanade.presentation.library.filter.FilterOptionData
 import eu.kanade.presentation.library.filter.FilterSectionData
@@ -90,20 +80,19 @@ import eu.kanade.presentation.library.filter.FullFilterSheet
 import eu.kanade.presentation.library.filter.GroupBySheet
 import eu.kanade.presentation.library.filter.LibraryFilterId
 import eu.kanade.presentation.library.filter.PersistentFilterSheet
-import eu.kanade.presentation.library.displayoptions.DisplayOptionsSheet
-import eu.kanade.presentation.library.displayoptions.LibraryType
 import eu.kanade.presentation.library.novel.NovelLibraryContent
 import eu.kanade.presentation.library.novel.NovelLibrarySettingsDialog
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
 import eu.kanade.presentation.util.Tab
-import eu.kanade.tachiyomi.ui.collection.CollectionsTab
-import tachiyomi.presentation.core.theme.active
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgress
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
+import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
+import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.channels.Channel
@@ -114,11 +103,12 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.collection.model.Collection
-import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.library.novel.model.NovelLibrarySort
 import tachiyomi.domain.library.novel.model.sort
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
+import tachiyomi.domain.readingorder.model.ReadingOrder
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -126,7 +116,10 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
+import tachiyomi.presentation.core.theme.active
 import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 data object NovelLibraryTab : Tab {
 
@@ -134,7 +127,7 @@ data object NovelLibraryTab : Tab {
     override val options: TabOptions
         @Composable
         get() {
-            val title = AYMR.strings.label_novel_library
+            val title = AYMR.strings.carrier_books_library
             val isSelected = LocalTabNavigator.current.current.key == key
             val image = AnimatedImageVector.animatedVectorResource(R.drawable.anim_library_enter)
             return TabOptions(
@@ -211,12 +204,15 @@ data object NovelLibraryTab : Tab {
         var showSettingsDialog by remember { mutableStateOf(false) }
 
         // Filter preferences as state
-        val filterDownloaded by settingsScreenModel.libraryPreferences.filterDownloadedNovel().collectAsStateWithLifecycle()
+        val filterDownloaded by settingsScreenModel.libraryPreferences.filterDownloadedNovel()
+            .collectAsStateWithLifecycle()
         val downloadedOnly by settingsScreenModel.preferences.downloadedOnly().collectAsStateWithLifecycle()
         val filterUnread by settingsScreenModel.libraryPreferences.filterUnreadNovel().collectAsStateWithLifecycle()
         val filterStarted by settingsScreenModel.libraryPreferences.filterStartedNovel().collectAsStateWithLifecycle()
-        val filterBookmarked by settingsScreenModel.libraryPreferences.filterBookmarkedNovel().collectAsStateWithLifecycle()
-        val filterCompleted by settingsScreenModel.libraryPreferences.filterCompletedNovel().collectAsStateWithLifecycle()
+        val filterBookmarked by settingsScreenModel.libraryPreferences.filterBookmarkedNovel()
+            .collectAsStateWithLifecycle()
+        val filterCompleted by settingsScreenModel.libraryPreferences.filterCompletedNovel()
+            .collectAsStateWithLifecycle()
         val filterOrder by settingsScreenModel.libraryPreferences.filterOrder().collectAsStateWithLifecycle()
         val trackers by settingsScreenModel.trackersFlow.collectAsStateWithLifecycle()
 
@@ -235,188 +231,254 @@ data object NovelLibraryTab : Tab {
         }
 
         // Build filter chip data ordered by filterOrder preference
-        val filterChips = remember(filterDownloaded, filterUnread, filterStarted, filterBookmarked, filterCompleted, filterOrder, trackedChipState, trackers) {
-            val orderChars = filterOrder.ifBlank { LibraryFilterId.DEFAULT_ORDER }
-            val allFilters = mapOf(
-                LibraryFilterId.DOWNLOADED to FilterChipData(
-                    id = LibraryFilterId.DOWNLOADED,
-                    labelRes = MR.strings.label_downloaded,
-                    state = if (downloadedOnly) TriState.ENABLED_IS else filterDownloaded,
-                    enabled = !downloadedOnly,
-                    onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterDownloadedNovel) },
-                ),
-                LibraryFilterId.UNREAD to FilterChipData(
-                    id = LibraryFilterId.UNREAD,
-                    labelRes = MR.strings.action_filter_unread,
-                    state = filterUnread,
-                    onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterUnreadNovel) },
-                ),
-                LibraryFilterId.STARTED to FilterChipData(
-                    id = LibraryFilterId.STARTED,
-                    labelRes = MR.strings.label_started,
-                    state = filterStarted,
-                    onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterStartedNovel) },
-                ),
-                LibraryFilterId.BOOKMARKED to FilterChipData(
-                    id = LibraryFilterId.BOOKMARKED,
-                    labelRes = MR.strings.action_filter_bookmarked,
-                    state = filterBookmarked,
-                    onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterBookmarkedNovel) },
-                ),
-                LibraryFilterId.COMPLETED to FilterChipData(
-                    id = LibraryFilterId.COMPLETED,
-                    labelRes = MR.strings.completed,
-                    state = filterCompleted,
-                    onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterCompletedNovel) },
-                ),
-                LibraryFilterId.TRACKED to FilterChipData(
-                    id = LibraryFilterId.TRACKED,
-                    labelRes = MR.strings.action_filter_tracked,
-                    state = trackedChipState,
-                    enabled = trackers.isNotEmpty(),
-                    onToggle = {
-                        // Toggle all trackers together
-                        trackers.forEach { tracker ->
-                            settingsScreenModel.toggleTracker(tracker.id.toInt())
-                        }
-                    },
-                ),
-            )
-            orderChars.mapNotNull { c -> LibraryFilterId.fromChar(c)?.let { allFilters[it] } }
-        }
+        val filterChips =
+            remember(
+                filterDownloaded,
+                filterUnread,
+                filterStarted,
+                filterBookmarked,
+                filterCompleted,
+                filterOrder,
+                trackedChipState,
+                trackers,
+            ) {
+                val orderChars = filterOrder.ifBlank { LibraryFilterId.DEFAULT_ORDER }
+                val allFilters = mapOf(
+                    LibraryFilterId.DOWNLOADED to FilterChipData(
+                        id = LibraryFilterId.DOWNLOADED,
+                        labelRes = MR.strings.label_downloaded,
+                        state = if (downloadedOnly) TriState.ENABLED_IS else filterDownloaded,
+                        enabled = !downloadedOnly,
+                        onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterDownloadedNovel) },
+                    ),
+                    LibraryFilterId.UNREAD to FilterChipData(
+                        id = LibraryFilterId.UNREAD,
+                        labelRes = MR.strings.action_filter_unread,
+                        state = filterUnread,
+                        onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterUnreadNovel) },
+                    ),
+                    LibraryFilterId.STARTED to FilterChipData(
+                        id = LibraryFilterId.STARTED,
+                        labelRes = MR.strings.label_started,
+                        state = filterStarted,
+                        onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterStartedNovel) },
+                    ),
+                    LibraryFilterId.BOOKMARKED to FilterChipData(
+                        id = LibraryFilterId.BOOKMARKED,
+                        labelRes = MR.strings.action_filter_bookmarked,
+                        state = filterBookmarked,
+                        onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterBookmarkedNovel) },
+                    ),
+                    LibraryFilterId.COMPLETED to FilterChipData(
+                        id = LibraryFilterId.COMPLETED,
+                        labelRes = MR.strings.completed,
+                        state = filterCompleted,
+                        onToggle = { settingsScreenModel.toggleFilter(LibraryPreferences::filterCompletedNovel) },
+                    ),
+                    LibraryFilterId.TRACKED to FilterChipData(
+                        id = LibraryFilterId.TRACKED,
+                        labelRes = MR.strings.action_filter_tracked,
+                        state = trackedChipState,
+                        enabled = trackers.isNotEmpty(),
+                        onToggle = {
+                            // Toggle all trackers together
+                            trackers.forEach { tracker ->
+                                settingsScreenModel.toggleTracker(tracker.id.toInt())
+                            }
+                        },
+                    ),
+                )
+                orderChars.mapNotNull { c -> LibraryFilterId.fromChar(c)?.let { allFilters[it] } }
+            }
 
         // Build full filter sections — each with 3 radio options (All / positive / negative)
         val filterSections = buildList {
-            add(FilterSectionData(
-                id = LibraryFilterId.DOWNLOADED,
-                titleRes = MR.strings.label_downloaded,
-                items = listOf(
-                    FilterOptionData(
-                        label = stringResource(MR.strings.all),
-                        isSelected = filterDownloaded == TriState.DISABLED,
-                        onClick = { settingsScreenModel.libraryPreferences.filterDownloadedNovel().set(TriState.DISABLED) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.label_downloaded),
-                        isSelected = if (downloadedOnly) true else filterDownloaded == TriState.ENABLED_IS,
-                        onClick = { settingsScreenModel.libraryPreferences.filterDownloadedNovel().set(TriState.ENABLED_IS) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.filter_not_downloaded),
-                        isSelected = filterDownloaded == TriState.ENABLED_NOT,
-                        onClick = { settingsScreenModel.libraryPreferences.filterDownloadedNovel().set(TriState.ENABLED_NOT) },
-                    ),
-                ),
-            ))
-            add(FilterSectionData(
-                id = LibraryFilterId.UNREAD,
-                titleRes = MR.strings.action_filter_unread,
-                items = listOf(
-                    FilterOptionData(
-                        label = stringResource(MR.strings.all),
-                        isSelected = filterUnread == TriState.DISABLED,
-                        onClick = { settingsScreenModel.libraryPreferences.filterUnreadNovel().set(TriState.DISABLED) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.action_filter_unread),
-                        isSelected = filterUnread == TriState.ENABLED_IS,
-                        onClick = { settingsScreenModel.libraryPreferences.filterUnreadNovel().set(TriState.ENABLED_IS) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.filter_read),
-                        isSelected = filterUnread == TriState.ENABLED_NOT,
-                        onClick = { settingsScreenModel.libraryPreferences.filterUnreadNovel().set(TriState.ENABLED_NOT) },
+            add(
+                FilterSectionData(
+                    id = LibraryFilterId.DOWNLOADED,
+                    titleRes = MR.strings.label_downloaded,
+                    items = listOf(
+                        FilterOptionData(
+                            label = stringResource(MR.strings.all),
+                            isSelected = filterDownloaded == TriState.DISABLED,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterDownloadedNovel().set(TriState.DISABLED)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.label_downloaded),
+                            isSelected = if (downloadedOnly) true else filterDownloaded == TriState.ENABLED_IS,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterDownloadedNovel().set(TriState.ENABLED_IS)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.filter_not_downloaded),
+                            isSelected = filterDownloaded == TriState.ENABLED_NOT,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterDownloadedNovel().set(TriState.ENABLED_NOT)
+                            },
+                        ),
                     ),
                 ),
-            ))
-            add(FilterSectionData(
-                id = LibraryFilterId.STARTED,
-                titleRes = MR.strings.label_started,
-                items = listOf(
-                    FilterOptionData(
-                        label = stringResource(MR.strings.all),
-                        isSelected = filterStarted == TriState.DISABLED,
-                        onClick = { settingsScreenModel.libraryPreferences.filterStartedNovel().set(TriState.DISABLED) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.label_started),
-                        isSelected = filterStarted == TriState.ENABLED_IS,
-                        onClick = { settingsScreenModel.libraryPreferences.filterStartedNovel().set(TriState.ENABLED_IS) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.filter_not_started),
-                        isSelected = filterStarted == TriState.ENABLED_NOT,
-                        onClick = { settingsScreenModel.libraryPreferences.filterStartedNovel().set(TriState.ENABLED_NOT) },
-                    ),
-                ),
-            ))
-            add(FilterSectionData(
-                id = LibraryFilterId.BOOKMARKED,
-                titleRes = MR.strings.action_filter_bookmarked,
-                items = listOf(
-                    FilterOptionData(
-                        label = stringResource(MR.strings.all),
-                        isSelected = filterBookmarked == TriState.DISABLED,
-                        onClick = { settingsScreenModel.libraryPreferences.filterBookmarkedNovel().set(TriState.DISABLED) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.action_filter_bookmarked),
-                        isSelected = filterBookmarked == TriState.ENABLED_IS,
-                        onClick = { settingsScreenModel.libraryPreferences.filterBookmarkedNovel().set(TriState.ENABLED_IS) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.filter_not_bookmarked),
-                        isSelected = filterBookmarked == TriState.ENABLED_NOT,
-                        onClick = { settingsScreenModel.libraryPreferences.filterBookmarkedNovel().set(TriState.ENABLED_NOT) },
+            )
+            add(
+                FilterSectionData(
+                    id = LibraryFilterId.UNREAD,
+                    titleRes = MR.strings.action_filter_unread,
+                    items = listOf(
+                        FilterOptionData(
+                            label = stringResource(MR.strings.all),
+                            isSelected = filterUnread == TriState.DISABLED,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterUnreadNovel().set(TriState.DISABLED)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.action_filter_unread),
+                            isSelected = filterUnread == TriState.ENABLED_IS,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterUnreadNovel().set(TriState.ENABLED_IS)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.filter_read),
+                            isSelected = filterUnread == TriState.ENABLED_NOT,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterUnreadNovel().set(TriState.ENABLED_NOT)
+                            },
+                        ),
                     ),
                 ),
-            ))
-            add(FilterSectionData(
-                id = LibraryFilterId.COMPLETED,
-                titleRes = MR.strings.completed,
-                items = listOf(
-                    FilterOptionData(
-                        label = stringResource(MR.strings.all),
-                        isSelected = filterCompleted == TriState.DISABLED,
-                        onClick = { settingsScreenModel.libraryPreferences.filterCompletedNovel().set(TriState.DISABLED) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.completed),
-                        isSelected = filterCompleted == TriState.ENABLED_IS,
-                        onClick = { settingsScreenModel.libraryPreferences.filterCompletedNovel().set(TriState.ENABLED_IS) },
-                    ),
-                    FilterOptionData(
-                        label = stringResource(MR.strings.ongoing),
-                        isSelected = filterCompleted == TriState.ENABLED_NOT,
-                        onClick = { settingsScreenModel.libraryPreferences.filterCompletedNovel().set(TriState.ENABLED_NOT) },
+            )
+            add(
+                FilterSectionData(
+                    id = LibraryFilterId.STARTED,
+                    titleRes = MR.strings.label_started,
+                    items = listOf(
+                        FilterOptionData(
+                            label = stringResource(MR.strings.all),
+                            isSelected = filterStarted == TriState.DISABLED,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterStartedNovel().set(TriState.DISABLED)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.label_started),
+                            isSelected = filterStarted == TriState.ENABLED_IS,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterStartedNovel().set(TriState.ENABLED_IS)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.filter_not_started),
+                            isSelected = filterStarted == TriState.ENABLED_NOT,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterStartedNovel().set(TriState.ENABLED_NOT)
+                            },
+                        ),
                     ),
                 ),
-            ))
+            )
+            add(
+                FilterSectionData(
+                    id = LibraryFilterId.BOOKMARKED,
+                    titleRes = MR.strings.action_filter_bookmarked,
+                    items = listOf(
+                        FilterOptionData(
+                            label = stringResource(MR.strings.all),
+                            isSelected = filterBookmarked == TriState.DISABLED,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterBookmarkedNovel().set(TriState.DISABLED)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.action_filter_bookmarked),
+                            isSelected = filterBookmarked == TriState.ENABLED_IS,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterBookmarkedNovel().set(TriState.ENABLED_IS)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.filter_not_bookmarked),
+                            isSelected = filterBookmarked == TriState.ENABLED_NOT,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterBookmarkedNovel().set(TriState.ENABLED_NOT)
+                            },
+                        ),
+                    ),
+                ),
+            )
+            add(
+                FilterSectionData(
+                    id = LibraryFilterId.COMPLETED,
+                    titleRes = MR.strings.completed,
+                    items = listOf(
+                        FilterOptionData(
+                            label = stringResource(MR.strings.all),
+                            isSelected = filterCompleted == TriState.DISABLED,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterCompletedNovel().set(TriState.DISABLED)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.completed),
+                            isSelected = filterCompleted == TriState.ENABLED_IS,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterCompletedNovel().set(TriState.ENABLED_IS)
+                            },
+                        ),
+                        FilterOptionData(
+                            label = stringResource(MR.strings.ongoing),
+                            isSelected = filterCompleted == TriState.ENABLED_NOT,
+                            onClick = {
+                                settingsScreenModel.libraryPreferences.filterCompletedNovel().set(TriState.ENABLED_NOT)
+                            },
+                        ),
+                    ),
+                ),
+            )
             if (trackers.isNotEmpty()) {
-                add(FilterSectionData(
-                    id = LibraryFilterId.TRACKED,
-                    titleRes = MR.strings.action_filter_tracked,
-                    items = trackers.flatMap { service ->
-                        val filterTracker = settingsScreenModel.libraryPreferences.filterTrackedNovel(service.id.toInt()).get()
-                        listOf(
-                            FilterOptionData(
-                                label = "${service.name}: ${stringResource(MR.strings.all)}",
-                                isSelected = filterTracker == TriState.DISABLED,
-                                onClick = { settingsScreenModel.libraryPreferences.filterTrackedNovel(service.id.toInt()).set(TriState.DISABLED) },
-                            ),
-                            FilterOptionData(
-                                label = "${service.name}: ${stringResource(MR.strings.action_filter_tracked)}",
-                                isSelected = filterTracker == TriState.ENABLED_IS,
-                                onClick = { settingsScreenModel.libraryPreferences.filterTrackedNovel(service.id.toInt()).set(TriState.ENABLED_IS) },
-                            ),
-                            FilterOptionData(
-                                label = "${service.name}: ${stringResource(MR.strings.filter_not_tracked)}",
-                                isSelected = filterTracker == TriState.ENABLED_NOT,
-                                onClick = { settingsScreenModel.libraryPreferences.filterTrackedNovel(service.id.toInt()).set(TriState.ENABLED_NOT) },
-                            ),
-                        )
-                    },
-                ))
+                add(
+                    FilterSectionData(
+                        id = LibraryFilterId.TRACKED,
+                        titleRes = MR.strings.action_filter_tracked,
+                        items = trackers.flatMap { service ->
+                            val filterTracker = settingsScreenModel.libraryPreferences.filterTrackedNovel(
+                                service.id.toInt(),
+                            ).get()
+                            listOf(
+                                FilterOptionData(
+                                    label = "${service.name}: ${stringResource(MR.strings.all)}",
+                                    isSelected = filterTracker == TriState.DISABLED,
+                                    onClick = {
+                                        settingsScreenModel.libraryPreferences.filterTrackedNovel(
+                                            service.id.toInt(),
+                                        ).set(TriState.DISABLED)
+                                    },
+                                ),
+                                FilterOptionData(
+                                    label = "${service.name}: ${stringResource(MR.strings.action_filter_tracked)}",
+                                    isSelected = filterTracker == TriState.ENABLED_IS,
+                                    onClick = {
+                                        settingsScreenModel.libraryPreferences.filterTrackedNovel(
+                                            service.id.toInt(),
+                                        ).set(TriState.ENABLED_IS)
+                                    },
+                                ),
+                                FilterOptionData(
+                                    label = "${service.name}: ${stringResource(MR.strings.filter_not_tracked)}",
+                                    isSelected = filterTracker == TriState.ENABLED_NOT,
+                                    onClick = {
+                                        settingsScreenModel.libraryPreferences.filterTrackedNovel(
+                                            service.id.toInt(),
+                                        ).set(TriState.ENABLED_NOT)
+                                    },
+                                ),
+                            )
+                        },
+                    ),
+                )
             }
         }
 
@@ -450,23 +512,29 @@ data object NovelLibraryTab : Tab {
         if (state.selectionMode) {
             // Selection mode — show count and selection actions
             val selectionActions = buildList {
-                add(AppBar.Action(
-                    title = stringResource(MR.strings.action_select_all),
-                    icon = Icons.Outlined.SelectAll,
-                    onClick = { screenModel.selectAll(screenModel.activeCollectionIndex) },
-                ))
-                add(AppBar.Action(
-                    title = stringResource(MR.strings.action_select_inverse),
-                    icon = Icons.Outlined.FlipToBack,
-                    onClick = { screenModel.invertSelection(screenModel.activeCollectionIndex) },
-                ))
+                add(
+                    AppBar.Action(
+                        title = stringResource(MR.strings.action_select_all),
+                        icon = Icons.Outlined.SelectAll,
+                        onClick = { screenModel.selectAll(screenModel.activeCollectionIndex) },
+                    ),
+                )
+                add(
+                    AppBar.Action(
+                        title = stringResource(MR.strings.action_select_inverse),
+                        icon = Icons.Outlined.FlipToBack,
+                        onClick = { screenModel.invertSelection(screenModel.activeCollectionIndex) },
+                    ),
+                )
                 // Download moved from bottom bar to top bar
                 if (!state.readingOrderMode) {
-                    add(AppBar.Action(
-                        title = stringResource(MR.strings.action_download),
-                        icon = Icons.Outlined.Download,
-                        onClick = { screenModel.runDownloadActionSelection(DownloadAction.UNVIEWED_ITEMS) },
-                    ))
+                    add(
+                        AppBar.Action(
+                            title = stringResource(MR.strings.action_download),
+                            icon = Icons.Outlined.Download,
+                            onClick = { screenModel.runDownloadActionSelection(DownloadAction.UNVIEWED_ITEMS) },
+                        ),
+                    )
                 }
             }
             useSharedTopBar(
@@ -476,27 +544,39 @@ data object NovelLibraryTab : Tab {
                     "${state.selection.size}"
                 },
                 actions = selectionActions.toPersistentList(),
-                navigateUp = if (state.readingOrderMode) screenModel::exitReadingOrderMode else screenModel::clearSelection,
+                navigateUp = if (state.readingOrderMode) {
+                    screenModel::exitReadingOrderMode
+                } else {
+                    screenModel::clearSelection
+                },
             )
         } else {
             val libraryActions = buildList {
-                add(AppBar.Action(
-                    title = stringResource(MR.strings.action_filter),
-                    icon = Icons.Outlined.FilterList,
-                    iconTint = if (state.hasActiveFilters) MaterialTheme.colorScheme.active else null,
-                    onClick = {
-                        filterSheetVisibility = when (filterSheetVisibility) {
-                            FilterSheetVisibility.HIDDEN -> FilterSheetVisibility.COLLAPSED
-                            FilterSheetVisibility.COLLAPSED -> FilterSheetVisibility.EXPANDED
-                            FilterSheetVisibility.EXPANDED -> FilterSheetVisibility.HIDDEN
-                        }
-                    },
-                ))
-                add(AppBar.OverflowAction(
-                    title = stringResource(AYMR.strings.reading_order),
-                    onClick = { screenModel.showReadingOrderDialog() },
-                ))
-                addAll(globalOverflowActions(onClickSettings = { navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen()) }))
+                add(
+                    AppBar.Action(
+                        title = stringResource(MR.strings.action_filter),
+                        icon = Icons.Outlined.FilterList,
+                        iconTint = if (state.hasActiveFilters) MaterialTheme.colorScheme.active else null,
+                        onClick = {
+                            filterSheetVisibility = when (filterSheetVisibility) {
+                                FilterSheetVisibility.HIDDEN -> FilterSheetVisibility.COLLAPSED
+                                FilterSheetVisibility.COLLAPSED -> FilterSheetVisibility.EXPANDED
+                                FilterSheetVisibility.EXPANDED -> FilterSheetVisibility.HIDDEN
+                            }
+                        },
+                    ),
+                )
+                add(
+                    AppBar.OverflowAction(
+                        title = stringResource(AYMR.strings.reading_order),
+                        onClick = { screenModel.showReadingOrderDialog() },
+                    ),
+                )
+                addAll(
+                    globalOverflowActions(onClickSettings = {
+                        navigator.push(eu.kanade.tachiyomi.ui.setting.SettingsScreen())
+                    }),
+                )
             }.toPersistentList()
             useSharedTopBarWithSearch(
                 title = title.text,
@@ -516,170 +596,171 @@ data object NovelLibraryTab : Tab {
         val hostBottomForSheet = hostPaddingForSheet?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
 
         Box {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {},
-            bottomBar = {
-                if (state.readingOrderMode) {
-                    ReadingOrderBottomBar(
-                        visible = state.readingOrderMode,
-                        currentLayer = state.readingOrderCurrentLayer,
-                        canGoBack = state.readingOrderCurrentLayer > 0 || state.readingOrderLayers.isNotEmpty(),
-                        canAdvance = state.selection.isNotEmpty(),
-                        canSave = state.readingOrderCurrentLayer > 0 || state.readingOrderLayers.isNotEmpty(),
-                        onBack = screenModel::goBackReadingOrderLayer,
-                        onNext = screenModel::advanceReadingOrderLayer,
-                        onSave = screenModel::saveReadingOrder,
-                    )
-                } else {
-                    LibraryBottomActionMenu(
-                        visible = state.selectionMode,
-                        onChangeCollectionClicked = screenModel::openChangeCollectionDialog,
-                        onMarkAsViewedClicked = { screenModel.markReadSelection(true) },
-                        onMarkAsUnviewedClicked = { screenModel.markReadSelection(false) },
-                        onDownloadClicked = null,
-                        onDeleteClicked = screenModel::openDeleteNovelDialog,
-                        isManga = true,
-                    )
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = {},
+                bottomBar = {
+                    if (state.readingOrderMode) {
+                        ReadingOrderBottomBar(
+                            visible = state.readingOrderMode,
+                            currentLayer = state.readingOrderCurrentLayer,
+                            canGoBack = state.readingOrderCurrentLayer > 0 || state.readingOrderLayers.isNotEmpty(),
+                            canAdvance = state.selection.isNotEmpty(),
+                            canSave = state.readingOrderCurrentLayer > 0 || state.readingOrderLayers.isNotEmpty(),
+                            onBack = screenModel::goBackReadingOrderLayer,
+                            onNext = screenModel::advanceReadingOrderLayer,
+                            onSave = screenModel::saveReadingOrder,
+                        )
+                    } else {
+                        LibraryBottomActionMenu(
+                            visible = state.selectionMode,
+                            onChangeCollectionClicked = screenModel::openChangeCollectionDialog,
+                            onMarkAsViewedClicked = { screenModel.markReadSelection(true) },
+                            onMarkAsUnviewedClicked = { screenModel.markReadSelection(false) },
+                            onDownloadClicked = null,
+                            onDeleteClicked = screenModel::openDeleteNovelDialog,
+                            isManga = true,
+                        )
+                    }
+                },
+                snackbarHost = {
+                    AchievementStyledSnackbarHost(hostState = snackbarHostState)
+                },
+            ) { contentPadding ->
+                val hostPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
+                val hostTop = hostPadding?.calculateTopPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+                val hostBottom = hostPadding?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
+                // Add extra bottom padding when the fetching overlay is visible
+                // so the last library items aren't hidden behind it.
+                val updateState by LibraryUpdateProgressBus.state.collectAsState()
+                val overlayExtraBottom = when (updateState) {
+                    is LibraryUpdateProgress.Running, is LibraryUpdateProgress.Completed -> 80.dp
+                    else -> 0.dp
                 }
-            },
-            snackbarHost = {
-                AchievementStyledSnackbarHost(hostState = snackbarHostState)
-            },
-        ) { contentPadding ->
-            val hostPadding = eu.kanade.presentation.components.LocalHostScaffoldContentPadding.current
-            val hostTop = hostPadding?.calculateTopPadding() ?: androidx.compose.ui.unit.Dp.Hairline
-            val hostBottom = hostPadding?.calculateBottomPadding() ?: androidx.compose.ui.unit.Dp.Hairline
-            // Add extra bottom padding when the fetching overlay is visible
-            // so the last library items aren't hidden behind it.
-            val updateState by LibraryUpdateProgressBus.state.collectAsState()
-            val overlayExtraBottom = when (updateState) {
-                is LibraryUpdateProgress.Running, is LibraryUpdateProgress.Completed -> 80.dp
-                else -> 0.dp
-            }
-            // Add extra bottom padding for the persistent filter sheet
-            val filterSheetExtraBottom = if (filterSheetVisibility != FilterSheetVisibility.HIDDEN) 80.dp else 0.dp
-            val resolvedContentPadding = androidx.compose.foundation.layout.PaddingValues(
-                top = contentPadding.calculateTopPadding() + hostTop,
-                bottom = contentPadding.calculateBottomPadding() + hostBottom + overlayExtraBottom + filterSheetExtraBottom,
-            )
-            when {
-                state.isLoading -> LoadingScreen(Modifier.padding(resolvedContentPadding))
-                state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
-                    val handler = LocalUriHandler.current
-                    EmptyScreen(
-                        stringRes = MR.strings.information_empty_library,
-                        modifier = Modifier.padding(resolvedContentPadding),
-                        actions = persistentListOf(
-                            EmptyScreenAction(
-                                stringRes = MR.strings.getting_started_guide,
-                                icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                                onClick = { handler.openUri(GETTING_STARTED_URL) },
+                // Add extra bottom padding for the persistent filter sheet
+                val filterSheetExtraBottom = if (filterSheetVisibility != FilterSheetVisibility.HIDDEN) 80.dp else 0.dp
+                val resolvedContentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    top = contentPadding.calculateTopPadding() + hostTop,
+                    bottom =
+                    contentPadding.calculateBottomPadding() + hostBottom + overlayExtraBottom + filterSheetExtraBottom,
+                )
+                when {
+                    state.isLoading -> LoadingScreen(Modifier.padding(resolvedContentPadding))
+                    state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
+                        val handler = LocalUriHandler.current
+                        EmptyScreen(
+                            stringRes = MR.strings.information_empty_library,
+                            modifier = Modifier.padding(resolvedContentPadding),
+                            actions = persistentListOf(
+                                EmptyScreenAction(
+                                    stringRes = MR.strings.getting_started_guide,
+                                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                                    onClick = { handler.openUri(GETTING_STARTED_URL) },
+                                ),
                             ),
-                        ),
-                    )
-                }
-                else -> {
-                    NovelLibraryContent(
-                        collections = state.collections,
-                        searchQuery = state.searchQuery,
-                        selection = state.selection,
-                        contentPadding = resolvedContentPadding,
-                        currentPage = { screenModel.activeCollectionIndex },
-                        hasActiveFilters = state.hasActiveFilters,
-                        showPageTabs = state.showCollectionTabs || !state.searchQuery.isNullOrEmpty(),
-                        onChangeCurrentPage = { screenModel.activeCollectionIndex = it },
-                        onNovelClicked = { novelId ->
-                            scope.launch {
-                                val lockedOrders = getLockedReadingOrders.await(novelId)
-                                if (lockedOrders.isNotEmpty()) {
-                                    lockDialog = novelId to lockedOrders
-                                } else {
-                                    navigator.push(eu.kanade.tachiyomi.ui.entries.novel.NovelScreen(novelId))
+                        )
+                    }
+                    else -> {
+                        NovelLibraryContent(
+                            collections = state.collections,
+                            searchQuery = state.searchQuery,
+                            selection = state.selection,
+                            contentPadding = resolvedContentPadding,
+                            currentPage = { screenModel.activeCollectionIndex },
+                            hasActiveFilters = state.hasActiveFilters,
+                            showPageTabs = state.showCollectionTabs || !state.searchQuery.isNullOrEmpty(),
+                            onChangeCurrentPage = { screenModel.activeCollectionIndex = it },
+                            onNovelClicked = { novelId ->
+                                scope.launch {
+                                    val lockedOrders = getLockedReadingOrders.await(novelId)
+                                    if (lockedOrders.isNotEmpty()) {
+                                        lockDialog = novelId to lockedOrders
+                                    } else {
+                                        navigator.push(eu.kanade.tachiyomi.ui.entries.novel.NovelScreen(novelId))
+                                    }
                                 }
-                            }
-                        },
-                        onContinueReadingClicked = { it: LibraryNovel ->
-                            scope.launchIO {
-                                val chapter = screenModel.getNextUnreadChapter(it.novel)
-                                if (chapter != null) {
-                                    navigator.push(
-                                        eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen(
-                                            it.novel.id,
-                                            chapter.id,
-                                        ),
-                                    )
-                                } else {
-                                    snackbarHostState.showSnackbar(
-                                        context.stringResource(MR.strings.no_next_chapter),
-                                    )
-                                }
-                            }
-                            Unit
-                        }.takeIf { state.showNovelContinueButton },
-                        onToggleSelection = screenModel::toggleSelection,
-                        onToggleRangeSelection = {
-                            screenModel.toggleRangeSelection(it)
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        },
-                        onRefresh = onClickRefresh,
-                        onGlobalSearchClicked = {
-                            navigator.push(GlobalNovelSearchScreen(screenModel.state.value.searchQuery ?: ""))
-                        },
-                        getNumberOfNovelsForCollection = { state.getNovelCountForCollection(it) },
-                        getDisplayMode = { screenModel.getDisplayMode() },
-                        getColumnsForOrientation = {
-                            screenModel.getColumnsPreferenceForCurrentOrientation(it)
-                        },
-                        getLibraryForPage = { state.getLibraryItemsByPage(it) },
-                        sortLabel = state.collections.getOrNull(screenModel.activeCollectionIndex)
-                            ?.let { collection ->
-                                stringResource(sortLabelResForNovel(collection.sort.type))
                             },
-                        sortDescending = state.collections.getOrNull(screenModel.activeCollectionIndex)
-                            ?.let { collection -> !collection.sort.isAscending },
-                        onSortClick = {
-                            showSortSheet = true
-                        },
-                        showLibraryTitle = state.showLibraryTitle,
-                        getReadingOrderLayer = { novelId -> state.getReadingOrderLayer(novelId) },
-                        readingOrderMode = state.readingOrderMode,
-                        getPreviousLayerNovelIds = if (state.readingOrderMode) {
-                            {
-                                state.readingOrderLayers.flatten()
-                                    .map { it.id }
-                                    .toSet()
-                            }
-                        } else {
-                            null
-                        },
-                        isEntryLocked = { novelId -> state.lockedReadingOrderEntryIds.contains(novelId) },
-                        sortKey = state.collections.getOrNull(screenModel.activeCollectionIndex)?.let {
-                            "${it.sort.type}:${it.sort.direction}"
-                        } ?: "",
-                    )
+                            onContinueReadingClicked = { it: LibraryNovel ->
+                                scope.launchIO {
+                                    val chapter = screenModel.getNextUnreadChapter(it.novel)
+                                    if (chapter != null) {
+                                        navigator.push(
+                                            eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen(
+                                                it.novel.id,
+                                                chapter.id,
+                                            ),
+                                        )
+                                    } else {
+                                        snackbarHostState.showSnackbar(
+                                            context.stringResource(MR.strings.no_next_chapter),
+                                        )
+                                    }
+                                }
+                                Unit
+                            }.takeIf { state.showNovelContinueButton },
+                            onToggleSelection = screenModel::toggleSelection,
+                            onToggleRangeSelection = {
+                                screenModel.toggleRangeSelection(it)
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            onRefresh = onClickRefresh,
+                            onGlobalSearchClicked = {
+                                navigator.push(GlobalNovelSearchScreen(screenModel.state.value.searchQuery ?: ""))
+                            },
+                            getNumberOfNovelsForCollection = { state.getNovelCountForCollection(it) },
+                            getDisplayMode = { screenModel.getDisplayMode() },
+                            getColumnsForOrientation = {
+                                screenModel.getColumnsPreferenceForCurrentOrientation(it)
+                            },
+                            getLibraryForPage = { state.getLibraryItemsByPage(it) },
+                            sortLabel = state.collections.getOrNull(screenModel.activeCollectionIndex)
+                                ?.let { collection ->
+                                    stringResource(sortLabelResForNovel(collection.sort.type))
+                                },
+                            sortDescending = state.collections.getOrNull(screenModel.activeCollectionIndex)
+                                ?.let { collection -> !collection.sort.isAscending },
+                            onSortClick = {
+                                showSortSheet = true
+                            },
+                            showLibraryTitle = state.showLibraryTitle,
+                            getReadingOrderLayer = { novelId -> state.getReadingOrderLayer(novelId) },
+                            readingOrderMode = state.readingOrderMode,
+                            getPreviousLayerNovelIds = if (state.readingOrderMode) {
+                                {
+                                    state.readingOrderLayers.flatten()
+                                        .map { it.id }
+                                        .toSet()
+                                }
+                            } else {
+                                null
+                            },
+                            isEntryLocked = { novelId -> state.lockedReadingOrderEntryIds.contains(novelId) },
+                            sortKey = state.collections.getOrNull(screenModel.activeCollectionIndex)?.let {
+                                "${it.sort.type}:${it.sort.direction}"
+                            } ?: "",
+                        )
+                    }
                 }
             }
-        }
 
-        // Persistent filter sheet — positioned above the floating nav bar
-        PersistentFilterSheet(
-            visibility = filterSheetVisibility,
-            filters = filterChips,
-            bottomOffset = hostBottomForSheet,
-            onFilterButtonClick = { showFullFilterSheet = true },
-            onGroupByClick = {
-                showGroupBySheet = true
-            },
-            onDisplayClick = {
-                showDisplayOptionsSheet = true
-            },
-            onClearFilters = onClearFilters,
-            showExpandCollapse = state.collections.size > 1,
-            allExpanded = null,
-            onExpandCollapseClick = {},
-            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
-        )
+            // Persistent filter sheet — positioned above the floating nav bar
+            PersistentFilterSheet(
+                visibility = filterSheetVisibility,
+                filters = filterChips,
+                bottomOffset = hostBottomForSheet,
+                onFilterButtonClick = { showFullFilterSheet = true },
+                onGroupByClick = {
+                    showGroupBySheet = true
+                },
+                onDisplayClick = {
+                    showDisplayOptionsSheet = true
+                },
+                onClearFilters = onClearFilters,
+                showExpandCollapse = state.collections.size > 1,
+                allExpanded = null,
+                onExpandCollapseClick = {},
+                modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+            )
         }
 
         val onDismissRequest = screenModel::closeDialog
@@ -848,139 +929,202 @@ data object NovelLibraryTab : Tab {
                 val sortDescending = !collection.sort.isAscending
                 val trackers by settingsScreenModel.trackersFlow.collectAsStateWithLifecycle()
                 val sortOptions = buildList {
-                    add(SortModeOption(
-                        labelRes = MR.strings.action_sort_alpha,
-                        icon = Icons.AutoMirrored.Outlined.Sort,
-                        isSelected = sortingMode == NovelLibrarySort.Type.Alphabetical,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.Alphabetical, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.Alphabetical, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = MR.strings.action_sort_total,
-                        icon = Icons.Outlined.Numbers,
-                        isSelected = sortingMode == NovelLibrarySort.Type.TotalChapters,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.TotalChapters, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.TotalChapters, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = MR.strings.action_sort_last_read,
-                        icon = Icons.Outlined.History,
-                        isSelected = sortingMode == NovelLibrarySort.Type.LastRead,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.LastRead, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.LastRead, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = AYMR.strings.action_sort_last_manga_update,
-                        icon = Icons.Outlined.Refresh,
-                        isSelected = sortingMode == NovelLibrarySort.Type.LastUpdate,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.LastUpdate, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.LastUpdate, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = MR.strings.action_sort_unread_count,
-                        icon = Icons.Outlined.NewReleases,
-                        isSelected = sortingMode == NovelLibrarySort.Type.UnreadCount,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.UnreadCount, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.UnreadCount, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = MR.strings.action_sort_latest_chapter,
-                        icon = Icons.Outlined.Explore,
-                        isSelected = sortingMode == NovelLibrarySort.Type.LatestChapter,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.LatestChapter, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.LatestChapter, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = MR.strings.action_sort_chapter_fetch_date,
-                        icon = Icons.Outlined.CalendarMonth,
-                        isSelected = sortingMode == NovelLibrarySort.Type.ChapterFetchDate,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.ChapterFetchDate, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.ChapterFetchDate, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = MR.strings.action_sort_date_added,
-                        icon = Icons.Outlined.Grade,
-                        isSelected = sortingMode == NovelLibrarySort.Type.DateAdded,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.DateAdded, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.DateAdded, dir)
-                        },
-                    ))
-                    if (trackers.isNotEmpty()) {
-                        add(SortModeOption(
-                            labelRes = MR.strings.action_sort_tracker_score,
-                            icon = Icons.Outlined.FavoriteBorder,
-                            isSelected = sortingMode == NovelLibrarySort.Type.TrackerMean,
+                    add(
+                        SortModeOption(
+                            labelRes = MR.strings.action_sort_alpha,
+                            icon = Icons.AutoMirrored.Outlined.Sort,
+                            isSelected = sortingMode == NovelLibrarySort.Type.Alphabetical,
                             isDescending = sortDescending,
                             isDirectional = true,
                             onClick = {
-                                val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.TrackerMean, sortDescending)
-                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.TrackerMean, dir)
+                                val dir =
+                                    toggleDirectionNovel(
+                                        sortingMode,
+                                        NovelLibrarySort.Type.Alphabetical,
+                                        sortDescending,
+                                    )
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.Alphabetical, dir)
                             },
-                        ))
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = MR.strings.action_sort_total,
+                            icon = Icons.Outlined.Numbers,
+                            isSelected = sortingMode == NovelLibrarySort.Type.TotalChapters,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(
+                                        sortingMode,
+                                        NovelLibrarySort.Type.TotalChapters,
+                                        sortDescending,
+                                    )
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.TotalChapters, dir)
+                            },
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = MR.strings.action_sort_last_read,
+                            icon = Icons.Outlined.History,
+                            isSelected = sortingMode == NovelLibrarySort.Type.LastRead,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.LastRead, sortDescending)
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.LastRead, dir)
+                            },
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = AYMR.strings.action_sort_last_manga_update,
+                            icon = Icons.Outlined.Refresh,
+                            isSelected = sortingMode == NovelLibrarySort.Type.LastUpdate,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.LastUpdate, sortDescending)
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.LastUpdate, dir)
+                            },
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = MR.strings.action_sort_unread_count,
+                            icon = Icons.Outlined.NewReleases,
+                            isSelected = sortingMode == NovelLibrarySort.Type.UnreadCount,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.UnreadCount, sortDescending)
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.UnreadCount, dir)
+                            },
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = MR.strings.action_sort_latest_chapter,
+                            icon = Icons.Outlined.Explore,
+                            isSelected = sortingMode == NovelLibrarySort.Type.LatestChapter,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(
+                                        sortingMode,
+                                        NovelLibrarySort.Type.LatestChapter,
+                                        sortDescending,
+                                    )
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.LatestChapter, dir)
+                            },
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = MR.strings.action_sort_chapter_fetch_date,
+                            icon = Icons.Outlined.CalendarMonth,
+                            isSelected = sortingMode == NovelLibrarySort.Type.ChapterFetchDate,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(
+                                        sortingMode,
+                                        NovelLibrarySort.Type.ChapterFetchDate,
+                                        sortDescending,
+                                    )
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.ChapterFetchDate, dir)
+                            },
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = MR.strings.action_sort_date_added,
+                            icon = Icons.Outlined.Grade,
+                            isSelected = sortingMode == NovelLibrarySort.Type.DateAdded,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.DateAdded, sortDescending)
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.DateAdded, dir)
+                            },
+                        ),
+                    )
+                    if (trackers.isNotEmpty()) {
+                        add(
+                            SortModeOption(
+                                labelRes = MR.strings.action_sort_tracker_score,
+                                icon = Icons.Outlined.FavoriteBorder,
+                                isSelected = sortingMode == NovelLibrarySort.Type.TrackerMean,
+                                isDescending = sortDescending,
+                                isDirectional = true,
+                                onClick = {
+                                    val dir =
+                                        toggleDirectionNovel(
+                                            sortingMode,
+                                            NovelLibrarySort.Type.TrackerMean,
+                                            sortDescending,
+                                        )
+                                    settingsScreenModel.setSort(collection, NovelLibrarySort.Type.TrackerMean, dir)
+                                },
+                            ),
+                        )
                     }
-                    add(SortModeOption(
-                        labelRes = AYMR.strings.action_sort_custom_order,
-                        icon = Icons.Outlined.SwapVert,
-                        isSelected = sortingMode == NovelLibrarySort.Type.CustomOrder,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.CustomOrder, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.CustomOrder, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = AYMR.strings.reading_order,
-                        icon = Icons.Outlined.AccountTree,
-                        isSelected = sortingMode == NovelLibrarySort.Type.ReadingOrder,
-                        isDescending = sortDescending,
-                        isDirectional = true,
-                        onClick = {
-                            val dir = toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.ReadingOrder, sortDescending)
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.ReadingOrder, dir)
-                        },
-                    ))
-                    add(SortModeOption(
-                        labelRes = MR.strings.action_sort_random,
-                        icon = Icons.Outlined.Check,
-                        isSelected = sortingMode == NovelLibrarySort.Type.Random,
-                        isDescending = false,
-                        isDirectional = false,
-                        onClick = {
-                            settingsScreenModel.setSort(collection, NovelLibrarySort.Type.Random, NovelLibrarySort.Direction.Ascending)
-                        },
-                    ))
+                    add(
+                        SortModeOption(
+                            labelRes = AYMR.strings.action_sort_custom_order,
+                            icon = Icons.Outlined.SwapVert,
+                            isSelected = sortingMode == NovelLibrarySort.Type.CustomOrder,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(sortingMode, NovelLibrarySort.Type.CustomOrder, sortDescending)
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.CustomOrder, dir)
+                            },
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = AYMR.strings.reading_order,
+                            icon = Icons.Outlined.AccountTree,
+                            isSelected = sortingMode == NovelLibrarySort.Type.ReadingOrder,
+                            isDescending = sortDescending,
+                            isDirectional = true,
+                            onClick = {
+                                val dir =
+                                    toggleDirectionNovel(
+                                        sortingMode,
+                                        NovelLibrarySort.Type.ReadingOrder,
+                                        sortDescending,
+                                    )
+                                settingsScreenModel.setSort(collection, NovelLibrarySort.Type.ReadingOrder, dir)
+                            },
+                        ),
+                    )
+                    add(
+                        SortModeOption(
+                            labelRes = MR.strings.action_sort_random,
+                            icon = Icons.Outlined.Check,
+                            isSelected = sortingMode == NovelLibrarySort.Type.Random,
+                            isDescending = false,
+                            isDirectional = false,
+                            onClick = {
+                                settingsScreenModel.setSort(
+                                    collection,
+                                    NovelLibrarySort.Type.Random,
+                                    NovelLibrarySort.Direction.Ascending,
+                                )
+                            },
+                        ),
+                    )
                 }
                 SortBottomSheet(
                     title = stringResource(MR.strings.action_sort),
@@ -992,9 +1136,14 @@ data object NovelLibraryTab : Tab {
             }
         }
 
-        BackHandler(enabled = state.selectionMode || state.searchQuery != null || filterSheetVisibility != FilterSheetVisibility.HIDDEN) {
+        BackHandler(
+            enabled =
+            state.selectionMode || state.searchQuery != null || filterSheetVisibility != FilterSheetVisibility.HIDDEN,
+        ) {
             when {
-                filterSheetVisibility != FilterSheetVisibility.HIDDEN -> filterSheetVisibility = FilterSheetVisibility.HIDDEN
+                filterSheetVisibility != FilterSheetVisibility.HIDDEN ->
+                    filterSheetVisibility =
+                        FilterSheetVisibility.HIDDEN
                 state.selectionMode -> screenModel.clearSelection()
                 state.searchQuery != null -> screenModel.search(null)
             }
@@ -1024,13 +1173,15 @@ data object NovelLibraryTab : Tab {
 
         LaunchedEffect(Unit) {
             launch { queryEvent.receiveAsFlow().collect(screenModel::search) }
-            launch { requestSettingsSheetEvent.receiveAsFlow().collectLatest {
-                filterSheetVisibility = when (filterSheetVisibility) {
-                    FilterSheetVisibility.HIDDEN -> FilterSheetVisibility.COLLAPSED
-                    FilterSheetVisibility.COLLAPSED -> FilterSheetVisibility.EXPANDED
-                    FilterSheetVisibility.EXPANDED -> FilterSheetVisibility.HIDDEN
+            launch {
+                requestSettingsSheetEvent.receiveAsFlow().collectLatest {
+                    filterSheetVisibility = when (filterSheetVisibility) {
+                        FilterSheetVisibility.HIDDEN -> FilterSheetVisibility.COLLAPSED
+                        FilterSheetVisibility.COLLAPSED -> FilterSheetVisibility.EXPANDED
+                        FilterSheetVisibility.EXPANDED -> FilterSheetVisibility.HIDDEN
+                    }
                 }
-            } }
+            }
         }
     }
 
@@ -1066,10 +1217,16 @@ private fun toggleDirectionNovel(
     currentlyDescending: Boolean,
 ): NovelLibrarySort.Direction {
     return if (currentMode == targetMode) {
-        if (currentlyDescending) NovelLibrarySort.Direction.Ascending
-        else NovelLibrarySort.Direction.Descending
+        if (currentlyDescending) {
+            NovelLibrarySort.Direction.Ascending
+        } else {
+            NovelLibrarySort.Direction.Descending
+        }
     } else {
-        if (currentlyDescending) NovelLibrarySort.Direction.Descending
-        else NovelLibrarySort.Direction.Ascending
+        if (currentlyDescending) {
+            NovelLibrarySort.Direction.Descending
+        } else {
+            NovelLibrarySort.Direction.Ascending
+        }
     }
 }

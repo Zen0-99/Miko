@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -26,24 +26,21 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VerifiedUser
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -62,12 +59,10 @@ import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.ui.browse.novel.source.NovelSourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreenModel.Listing
 import eu.kanade.tachiyomi.util.system.LocaleHelper
-import tachiyomi.domain.source.novel.model.NovelSource
 import tachiyomi.domain.source.novel.model.LocalNovelSource
+import tachiyomi.domain.source.novel.model.NovelSource
 import tachiyomi.domain.source.novel.model.Pin
 import tachiyomi.i18n.MR
-import androidx.compose.foundation.lazy.LazyColumn
-import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
@@ -99,7 +94,7 @@ fun NovelSourcesScreen(
     onClickUpdate: (NovelSource) -> Unit = {},
     onRefresh: () -> Unit = {},
     onClickUpdateAll: () -> Unit = {},
-    /** MikoDB per-package ranking metadata - pkg -> tier/name. */
+    /** MikoDB per-package ranking metadata — pkg → tier/name. */
     sourceMeta: Map<String, eu.kanade.tachiyomi.data.mikodb.MikoDbManager.SourceMeta> = emptyMap(),
 ) {
     // When there are no installed extensions (only the local source), hide
@@ -116,7 +111,10 @@ fun NovelSourcesScreen(
     val visibleItems = remember(state.items, notInstalledExpanded, hasInstalledExtensions) {
         if (notInstalledExpanded) {
             if (!hasInstalledExtensions) {
-                state.items.filterNot { it is NovelSourceUiModel.Header && it.language == NovelSourcesScreenModel.INSTALLED_KEY }
+                state.items.filterNot {
+                    it is NovelSourceUiModel.Header &&
+                        it.language == NovelSourcesScreenModel.INSTALLED_KEY
+                }
             } else {
                 state.items
             }
@@ -152,7 +150,11 @@ fun NovelSourcesScreen(
                     // Skip available extensions and language sub-headers
                     if (item is NovelSourceUiModel.AvailableExtension) continue
                     // Skip language sub-headers (they have non-special language values)
-                    if (item is NovelSourceUiModel.Header && item.language != NovelSourcesScreenModel.NOT_INSTALLED_KEY) continue
+                    if (item is NovelSourceUiModel.Header &&
+                        item.language != NovelSourcesScreenModel.NOT_INSTALLED_KEY
+                    ) {
+                        continue
+                    }
                 }
                 result.add(item)
             }
@@ -193,95 +195,97 @@ fun NovelSourcesScreen(
                         sourceMeta = sourceMeta,
                     )
                 } else {
-                LazyColumn(
-                    contentPadding = contentPadding + topSmallPaddingValues,
-                ) {
-                itemsIndexed(
-                    items = visibleItems,
-                    contentType = { _, it ->
-                        when (it) {
-                            is NovelSourceUiModel.Header -> "header"
-                            is NovelSourceUiModel.Item -> "item"
-                            is NovelSourceUiModel.AvailableExtension -> "available-extension"
-                            is NovelSourceUiModel.UntrustedExtension -> "untrusted-extension"
-                        }
-                    },
-                    key = { index, it ->
-                        when (it) {
-                            is NovelSourceUiModel.Header -> "header-$index-${it.language}"
-                            is NovelSourceUiModel.Item -> "source-${it.source.key()}"
-                            is NovelSourceUiModel.AvailableExtension -> "available-${it.extension.pkgName}"
-                            is NovelSourceUiModel.UntrustedExtension -> "untrusted-${it.extension.pkgName}"
-                        }
-                    },
-                ) { _, model ->
-                    when (model) {
-                        is NovelSourceUiModel.Header -> {
-                            when (model.language) {
-                                NovelSourcesScreenModel.NOT_INSTALLED_KEY -> {
-                                    NovelSourceSectionHeader(
+                    LazyColumn(
+                        contentPadding = contentPadding + topSmallPaddingValues,
+                    ) {
+                        itemsIndexed(
+                            items = visibleItems,
+                            contentType = { _, it ->
+                                when (it) {
+                                    is NovelSourceUiModel.Header -> "header"
+                                    is NovelSourceUiModel.Item -> "item"
+                                    is NovelSourceUiModel.AvailableExtension -> "available-extension"
+                                    is NovelSourceUiModel.UntrustedExtension -> "untrusted-extension"
+                                }
+                            },
+                            key = { index, it ->
+                                when (it) {
+                                    is NovelSourceUiModel.Header -> "header-$index-${it.language}"
+                                    is NovelSourceUiModel.Item -> "source-${it.source.key()}"
+                                    is NovelSourceUiModel.AvailableExtension -> "available-${it.extension.pkgName}"
+                                    is NovelSourceUiModel.UntrustedExtension -> "untrusted-${it.extension.pkgName}"
+                                }
+                            },
+                        ) { _, model ->
+                            when (model) {
+                                is NovelSourceUiModel.Header -> {
+                                    when (model.language) {
+                                        NovelSourcesScreenModel.NOT_INSTALLED_KEY -> {
+                                            NovelSourceSectionHeader(
+                                                modifier = Modifier.animateItem(),
+                                                text = stringResource(MR.strings.ext_not_installed),
+                                                expanded = notInstalledExpanded,
+                                                onClick = { notInstalledExpanded = !notInstalledExpanded },
+                                            )
+                                        }
+                                        NovelSourcesScreenModel.INSTALLED_KEY -> {
+                                            NovelSourceSectionHeader(
+                                                modifier = Modifier.animateItem(),
+                                                text = stringResource(MR.strings.ext_installed),
+                                                action = {
+                                                    if (sourcesWithUpdates.isNotEmpty()) {
+                                                        IconButton(onClick = onClickUpdateAll) {
+                                                            Icon(
+                                                                imageVector = Icons.Outlined.Download,
+                                                                contentDescription = stringResource(
+                                                                    MR.strings.ext_update_all,
+                                                                ),
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                            )
+                                        }
+                                        else -> {
+                                            SourceHeader(
+                                                modifier = Modifier.animateItem(),
+                                                language = model.language,
+                                            )
+                                        }
+                                    }
+                                }
+                                is NovelSourceUiModel.Item -> SourceItem(
+                                    modifier = Modifier.animateItem(),
+                                    source = model.source,
+                                    onClickItem = onClickItem,
+                                    onLongClickItem = onLongClickItem,
+                                    onClickPin = onClickPin,
+                                    onSwipeHide = onSwipeHide,
+                                    swipeToHideEnabled = swipeToHideEnabled,
+                                    onClickExtension = onClickExtension,
+                                    hasUpdate = model.source.id in sourcesWithUpdates,
+                                )
+                                is NovelSourceUiModel.AvailableExtension -> {
+                                    NovelAvailableExtensionItem(
                                         modifier = Modifier.animateItem(),
-                                        text = stringResource(MR.strings.ext_not_installed),
-                                        expanded = notInstalledExpanded,
-                                        onClick = { notInstalledExpanded = !notInstalledExpanded },
+                                        extension = model.extension,
+                                        onClickInstall = onClickInstallExtension,
+                                        installStep = downloadStates[model.extension.pkgName] ?: InstallStep.Idle,
                                     )
                                 }
-                                NovelSourcesScreenModel.INSTALLED_KEY -> {
-                                    NovelSourceSectionHeader(
+                                is NovelSourceUiModel.UntrustedExtension -> {
+                                    NovelUntrustedExtensionItem(
                                         modifier = Modifier.animateItem(),
-                                        text = stringResource(MR.strings.ext_installed),
-                                        action = {
-                                            if (sourcesWithUpdates.isNotEmpty()) {
-                                                IconButton(onClick = onClickUpdateAll) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Download,
-                                                        contentDescription = stringResource(MR.strings.ext_update_all),
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                    )
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
-                                else -> {
-                                    SourceHeader(
-                                        modifier = Modifier.animateItem(),
-                                        language = model.language,
+                                        extension = model.extension,
+                                        onClickTrust = onClickTrustExtension,
                                     )
                                 }
                             }
                         }
-                        is NovelSourceUiModel.Item -> SourceItem(
-                            modifier = Modifier.animateItem(),
-                            source = model.source,
-                            onClickItem = onClickItem,
-                            onLongClickItem = onLongClickItem,
-                            onClickPin = onClickPin,
-                            onSwipeHide = onSwipeHide,
-                            swipeToHideEnabled = swipeToHideEnabled,
-                            onClickExtension = onClickExtension,
-                            hasUpdate = model.source.id in sourcesWithUpdates,
-                        )
-                        is NovelSourceUiModel.AvailableExtension -> {
-                            NovelAvailableExtensionItem(
-                                modifier = Modifier.animateItem(),
-                                extension = model.extension,
-                                onClickInstall = onClickInstallExtension,
-                                installStep = downloadStates[model.extension.pkgName] ?: InstallStep.Idle,
-                            )
-                        }
-                        is NovelSourceUiModel.UntrustedExtension -> {
-                            NovelUntrustedExtensionItem(
-                                modifier = Modifier.animateItem(),
-                                extension = model.extension,
-                                onClickTrust = onClickTrustExtension,
-                            )
-                        }
                     }
                 }
             }
-            }
-        }
         }
     }
 }
@@ -385,9 +389,10 @@ private fun NovelSourcesCardView(
                                         val ext = sourceExtensionMap[model.source.id]
                                         val jsPlugin = jsSourcePluginMap[model.source.id]
                                         val hasUpdate = model.source.id in sourcesWithUpdates
-                                        val isUpdating = ext != null && downloadStates[ext.pkgName]?.let {
-                                            it == InstallStep.Pending || it == InstallStep.Downloading
-                                        } == true
+                                        val isUpdating = ext != null &&
+                                            downloadStates[ext.pkgName]?.let {
+                                                it == InstallStep.Pending || it == InstallStep.Downloading
+                                            } == true
                                         ExtensionCard(
                                             modifier = Modifier.weight(1f),
                                             title = model.source.name,
@@ -399,13 +404,16 @@ private fun NovelSourcesCardView(
                                             isUpdating = isUpdating,
                                             isInstalled = true,
                                             isObsolete = ext?.isObsolete == true,
-                                            tier = ext?.pkgName?.let(sourceMeta::get)?.tier,
                                             supportsComments = ext?.sources?.any { it.supportsComments } == true,
+                                            tier = ext?.pkgName?.let(sourceMeta::get)?.tier,
                                             onClick = { onClickItem(model.source, Listing.Popular) },
                                             onLongClick = { onLongClickItem(model.source) },
                                             onCogClick = {
-                                                if (hasUpdate) onClickUpdate(model.source)
-                                                else onClickExtension(model.source)
+                                                if (hasUpdate) {
+                                                    onClickUpdate(model.source)
+                                                } else {
+                                                    onClickExtension(model.source)
+                                                }
                                             },
                                         )
                                     }
@@ -417,8 +425,8 @@ private fun NovelSourcesCardView(
                                             version = model.extension.versionName,
                                             iconUrl = model.extension.iconUrl,
                                             isInstalled = false,
-                                            tier = sourceMeta[model.extension.pkgName]?.tier,
                                             supportsComments = model.extension.sources.any { it.supportsComments },
+                                            tier = sourceMeta[model.extension.pkgName]?.tier,
                                             onClick = { onClickInstallExtension(model.extension) },
                                         )
                                     }
@@ -661,8 +669,11 @@ private fun SourceItem(
                         Icon(
                             imageVector = if (hasUpdate) Icons.Outlined.Download else Icons.Outlined.Settings,
                             contentDescription = stringResource(MR.strings.label_extension_info),
-                            tint = if (hasUpdate) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                            tint = if (hasUpdate) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA)
+                            },
                         )
                     }
                 }
@@ -744,23 +755,35 @@ fun NovelSourceOptionsDialog(
             SourceSheetOption(
                 label = pinText,
                 icon = if (Pin.Pinned in source.pin) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                onClick = { onClickPin(); onDismiss() },
+                onClick = {
+                    onClickPin()
+                    onDismiss()
+                },
             )
             if (source.id != LocalNovelSource.ID) {
                 SourceSheetOption(
                     label = stringResource(MR.strings.action_migrate),
                     icon = Icons.Outlined.SwapHoriz,
-                    onClick = { onClickMigrate(); onDismiss() },
+                    onClick = {
+                        onClickMigrate()
+                        onDismiss()
+                    },
                 )
                 SourceSheetOption(
                     label = stringResource(MR.strings.action_disable),
                     icon = Icons.Outlined.Block,
-                    onClick = { onClickDisable(); onDismiss() },
+                    onClick = {
+                        onClickDisable()
+                        onDismiss()
+                    },
                 )
                 SourceSheetOption(
                     label = stringResource(MR.strings.action_uninstall),
                     icon = Icons.Outlined.Delete,
-                    onClick = { onClickUninstall(); onDismiss() },
+                    onClick = {
+                        onClickUninstall()
+                        onDismiss()
+                    },
                 )
             }
         }

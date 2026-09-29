@@ -35,8 +35,8 @@ import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelPluginDetailsScreenModel
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import eu.kanade.tachiyomi.util.system.copyToClipboard
-import tachiyomi.domain.entries.novel.model.NovelCover
 import kotlinx.collections.immutable.ImmutableList
+import tachiyomi.domain.entries.novel.model.NovelCover
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn

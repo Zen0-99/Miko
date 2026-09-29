@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.SynthAudio
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.EngineProfiles
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyApplier
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyHint
-import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +27,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import kotlin.math.abs
 
 /**
  * [TtsEngine] adapter over the ported Pocket engine (D-05/D-06).
@@ -85,12 +85,17 @@ class PocketTtsEngine internal constructor(
     private val prefetches = LinkedHashMap<String, PrefetchEntry>()
 
     @Volatile private var playbackJob: Job? = null
+
     @Volatile private var currentSink: PcmSink? = null
 
     @Volatile private var currentRate = 1.0f
+
     @Volatile private var currentPitch = 1.0f
+
     @Volatile private var currentVoice = PocketVoiceCatalog.DEFAULT_VOICE
+
     @Volatile private var pauseRequested = false
+
     @Volatile private var currentLanguage = ""
 
     override val isReady: Boolean
@@ -399,6 +404,7 @@ internal class AudioTrackPcmSink(private val sampleRate: Int) : PcmSink {
 
     private var track: AudioTrack? = null
     private var samplesWritten = 0
+
     @Volatile private var paused = false
 
     private fun ensureTrack(): AudioTrack {

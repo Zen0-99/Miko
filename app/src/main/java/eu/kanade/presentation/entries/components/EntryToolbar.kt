@@ -1,12 +1,10 @@
 package eu.kanade.presentation.entries.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FilterList
@@ -50,16 +48,13 @@ fun EntryToolbar(
     onClickShare: (() -> Unit)?,
     onClickDownload: ((DownloadAction) -> Unit)?,
     onClickEditCollection: (() -> Unit)?,
-    onClickRefresh: (() -> Unit)?,
     onClickMigrate: (() -> Unit)?,
     onClickSettings: (() -> Unit)?,
-    onClickMarkAllRead: (() -> Unit)? = null,
-    onClickMarkAllUnread: (() -> Unit)? = null,
-    onClickRefreshTracking: (() -> Unit)? = null,
     onClickRemoveAllDownloads: (() -> Unit)? = null,
     onClickRemoveNonBookmarkedDownloads: (() -> Unit)? = null,
     onClickRemoveReadDownloads: (() -> Unit)? = null,
-    onClickLinkedSources: (() -> Unit)? = null,
+    onClickWebView: (() -> Unit)? = null,
+    onClickHighlights: (() -> Unit)? = null,
     onClickUnhideChapters: (() -> Unit)? = null,
     // Anime only
     changeAnimeSkipIntro: (() -> Unit)?,
@@ -91,8 +86,10 @@ fun EntryToolbar(
             }
         },
         modifier = modifier,
-        backgroundColor = (toolbarBackgroundColor ?: MaterialTheme.colorScheme
-            .surfaceColorAtElevation(3.dp))
+        backgroundColor = (
+            toolbarBackgroundColor ?: MaterialTheme.colorScheme
+                .surfaceColorAtElevation(3.dp)
+            )
             .copy(alpha = if (isActionMode) 1f else backgroundAlphaProvider()),
         navigateUp = navigateUp,
         actions = {
@@ -132,8 +129,11 @@ fun EntryToolbar(
                         add(
                             AppBar.Action(
                                 title = stringResource(
-                                    if (directDownloadAction) MR.strings.action_remove_downloads
-                                    else MR.strings.manga_download,
+                                    if (directDownloadAction) {
+                                        MR.strings.action_remove_downloads
+                                    } else {
+                                        MR.strings.manga_download
+                                    },
                                 ),
                                 icon = if (directDownloadAction) {
                                     Icons.Outlined.Delete
@@ -168,27 +168,19 @@ fun EntryToolbar(
                             ),
                         )
                     }
-                    if (onClickMarkAllRead != null) {
+                    if (onClickWebView != null) {
                         add(
                             AppBar.OverflowAction(
-                                title = stringResource(MR.strings.action_mark_all_as_read),
-                                onClick = onClickMarkAllRead,
+                                title = stringResource(MR.strings.action_web_view),
+                                onClick = onClickWebView,
                             ),
                         )
                     }
-                    if (onClickMarkAllUnread != null) {
+                    if (onClickHighlights != null) {
                         add(
                             AppBar.OverflowAction(
-                                title = stringResource(MR.strings.action_mark_all_as_unread),
-                                onClick = onClickMarkAllUnread,
-                            ),
-                        )
-                    }
-                    if (onClickRefreshTracking != null) {
-                        add(
-                            AppBar.OverflowAction(
-                                title = stringResource(MR.strings.action_refresh_tracking),
-                                onClick = onClickRefreshTracking,
+                                title = stringResource(AYMR.strings.highlights),
+                                onClick = onClickHighlights,
                             ),
                         )
                     }
@@ -197,36 +189,34 @@ fun EntryToolbar(
                             AppBar.NestedOverflowAction(
                                 title = stringResource(MR.strings.action_remove_downloads),
                                 subActions = buildList {
-                                    add(AppBar.OverflowAction(
-                                        title = stringResource(MR.strings.action_remove_all_downloads),
-                                        onClick = onClickRemoveAllDownloads,
-                                    ))
+                                    add(
+                                        AppBar.OverflowAction(
+                                            title = stringResource(MR.strings.action_remove_all_downloads),
+                                            onClick = onClickRemoveAllDownloads,
+                                        ),
+                                    )
                                     if (onClickRemoveNonBookmarkedDownloads != null) {
-                                        add(AppBar.OverflowAction(
-                                            title = stringResource(MR.strings.action_remove_non_bookmarked_downloads),
-                                            onClick = onClickRemoveNonBookmarkedDownloads,
-                                        ))
+                                        add(
+                                            AppBar.OverflowAction(
+                                                title = stringResource(
+                                                    MR.strings.action_remove_non_bookmarked_downloads,
+                                                ),
+                                                onClick = onClickRemoveNonBookmarkedDownloads,
+                                            ),
+                                        )
                                     }
                                     if (onClickRemoveReadDownloads != null) {
-                                        add(AppBar.OverflowAction(
-                                            title = stringResource(MR.strings.action_remove_read_downloads),
-                                            onClick = onClickRemoveReadDownloads,
-                                        ))
+                                        add(
+                                            AppBar.OverflowAction(
+                                                title = stringResource(MR.strings.action_remove_read_downloads),
+                                                onClick = onClickRemoveReadDownloads,
+                                            ),
+                                        )
                                     }
                                 },
                             ),
                         )
                     }
-                    if (onClickRefresh != null) {
-                        add(
-                            AppBar.Action(
-                                title = stringResource(MR.strings.action_webview_refresh),
-                                icon = Icons.Filled.Refresh,
-                                onClick = onClickRefresh,
-                            ),
-                        )
-                    }
-
                     if (onClickEditCollection != null) {
                         add(
                             AppBar.OverflowAction(
@@ -240,14 +230,6 @@ fun EntryToolbar(
                             AppBar.OverflowAction(
                                 title = stringResource(MR.strings.action_migrate),
                                 onClick = onClickMigrate,
-                            ),
-                        )
-                    }
-                    if (onClickLinkedSources != null) {
-                        add(
-                            AppBar.OverflowAction(
-                                title = stringResource(MR.strings.action_linked_sources),
-                                onClick = onClickLinkedSources,
                             ),
                         )
                     }

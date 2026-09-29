@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.EngineProfiles
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyApplier
 import eu.kanade.tachiyomi.ui.reader.novel.tts.preprocessing.ProsodyHint
 import eu.kanade.tachiyomi.ui.reader.novel.tts.supertonic.SupertonicEngine
-import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +22,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import kotlin.math.abs
 
 /**
  * [TtsEngine] adapter over the ported Supertonic-3 engine (phase-05B D-01).
@@ -81,12 +81,17 @@ class SupertonicTtsEngine internal constructor(
     private val prefetches = LinkedHashMap<String, PrefetchEntry>()
 
     @Volatile private var playbackJob: Job? = null
+
     @Volatile private var currentSink: PcmSink? = null
 
     @Volatile private var currentRate = 1.0f
+
     @Volatile private var currentPitch = 1.0f
+
     @Volatile private var currentVoice = SupertonicVoiceCatalog.DEFAULT_VOICE
+
     @Volatile private var pauseRequested = false
+
     @Volatile private var currentLanguage = ""
 
     override val isReady: Boolean

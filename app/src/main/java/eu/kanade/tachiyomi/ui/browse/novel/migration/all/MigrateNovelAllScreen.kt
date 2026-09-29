@@ -12,7 +12,6 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelSearchScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
-import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.entries.novel.model.Novel
 

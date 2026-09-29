@@ -28,13 +28,13 @@ class ResetSortPreferenceRemovedMigration : Migration {
         }
 
         val oldAnimeSortingMode = prefs.getInt(
-            libraryPreferences.animeSortingMode().key(),
+            libraryPreferences.showsSortingMode().key(),
             0,
         )
 
         if (oldAnimeSortingMode == 5) { // SOURCE = 5
             prefs.edit {
-                putInt(libraryPreferences.animeSortingMode().key(), 0) // ALPHABETICAL = 0
+                putInt(libraryPreferences.showsSortingMode().key(), 0) // ALPHABETICAL = 0
             }
         }
 

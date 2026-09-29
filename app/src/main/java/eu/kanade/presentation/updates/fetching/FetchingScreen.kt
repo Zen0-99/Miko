@@ -1,11 +1,11 @@
 package eu.kanade.presentation.updates.fetching
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,7 +54,6 @@ import eu.kanade.tachiyomi.ui.updates.fetching.FailedFetchGroup
 import eu.kanade.tachiyomi.ui.updates.fetching.FailedFetchUi
 import eu.kanade.tachiyomi.ui.updates.fetching.FetchingScreenModel
 import eu.kanade.tachiyomi.ui.updates.fetching.FetchingState
-import tachiyomi.domain.library.model.EntryKind
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -185,7 +183,9 @@ private fun ProgressCard(
             Spacer(Modifier.height(8.dp))
             val ratio = if (progress.totalEntries > 0) {
                 progress.processedEntries.toFloat() / progress.totalEntries.toFloat()
-            } else 0f
+            } else {
+                0f
+            }
             LinearProgressIndicator(
                 progress = { ratio },
                 modifier = Modifier.fillMaxWidth(),

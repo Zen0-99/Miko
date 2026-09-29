@@ -2,18 +2,18 @@ package eu.kanade.presentation.more.settings.screen.browse
 
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import mihon.domain.extensionrepo.model.ExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.CreateNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.DeleteNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.ReplaceNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.UpdateNovelExtensionRepo
-import mihon.domain.extensionrepo.model.ExtensionRepo
-import eu.kanade.tachiyomi.extension.novel.JsNovelPluginManager
 import tachiyomi.core.common.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

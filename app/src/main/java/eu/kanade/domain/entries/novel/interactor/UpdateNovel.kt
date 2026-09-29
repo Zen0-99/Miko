@@ -55,7 +55,10 @@ class UpdateNovel(
         val coverFileExists = coverCache.getCoverFile(localNovel.thumbnailUrl)?.exists() == true
         val hasLocalThumbnailUrl = !localNovel.thumbnailUrl.isNullOrEmpty()
         val hasRemoteThumbnailUrl = !remoteThumbnailUrl.isNullOrEmpty()
-        android.util.Log.d("UpdateNovel", "awaitUpdateFromSource: novel=${localNovel.title} coverFileExists=$coverFileExists hasLocal=$hasLocalThumbnailUrl hasRemote=$hasRemoteThumbnailUrl localUrl=${localNovel.thumbnailUrl} remoteUrl=$remoteThumbnailUrl")
+        android.util.Log.d(
+            "UpdateNovel",
+            "awaitUpdateFromSource: novel=${localNovel.title} coverFileExists=$coverFileExists hasLocal=$hasLocalThumbnailUrl hasRemote=$hasRemoteThumbnailUrl localUrl=${localNovel.thumbnailUrl} remoteUrl=$remoteThumbnailUrl",
+        )
 
         val coverLastModified = when {
             // No cover URL anywhere — can't fetch a cover
@@ -90,7 +93,10 @@ class UpdateNovel(
             localNovel.thumbnailUrl
         }
 
-        android.util.Log.d("UpdateNovel", "result: novel=${localNovel.title} coverLastModified=$coverLastModified thumbnailUrl=$thumbnailUrl")
+        android.util.Log.d(
+            "UpdateNovel",
+            "result: novel=${localNovel.title} coverLastModified=$coverLastModified thumbnailUrl=$thumbnailUrl",
+        )
 
         return novelRepository.updateNovel(
             NovelUpdate(

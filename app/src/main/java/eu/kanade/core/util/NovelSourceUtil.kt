@@ -12,7 +12,10 @@ import uy.kohesive.injekt.api.get
 fun ifNovelSourcesLoaded(): Boolean {
     val isInitialized = remember { Injekt.get<NovelSourceManager>().isInitialized }.collectAsState().value
     if (!isInitialized) {
-        Log.w("NovelSearch", "[ifNovelSourcesLoaded] NovelSourceManager.isInitialized = false (novel sources not loaded yet!)")
+        Log.w(
+            "NovelSearch",
+            "[ifNovelSourcesLoaded] NovelSourceManager.isInitialized = false (novel sources not loaded yet!)",
+        )
     }
     return isInitialized
 }

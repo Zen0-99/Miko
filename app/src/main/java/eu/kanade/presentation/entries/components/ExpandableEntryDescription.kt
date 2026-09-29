@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.icerock.moko.resources.StringResource
+import eu.kanade.presentation.util.formatGenreLabel
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
@@ -60,6 +62,7 @@ fun ExpandableEntryDescription(
     accentColor: Color?,
     onTagSearch: (String) -> Unit,
     modifier: Modifier = Modifier,
+    titleResource: StringResource = MR.strings.description,
 ) {
     Column(
         modifier = modifier
@@ -86,7 +89,7 @@ fun ExpandableEntryDescription(
         val accent = accentColor ?: MaterialTheme.colorScheme.primary
 
         Text(
-            text = stringResource(MR.strings.about_this_novel),
+            text = stringResource(titleResource),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier
                 .padding(top = 12.dp, bottom = 4.dp)
@@ -114,7 +117,7 @@ fun ExpandableEntryDescription(
                         Modifier.animateContentSize(animationSpec = spring(dampingRatio = 0.85f, stiffness = 350f))
                     } else {
                         Modifier
-                    }
+                    },
                 )
                 .then(
                     if (canExpand) {
@@ -183,7 +186,7 @@ fun ExpandableEntryDescription(
                         ) {
                             tags.forEach { tag ->
                                 EntryTagChip(
-                                    text = tag,
+                                    text = formatGenreLabel(tag),
                                     accentColor = accentColor,
                                     onClick = { onTagSearch(tag) },
                                 )

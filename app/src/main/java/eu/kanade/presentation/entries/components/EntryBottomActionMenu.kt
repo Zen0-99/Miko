@@ -15,14 +15,14 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -35,13 +35,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -61,7 +62,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,7 +77,6 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import eu.kanade.presentation.components.EntryDownloadDropdownMenu
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
@@ -85,9 +84,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import tachiyomi.domain.readingorder.model.ReadingOrder
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
-import tachiyomi.domain.readingorder.model.ReadingOrder
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -107,7 +106,7 @@ fun EntryBottomActionMenu(
     onMarkPreviousAsViewedClicked: (() -> Unit)? = null,
     onDownloadClicked: (() -> Unit)? = null,
     onDeleteClicked: (() -> Unit)? = null,
-    onExternalClicked: (() -> Unit)? = null,
+    onHideClicked: (() -> Unit)? = null,
     onInternalClicked: (() -> Unit)? = null,
 ) {
     AnimatedVisibility(
@@ -128,9 +127,12 @@ fun EntryBottomActionMenu(
             val haptic = LocalHapticFeedback.current
             val confirm =
                 remember {
-                    mutableStateListOf(false, false, false, false, false, false, false, false, false, false, false)
+                    mutableStateListOf(
+                        false, false, false, false, false, false,
+                        false, false, false, false, false, false,
+                    )
                 }
-            val confirmRange = 0..<11
+            val confirmRange = 0..<12
             var resetJob: Job? = remember { null }
             val onLongClickItem: (Int) -> Unit = { toConfirmIndex ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -244,13 +246,13 @@ fun EntryBottomActionMenu(
                         onClick = onDeleteClicked,
                     )
                 }
-                if (!isManga && onExternalClicked != null && !playerPreferences.alwaysUseExternalPlayer().get()) {
+                if (onHideClicked != null) {
                     Button(
-                        title = stringResource(AYMR.strings.action_play_externally),
-                        icon = ImageVector.vectorResource(R.drawable.ic_open_in_webview_24dp),
-                        toConfirm = confirm[9],
-                        onLongClick = { onLongClickItem(9) },
-                        onClick = onExternalClicked,
+                        title = stringResource(MR.strings.action_hide_chapters),
+                        icon = Icons.Outlined.VisibilityOff,
+                        toConfirm = confirm[11],
+                        onLongClick = { onLongClickItem(11) },
+                        onClick = onHideClicked,
                     )
                 }
                 if (!isManga && onInternalClicked != null && playerPreferences.alwaysUseExternalPlayer().get()) {
@@ -1026,7 +1028,9 @@ fun ReadingOrderMoveDepthDialog(
         },
         text = {
             Text(
-                text = "\"$entryTitle\" is currently in Depth ${ordinal(fromDepth)}. Move it to Depth ${ordinal(toDepth)}?",
+                text = "\"$entryTitle\" is currently in Depth ${ordinal(
+                    fromDepth,
+                )}. Move it to Depth ${ordinal(toDepth)}?",
                 style = MaterialTheme.typography.bodyMedium,
             )
         },

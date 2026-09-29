@@ -1,6 +1,5 @@
 package eu.kanade.presentation.more.settings.screen
 
-
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,12 +17,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.asBooleanPreference
-import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.domain.ui.model.NavBarAppearance
 import eu.kanade.domain.ui.model.StartScreen
@@ -216,10 +213,12 @@ object SettingsAppearanceScreen : SearchableSettings {
                     },
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = remember { uiPreferences.navBarAppearance().asBooleanPreference(
-                        targetValue = NavBarAppearance.FLOATING_GLASS,
-                        defaultValue = NavBarAppearance.STANDARD,
-                    ) },
+                    preference = remember {
+                        uiPreferences.navBarAppearance().asBooleanPreference(
+                            targetValue = NavBarAppearance.FLOATING_GLASS,
+                            defaultValue = NavBarAppearance.STANDARD,
+                        )
+                    },
                     title = "Floating glass navigation bar",
                     subtitle = "Pill-shaped bar with glassmorphism blur, inset from screen edges",
                 ),
@@ -237,7 +236,9 @@ object SettingsAppearanceScreen : SearchableSettings {
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     ) {
                         Text(
-                            text = "Controls opacity of all glassmorphic surfaces (nav bar, top bar, update overlay). Lower = more transparent.",
+                            text =
+                            "Controls opacity of all glassmorphic surfaces (nav bar, top bar, update overlay). " +
+                                "Lower = more transparent.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -260,7 +261,7 @@ object SettingsAppearanceScreen : SearchableSettings {
                     subtitle = "Slowly pan the home hero cover image up and down with an eased animation",
                 ),
                 Preference.PreferenceItem.SwitchPreference(
-                    preference = uiPreferences.showAnimeMode(),
+                    preference = uiPreferences.showShowsMode(),
                     title = "Show Anime",
                     subtitle = "Display anime in the mode carousel and mode-aware tabs",
                 ),

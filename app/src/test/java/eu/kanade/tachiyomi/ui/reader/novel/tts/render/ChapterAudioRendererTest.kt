@@ -13,12 +13,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
-import java.io.File
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
-import kotlin.io.path.createTempDirectory
-import kotlin.io.path.createTempFile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,6 +29,12 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.items.chapter.model.NovelChapter
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
+import kotlin.io.path.createTempDirectory
+import kotlin.io.path.createTempFile
 
 /**
  * JVM unit tests for [ChapterAudioRenderer] — the end-to-end render slice
@@ -280,7 +280,10 @@ class ChapterAudioRendererTest {
                 if (text.contains("Alpha")) {
                     flowOf(chunk(480))
                 } else {
-                    flow { gate.await(); emit(chunk(10)) }
+                    flow {
+                        gate.await()
+                        emit(chunk(10))
+                    }
                 }
             },
         )
@@ -348,7 +351,10 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = secondSink,
             html = "<p>Alpha.</p><p>Beta.</p>",
-            streamFactory = { text, voice, _ -> calls += text to voice; flowOf(chunk(240)) },
+            streamFactory = { text, voice, _ ->
+                calls += text to voice
+                flowOf(chunk(240))
+            },
         )
         val manifest = second.renderChapter(novel, chapter, source, resumeFromParagraph = 1)
 
@@ -371,7 +377,10 @@ class ChapterAudioRendererTest {
             scratchDir = scratchDir,
             sink = sink,
             html = "<p>Alpha.</p><p>Beta.</p>",
-            streamFactory = { text, _, _ -> calls += text; flowOf(chunk(120)) },
+            streamFactory = { text, _, _ ->
+                calls += text
+                flowOf(chunk(120))
+            },
         )
 
         renderer.renderChapter(novel, chapter, source, resumeFromParagraph = 1)
@@ -390,7 +399,10 @@ class ChapterAudioRendererTest {
             provider = mockk<NovelDownloadProvider>(relaxed = true),
             preferences = NovelTtsPreferences(FakePreferenceStore()),
             profileFactory = { fakeProfile(context, { _, _, _ -> flowOf(chunk(10)) }) },
-            sinkFactory = { _, _, _ -> sinkCreated = true; sink },
+            sinkFactory = { _, _, _ ->
+                sinkCreated = true
+                sink
+            },
             chapterTextLoader = { _, _, _ -> "<p>   </p><p></p>" },
             scratchDir = scratchDir,
         )

@@ -57,6 +57,14 @@ class CinemetaBrowseScreenModel(
         return entry
     }
 
+    /**
+     * Cached catalog items for a type without switching to it — pager
+     * pages preview their own type during a swipe (the settled page owns
+     * [State.metas]). Empty when nothing is cached.
+     */
+    fun peekCachedMetas(type: String): List<MikoMetaShort> =
+        isCacheValid(type)?.metas.orEmpty()
+
     fun changeType(newType: String) {
         if (state.value.type == newType) return
         // Check cache first — if valid, restore from cache without network call

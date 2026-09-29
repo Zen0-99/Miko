@@ -148,8 +148,11 @@ object ProsodyApplier {
         // off by rateRatio, which for our params (|rateRatio - 1| ≤ 8%)
         // is well under a semitone of unintended drift.
         val pitched = resampleLinear(pcm, pitchRatio)
-        val timed = if (p.rateRatio == 1f) pitched
-        else resampleLinear(pitched, 1f / p.rateRatio)
+        val timed = if (p.rateRatio == 1f) {
+            pitched
+        } else {
+            resampleLinear(pitched, 1f / p.rateRatio)
+        }
 
         // Float headroom for the remaining stages.
         val buf = FloatArray(timed.size) { timed[it].toFloat() }

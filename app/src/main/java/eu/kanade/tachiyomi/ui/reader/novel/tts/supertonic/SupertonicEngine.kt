@@ -11,18 +11,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicEngineCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.SupertonicVoiceCatalog
 import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.EngineNotInstalledException
 import eu.kanade.tachiyomi.ui.reader.novel.tts.pocket.SynthAudio
-import java.io.File
-import java.nio.FloatBuffer
-import java.nio.LongBuffer
-import java.text.Normalizer
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.coroutineContext
-import kotlin.math.cos
-import kotlin.math.ln
-import kotlin.math.max
-import kotlin.math.sqrt
-import kotlin.random.Random
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +27,17 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import java.io.File
+import java.nio.FloatBuffer
+import java.nio.LongBuffer
+import java.text.Normalizer
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.coroutineContext
+import kotlin.math.cos
+import kotlin.math.ln
+import kotlin.math.max
+import kotlin.math.sqrt
+import kotlin.random.Random
 
 /**
  * Supertonic-3 TTS engine — Supertone's flow-matching TTS running directly
@@ -595,15 +594,21 @@ class SupertonicEngine(
 
     private fun releaseInternal() {
         listOf(dpSession, textEncSession, vectorEstSession, vocoderSession).forEach { s ->
-            try { s?.close() } catch (_: Throwable) {}
+            try {
+                s?.close()
+            } catch (_: Throwable) {}
         }
         dpSession = null
         textEncSession = null
         vectorEstSession = null
         vocoderSession = null
         styleCache.values.forEach { style ->
-            try { style.ttlTensor.close() } catch (_: Throwable) {}
-            try { style.dpTensor.close() } catch (_: Throwable) {}
+            try {
+                style.ttlTensor.close()
+            } catch (_: Throwable) {}
+            try {
+                style.dpTensor.close()
+            } catch (_: Throwable) {}
         }
         styleCache.clear()
         voiceBinData = null
@@ -665,19 +670,26 @@ class SupertonicEngine(
             val sb = StringBuilder()
             var i = 0
             while (i < text.length) {
-                val cp = if (Character.isHighSurrogate(text[i]) && i + 1 < text.length &&
+                val cp = if (Character.isHighSurrogate(text[i]) &&
+                    i + 1 < text.length &&
                     Character.isLowSurrogate(text[i + 1])
                 ) {
                     Character.codePointAt(text, i).also { i++ }
                 } else {
                     text[i].code
                 }
-                val isEmoji = (cp in 0x1F600..0x1F64F) || (cp in 0x1F300..0x1F5FF) ||
-                    (cp in 0x1F680..0x1F6FF) || (cp in 0x1F700..0x1F77F) ||
-                    (cp in 0x1F780..0x1F7FF) || (cp in 0x1F800..0x1F8FF) ||
-                    (cp in 0x1F900..0x1F9FF) || (cp in 0x1FA00..0x1FA6F) ||
-                    (cp in 0x1FA70..0x1FAFF) || (cp in 0x2600..0x26FF) ||
-                    (cp in 0x2700..0x27BF) || (cp in 0x1F1E6..0x1F1FF)
+                val isEmoji = (cp in 0x1F600..0x1F64F) ||
+                    (cp in 0x1F300..0x1F5FF) ||
+                    (cp in 0x1F680..0x1F6FF) ||
+                    (cp in 0x1F700..0x1F77F) ||
+                    (cp in 0x1F780..0x1F7FF) ||
+                    (cp in 0x1F800..0x1F8FF) ||
+                    (cp in 0x1F900..0x1F9FF) ||
+                    (cp in 0x1FA00..0x1FA6F) ||
+                    (cp in 0x1FA70..0x1FAFF) ||
+                    (cp in 0x2600..0x26FF) ||
+                    (cp in 0x2700..0x27BF) ||
+                    (cp in 0x1F1E6..0x1F1FF)
                 if (!isEmoji) {
                     if (cp > 0xFFFF) sb.append(String(Character.toChars(cp))) else sb.append(cp.toChar())
                 }

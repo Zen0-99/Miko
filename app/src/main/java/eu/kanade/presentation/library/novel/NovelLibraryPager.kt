@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.presentation.library.components.GlobalSearchItem
 import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryItem
-import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.util.plus

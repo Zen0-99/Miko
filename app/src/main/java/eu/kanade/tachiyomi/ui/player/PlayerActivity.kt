@@ -42,6 +42,7 @@ import android.os.Bundle
 import android.util.Rational
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -52,15 +53,14 @@ import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import androidx.media.AudioAttributesCompat
 import androidx.media.AudioFocusRequestCompat
 import androidx.media.AudioManagerCompat
-import miko.core.common.torrent.TorrentPreferences
-import miko.core.common.torrent.TorrentServerApi
-import miko.core.common.torrent.TorrentServerUtils
 import com.hippo.unifile.UniFile
+import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import eu.kanade.presentation.theme.TachiyomiTheme
 import eu.kanade.tachiyomi.animesource.model.ChapterType
 import eu.kanade.tachiyomi.animesource.model.Hoster
@@ -69,7 +69,6 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
-import eu.kanade.tachiyomi.data.torrent.service.TorrentServerService
 import eu.kanade.tachiyomi.databinding.PlayerLayoutBinding
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
@@ -95,6 +94,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
+import miko.core.common.torrent.TorrentPreferences
+import miko.core.common.torrent.TorrentServerApi
+import miko.core.common.torrent.TorrentServerUtils
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
@@ -105,15 +107,15 @@ import tachiyomi.domain.custombuttons.model.CustomButton
 import tachiyomi.domain.storage.service.StorageManager
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
-import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import eu.kanade.presentation.achievement.components.AchievementBannerManager
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 class PlayerActivity : BaseActivity() {
     private val viewModel by viewModels<PlayerViewModel>(factoryProducer = { PlayerViewModelProviderFactory(this) })
@@ -128,6 +130,16 @@ class PlayerActivity : BaseActivity() {
     private var mpvLoadTimeoutJob: kotlinx.coroutines.Job? = null
     private var pendingVideoUrl: String? = null
     private var pendingStartPosition: Long = 0
+    private var pendingVideo: Video? = null
+    private var pendingIsTorrent = false
+    private var pendingRetriesLeft = 0
+
+    /**
+     * True while an mpv `loadfile` is in-flight (issued but no FILE_LOADED yet).
+     * `isLoading` can't be trusted for this — seek/cache observer events flip
+     * it independently of load state.
+     */
+    private var pendingMpvLoad = false
     private val castManager by lazy { eu.kanade.tachiyomi.ui.player.cast.CastManager(this) }
 
     private var mediaSession: MediaSession? = null
@@ -189,6 +201,19 @@ class PlayerActivity : BaseActivity() {
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         }
+
+        /**
+         * Width of the docked comments panel in landscape. Shared between the
+         * activity (video surface resize) and [CommentsDock] (panel width).
+         */
+        fun commentsPanelWidthPx(context: Context): Int {
+            val dm = context.resources.displayMetrics
+            return min((420 * dm.density).roundToInt(), (dm.widthPixels * 0.4f).toInt())
+        }
+
+        private const val MPV_LOAD_TIMEOUT_MS = 15_000L
+        private const val TORRENT_LOAD_TIMEOUT_MS = 60_000L
+        private const val TORRENT_LOAD_RETRIES = 2
 
         internal const val MPV_DIR = "mpv"
         private const val MPV_FONTS_DIR = "fonts"
@@ -297,6 +322,10 @@ class PlayerActivity : BaseActivity() {
                     }
                 }
             }
+            .launchIn(lifecycleScope)
+
+        viewModel.sheetShown
+            .onEach { updateCommentsDock() }
             .launchIn(lifecycleScope)
 
         binding.controls.setContent {
@@ -720,6 +749,24 @@ class PlayerActivity : BaseActivity() {
             viewModel.hideControls()
         }
         super.onConfigurationChanged(newConfig)
+        // Re-evaluate the comments dock once the new layout is measured.
+        binding.root.post { updateCommentsDock() }
+    }
+
+    /**
+     * While the comments sheet is open in landscape the video surfaces are
+     * shrunk to the left of the docked panel so the video stays visible.
+     */
+    private fun updateCommentsDock() {
+        val dockOpen = viewModel.sheetShown.value == Sheets.Comments &&
+            resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val videoWidth = if (dockOpen && binding.root.width > 0) {
+            binding.root.width - commentsPanelWidthPx(this)
+        } else {
+            ViewGroup.LayoutParams.MATCH_PARENT
+        }
+        binding.player.updateLayoutParams { width = videoWidth }
+        binding.exoPlayerView.updateLayoutParams { width = videoWidth }
     }
 
     fun showToast(message: String) {
@@ -822,21 +869,21 @@ class PlayerActivity : BaseActivity() {
         when (eventId) {
             MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
                 mpvLoadTimeoutJob?.cancel()
+                pendingMpvLoad = false
                 viewModel.viewModelScope.launchIO { fileLoaded() }
             }
             MPVLib.mpvEventId.MPV_EVENT_SEEK -> viewModel.isLoading.update { true }
             MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> player.isExiting = false
             MPVLib.mpvEventId.MPV_EVENT_END_FILE -> {
-                // If file ended with error and we're in Auto mode, try ExoPlayer
-                if (viewModel.isLoading.value &&
-                    playerPreferences.playerEngine().get() == PlayerEngine.Auto &&
+                // File ended with an error while a loadfile was still in-flight:
+                // torrents retry MPV (TorrServer may still be caching), other
+                // streams fall back to ExoPlayer regardless of engine pref —
+                // an unplayable stream under mpv stays dead otherwise.
+                if (pendingMpvLoad &&
                     viewModel.activeEngine.value == PlayerEngine.Mpv
                 ) {
-                    logcat(LogPriority.WARN) { "MPV end-file while loading — falling back to ExoPlayer" }
-                    runOnUiThread {
-                        switchToExoPlayer()
-                        pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
-                    }
+                    logcat(LogPriority.WARN) { "MPV end-file while loading (torrent=$pendingIsTorrent)" }
+                    runOnUiThread { retryMpvOrFail("end-file") }
                 }
             }
         }
@@ -1165,7 +1212,8 @@ class PlayerActivity : BaseActivity() {
         // Handle resume overlay for Ask mode
         val resumeMode = playerPreferences.resumeMode().get()
         val showResumeDialog = viewModel.isLoadingEpisode.value &&
-            resumeMode == ResumeMode.Ask && savedPosition > 1000
+            resumeMode == ResumeMode.Ask &&
+            savedPosition > 1000
 
         if (viewModel.isLoadingEpisode.value) {
             when (resumeMode) {
@@ -1215,7 +1263,9 @@ class PlayerActivity : BaseActivity() {
             launchIO {
                 val resolvedUrl = magnetResolver.resolve(rawVideoUrl, video.videoTitle)
                 if (resolvedUrl != null) {
-                    withUIContext { loadVideoWithResolvedUrl(resolvedUrl, startMs, enginePref, video) }
+                    withUIContext {
+                        loadVideoWithResolvedUrl(resolvedUrl, startMs, enginePref, video, isTorrent = true)
+                    }
                 } else {
                     withUIContext {
                         toast("Failed to resolve torrent stream. Try again or check TorrServer settings.")
@@ -1239,7 +1289,9 @@ class PlayerActivity : BaseActivity() {
         startMs: Long,
         enginePref: PlayerEngine,
         video: Video,
+        isTorrent: Boolean = false,
     ) {
+        pendingMpvLoad = false
         when {
             viewModel.activeEngine.value == PlayerEngine.ExoPlayer -> {
                 loadWithExoPlayer(videoUrl, startMs)
@@ -1250,8 +1302,12 @@ class PlayerActivity : BaseActivity() {
             }
             else -> {
                 // MPV or Auto — load with MPV, set fallback timeout
+                pendingMpvLoad = true
                 pendingVideoUrl = videoUrl
                 pendingStartPosition = startMs
+                pendingVideo = video
+                pendingIsTorrent = isTorrent
+                pendingRetriesLeft = if (isTorrent) TORRENT_LOAD_RETRIES else 0
                 startMpvLoadTimeout()
 
                 val videoOptions = video.mpvArgs.joinToString(",") { (option, value) ->
@@ -1271,18 +1327,70 @@ class PlayerActivity : BaseActivity() {
         }
     }
 
+    /**
+     * Whether an MPV load failure will be silently recovered — torrent streams
+     * retry, and other streams fall back to ExoPlayer. PlayerObserver uses
+     * this to suppress the mpv "loading failed" toast when the user never
+     * sees a real failure. Mirrors the END_FILE recovery condition in [event].
+     */
+    internal fun willRecoverMpvLoad(): Boolean {
+        return pendingMpvLoad &&
+            viewModel.activeEngine.value == PlayerEngine.Mpv
+    }
+
     private fun startMpvLoadTimeout() {
         mpvLoadTimeoutJob?.cancel()
+        val timeoutMs = if (pendingIsTorrent) TORRENT_LOAD_TIMEOUT_MS else MPV_LOAD_TIMEOUT_MS
         mpvLoadTimeoutJob = launchIO {
-            kotlinx.coroutines.delay(15000)
-            if (viewModel.activeEngine.value == PlayerEngine.Mpv && viewModel.isLoading.value) {
-                logcat(LogPriority.WARN) { "MPV load timeout — falling back to ExoPlayer" }
-                withUIContext {
-                    switchToExoPlayer()
-                    pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
-                }
+            kotlinx.coroutines.delay(timeoutMs)
+            if (pendingMpvLoad && viewModel.activeEngine.value == PlayerEngine.Mpv) {
+                logcat(LogPriority.WARN) { "MPV load timeout after ${timeoutMs}ms (torrent=$pendingIsTorrent)" }
+                withUIContext { retryMpvOrFail("load timeout") }
             }
         }
+    }
+
+    /**
+     * Handle an MPV load failure. Torrent-backed streams get retries with a longer
+     * window — TorrServer needs time to fetch pieces before it can serve data, and
+     * ExoPlayer can't decode the codecs torrents typically carry anyway. Regular
+     * streams in Auto mode fall back to ExoPlayer as before.
+     */
+    private fun retryMpvOrFail(reason: String) {
+        if (pendingIsTorrent) {
+            if (pendingRetriesLeft > 0) {
+                pendingRetriesLeft--
+                logcat(LogPriority.WARN) { "MPV torrent load $reason — retrying ($pendingRetriesLeft left)" }
+                retryMpvLoadfile()
+                startMpvLoadTimeout()
+            } else {
+                pendingMpvLoad = false
+                logcat(LogPriority.ERROR) { "MPV torrent load failed: $reason" }
+                viewModel.isLoading.update { false }
+                toast("Torrent failed to start — check TorrServer and peer availability.")
+            }
+            return
+        }
+        logcat(LogPriority.WARN) { "MPV load $reason — falling back to ExoPlayer" }
+        pendingMpvLoad = false
+        switchToExoPlayer()
+        pendingVideoUrl?.let { loadWithExoPlayer(it, pendingStartPosition) }
+    }
+
+    private fun retryMpvLoadfile() {
+        val url = pendingVideoUrl ?: return
+        val videoOptions = pendingVideo?.mpvArgs?.joinToString(",") { (option, value) ->
+            "$option=\"$value\""
+        } ?: ""
+        MPVLib.command(
+            arrayOf(
+                "loadfile",
+                parseVideoUrl(url),
+                "replace",
+                "0",
+                videoOptions,
+            ),
+        )
     }
 
     private fun switchToExoPlayer() {
@@ -1302,6 +1410,7 @@ class PlayerActivity : BaseActivity() {
                 callbacks = object : ExoPlayerEngine.Callbacks {
                     override fun onReady() {
                         viewModel.isLoading.update { false }
+                        viewModel.updateIsLoadingEpisode(false)
                         runOnUiThread { exoPlayerView.player = exoPlayerEngine?.player }
                     }
 
@@ -1316,6 +1425,8 @@ class PlayerActivity : BaseActivity() {
 
                     override fun onError(message: String) {
                         logcat(LogPriority.ERROR) { "ExoPlayer error: $message" }
+                        viewModel.isLoading.update { false }
+                        viewModel.updateIsLoadingEpisode(false)
                         runOnUiThread { toast(message) }
                     }
 
@@ -1333,7 +1444,12 @@ class PlayerActivity : BaseActivity() {
     private fun loadWithExoPlayer(url: String, startPositionMs: Long) {
         android.util.Log.d("PlayerActivity", "loadWithExoPlayer: url='${url.take(80)}...', startPos=$startPositionMs")
         // Magnet/torrent URLs are resolved to HTTP URLs by MagnetResolver before reaching here.
-        exoPlayerEngine?.loadVideo(url, startPositionMs)
+        val headers = viewModel.currentVideo.value?.headers
+            ?: (viewModel.currentSource.value as? AnimeHttpSource)?.headers
+        val headerMap = headers?.toMultimap()
+            ?.mapValues { it.value.firstOrNull() ?: "" }
+            .orEmpty()
+        exoPlayerEngine?.loadVideo(url, startPositionMs, headerMap)
     }
 
     /**
@@ -1365,7 +1481,10 @@ class PlayerActivity : BaseActivity() {
         // Wait for torrent server to be ready (up to 15 seconds)
         val serverReady = waitForTorrentServer()
         if (!serverReady) {
-            android.util.Log.e("PlayerActivity", "torrentLinkHandlerForExoPlayer: torrent server not ready after waiting")
+            android.util.Log.e(
+                "PlayerActivity",
+                "torrentLinkHandlerForExoPlayer: torrent server not ready after waiting",
+            )
             runOnUiThread {
                 toast("Torrent server failed to start. Try again or check TorrServer settings.")
                 viewModel.isLoading.update { false }
@@ -1388,7 +1507,10 @@ class PlayerActivity : BaseActivity() {
             try {
                 val echo = torrentServerApi.echo()
                 if (echo.isNotEmpty()) {
-                    android.util.Log.d("PlayerActivity", "waitForTorrentServer: server ready after ${it + 1}s (echo='$echo')")
+                    android.util.Log.d(
+                        "PlayerActivity",
+                        "waitForTorrentServer: server ready after ${it + 1}s (echo='$echo')",
+                    )
                     return true
                 }
             } catch (_: Exception) {
@@ -1472,6 +1594,14 @@ class PlayerActivity : BaseActivity() {
             .toMultimap()
             .mapValues { it.value.firstOrNull() ?: "" }
             .toMutableMap()
+
+        // mpv bypasses okhttp, so the UserAgentInterceptor never applies and
+        // mpv's own UA is sent. CDN-fronted hosts (Cloudflare et al.) commonly
+        // 403 that — inject the app's configured UA when nothing set one.
+        if (headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+            headers["User-Agent"] = Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>()
+                .defaultUserAgentProvider()
+        }
 
         val httpHeaderString = headers.map {
             it.key + ": " + it.value.replace(",", "\\,")

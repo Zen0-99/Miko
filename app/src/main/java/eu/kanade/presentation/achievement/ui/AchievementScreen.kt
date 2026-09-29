@@ -1,7 +1,6 @@
 package eu.kanade.presentation.achievement.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,10 +46,10 @@ import eu.kanade.presentation.achievement.components.AchievementCategoryTabs
 import eu.kanade.presentation.achievement.components.AchievementContent
 import eu.kanade.presentation.achievement.components.AchievementStatsComparison
 import eu.kanade.presentation.achievement.screenmodel.AchievementScreenState
+import eu.kanade.presentation.components.SimpleTopBarLayout
 import eu.kanade.presentation.theme.AchievementColors
 import eu.kanade.presentation.theme.achievementInactiveBarColor
 import eu.kanade.presentation.theme.achievementLabelColor
-import eu.kanade.presentation.components.SimpleTopBarLayout
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.i18n.aniyomi.AYMR
@@ -388,48 +387,48 @@ private fun BentoStatsCard(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.SpaceAround,
         ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(AYMR.strings.achievement_bento_xp_points),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = achievementLabelColor(),
-                        letterSpacing = 0.5.sp,
-                    )
-                    Text(
-                        text = totalPoints.toString(),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = AchievementColors.Gold,
-                    )
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(AYMR.strings.achievement_bento_xp_points),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = achievementLabelColor(),
+                    letterSpacing = 0.5.sp,
+                )
+                Text(
+                    text = totalPoints.toString(),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AchievementColors.Gold,
+                )
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(AYMR.strings.achievement_bento_unlocked),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = achievementLabelColor(),
-                        letterSpacing = 0.5.sp,
-                    )
-                    Text(
-                        text = "$unlockedCount/$totalCount",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(AYMR.strings.achievement_bento_unlocked),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = achievementLabelColor(),
+                    letterSpacing = 0.5.sp,
+                )
+                Text(
+                    text = "$unlockedCount/$totalCount",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
+}
 
 /**
  * Bento Streak Card displaying current streak and horizontal micro timeline

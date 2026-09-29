@@ -2,7 +2,6 @@ package eu.kanade.presentation.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -14,17 +13,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarData
@@ -138,7 +135,9 @@ private fun AchievementSnackbar(data: SnackbarData) {
                 visuals.actionLabel?.let { label ->
                     TextButton(
                         onClick = { data.performAction() },
-                        content = { Text(label, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
+                        content = {
+                            Text(label, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        },
                     )
                 }
             }
@@ -161,7 +160,8 @@ private fun snackbarIcon(visuals: SnackbarVisuals): ImageVector? {
 
 @Composable
 private fun snackbarIconTint(visuals: SnackbarVisuals, accent: Color): Color {
-    val isError = visuals is AchievementSnackbarVisuals && visuals.isError ||
+    val isError = visuals is AchievementSnackbarVisuals &&
+        visuals.isError ||
         visuals.message.contains("error", ignoreCase = true) ||
         visuals.message.contains("fail", ignoreCase = true)
     val isWarn = visuals.message.contains("warn", ignoreCase = true)

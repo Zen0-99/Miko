@@ -84,18 +84,10 @@ import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.collection.novel.interactor.SetNovelCollections
 import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.novel.interactor.GetDuplicateLibraryNovel
-import tachiyomi.domain.entries.novel.interactor.GetLinkedNovels
-import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
-import tachiyomi.domain.entries.novel.interactor.GetNovelLinkedId
 import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
-import tachiyomi.domain.entries.novel.interactor.LinkNovels
-import tachiyomi.domain.entries.novel.interactor.MakeLinkedPrimary
-import tachiyomi.domain.entries.novel.interactor.MergeLinkedNovelChapters
 import tachiyomi.domain.entries.novel.interactor.SetNovelChapterFlags
 import tachiyomi.domain.entries.novel.interactor.SetNovelDefaultChapterFlags
-import tachiyomi.domain.entries.novel.interactor.UnlinkNovel
 import tachiyomi.domain.entries.novel.model.Novel
-import tachiyomi.domain.entries.novel.model.NovelLink
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
 import tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter
@@ -137,14 +129,9 @@ class NovelScreenModel(
     private val audioRenderManager: ChapterAudioRenderManager = Injekt.get(),
     private val audiobookPlayer: AudiobookPlayerController = Injekt.get(),
     private val fetchInterval: tachiyomi.domain.entries.novel.interactor.NovelFetchInterval = Injekt.get(),
-    private val getLinkedNovels: GetLinkedNovels = Injekt.get(),
-    private val getNovelLinkedId: GetNovelLinkedId = Injekt.get(),
-    private val getNovelFavorites: GetNovelFavorites = Injekt.get(),
-    private val linkNovelsInteractor: LinkNovels = Injekt.get(),
-    private val unlinkNovelInteractor: UnlinkNovel = Injekt.get(),
-    private val makeLinkedPrimary: MakeLinkedPrimary = Injekt.get(),
-    private val mergeLinkedNovelChapters: MergeLinkedNovelChapters = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
+    private val threadIdResolver: eu.kanade.tachiyomi.data.comments.ThreadIdResolver = Injekt.get(),
+    private val commentsApi: eu.kanade.tachiyomi.data.comments.CommentsApi = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
     private val searchFallbackEngine: NovelSearchFallbackEngine = Injekt.get(),
@@ -424,12 +411,10 @@ class NovelScreenModel(
             ) { novelAndChapters, _, _, _ -> novelAndChapters }
                 .flowWithLifecycle(lifecycle)
                 .collectLatest { (novel, chapters) ->
-                    // Merge chapters from linked sources (dedup by chapter number)
-                    val mergedChapters = mergeWithLinkedSources(novel, chapters)
                     updateSuccessState {
                         it.copy(
                             novel = novel,
-                            chapters = mergedChapters.toNovelChapterListItems(novel),
+                            chapters = chapters.toNovelChapterListItems(novel),
                         )
                     }
                 }
@@ -508,6 +493,20 @@ class NovelScreenModel(
 
             // Start observe tracking since it only needs novelId
             observeTrackers()
+
+            // "View comments (N)" badge — resolves the work thread once
+            // and counts its visible comments. Silent on failure.
+            if (commentsEnabled) {
+                screenModelScope.launchIO {
+                    val threadId = threadIdResolver.forNovel(novel) ?: return@launchIO
+                    val result = commentsApi.threadCounts(listOf(threadId))
+                    if (result is eu.kanade.tachiyomi.data.comments.CommentsApi.Result.Ok) {
+                        updateSuccessState {
+                            it.copy(commentsCount = result.value.counts[threadId] ?: 0L)
+                        }
+                    }
+                }
+            }
 
             // Canonical rows collect+canonize chapter feeds in the
             // background (13-02), same as the manga entry path, then
@@ -636,25 +635,9 @@ class NovelScreenModel(
             primaryError = e
         }
 
-        // --- Linked source refresh (always runs, like Mohyeong) ---
-        val linkedNew = try {
-            withIOContext { refreshLinkedSourceChapters(manualFetch) }
-        } catch (t: Throwable) {
-            logcat(LogPriority.ERROR, t) { "Linked-source refresh failed" }
-            emptyList()
-        }
-
-        // --- Fallback: if primary failed but linked sources delivered chapters,
-        //     surface a soft warning instead of a hard error ---
         if (primaryError != null) {
-            if (linkedNew.isNotEmpty() || primarySucceeded) {
-                // Linked sources covered for the primary failure — log but don't block
-                logcat(LogPriority.WARN, primaryError) {
-                    "Primary source failed but linked sources delivered chapters"
-                }
-            } else {
-                // Both primary and linked failed — surface the primary error
-                logcat(LogPriority.ERROR, primaryError)
+            logcat(LogPriority.ERROR, primaryError)
+            if (!primarySucceeded) {
                 screenModelScope.launch {
                     val message = if (primaryError is NoChaptersException) {
                         with(context) { primaryError.formattedMessage }
@@ -665,75 +648,6 @@ class NovelScreenModel(
                 }
             }
         }
-    }
-
-    /**
-     * Fetches and syncs chapters from every linked source under its own novelId.
-     * Errors per source are logged but do not abort the rest — one broken mirror
-     * shouldn't stop the others from refreshing.
-     *
-     * Returns the list of newly added chapters across all linked sources.
-     */
-    private suspend fun refreshLinkedSourceChapters(manualFetch: Boolean): List<NovelChapter> {
-        val primary = novel ?: return emptyList()
-        val linkedId = getNovelLinkedId.await(primary.id) ?: return emptyList()
-        val linkedList = getLinkedNovels.await(linkedId).filter { !it.isPrimary }
-        if (linkedList.isEmpty()) return emptyList()
-
-        val collectedNew = mutableListOf<NovelChapter>()
-        for (link in linkedList) {
-            val linkedNovel = runCatching {
-                novelRepository.getNovelById(link.novelId)
-            }.getOrNull() ?: continue
-            val linkedSource = sourceManager.get(linkedNovel.source) as? NovelCatalogueSource ?: continue
-            try {
-                val remoteChapters = linkedSource.getChapterList(linkedNovel.toSNovel())
-                if (remoteChapters.isEmpty()) continue
-
-                val newChapters = remoteChapters.mapIndexed { i, sNovelChapter ->
-                    tachiyomi.domain.items.chapter.model.NovelChapter.create().copy(
-                        novelId = linkedNovel.id,
-                        url = sNovelChapter.url,
-                        name = sNovelChapter.name,
-                        chapterNumber = sNovelChapter.chapter_number.toDouble(),
-                        sourceOrder = i.toLong(),
-                        dateFetch = sNovelChapter.date_upload,
-                        dateUpload = sNovelChapter.date_upload,
-                    )
-                }
-
-                val localLinkedChapters = novelChapterRepository.getNovelChaptersByNovelId(linkedNovel.id)
-                val merged = mergeChapters(localLinkedChapters, newChapters)
-                val toAdd = merged.filter { it.id == -1L }
-                val toUpdate = merged.filter { it.id != -1L }
-                    .filter { mc -> localLinkedChapters.any { it.id == mc.id && it != mc } }
-
-                if (toAdd.isNotEmpty()) {
-                    novelChapterRepository.addAllNovelChapters(toAdd)
-                    collectedNew.addAll(toAdd)
-                }
-                if (toUpdate.isNotEmpty()) {
-                    updateNovelChapter.awaitAll(
-                        toUpdate.map {
-                            NovelChapterUpdate(
-                                id = it.id,
-                                name = it.name,
-                                url = it.url,
-                                chapterNumber = it.chapterNumber,
-                                dateFetch = it.dateFetch,
-                                dateUpload = it.dateUpload,
-                                sourceOrder = it.sourceOrder,
-                            )
-                        },
-                    )
-                }
-            } catch (t: Throwable) {
-                logcat(LogPriority.WARN, t) {
-                    "Linked-source refresh failed for ${linkedNovel.url} on ${linkedSource.name}"
-                }
-            }
-        }
-        return collectedNew
     }
 
     private fun mergeChapters(
@@ -749,36 +663,6 @@ class NovelScreenModel(
                 remote
             }
         }
-    }
-
-    /**
-     * Merges the primary novel's chapters with chapters from all linked sources,
-     * deduplicating by chapter number. The primary source always wins for a given
-     * chapter number; among linked sources, the one with the lowest priority wins.
-     *
-     * This is the display-layer merge — it reads already-stored chapters from the
-     * DB for each linked novel and combines them with the primary's chapters.
-     */
-    private suspend fun mergeWithLinkedSources(
-        primaryNovel: Novel,
-        primaryChapters: List<NovelChapter>,
-    ): List<NovelChapter> {
-        val linkedId = getNovelLinkedId.await(primaryNovel.id) ?: return primaryChapters
-        val linkedList = getLinkedNovels.await(linkedId).filter { !it.isPrimary }
-        if (linkedList.isEmpty()) return primaryChapters
-
-        val linkedChapters = mutableListOf<Pair<NovelLink, List<NovelChapter>>>()
-        for (link in linkedList) {
-            val chapters = runCatching {
-                novelChapterRepository.getNovelChaptersByNovelId(link.novelId)
-            }.getOrNull() ?: emptyList()
-            if (chapters.isNotEmpty()) {
-                linkedChapters.add(link to chapters)
-            }
-        }
-        if (linkedChapters.isEmpty()) return primaryChapters
-
-        return mergeLinkedNovelChapters.await(primaryChapters, linkedChapters)
     }
 
     fun fetchAllFromSource(manualFetch: Boolean = true) {
@@ -1971,69 +1855,6 @@ class NovelScreenModel(
         updateSuccessState { it.copy(dialog = Dialog.Migrate(newNovel = novel, oldNovel = duplicate)) }
     }
 
-    fun showLinkedSourcesDialog() {
-        updateSuccessState { it.copy(dialog = Dialog.LinkedSources) }
-    }
-
-    suspend fun loadLinkedNovelsForDialog(): List<Novel> {
-        val id = novel?.id ?: return emptyList()
-        val linkedId = getNovelLinkedId.await(id) ?: return emptyList()
-        val links = getLinkedNovels.await(linkedId).filter { !it.isPrimary }
-        return links.mapNotNull { link ->
-            runCatching { novelRepository.getNovelById(link.novelId) }.getOrNull()
-        }
-    }
-
-    suspend fun loadFavoritesForLinking(): List<Novel> {
-        val current = novel ?: return emptyList()
-        val linkedId = getNovelLinkedId.await(current.id)
-        val linkedIds = if (linkedId != null) {
-            getLinkedNovels.await(linkedId).map { it.novelId }.toSet()
-        } else {
-            emptySet()
-        }
-        // Get all favorite novels, filter out current and already-linked
-        return getNovelFavorites.await()
-            .filter { it.id != current.id && it.id !in linkedIds }
-    }
-
-    fun linkNovelSource(targetId: Long) {
-        val currentNovel = novel ?: return
-        val currentSourceId = source?.id ?: return
-        screenModelScope.launchNonCancellable {
-            // Get target novel to find its source ID
-            val target = novelRepository.getNovelById(targetId)
-            linkNovelsInteractor.await(
-                primaryNovelId = currentNovel.id,
-                primarySourceId = currentSourceId,
-                primaryExtensionType = "apk",
-                linkedNovelId = targetId,
-                linkedSourceId = target.source,
-                linkedExtensionType = "apk",
-            )
-        }
-    }
-
-    fun unlinkNovelSource(targetId: Long) {
-        screenModelScope.launchNonCancellable {
-            unlinkNovelInteractor.await(targetId)
-        }
-    }
-
-    fun makeLinkedPrimary(targetId: Long) {
-        val currentPrimary = novel ?: return
-        if (targetId == currentPrimary.id) return
-        screenModelScope.launchNonCancellable {
-            makeLinkedPrimary.await(currentPrimary.id, targetId)
-        }
-    }
-
-    fun refreshLinkedSources() {
-        screenModelScope.launchNonCancellable {
-            refreshLinkedSourceChapters(manualFetch = true)
-        }
-    }
-
     sealed interface Dialog {
         data class ChangeCollection(
             val novel: Novel,
@@ -2044,7 +1865,6 @@ class NovelScreenModel(
         data class Migrate(val newNovel: Novel, val oldNovel: Novel) : Dialog
         data object SettingsSheet : Dialog
         data object FullCover : Dialog
-        data object LinkedSources : Dialog
         data object TrackSheet : Dialog
         data object Comments : Dialog
     }
@@ -2069,6 +1889,7 @@ class NovelScreenModel(
             val intervalDays: Int? = null,
             val showInterval: Boolean = true,
             val suggestions: SuggestionState = SuggestionState.Idle,
+            val commentsCount: Long? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(novel).toList()

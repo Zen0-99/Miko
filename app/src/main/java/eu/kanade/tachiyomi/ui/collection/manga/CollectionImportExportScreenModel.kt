@@ -135,7 +135,9 @@ class CollectionImportExportScreenModel(
                 } ?: error("Could not open input stream")
 
                 val message = buildString {
-                    append("Imported ${result.collectionsCreated} collection(s): ${result.collectionNames.joinToString()}")
+                    append(
+                        "Imported ${result.collectionsCreated} collection(s): ${result.collectionNames.joinToString()}",
+                    )
                     if (result.readingOrdersCreated > 0) {
                         append(", ${result.readingOrdersCreated} reading order(s)")
                     }

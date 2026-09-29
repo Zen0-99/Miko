@@ -62,7 +62,11 @@ class EngineInstallerTest {
         val bundle = stageBundle(POCKET_LAYOUT)
 
         val progressEvents = mutableListOf<InstallState.Downloading>()
-        val result = installer.installViaDescriptor(bundle.descriptor, listOf(bundle.source), PocketEngineCatalog::checkLayout) { progress ->
+        val result = installer.installViaDescriptor(
+            bundle.descriptor,
+            listOf(bundle.source),
+            PocketEngineCatalog::checkLayout,
+        ) { progress ->
             progressEvents += progress
         }
 
@@ -98,7 +102,12 @@ class EngineInstallerTest {
         fetcher.payloads[sourceA.url] = archive
         fetcher.payloads[sourceB.url] = archive
 
-        val result = installer.installViaDescriptor(descriptor, listOf(sourceA, sourceB), PocketEngineCatalog::checkLayout) {}
+        val result = installer.installViaDescriptor(
+            descriptor,
+            listOf(sourceA, sourceB),
+            PocketEngineCatalog::checkLayout,
+        ) {
+        }
 
         result.isFailure shouldBe true
         (result.exceptionOrNull()?.message ?: "") shouldContain "SHA-256 mismatch"
@@ -125,7 +134,12 @@ class EngineInstallerTest {
         // IOException, simulating a 404/transport error on the primary host.
         fetcher.payloads[fallback.url] = archive
 
-        val result = installer.installViaDescriptor(descriptor, listOf(primary, fallback), PocketEngineCatalog::checkLayout) {}
+        val result = installer.installViaDescriptor(
+            descriptor,
+            listOf(primary, fallback),
+            PocketEngineCatalog::checkLayout,
+        ) {
+        }
 
         result.isSuccess shouldBe true
         // Second source reached only after the first failed.
@@ -195,7 +209,9 @@ class EngineInstallerTest {
         fetcher.payloads[source.url] = archive
 
         fetcher.abortAfterBytes = (archive.size / 2).toLong()
-        installer.installViaDescriptor(descriptor, listOf(source), PocketEngineCatalog::checkLayout) {}.isFailure shouldBe true
+        installer.installViaDescriptor(descriptor, listOf(source), PocketEngineCatalog::checkLayout) {
+        }.isFailure shouldBe
+            true
 
         // Server doesn't speak Range (HTTP 200 full body): the installer must
         // discard the partial and restart rather than append onto it.
@@ -215,27 +231,31 @@ class EngineInstallerTest {
         val expectedSource = source("https://test/pocket.tar.bz2", archive)
 
         // Absent dir.
-        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe InstallState.NotInstalled
+        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe
+            InstallState.NotInstalled
 
         // Complete layout + meta stamped with the expected sha → Installed.
         val dir = File(filesDir, "engines/${descriptor.name}").apply { mkdirs() }
         stagePocketLayout(dir)
         File(dir, ".install_meta.json")
             .writeText("""{"archive_sha256":"${expectedSource.sha256}","archive_url":"${expectedSource.url}"}""")
-        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe InstallState.Installed
+        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe
+            InstallState.Installed
 
         // Missing required file → Corrupt.
         File(dir, "tokenizer.model").delete()
-        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe InstallState.Corrupt
+        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe
+            InstallState.Corrupt
 
         // sha drift in .install_meta.json → Outdated (layout itself is intact).
         stagePocketLayout(dir)
         File(dir, ".install_meta.json")
             .writeText("""{"archive_sha256":"${"f".repeat(64)}","archive_url":"https://test/old.tar.bz2"}""")
-        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe InstallState.Outdated(
-            installedSha256 = "f".repeat(64),
-            expectedSha256 = expectedSource.sha256,
-        )
+        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe
+            InstallState.Outdated(
+                installedSha256 = "f".repeat(64),
+                expectedSha256 = expectedSource.sha256,
+            )
     }
 
     @Test
@@ -249,7 +269,8 @@ class EngineInstallerTest {
         // Overwrite flow_lm_main with a sub-1-MiB file — should flip to Corrupt.
         File(dir, "flow_lm_main_int8.onnx").writeText("too small")
 
-        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe InstallState.Corrupt
+        installer.verifyDescriptor(descriptor, expectedSource, PocketEngineCatalog::checkLayout) shouldBe
+            InstallState.Corrupt
     }
 
     @Test
@@ -291,7 +312,8 @@ class EngineInstallerTest {
     fun `reinstall replaces previous files atomically`() = runTest {
         // First install.
         val v1 = stageBundle(POCKET_LAYOUT)
-        val first = installer.installViaDescriptor(v1.descriptor, listOf(v1.source), PocketEngineCatalog::checkLayout) {}
+        val first = installer.installViaDescriptor(v1.descriptor, listOf(v1.source), PocketEngineCatalog::checkLayout) {
+        }
         first.isSuccess shouldBe true
         File(filesDir, "engines/${v1.name}/tokenizer.model").readText() shouldBe "sentencepiece"
 
@@ -303,7 +325,8 @@ class EngineInstallerTest {
         val v2Source = source(v1.source.url, v2Archive)
         fetcher.payloads[v2Source.url] = v2Archive
 
-        val second = installer.installViaDescriptor(v1.descriptor, listOf(v2Source), PocketEngineCatalog::checkLayout) {}
+        val second = installer.installViaDescriptor(v1.descriptor, listOf(v2Source), PocketEngineCatalog::checkLayout) {
+        }
         second.isSuccess shouldBe true
 
         File(filesDir, "engines/${v1.name}/tokenizer.model").readText() shouldBe "sentencepiece-v2"
@@ -339,19 +362,30 @@ class EngineInstallerTest {
     @Test
     fun `failed update keeps the existing engine intact`() = runTest {
         val bundle = stageBundle(POCKET_LAYOUT)
-        val first = installer.installViaDescriptor(bundle.descriptor, listOf(bundle.source), PocketEngineCatalog::checkLayout) {}
+        val first = installer.installViaDescriptor(
+            bundle.descriptor,
+            listOf(bundle.source),
+            PocketEngineCatalog::checkLayout,
+        ) {
+        }
         first.isSuccess shouldBe true
 
         // Update attempt whose download fails (URL no longer registered).
         fetcher.payloads.remove(bundle.source.url)
-        val second = installer.installViaDescriptor(bundle.descriptor, listOf(bundle.source), PocketEngineCatalog::checkLayout) {}
+        val second = installer.installViaDescriptor(
+            bundle.descriptor,
+            listOf(bundle.source),
+            PocketEngineCatalog::checkLayout,
+        ) {
+        }
         second.isFailure shouldBe true
 
         // The previously-working engine must survive the failed update.
         val engineDir = File(filesDir, "engines/${bundle.name}")
         engineDir.isDirectory shouldBe true
         File(engineDir, "bundle.json").isFile shouldBe true
-        installer.verifyDescriptor(bundle.descriptor, bundle.source, PocketEngineCatalog::checkLayout) shouldBe InstallState.Installed
+        installer.verifyDescriptor(bundle.descriptor, bundle.source, PocketEngineCatalog::checkLayout) shouldBe
+            InstallState.Installed
     }
 
     // -- catalog gating --------------------------------------------------------------

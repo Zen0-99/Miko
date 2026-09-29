@@ -27,11 +27,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Comment
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -68,19 +70,19 @@ import eu.kanade.presentation.components.fullDateText
 import eu.kanade.presentation.components.relativeDateTimeText
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
-import eu.kanade.presentation.entries.shows.components.ShowsContinueButton
 import eu.kanade.presentation.entries.shows.components.ShowsSeasonListItem
 import eu.kanade.presentation.entries.shows.components.EpisodeDownloadAction
 import eu.kanade.presentation.entries.shows.components.ExpandableAnimeDescription
 import eu.kanade.presentation.entries.shows.components.NextEpisodeAiringListItem
 import eu.kanade.presentation.entries.shows.components.NuvioEpisodeCard
 import eu.kanade.presentation.entries.shows.components.SeasonPillRow
-import eu.kanade.presentation.entries.components.EnhancedEntryActionRow
 import eu.kanade.presentation.entries.components.EnhancedEntryInfoBox
+import eu.kanade.presentation.entries.components.EntryContinueRow
+import eu.kanade.presentation.entries.components.EntryViewCommentsButton
+import eu.kanade.presentation.entries.components.EntryNextUpAction
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryChapterHeader
 import eu.kanade.presentation.entries.components.EntryGenreRow
-import eu.kanade.presentation.entries.components.EntryIconAction
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.MissingItemCountListItem
 import eu.kanade.presentation.entries.components.enhancedEntryStatusText
@@ -136,7 +138,6 @@ fun ShowsScreen(
     onDownloadEpisode: ((List<EpisodeList.Item>, EpisodeDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
-    onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: (() -> Unit)?,
     onCommentsClicked: (() -> Unit)? = null,
 
@@ -215,7 +216,6 @@ fun ShowsScreen(
             onDownloadEpisode = onDownloadEpisode,
             onAddToLibraryClicked = onAddToLibraryClicked,
             onWebViewClicked = onWebViewClicked,
-            onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
             onCommentsClicked = onCommentsClicked,
             onTagSearch = onTagSearch,
@@ -266,7 +266,6 @@ fun ShowsScreen(
             onDownloadEpisode = onDownloadEpisode,
             onAddToLibraryClicked = onAddToLibraryClicked,
             onWebViewClicked = onWebViewClicked,
-            onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
             onCommentsClicked = onCommentsClicked,
             onTagSearch = onTagSearch,
@@ -321,7 +320,6 @@ private fun ShowsScreenSmallImpl(
     onDownloadEpisode: ((List<EpisodeList.Item>, EpisodeDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
-    onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: (() -> Unit)?,
     onCommentsClicked: (() -> Unit)? = null,
 
@@ -621,12 +619,10 @@ private fun ShowsScreenSmallImpl(
                     titleAlphaProvider = { titleAlpha },
                     backgroundAlphaProvider = { backgroundAlpha },
                     isManga = false,
-                    isMovie = isCinemetaMovie,
                     modifier = Modifier.onSizeChanged { toolbarHeight = it.height },
                     toolbarBackgroundColor = MaterialTheme.colorScheme.background,
-                    onClickMarkAllRead = onMarkAllSeenClicked,
-                    onClickMarkAllUnread = onMarkAllUnseenClicked,
-                    onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
+                    onClickWebView = onWebViewClicked,
+                onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
                     onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
                     onClickRemoveReadDownloads = onRemoveSeenDownloadsClicked,
                 )
@@ -723,30 +719,59 @@ private fun ShowsScreenSmallImpl(
                             val hasSeenEpisodes = remember(state.episodes) {
                                 state.episodes.fastAny { it.episode.seen }
                             }
-                            EnhancedEntryActionRow(
-                                favorite = state.anime.favorite,
-                                onAddToLibraryClicked = onAddToLibraryClicked,
-                                onWebViewClicked = onWebViewClicked,
+                            val allSeen = episodes.isNotEmpty() &&
+                                episodes.fastAll { it.episode.seen }
+                            EntryContinueRow(
+                                actions = listOf(
+                                    EntryNextUpAction(
+                                        icon = if (allSeen) {
+                                            Icons.Filled.CheckCircle
+                                        } else {
+                                            Icons.Filled.PlayArrow
+                                        },
+                                        label = when {
+                                            allSeen -> stringResource(
+                                                AYMR.strings.fetching_overlay_all_up_to_date,
+                                            )
+                                            isCinemetaMovie ->
+                                                stringResource(AYMR.strings.action_play)
+                                            nextEpisode != null && hasSeenEpisodes ->
+                                                stringResource(MR.strings.action_continue)
+                                            else -> stringResource(MR.strings.action_start)
+                                        },
+                                        onClickLabel = stringResource(
+                                            AYMR.strings.action_play,
+                                        ),
+                                        onClick = onContinueWatching,
+                                    ),
+                                ),
+                                actionsEnabled = !allSeen,
                                 accentColor = displayedAccent,
-                                extraActions = {
-                                    EntryIconAction(
-                                        icon = Icons.AutoMirrored.Outlined.Comment,
-                                        contentDescription = stringResource(MR.strings.comments_title),
-                                        tint = displayedAccent ?: MaterialTheme.colorScheme.primary,
-                                        onClick = onCommentsClicked,
-                                    )
+                                favorite = state.anime.favorite,
+                                allDone = allSeen,
+                                favoriteContentDescription = stringResource(
+                                    if (state.anime.favorite) {
+                                        MR.strings.in_library
+                                    } else {
+                                        MR.strings.add_to_library
+                                    },
+                                ),
+                                doneContentDescription = stringResource(
+                                    if (allSeen) {
+                                        AYMR.strings.action_mark_as_unseen
+                                    } else {
+                                        AYMR.strings.action_mark_as_seen
+                                    },
+                                ),
+                                onFavoriteClick = onAddToLibraryClicked,
+                                onToggleDoneClick = {
+                                    if (allSeen) {
+                                        onMarkAllUnseenClicked?.invoke()
+                                    } else {
+                                        onMarkAllSeenClicked?.invoke()
+                                    }
                                 },
-                            ) {
-                                ShowsContinueButton(
-                                    nextEpisode = nextEpisode,
-                                    hasSeenEpisodes = hasSeenEpisodes,
-                                    accentColor = displayedAccent,
-                                    onClick = onContinueWatching,
-                                    modifier = Modifier.weight(1.6f),
-                                    isMovie = isCinemetaMovie,
-                                    horizontalPadding = 0.dp,
-                                )
-                            }
+                            )
                             EntryGenreRow(
                                 pills = state.anime.genre.orEmpty(),
                                 onPillClick = { onSearch(it, true) },
@@ -922,6 +947,8 @@ private fun ShowsScreenSmallImpl(
                                     onEpisodeSelected = onEpisodeSelected,
                                     itemModifier = Modifier.ignorePadding(offsetGridPaddingPx),
                                     accentColor = displayedAccent,
+                                    commentsCount = state.commentsCount,
+                                    onCommentsClicked = onCommentsClicked,
                                 )
                             }
                         }
@@ -947,7 +974,6 @@ fun ShowsScreenLargeImpl(
     onDownloadEpisode: ((List<EpisodeList.Item>, EpisodeDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
-    onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: (() -> Unit)?,
     onCommentsClicked: (() -> Unit)? = null,
 
@@ -1235,11 +1261,9 @@ fun ShowsScreenLargeImpl(
                     titleAlphaProvider = { 1f },
                     backgroundAlphaProvider = { 1f },
                     isManga = false,
-                    isMovie = isCinemetaMovie,
                     toolbarBackgroundColor = MaterialTheme.colorScheme.background,
-                    onClickMarkAllRead = onMarkAllSeenClicked,
-                    onClickMarkAllUnread = onMarkAllUnseenClicked,
-                    onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
+                    onClickWebView = onWebViewClicked,
+                onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
                     onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
                     onClickRemoveReadDownloads = onRemoveSeenDownloadsClicked,
                 )
@@ -1318,30 +1342,59 @@ fun ShowsScreenLargeImpl(
                             val hasSeenEpisodes = remember(state.episodes) {
                                 state.episodes.fastAny { it.episode.seen }
                             }
-                            EnhancedEntryActionRow(
-                                favorite = state.anime.favorite,
-                                onAddToLibraryClicked = onAddToLibraryClicked,
-                                onWebViewClicked = onWebViewClicked,
+                            val allSeen = episodes.isNotEmpty() &&
+                                episodes.fastAll { it.episode.seen }
+                            EntryContinueRow(
+                                actions = listOf(
+                                    EntryNextUpAction(
+                                        icon = if (allSeen) {
+                                            Icons.Filled.CheckCircle
+                                        } else {
+                                            Icons.Filled.PlayArrow
+                                        },
+                                        label = when {
+                                            allSeen -> stringResource(
+                                                AYMR.strings.fetching_overlay_all_up_to_date,
+                                            )
+                                            isCinemetaMovie ->
+                                                stringResource(AYMR.strings.action_play)
+                                            nextEpisode != null && hasSeenEpisodes ->
+                                                stringResource(MR.strings.action_continue)
+                                            else -> stringResource(MR.strings.action_start)
+                                        },
+                                        onClickLabel = stringResource(
+                                            AYMR.strings.action_play,
+                                        ),
+                                        onClick = onContinueWatching,
+                                    ),
+                                ),
+                                actionsEnabled = !allSeen,
                                 accentColor = displayedAccent,
-                                extraActions = {
-                                    EntryIconAction(
-                                        icon = Icons.AutoMirrored.Outlined.Comment,
-                                        contentDescription = stringResource(MR.strings.comments_title),
-                                        tint = displayedAccent ?: MaterialTheme.colorScheme.primary,
-                                        onClick = onCommentsClicked,
-                                    )
+                                favorite = state.anime.favorite,
+                                allDone = allSeen,
+                                favoriteContentDescription = stringResource(
+                                    if (state.anime.favorite) {
+                                        MR.strings.in_library
+                                    } else {
+                                        MR.strings.add_to_library
+                                    },
+                                ),
+                                doneContentDescription = stringResource(
+                                    if (allSeen) {
+                                        AYMR.strings.action_mark_as_unseen
+                                    } else {
+                                        AYMR.strings.action_mark_as_seen
+                                    },
+                                ),
+                                onFavoriteClick = onAddToLibraryClicked,
+                                onToggleDoneClick = {
+                                    if (allSeen) {
+                                        onMarkAllUnseenClicked?.invoke()
+                                    } else {
+                                        onMarkAllSeenClicked?.invoke()
+                                    }
                                 },
-                            ) {
-                                ShowsContinueButton(
-                                    nextEpisode = nextEpisode,
-                                    hasSeenEpisodes = hasSeenEpisodes,
-                                    accentColor = displayedAccent,
-                                    onClick = onContinueWatching,
-                                    modifier = Modifier.weight(1.6f),
-                                    isMovie = isCinemetaMovie,
-                                    horizontalPadding = 0.dp,
-                                )
-                            }
+                            )
                             EntryGenreRow(
                                 pills = state.anime.genre.orEmpty(),
                                 onPillClick = { onSearch(it, true) },
@@ -1526,6 +1579,8 @@ fun ShowsScreenLargeImpl(
                                                 offsetGridPaddingPx,
                                             ),
                                             accentColor = displayedAccent,
+                                            commentsCount = state.commentsCount,
+                                            onCommentsClicked = onCommentsClicked,
                                         )
                                     }
                                 }
@@ -1628,6 +1683,8 @@ private fun LazyGridScope.sharedEpisodeItems(
     onEpisodeSelected: (EpisodeList.Item, Boolean, Boolean, Boolean) -> Unit,
     itemModifier: Modifier = Modifier,
     accentColor: Color? = null,
+    commentsCount: Long? = null,
+    onCommentsClicked: (() -> Unit)? = null,
 ) {
     item(
         key = "episode-carousel",
@@ -1636,10 +1693,21 @@ private fun LazyGridScope.sharedEpisodeItems(
     ) {
         // Nuvio-style horizontal episode carousel — cards are full-bleed
         // stills, so the row scrolls horizontally with snap-to-card.
-        val rowState = rememberLazyListState()
+        // Opens on the lowest-numbered unseen episode — "next up"
+        // regardless of sort direction.
+        val nextIndex = episodes.mapIndexedNotNull { index, item ->
+            (item as? EpisodeList.Item)
+                ?.takeIf { !it.episode.seen }
+                ?.let { index to it.episode.episodeNumber }
+        }.minByOrNull { it.second }?.first ?: 0
+        val rowState = rememberLazyListState(
+            initialFirstVisibleItemIndex = nextIndex,
+        )
         LazyRow(
             state = rowState,
-            modifier = itemModifier.fillMaxWidth(),
+            modifier = itemModifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             flingBehavior = rememberSnapFlingBehavior(lazyListState = rowState),
@@ -1748,6 +1816,24 @@ private fun LazyGridScope.sharedEpisodeItems(
                     }
                 }
             }
+        }
+    }
+
+    // Comments live under the episode cards — a text button with the
+    // visible-comment count, opening the same bottom sheet the removed
+    // header icon used to.
+    if (onCommentsClicked != null) {
+        item(
+            key = "episode-comments-button",
+            contentType = EntryScreenItem.ITEM,
+            span = { GridItemSpan(maxLineSpan) },
+        ) {
+            EntryViewCommentsButton(
+                commentsCount = commentsCount,
+                accentColor = accentColor,
+                onClick = onCommentsClicked,
+                modifier = itemModifier,
+            )
         }
     }
 }

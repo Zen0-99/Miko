@@ -68,9 +68,9 @@ class ConsolidatedExtensionReposScreen(
         val novelState by novelScreenModel.state.collectAsState()
 
         val tabs = listOf(
-            AYMR.strings.label_anime,
-            AYMR.strings.label_manga,
-            AYMR.strings.label_novel,
+            AYMR.strings.carrier_shows,
+            AYMR.strings.carrier_manga,
+            AYMR.strings.carrier_books,
         )
         val pagerState = rememberPagerState { tabs.size }
         val scope = rememberCoroutineScope()

@@ -4,31 +4,31 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.util.Log
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import android.view.GestureDetector
-import android.view.ViewConfiguration
 import android.view.MotionEvent
-import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.TextView
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -41,10 +41,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,21 +52,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -78,28 +70,29 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
-import tachiyomi.presentation.core.util.collectAsState
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.novel.reader.NovelChaptersSheet
-import eu.kanade.presentation.novel.reader.NovelCommentsDialog
 import eu.kanade.presentation.novel.reader.NovelReaderChrome
 import eu.kanade.presentation.novel.reader.NovelReaderSettingsDialog
-import eu.kanade.presentation.novel.reader.NovelTtsControlsBar
 import eu.kanade.presentation.novel.reader.NovelReaderSettingsScreenModel
+import eu.kanade.presentation.novel.reader.NovelTtsControlsBar
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.ui.comments.CommentsSheetScreen
 import eu.kanade.tachiyomi.ui.reader.novel.NovelAutoScrollChapterEndBehavior
 import eu.kanade.tachiyomi.ui.reader.novel.dictionary.DictionaryBottomSheet
 import eu.kanade.tachiyomi.util.system.hasDisplayCutout
-import kotlin.math.hypot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import tachiyomi.presentation.core.screens.LoadingScreen
+import tachiyomi.presentation.core.util.collectAsState
+import kotlin.math.hypot
 
 class NovelReaderScreen(
     private val novelId: Long,
@@ -162,10 +155,7 @@ class NovelReaderScreen(
         val isSettingsVisible by screenModel.isSettingsVisible.collectAsStateWithLifecycle()
         val isChaptersSheetVisible by screenModel.isChaptersSheetVisible.collectAsStateWithLifecycle()
         val renderedAudioChapterIds by screenModel.renderedAudioChapterIds.collectAsStateWithLifecycle()
-        val isCommentsDialogVisible by screenModel.isCommentsDialogVisible.collectAsStateWithLifecycle()
-        val comments by screenModel.comments.collectAsStateWithLifecycle()
-        val isLoadingComments by screenModel.isLoadingComments.collectAsStateWithLifecycle()
-        val commentsError by screenModel.commentsError.collectAsStateWithLifecycle()
+        val isCommentsSheetVisible by screenModel.isCommentsSheetVisible.collectAsStateWithLifecycle()
         val textConfig by screenModel.textConfig.collectAsStateWithLifecycle()
         val dictionaryQuery by screenModel.dictionaryQuery.collectAsStateWithLifecycle()
         val progressPercent by screenModel.progressPercent.collectAsStateWithLifecycle()
@@ -350,12 +340,25 @@ class NovelReaderScreen(
         // controls, translation dialog) is open, not while the user is
         // actively touching the screen, and not when the window lost focus
         // (notification shade pulled down).
-        val isOverlayActive = isControlsVisible || isSettingsVisible ||
-            isChaptersSheetVisible || isCommentsDialogVisible ||
-            dictionaryQuery != null || !hasWindowFocus || isTextSelectionActive ||
+        val isOverlayActive = isControlsVisible ||
+            isSettingsVisible ||
+            isChaptersSheetVisible ||
+            isCommentsSheetVisible ||
+            dictionaryQuery != null ||
+            !hasWindowFocus ||
+            isTextSelectionActive ||
             isTtsActive
 
-        LaunchedEffect(autoScrollEnabled, smoothAutoScroll, autoScrollInterval, autoScrollOffset, smoothSpeed, isOverlayActive, isUserTouching, isLoading) {
+        LaunchedEffect(
+            autoScrollEnabled,
+            smoothAutoScroll,
+            autoScrollInterval,
+            autoScrollOffset,
+            smoothSpeed,
+            isOverlayActive,
+            isUserTouching,
+            isLoading,
+        ) {
             if (!autoScrollEnabled) return@LaunchedEffect
             // Chapter end behavior: what to do when auto-scroll reaches bottom
             val endBehavior = screenModel.preferences.autoScrollChapterEndBehavior().get()
@@ -460,7 +463,6 @@ class NovelReaderScreen(
             val ad = rv.adapter as? TextAdapter ?: return@LaunchedEffect
             if (!isTtsActive) {
                 ad.clearTtsPlayback()
-                rv.stopScroll()
                 return@LaunchedEffect
             }
             val paragraphId = screenModel.ttsParagraphItems
@@ -478,11 +480,18 @@ class NovelReaderScreen(
                 rangeEnd = ttsPlaybackState.currentRangeEnd,
                 color = highlightColor,
             )
-            if (ttsPlaybackState.isPlaying && hasWindowFocus && !isUserTouching) {
+            // Only follow the spoken position while the list is idle. A user
+            // drag or fling must win — hijacking the scroller here kills the
+            // gesture's momentum (RecyclerView natively cancels our smooth
+            // scrolls when the user touches, so no explicit stop is needed).
+            if (
+                ttsPlaybackState.isPlaying &&
+                hasWindowFocus &&
+                !isUserTouching &&
+                rv.scrollState == RecyclerView.SCROLL_STATE_IDLE
+            ) {
                 androidx.compose.runtime.withFrameNanos { }
                 scrollToTtsPosition(rv, adapterPos, ttsPlaybackState.currentRangeStart)
-            } else {
-                rv.stopScroll()
             }
         }
 
@@ -529,7 +538,10 @@ class NovelReaderScreen(
                     if (pending != null) {
                         screenModel.pendingScrollRestore = null
                         val (targetIndex, targetOffset) = pending
-                        Log.d("NovelReader", "onRecyclerViewReady: pendingScrollRestore targetIndex=$targetIndex targetOffset=$targetOffset")
+                        Log.d(
+                            "NovelReader",
+                            "onRecyclerViewReady: pendingScrollRestore targetIndex=$targetIndex targetOffset=$targetOffset",
+                        )
                         if (targetIndex > 0 || targetOffset > 0) {
                             // Hide the RV until we've scrolled to the saved position.
                             rv.alpha = 0f
@@ -539,11 +551,17 @@ class NovelReaderScreen(
                                 val adapter = rv.adapter as? TextAdapter
                                 val items = adapter?.currentList
                                 if (items.isNullOrEmpty()) {
-                                    Log.d("NovelReader", "tryRestoreScroll: attempt=$attempts items=null targetIndex=$targetIndex — waiting")
+                                    Log.d(
+                                        "NovelReader",
+                                        "tryRestoreScroll: attempt=$attempts items=null targetIndex=$targetIndex — waiting",
+                                    )
                                     if (++attempts < maxAttempts) {
                                         rv.postDelayed(::tryRestoreScroll, 50L)
                                     } else {
-                                        Log.w("NovelReader", "tryRestoreScroll: GAVE UP (no items) after $maxAttempts attempts")
+                                        Log.w(
+                                            "NovelReader",
+                                            "tryRestoreScroll: GAVE UP (no items) after $maxAttempts attempts",
+                                        )
                                         rv.alpha = 1f
                                     }
                                     return
@@ -553,7 +571,10 @@ class NovelReaderScreen(
                                 // multiple chapters were appended. Clamp to the last
                                 // available item instead of giving up at position 0.
                                 val effectiveIndex = if (targetIndex >= items.size) {
-                                    Log.w("NovelReader", "tryRestoreScroll: targetIndex=$targetIndex > items.size=${items.size}, clamping to last item")
+                                    Log.w(
+                                        "NovelReader",
+                                        "tryRestoreScroll: targetIndex=$targetIndex > items.size=${items.size}, clamping to last item",
+                                    )
                                     items.size - 1
                                 } else {
                                     targetIndex
@@ -568,7 +589,10 @@ class NovelReaderScreen(
                                 // This is the key difference from the old approach —
                                 // we restore the EXACT pixel offset, not just the
                                 // paragraph start, eliminating position drift.
-                                Log.d("NovelReader", "tryRestoreScroll: scrolling to index=$effectiveIndex offset=$targetOffset (items=${items.size})")
+                                Log.d(
+                                    "NovelReader",
+                                    "tryRestoreScroll: scrolling to index=$effectiveIndex offset=$targetOffset (items=${items.size})",
+                                )
                                 lm.scrollToPositionWithOffset(effectiveIndex, targetOffset)
                                 // Make the RV visible on the next frame, after
                                 // the scroll has been applied and laid out.
@@ -615,7 +639,10 @@ class NovelReaderScreen(
                         val tl = hypot(center.x.toDouble(), center.y.toDouble()).toFloat()
                         val tr = hypot((size.width - center.x).toDouble(), center.y.toDouble()).toFloat()
                         val bl = hypot(center.x.toDouble(), (size.height - center.y).toDouble()).toFloat()
-                        val br = hypot((size.width - center.x).toDouble(), (size.height - center.y).toDouble()).toFloat()
+                        val br = hypot(
+                            (size.width - center.x).toDouble(),
+                            (size.height - center.y).toDouble(),
+                        ).toFloat()
                         val radius = maxOf(tl, tr, bl, br)
                         drawRect(
                             brush = Brush.radialGradient(
@@ -678,17 +705,21 @@ class NovelReaderScreen(
                 progressPercent = if (screenModel.preferences.showScrollPercentage().get()) progressPercent else -1,
                 wordCount = if (screenModel.preferences.showWordCount().get()) {
                     screenModel.positionTracker.getTotalWordCount()
-                } else -1,
+                } else {
+                    -1
+                },
                 fullscreen = screenModel.preferences.fullscreen().get(),
                 showPhoneInfo = screenModel.preferences.showBatteryAndTime().get(),
                 estimatedReadingTime = if (screenModel.preferences.showEstimatedReadingTime().get()) {
                     screenModel.positionTracker.getEstimatedReadingTime()
-                } else -1,
+                } else {
+                    -1
+                },
                 readerBackgroundColor = bgColor,
                 backgroundTexture = textConfig.backgroundTexture,
                 textureStrength = textConfig.textureStrength,
                 edgeFadeEnabled = textConfig.edgeFadeEnabled,
-                showCommentsButton = screenModel.supportsComments,
+                showCommentsButton = screenModel.commentsEnabled,
                 isTtsActive = screenModel.isTtsActive,
                 onBackClick = { navigator.pop() },
                 onChaptersClick = { screenModel.showChapters() },
@@ -920,24 +951,34 @@ class NovelReaderScreen(
             )
         }
 
-        // Reload comments when the current chapter changes during infinite scroll
-        // and the comments dialog is open.
-        LaunchedEffect(currentChapter?.id, isCommentsDialogVisible) {
-            if (isCommentsDialogVisible && currentChapter != null) {
-                screenModel.refreshComments()
+        // The comments sheet is scoped to a single chapter — dismiss it if the
+        // current chapter changes during infinite scroll so a stale thread
+        // isn't shown.
+        LaunchedEffect(currentChapter?.id) {
+            if (isCommentsSheetVisible) {
+                screenModel.dismissComments()
             }
         }
 
-        if (isCommentsDialogVisible) {
-            NovelCommentsDialog(
-                comments = comments,
-                isLoading = isLoadingComments,
-                error = commentsError,
-                onDismiss = { screenModel.dismissComments() },
-                onRefresh = { screenModel.refreshComments() },
-                accentColor = accentColor,
-                chapterTitle = currentChapter?.name,
-            )
+        if (isCommentsSheetVisible) {
+            val commentsNovel = novel
+            val commentsChapter = currentChapter
+            val commentsSourceKey = screenModel.commentsSourceKey
+            if (commentsNovel != null && commentsChapter != null && commentsSourceKey != null) {
+                NavigatorAdaptiveSheet(
+                    screen = CommentsSheetScreen(
+                        carrier = Carrier.BOOKS,
+                        entryId = commentsNovel.id,
+                        chapter = CommentsSheetScreen.ChapterRef(
+                            name = commentsChapter.name,
+                            number = commentsChapter.chapterNumber.toFloat(),
+                            sourceKey = commentsSourceKey,
+                            allChapters = chapters.map { it.name to it.chapterNumber.toFloat() },
+                        ),
+                    ),
+                    onDismissRequest = { screenModel.dismissComments() },
+                )
+            }
         }
 
         ApplyReaderWindowSettings(activity, screenModel)
@@ -1285,7 +1326,8 @@ class NovelReaderScreen(
                                             if (hasParagraphs) {
                                                 // Check if near the bottom (load next)
                                                 val lastVisible = lm.findLastVisibleItemPosition()
-                                                val scrollPctDown = (lastVisible + 1).toFloat() / totalItemCount.toFloat()
+                                                val scrollPctDown =
+                                                    (lastVisible + 1).toFloat() / totalItemCount.toFloat()
                                                 val atBottom = !rv.canScrollVertically(1)
                                                 if ((scrollPctDown >= 0.80f || atBottom) &&
                                                     !screenModel.isLoadingNext &&
@@ -1320,8 +1362,11 @@ class NovelReaderScreen(
                         ad.dismissActiveSelectionPopup()
 
                         // Track scroll direction for infinite-scroll trigger
-                        if (dy > 0) lastScrollDirection = 1
-                        else if (dy < 0) lastScrollDirection = -1
+                        if (dy > 0) {
+                            lastScrollDirection = 1
+                        } else if (dy < 0) {
+                            lastScrollDirection = -1
+                        }
 
                         val lm = rv.layoutManager as? LinearLayoutManager ?: return
                         val items = ad.currentList
@@ -1367,7 +1412,10 @@ class NovelReaderScreen(
                             // and falsely trigger forceProgressComplete, marking the
                             // chapter as read without the user reading it.
                             val hasParagraphs = items.any { it is TextItem.Paragraph }
-                            if (atBottom && hasParagraphs && (mode != NovelReadingMode.INFINITE_SCROLL || isLastChapter)) {
+                            if (atBottom &&
+                                hasParagraphs &&
+                                (mode != NovelReadingMode.INFINITE_SCROLL || isLastChapter)
+                            ) {
                                 screenModel.forceProgressComplete()
                             } else {
                                 // Calculate per-chapter character position.
@@ -1424,7 +1472,10 @@ class NovelReaderScreen(
                 val pendingTransition = screenModel.pendingTransitionPosition
                 val pendingRestore = screenModel.pendingScrollRestore
                 if (pending != null) {
-                    Log.d("NovelReader", "update: applying pendingScrollAdjustment=$pending, contentItems=${contentItems.size}")
+                    Log.d(
+                        "NovelReader",
+                        "update: applying pendingScrollAdjustment=$pending, contentItems=${contentItems.size}",
+                    )
                     screenModel.pendingScrollAdjustment = null
                     adapter?.submitList(contentItems) {
                         rv.post {
@@ -1433,7 +1484,10 @@ class NovelReaderScreen(
                         }
                     }
                 } else if (pendingTransition != null) {
-                    Log.d("NovelReader", "update: applying pendingTransitionPosition=$pendingTransition, contentItems=${contentItems.size}")
+                    Log.d(
+                        "NovelReader",
+                        "update: applying pendingTransitionPosition=$pendingTransition, contentItems=${contentItems.size}",
+                    )
                     screenModel.pendingTransitionPosition = null
                     val transitionStyle = screenModel.preferences.pageTransitionStyle().get()
                     adapter?.submitList(contentItems) {
@@ -1445,7 +1499,10 @@ class NovelReaderScreen(
                     // before the content was loaded (e.g. downloaded chapters
                     // that don't show a loading indicator but still need time
                     // to read and parse the file).
-                    Log.d("NovelReader", "update: applying pendingScrollRestore in update callback, contentItems=${contentItems.size}")
+                    Log.d(
+                        "NovelReader",
+                        "update: applying pendingScrollRestore in update callback, contentItems=${contentItems.size}",
+                    )
                     screenModel.pendingScrollRestore = null
                     val (targetIndex, targetOffset) = pendingRestore
                     adapter?.submitList(contentItems) {
@@ -1455,12 +1512,18 @@ class NovelReaderScreen(
                                 // Clamp targetIndex to available items (same fix as
                                 // tryRestoreScroll — handles infinite-scroll positions).
                                 val effectiveIdx = if (targetIndex >= contentItems.size) {
-                                    Log.w("NovelReader", "update: targetIndex=$targetIndex > contentSize=${contentItems.size}, clamping")
+                                    Log.w(
+                                        "NovelReader",
+                                        "update: targetIndex=$targetIndex > contentSize=${contentItems.size}, clamping",
+                                    )
                                     contentItems.size - 1
                                 } else {
                                     targetIndex
                                 }
-                                Log.d("NovelReader", "update: scrollToPositionWithOffset index=$effectiveIdx offset=$targetOffset")
+                                Log.d(
+                                    "NovelReader",
+                                    "update: scrollToPositionWithOffset index=$effectiveIdx offset=$targetOffset",
+                                )
                                 lm.scrollToPositionWithOffset(effectiveIdx, targetOffset)
                             } else {
                                 Log.w("NovelReader", "update: cannot restore — lm is null")

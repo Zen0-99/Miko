@@ -4,12 +4,9 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import eu.kanade.presentation.entries.components.PreExtractEntryCoverColor
-import eu.kanade.presentation.entries.components.adjustForTheme
 import eu.kanade.presentation.entries.components.extractEntryCoverBaseColor
-import eu.kanade.presentation.entries.components.isDark
 import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
-import eu.kanade.tachiyomi.util.novel.NovelCoverMetadata
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelCover
 import tachiyomi.domain.entries.novel.model.asNovelCover

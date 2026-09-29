@@ -12,6 +12,9 @@ const DIVERGENCE_THRESHOLD = 0.5;
 interface FeedChapter {
     name?: string;
     url?: string;
+    /** Source-reported upload time (epoch ms); merged rows keep the
+     *  earliest contributing date. */
+    date_upload?: number;
 }
 
 interface CanonizeFeed {
@@ -38,6 +41,7 @@ interface Entry {
     label: string;
     src: string;
     url: string | null;
+    date: number | null;
 }
 
 function mergeKey(e: Entry): string {
@@ -85,6 +89,10 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
         }
         for (const c of f.chapters) {
             if (typeof c.name !== 'string' || c.name.length > MAX_NAME) return err(400, 'bad_request');
+            if (c.date_upload !== undefined &&
+                (typeof c.date_upload !== 'number' || !Number.isFinite(c.date_upload))) {
+                return err(400, 'bad_request');
+            }
         }
     }
 
@@ -109,6 +117,7 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
                 label: p.number === null ? normalize(c.name as string) : (c.name as string).trim(),
                 src,
                 url: typeof c.url === 'string' ? c.url : null,
+                date: typeof c.date_upload === 'number' && c.date_upload > 0 ? c.date_upload : null,
             });
         }
         feedNums.set(src, nums);
@@ -172,6 +181,9 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
         const sources = [...new Set(g.map((e) => e.src))];
         const refs: Record<string, string> = {};
         for (const e of g) if (e.url) refs[e.src] = e.url;
+        // Earliest contributing upload date — the true publication time;
+        // never the canonization time.
+        const dates = g.map((e) => e.date).filter((d): d is number => d !== null);
         const rep = g[0];
         return {
             number: rep.number,
@@ -182,6 +194,7 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
             confidence: sources.length >= 2 ? 'verified' : 'single',
             sources,
             refs,
+            dateUpload: dates.length ? Math.min(...dates) : null,
         };
     });
     merged.sort((a, b) => sortKey(a) - sortKey(b));
@@ -192,11 +205,12 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
         ...merged.map((m, i) =>
             env.COMMENTS_DB.prepare(
                 `INSERT INTO canonical_chapters
-                 (work_id, seq, number, part, volume, kind, label, confidence, sources_json, refs_json, updated_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                 (work_id, seq, number, part, volume, kind, label, confidence, sources_json, refs_json, date_upload, updated_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
             ).bind(
                 workId, i, m.number, m.part, m.volume, m.kind, m.label,
-                m.confidence, JSON.stringify(m.sources), JSON.stringify(m.refs), ts,
+                m.confidence, JSON.stringify(m.sources), JSON.stringify(m.refs),
+                m.dateUpload, ts,
             ),
         ),
     ];
@@ -221,11 +235,12 @@ export async function handleGetChapters(
 ): Promise<Response> {
     const workId = params.id;
     const { results } = await env.COMMENTS_DB.prepare(
-        `SELECT seq, number, part, volume, kind, label, confidence, sources_json, refs_json
+        `SELECT seq, number, part, volume, kind, label, confidence, sources_json, refs_json, date_upload
          FROM canonical_chapters WHERE work_id = ? ORDER BY seq`,
     ).bind(workId).all<{
         seq: number; number: number | null; part: number | null; volume: number | null;
         kind: string; label: string; confidence: string; sources_json: string; refs_json: string;
+        date_upload: number | null;
     }>();
     return ok({
         work_id: workId,
@@ -239,6 +254,7 @@ export async function handleGetChapters(
             confidence: r.confidence,
             sources: JSON.parse(r.sources_json) as string[],
             refs: JSON.parse(r.refs_json) as Record<string, string>,
+            date_upload: r.date_upload,
         })),
     });
 }

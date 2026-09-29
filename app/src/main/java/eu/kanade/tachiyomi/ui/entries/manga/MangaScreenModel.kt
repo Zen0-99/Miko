@@ -131,6 +131,8 @@ class MangaScreenModel(
     private val syncChaptersWithSource: SyncChaptersWithSource = Injekt.get(),
     private val getCollections: GetMangaCollections = Injekt.get(),
     private val getTracks: GetMangaTracks = Injekt.get(),
+    private val threadIdResolver: eu.kanade.tachiyomi.data.comments.ThreadIdResolver = Injekt.get(),
+    private val commentsApi: eu.kanade.tachiyomi.data.comments.CommentsApi = Injekt.get(),
     private val addTracks: AddMangaTracks = Injekt.get(),
     private val setMangaCollections: SetMangaCollections = Injekt.get(),
     private val mangaRepository: MangaRepository = Injekt.get(),
@@ -481,6 +483,20 @@ class MangaScreenModel(
 
             // Start observe tracking since it only needs mangaId
             observeTrackers()
+
+            // "View comments (N)" badge — resolves the work thread once
+            // and counts its visible comments. Silent on failure.
+            if (commentsEnabled) {
+                screenModelScope.launchIO {
+                    val threadId = threadIdResolver.forManga(manga) ?: return@launchIO
+                    val result = commentsApi.threadCounts(listOf(threadId))
+                    if (result is eu.kanade.tachiyomi.data.comments.CommentsApi.Result.Ok) {
+                        updateSuccessState {
+                            it.copy(commentsCount = result.value.counts[threadId] ?: 0L)
+                        }
+                    }
+                }
+            }
 
             // Canonical rows collect+canonize chapter feeds in the
             // background (13-02): cached sequence serves immediately,
@@ -1483,6 +1499,7 @@ class MangaScreenModel(
             val intervalDays: Int? = null,
             val showInterval: Boolean = true,
             val suggestions: SuggestionState = SuggestionState.Idle,
+            val commentsCount: Long? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(manga).toList()

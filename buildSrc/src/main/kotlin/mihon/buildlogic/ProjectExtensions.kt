@@ -54,7 +54,6 @@ internal fun Project.configureAndroid(commonExtension: CommonExtension<*, *, *, 
             // Override by setting warningsAsErrors=true in your ~/.gradle/gradle.properties
             val warningsAsErrors: String? by project
             allWarningsAsErrors.set(warningsAsErrors.toBoolean())
-
         }
     }
 

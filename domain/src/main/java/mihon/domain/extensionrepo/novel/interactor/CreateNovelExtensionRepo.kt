@@ -3,8 +3,8 @@ package mihon.domain.extensionrepo.novel.interactor
 import eu.kanade.tachiyomi.util.lang.Hash
 import logcat.LogPriority
 import mihon.domain.extensionrepo.exception.SaveExtensionRepoException
-import mihon.domain.extensionrepo.novel.repository.NovelExtensionRepoRepository
 import mihon.domain.extensionrepo.model.ExtensionRepo
+import mihon.domain.extensionrepo.novel.repository.NovelExtensionRepoRepository
 import mihon.domain.extensionrepo.service.ExtensionRepoService
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import tachiyomi.core.common.util.system.logcat

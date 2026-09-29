@@ -4,8 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import eu.kanade.presentation.entries.components.EntryChapterHeader
-import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.pluralStringResource
 
 /**
  * Deprecated — use [eu.kanade.presentation.entries.components.EntryChapterHeader] instead.

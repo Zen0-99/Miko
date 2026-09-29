@@ -2,7 +2,6 @@ package eu.kanade.presentation.library.filter
 
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.core.common.preference.TriState
-import tachiyomi.i18n.MR
 
 /**
  * Visibility states for the persistent filter sheet.

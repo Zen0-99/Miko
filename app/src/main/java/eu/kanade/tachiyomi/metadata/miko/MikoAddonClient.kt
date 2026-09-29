@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.parseAs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import java.net.URLEncoder
@@ -29,10 +31,16 @@ class MikoAddonClient(
 
     private var cachedManifest: MikoManifest? = null
 
+    // parseAs streams the body on the calling thread — callers on the main
+    // dispatcher hit NetworkOnMainThreadException (StrictMode) without this.
+    private suspend fun <T> fetch(url: String, decode: okhttp3.Response.() -> T): T =
+        withContext(Dispatchers.IO) {
+            client.newCall(GET(url)).awaitSuccess().use { it.decode() }
+        }
+
     override suspend fun getManifest(): MikoManifest {
         cachedManifest?.let { return it }
-        val response = client.newCall(GET(manifestUrl)).awaitSuccess()
-        val manifest = with(json) { response.parseAs<MikoManifest>() }
+        val manifest = fetch(manifestUrl) { with(json) { parseAs<MikoManifest>() } }
         cachedManifest = manifest
         return manifest
     }
@@ -48,9 +56,9 @@ class MikoAddonClient(
             if (skip > 0) add("skip=$skip")
         }
         val extraSegment = if (extras.isEmpty()) "" else "/${extras.joinToString(",")}"
-        val url = "$baseUrl/catalog/$type/$catalogId$extraSegment.json"
-        val response = client.newCall(GET(url)).awaitSuccess()
-        return with(json) { response.parseAs<MikoCatalogResult>() }
+        return fetch("$baseUrl/catalog/$type/$catalogId$extraSegment.json") {
+            with(json) { parseAs<MikoCatalogResult>() }
+        }
     }
 
     override suspend fun search(type: String, query: String, skip: Int): MikoCatalogResult {
@@ -59,14 +67,14 @@ class MikoAddonClient(
             add("search=$encodedQuery")
             if (skip > 0) add("skip=$skip")
         }
-        val url = "$baseUrl/catalog/$type/top/${extras.joinToString(",")}.json"
-        val response = client.newCall(GET(url)).awaitSuccess()
-        return with(json) { response.parseAs<MikoCatalogResult>() }
+        return fetch("$baseUrl/catalog/$type/top/${extras.joinToString(",")}.json") {
+            with(json) { parseAs<MikoCatalogResult>() }
+        }
     }
 
     override suspend fun getMeta(type: String, id: String): MikoMeta {
-        val url = "$baseUrl/meta/$type/$id.json"
-        val response = client.newCall(GET(url)).awaitSuccess()
-        return with(json) { response.parseAs<MikoMetaResponse>() }.meta
+        return fetch("$baseUrl/meta/$type/$id.json") {
+            with(json) { parseAs<MikoMetaResponse>() }.meta
+        }
     }
 }

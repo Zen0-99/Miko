@@ -18,7 +18,9 @@ class NovelPluginApi(
             val repos = repoProvider.getAll()
             logcat(LogPriority.DEBUG) { "NovelPluginApi: fetching available plugins from ${repos.size} repos" }
             repos.flatMap { repo ->
-                logcat(LogPriority.DEBUG) { "NovelPluginApi: fetching from repo baseUrl=${repo.baseUrl} name=${repo.name}" }
+                logcat(LogPriority.DEBUG) {
+                    "NovelPluginApi: fetching from repo baseUrl=${repo.baseUrl} name=${repo.name}"
+                }
                 fetchPluginsFromRepo(repo).map { plugin ->
                     plugin.copy(
                         repoName = repo.name.ifBlank { repo.shortName ?: repo.baseUrl },

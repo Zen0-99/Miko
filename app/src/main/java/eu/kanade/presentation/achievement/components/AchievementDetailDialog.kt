@@ -174,7 +174,11 @@ fun AchievementDetailDialog(
                             text = AchievementRevealHelper.getDisplayName(achievement, progress),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = if (isUnlocked) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isUnlocked) {
+                                MaterialTheme.colorScheme.onBackground
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -183,7 +187,13 @@ fun AchievementDetailDialog(
                                 text = if (isUnlocked) "+${achievement.points} XP" else "${achievement.points} XP",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (isUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                color = if (isUnlocked) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                        alpha = 0.5f,
+                                    )
+                                },
                             )
                         }
                     }

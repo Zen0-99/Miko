@@ -6,10 +6,10 @@ import ai.onnxruntime.OrtSession
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
-import java.nio.FloatBuffer
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.nio.FloatBuffer
 
 /**
  * Spike: GPU/NPU feasibility on-device (the "2-minute chapter" question).
@@ -143,9 +143,13 @@ class SupertonicGpuInstrumentedTest {
 
                 fun once() {
                     val inputs = mapOf(
-                        "noisy_latent" to noise, "text_emb" to emb, "style_ttl" to sty,
-                        "latent_mask" to lMask, "text_mask" to tMask,
-                        "current_step" to step, "total_step" to total,
+                        "noisy_latent" to noise,
+                        "text_emb" to emb,
+                        "style_ttl" to sty,
+                        "latent_mask" to lMask,
+                        "text_mask" to tMask,
+                        "current_step" to step,
+                        "total_step" to total,
                     )
                     interp.runForMultipleInputsOutputs(
                         inputs.values.toTypedArray(),
@@ -155,7 +159,8 @@ class SupertonicGpuInstrumentedTest {
 
                 // NOTE: input ORDER must match the model's signature order —
                 // runForMultipleInputsOutputs takes positional args.
-                once(); once() // warmup + delegate compile
+                once()
+                once() // warmup + delegate compile
                 val times = LongArray(10)
                 for (i in times.indices) {
                     val t0 = System.nanoTime()
@@ -225,7 +230,8 @@ class SupertonicGpuInstrumentedTest {
                 val out = Array(1) { Array(144) { FloatArray(64) } }
 
                 fun once() = interp.runForMultipleInputsOutputs(inputs, mapOf(0 to out))
-                once(); once()
+                once()
+                once()
                 val times = LongArray(10)
                 for (i in times.indices) {
                     val t0 = System.nanoTime()
@@ -280,19 +286,29 @@ class SupertonicGpuInstrumentedTest {
     ) {
         fun inputs(step: Float) = mapOf(
             "noisy_latent" to OnnxTensor.createTensor(
-                env, FloatBuffer.wrap(latent), longArrayOf(1, 144, latLen.toLong()),
+                env,
+                FloatBuffer.wrap(latent),
+                longArrayOf(1, 144, latLen.toLong()),
             ),
             "text_emb" to OnnxTensor.createTensor(
-                env, FloatBuffer.wrap(textEmb), longArrayOf(1, 256, 64),
+                env,
+                FloatBuffer.wrap(textEmb),
+                longArrayOf(1, 256, 64),
             ),
             "style_ttl" to OnnxTensor.createTensor(
-                env, FloatBuffer.wrap(style), longArrayOf(1, 50, 256),
+                env,
+                FloatBuffer.wrap(style),
+                longArrayOf(1, 50, 256),
             ),
             "latent_mask" to OnnxTensor.createTensor(
-                env, FloatBuffer.wrap(latMask), longArrayOf(1, 1, latLen.toLong()),
+                env,
+                FloatBuffer.wrap(latMask),
+                longArrayOf(1, 1, latLen.toLong()),
             ),
             "text_mask" to OnnxTensor.createTensor(
-                env, FloatBuffer.wrap(txtMask), longArrayOf(1, 1, 64),
+                env,
+                FloatBuffer.wrap(txtMask),
+                longArrayOf(1, 1, 64),
             ),
             "current_step" to OnnxTensor.createTensor(env, floatArrayOf(step)),
             "total_step" to OnnxTensor.createTensor(env, floatArrayOf(5f)),

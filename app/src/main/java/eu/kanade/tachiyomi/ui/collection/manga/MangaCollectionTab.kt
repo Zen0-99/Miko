@@ -25,7 +25,7 @@ fun Screen.mangaCollectionTab(): TabContent {
     val state by screenModel.state.collectAsState()
 
     return TabContent(
-        titleRes = AYMR.strings.label_manga,
+        titleRes = AYMR.strings.carrier_manga,
         searchEnabled = false,
         content = { contentPadding, _ ->
             if (state is MangaCollectionScreenState.Loading) {

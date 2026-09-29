@@ -16,7 +16,7 @@ import eu.kanade.core.util.fastFilterNot
 import eu.kanade.core.util.fastPartition
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.entries.novel.interactor.UpdateNovel
-import tachiyomi.domain.entries.novel.model.NovelUpdate
+import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.library.components.LibraryToolbarTitle
@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
@@ -52,6 +53,7 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
 import tachiyomi.domain.collection.novel.interactor.GetNovelCustomOrder
@@ -62,7 +64,9 @@ import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
+import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupMode
 import tachiyomi.domain.library.novel.LibraryNovel
@@ -71,24 +75,20 @@ import tachiyomi.domain.library.novel.model.sort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
-import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
-import tachiyomi.domain.readingorder.interactor.GetReadingOrders
-import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes
-import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
-import tachiyomi.domain.readingorder.interactor.GetReadingOrderProgress
 import tachiyomi.domain.readingorder.interactor.AutoRemoveCompletedReadingOrderEntries
-import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderNode
+import tachiyomi.domain.readingorder.interactor.CreateReadingOrder
 import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderEdges
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderNodes
+import tachiyomi.domain.readingorder.interactor.GetReadingOrderProgress
+import tachiyomi.domain.readingorder.interactor.GetReadingOrders
+import tachiyomi.domain.readingorder.interactor.RemoveReadingOrderNode
 import tachiyomi.domain.readingorder.interactor.UpdateReadingOrder
 import tachiyomi.domain.readingorder.model.ReadingOrder
-import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.track.novel.interactor.GetTracksPerNovel
 import tachiyomi.domain.track.novel.model.NovelTrack
-import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
-import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.i18n.MR
-import logcat.LogPriority
-import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.random.Random
@@ -298,17 +298,27 @@ class NovelLibraryScreenModel(
             when (this.type) {
                 NovelLibrarySort.Type.Alphabetical -> sortAlphabetically(i1, i2)
                 NovelLibrarySort.Type.LastRead -> i1.libraryNovel.lastRead.compareTo(i2.libraryNovel.lastRead)
-                NovelLibrarySort.Type.LastUpdate -> i1.libraryNovel.novel.lastUpdate.compareTo(i2.libraryNovel.novel.lastUpdate)
+                NovelLibrarySort.Type.LastUpdate -> i1.libraryNovel.novel.lastUpdate.compareTo(
+                    i2.libraryNovel.novel.lastUpdate,
+                )
                 NovelLibrarySort.Type.UnreadCount -> when {
                     i1.libraryNovel.unreadCount == i2.libraryNovel.unreadCount -> 0
                     i1.libraryNovel.unreadCount == 0L -> if (this.isAscending) 1 else -1
                     i2.libraryNovel.unreadCount == 0L -> if (this.isAscending) -1 else 1
                     else -> i1.libraryNovel.unreadCount.compareTo(i2.libraryNovel.unreadCount)
                 }
-                NovelLibrarySort.Type.TotalChapters -> i1.libraryNovel.totalChapters.compareTo(i2.libraryNovel.totalChapters)
-                NovelLibrarySort.Type.LatestChapter -> i1.libraryNovel.latestUpload.compareTo(i2.libraryNovel.latestUpload)
-                NovelLibrarySort.Type.ChapterFetchDate -> i1.libraryNovel.chapterFetchedAt.compareTo(i2.libraryNovel.chapterFetchedAt)
-                NovelLibrarySort.Type.DateAdded -> i1.libraryNovel.novel.dateAdded.compareTo(i2.libraryNovel.novel.dateAdded)
+                NovelLibrarySort.Type.TotalChapters -> i1.libraryNovel.totalChapters.compareTo(
+                    i2.libraryNovel.totalChapters,
+                )
+                NovelLibrarySort.Type.LatestChapter -> i1.libraryNovel.latestUpload.compareTo(
+                    i2.libraryNovel.latestUpload,
+                )
+                NovelLibrarySort.Type.ChapterFetchDate -> i1.libraryNovel.chapterFetchedAt.compareTo(
+                    i2.libraryNovel.chapterFetchedAt,
+                )
+                NovelLibrarySort.Type.DateAdded -> i1.libraryNovel.novel.dateAdded.compareTo(
+                    i2.libraryNovel.novel.dateAdded,
+                )
                 NovelLibrarySort.Type.TrackerMean -> {
                     val item1Score = trackerScores[i1.libraryNovel.id] ?: defaultTrackerScoreSortValue
                     val item2Score = trackerScores[i2.libraryNovel.id] ?: defaultTrackerScoreSortValue
@@ -777,7 +787,9 @@ class NovelLibraryScreenModel(
         }
 
         val name = state.readingOrderName.ifBlank {
-            "Reading Order ${java.text.SimpleDateFormat.getDateTimeInstance().format(java.util.Date(System.currentTimeMillis()))}"
+            "Reading Order ${java.text.SimpleDateFormat.getDateTimeInstance().format(
+                java.util.Date(System.currentTimeMillis()),
+            )}"
         }
         val editingId = state.editingReadingOrderId
 
@@ -926,7 +938,13 @@ class NovelLibraryScreenModel(
         }
         if (existingDepth >= 0 && existingDepth != state.readingOrderCurrentLayer) {
             mutableState.update {
-                it.copy(dialog = Dialog.ReadingOrderMoveDepth(novel, existingDepth + 1, state.readingOrderCurrentLayer + 1))
+                it.copy(
+                    dialog = Dialog.ReadingOrderMoveDepth(
+                        novel,
+                        existingDepth + 1,
+                        state.readingOrderCurrentLayer + 1,
+                    ),
+                )
             }
             return
         }
@@ -958,7 +976,9 @@ class NovelLibraryScreenModel(
         }
     }
 
-    private fun compactLayers(layers: PersistentList<PersistentList<LibraryNovel>>): PersistentList<PersistentList<LibraryNovel>> {
+    private fun compactLayers(
+        layers: PersistentList<PersistentList<LibraryNovel>>,
+    ): PersistentList<PersistentList<LibraryNovel>> {
         return layers.filter { it.isNotEmpty() }.toPersistentList()
     }
 
@@ -1034,14 +1054,20 @@ class NovelLibraryScreenModel(
             }
         }
         val nodesJson = nodes.joinToString(",") { node ->
-            """{"entryId":${node.entryId},"position":${node.position},"title":"${entryTitles[node.entryId]?.replace("\"", "\\\"") ?: ""}","url":"${entryUrls[node.entryId]?.replace("\"", "\\\"") ?: ""}"}"""
+            """{"entryId":${node.entryId},"position":${node.position},"title":"${entryTitles[node.entryId]?.replace(
+                "\"",
+                "\\\"",
+            ) ?: ""}","url":"${entryUrls[node.entryId]?.replace("\"", "\\\"") ?: ""}"}"""
         }
         val edgesJson = edges.joinToString(",") { edge ->
             """{"fromEntryId":${edge.fromEntryId},"toEntryId":${edge.toEntryId}}"""
         }
         val desc = order.description
         val descJson = if (desc != null) "\"${desc.replace("\"", "\\\"")}\"" else "null"
-        return """{"name":"${order.name.replace("\"", "\\\"")}","description":$descJson,"entryKind":"${order.entryKind}","nodes":[$nodesJson],"edges":[$edgesJson]}"""
+        return """{"name":"${order.name.replace(
+            "\"",
+            "\\\"",
+        )}","description":$descJson,"entryKind":"${order.entryKind}","nodes":[$nodesJson],"edges":[$edgesJson]}"""
     }
 
     suspend fun importReadingOrder(json: String): Boolean {
@@ -1049,7 +1075,10 @@ class NovelLibraryScreenModel(
             try {
                 val nameMatch = Regex(""""name"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)
                 val name = nameMatch?.groupValues?.get(1)?.replace("\\\"", "\"") ?: "Imported Reading Order"
-                val nodeRegex = Regex("""\{"entryId":(\d+),"position":\d+,"title":"((?:[^"\\]|\\.)*)","url":"((?:[^"\\]|\\.)*)"\}""")
+                val nodeRegex =
+                    Regex(
+                        """\{"entryId":(\d+),"position":\d+,"title":"((?:[^"\\]|\\.)*)","url":"((?:[^"\\]|\\.)*)"\}""",
+                    )
                 val nodes = nodeRegex.findAll(json).map { match ->
                     match.groupValues[1].toLong() to match.groupValues[2].replace("\\\"", "\"")
                 }.toList()

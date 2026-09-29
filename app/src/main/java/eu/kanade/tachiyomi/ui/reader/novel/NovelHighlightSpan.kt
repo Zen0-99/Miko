@@ -42,8 +42,13 @@ class NovelTtsHighlightSpan(
         val iterator = android.graphics.RegionIterator(region)
         while (iterator.next(rect)) {
             canvas.drawRoundRect(
-                rect.left.toFloat(), rect.top.toFloat(), rect.right.toFloat(), rect.bottom.toFloat(),
-                radius, radius, fill,
+                rect.left.toFloat(),
+                rect.top.toFloat(),
+                rect.right.toFloat(),
+                rect.bottom.toFloat(),
+                radius,
+                radius,
+                fill,
             )
         }
     }

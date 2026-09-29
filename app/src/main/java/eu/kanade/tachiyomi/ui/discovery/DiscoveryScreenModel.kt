@@ -75,6 +75,21 @@ class DiscoveryScreenModel(
 
     private var reloadJob: Job? = null
 
+    /** Per-(type, filter) discover results — lets the pager's other page
+     *  preview its own type and makes a type switch hydrate instantly. */
+    private data class DiscoverCacheEntry(
+        val items: List<TmdbDiscover.Item>,
+        val page: Int,
+        val hasMore: Boolean,
+    )
+
+    private val discoverCache = mutableMapOf<Pair<MediaType, DiscoveryFilter>, DiscoverCacheEntry>()
+
+    /** Cached discover items for a (type, filter) pair without switching —
+     *  empty when nothing is cached. */
+    fun peekDiscoverItems(type: MediaType, filter: DiscoveryFilter): List<TmdbDiscover.Item> =
+        discoverCache[type to filter]?.items.orEmpty()
+
     // Mint-on-browse deps are lazy so unit tests can construct the model
     // with only a TmdbDiscover fake (Injekt is never touched until a
     // rendered item actually mints).
@@ -131,6 +146,19 @@ class DiscoveryScreenModel(
             return
         }
         reloadJob?.cancel()
+        val cached = discoverCache[type to filter]
+        if (cached != null) {
+            mutableState.update {
+                it.copy(
+                    discoverItems = cached.items,
+                    discoverPage = cached.page,
+                    discoverHasMore = cached.hasMore,
+                    discoverLoading = false,
+                    discoverError = false,
+                )
+            }
+            return
+        }
         reloadJob = screenModelScope.launch {
             delay(debounceMs)
             loadDiscoverPage(type, filter, page = 1, append = false)
@@ -240,6 +268,11 @@ class DiscoveryScreenModel(
                 discoverError = false,
             )
         }
+        discoverCache[type to filter] = DiscoverCacheEntry(
+            items = state.value.discoverItems,
+            page = result.page,
+            hasMore = result.hasMore,
+        )
     }
 
     companion object {

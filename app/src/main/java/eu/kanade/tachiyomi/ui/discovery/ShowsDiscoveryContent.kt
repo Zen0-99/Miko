@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -259,7 +261,6 @@ private fun TmdbDiscoverContent(
     val navigator = LocalNavigator.currentOrThrow
     val scope = rememberCoroutineScope()
 
-    val gridState = rememberLazyGridState()
     val displayMode by libraryPreferences.displayMode().collectAsState()
 
     val configuration = LocalConfiguration.current
@@ -272,24 +273,27 @@ private fun TmdbDiscoverContent(
         }
         ).collectAsState()
 
-    LaunchedEffect(gridState) {
-        snapshotFlow {
-            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val totalItems = gridState.layoutInfo.totalItemsCount
-            lastVisible >= totalItems - 6
-        }
-            .distinctUntilChanged()
-            .collect { shouldLoad ->
-                if (shouldLoad && state.discoverHasMore && !state.discoverLoading && !state.discoverError) {
-                    discoveryScreenModel.loadNextDiscoverPage(mediaType)
-                }
-            }
+    // Same Movies | Series pill as CinemetaBrowseContent — bound to the
+    // same screen-model field so both surfaces stay in sync, but paged:
+    // each page keeps its own grid state (scroll positions never carry
+    // over) and the settled page commits via changeType.
+    val typeOptions = listOf("Movies" to MediaType.MOVIE, "Series" to MediaType.TV)
+    val selectedIndex = typeOptions.indexOfFirst { it.second == mediaType }
+        .coerceAtLeast(0)
+    val pagerState = rememberPagerState(initialPage = selectedIndex) { typeOptions.size }
+    LaunchedEffect(pagerState.settledPage) {
+        val settled = typeOptions[pagerState.settledPage].second
+        val type = if (settled == MediaType.MOVIE) "movie" else "series"
+        if (type != cinemetaState.type) cinemetaScreenModel.changeType(type)
     }
+    LaunchedEffect(mediaType) {
+        if (typeOptions.getOrNull(pagerState.currentPage)?.second != mediaType) {
+            pagerState.animateScrollToPage(selectedIndex)
+        }
+    }
+    val filter = state.filters[Carrier.SHOWS] ?: DiscoveryFilter()
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Same Movies | Series pill as CinemetaBrowseContent — bound to
-        // the same screen-model field so both surfaces stay in sync.
-        val typeOptions = listOf("Movies" to "movie", "Series" to "series")
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -299,8 +303,9 @@ private fun TmdbDiscoverContent(
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            typeOptions.forEach { (label, value) ->
-                val isSelected = cinemetaState.type == value
+            typeOptions.forEachIndexed { index, option ->
+                val label = if (option.second == MediaType.MOVIE) "Movies" else "Series"
+                val isSelected = index == pagerState.currentPage
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -312,7 +317,7 @@ private fun TmdbDiscoverContent(
                                 Modifier
                             },
                         )
-                        .clickable { cinemetaScreenModel.changeType(value) }
+                        .clickable { scope.launch { pagerState.animateScrollToPage(index) } }
                         .padding(vertical = 7.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -331,63 +336,148 @@ private fun TmdbDiscoverContent(
             }
         }
 
-        PullRefresh(
-            refreshing = state.discoverLoading && state.discoverItems.isNotEmpty(),
-            enabled = state.discoverItems.isNotEmpty(),
-            onRefresh = { discoveryScreenModel.onDiscoverInputsChanged(mediaType) },
-            indicatorPadding = contentPadding,
-        ) {
-            when {
-                state.discoverKeyMissing -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = stringResource(AYMR.strings.discovery_tmdb_missing_key),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(24.dp),
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f),
+        ) { page ->
+            val pageType = typeOptions[page].second
+            val live = pageType == mediaType
+            TmdbDiscoverGrid(
+                items = if (live) {
+                    state.discoverItems
+                } else {
+                    discoveryScreenModel.peekDiscoverItems(pageType, filter)
+                },
+                loading = live && state.discoverLoading,
+                error = live && state.discoverError,
+                keyMissing = live && state.discoverKeyMissing,
+                hasMore = live && state.discoverHasMore,
+                pagingEnabled = live,
+                mediaType = pageType,
+                discoveryScreenModel = discoveryScreenModel,
+                onItemClick = { item ->
+                    scope.launch {
+                        // TMDB → IMDB → existing cinemeta entry path; no
+                        // IMDB link = dead end.
+                        val imdb = discoveryScreenModel.resolveImdbId(pageType, item.id)
+                            ?: return@launch
+                        val meta = MikoMetaShort(
+                            id = imdb,
+                            name = item.title,
+                            type = TmdbDiscover.cinemetaType(pageType),
+                            poster = item.posterUrl,
+                            releaseInfo = item.year?.toString(),
+                            imdbRating = item.voteAverage?.toString(),
                         )
+                        val animeId = cinemetaScreenModel.getOrCreateAnimeId(meta)
+                        navigator.push(ShowsScreen(animeId, true))
                     }
-                }
+                },
+                onRefresh = { discoveryScreenModel.onDiscoverInputsChanged(pageType) },
+                columns = columns,
+                displayMode = displayMode,
+                contentPadding = contentPadding,
+            )
+        }
+    }
+}
 
-                state.discoverLoading && state.discoverItems.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
+/**
+ * One discover-grid page — mirrors the catalog grid's chrome. Preview
+ * pages ([pagingEnabled] false) show their own cached items; paging and
+ * pull-refresh only run on the live page so one type's scroll can't
+ * page the other's feed.
+ */
+@Composable
+private fun TmdbDiscoverGrid(
+    items: List<TmdbDiscover.Item>,
+    loading: Boolean,
+    error: Boolean,
+    keyMissing: Boolean,
+    hasMore: Boolean,
+    pagingEnabled: Boolean,
+    mediaType: MediaType,
+    discoveryScreenModel: DiscoveryScreenModel,
+    onItemClick: (TmdbDiscover.Item) -> Unit,
+    onRefresh: () -> Unit,
+    columns: Int,
+    displayMode: LibraryDisplayMode,
+    contentPadding: PaddingValues,
+) {
+    val gridState = rememberLazyGridState()
 
-                state.discoverError && state.discoverItems.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = stringResource(AYMR.strings.discovery_tmdb_error),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        Text(
-                            text = stringResource(MR.strings.action_retry),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .padding(top = 8.dp)
-                                .clickable { discoveryScreenModel.onDiscoverInputsChanged(mediaType) },
-                        )
-                    }
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = gridState.layoutInfo.totalItemsCount
+            lastVisible >= totalItems - 6
+        }
+            .distinctUntilChanged()
+            .collect { shouldLoad ->
+                if (shouldLoad && pagingEnabled && hasMore && !loading && !error) {
+                    discoveryScreenModel.loadNextDiscoverPage(mediaType)
                 }
+            }
+    }
 
-                state.discoverItems.isEmpty() && !state.discoverLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
+    PullRefresh(
+        refreshing = loading && items.isNotEmpty(),
+        enabled = pagingEnabled && items.isNotEmpty(),
+        onRefresh = onRefresh,
+        indicatorPadding = contentPadding,
+    ) {
+        when {
+            keyMissing -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(AYMR.strings.discovery_tmdb_missing_key),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                }
+            }
+
+            loading && items.isEmpty() -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            error && items.isEmpty() -> {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = stringResource(AYMR.strings.discovery_tmdb_error),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        text = stringResource(MR.strings.action_retry),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clickable { onRefresh() },
+                    )
+                }
+            }
+
+            items.isEmpty() && !loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (pagingEnabled) {
                         Text(
                             text = stringResource(AYMR.strings.discovery_tmdb_empty),
                             style = MaterialTheme.typography.bodyMedium,
@@ -395,24 +485,25 @@ private fun TmdbDiscoverContent(
                         )
                     }
                 }
+            }
 
-                else -> {
-                    val gridColumns = if (columns > 0) columns else 3
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(gridColumns),
-                        state = gridState,
-                        contentPadding = PaddingValues(
-                            start = contentPadding.calculateLeftPadding(LayoutDirection.Ltr),
-                            end = contentPadding.calculateRightPadding(LayoutDirection.Ltr),
-                            top = 8.dp,
-                            bottom = contentPadding.calculateBottomPadding() + 8.dp,
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridHorizontalSpacer),
-                        verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(state.discoverItems.size) { index ->
-                            val item = state.discoverItems[index]
+            else -> {
+                val gridColumns = if (columns > 0) columns else 3
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(gridColumns),
+                    state = gridState,
+                    contentPadding = PaddingValues(
+                        start = contentPadding.calculateLeftPadding(LayoutDirection.Ltr),
+                        end = contentPadding.calculateRightPadding(LayoutDirection.Ltr),
+                        top = 8.dp,
+                        bottom = contentPadding.calculateBottomPadding() + 8.dp,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridHorizontalSpacer),
+                    verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(items.size) { index ->
+                        val item = items[index]
 
                             // Mint-on-browse: TMDB discover rows aren't
                             // canonical works — resolve once per item
@@ -429,24 +520,7 @@ private fun TmdbDiscoverContent(
                                 url = item.posterUrl,
                                 lastModified = 0L,
                             )
-                            val onClick: () -> Unit = {
-                                scope.launch {
-                                    // TMDB → IMDB → existing cinemeta
-                                    // entry path; no IMDB link = dead end.
-                                    val imdb = discoveryScreenModel.resolveImdbId(mediaType, item.id)
-                                        ?: return@launch
-                                    val meta = MikoMetaShort(
-                                        id = imdb,
-                                        name = item.title,
-                                        type = TmdbDiscover.cinemetaType(mediaType),
-                                        poster = item.posterUrl,
-                                        releaseInfo = item.year?.toString(),
-                                        imdbRating = item.voteAverage?.toString(),
-                                    )
-                                    val animeId = cinemetaScreenModel.getOrCreateAnimeId(meta)
-                                    navigator.push(ShowsScreen(animeId, true))
-                                }
-                            }
+                            val onClick: () -> Unit = { onItemClick(item) }
 
                             when (displayMode) {
                                 LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
@@ -472,7 +546,7 @@ private fun TmdbDiscoverContent(
                                 }
                             }
                         }
-                        if (state.discoverLoading) {
+                        if (loading) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 Box(
                                     modifier = Modifier
@@ -489,4 +563,3 @@ private fun TmdbDiscoverContent(
             }
         }
     }
-}
