@@ -7,25 +7,19 @@ import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
 import eu.kanade.tachiyomi.extension.novel.model.NovelLoadResult
 import eu.kanade.tachiyomi.extension.novel.util.NovelExtensionLoader
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.FORCE_NETWORK
 import eu.kanade.tachiyomi.network.NetworkHelper
-import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.network.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import logcat.LogPriority
+import mihon.domain.extensionrepo.model.ExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.UpdateNovelExtensionRepo
-import mihon.domain.extensionrepo.model.ExtensionRepo
 import mihon.domain.extensionrepo.service.ExtensionIndexEntry
 import mihon.domain.extensionrepo.service.ExtensionRepoService
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.injectLazy
 import java.time.Instant
 import kotlin.time.Duration.Companion.days
@@ -68,14 +62,20 @@ internal class NovelExtensionApi {
             android.util.Log.i("NovelExtApi", "getExtensions: fetching index from $repoBaseUrl")
             val entries = extensionRepoService.fetchExtensionIndex(repoBaseUrl)
                 ?: run {
-                    android.util.Log.w("NovelExtApi", "getExtensions: fetchExtensionIndex returned null for $repoBaseUrl")
+                    android.util.Log.w(
+                        "NovelExtApi",
+                        "getExtensions: fetchExtensionIndex returned null for $repoBaseUrl",
+                    )
                     return emptyList()
                 }
             android.util.Log.i("NovelExtApi", "getExtensions: got ${entries.size} entries from $repoBaseUrl")
             val extensions = entries.toNovelExtensions()
             android.util.Log.i("NovelExtApi", "getExtensions: ${extensions.size} entries passed lib version filter")
             extensions.forEach { ext ->
-                android.util.Log.i("NovelExtApi", "  available: ${ext.name} v${ext.versionName} (code ${ext.versionCode}) pkg=${ext.pkgName}")
+                android.util.Log.i(
+                    "NovelExtApi",
+                    "  available: ${ext.name} v${ext.versionName} (code ${ext.versionCode}) pkg=${ext.pkgName}",
+                )
             }
             extensions
         } catch (e: Throwable) {
@@ -86,6 +86,14 @@ internal class NovelExtensionApi {
 
     private fun List<ExtensionIndexEntry>.toNovelExtensions(): List<NovelExtension.Available> {
         return this
+            // Combined repos (MikoDB) also ship anime/manga extensions — keep
+            // them out of the novel list.
+            .filterNot {
+                val pkg = it.pkgName.lowercase()
+                pkg.contains("animeextension") || pkg.contains("aniyomi") || pkg.contains(".anime.") ||
+                    pkg.contains("tachiyomi.extension.") || pkg.contains("tachiyomi.manga") ||
+                    pkg.contains("keiyoushi")
+            }
             .filter {
                 it.libVersion >= NovelExtensionLoader.LIB_VERSION_MIN &&
                     it.libVersion <= NovelExtensionLoader.LIB_VERSION_MAX

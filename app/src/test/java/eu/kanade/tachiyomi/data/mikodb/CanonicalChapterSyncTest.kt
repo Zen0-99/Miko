@@ -15,6 +15,7 @@ class CanonicalChapterSyncTest {
         label: String,
         kind: Kind = Kind.CHAPTER,
         refs: Map<String, String> = emptyMap(),
+        dateUpload: Long? = null,
     ) = CanonChapter(
         seq = seq,
         number = number,
@@ -25,6 +26,7 @@ class CanonicalChapterSyncTest {
         confidence = "verified",
         sources = refs.keys.toList(),
         refs = refs,
+        dateUpload = dateUpload,
     )
 
     @Test
@@ -34,7 +36,7 @@ class CanonicalChapterSyncTest {
             canon(1, 1.0, "Chapter 1"),
             canon(2, 2.0, "Chapter 2"),
         )
-        val out = CanonicalChapterSync.toSChapters(rows, emptySet(), "mk:mb:1")
+        val out = CanonicalChapterSync.toSChapters(rows, "mk:mb:1")
         // Newest first, like a real source feed.
         assertEquals("Chapter 2", out[0].name)
         assertEquals("Chapter 1", out[1].name)
@@ -47,28 +49,59 @@ class CanonicalChapterSyncTest {
     }
 
     @Test
-    fun `scanlator field carries installed carriers only`() {
+    fun `scanlator stays null — carrier refs never surface as package names`() {
         val row = canon(
             1, 30.0, "Chapter 30",
             refs = mapOf(
                 "en.mangadex" to "/ch/a",
                 "en.asura" to "/ch/b",
-                "en.uninstalled" to "/ch/c",
             ),
         )
-        val out = CanonicalChapterSync.toSChapters(
-            listOf(row),
-            installed = setOf("en.mangadex", "en.asura"),
-            workId = "mk:mb:1",
-        )
-        assertEquals(setOf("en.mangadex", "en.asura"), out[0].scanlator!!.split(", ").toSet())
+        val out = CanonicalChapterSync.toSChapters(listOf(row), "mk:mb:1")
+        assertNull(out[0].scanlator)
     }
 
     @Test
-    fun `zero-coverage rows get null scanlator`() {
-        val row = canon(1, 30.0, "Chapter 30", refs = mapOf("en.gone" to "/ch/x"))
-        val out = CanonicalChapterSync.toSChapters(listOf(row), emptySet(), "mk:mb:1")
-        assertNull(out[0].scanlator)
+    fun `carrier upload date flows through to the row`() {
+        val row = canon(1, 1.0, "Chapter 1", dateUpload = 1_700_000_000_000L)
+        val out = CanonicalChapterSync.toSChapters(listOf(row), "mk:mb:1")
+        assertEquals(1_700_000_000_000L, out[0].date_upload)
+    }
+
+    @Test
+    fun `missing carrier date stays zero — card shows N-A, not now`() {
+        val row = canon(1, 1.0, "Chapter 1")
+        val out = CanonicalChapterSync.toSChapters(listOf(row), "mk:mb:1")
+        assertEquals(0L, out[0].date_upload)
+    }
+
+    @Test
+    fun `redundant trailing chapter marker is stripped when it repeats the number`() {
+        assertEquals(
+            "Ep. 1 - Beginning of the End",
+            CanonicalChapterSync.normalizeLabel("Ep. 1 - Beginning of the End (ch. 1)", 1.0),
+        )
+        assertEquals(
+            "Chapter 30",
+            CanonicalChapterSync.normalizeLabel("Chapter 30 [chapter 30]", 30.0),
+        )
+    }
+
+    @Test
+    fun `marker with a different number is real information and kept`() {
+        // Source numbering offset — the parenthetical isn't redundant.
+        val label = "Episode 5 (ch. 12)"
+        assertEquals(label, CanonicalChapterSync.normalizeLabel(label, 5.0))
+    }
+
+    @Test
+    fun `unnumbered rows keep their labels untouched`() {
+        assertEquals(
+            "Omake (ch. 99)",
+            CanonicalChapterSync.normalizeLabel("Omake (ch. 99)", null),
+        )
+        // Empty-after-strip labels keep the original rather than going blank.
+        assertEquals("(ch. 7)", CanonicalChapterSync.normalizeLabel("(ch. 7)", 7.0))
     }
 
     @Test
@@ -77,7 +110,7 @@ class CanonicalChapterSyncTest {
             canon(9, null, "Omake", Kind.EXTRA),
             canon(10, null, "Afterword", Kind.AFTERWORD),
         )
-        val out = CanonicalChapterSync.toSChapters(rows, emptySet(), "mk:mb:1")
+        val out = CanonicalChapterSync.toSChapters(rows, "mk:mb:1")
         assertTrue(out.all { it.chapter_number == 0.0f })
         assertEquals("Afterword", out[0].name) // newest-first
     }
@@ -87,7 +120,7 @@ class CanonicalChapterSyncTest {
         // The materialized chapter feeds straight into ChapterBinder —
         // "manga:mk:mb:1:c30" is the shared thread regardless of carrier.
         val row = canon(1, 30.0, "Chapter 30", refs = mapOf("en.asura" to "/x"))
-        val ch = CanonicalChapterSync.toSChapters(listOf(row), setOf("en.asura"), "mk:mb:1")[0]
+        val ch = CanonicalChapterSync.toSChapters(listOf(row), "mk:mb:1")[0]
         val thread = eu.kanade.tachiyomi.data.comments.ChapterBinder
             .bind(eu.kanade.domain.ui.model.Carrier.MANGA, "mk:mb:1", ch.name, ch.chapter_number)
         assertEquals("manga:mk:mb:1:c30", thread)

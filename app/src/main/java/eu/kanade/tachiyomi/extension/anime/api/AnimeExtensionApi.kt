@@ -1,16 +1,13 @@
 package eu.kanade.tachiyomi.extension.anime.api
 
 import android.content.Context
+import eu.kanade.tachiyomi.data.mikodb.MikoDbManager
 import eu.kanade.tachiyomi.extension.ExtensionUpdateNotifier
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.anime.model.AnimeLoadResult
 import eu.kanade.tachiyomi.extension.anime.util.AnimeExtensionLoader
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.FORCE_NETWORK
 import eu.kanade.tachiyomi.network.NetworkHelper
-import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.network.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.Serializable
@@ -38,6 +35,7 @@ internal class AnimeExtensionApi {
     private val animeExtensionManager: AnimeExtensionManager by injectLazy()
     private val json: Json by injectLazy()
     private val extensionRepoService: ExtensionRepoService by injectLazy()
+    private val mikoDbManager: MikoDbManager by injectLazy()
 
     private val lastExtCheck: Preference<Long> by lazy {
         preferenceStore.getLong("last_ext_check", 0)
@@ -55,6 +53,9 @@ internal class AnimeExtensionApi {
     private suspend fun getExtensions(extRepo: ExtensionRepo): List<AnimeExtension.Available> {
         val repoBaseUrl = extRepo.baseUrl
         return try {
+            // Best-effort: repos shipping a miko.json sidecar (MikoDB) sync the
+            // identity DB + binding metadata here. No-op for ordinary repos.
+            mikoDbManager.trySync(repoBaseUrl)
             val entries = extensionRepoService.fetchExtensionIndex(repoBaseUrl)
                 ?: return emptyList()
             entries.toAnimeExtensions()
@@ -66,6 +67,15 @@ internal class AnimeExtensionApi {
 
     private fun List<ExtensionIndexEntry>.toAnimeExtensions(): List<AnimeExtension.Available> {
         return this
+            // Combined repos (MikoDB) also ship manga + novel extensions —
+            // keep them out of the anime list.
+            .filterNot {
+                val pkg = it.pkgName.lowercase()
+                pkg.contains("novel") ||
+                    pkg.contains("tachiyomi.extension.") ||
+                    pkg.contains("tachiyomi.manga") ||
+                    pkg.contains("keiyoushi")
+            }
             .filter {
                 it.libVersion >= AnimeExtensionLoader.LIB_VERSION_MIN &&
                     it.libVersion <= AnimeExtensionLoader.LIB_VERSION_MAX

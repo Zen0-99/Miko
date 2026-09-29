@@ -51,6 +51,7 @@ import eu.kanade.presentation.entries.novel.components.NovelChapterListItem
 import eu.kanade.presentation.entries.novel.components.NovelContinueButton
 import eu.kanade.presentation.entries.novel.components.NovelEditDialog
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
+import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import eu.kanade.tachiyomi.ui.entries.novel.NovelChapterList
@@ -532,7 +533,11 @@ private fun NovelScreenSmallImpl(
                         metaItems = listOfNotNull(
                             state.novel.author?.takeIf { it.isNotBlank() },
                             enhancedEntryStatusText(state.novel.status),
-                            state.source.name,
+                            if (CanonicalCatalog.workIdFromNovelUrl(state.novel.url) != null) {
+                                "MikoDB"
+                            } else {
+                                state.source.name
+                            },
                         ),
                         rating = null,
                         onCoverClick = onCoverClick,

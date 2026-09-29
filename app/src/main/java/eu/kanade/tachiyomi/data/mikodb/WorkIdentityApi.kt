@@ -109,6 +109,8 @@ class WorkIdentityApi {
         val confidence: String = "single",
         val sources: List<String> = emptyList(),
         val refs: Map<String, String> = emptyMap(),
+        /** Earliest carrier upload date (epoch ms); null when unknown. */
+        val date_upload: Long? = null,
     )
 
     @Serializable
@@ -118,7 +120,14 @@ class WorkIdentityApi {
     )
 
     @Serializable
-    data class FeedChapter(val name: String, val url: String? = null)
+    data class FeedChapter(
+        val name: String,
+        val url: String? = null,
+        /** Source-reported upload time (epoch ms); carried into the
+         *  canonical row so materialized chapters show a real date
+         *  instead of the sync stamp. */
+        val date_upload: Long? = null,
+    )
 
     @Serializable
     data class CanonizeFeed(

@@ -213,7 +213,13 @@ class CanonicalFeedCollector(
                 logcat { "canonicalFeed ${g.pkgName} chapterlist: ${e.message}" }
                 emptyList()
             }
-            .map { WorkIdentityApi.FeedChapter(name = it.name, url = it.url) }
+            .map {
+                WorkIdentityApi.FeedChapter(
+                    name = it.name,
+                    url = it.url,
+                    date_upload = it.date_upload.takeIf { d -> d > 0L },
+                )
+            }
 
         return Feed(
             sourceId = source.id,
@@ -300,7 +306,13 @@ class CanonicalFeedCollector(
                 logcat { "canonicalFeed(novel) ${g.pkgName} chapterlist: ${e.message}" }
                 emptyList()
             }
-            .map { WorkIdentityApi.FeedChapter(name = it.name, url = it.url) }
+            .map {
+                WorkIdentityApi.FeedChapter(
+                    name = it.name,
+                    url = it.url,
+                    date_upload = it.date_upload.takeIf { d -> d > 0L },
+                )
+            }
 
         return Feed(
             sourceId = source.id,

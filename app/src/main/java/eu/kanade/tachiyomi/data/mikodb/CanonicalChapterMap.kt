@@ -25,6 +25,8 @@ class CanonicalChapterMap(
         val confidence: String,
         val sources: List<String>,
         val refs: Map<String, String>,
+        /** Earliest carrier upload date (epoch ms); null when unknown. */
+        val dateUpload: Long? = null,
     )
 
     private companion object {
@@ -60,6 +62,7 @@ class CanonicalChapterMap(
                 confidence = c.confidence,
                 sources = c.sources,
                 refs = c.refs,
+                dateUpload = c.date_upload,
             )
         }
         synchronized(cache) {

@@ -62,6 +62,7 @@ class MangaBakaEnrich(
     /** Enrich the bridge row + the manga entry for [workId]. No-op on
      *  non-`mk:mb:` ids, already-enriched rows, or fetch failure. */
     suspend fun run(workId: String, manga: Manga): Boolean {
+        clearTypeSeed(manga)
         val detail = fetchDetail(workId) ?: return false
         // Entry metadata first — the user-facing fix. A bridge-row write
         // failure must not starve the visible update (and vice versa).
@@ -89,6 +90,7 @@ class MangaBakaEnrich(
 
     /** Same as [run] for novels/books (`mk:mb:` novel rows). */
     suspend fun run(workId: String, novel: Novel): Boolean {
+        clearTypeSeed(novel)
         val detail = fetchDetail(workId) ?: return false
         runCatching {
             novelRepository.updateNovel(
@@ -110,6 +112,30 @@ class MangaBakaEnrich(
                 logcat(LogPriority.WARN) { "MangaBakaEnrich: bridge write failed for $workId: ${e.message}" }
             }
         return true
+    }
+
+    /**
+     * Earlier materialization seeded `genre` with the work's type
+     * ("oel", "webtoon", …) so a bare tag stayed visible. A single-tag
+     * genre matching a taxonomy word is that seed — clear it so a work
+     * MangaBaka has no genres for doesn't carry junk taxonomy forever.
+     */
+    private suspend fun clearTypeSeed(manga: Manga) {
+        val g = manga.genre ?: return
+        if (g.size == 1 && g[0].lowercase() in TAXONOMY_KINDS) {
+            runCatching {
+                mangaRepository.updateManga(MangaUpdate(id = manga.id, genre = emptyList()))
+            }
+        }
+    }
+
+    private suspend fun clearTypeSeed(novel: Novel) {
+        val g = novel.genre ?: return
+        if (g.size == 1 && g[0].lowercase() in TAXONOMY_KINDS) {
+            runCatching {
+                novelRepository.updateNovel(NovelUpdate(id = novel.id, genre = emptyList()))
+            }
+        }
     }
 
     // ---------- fetch ----------
@@ -254,6 +280,13 @@ class MangaBakaEnrich(
          *  Bumped to v2 — rows enriched under v1 carried the x250 proxy
          *  cover and lowercase genres, so they re-fetch once. */
         internal const val RESOLUTION_MB_DETAIL = "mb_detail_v2"
+
+        /** Taxonomy words that are kinds, not genres — the materialize
+         *  seed artifact that [clearTypeSeed] removes. */
+        private val TAXONOMY_KINDS = setOf(
+            "manga", "manhwa", "manhua", "comic", "webtoon", "oel", "other",
+            "book", "novel",
+        )
 
         /**
          * links_v2 webplatform URLs → provider_links entries. Provider slug

@@ -64,6 +64,7 @@ import eu.kanade.presentation.entries.manga.components.MangaContinueButton
 import eu.kanade.presentation.entries.manga.components.MangaInfoBox
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
+import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.data.suggestions.SuggestionState
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -424,7 +425,13 @@ private fun MangaScreenSmallImpl(
                             isTabletUi = false,
                             appBarPadding = topPadding,
                             manga = state.manga,
-                            sourceName = remember { state.source.getNameForMangaInfo() },
+                            sourceName = remember {
+                                if (CanonicalCatalog.workIdFromMangaUrl(state.manga.url) != null) {
+                                    "MikoDB"
+                                } else {
+                                    state.source.getNameForMangaInfo()
+                                }
+                            },
                             isStubSource = remember { state.source is StubMangaSource },
                             onCoverClick = onCoverClicked,
                             doSearch = onSearch,
@@ -698,7 +705,13 @@ fun MangaScreenLargeImpl(
                             isTabletUi = true,
                             appBarPadding = contentPadding.calculateTopPadding(),
                             manga = state.manga,
-                            sourceName = remember { state.source.getNameForMangaInfo() },
+                            sourceName = remember {
+                                if (CanonicalCatalog.workIdFromMangaUrl(state.manga.url) != null) {
+                                    "MikoDB"
+                                } else {
+                                    state.source.getNameForMangaInfo()
+                                }
+                            },
                             isStubSource = remember { state.source is StubMangaSource },
                             onCoverClick = onCoverClicked,
                             doSearch = onSearch,

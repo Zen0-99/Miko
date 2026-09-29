@@ -180,6 +180,7 @@ class ExtensionRepoService(
                 types.add("novel")
             }
             if (pkg.contains(".anime.") ||
+                pkg.contains("animeextension") ||
                 pkg.contains("aniyomi") ||
                 pkg.contains("jmiri.anime") ||
                 name.contains("anime")

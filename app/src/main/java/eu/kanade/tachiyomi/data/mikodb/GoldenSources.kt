@@ -9,6 +9,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.entries.novel.repository.NovelRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -28,6 +30,8 @@ class GoldenSources(
     private val mangaExtensions: MangaExtensionManager = Injekt.get(),
     private val novelExtensions: NovelExtensionManager = Injekt.get(),
     private val json: Json = Injekt.get(),
+    private val mangaRepository: MangaRepository = Injekt.get(),
+    private val novelRepository: NovelRepository = Injekt.get(),
 ) {
 
     /** A provider link joined to an installed, tiered extension. */
@@ -128,8 +132,21 @@ class GoldenSources(
         // installed extensions title-search the work; SeriesMatcher
         // still gates identity downstream, so wrong-series feeds are
         // rejected rather than merged.
+        //
+        // Locally-bound sources rank first regardless of tier order:
+        // an installed extension already holding a same-title row for
+        // this work (library/read history) is a proven carrier — the
+        // alphabetical tie-break must not cut it (e.g. Weeb Central
+        // carrying a user's One-Punch Man row sorted 9th of 24).
+        val localPkgs = localCarrierPkgs(work, installed, isBooks = medium == WorkIdResolver.MEDIUM_BOOKS)
         return installed
-            .sortedWith(compareBy({ tierRank(meta[it.pkgName]?.tier ?: "") }, { it.pkgName }))
+            .sortedWith(
+                compareBy(
+                    { if (it.pkgName in localPkgs) 0 else 1 },
+                    { tierRank(meta[it.pkgName]?.tier ?: "") },
+                    { it.pkgName },
+                ),
+            )
             .take(BROAD_FALLBACK_MAX)
             .map { ext ->
                 GoldenSource(
@@ -161,6 +178,41 @@ class GoldenSources(
         val seg = normalizeKey(pkgName.substringAfterLast('.'))
         return seg.isNotEmpty() &&
             (seg == normalizeKey(provider) || (hostSlug != null && seg == hostSlug))
+    }
+
+    /**
+     * Packages of installed extensions that already hold a local entry
+     * for this work — favorites + read-but-not-favorited rows whose
+     * normalized title matches any of the work's titles. These are
+     * proven carriers; identity is still verified downstream, so a
+     * coincidental title match can only waste one probe, never poison
+     * the merge.
+     */
+    private suspend fun localCarrierPkgs(
+        work: MangaNovelIdBridge.WorkRow,
+        installed: List<InstalledExt>,
+        isBooks: Boolean,
+    ): Set<String> {
+        val wanted = listOfNotNull(work.title, work.romanizedTitle, work.nativeTitle)
+            .map(TitleNormalizer::normalize)
+            .filter { it.isNotEmpty() }
+            .toSet()
+        if (wanted.isEmpty()) return emptySet()
+        val pkgBySourceId = installed
+            .flatMap { e -> e.sourceIds.map { it to e.pkgName } }
+            .toMap()
+        val rows: List<Pair<Long, String>> = if (isBooks) {
+            novelRepository.getNovelFavorites().map { it.source to it.title }
+        } else {
+            (mangaRepository.getMangaFavorites() + mangaRepository.getReadMangaNotInLibrary())
+                .map { it.source to it.title }
+        }
+        return rows.mapNotNull { (sourceId, title) ->
+            if (sourceId == 0L || TitleNormalizer.normalize(title) !in wanted) {
+                return@mapNotNull null
+            }
+            pkgBySourceId[sourceId]
+        }.toSet()
     }
 
     private fun normalizeKey(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")

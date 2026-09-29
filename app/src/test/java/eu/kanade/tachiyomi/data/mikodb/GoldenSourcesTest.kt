@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.source.MangaSource
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +13,8 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.entries.novel.repository.NovelRepository
 
 class GoldenSourcesTest {
 
@@ -20,6 +23,8 @@ class GoldenSourcesTest {
     private val bridge = mockk<MangaNovelIdBridge>()
     private val mangaExtensions = mockk<MangaExtensionManager>()
     private val novelExtensions = mockk<NovelExtensionManager>()
+    private val mangaRepository = mockk<MangaRepository>()
+    private val novelRepository = mockk<NovelRepository>()
 
     private val golden = GoldenSources(
         mikoDbManager = mikoDbManager,
@@ -27,7 +32,15 @@ class GoldenSourcesTest {
         mangaExtensions = mangaExtensions,
         novelExtensions = novelExtensions,
         json = json,
+        mangaRepository = mangaRepository,
+        novelRepository = novelRepository,
     )
+
+    init {
+        coEvery { mangaRepository.getMangaFavorites() } returns emptyList()
+        coEvery { mangaRepository.getReadMangaNotInLibrary() } returns emptyList()
+        coEvery { novelRepository.getNovelFavorites() } returns emptyList()
+    }
 
     private fun ext(pkg: String, vararg sourceIds: Long, nsfw: Boolean = false) = MangaExtension.Installed(
         name = pkg.substringAfterLast('.'),
@@ -203,6 +216,27 @@ class GoldenSourcesTest {
 
         val out = golden.forWorkRow(w, WorkIdResolver.MEDIUM_MANGA)
         assertEquals(listOf("MangaDex", "LowTier"), out.map { it.name })
+    }
+
+    @Test
+    fun `locally-bound carrier survives the fallback cap`() = runBlocking {
+        // The OPM case: 7 installed sources, the work's own library row
+        // sits on the alphabetically-last one. Tier-sorted + capped at 6
+        // would cut it; local evidence must rank it first.
+        val pkgs = ('a'..'g').map { "eu.kanade.tachiyomi.extension.en.src$it" }
+        every { mangaExtensions.installedExtensionsFlow } returns
+            MutableStateFlow(pkgs.mapIndexed { i, p -> ext(p, (i + 1).toLong()) })
+        every { mikoDbManager.allSourceMeta() } returns
+            pkgs.associateWith { meta(emptyList(), "S") }
+        coEvery { mangaRepository.getMangaFavorites() } returns listOf(
+            tachiyomi.domain.entries.manga.model.Manga.create()
+                .copy(source = 7L, title = "Solo Leveling"),
+        )
+        val w = work("[]")
+
+        val out = golden.forWorkRow(w, WorkIdResolver.MEDIUM_MANGA)
+        assertEquals("eu.kanade.tachiyomi.extension.en.srcg", out.first().pkgName)
+        assertEquals(6, out.size) // still capped
     }
 
     @Test

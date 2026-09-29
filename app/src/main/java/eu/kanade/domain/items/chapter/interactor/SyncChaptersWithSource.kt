@@ -104,7 +104,10 @@ class SyncChaptersWithSource(
             val dbChapter = dbChapters.find { it.url == chapter.url }
 
             if (dbChapter == null) {
-                val toAddChapter = if (chapter.dateUpload == 0L) {
+                // Canon rows (canon: urls) keep 0 when the worker has no
+                // carrier date — the card renders "N/A", not a fake
+                // "now". Real feeds keep the old now/maxSeen fallback.
+                val toAddChapter = if (chapter.dateUpload == 0L && !chapter.url.startsWith("canon:")) {
                     val altDateUpload = if (maxSeenUploadDate == 0L) nowMillis else maxSeenUploadDate
                     chapter.copy(dateUpload = altDateUpload)
                 } else {

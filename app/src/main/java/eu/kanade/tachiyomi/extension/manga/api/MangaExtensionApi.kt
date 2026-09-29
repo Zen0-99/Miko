@@ -7,11 +7,7 @@ import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaLoadResult
 import eu.kanade.tachiyomi.extension.manga.util.MangaExtensionLoader
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.FORCE_NETWORK
 import eu.kanade.tachiyomi.network.NetworkHelper
-import eu.kanade.tachiyomi.network.awaitSuccess
-import eu.kanade.tachiyomi.network.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.serialization.Serializable
@@ -71,6 +67,14 @@ internal class MangaExtensionApi {
 
     private fun List<ExtensionIndexEntry>.toMangaExtensions(): List<MangaExtension.Available> {
         return this
+            // Combined repos (MikoDB) also ship anime + novel extensions —
+            // keep them out of the manga list.
+            .filterNot {
+                val pkg = it.pkgName.lowercase()
+                pkg.contains("animeextension") || pkg.contains("aniyomi") ||
+                    pkg.contains(".anime.") || pkg.contains("yokai.extension.novel") ||
+                    pkg.contains("tachiyomi.novel") || pkg.contains(".novel.")
+            }
             .filter {
                 it.libVersion >= MangaExtensionLoader.LIB_VERSION_MIN &&
                     it.libVersion <= MangaExtensionLoader.LIB_VERSION_MAX
@@ -203,4 +207,3 @@ private val extensionSourceMapper: (ExtensionSourceJsonObject) -> MangaExtension
         baseUrl = it.baseUrl,
     )
 }
-

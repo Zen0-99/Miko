@@ -47,9 +47,9 @@ class CanonicalCatalog {
             title = work.title,
             author = work.author,
             description = work.description,
-            // Real genres when the caller carried them (browse rows);
-            // the kind tag keeps a bare type visible otherwise.
-            genre = work.genres?.takeIf { it.isNotEmpty() } ?: listOf(work.type),
+            // Genres come only from real catalog/enrichment data — the
+            // work type ("oel", "manga") is taxonomy, not a genre tag.
+            genre = work.genres?.takeIf { it.isNotEmpty() }.orEmpty(),
             thumbnailUrl = work.coverUrl,
             status = statusOf(work.status, manga = true),
             source = CANONICAL_SOURCE_ID,
@@ -66,7 +66,7 @@ class CanonicalCatalog {
             title = work.title,
             author = work.author,
             description = work.description,
-            genre = work.genres?.takeIf { it.isNotEmpty() } ?: listOf(work.type),
+            genre = work.genres?.takeIf { it.isNotEmpty() }.orEmpty(),
             thumbnailUrl = work.coverUrl,
             status = statusOf(work.status, manga = false),
             source = CANONICAL_SOURCE_ID,

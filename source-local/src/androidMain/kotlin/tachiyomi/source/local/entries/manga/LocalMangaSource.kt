@@ -382,6 +382,6 @@ actual class LocalMangaSource(
     }
 }
 
-fun Manga.isLocal(): Boolean = source == LocalMangaSource.ID
+fun Manga.isLocal(): Boolean = source == LocalMangaSource.ID && !url.startsWith("miko:")
 
 fun MangaSource.isLocal(): Boolean = id == LocalMangaSource.ID
