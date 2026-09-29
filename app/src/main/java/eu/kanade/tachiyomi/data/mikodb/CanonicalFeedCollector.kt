@@ -38,6 +38,21 @@ class CanonicalFeedCollector(
     private val matcher: SeriesMatcher = Injekt.get(),
 ) {
 
+    /** Entry metadata carried by a source's series details — lets the
+     * caller backfill sparse canonical stubs from whichever extension
+     * actually won the identity gate (13-02). */
+    data class FeedDetails(
+        val description: String? = null,
+        val author: String? = null,
+        val genre: List<String> = emptyList(),
+        val thumbnailUrl: String? = null,
+        val status: Int? = null,
+    ) {
+        val isEmpty: Boolean
+            get() = description.isNullOrBlank() && author.isNullOrBlank() &&
+                genre.isEmpty() && thumbnailUrl.isNullOrBlank()
+    }
+
     data class Feed(
         val sourceId: Long,
         val pkgName: String,
@@ -50,6 +65,7 @@ class CanonicalFeedCollector(
         val verdict: SeriesMatcher.Decision,
         val score: Double,
         val reasons: List<String>,
+        val details: FeedDetails? = null,
     )
 
     data class Result(
@@ -197,6 +213,13 @@ class CanonicalFeedCollector(
             verdict = verdict.decision,
             score = verdict.score,
             reasons = verdict.reasons,
+            details = FeedDetails(
+                description = details.description?.takeIf { it.isNotBlank() },
+                author = details.author?.takeIf { it.isNotBlank() },
+                genre = details.genre.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() },
+                thumbnailUrl = details.thumbnail_url?.takeIf { it.isNotBlank() },
+                status = details.status.takeIf { it != SManga.UNKNOWN },
+            ),
         )
     }
 
@@ -277,6 +300,13 @@ class CanonicalFeedCollector(
             verdict = verdict.decision,
             score = verdict.score,
             reasons = verdict.reasons,
+            details = FeedDetails(
+                description = details.description?.takeIf { it.isNotBlank() },
+                author = details.author?.takeIf { it.isNotBlank() },
+                genre = details.genre.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() },
+                thumbnailUrl = details.thumbnail_url?.takeIf { it.isNotBlank() },
+                status = details.status.takeIf { it != SNovel.UNKNOWN },
+            ),
         )
     }
 

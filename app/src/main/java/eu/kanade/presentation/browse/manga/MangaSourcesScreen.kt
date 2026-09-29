@@ -99,6 +99,8 @@ fun MangaSourcesScreen(
     onClickUpdate: (Source) -> Unit = {},
     onRefresh: () -> Unit = {},
     onClickUpdateAll: () -> Unit = {},
+    /** MikoDB per-package ranking metadata - pkg -> tier/name. */
+    sourceMeta: Map<String, eu.kanade.tachiyomi.data.mikodb.MikoDbManager.SourceMeta> = emptyMap(),
 ) {
     // When there are no installed extensions (only the local source), hide
     // the "Installed" section header and auto-expand "Not Installed" so the
@@ -177,6 +179,7 @@ fun MangaSourcesScreen(
                         onClickTrustExtension = onClickTrustExtension,
                         downloadStates = downloadStates,
                         onClickUpdateAll = onClickUpdateAll,
+                        sourceMeta = sourceMeta,
                     )
                 } else {
                 LazyColumn(
@@ -289,6 +292,7 @@ private fun MangaSourcesCardView(
     downloadStates: SnapshotStateMap<String, InstallStep>,
     sourceExtensionMap: Map<Long, MangaExtension.Installed>,
     onClickUpdateAll: () -> Unit = {},
+    sourceMeta: Map<String, eu.kanade.tachiyomi.data.mikodb.MikoDbManager.SourceMeta> = emptyMap(),
 ) {
     // Group items by section (header + items)
     val sectionedItems = remember(items) {
@@ -381,6 +385,7 @@ private fun MangaSourcesCardView(
                                             isUpdating = isUpdating,
                                             isInstalled = true,
                                             isObsolete = ext?.isObsolete == true,
+                                            tier = ext?.pkgName?.let(sourceMeta::get)?.tier,
                                             onClick = { onClickItem(model.source, Listing.Popular) },
                                             onLongClick = { onLongClickItem(model.source) },
                                             onCogClick = {
@@ -397,6 +402,7 @@ private fun MangaSourcesCardView(
                                             version = model.extension.versionName,
                                             iconUrl = model.extension.iconUrl,
                                             isInstalled = false,
+                                            tier = sourceMeta[model.extension.pkgName]?.tier,
                                             onClick = { onClickInstallExtension(model.extension) },
                                         )
                                     }
@@ -408,6 +414,7 @@ private fun MangaSourcesCardView(
                                             version = model.extension.versionName,
                                             isInstalled = true,
                                             isUntrusted = true,
+                                            tier = sourceMeta[model.extension.pkgName]?.tier,
                                             onClick = { onClickTrustExtension(model.extension) },
                                             onTrustClick = { onClickTrustExtension(model.extension) },
                                         )

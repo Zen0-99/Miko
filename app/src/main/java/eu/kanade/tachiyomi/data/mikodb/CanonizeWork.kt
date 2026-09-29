@@ -29,7 +29,14 @@ class CanonizeWork(
 ) {
 
     sealed interface Outcome {
-        data class Canonized(val count: Int, val tentative: Int) : Outcome
+        /** [bestDetails] — metadata from the highest-scoring ACCEPT
+         *  feed; lets callers backfill sparse canonical entries from
+         *  the extension that actually won the identity gate. */
+        data class Canonized(
+            val count: Int,
+            val tentative: Int,
+            val bestDetails: CanonicalFeedCollector.FeedDetails? = null,
+        ) : Outcome
         data object Fresh : Outcome
         data object NoWork : Outcome
         data object NoVerifiedFeeds : Outcome
@@ -45,22 +52,39 @@ class CanonizeWork(
     suspend fun run(workId: String, carrier: Carrier = Carrier.MANGA): Outcome {
         if (carrier == Carrier.SHOWS) return Outcome.UnsupportedMedium
         if (!chapterMap.isStale(workId)) return Outcome.Fresh
-        val work = bridge.byWorkId(workId) ?: return Outcome.NoWork
+        val work = bridge.byWorkId(workId) ?: return Outcome.NoWork.also {
+            logcat { "canonize $workId: no work row" }
+        }
 
         val r = collector.collect(work, carrier.medium)
-        if (r.feeds.isEmpty() && r.failed.size > MAX_FAILURES) return Outcome.TooManyFailures
-        if (r.feeds.isEmpty()) return Outcome.NoVerifiedFeeds
+        if (r.feeds.isEmpty() && r.failed.size > MAX_FAILURES) {
+            return Outcome.TooManyFailures.also {
+                logcat { "canonize $workId: ${r.failed.size} source failures (${r.failed.keys})" }
+            }
+        }
+        if (r.feeds.isEmpty()) {
+            return Outcome.NoVerifiedFeeds.also {
+                logcat {
+                    "canonize $workId: no verified feeds " +
+                        "(tentative=${r.tentative.size} rejected=${r.rejected.size} failed=${r.failed.keys})"
+                }
+            }
+        }
 
         val feeds = r.feeds.map { it.wire(verified = true) } +
             r.tentative.map { it.wire(verified = false) }
 
         val resp = api.canonize(
             WorkIdentityApi.CanonizeRequest(work_id = workId, feeds = feeds),
-        ) ?: return Outcome.PostFailed
+        ) ?: return Outcome.PostFailed.also {
+            logcat { "canonize $workId: POST failed (${feeds.size} feeds)" }
+        }
 
         chapterMap.invalidate(workId)
-        logcat { "canonize $workId: ${resp.count} chapters (${r.tentative.size} tentative)" }
-        return Outcome.Canonized(resp.count, r.tentative.size)
+        val bestDetails = r.feeds.filter { it.details != null && !it.details.isEmpty }
+            .maxByOrNull { it.score }?.details
+        logcat { "canonize $workId: ${resp.count} chapters (${r.tentative.size} tentative, feeds=${r.feeds.map { it.pkgName }})" }
+        return Outcome.Canonized(resp.count, r.tentative.size, bestDetails)
     }
 
     private fun CanonicalFeedCollector.Feed.wire(verified: Boolean) =

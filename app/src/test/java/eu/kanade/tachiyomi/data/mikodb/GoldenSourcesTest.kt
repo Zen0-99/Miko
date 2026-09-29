@@ -29,14 +29,14 @@ class GoldenSourcesTest {
         json = json,
     )
 
-    private fun ext(pkg: String, vararg sourceIds: Long) = MangaExtension.Installed(
+    private fun ext(pkg: String, vararg sourceIds: Long, nsfw: Boolean = false) = MangaExtension.Installed(
         name = pkg.substringAfterLast('.'),
         pkgName = pkg,
         versionName = "1.0",
         versionCode = 1L,
         libVersion = 1.4,
         lang = "en",
-        isNsfw = false,
+        isNsfw = nsfw,
         pkgFactory = null,
         sources = sourceIds.map { id -> mockk<MangaSource> { every { this@mockk.id } returns id } },
         icon = null,
@@ -45,11 +45,12 @@ class GoldenSourcesTest {
         isShared = false,
     )
 
-    private fun work(providerLinks: String) = MangaNovelIdBridge.WorkRow(
+    private fun work(providerLinks: String, nsfw: Boolean = false) = MangaNovelIdBridge.WorkRow(
         mikoWorkId = "mk:mb:1",
         type = "manga",
         title = "Solo Leveling",
         providerLinks = providerLinks,
+        nsfw = nsfw,
     )
 
     private fun meta(
@@ -202,5 +203,43 @@ class GoldenSourcesTest {
 
         val out = golden.forWorkRow(w, WorkIdResolver.MEDIUM_MANGA)
         assertEquals(listOf("MangaDex", "LowTier"), out.map { it.name })
+    }
+
+    @Test
+    fun `nsfw extensions are never probed for sfw works`() = runBlocking {
+        every { mangaExtensions.installedExtensionsFlow } returns
+            MutableStateFlow(
+                listOf(
+                    ext("eu.kanade.tachiyomi.extension.all.nhentai", 1L, nsfw = true),
+                    ext("eu.kanade.tachiyomi.extension.en.mangabat", 2L),
+                ),
+            )
+        every { mikoDbManager.allSourceMeta() } returns mapOf(
+            "eu.kanade.tachiyomi.extension.all.nhentai" to meta(emptyList(), "S", "NHentai"),
+            "eu.kanade.tachiyomi.extension.en.mangabat" to meta(emptyList(), "B", "MangaBat"),
+        )
+        val w = work("[]") // SFW work → broad fallback must skip the S-tier porn ext.
+
+        val out = golden.forWorkRow(w, WorkIdResolver.MEDIUM_MANGA)
+        assertEquals(listOf("MangaBat"), out.map { it.name })
+    }
+
+    @Test
+    fun `nsfw works keep nsfw extensions in the pool`() = runBlocking {
+        every { mangaExtensions.installedExtensionsFlow } returns
+            MutableStateFlow(
+                listOf(
+                    ext("eu.kanade.tachiyomi.extension.all.nhentai", 1L, nsfw = true),
+                    ext("eu.kanade.tachiyomi.extension.en.mangabat", 2L),
+                ),
+            )
+        every { mikoDbManager.allSourceMeta() } returns mapOf(
+            "eu.kanade.tachiyomi.extension.all.nhentai" to meta(emptyList(), "S", "NHentai"),
+            "eu.kanade.tachiyomi.extension.en.mangabat" to meta(emptyList(), "B", "MangaBat"),
+        )
+        val w = work("[]", nsfw = true)
+
+        val out = golden.forWorkRow(w, WorkIdResolver.MEDIUM_MANGA)
+        assertEquals(listOf("NHentai", "MangaBat"), out.map { it.name })
     }
 }

@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.novel.api
 
 import android.content.Context
+import eu.kanade.tachiyomi.data.mikodb.MikoDbManager
 import eu.kanade.tachiyomi.extension.ExtensionUpdateNotifier
 import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
@@ -38,6 +39,7 @@ internal class NovelExtensionApi {
     private val extensionManager: NovelExtensionManager by injectLazy()
     private val json: Json by injectLazy()
     private val extensionRepoService: ExtensionRepoService by injectLazy()
+    private val mikoDbManager: MikoDbManager by injectLazy()
 
     private val lastExtCheck: Preference<Long> by lazy {
         preferenceStore.getLong("last_novel_ext_check", 0)
@@ -60,6 +62,9 @@ internal class NovelExtensionApi {
     private suspend fun getExtensions(extRepo: ExtensionRepo): List<NovelExtension.Available> {
         val repoBaseUrl = extRepo.baseUrl
         return try {
+            // Best-effort: repos shipping a miko.json sidecar (MikoDB) sync the
+            // identity DB + binding metadata here. No-op for ordinary repos.
+            mikoDbManager.trySync(repoBaseUrl)
             android.util.Log.i("NovelExtApi", "getExtensions: fetching index from $repoBaseUrl")
             val entries = extensionRepoService.fetchExtensionIndex(repoBaseUrl)
                 ?: run {

@@ -79,6 +79,16 @@ fun Screen.mangaSourcesTab(
     val cardDesign by cardDesignPref.changes().collectAsState(cardDesignPref.get())
     val cardColumns by cardColumnsPref.changes().collectAsState(cardColumnsPref.get())
 
+    // MikoDB per-extension ranking metadata (tier badges on cards).
+    val mikoDbManager = remember { Injekt.get<eu.kanade.tachiyomi.data.mikodb.MikoDbManager>() }
+    val sourceMeta by androidx.compose.runtime.produceState(
+        initialValue = emptyMap<String, eu.kanade.tachiyomi.data.mikodb.MikoDbManager.SourceMeta>(),
+    ) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            mikoDbManager.allSourceMeta()
+        }
+    }
+
     return TabContent(
         titleRes = AYMR.strings.label_manga_sources,
         actions = persistentListOf(),
@@ -95,6 +105,7 @@ fun Screen.mangaSourcesTab(
                 cardDesign = cardDesign,
                 cardColumns = cardColumns,
                 sourceExtensionMap = sourceExtensionMap,
+                sourceMeta = sourceMeta,
                 onRefresh = screenModel::findAvailableExtensions,
                 onClickUpdateAll = {
                     installedExtensions.filter { it.hasUpdate }.forEach { ext ->

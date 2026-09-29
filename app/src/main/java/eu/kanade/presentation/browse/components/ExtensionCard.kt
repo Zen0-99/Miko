@@ -2,6 +2,7 @@ package eu.kanade.presentation.browse.components
 
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,6 +72,8 @@ fun ExtensionCard(
     isObsolete: Boolean = false,
     isUntrusted: Boolean = false,
     supportsComments: Boolean = false,
+    /** MikoDB source rank (S/A/B/C) - small outlined chip in the lang row. */
+    tier: String? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     onCogClick: () -> Unit = {},
@@ -197,6 +200,9 @@ fun ExtensionCard(
                                 modifier = Modifier.size(12.dp),
                             )
                         }
+                        if (!tier.isNullOrBlank()) {
+                            TierBadge(tier)
+                        }
                     }
                     // Title (below lang/version)
                     Text(
@@ -211,6 +217,26 @@ fun ExtensionCard(
             }
         }
     }
+}
+
+/** Tiny outlined rank chip - S stands out, A is primary, B muted, C faded error. */
+@Composable
+private fun TierBadge(tier: String) {
+    val color = when (tier.uppercase()) {
+        "S" -> MaterialTheme.colorScheme.tertiary
+        "A" -> MaterialTheme.colorScheme.primary
+        "C" -> MaterialTheme.colorScheme.error.copy(alpha = 0.65f)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(
+        text = tier.uppercase(),
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        color = color,
+        modifier = Modifier
+            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 4.dp),
+    )
 }
 
 /**

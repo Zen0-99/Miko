@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.manga.api
 
 import android.content.Context
+import eu.kanade.tachiyomi.data.mikodb.MikoDbManager
 import eu.kanade.tachiyomi.extension.ExtensionUpdateNotifier
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
@@ -38,6 +39,7 @@ internal class MangaExtensionApi {
     private val extensionManager: MangaExtensionManager by injectLazy()
     private val json: Json by injectLazy()
     private val extensionRepoService: ExtensionRepoService by injectLazy()
+    private val mikoDbManager: MikoDbManager by injectLazy()
 
     private val lastExtCheck: Preference<Long> by lazy {
         preferenceStore.getLong("last_ext_check", 0)
@@ -55,6 +57,9 @@ internal class MangaExtensionApi {
     private suspend fun getExtensions(extRepo: ExtensionRepo): List<MangaExtension.Available> {
         val repoBaseUrl = extRepo.baseUrl
         return try {
+            // Best-effort: repos shipping a miko.json sidecar (MikoDB) sync the
+            // identity DB + binding metadata here. No-op for ordinary repos.
+            mikoDbManager.trySync(repoBaseUrl)
             val entries = extensionRepoService.fetchExtensionIndex(repoBaseUrl)
                 ?: return emptyList()
             entries.toMangaExtensions()

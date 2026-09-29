@@ -522,7 +522,10 @@ class NovelScreenModel(
                             .workIdFromNovelUrl(novel.url)
                             ?.let { workId ->
                                 mangaBakaEnrich.run(workId, novel)
-                                canonizeWork.run(workId, Carrier.BOOKS)
+                                val outcome = canonizeWork.run(workId, Carrier.BOOKS)
+                                if (outcome is eu.kanade.tachiyomi.data.mikodb.CanonizeWork.Outcome.Canonized) {
+                                    backfillFromFeed(novel, outcome.bestDetails)
+                                }
                                 canonicalChapterSync.syncNovel(novel, workId)
                             }
                     }.onFailure { e ->
@@ -1899,6 +1902,38 @@ class NovelScreenModel(
                 logcat(LogPriority.ERROR, e)
             }
         }
+    }
+
+    /**
+     * Backfill a sparse canonical stub with metadata from the extension
+     * that won the identity gate — same as the manga entry path; only
+     * fields the entry still lacks are written.
+     */
+    private suspend fun backfillFromFeed(
+        novel: Novel,
+        details: eu.kanade.tachiyomi.data.mikodb.CanonicalFeedCollector.FeedDetails?,
+    ) {
+        if (details == null || details.isEmpty) return
+        val genres = novel.genre.orEmpty()
+        val stubGenre = genres.isEmpty() ||
+            (genres.size <= 2 && genres.lastOrNull()?.toIntOrNull() != null)
+        val update = tachiyomi.domain.entries.novel.model.NovelUpdate(
+            id = novel.id,
+            description = details.description.takeIf { novel.description.isNullOrBlank() },
+            genre = details.genre.takeIf { stubGenre && it.isNotEmpty() },
+            author = details.author.takeIf { novel.author.isNullOrBlank() },
+            thumbnailUrl = details.thumbnailUrl.takeIf { novel.thumbnailUrl.isNullOrBlank() },
+            status = details.status?.toLong().takeIf { novel.status == 0L },
+        )
+        if (update.description == null && update.genre == null && update.author == null &&
+            update.thumbnailUrl == null && update.status == null
+        ) {
+            return
+        }
+        runCatching { updateNovel.await(update) }
+            .onFailure { e ->
+                logcat(LogPriority.WARN) { "[NovelScreenModel] feed backfill failed: ${e.message}" }
+            }
     }
 
     private suspend fun List<NovelChapter>.toNovelChapterListItems(novel: Novel): List<NovelChapterList.Item> {

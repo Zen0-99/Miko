@@ -93,6 +93,8 @@ fun AnimeSourcesScreen(
     onClickUpdate: (AnimeSource) -> Unit = {},
     onRefresh: () -> Unit = {},
     onClickUpdateAll: () -> Unit = {},
+    /** MikoDB per-package ranking metadata — pkg → tier/name. */
+    sourceMeta: Map<String, eu.kanade.tachiyomi.data.mikodb.MikoDbManager.SourceMeta> = emptyMap(),
 ) {
     // When there are no installed extensions (only the local source), hide
     // the "Installed" section header and auto-expand "Not Installed" so the
@@ -178,6 +180,7 @@ fun AnimeSourcesScreen(
                         onClickTrustExtension = onClickTrustExtension,
                         downloadStates = downloadStates,
                         onClickUpdateAll = onClickUpdateAll,
+                        sourceMeta = sourceMeta,
                     )
                 } else {
                     LazyColumn(
@@ -292,6 +295,7 @@ private fun AnimeSourcesCardView(
     onClickTrustExtension: (AnimeExtension.Untrusted) -> Unit,
     downloadStates: SnapshotStateMap<String, InstallStep>,
     onClickUpdateAll: () -> Unit = {},
+    sourceMeta: Map<String, eu.kanade.tachiyomi.data.mikodb.MikoDbManager.SourceMeta> = emptyMap(),
 ) {
     // Group items by section (header + items)
     val sectionedItems = remember(items) {
@@ -385,6 +389,7 @@ private fun AnimeSourcesCardView(
                                             isUpdating = isUpdating,
                                             isInstalled = true,
                                             isObsolete = ext?.isObsolete == true,
+                                            tier = ext?.pkgName?.let(sourceMeta::get)?.tier,
                                             onClick = { onClickItem(model.source, Listing.Popular) },
                                             onLongClick = { onLongClickItem(model.source) },
                                             onCogClick = {
@@ -404,6 +409,7 @@ private fun AnimeSourcesCardView(
                                             version = model.extension.versionName,
                                             iconUrl = model.extension.iconUrl,
                                             isInstalled = false,
+                                            tier = sourceMeta[model.extension.pkgName]?.tier,
                                             onClick = { onClickInstallExtension(model.extension) },
                                         )
                                     }
@@ -415,6 +421,7 @@ private fun AnimeSourcesCardView(
                                             version = model.extension.versionName,
                                             isInstalled = true,
                                             isUntrusted = true,
+                                            tier = sourceMeta[model.extension.pkgName]?.tier,
                                             onClick = { onClickTrustExtension(model.extension) },
                                             onTrustClick = { onClickTrustExtension(model.extension) },
                                         )

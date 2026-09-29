@@ -61,21 +61,26 @@ class GoldenSources(
     }
 
     suspend fun forWorkRow(work: MangaNovelIdBridge.WorkRow, medium: String): List<GoldenSource> {
-        val installed = installedPkgs(medium)
+        // NSFW extensions are never probed for SFW works — searching a
+        // safe title on a porn aggregator can only return wrong matches,
+        // and a flagged ext's feed would poison the merged sequence.
+        val installed = installedExts(medium)
+            .let { list -> if (work.nsfw) list else list.filter { !it.isNsfw } }
         if (installed.isEmpty()) return emptyList()
+        val installedByPkg = installed.associateBy { it.pkgName }
         val links = providerLinksOf(work.providerLinks)
         val meta = mikoDbManager.allSourceMeta()
 
         // Declared path: miko.json `providers` ∩ provider_links ∩ installed.
         val byProvider = mutableMapOf<String, MutableList<GoldenSource>>()
         for ((pkg, m) in meta) {
-            if (pkg !in installed) continue
+            val ext = installedByPkg[pkg] ?: continue
             for (provider in m.providers) {
                 byProvider.getOrPut(provider) { mutableListOf() }
                     .add(
                         GoldenSource(
                             pkgName = pkg,
-                            sourceIds = installed.getValue(pkg),
+                            sourceIds = ext.sourceIds,
                             name = m.name,
                             tier = m.tier,
                             provider = provider,
@@ -90,21 +95,20 @@ class GoldenSources(
             candidates.map { it.copy(externalId = link.externalId, url = link.url) }
         }
 
-        // Heuristic path: miko.json ships no `providers` rows for text
-        // extensions today, so bind installed packages whose identity
+        // Heuristic path: bind installed packages whose identity
         // matches the carrier — pkg last segment vs provider slug or
         // link host ("...all.webtoons" ↔ "webtoons" ↔ webtoons.com).
         val declaredPkgs = declared.mapTo(HashSet()) { it.pkgName }
         val heuristic = links.flatMap { link ->
             val hostSlug = hostSlugOf(link.url)
-            installed.filterKeys { pkg ->
-                pkg !in declaredPkgs && pkgMatchesProvider(pkg, link.provider, hostSlug)
-            }.map { (pkg, ids) ->
+            installed.filter { ext ->
+                ext.pkgName !in declaredPkgs && pkgMatchesProvider(ext.pkgName, link.provider, hostSlug)
+            }.map { ext ->
                 GoldenSource(
-                    pkgName = pkg,
-                    sourceIds = ids,
-                    name = meta[pkg]?.name ?: pkg.substringAfterLast('.'),
-                    tier = meta[pkg]?.tier ?: "",
+                    pkgName = ext.pkgName,
+                    sourceIds = ext.sourceIds,
+                    name = meta[ext.pkgName]?.name ?: ext.pkgName.substringAfterLast('.'),
+                    tier = meta[ext.pkgName]?.tier ?: "",
                     provider = link.provider,
                     externalId = link.externalId,
                     url = link.url,
@@ -124,15 +128,15 @@ class GoldenSources(
         // installed extensions title-search the work; SeriesMatcher
         // still gates identity downstream, so wrong-series feeds are
         // rejected rather than merged.
-        return installed.entries
-            .sortedWith(compareBy({ tierRank(meta[it.key]?.tier ?: "") }, { it.key }))
+        return installed
+            .sortedWith(compareBy({ tierRank(meta[it.pkgName]?.tier ?: "") }, { it.pkgName }))
             .take(BROAD_FALLBACK_MAX)
-            .map { (pkg, ids) ->
+            .map { ext ->
                 GoldenSource(
-                    pkgName = pkg,
-                    sourceIds = ids,
-                    name = meta[pkg]?.name ?: pkg.substringAfterLast('.'),
-                    tier = meta[pkg]?.tier ?: "",
+                    pkgName = ext.pkgName,
+                    sourceIds = ext.sourceIds,
+                    name = meta[ext.pkgName]?.name ?: ext.pkgName.substringAfterLast('.'),
+                    tier = meta[ext.pkgName]?.tier ?: "",
                     provider = "",
                     externalId = null,
                     url = null,
@@ -187,18 +191,25 @@ class GoldenSources(
 
         /** Cap on broad-fallback search candidates — every candidate is
          *  a getSearchManga + details + chapterList round trip. */
-        const val BROAD_FALLBACK_MAX = 4
+        const val BROAD_FALLBACK_MAX = 6
     }
 
-    /** Installed extension pkg → its source ids, for the medium. */
-    private fun installedPkgs(medium: String): Map<String, List<Long>> =
+    /** An installed extension the canonical pipeline may drive. */
+    internal data class InstalledExt(
+        val pkgName: String,
+        val sourceIds: List<Long>,
+        val isNsfw: Boolean,
+    )
+
+    /** Installed extensions for the medium, pkg-keyed with source ids. */
+    private fun installedExts(medium: String): List<InstalledExt> =
         if (medium == WorkIdResolver.MEDIUM_BOOKS) {
             novelExtensions.installedExtensionsFlow.value
                 .filterIsInstance<NovelExtension.Installed>()
-                .associate { it.pkgName to it.sources.map { s -> s.id } }
+                .map { InstalledExt(it.pkgName, it.sources.map { s -> s.id }, it.isNsfw) }
         } else {
             mangaExtensions.installedExtensionsFlow.value
                 .filterIsInstance<MangaExtension.Installed>()
-                .associate { it.pkgName to it.sources.map { s -> s.id } }
+                .map { InstalledExt(it.pkgName, it.sources.map { s -> s.id }, it.isNsfw) }
         }
 }
