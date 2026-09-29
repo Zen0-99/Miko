@@ -26,7 +26,7 @@ page_size_dialog*.png
 ui*.xml
 
 # Extracted libs (not source)
-libs/
+libs/*
 # Keep the local Maven repo for vendored AARs
 !libs/repo/
 
