@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import eu.kanade.presentation.entries.components.ExpandableEntryDescription
+import tachiyomi.i18n.MR
 
 /**
  * Deprecated — use [eu.kanade.presentation.entries.components.ExpandableEntryDescription] instead.
@@ -21,6 +22,9 @@ fun ExpandableNovelDescription(
     ExpandableEntryDescription(
         defaultExpandState = defaultExpandState,
         description = description,
+        // Same "Description" header manga/anime show — not the legacy
+        // shared default ("About this novel").
+        titleResource = MR.strings.description,
         tagsProvider = tagsProvider,
         accentColor = accentColor,
         onTagSearch = onTagSearch,

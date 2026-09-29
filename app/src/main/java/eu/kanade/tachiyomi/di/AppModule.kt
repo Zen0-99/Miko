@@ -346,6 +346,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalFeedCollector() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonizeWork() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher() }
         addSingletonFactory { eu.kanade.tachiyomi.data.comments.CommentsApi() }

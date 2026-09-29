@@ -205,7 +205,10 @@ class MangaBakaEnrich(
         description = description?.takeIf { it.isNotBlank() },
         status = status,
         author = nameListOf(authors).firstOrNull(),
-        genres = nameListOf(genres).ifEmpty { nameListOf(genres_v2) },
+        // MangaBaka genre slugs arrive lowercase ("sci-fi") — title-case
+        // them so canonical rows render like extension-fetched entries.
+        genres = (nameListOf(genres).ifEmpty { nameListOf(genres_v2) })
+            .map { it.replaceFirstChar { c -> if (c.isLowerCase()) c.titlecase() else c.toString() } },
         coverUrl = coverUrlOf(cover),
         providerLinks = providerLinksOfLinks(links_v2),
         externalIds = sourceIdsOf(source),
@@ -227,10 +230,13 @@ class MangaBakaEnrich(
     }
 
     private fun coverUrlOf(cover: JsonObject?): String? {
+        // Full-res original first (the x250 imgproxy variant renders
+        // visibly soft as an entry cover), then largest-to-smallest.
+        (cover?.get("raw") as? JsonObject)?.get("url")?.jsonPrimitive?.contentOrNull
+            ?.let { return it }
         fun variant(name: String): String? = (cover?.get(name) as? JsonObject)
             ?.get("x1")?.jsonPrimitive?.contentOrNull
-        return variant("x250") ?: variant("x150") ?: variant("x100")
-            ?: (cover?.get("raw") as? JsonObject)?.get("url")?.jsonPrimitive?.contentOrNull
+        return variant("x350") ?: variant("x250") ?: variant("x150")
     }
 
     private fun sourceIdsOf(source: Map<String, SourceDto>?): Map<String, String> =
@@ -244,8 +250,10 @@ class MangaBakaEnrich(
     companion object {
         private const val BASE_URL = "https://api.mangabaka.org"
         private const val MB_PREFIX = "mk:mb:"
-        /** Bridge-row marker: detail already fetched (success or miss). */
-        internal const val RESOLUTION_MB_DETAIL = "mb_detail"
+        /** Bridge-row marker: detail already fetched (success or miss).
+         *  Bumped to v2 — rows enriched under v1 carried the x250 proxy
+         *  cover and lowercase genres, so they re-fetch once. */
+        internal const val RESOLUTION_MB_DETAIL = "mb_detail_v2"
 
         /**
          * links_v2 webplatform URLs → provider_links entries. Provider slug

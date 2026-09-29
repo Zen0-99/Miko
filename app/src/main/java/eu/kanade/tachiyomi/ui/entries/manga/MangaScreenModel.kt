@@ -29,7 +29,6 @@ import eu.kanade.domain.track.manga.interactor.RefreshMangaTracks
 import eu.kanade.domain.track.manga.interactor.TrackChapter
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
-import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
@@ -141,9 +140,7 @@ class MangaScreenModel(
     private val suggestionCoordinator: SuggestionCoordinator = Injekt.get(),
     private val searchFallbackEngine: MangaSearchFallbackEngine = Injekt.get(),
     private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
-    private val canonizeWork: eu.kanade.tachiyomi.data.mikodb.CanonizeWork = Injekt.get(),
-    private val mangaBakaEnrich: eu.kanade.tachiyomi.data.mikodb.MangaBakaEnrich = Injekt.get(),
-    private val canonicalChapterSync: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync = Injekt.get(),
+    private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -492,26 +489,9 @@ class MangaScreenModel(
             // (13-03) so the unified list renders through the normal
             // chapter pipeline.
             if (isCanonical) {
-                screenModelScope.launchIO {
-                    runCatching {
-                        eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
-                            .workIdFromMangaUrl(manga.url)
-                            ?.let { workId ->
-                                // Seeded rows arrive with no description and
-                                // empty provider_links — detail enrichment
-                                // must run before canonize so golden-source
-                                // selection has links to bind.
-                                mangaBakaEnrich.run(workId, manga)
-                                val outcome = canonizeWork.run(workId, Carrier.MANGA)
-                                if (outcome is eu.kanade.tachiyomi.data.mikodb.CanonizeWork.Outcome.Canonized) {
-                                    backfillFromFeed(manga, outcome.bestDetails)
-                                }
-                                canonicalChapterSync.sync(manga, workId)
-                            }
-                    }.onFailure { e ->
-                        logcat(LogPriority.WARN) { "[MangaScreenModel] canonical pipeline failed: ${e.message}" }
-                    }
-                }
+                eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                    .workIdFromMangaUrl(manga.url)
+                    ?.let { workId -> canonicalPipelineRunner.launchManga(workId, manga) }
             }
 
             // Upgrade the cover to hi-res artwork (AniList -> MangaDex -> Jikan)
@@ -1397,39 +1377,6 @@ class MangaScreenModel(
     // Chapters list - end
 
     // Track sheet - start
-
-    /**
-     * Backfill a sparse canonical stub with metadata from the extension
-     * that won the identity gate — description/genres/author/cover land
-     * from the S/A-ranked source when MangaBaka enrichment left gaps.
-     * Only fills fields the entry still lacks; real enrich data wins.
-     */
-    private suspend fun backfillFromFeed(
-        manga: Manga,
-        details: eu.kanade.tachiyomi.data.mikodb.CanonicalFeedCollector.FeedDetails?,
-    ) {
-        if (details == null || details.isEmpty) return
-        val genres = manga.genre.orEmpty()
-        val stubGenre = genres.isEmpty() ||
-            (genres.size <= 2 && genres.lastOrNull()?.toIntOrNull() != null)
-        val update = tachiyomi.domain.entries.manga.model.MangaUpdate(
-            id = manga.id,
-            description = details.description.takeIf { manga.description.isNullOrBlank() },
-            genre = details.genre.takeIf { stubGenre && it.isNotEmpty() },
-            author = details.author.takeIf { manga.author.isNullOrBlank() },
-            thumbnailUrl = details.thumbnailUrl.takeIf { manga.thumbnailUrl.isNullOrBlank() },
-            status = details.status?.toLong().takeIf { manga.status == 0L },
-        )
-        if (update.description == null && update.genre == null && update.author == null &&
-            update.thumbnailUrl == null && update.status == null
-        ) {
-            return
-        }
-        runCatching { updateManga.await(update) }
-            .onFailure { e ->
-                logcat(LogPriority.WARN) { "[MangaScreenModel] feed backfill failed: ${e.message}" }
-            }
-    }
 
     private fun observeTrackers() {
         val manga = successState?.manga ?: return

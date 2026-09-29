@@ -132,10 +132,11 @@ private fun pillsFor(carrier: Carrier): List<SubPill> = when (carrier) {
         SubPill(AYMR.strings.carrier_books, null),
     )
     else -> listOf(
-        SubPill(AYMR.strings.carrier_manga, "manga,manhwa,manhua"),
-        // MangaBaka's type vocab has no comic/webtoon — webtoon-flavored
-        // rows land in `oel`/`other`, which is what this pill queries.
-        SubPill(AYMR.strings.discovery_pill_webtoons, "webtoon,oel,other"),
+        SubPill(AYMR.strings.carrier_manga, "manga,comic"),
+        // All vertical-scroll content lives here — MangaBaka has no
+        // literal `webtoon` type, so manhwa/manhua carry the scroll
+        // formats alongside oel/other.
+        SubPill(AYMR.strings.discovery_pill_webtoons, "manhwa,manhua,webtoon,oel,other"),
     )
 }
 

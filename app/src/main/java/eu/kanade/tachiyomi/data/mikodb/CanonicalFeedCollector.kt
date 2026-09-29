@@ -7,9 +7,11 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import logcat.logcat
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.service.NovelSourceManager
@@ -104,17 +106,27 @@ class CanonicalFeedCollector(
         coroutineScope {
             goldens.map { g ->
                 async {
-                    runCatching {
-                        if (isBooks) {
-                            collectNovelFrom(g, query, work.title ?: "")
-                        } else {
-                            collectFrom(g, query, work.title ?: "")
+                    // Bound each source probe — a stalled Cloudflare/resolver
+                    // path must not hang the whole collect (coroutineScope
+                    // waits for every child).
+                    val res = try {
+                        withTimeout(SOURCE_TIMEOUT_MS) {
+                            runCatching {
+                                if (isBooks) {
+                                    collectNovelFrom(g, query, work.title ?: "")
+                                } else {
+                                    collectFrom(g, query, work.title ?: "")
+                                }
+                            }
                         }
+                    } catch (e: TimeoutCancellationException) {
+                        failed[g.pkgName] = "timeout"
+                        null
                     }
-                        .getOrElse { e ->
-                            failed[g.pkgName] = e.message ?: e.javaClass.simpleName
-                            null
-                        }
+                    res?.getOrElse { e ->
+                        failed[g.pkgName] = e.message ?: e.javaClass.simpleName
+                        null
+                    }
                 }
             }.forEach { deferred ->
                 val f = deferred.await() ?: return@forEach
@@ -312,5 +324,6 @@ class CanonicalFeedCollector(
 
     companion object {
         private const val TOP_CANDIDATES = 3
+        private const val SOURCE_TIMEOUT_MS = 45_000L
     }
 }

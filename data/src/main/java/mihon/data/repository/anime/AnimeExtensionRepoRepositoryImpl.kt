@@ -41,7 +41,15 @@ class AnimeExtensionRepoRepositoryImpl(
         signingKeyFingerprint: String,
     ) {
         try {
-            handler.await { extension_reposQueries.insert(baseUrl, name, shortName, website, signingKeyFingerprint) }
+            handler.await {
+                extension_reposQueries.insert(
+                    baseUrl,
+                    ExtensionRepo.mediumLabeledRepoName(name, "Shows"),
+                    shortName,
+                    website,
+                    signingKeyFingerprint,
+                )
+            }
         } catch (ex: SQLiteException) {
             throw SaveExtensionRepoException(ex)
         }
@@ -55,7 +63,15 @@ class AnimeExtensionRepoRepositoryImpl(
         signingKeyFingerprint: String,
     ) {
         try {
-            handler.await { extension_reposQueries.upsert(baseUrl, name, shortName, website, signingKeyFingerprint) }
+            handler.await {
+                extension_reposQueries.upsert(
+                    baseUrl,
+                    ExtensionRepo.mediumLabeledRepoName(name, "Shows"),
+                    shortName,
+                    website,
+                    signingKeyFingerprint,
+                )
+            }
         } catch (ex: SQLiteException) {
             throw SaveExtensionRepoException(ex)
         }
@@ -65,7 +81,7 @@ class AnimeExtensionRepoRepositoryImpl(
         handler.await {
             extension_reposQueries.replace(
                 newRepo.baseUrl,
-                newRepo.name,
+                ExtensionRepo.mediumLabeledRepoName(newRepo.name, "Shows"),
                 newRepo.shortName,
                 newRepo.website,
                 newRepo.signingKeyFingerprint,
