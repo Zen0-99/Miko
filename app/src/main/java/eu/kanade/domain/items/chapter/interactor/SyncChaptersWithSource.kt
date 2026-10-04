@@ -175,6 +175,18 @@ class SyncChaptersWithSource(
             deletedChapterNumbers.add(chapter.chapterNumber)
         }
 
+        // Read/bookmark restore is keyed on chapter number — page
+        // position deserves the same: a renumbered relist must not
+        // strand the reader at page 0 of a chapter they were inside.
+        val deletedLastPageReadMap = mutableMapOf<Double, Long>()
+        removedChapters.forEach { chapter ->
+            if (chapter.isRecognizedNumber && chapter.lastPageRead > 0) {
+                deletedLastPageReadMap.merge(
+                    chapter.chapterNumber, chapter.lastPageRead, ::maxOf,
+                )
+            }
+        }
+
         val deletedChapterNumberDateFetchMap = removedChapters.sortedByDescending { it.dateFetch }
             .associate { it.chapterNumber to it.dateFetch }
 
@@ -197,6 +209,10 @@ class SyncChaptersWithSource(
             chapter = chapter.copy(
                 read = chapter.chapterNumber in deletedReadChapterNumbers,
                 bookmark = chapter.chapterNumber in deletedBookmarkedChapterNumbers,
+                lastPageRead = maxOf(
+                    chapter.lastPageRead,
+                    deletedLastPageReadMap[chapter.chapterNumber] ?: 0L,
+                ),
             )
 
             // Try to to use the fetch date of the original entry to not pollute 'Updates' tab
@@ -209,13 +225,19 @@ class SyncChaptersWithSource(
             chapter
         }
 
+        // Insert before delete — the pair isn't one transaction, so a
+        // delete-first crash strands the entry at zero chapters until
+        // the next successful sync. New urls never collide with removed
+        // ones (a url present in both lists would have matched above),
+        // so inserting first is safe; a failed delete just leaves
+        // dupes the next sync cleans up.
+        if (updatedToAdd.isNotEmpty()) {
+            updatedToAdd = chapterRepository.addAllChapters(updatedToAdd)
+        }
+
         if (removedChapters.isNotEmpty()) {
             val toDeleteIds = removedChapters.map { it.id }
             chapterRepository.removeChaptersWithIds(toDeleteIds)
-        }
-
-        if (updatedToAdd.isNotEmpty()) {
-            updatedToAdd = chapterRepository.addAllChapters(updatedToAdd)
         }
 
         if (updatedChapters.isNotEmpty()) {

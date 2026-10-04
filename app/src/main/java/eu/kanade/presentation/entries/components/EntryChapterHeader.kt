@@ -3,13 +3,16 @@ package eu.kanade.presentation.entries.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +37,10 @@ import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
  * @param onClick called when the filter icon is tapped (opens filter sheet)
  * @param accentColor the entry's cover-derived accent color, or null for default
  * @param intervalDays optional smart update interval in days, shown inline after the count
+ * @param entryCountText formatted raw-row count (e.g. "14 entries") shown as
+ *  a small line under the chapter count when sub-part numbering (1.1/1.2,
+ *  "Part N" rows) makes the entry list longer than the chapter count;
+ *  null hides it.
  */
 @Composable
 fun EntryChapterHeader(
@@ -41,10 +48,15 @@ fun EntryChapterHeader(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
+    entryCountText: String? = null,
     onFetchNew: (() -> Unit)? = null,
     onFetchAll: (() -> Unit)? = null,
     intervalDays: Int? = null,
     showInterval: Boolean = true,
+    /** Canonical-entry carrier chip (16-04): "Source: X ▾" opens the
+     *  preferred-carrier picker. Null on non-canonical entries. */
+    carrierLabel: String? = null,
+    onCarrierClick: (() -> Unit)? = null,
 ) {
     val iconTint = accentColor ?: MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA)
 
@@ -60,11 +72,20 @@ fun EntryChapterHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = itemCountText,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
+            Column {
+                Text(
+                    text = itemCountText,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                if (entryCountText != null) {
+                    Text(
+                        text = entryCountText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                    )
+                }
+            }
             // Show the interval badge only when showInterval is true.
             // Hidden when the series is completed or the last update is
             // older than 2 months (stale schedule).
@@ -99,19 +120,63 @@ fun EntryChapterHeader(
         }
 
         // Filter icon (rightmost, aligned with download icons in list items)
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.FilterList,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(24.dp),
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (carrierLabel != null && onCarrierClick != null) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onCarrierClick)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Extension,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = carrierLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.FilterList,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
         }
     }
+}
+
+/**
+ * Logical-chapter vs raw-entry counts for the header. Sub-part
+ * numbering — 1.1/1.2/1.3, "Part 2" rows stored under the parent
+ * number — collapses to the whole chapter; rows with no recognized
+ * number count individually. Returns (logical, raw).
+ */
+fun chapterCountPair(numbers: List<Double>): Pair<Int, Int> {
+    val parents = HashSet<Int>()
+    var unnumbered = 0
+    for (n in numbers) {
+        if (n >= 0) {
+            parents.add(kotlin.math.floor(n).toInt())
+        } else {
+            unnumbered++
+        }
+    }
+    return (parents.size + unnumbered) to numbers.size
 }

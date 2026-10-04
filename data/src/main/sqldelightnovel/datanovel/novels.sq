@@ -75,7 +75,21 @@ SELECT *
 FROM novels
 WHERE url = :url
 AND source = :source
+-- Duplicated canonical rows must never shadow the favorited copy —
+-- LIMIT 1 without this order could return a bare stub.
+ORDER BY favorite DESC, _id
 LIMIT 1;
+
+-- Canonical (`miko:` url) rows for the dedupe sweep — a legacy
+-- await bug minted a new row per materialize instead of reusing.
+getCanonicalNovelDupes:
+SELECT _id, url, favorite,
+  (SELECT COUNT(*) FROM novelchapters nc WHERE nc.novel_id = novels._id) AS chapter_count
+FROM novels
+WHERE source = :source AND url LIKE 'miko:%';
+
+deleteNovelById:
+DELETE FROM novels WHERE _id = :id;
 
 getFavorites:
 SELECT *

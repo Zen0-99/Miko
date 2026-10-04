@@ -10,6 +10,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
@@ -242,6 +243,14 @@ class AudiobookPlayerController(
      * → the next rendered chapter after it → the first rendered chapter.
      * Returns false when nothing is playable; callers fall back to live TTS.
      */
+    /**
+     * Whether this novel has a listening history — the session track or a
+     * persisted last-played chapter — so a "continue" affordance can pick
+     * audio vs. reader by the medium the user actually consumed last.
+     */
+    fun hasListenedBefore(novelId: Long): Boolean =
+        state.value.novelId == novelId || lastPlayedMap.containsKey(novelId)
+
     suspend fun resumeListening(novel: Novel): Boolean {
         val chapters = getNovelChaptersByNovelId.await(novel.id)
         if (chapters.isEmpty()) return false
@@ -294,9 +303,59 @@ class AudiobookPlayerController(
         mediaController?.pause()
     }
 
-    /** −30s — same increment the notification's rewind button uses. */
+    /**
+     * Rewind by the player's configured back-increment (30s, same as the
+     * notification's rewind button). When the playhead sits at the head of
+     * a chapter — 00:00–00:0x — the remainder carries into the tail of the
+     * previous track instead of clamping at 0, so a rewind near a boundary
+     * lands in the previous file by the full increment.
+     */
     fun rewind() {
-        mediaController?.seekBack()
+        val player = mediaController ?: return
+        val backMs = player.seekBackIncrement.takeIf { it > 0 } ?: 15_000L
+        val position = player.currentPosition
+        val previousIndex = player.previousMediaItemIndex
+        if (position == C.TIME_UNSET || position >= backMs ||
+            previousIndex == C.INDEX_UNSET
+        ) {
+            player.seekBack()
+            return
+        }
+        saveCurrentPosition()
+        val remainderMs = backMs - position
+        val previousDuration = player.currentTimeline
+            .getWindow(previousIndex, Timeline.Window())
+            .durationMs
+        if (previousDuration != C.TIME_UNSET) {
+            player.seekTo(previousIndex, (previousDuration - remainderMs).coerceAtLeast(0L))
+        } else {
+            // Duration resolves when the previous item prepares — land on it
+            // first, then step back from its tail once the duration arrives.
+            seekIntoTailOnceLoaded(previousIndex, remainderMs)
+            player.seekTo(previousIndex, C.TIME_UNSET)
+        }
+        pushPosition()
+    }
+
+    /** One-shot: when [index] becomes the current item and its duration is
+     *  known, seek to `duration - fromEndMs`. Aborts if the user navigates
+     *  to a different item before the duration resolves. */
+    private fun seekIntoTailOnceLoaded(index: Int, fromEndMs: Long) {
+        val player = mediaController ?: return
+        val listener = object : Player.Listener {
+            override fun onEvents(p: Player, events: Player.Events) {
+                if (p.currentMediaItemIndex != index) {
+                    p.removeListener(this)
+                    return
+                }
+                val duration = p.duration
+                if (duration != C.TIME_UNSET) {
+                    p.removeListener(this)
+                    p.seekTo(index, (duration - fromEndMs).coerceAtLeast(0L))
+                }
+            }
+        }
+        player.addListener(listener)
     }
 
     /** +10s — same increment the notification's fast-forward button uses. */

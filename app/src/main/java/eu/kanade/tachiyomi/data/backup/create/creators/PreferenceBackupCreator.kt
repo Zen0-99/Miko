@@ -20,12 +20,14 @@ import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
 class PreferenceBackupCreator(
-    private val animeSourceManager: AnimeSourceManager = Injekt.get(),
-    private val mangaSourceManager: MangaSourceManager = Injekt.get(),
     private val preferenceStore: PreferenceStore = Injekt.get(),
 ) {
+
+    private val animeSourceManager: AnimeSourceManager by injectLazy()
+    private val mangaSourceManager: MangaSourceManager by injectLazy()
 
     fun createApp(includePrivatePreferences: Boolean): List<BackupPreference> {
         return preferenceStore.getAll().toBackupPreferences()

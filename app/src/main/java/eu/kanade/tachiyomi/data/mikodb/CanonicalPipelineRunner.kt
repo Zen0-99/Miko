@@ -30,46 +30,85 @@ class CanonicalPipelineRunner(
     private val mangaBakaEnrich: MangaBakaEnrich = Injekt.get(),
     private val canonizeWork: CanonizeWork = Injekt.get(),
     private val canonicalChapterSync: CanonicalChapterSync = Injekt.get(),
+    private val canonizer: LibraryCanonizer = Injekt.get(),
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val running = ConcurrentHashMap.newKeySet<String>()
+    private val lastRanAt = ConcurrentHashMap<String, Long>()
 
-    /** Enrich → canonize → materialize chapters for a canonical manga row. */
-    fun launchManga(workId: String, manga: Manga) {
-        if (!running.add(workId)) return
+    /**
+     * Re-open debounce — every detail open kicks a launch, and the
+     * chain itself is internally freshness-gated (enrich tag, isStale),
+     * but a full re-run still rewrites the chapter list under the
+     * reader's eyes. Repeat launches inside this window are skipped.
+     */
+    private fun shouldRun(workId: String): Boolean {
+        val last = lastRanAt[workId] ?: return true
+        return System.currentTimeMillis() - last > DEBOUNCE_MS
+    }
+
+    /** Enrich → canonize → materialize chapters for a canonical manga row.
+     *  [force] bypasses the re-open debounce for explicit user refreshes. */
+    fun launchManga(workId: String, manga: Manga, force: Boolean = false) {
+        if ((!force && !shouldRun(workId)) || !running.add(workId)) return
         scope.launch {
             try {
+                var id = workId
+                var row = manga
+                // `mk:m:` rows are provisional local mints — re-resolve
+                // so a work the catalog learned since minting retargets
+                // onto its real id before enrich/canonize run.
+                if (id.startsWith(WorkIdMint.PREFIX)) {
+                    canonizer.promoteLocalMint(row)?.let { (m, newId) ->
+                        row = m
+                        id = newId
+                    }
+                }
                 // Seeded rows arrive with empty provider_links — enrich
                 // first so golden-source selection has links to bind.
-                mangaBakaEnrich.run(workId, manga)
-                canonizeWork.run(workId, Carrier.MANGA)
-                canonicalChapterSync.sync(manga, workId)
+                mangaBakaEnrich.run(id, row)
+                canonizeWork.run(id, Carrier.MANGA)
+                canonicalChapterSync.sync(row, id)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 logcat(LogPriority.WARN, e) { "[CanonicalPipeline] manga run failed for $workId" }
             } finally {
+                lastRanAt[workId] = System.currentTimeMillis()
                 running.remove(workId)
             }
         }
     }
 
     /** Same as [launchManga] for canonical novel/book rows. */
-    fun launchNovel(workId: String, novel: Novel) {
-        if (!running.add(workId)) return
+    fun launchNovel(workId: String, novel: Novel, force: Boolean = false) {
+        if ((!force && !shouldRun(workId)) || !running.add(workId)) return
         scope.launch {
             try {
-                mangaBakaEnrich.run(workId, novel)
-                canonizeWork.run(workId, Carrier.BOOKS)
-                canonicalChapterSync.syncNovel(novel, workId)
+                var id = workId
+                var row = novel
+                if (id.startsWith(WorkIdMint.PREFIX)) {
+                    canonizer.promoteLocalMint(row)?.let { (n, newId) ->
+                        row = n
+                        id = newId
+                    }
+                }
+                mangaBakaEnrich.run(id, row)
+                canonizeWork.run(id, Carrier.BOOKS)
+                canonicalChapterSync.syncNovel(row, id)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 logcat(LogPriority.WARN, e) { "[CanonicalPipeline] novel run failed for $workId" }
             } finally {
+                lastRanAt[workId] = System.currentTimeMillis()
                 running.remove(workId)
             }
         }
+    }
+
+    private companion object {
+        const val DEBOUNCE_MS = 10L * 60 * 1000
     }
 }

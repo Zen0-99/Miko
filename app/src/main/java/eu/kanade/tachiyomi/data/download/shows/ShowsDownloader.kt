@@ -385,11 +385,15 @@ class ShowsDownloader(
             tmpDir.findFile("${filename}_tmp.mkv")?.delete()
             tmpDir.renameTo(episodeDirname)
 
-            cache.addEpisode(episodeDirname, animeDir, download.anime)
-
-            DiskUtil.createNoMediaFile(tmpDir, context)
-
+            // The files are in place — the download is complete.
+            // Bookkeeping failures must not downgrade it to ERROR.
             download.status = ShowsDownload.State.DOWNLOADED
+            try {
+                cache.addEpisode(episodeDirname, animeDir, download.anime)
+                DiskUtil.createNoMediaFile(tmpDir, context)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+            }
         } catch (error: Throwable) {
             // TimeoutCancellationException is a CancellationException — surface
             // it as a real download error before the generic rethrow swallows it

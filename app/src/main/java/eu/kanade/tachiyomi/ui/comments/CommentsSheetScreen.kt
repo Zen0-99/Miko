@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.comments
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.presentation.comments.CommentSection
+import eu.kanade.presentation.entries.components.accentTintedSurface
 import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.tachiyomi.data.comments.ChapterThreadResolver
 import eu.kanade.tachiyomi.data.comments.ThreadIdResolver
@@ -85,6 +87,14 @@ class CommentsSheetScreen(
                 Carrier.BOOKS -> EntryCoverMetadata.EntryType.NOVEL
             },
         )
+        // The sheet interior carries the ENTRY accent darkened +
+        // desaturated into a surface — same recipe as the chapter cards.
+        // Falls back to the app primary while the accent is unresolved.
+        val sheetBackground = accentTintedSurface(
+            accent = accent ?: MaterialTheme.colorScheme.primary,
+            background = MaterialTheme.colorScheme.background,
+            dimmed = false,
+        )
         val scheme = if (accent != null) {
             MaterialTheme.colorScheme.copy(primary = accent)
         } else {
@@ -92,15 +102,22 @@ class CommentsSheetScreen(
         }
 
         MaterialTheme(colorScheme = scheme) {
-            CommentsContent(
-                threadId = resolved?.threadId,
-                fillHeight = fillHeight,
-            )
+            Box(
+                modifier = Modifier
+                    .then(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth())
+                    .background(sheetBackground),
+            ) {
+                CommentsContent(
+                    threadId = resolved?.threadId,
+                    fillHeight = fillHeight,
+                    accentColor = accent,
+                )
+            }
         }
     }
 
     @Composable
-    private fun CommentsContent(threadId: String?, fillHeight: Boolean) {
+    private fun CommentsContent(threadId: String?, fillHeight: Boolean, accentColor: androidx.compose.ui.graphics.Color?) {
         when {
             threadId == null -> Box(
                 modifier = if (fillHeight) {
@@ -154,6 +171,7 @@ class CommentsSheetScreen(
                         onAppeal = screenModel::appeal,
                         onLoadMore = screenModel::loadMore,
                         modifier = contentModifier,
+                        accentColor = accentColor,
                     )
                 }
             }

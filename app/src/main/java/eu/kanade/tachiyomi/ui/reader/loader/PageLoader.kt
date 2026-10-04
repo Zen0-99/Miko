@@ -18,6 +18,14 @@ abstract class PageLoader {
     abstract var isLocal: Boolean
 
     /**
+     * Display name of the source actually serving this chapter's pages —
+     * the resolved carrier for canonical chapters, the entry's source
+     * otherwise. Null until known.
+     */
+    open var sourceName: String? = null
+        protected set
+
+    /**
      * Returns the list of pages of a chapter.
      */
     abstract suspend fun getPages(): List<ReaderPage>

@@ -2,6 +2,7 @@ package eu.kanade.presentation.entries.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,24 +24,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
+import eu.kanade.presentation.components.fullDateText
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 
 /**
  * Horizontal chapter card for manga/novel detail views — the chapter-list
  * counterpart of the Nuvio episode card. Same chrome: fixed
  * 0.75 × screen width inside a snap-fling carousel, rounded 16dp body,
- * metadata pinned to the bottom, download/audio indicators top-right,
- * bottom-edge progress bar, check badge when finished. There is no still,
- * so the body is a tonal surface instead of an image + scrim.
+ * metadata pinned to the bottom, download/audio indicators top-right.
+ * Both shades are the entry accent darkened + desaturated into a surface
+ * ([accentTintedSurface]) — read cards sit a notch darker. There is no
+ * still, so the body is a tonal surface instead of an image + scrim.
  *
  * Swipe actions are intentionally absent (they fight the carousel's
  * scroll) — long-press selection exposes the same actions.
@@ -48,91 +50,119 @@ import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 @Composable
 fun EntryChapterCarouselCard(
     title: String,
-    date: String?,
-    metaParts: List<String>,
-    progressFraction: Float?,
+    dateUpload: Long,
+    scanlator: String?,
+    progress: String?,
     read: Boolean,
     bookmark: Boolean,
     selected: Boolean,
+    /** The next-in-line chapter to read — gets a thin accent outline. */
+    isNext: Boolean = false,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
+    /** Carrier hint on canonical rows (16-04) — e.g. "Needs extension"
+     *  or the carrier that would serve the row. Renders in the
+     *  scanlator slot (unused on canon rows); warning copies the error
+     *  color so the affordance reads as actionable. */
+    carrierNote: String? = null,
+    carrierNoteWarning: Boolean = false,
+    /** Non-null on multi-carrier canonical rows — tapping the note opens
+     *  the chapter-scoped carrier picker ("read this chapter with…"). */
+    onCarrierNoteClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
     val cardWidth = LocalConfiguration.current.screenWidthDp.dp * 0.75f
-    val metaAlpha = if (read) DISABLED_ALPHA else 1f
+    // Cards are the ENTRY accent darkened + desaturated into a surface —
+    // a purple-accented entry reads as a muted purple card. Read cards
+    // sit a notch darker, but never at/below the page background.
+    val cardColor = accentTintedSurface(
+        accent = accent,
+        background = MaterialTheme.colorScheme.background,
+        dimmed = read,
+    )
+    val readCheckTint = rememberOnAccentColor(cardColor)
 
     Box(
         modifier = modifier
             .width(cardWidth)
             .height(132.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                RoundedCornerShape(16.dp),
+            .background(cardColor)
+            .then(
+                if (isNext && !selected) {
+                    Modifier.border(1.dp, accent, RoundedCornerShape(16.dp))
+                } else {
+                    Modifier
+                },
             )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
             ),
     ) {
-        // Selection layer — accent tint + border, same as the episode card
+        // Selection layer — accent tint fill, same as the episode card
         if (selected) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(accent.copy(alpha = 0.18f))
-                    .border(1.5.dp, accent, RoundedCornerShape(16.dp)),
+                    .background(accent.copy(alpha = 0.18f)),
             )
         }
 
-        // Read badge (top-left accent circle, white ring — Nuvio style)
-        if (read) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(10.dp)
-                    .size(24.dp)
-                    .background(accent, RoundedCornerShape(12.dp))
-                    .border(
-                        2.dp,
-                        MaterialTheme.colorScheme.surfaceContainerHighest,
-                        RoundedCornerShape(12.dp),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
+        // Top-left status cluster (episode-card convention): read check,
+        // reading-progress pill, bookmark — one row pinned to the corner.
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (read) {
                 Icon(
                     imageVector = Icons.Outlined.Check,
                     contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(13.dp),
+                    tint = readCheckTint,
+                    modifier = Modifier.size(20.dp),
                 )
             }
-        }
-
-        // Bookmark marker (top-left, beside the read badge)
-        if (bookmark) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = if (read) 42.dp else 10.dp, top = 10.dp)
-                    .size(24.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                        RoundedCornerShape(12.dp),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Bookmark,
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier.size(14.dp),
+            if (progress != null) {
+                // "Page 7"-style progress pill — same black-scrim chip the
+                // episode card uses for "time watched".
+                Text(
+                    text = progress,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .background(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                            RoundedCornerShape(12.dp),
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
+            }
+            if (bookmark) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                            RoundedCornerShape(12.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Bookmark,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
         }
 
@@ -142,6 +172,7 @@ fun EntryChapterCarouselCard(
                 .align(Alignment.TopEnd)
                 .padding(6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             trailing?.invoke()
         }
@@ -152,8 +183,7 @@ fun EntryChapterCarouselCard(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
-                .alpha(metaAlpha),
+                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
@@ -166,58 +196,55 @@ fun EntryChapterCarouselCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (metaParts.isNotEmpty() || date != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    metaParts.forEach { part ->
-                        Text(
-                            text = part,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                .copy(alpha = SECONDARY_ALPHA),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                    if (date != null) {
-                        Text(
-                            text = date,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                .copy(alpha = SECONDARY_ALPHA),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        }
-
-        // Bottom-edge progress bar — in-progress chapters only
-        if (progressFraction != null && !read) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                    ),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
-                        .height(3.dp)
-                        .background(accent),
+                // Episode-card convention: release date on the left in the
+                // description color; everything else pins to the right
+                // edge — scanlator/carrier truncates, progress last.
+                Text(
+                    text = fullDateText(dateUpload),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                        .copy(alpha = SECONDARY_ALPHA),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                val metaLabel = scanlator?.takeIf { it.isNotBlank() } ?: carrierNote
+                if (!metaLabel.isNullOrBlank()) {
+                    Text(
+                        text = metaLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.End,
+                        color = if (carrierNoteWarning && scanlator.isNullOrBlank()) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            // Same color as the date text — the carrier
+                            // name is metadata, not a warning.
+                            MaterialTheme.colorScheme.onBackground
+                                .copy(alpha = SECONDARY_ALPHA)
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .let { m ->
+                                if (onCarrierNoteClick != null && scanlator.isNullOrBlank()) {
+                                    m.clickable(onClick = onCarrierNoteClick)
+                                } else {
+                                    m
+                                }
+                            },
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
     }
 }
+

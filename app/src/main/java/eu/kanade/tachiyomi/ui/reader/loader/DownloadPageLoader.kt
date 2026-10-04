@@ -31,6 +31,12 @@ internal class DownloadPageLoader(
 
     override var isLocal: Boolean = true
 
+    init {
+        // `source` is the carrier the download lives under (canon rows)
+        // or the entry's own source.
+        sourceName = source.name
+    }
+
     override suspend fun getPages(): List<ReaderPage> {
         val dbChapter = chapter.chapter
         val chapterPath = downloadProvider.findChapterDir(

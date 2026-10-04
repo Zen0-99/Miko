@@ -408,9 +408,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
             // Phase 14-02: a completed refresh mints + canonizes the whole
             // library in the background (resolve → markSeen → canonize).
-            if (basePreferences.commentsEnabled().get()) {
-                workPrefetcher.start(canonize = true)
-            }
+            workPrefetcher.start(canonize = true)
         }
     }
 

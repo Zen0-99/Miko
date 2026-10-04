@@ -3,6 +3,10 @@ package eu.kanade.tachiyomi.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -16,6 +20,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -65,13 +70,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -81,6 +90,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -88,9 +99,6 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
@@ -98,12 +106,21 @@ import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.LocalSharedTopBar
+import eu.kanade.presentation.components.NAV_DOWNLOAD_SHARED_KEY
+import eu.kanade.presentation.components.NAV_LEADING_ICON_SHARED_KEY
+import eu.kanade.presentation.components.NAV_PILL_SHARED_KEY
+
 import eu.kanade.presentation.components.SharedTopBarState
+import eu.kanade.presentation.entries.components.HeroSharedKind
+import eu.kanade.presentation.entries.components.heroSharedBoundsModifier
 import eu.kanade.presentation.home.ModePill
 import eu.kanade.presentation.library.LibraryUpdateProgressOverlay
 import eu.kanade.presentation.novel.audiobook.AudiobookMiniPlayer
+import eu.kanade.presentation.util.LocalNavAnimatedVisibilityScope
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
+import eu.kanade.presentation.util.navTransitionFadeAlpha
+import eu.kanade.presentation.util.navTransitionProgress
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.download.DownloadsTab
@@ -242,7 +259,9 @@ object HomeScreen : Screen() {
                             )
                         } else {
                             // Standard (non-glass) top bar — same search-first design
-                            // but with a solid surface background.
+                            // but with a solid surface background. Fades with the
+                            // nav transition like the glass variant — without it the
+                            // bar blinks under the shared-element overlay mid-morph.
                             val context = androidx.compose.ui.platform.LocalContext.current
                             val density = androidx.compose.ui.platform.LocalDensity.current
                             val statusBarHeight = remember {
@@ -250,10 +269,12 @@ object HomeScreen : Screen() {
                                 val id = res.getIdentifier("status_bar_height", "dimen", "android")
                                 if (id > 0) with(density) { res.getDimensionPixelSize(id).toDp() } else 0.dp
                             }
+                            val navFade = navTransitionFadeAlpha()
                             Column(
                                 modifier = Modifier
                                     .background(MaterialTheme.colorScheme.surface)
-                                    .padding(top = statusBarHeight),
+                                    .padding(top = statusBarHeight)
+                                    .graphicsLayer { alpha = navFade },
                             ) {
                                 SearchFirstTopBarContent(
                                     sharedTopBarState = sharedTopBarState,
@@ -769,28 +790,117 @@ private fun FloatingGlassTopBar(
         if (id > 0) with(density) { res.getDimensionPixelSize(id).toDp() } else 0.dp
     }
 
-    val glassModifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 12.dp)
-        .padding(top = statusBarHeight + 6.dp, bottom = 6.dp)
-        .shadow(elevation = 8.dp, shape = shape)
-        .clip(shape)
-        .hazeEffect(
-            state = hazeState,
-            style = HazeStyle(
-                backgroundColor = colorScheme.background,
-                tint = HazeTint(resolvedTint),
-                blurRadius = 24.dp,
-                noiseFactor = 0.12f,
-            ),
-        )
+    // The pill is a normal full-width bar whenever it carries content (search,
+    // back arrow, action icons, subtitle). When it exists solely to house the
+    // overflow menu it shrinks to a chip. The RIGHT edge is pinned — only the
+    // left edge travels — so the three-dot never moves between tabs.
+    val barExpanded = sharedTopBarState.searchAvailable ||
+        sharedTopBarState.navigateUp != null ||
+        sharedTopBarState.actions.any { it is AppBar.Action } ||
+        sharedTopBarState.subtitle != null ||
+        sharedTopBarState.numberOfEntries != null
+    val morphSpec = spring(
+        dampingRatio = 0.8f,
+        stiffness = 300f,
+        visibilityThreshold = Dp.VisibilityThreshold,
+    )
+    val heightSpec = spring(
+        dampingRatio = 0.8f,
+        stiffness = 300f,
+        visibilityThreshold = IntSize.VisibilityThreshold,
+    )
 
-    Box(
-        modifier = Modifier.then(glassModifier),
+    // Back to basics: the pill is a solid color — the tint composited
+    // over background, i.e. the exact color the glass reads as over the
+    // app background — at rest AND in transit, so the shared element
+    // never swaps its look mid-flight.
+    val navProgress = navTransitionProgress()
+    val pillAlpha = ((navProgress - 0.7f) / 0.3f).coerceIn(0f, 1f)
+    val glassFill = remember(resolvedTint, colorScheme) {
+        resolvedTint.compositeOver(colorScheme.background)
+    }
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .padding(top = statusBarHeight + 6.dp, bottom = 6.dp)
+            .graphicsLayer { alpha = pillAlpha },
     ) {
-        Column {
-            SearchFirstTopBarContent(
-                sharedTopBarState = sharedTopBarState,
+        // Compact footprint = one 48dp overflow slot + the row's 8dp horizontal
+        // padding. Only reached when barExpanded is false, which guarantees
+        // nothing else is in the row to be clipped.
+        val animatedWidth by animateDpAsState(
+            targetValue = if (barExpanded) maxWidth else 56.dp,
+            animationSpec = morphSpec,
+            label = "glassBarWidth",
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .width(animatedWidth),
+        ) {
+            // The surface IS the shared element — solid color at rest
+            // and in transit — morphing to the invisible anchor at the
+            // detail toolbar's trailing slot (NAV_PILL_SHARED_KEY),
+            // collapsing into the overflow corner with the three-dot.
+            // Content (text/icons) keeps the wrapper fade; the three-dot
+            // morphs on its own element.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(
+                        heroSharedBoundsModifier(
+                            NAV_PILL_SHARED_KEY,
+                            HeroSharedKind.Container,
+                        ),
+                    )
+                    .clip(shape)
+                    .background(glassFill),
+            )
+            // Height morphs too — a library subtitle expands the pill
+            // downward while the width stays pinned to the right edge.
+            Box(modifier = Modifier.clip(shape)) {
+                Column(modifier = Modifier.animateContentSize(heightSpec)) {
+                    SearchFirstTopBarContent(
+                        sharedTopBarState = sharedTopBarState,
+                    )
+                }
+            }
+        }
+        // Invisible partner for the detail toolbar's download action —
+        // the icon glides to this slot through the overlay instead of
+        // popping with the bar's fade (same pattern as the leading
+        // anchor below).
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 52.dp)
+                .size(48.dp)
+                .alpha(0f)
+                .then(
+                    heroSharedBoundsModifier(
+                        NAV_DOWNLOAD_SHARED_KEY,
+                        HeroSharedKind.Text,
+                    ),
+                ),
+        )
+        // Invisible partner for the detail toolbar's back arrow — the
+        // real leading slot only renders on search-capable tabs, so on
+        // the Home hub (no search) the back icon had no counterpart and
+        // popped with the screen instead of gliding. This anchor covers
+        // that case; when the real slot renders it takes over.
+        if (!(sharedTopBarState.navigateUp != null || sharedTopBarState.searchAvailable)) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(48.dp)
+                    .alpha(0f)
+                    .then(
+                        heroSharedBoundsModifier(
+                            NAV_LEADING_ICON_SHARED_KEY,
+                            HeroSharedKind.Text,
+                        ),
+                    ),
             )
         }
     }
@@ -826,11 +936,37 @@ private fun SearchFirstTopBarContent(
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // ── Left slot (48dp): back arrow or search icon ──
-            // Static between main tabs — only animates when entering/leaving
-            // a search-capable or navigateUp context. Small fixed-dp slide + fade.
+            // ── Leading group: back/search icon + search field or hint ──
+            // Weighted and clipped — when the floating glass bar shrinks to
+            // its chip size this slot collapses to 0 while the trailing
+            // actions stay pinned to the right edge.
             Box(
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .clipToBounds(),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+            // Left slot (48dp): back arrow or search icon. Appears/vanishes
+            // instantly — the morphing container bounds are the animation;
+            // icons themselves still fade/slide via the inner slots.
+            if (hasNavigateUp || canSearch) {
+            Box(
+                // Shared element with the detail toolbar's up arrow —
+                // the 48dp leading slot crossfades icon-to-icon through
+                // the overlay during transit instead of vanishing with
+                // the bar's early fade-out.
+                modifier = Modifier
+                    .size(48.dp)
+                    .then(
+                        heroSharedBoundsModifier(
+                            NAV_LEADING_ICON_SHARED_KEY,
+                            HeroSharedKind.Text,
+                        ),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 // Back arrow — visible on sub-screens with navigateUp
@@ -865,6 +1001,7 @@ private fun SearchFirstTopBarContent(
                         )
                     }
                 }
+            }
             }
 
             // ── Center slot: search field or tappable hint ──
@@ -969,6 +1106,9 @@ private fun SearchFirstTopBarContent(
                             )
                         }
                     }
+                }
+            }
+
                 }
             }
 

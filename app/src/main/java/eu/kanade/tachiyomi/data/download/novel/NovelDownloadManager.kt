@@ -35,6 +35,8 @@ class NovelDownloadManager(
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
 ) {
 
+    private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers by injectLazy()
+
     private val downloader = NovelDownloader(context, provider, cache)
 
     val isRunning: Boolean
@@ -94,8 +96,37 @@ class NovelDownloadManager(
         downloader.updateQueue(downloads)
     }
 
-    fun downloadChapters(novel: Novel, chapters: List<NovelChapter>, autoStart: Boolean = true) {
-        downloader.queueChapters(novel, chapters, autoStart)
+    suspend fun downloadChapters(
+        novel: Novel,
+        chapters: List<NovelChapter>,
+        autoStart: Boolean = true,
+        forcedCarrierPkg: String? = null,
+    ) {
+        downloader.queueChapters(novel, chapters, autoStart, forcedCarrierPkg)
+    }
+
+    /**
+     * The carrier source holding a canon chapter's downloaded text, if
+     * any — canon rows have no single home source, so the check scans
+     * every bound carrier's download dir.
+     */
+    suspend fun canonDownloadSource(
+        chapterName: String,
+        chapterScanlator: String?,
+        novel: Novel,
+    ): eu.kanade.tachiyomi.novelsource.online.NovelHttpSource? {
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return null
+        val sourceIds = runCatching {
+            workCarriers.forWork(workId, eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS)
+                .carriers
+        }.getOrNull()?.flatMap { it.sourceIds } ?: return null
+        return sourceIds.firstNotNullOfOrNull { id ->
+            (sourceManager.get(id) as? eu.kanade.tachiyomi.novelsource.online.NovelHttpSource)
+                ?.takeIf {
+                    cache.isChapterDownloaded(chapterName, chapterScanlator, novel.title, id, true)
+                }
+        }
     }
 
     fun addDownloadsToStartOfQueue(downloads: List<NovelDownload>) {
@@ -152,28 +183,53 @@ class NovelDownloadManager(
 
             removeFromDownloadQueue(filteredChapters)
 
-            val (novelDir, chapterDirs) = provider.findChapterDirs(filteredChapters, novel, source)
-            chapterDirs.forEach { it.delete() }
+            // Canon rows download under whichever carrier served them —
+            // scan every bound carrier's dir, not just the entry's own
+            // (stub) source dir.
+            val sourcesToScan = if (
+                eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                    .workIdFromNovelUrl(novel.url) != null
+            ) {
+                carrierSources(novel).ifEmpty { listOf(source) }
+            } else {
+                listOf(source)
+            }
+            sourcesToScan.forEach { src ->
+                val (novelDir, chapterDirs) = provider.findChapterDirs(filteredChapters, novel, src)
+                chapterDirs.forEach { it.delete() }
+
+                // Rendered-audio cascade (05-02, D-18): cancel any queued/running
+                // render FIRST so the engine can't resurrect the .m4a after it
+                // is deleted here; runs before the empty-novel-dir check so the
+                // audio/ files don't block auto-cleanup.
+                filteredChapters.forEach { chapter ->
+                    renderManager.cancelRender(chapter.id)
+                    provider.deleteAudioFile(chapter.name, chapter.scanlator, novel.title, src)
+                }
+                // Drop the audio/ dir itself once empty — a leftover empty dir
+                // would still make novelDir.listFiles() non-empty below.
+                provider.findAudioDir(novel.title, src)
+                    ?.takeIf { it.listFiles().isNullOrEmpty() }
+                    ?.delete()
+
+                if (novelDir?.listFiles()?.isEmpty() == true) {
+                    deleteNovel(novel, src, removeQueued = false)
+                }
+            }
             cache.removeChapters(filteredChapters, novel)
-
-            // Rendered-audio cascade (05-02, D-18): cancel any queued/running
-            // render FIRST so the engine can't resurrect the .m4a after it
-            // is deleted here; runs before the empty-novel-dir check so the
-            // audio/ files don't block auto-cleanup.
-            filteredChapters.forEach { chapter ->
-                renderManager.cancelRender(chapter.id)
-                provider.deleteAudioFile(chapter.name, chapter.scanlator, novel.title, source)
-            }
-            // Drop the audio/ dir itself once empty — a leftover empty dir
-            // would still make novelDir.listFiles() non-empty below.
-            provider.findAudioDir(novel.title, source)
-                ?.takeIf { it.listFiles().isNullOrEmpty() }
-                ?.delete()
-
-            if (novelDir?.listFiles()?.isEmpty() == true) {
-                deleteNovel(novel, source, removeQueued = false)
-            }
         }
+    }
+
+    /** Installed sources behind this work's bound carriers — where canon
+     *  chapter downloads physically live. */
+    private suspend fun carrierSources(novel: Novel): List<NovelSource> {
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return emptyList()
+        val sourceIds = runCatching {
+            workCarriers.forWork(workId, eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS)
+                .carriers
+        }.getOrNull()?.flatMap { it.sourceIds }.orEmpty()
+        return sourceIds.mapNotNull { sourceManager.get(it) }
     }
 
     fun deleteNovel(novel: Novel, source: NovelSource, removeQueued: Boolean = true) {

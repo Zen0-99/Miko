@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
@@ -51,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -78,6 +82,7 @@ import eu.kanade.presentation.entries.shows.components.NuvioEpisodeCard
 import eu.kanade.presentation.entries.shows.components.SeasonPillRow
 import eu.kanade.presentation.entries.components.EnhancedEntryInfoBox
 import eu.kanade.presentation.entries.components.EntryContinueRow
+import eu.kanade.presentation.entries.components.EntryFindProviderButton
 import eu.kanade.presentation.entries.components.EntryViewCommentsButton
 import eu.kanade.presentation.entries.components.EntryNextUpAction
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
@@ -140,6 +145,9 @@ fun ShowsScreen(
     onWebViewClicked: (() -> Unit)?,
     onTrackingClicked: (() -> Unit)?,
     onCommentsClicked: (() -> Unit)? = null,
+    /** Find Content Provider (17-02) — replaces the comments button on
+     *  canonical entries with zero bound carriers. */
+    onFindProviderClicked: (() -> Unit)? = null,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -189,6 +197,9 @@ fun ShowsScreen(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    /** Artwork the caller already shows for this entry (home hero) —
+     *  underlays the shared hero image so the morph never draws empty. */
+    previewCover: Any? = null,
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -218,6 +229,7 @@ fun ShowsScreen(
             onWebViewClicked = onWebViewClicked,
             onTrackingClicked = onTrackingClicked,
             onCommentsClicked = onCommentsClicked,
+            onFindProviderClicked = onFindProviderClicked,
             onTagSearch = onTagSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterClicked = onFilterButtonClicked,
@@ -251,6 +263,7 @@ fun ShowsScreen(
             onSuggestionClick = onSuggestionClick,
             onOpenSuggestions = onOpenSuggestions,
             onRetrySuggestions = onRetrySuggestions,
+            previewCover = previewCover,
         )
     } else {
         ShowsScreenLargeImpl(
@@ -268,6 +281,7 @@ fun ShowsScreen(
             onWebViewClicked = onWebViewClicked,
             onTrackingClicked = onTrackingClicked,
             onCommentsClicked = onCommentsClicked,
+            onFindProviderClicked = onFindProviderClicked,
             onTagSearch = onTagSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterButtonClicked = onFilterButtonClicked,
@@ -301,6 +315,7 @@ fun ShowsScreen(
             onSuggestionClick = onSuggestionClick,
             onOpenSuggestions = onOpenSuggestions,
             onRetrySuggestions = onRetrySuggestions,
+            previewCover = previewCover,
         )
     }
 }
@@ -322,6 +337,9 @@ private fun ShowsScreenSmallImpl(
     onWebViewClicked: (() -> Unit)?,
     onTrackingClicked: (() -> Unit)?,
     onCommentsClicked: (() -> Unit)? = null,
+    /** Find Content Provider (17-02) — replaces the comments button on
+     *  canonical entries with zero bound carriers. */
+    onFindProviderClicked: (() -> Unit)? = null,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -373,6 +391,7 @@ private fun ShowsScreenSmallImpl(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    previewCover: Any? = null,
 ) {
     val density = LocalDensity.current
     val offsetGridPaddingPx = with(density) { GRID_PADDING.roundToPx() }
@@ -583,24 +602,13 @@ private fun ShowsScreenSmallImpl(
         val density = LocalDensity.current
         val containerHeightPx = with(density) { this@BoxWithConstraints.maxHeight.roundToPx() }
         Scaffold(
+            // The bar stays put (back/download/menu always reachable) but the
+            // scroll-reveal is gone — title and background are pinned transparent
+            // outside multi-select; action mode forces both to full alpha itself.
             topBar = {
                 val selectedEpisodeCount: Int = remember(episodes) {
                     episodes.count { it.selected }
                 }
-                // Scroll-dependent alpha: top-bar opacity gradually increases as the user
-                // scrolls down, proportional to how far the first item has scrolled.
-                val titleAlpha by remember {
-                    derivedStateOf {
-                        if (itemListState.firstVisibleItemIndex == 0) {
-                            val offset = itemListState.firstVisibleItemScrollOffset
-                            val itemHeight = itemListState.layoutInfo.visibleItemsInfo.firstOrNull()?.size?.height ?: 1
-                            (offset.toFloat() / itemHeight.toFloat()).coerceIn(0f, 1f)
-                        } else {
-                            1f
-                        }
-                    }
-                }
-                val backgroundAlpha = titleAlpha
                 EntryToolbar(
                     title = state.anime.title,
                     hasFilters = hasFilters,
@@ -616,8 +624,8 @@ private fun ShowsScreenSmallImpl(
                     onCancelActionMode = { onAllEpisodeSelected(false) },
                     onSelectAll = { onAllEpisodeSelected(true) },
                     onInvertSelection = { onInvertSelection() },
-                    titleAlphaProvider = { titleAlpha },
-                    backgroundAlphaProvider = { backgroundAlpha },
+                    titleAlphaProvider = { 0f },
+                    backgroundAlphaProvider = { 0f },
                     isManga = false,
                     modifier = Modifier.onSizeChanged { toolbarHeight = it.height },
                     toolbarBackgroundColor = MaterialTheme.colorScheme.background,
@@ -647,6 +655,9 @@ private fun ShowsScreenSmallImpl(
             snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
         ) { contentPadding ->
             val topPadding = contentPadding.calculateTopPadding()
+            // The bar renders but is transparent outside selection — still keep
+            // the indicator/hero clear of the status bar.
+            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
             val pullState = rememberPullToRefreshState()
             // Pull distance in px — drives the Nuvio-style hero zoom. The PTR
@@ -658,7 +669,7 @@ private fun ShowsScreenSmallImpl(
                 refreshing = state.isRefreshingData,
                 onRefresh = onRefresh,
                 enabled = !isAnySelected,
-                indicatorPadding = PaddingValues(top = topPadding),
+                indicatorPadding = PaddingValues(top = maxOf(topPadding, statusBarTop)),
                 state = pullState,
             ) {
                 val layoutDirection = LocalLayoutDirection.current
@@ -685,9 +696,10 @@ private fun ShowsScreenSmallImpl(
                         span = { GridItemSpan(maxLineSpan) },
                     ) {
                         EnhancedEntryInfoBox(
-                            appBarPadding = topPadding,
+                            appBarPadding = maxOf(topPadding, statusBarTop),
                             title = state.anime.title,
                             backdrop = seasonCoverOverride ?: (state.anime.backgroundUrl ?: state.anime),
+                            sharedKey = "hero-image-${state.anime.id}",
                             logoUrl = cinemetaLogo.takeIf { it.isNotBlank() },
                             metaItems = buildList {
                                 addAll(cinemetaMovieMetaItems(state.anime))
@@ -696,12 +708,19 @@ private fun ShowsScreenSmallImpl(
                                 }
                             },
                             rating = cinemetaMovieRating(state.anime),
-                            onCoverClick = { onCoverClicked(seasonCoverOverride) },
+                            // The viewer's first page must show the artwork
+                            // the hero is displaying — movies have no season
+                            // poster, so it falls back to the fanart
+                            // backgroundUrl (a poster otherwise).
+                            onCoverClick = {
+                                onCoverClicked(seasonCoverOverride ?: state.anime.backgroundUrl)
+                            },
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                             panHorizontally = true,
                             overscrollPullPx = heroOverscrollPx,
                             parallaxOffsetPx = heroParallaxPx,
                             accentColor = displayedAccent,
+                            previewCover = previewCover,
                         )
                     }
 
@@ -714,14 +733,24 @@ private fun ShowsScreenSmallImpl(
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                         ) {
                             val nextEpisode = remember(episodes) {
-                                episodes.firstOrNull { !it.episode.seen }?.episode
+                                // Lowest-numbered unseen — the "next in
+                                // line" episode regardless of sort
+                                // direction (firstOrNull on a descending
+                                // list returns the newest unseen).
+                                episodes
+                                    .filter { !it.episode.seen }
+                                    .minByOrNull { it.episode.episodeNumber }
+                                    ?.episode
                             }
                             val hasSeenEpisodes = remember(state.episodes) {
                                 state.episodes.fastAny { it.episode.seen }
                             }
+                            val hasStarted = hasSeenEpisodes ||
+                                (nextEpisode?.lastSecondSeen ?: 0L) > 0
                             val allSeen = episodes.isNotEmpty() &&
                                 episodes.fastAll { it.episode.seen }
                             EntryContinueRow(
+                                sharedKey = "hero-resume-${state.anime.id}",
                                 actions = listOf(
                                     EntryNextUpAction(
                                         icon = if (allSeen) {
@@ -733,10 +762,13 @@ private fun ShowsScreenSmallImpl(
                                             allSeen -> stringResource(
                                                 AYMR.strings.fetching_overlay_all_up_to_date,
                                             )
+                                            nextEpisode != null && hasStarted ->
+                                                stringResource(
+                                                    MR.strings.action_continue_named,
+                                                    nextEpisode.name,
+                                                )
                                             isCinemetaMovie ->
                                                 stringResource(AYMR.strings.action_play)
-                                            nextEpisode != null && hasSeenEpisodes ->
-                                                stringResource(MR.strings.action_continue)
                                             else -> stringResource(MR.strings.action_start)
                                         },
                                         onClickLabel = stringResource(
@@ -949,6 +981,9 @@ private fun ShowsScreenSmallImpl(
                                     accentColor = displayedAccent,
                                     commentsCount = state.commentsCount,
                                     onCommentsClicked = onCommentsClicked,
+                                    hasNoCarriers = hasNoCarriers(state),
+                                    onFindProviderClicked = onFindProviderClicked,
+                                    episodesLoading = episodesLoading(state),
                                 )
                             }
                         }
@@ -976,6 +1011,9 @@ fun ShowsScreenLargeImpl(
     onWebViewClicked: (() -> Unit)?,
     onTrackingClicked: (() -> Unit)?,
     onCommentsClicked: (() -> Unit)? = null,
+    /** Find Content Provider (17-02) — replaces the comments button on
+     *  canonical entries with zero bound carriers. */
+    onFindProviderClicked: (() -> Unit)? = null,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -1027,6 +1065,7 @@ fun ShowsScreenLargeImpl(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    previewCover: Any? = null,
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
@@ -1322,6 +1361,7 @@ fun ShowsScreenLargeImpl(
                                 appBarPadding = contentPadding.calculateTopPadding(),
                                 title = state.anime.title,
                                 backdrop = seasonCoverOverride ?: (state.anime.backgroundUrl ?: state.anime),
+                                sharedKey = "hero-image-${state.anime.id}",
                                 logoUrl = cinemetaLogo.takeIf { it.isNotBlank() },
                                 metaItems = buildList {
                                     addAll(cinemetaMovieMetaItems(state.anime))
@@ -1330,21 +1370,34 @@ fun ShowsScreenLargeImpl(
                                     }
                                 },
                                 rating = cinemetaMovieRating(state.anime),
-                                onCoverClick = { onCoverClicked(seasonCoverOverride) },
+                                onCoverClick = {
+                                    onCoverClicked(seasonCoverOverride ?: state.anime.backgroundUrl)
+                                },
                                 panHorizontally = true,
                                 overscrollPullPx = heroOverscrollPx,
                                 parallaxOffsetPx = heroScrollState.value.toFloat(),
                                 accentColor = displayedAccent,
+                                previewCover = previewCover,
                             )
                             val nextEpisode = remember(episodes) {
-                                episodes.firstOrNull { !it.episode.seen }?.episode
+                                // Lowest-numbered unseen — the "next in
+                                // line" episode regardless of sort
+                                // direction (firstOrNull on a descending
+                                // list returns the newest unseen).
+                                episodes
+                                    .filter { !it.episode.seen }
+                                    .minByOrNull { it.episode.episodeNumber }
+                                    ?.episode
                             }
                             val hasSeenEpisodes = remember(state.episodes) {
                                 state.episodes.fastAny { it.episode.seen }
                             }
+                            val hasStarted = hasSeenEpisodes ||
+                                (nextEpisode?.lastSecondSeen ?: 0L) > 0
                             val allSeen = episodes.isNotEmpty() &&
                                 episodes.fastAll { it.episode.seen }
                             EntryContinueRow(
+                                sharedKey = "hero-resume-${state.anime.id}",
                                 actions = listOf(
                                     EntryNextUpAction(
                                         icon = if (allSeen) {
@@ -1356,10 +1409,13 @@ fun ShowsScreenLargeImpl(
                                             allSeen -> stringResource(
                                                 AYMR.strings.fetching_overlay_all_up_to_date,
                                             )
+                                            nextEpisode != null && hasStarted ->
+                                                stringResource(
+                                                    MR.strings.action_continue_named,
+                                                    nextEpisode.name,
+                                                )
                                             isCinemetaMovie ->
                                                 stringResource(AYMR.strings.action_play)
-                                            nextEpisode != null && hasSeenEpisodes ->
-                                                stringResource(MR.strings.action_continue)
                                             else -> stringResource(MR.strings.action_start)
                                         },
                                         onClickLabel = stringResource(
@@ -1581,6 +1637,9 @@ fun ShowsScreenLargeImpl(
                                             accentColor = displayedAccent,
                                             commentsCount = state.commentsCount,
                                             onCommentsClicked = onCommentsClicked,
+                                            hasNoCarriers = hasNoCarriers(state),
+                                            onFindProviderClicked = onFindProviderClicked,
+                                            episodesLoading = episodesLoading(state),
                                         )
                                     }
                                 }
@@ -1685,6 +1744,13 @@ private fun LazyGridScope.sharedEpisodeItems(
     accentColor: Color? = null,
     commentsCount: Long? = null,
     onCommentsClicked: (() -> Unit)? = null,
+    /** True when the canonical work has zero bound carriers — swaps the
+     *  comments slot to Find Content Provider (17-02). */
+    hasNoCarriers: Boolean = false,
+    onFindProviderClicked: (() -> Unit)? = null,
+    /** Carriers are bound but episode rows haven't materialized yet —
+     *  the extension fetch is running; show a spinner in the slot. */
+    episodesLoading: Boolean = false,
 ) {
     item(
         key = "episode-carousel",
@@ -1700,8 +1766,19 @@ private fun LazyGridScope.sharedEpisodeItems(
                 ?.takeIf { !it.episode.seen }
                 ?.let { index to it.episode.episodeNumber }
         }.minByOrNull { it.second }?.first ?: 0
+        // The same episode carries a thin accent outline on its card.
+        val nextEpisodeId = episodes.filterIsInstance<EpisodeList.Item>()
+            .filter { !it.episode.seen }
+            .minByOrNull { it.episode.episodeNumber }
+            ?.episode?.id
+        // Cards are 75% of screen width — a negative initial offset lands
+        // the next-up episode centered instead of pinned to the start edge.
+        val centeredOffsetPx = with(LocalDensity.current) {
+            (16.dp - LocalConfiguration.current.screenWidthDp.dp * 0.125f).roundToPx()
+        }
         val rowState = rememberLazyListState(
             initialFirstVisibleItemIndex = nextIndex,
+            initialFirstVisibleItemScrollOffset = centeredOffsetPx,
         )
         LazyRow(
             state = rowState,
@@ -1767,9 +1844,6 @@ private fun LazyGridScope.sharedEpisodeItems(
                             } else {
                                 relativeDateTimeText(episodeItem.episode.dateUpload)
                             },
-                            runtime = episodeItem.episode.totalSeconds
-                                .takeIf { it > 0L }
-                                ?.let { formatEpisodeRuntime(it * 1000) },
                             watchProgress = episodeItem.episode
                                 .takeIf { !it.seen && it.lastSecondSeen > 0L }
                                 ?.let { formatEpisodeRuntime(it.lastSecondSeen * 1000) },
@@ -1786,6 +1860,7 @@ private fun LazyGridScope.sharedEpisodeItems(
                             seen = episodeItem.episode.seen,
                             bookmark = episodeItem.episode.bookmark,
                             selected = episodeItem.selected,
+                            isNext = episodeItem.episode.id == nextEpisodeId,
                             // Cinemeta entries download through a picked source —
                             // the icon opens the source picker rather than a direct
                             // queue, so it stays enabled for them too.
@@ -1819,10 +1894,42 @@ private fun LazyGridScope.sharedEpisodeItems(
         }
     }
 
-    // Comments live under the episode cards — a text button with the
-    // visible-comment count, opening the same bottom sheet the removed
-    // header icon used to.
-    if (onCommentsClicked != null) {
+    // The action slot under the episode cards. Priority: Find Content
+    // Provider on zero-carrier canonical entries (17-02) → a spinner
+    // while bound carriers are still expanding into episode rows →
+    // comments, which only renders when episodes actually exist.
+    val hasEpisodeItems = episodes.any { it is EpisodeList.Item }
+    if (hasNoCarriers && onFindProviderClicked != null) {
+        item(
+            key = "episode-find-provider-button",
+            contentType = EntryScreenItem.ITEM,
+            span = { GridItemSpan(maxLineSpan) },
+        ) {
+            EntryFindProviderButton(
+                accentColor = accentColor,
+                onClick = onFindProviderClicked,
+                modifier = itemModifier,
+            )
+        }
+    } else if (episodesLoading && !hasEpisodeItems) {
+        item(
+            key = "episode-loading",
+            contentType = EntryScreenItem.ITEM,
+            span = { GridItemSpan(maxLineSpan) },
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(32.dp),
+                    color = accentColor ?: MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    } else if (onCommentsClicked != null && hasEpisodeItems) {
         item(
             key = "episode-comments-button",
             contentType = EntryScreenItem.ITEM,
@@ -1938,6 +2045,24 @@ private fun formatTime(milliseconds: Long, useDayFormat: Boolean = false): Strin
 }
 
 private val GRID_PADDING = 14.dp
+
+/** Zero bindings on a fetched canonical entry — the comments slot
+ *  swaps to Find Content Provider (17-02). Worker-assigned kind gates
+ *  it: non-anime movies/series are ID-only, never extension-pursued. */
+private fun hasNoCarriers(state: ShowsScreenModel.State.Success): Boolean {
+    val carrierless = state.carrierMatrix
+        ?.let { it.fetched && it.readable.isEmpty() } == true
+    if (!carrierless) return false
+    return state.canonicalKind != "movie" && state.canonicalKind != "series"
+}
+
+/** Enabled carriers but no episode rows yet — the extension fetch is
+ *  still expanding; the action slot shows a spinner (17-02). An empty
+ *  readable set can't expand — that's the Find Provider state. */
+private fun episodesLoading(state: ShowsScreenModel.State.Success): Boolean =
+    state.carrierMatrix?.let { it.fetched && it.readable.isNotEmpty() } == true &&
+        state.episodes.none { it is EpisodeList.Item }
+
 private fun Modifier.ignorePadding(gridPadding: Int) = layout { measurable, constraints ->
     val looseConstraints = constraints.offset(gridPadding * 2, 0)
     val placeable = measurable.measure(looseConstraints)

@@ -54,6 +54,12 @@
         <item quantity="many">%1$s глав</item>
         <item quantity="other">%1$s глав</item>
     </plurals>
+    <plurals name="num_entries">
+        <item quantity="one">%1$s запись</item>
+        <item quantity="few">%1$s записи</item>
+        <item quantity="many">%1$s записей</item>
+        <item quantity="other">%1$s записей</item>
+    </plurals>
     <plurals name="num_trackers">
         <item quantity="one">%d отслеживание</item>
         <item quantity="few">%d отслеживания</item>

@@ -79,9 +79,17 @@ class ChapterLoader(
     /**
      * Returns the page loader to use for this [chapter].
      */
-    private fun getPageLoader(chapter: ReaderChapter): PageLoader {
+    private suspend fun getPageLoader(chapter: ReaderChapter): PageLoader {
         val dbChapter = chapter.chapter
-        val isDownloaded = downloadManager.isChapterDownloaded(
+        val isCanon = CanonicalChapterRouter.isCanonUrl(dbChapter.url)
+        // Canon rows have no single home source — the download may live
+        // under any bound carrier's dir; resolve which one holds it.
+        val canonSource = if (isCanon) {
+            downloadManager.canonDownloadSource(dbChapter.name, dbChapter.scanlator, manga)
+        } else {
+            null
+        }
+        val isDownloaded = canonSource != null || downloadManager.isChapterDownloaded(
             dbChapter.name,
             dbChapter.scanlator,
             manga.title,
@@ -92,10 +100,17 @@ class ChapterLoader(
             isDownloaded -> DownloadPageLoader(
                 chapter,
                 manga,
-                source,
+                canonSource ?: source,
                 downloadManager,
                 downloadProvider,
             )
+            // Canonical rows (canon:{work}:{seq}) fan out to the best
+            // installed carrier source (13-04) — never served by the
+            // entry's stub source directly. Checked BEFORE the local
+            // branch: canonical entries carry source id 0, which resolves
+            // to LocalMangaSource, and getFormat would index a chapter
+            // that isn't a file on disk.
+            isCanon -> CanonicalPageLoader(chapter, manga)
             source is LocalMangaSource -> source.getFormat(chapter.chapter).let { format ->
                 when (format) {
                     is Format.Directory -> DirectoryPageLoader(format.file)
@@ -103,11 +118,6 @@ class ChapterLoader(
                     is Format.Epub -> EpubPageLoader(format.file.epubReader(context))
                 }
             }
-            // Canonical rows (canon:{work}:{seq}) fan out to the best
-            // installed carrier source (13-04) — never served by the
-            // entry's stub source directly.
-            CanonicalChapterRouter.isCanonUrl(dbChapter.url) ->
-                CanonicalPageLoader(chapter, manga)
             source is HttpSource -> HttpPageLoader(chapter, source)
             source is StubMangaSource -> error(
                 context.stringResource(MR.strings.source_not_installed, source.toString()),

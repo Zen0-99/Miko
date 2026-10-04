@@ -1,3 +1,4 @@
+import { liveWorkId } from './bindings';
 import { parseChapter } from './chapterparse';
 import type { Env } from './env';
 import { normalize } from './normalize';
@@ -8,6 +9,9 @@ const MAX_CHAPTERS_PER_FEED = 5000;
 const MAX_NAME = 500;
 const DIVERGENCE_MIN_FEED = 10;
 const DIVERGENCE_THRESHOLD = 0.5;
+/** Human-confirmed bindings (Find Provider picks) never record below
+ *  this confidence — a user's explicit pick outranks a matcher ACCEPT. */
+const USER_PICKED_FLOOR = 0.9;
 
 interface FeedChapter {
     name?: string;
@@ -15,6 +19,13 @@ interface FeedChapter {
     /** Source-reported upload time (epoch ms); merged rows keep the
      *  earliest contributing date. */
     date_upload?: number;
+    /** Structured fields from server-side feeds (MangaDex/crawler) —
+     *  bypass parseChapter when present. number may be null for
+     *  unnumbered extras whose kind the feed asserts directly. */
+    number?: number | null;
+    volume?: number | null;
+    part?: number | null;
+    kind?: string;
 }
 
 interface CanonizeFeed {
@@ -25,6 +36,13 @@ interface CanonizeFeed {
      * also write an identity_review row. */
     verified?: boolean;
     score?: number;
+    /** Provider entry ref (manga URL / id on the source) — persisted to
+     *  external_ids so the work→provider binding is durable. */
+    provider_ref?: string;
+    /** Who produced this feed — 'device_feed' (default), 'user_picked'
+     *  (Find Provider sheet confirmation, 17-01), 'crawler',
+     *  'mangadex_seed'. Stamped onto the external_ids binding. */
+    provenance?: string;
     chapters?: FeedChapter[];
 }
 
@@ -58,9 +76,16 @@ function sortKey(e: { number: number | null; part: number | null; volume: number
 }
 
 async function review(env: Env, kind: string, payload: unknown) {
+    const json = JSON.stringify(payload);
+    // Re-merges re-evaluate the full stored corpus — an already-known
+    // issue shouldn't enqueue another identical review row.
+    const { results } = await env.COMMENTS_DB.prepare(
+        'SELECT 1 AS x FROM identity_review WHERE kind = ? AND payload = ? LIMIT 1',
+    ).bind(kind, json).all();
+    if (results.length > 0) return;
     await env.COMMENTS_DB.prepare(
         'INSERT INTO identity_review (kind, payload, created_at) VALUES (?,?,?)',
-    ).bind(kind, JSON.stringify(payload), now()).run();
+    ).bind(kind, json, now()).run();
 }
 
 /**
@@ -77,8 +102,9 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
     } catch {
         return err(400, 'bad_json');
     }
-    const workId = body.work_id;
-    if (typeof workId !== 'string' || !workId) return err(400, 'bad_request');
+    if (typeof body.work_id !== 'string' || !body.work_id) return err(400, 'bad_request');
+    // Dead-id canonize targets redirect onto the merged live work.
+    const workId = await liveWorkId(env, body.work_id);
     if (!Array.isArray(body.feeds) || body.feeds.length === 0 || body.feeds.length > MAX_FEEDS) {
         return err(400, 'bad_request');
     }
@@ -87,23 +113,163 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
         if (!Array.isArray(f.chapters) || f.chapters.length > MAX_CHAPTERS_PER_FEED) {
             return err(400, 'bad_request');
         }
+        if (f.provider_ref !== undefined &&
+            (typeof f.provider_ref !== 'string' || f.provider_ref.length > 500)) {
+            return err(400, 'bad_request');
+        }
+        if (f.provenance !== undefined &&
+            (typeof f.provenance !== 'string' || f.provenance.length > 40)) {
+            return err(400, 'bad_request');
+        }
         for (const c of f.chapters) {
             if (typeof c.name !== 'string' || c.name.length > MAX_NAME) return err(400, 'bad_request');
             if (c.date_upload !== undefined &&
                 (typeof c.date_upload !== 'number' || !Number.isFinite(c.date_upload))) {
                 return err(400, 'bad_request');
             }
+            for (const k of ['number', 'volume', 'part'] as const) {
+                const v = c[k];
+                if (v !== undefined && v !== null &&
+                    (typeof v !== 'number' || !Number.isFinite(v))) {
+                    return err(400, 'bad_request');
+                }
+            }
         }
+    }
+
+    // Persist each feed (latest-wins per source_key) then remerge the
+    // work's full stored corpus — feeds are durable inputs, and
+    // canonical_chapters is their materialized view.
+    const ts0 = now();
+    const writes: D1PreparedStatement[] = [];
+    const refConflicts: Array<{ provider: string; ref: string; existing: string }> = [];
+    for (const f of body.feeds) {
+        const src = f.source_key as string;
+        writes.push(env.COMMENTS_DB.prepare(
+            `REPLACE INTO canonical_feeds
+             (work_id, source_key, feed_json, verified, score, received_at)
+             VALUES (?,?,?,?,?,?)`,
+        ).bind(
+            workId, src, JSON.stringify(f.chapters ?? []),
+            f.verified === true ? 1 : 0, f.score ?? null, ts0,
+        ));
+        if (typeof f.provider_ref === 'string' && f.provider_ref) {
+            // The binding is keyed (provider, ref) → a ref already bound
+            // to a DIFFERENT work is an identity conflict: flag it,
+            // never rebind silently (OPM sibling-work collision).
+            const existing = await env.COMMENTS_DB.prepare(
+                `SELECT miko_work_id FROM external_ids
+                 WHERE provider = ? AND external_id = ?`,
+            ).bind(src, f.provider_ref).first<{ miko_work_id: string }>();
+            if (existing && existing.miko_work_id !== workId) {
+                refConflicts.push({
+                    provider: src, ref: f.provider_ref, existing: existing.miko_work_id,
+                });
+            } else {
+                // 'crawler' provenance is a privileged claim — it says
+                // "a managed host vouches for this binding". Require the
+                // shared key; unauthenticated claims degrade to
+                // 'device_feed' rather than reject the feed itself.
+                const wantsCrawler = f.provenance === 'crawler';
+                const authed = !!env.CRAWLER_KEY &&
+                    req.headers.get('x-crawler-key') === env.CRAWLER_KEY;
+                const provenance = wantsCrawler && !authed
+                    ? 'device_feed'
+                    : (f.provenance ?? 'device_feed');
+                // 'user_picked' = a human confirmed this result IS the work
+                // in the Find Provider sheet (17-01). The confirmation is
+                // the signal, not the sender — no auth, but verified=true is
+                // required and the floor outranks a bare matcher ACCEPT.
+                const confidence = provenance === 'user_picked' && f.verified === true
+                    ? Math.max(typeof f.score === 'number' ? f.score : 0, USER_PICKED_FLOOR)
+                    : (typeof f.score === 'number' ? f.score : null);
+                writes.push(env.COMMENTS_DB.prepare(
+                    `INSERT INTO external_ids
+                     (provider, external_id, miko_work_id, confidence, provenance, last_seen_at)
+                     VALUES (?,?,?,?,?,?)
+                     ON CONFLICT(provider, external_id) DO UPDATE SET
+                        confidence = COALESCE(excluded.confidence, external_ids.confidence),
+                        provenance = excluded.provenance,
+                        last_seen_at = excluded.last_seen_at`,
+                ).bind(
+                    src, f.provider_ref, workId,
+                    confidence, provenance, ts0,
+                ));
+            }
+        }
+    }
+    await env.COMMENTS_DB.batch(writes);
+    if (refConflicts.length > 0) {
+        await review(env, 'provider_ref_conflict', {
+            work_id: workId, conflicts: refConflicts,
+        });
+    }
+
+    // Tentative feeds (SeriesMatcher floor-without-margin) merge into
+    // the sequence but flag for review — an ambiguous identity should
+    // never silently contribute structure.
+    const tentative = body.feeds.filter((f) => f.verified === false);
+    if (tentative.length > 0) {
+        await review(env, 'chapter_feed_tentative', {
+            work_id: workId,
+            feeds: tentative.map((f) => ({ source_key: f.source_key, score: f.score })),
+        });
+    }
+
+    const summary = await remergeChapters(env, workId);
+    return ok({
+        work_id: workId,
+        ...summary,
+    });
+}
+
+/** Stored feed row → the shape the merge loop consumes. */
+interface StoredFeed {
+    source_key: string;
+    chapters: FeedChapter[];
+}
+
+/**
+ * Rebuild a work's canonical chapter sequence from its ENTIRE stored
+ * feed corpus (canonical_feeds). Entries merge by (kind, number|label,
+ * part); ≥2 sources → verified. Divergent feeds and kind conflicts go
+ * to identity_review (deduped on identical payloads so re-merges don't
+ * spam the queue).
+ */
+export async function remergeChapters(env: Env, workId: string): Promise<{
+    count: number;
+    verified: number;
+    skipped: number;
+    conflicts: number;
+    divergent: string[];
+}> {
+    const { results: rows } = await env.COMMENTS_DB.prepare(
+        'SELECT source_key, feed_json FROM canonical_feeds WHERE work_id = ?',
+    ).bind(workId).all<{ source_key: string; feed_json: string }>();
+
+    const feeds: StoredFeed[] = [];
+    for (const r of rows) {
+        try {
+            feeds.push({ source_key: r.source_key, chapters: JSON.parse(r.feed_json) });
+        } catch { /* corrupt feed row — skip, next canonize repairs */ }
     }
 
     const entries: Entry[] = [];
     const feedNums = new Map<string, Set<number>>();
     let skipped = 0;
-    for (const f of body.feeds) {
-        const src = f.source_key as string;
+    for (const f of feeds) {
+        const src = f.source_key;
         const nums = new Set<number>();
         for (const c of f.chapters ?? []) {
-            const p = parseChapter(c.name as string);
+            const structured = c.number !== undefined;
+            const p = structured
+                ? {
+                    number: c.number ?? null,
+                    volume: c.volume ?? null,
+                    part: c.part ?? null,
+                    kind: c.kind ?? (c.number == null ? 'extra' : 'chapter'),
+                }
+                : parseChapter(c.name as string);
             if (p.kind === 'unknown' || p.kind === 'notice') {
                 skipped++;
                 continue;
@@ -148,8 +314,14 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
     }
 
     // Divergent feed: ≥10 parsed chapters with <50% corroboration.
+    // Only substantive feeds (≥MIN themselves) count as corroborating
+    // peers — an empty/licensed-removed feed (MangaDex) can't vouch for
+    // anything and must not single-source-flag every real feed.
     const allNums = new Map<number, Set<string>>();
+    const substantive = new Set<string>();
     for (const [src, nums] of feedNums) {
+        if (nums.size < DIVERGENCE_MIN_FEED) continue;
+        substantive.add(src);
         for (const n of nums) {
             const s = allNums.get(n) ?? new Set();
             s.add(src);
@@ -157,24 +329,13 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
         }
     }
     const divergent: string[] = [];
-    for (const [src, nums] of feedNums) {
-        if (nums.size < DIVERGENCE_MIN_FEED) continue;
+    for (const src of substantive) {
+        const nums = feedNums.get(src) as Set<number>;
         const corroborated = [...nums].filter((n) => (allNums.get(n)?.size ?? 0) > 1).length;
         if (corroborated / nums.size < DIVERGENCE_THRESHOLD) divergent.push(src);
     }
-    if (divergent.length > 0 && feedNums.size > 1) {
+    if (divergent.length > 0 && substantive.size > 1) {
         await review(env, 'chapter_feed_divergent', { work_id: workId, divergent });
-    }
-
-    // Tentative feeds (SeriesMatcher floor-without-margin) merge into
-    // the sequence but flag for review — an ambiguous identity should
-    // never silently contribute structure.
-    const tentative = body.feeds.filter((f) => f.verified === false);
-    if (tentative.length > 0) {
-        await review(env, 'chapter_feed_tentative', {
-            work_id: workId,
-            feeds: tentative.map((f) => ({ source_key: f.source_key, score: f.score })),
-        });
     }
 
     const merged = [...groups.values()].map((g) => {
@@ -216,14 +377,13 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
     ];
     await env.COMMENTS_DB.batch(stmts);
 
-    return ok({
-        work_id: workId,
+    return {
         count: merged.length,
         verified: merged.filter((m) => m.confidence === 'verified').length,
         skipped,
         conflicts,
         divergent,
-    });
+    };
 }
 
 /** GET /v1/works/:id/chapters — the canonical sequence, empty list if never canonized. */
@@ -233,7 +393,7 @@ export async function handleGetChapters(
     _url: URL,
     env: Env,
 ): Promise<Response> {
-    const workId = params.id;
+    const workId = await liveWorkId(env, params.id);
     const { results } = await env.COMMENTS_DB.prepare(
         `SELECT seq, number, part, volume, kind, label, confidence, sources_json, refs_json, date_upload
          FROM canonical_chapters WHERE work_id = ? ORDER BY seq`,

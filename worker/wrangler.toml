@@ -7,3 +7,8 @@ binding = "COMMENTS_DB"
 database_name = "miko-comments"
 database_id = "43cd58f5-a9fe-4e3e-8aff-35cb50bfb7a0"
 migrations_dir = "migrations"
+
+# MangaDex canonical-feed refresh: stale feeds first, then the coverage
+# backlog (works_cache rows without a mangadex external_id).
+[triggers]
+crons = ["17 */4 * * *"]

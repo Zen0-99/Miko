@@ -15,6 +15,11 @@ import java.security.MessageDigest
  */
 object WorkIdMint {
 
+    /** Scheme prefix — rows minted device-side are provisional and
+     *  get retargeted onto a real catalog id once the worker knows
+     *  the work. */
+    const val PREFIX = "mk:m:"
+
     fun mint(title: String, type: String, author: String? = null, year: Int? = null): String {
         val normalized = buildList {
             add(TitleNormalizer.normalize(title))
@@ -24,6 +29,6 @@ object WorkIdMint {
         }
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(normalized.joinToString("|").toByteArray(Charsets.UTF_8))
-        return "mk:m:" + digest.joinToString("") { "%02x".format(it) }
+        return PREFIX + digest.joinToString("") { "%02x".format(it) }
     }
 }

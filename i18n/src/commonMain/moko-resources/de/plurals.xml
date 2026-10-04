@@ -36,6 +36,10 @@
         <item quantity="one">%1$s Kapitel</item>
         <item quantity="other">%1$s Kapitel</item>
     </plurals>
+    <plurals name="num_entries">
+        <item quantity="one">%1$s Eintrag</item>
+        <item quantity="other">%1$s Einträge</item>
+    </plurals>
     <plurals name="num_trackers">
         <item quantity="one">%d Tracker</item>
         <item quantity="other">%d Tracker</item>

@@ -2,7 +2,10 @@ package eu.kanade.tachiyomi.ui.home.hub
 
 import androidx.compose.runtime.Immutable
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.domain.ui.model.ContentMode
+import eu.kanade.tachiyomi.data.catalogrows.CatalogRowSpec
+import eu.kanade.tachiyomi.data.catalogrows.RowItem
 import tachiyomi.domain.achievement.model.MonthStats
 import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
@@ -19,7 +22,7 @@ data class HomeHubCardItem(
 )
 
 /**
- * Home Hub state — recently viewed + recently added + greeting + hero card +
+ * Home Hub state — recently viewed + greeting + hero card +
  * streak counter + month stats + achievement count + recommendations.
  *
  * Enhanced from the minimal Phase 2.3 implementation with features ported
@@ -31,15 +34,16 @@ data class HomeHubState(
     val recentAnime: List<AnimeHistoryWithRelations> = emptyList(),
     val recentManga: List<MangaHistoryWithRelations> = emptyList(),
     val recentNovels: List<NovelHistoryWithRelations> = emptyList(),
-    val recentlyAddedAnime: List<RecentlyAddedItem> = emptyList(),
-    val recentlyAddedManga: List<RecentlyAddedItem> = emptyList(),
-    val recentlyAddedNovels: List<RecentlyAddedItem> = emptyList(),
     // --- Greeting system ---
     val greeting: StringResource = AYMR.strings.home_greeting_default,
     val greetingReady: Boolean = false,
     val userName: String = "",
-    // --- Hero card ---
+    // --- Hero carousel ---
     val hero: HomeHubHero? = null,
+    /** Hero pages — most recently consumed entries in the current mode,
+     *  newest first; feeds the swipeable full-bleed carousel. [hero] is
+     *  always `heroes.firstOrNull()`. */
+    val heroes: List<HomeHubHero> = emptyList(),
     // --- Streak counter ---
     val currentStreak: Int = 0,
     // --- Month stats ---
@@ -50,6 +54,13 @@ data class HomeHubState(
     val achievementTotal: Int = 0,
     // --- Recommendations ---
     val recommendations: List<HomeHubCardItem> = emptyList(),
+    // --- User-built catalog rows (Phase 18) ---
+    /** All persisted specs, ordered — mode + visibility filter at render. */
+    val catalogSpecs: List<CatalogRowSpec> = emptyList(),
+    /** Fetch state per spec id — populated lazily on first visibility. */
+    val catalogRows: Map<String, CatalogRowState> = emptyMap(),
+    /** Hosted sheet — Manage Catalogs / the builder (Phase 18-03). */
+    val dialog: HomeHubDialog? = null,
     // --- Mode-aware filtering ---
     val currentMode: ContentMode = ContentMode.MANGA,
     // --- Hidden collections (set of collection IDs hidden from home) ---
@@ -64,19 +75,25 @@ data class HomeHubState(
     val hasAnyRecent: Boolean
         get() = recentAnime.isNotEmpty() || recentManga.isNotEmpty() || recentNovels.isNotEmpty()
 
-    val hasAnyRecentlyAdded: Boolean
-        get() = recentlyAddedAnime.isNotEmpty() ||
-            recentlyAddedManga.isNotEmpty() ||
-            recentlyAddedNovels.isNotEmpty()
-
+    /**
+     * Home is empty only when there is nothing to render IN THIS MODE —
+     * a spec living under another medium must not suppress the welcome
+     * state here (the user can't see it anyway).
+     */
     val isEmpty: Boolean
-        get() = !isLoading && !hasAnyRecent && !hasAnyRecentlyAdded && hero == null && recommendations.isEmpty()
+        get() = !isLoading && !hasAnyRecent && hero == null && recommendations.isEmpty() &&
+            catalogSpecs.none {
+                it.visible && it.medium == Carrier.fromContentMode(currentMode).medium
+            }
 
     // --- Card helpers for unified rendering ---
 
     val recentAnimeCards: List<HomeHubCardItem>
         get() = recentAnime
-            .distinctBy { it.animeId }
+            // showKey merges extension-source duplicates that CinemetaEntryUnifier
+            // mapped onto the same canonical entry (e.g. per-episode/per-season
+            // source entries all resolving to one "Naruto").
+            .distinctBy { it.showKey }
             .map {
                 HomeHubCardItem(it.animeId, it.title, it.coverData, HomeHubMediaType.SHOWS, animeProgressLabel(it))
             }
@@ -106,21 +123,6 @@ data class HomeHubState(
                     "Ch. ${eu.kanade.presentation.util.formatChapterNumber(it.chapterNumber)}",
                 )
             }
-
-    val recentlyAddedAnimeCards: List<HomeHubCardItem>
-        get() = recentlyAddedAnime.map {
-            HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.SHOWS)
-        }
-
-    val recentlyAddedMangaCards: List<HomeHubCardItem>
-        get() = recentlyAddedManga.map {
-            HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.MANGA)
-        }
-
-    val recentlyAddedNovelCards: List<HomeHubCardItem>
-        get() = recentlyAddedNovels.map {
-            HomeHubCardItem(it.id, it.title, it.coverData, HomeHubMediaType.NOVEL)
-        }
 }
 
 /**
@@ -143,16 +145,6 @@ internal fun animeProgressLabel(item: AnimeHistoryWithRelations): String {
     }
 }
 
-@Immutable
-data class RecentlyAddedItem(
-    val id: Long,
-    val title: String,
-    val coverData: Any?,
-    val sourceId: Long,
-    val url: String,
-    val mediaType: HomeHubMediaType,
-)
-
 /**
  * Hero card data — the most recently watched/read entry with progress info.
  */
@@ -170,7 +162,57 @@ data class HomeHubHero(
     val season: Int? = null,
     val runtime: String? = null,
     val isCinemetaMovie: Boolean = false,
+    // Hero presentation extras — prevalence-ordered genres (top 3 shown),
+    // a high-res backdrop preferred over the (often low-res) coverData,
+    // and the canonical entry id the detail screen resolves to (showKey
+    // for shows, the unifier's materialized `miko:` row for manga/novel).
+    // Doubles as the Cinemeta clearlogo pref key and the shared-element
+    // nav id — pushing it skips the detail screen's canonical redirect,
+    // which would run a second transition and pop every shared element.
+    val genres: List<String> = emptyList(),
+    val backdrop: Any? = null,
+    val canonicalId: Long? = null,
 )
+
+/**
+ * Runtime state for one catalog row (Phase 18) — populated by
+ * `onCatalogRowVisible` → resolver fetch, keyed by spec id in
+ * [HomeHubState.catalogRows].
+ */
+@Immutable
+data class CatalogRowState(
+    val items: List<RowItem> = emptyList(),
+    val loading: Boolean = false,
+    val error: CatalogRowError? = null,
+)
+
+/**
+ * Sheets hosted by the hub — rendered before the `isEmpty` early return
+ * so a fresh user can open Manage Catalogs and build their first row.
+ */
+sealed interface HomeHubDialog {
+    data object ManageCatalogs : HomeHubDialog
+    /**
+     * [lockedMedium] scopes the type step to one category — "New
+     * catalog" from a manage-sheet medium pill opens the builder with
+     * only that category's sub-types offered.
+     */
+    data class BuildCatalog(
+        val existing: CatalogRowSpec?,
+        val lockedMedium: String? = null,
+    ) : HomeHubDialog
+}
+
+enum class CatalogRowError {
+    /** No TMDB key resolves — row renders the BYOK notice. */
+    NO_TMDB_KEY,
+    /** Feed endpoint can't serve the spec (e.g. LATEST on a
+     *  `supportsLatest=false` source). */
+    UNSUPPORTED_FEED,
+    /** The spec's extension is uninstalled or moved to another package. */
+    EXTENSION_MISSING,
+    FETCH_FAILED,
+}
 
 enum class HomeHubMediaType {
     SHOWS,

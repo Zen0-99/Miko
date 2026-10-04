@@ -125,6 +125,21 @@ describe('chapters/canonize', () => {
         expect(results.length).toBeGreaterThan(0);
     });
 
+    it('an empty feed never flags a real feed as divergent', async () => {
+        const work = 'mk:mb:diverge2';
+        // Licensed-empty MangaDex feed + a single real crawler feed —
+        // nothing to corroborate against, nothing to flag.
+        await canonize({ work_id: work, feeds: [{ source_key: 'mangadex', chapters: [] }] });
+        await canonize({
+            work_id: work,
+            feeds: [feed('weeb', Array.from({ length: 15 }, (_, i) => `Chapter ${i + 1}`))],
+        });
+        const { results } = await env.COMMENTS_DB.prepare(
+            "SELECT kind FROM identity_review WHERE kind = 'chapter_feed_divergent' AND payload LIKE ?",
+        ).bind(`%${work}%`).all();
+        expect(results).toHaveLength(0);
+    });
+
     it('tentative feeds merge but flag identity_review', async () => {
         const work = 'mk:mb:tent1';
         const res = await canonize({
@@ -177,5 +192,139 @@ describe('chapters/canonize', () => {
         await canonize({ work_id: work, feeds: [feed('a', ['Chapter 1'])] });
         const list = await (await getChapters(work)).json() as any;
         expect(list.chapters).toHaveLength(1);
+    });
+
+    it('a later POST keeps sources it did not carry (durable feeds)', async () => {
+        const work = 'mk:mb:durable1';
+        await canonize({
+            work_id: work,
+            feeds: [feed('a', ['Chapter 1', 'Chapter 2']), feed('b', ['Chapter 3'])],
+        });
+        // Device resubmits with only its own source — a and b must survive.
+        await canonize({ work_id: work, feeds: [feed('c', ['Chapter 1', 'Chapter 2', 'Chapter 3'])] });
+        const list = await (await getChapters(work)).json() as any;
+        expect(list.chapters).toHaveLength(3);
+        expect(list.chapters.every((c: { confidence: string }) => c.confidence === 'verified'))
+            .toBe(true);
+        expect(list.chapters[2].sources).toContain('b');
+    });
+
+    it('a resubmitted source replaces only its own feed', async () => {
+        const work = 'mk:mb:durable2';
+        await canonize({
+            work_id: work,
+            feeds: [feed('a', ['Chapter 1', 'Chapter 2']), feed('b', ['Chapter 9'])],
+        });
+        await canonize({ work_id: work, feeds: [feed('a', ['Chapter 1'])] });
+        const list = await (await getChapters(work)).json() as any;
+        expect(list.chapters.map((c: { number: number | null }) => c.number))
+            .toEqual([1, 9]);
+    });
+
+    it('provider_ref persists the work→source binding', async () => {
+        const work = 'mk:mb:pref1';
+        await canonize({
+            work_id: work,
+            feeds: [{
+                source_key: 'mangadex',
+                provider_ref: 'd8a959f7-648e-4c8d-8f23-f1f3f8e129f3',
+                chapters: [{ name: 'Chapter 1' }],
+            }],
+        });
+        const { results } = await env.COMMENTS_DB.prepare(
+            `SELECT external_id FROM external_ids
+             WHERE provider = 'mangadex' AND miko_work_id = ?`,
+        ).bind(work).all<{ external_id: string }>();
+        expect(results[0]?.external_id).toBe('d8a959f7-648e-4c8d-8f23-f1f3f8e129f3');
+    });
+
+    it('user_picked provenance persists with confidence floor', async () => {
+        const work = 'mk:mb:up1';
+        await canonize({
+            work_id: work,
+            feeds: [{
+                source_key: 'asura',
+                provider_ref: '/manga/omniscient-reader',
+                verified: true,
+                score: 0.6,
+                provenance: 'user_picked',
+                chapters: [{ name: 'Chapter 1' }],
+            }],
+        });
+        const row = await env.COMMENTS_DB.prepare(
+            `SELECT confidence, provenance FROM external_ids
+             WHERE provider = 'asura' AND miko_work_id = ?`,
+        ).bind(work).first<{ confidence: number; provenance: string }>();
+        expect(row?.provenance).toBe('user_picked');
+        // A human pick outranks a middling matcher score.
+        expect(row?.confidence).toBe(0.9);
+    });
+
+    it('user_picked without verified gets no confidence floor', async () => {
+        const work = 'mk:mb:up2';
+        await canonize({
+            work_id: work,
+            feeds: [{
+                source_key: 'asura',
+                provider_ref: '/manga/maybe-this',
+                verified: false,
+                score: 0.5,
+                provenance: 'user_picked',
+                chapters: [{ name: 'Chapter 1' }],
+            }],
+        });
+        const row = await env.COMMENTS_DB.prepare(
+            `SELECT confidence, provenance FROM external_ids
+             WHERE provider = 'asura' AND miko_work_id = ?`,
+        ).bind(work).first<{ confidence: number; provenance: string }>();
+        expect(row?.provenance).toBe('user_picked');
+        expect(row?.confidence).toBe(0.5);
+        // ...and it still lands in the pending-review tier.
+        const { results } = await env.COMMENTS_DB.prepare(
+            `SELECT kind FROM identity_review
+             WHERE kind = 'chapter_feed_tentative' AND payload LIKE ?`,
+        ).bind(`%${work}%`).all<{ kind: string }>();
+        expect(results.length).toBe(1);
+    });
+
+    it('a chapterless feed still mints the binding (shows path)', async () => {
+        const work = 'mk:mb:up3';
+        const res = await canonize({
+            work_id: work,
+            feeds: [{
+                source_key: 'aniyomi.en.anikage',
+                provider_ref: 'kryiqaEgBJ',
+                verified: true,
+                provenance: 'user_picked',
+                chapters: [],
+            }],
+        });
+        expect(res.status).toBe(200);
+        const row = await env.COMMENTS_DB.prepare(
+            `SELECT external_id FROM external_ids
+             WHERE provider = 'aniyomi.en.anikage' AND miko_work_id = ?`,
+        ).bind(work).first<{ external_id: string }>();
+        expect(row?.external_id).toBe('kryiqaEgBJ');
+    });
+
+    it('structured feed chapters bypass name parsing', async () => {
+        const work = 'mk:mb:struct1';
+        await canonize({
+            work_id: work,
+            feeds: [{
+                source_key: 'mangadex',
+                chapters: [
+                    // A name parseChapter would read as plain 142 — the
+                    // structured .5 must win.
+                    { name: 'Chapter 142 — foo', number: 142.5, kind: 'chapter' },
+                    { name: 'Omake: pool', number: null, kind: 'extra' },
+                ],
+            }],
+        });
+        const list = await (await getChapters(work)).json() as any;
+        expect(list.chapters.map((c: { number: number | null; kind: string }) => [c.number, c.kind]))
+            .toContainEqual([142.5, 'chapter']);
+        expect(list.chapters.map((c: { number: number | null; kind: string }) => [c.number, c.kind]))
+            .toContainEqual([null, 'extra']);
     });
 });

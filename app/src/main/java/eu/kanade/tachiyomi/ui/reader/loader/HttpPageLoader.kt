@@ -52,6 +52,7 @@ internal class HttpPageLoader(
     // SY <--
 
     init {
+        sourceName = source.name
         scope.launchIO {
             flow {
                 while (true) {

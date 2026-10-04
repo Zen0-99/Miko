@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.domain.entries.manga.model.hasCustomCover
+import eu.kanade.domain.entries.novel.model.hasCustomCover
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
@@ -63,7 +65,17 @@ class MangaBakaEnrich(
      *  non-`mk:mb:` ids, already-enriched rows, or fetch failure. */
     suspend fun run(workId: String, manga: Manga): Boolean {
         clearTypeSeed(manga)
-        val detail = fetchDetail(workId) ?: return false
+        // A bare entry means an earlier enrich tagged the work but its
+        // entry write never landed (dupe row, transient update failure)
+        // — the tag must not gate the fetch that repairs it.
+        val bare = manga.description.isNullOrBlank() || manga.thumbnailUrl.isNullOrBlank()
+        val detail = fetchDetail(workId, force = bare) ?: return false
+        // Don't downgrade a recognized hi-res/custom cover to the
+        // MangaBaka art — the resolver upgrades to original-resolution
+        // provider covers and enrichment must not stomp them.
+        val keepCover = manga.hasCustomCover() ||
+            eu.kanade.tachiyomi.data.cover.HiResCoverResolver
+                .isPreferredCoverUrl(manga.thumbnailUrl)
         // Entry metadata first — the user-facing fix. A bridge-row write
         // failure must not starve the visible update (and vice versa).
         runCatching {
@@ -73,8 +85,10 @@ class MangaBakaEnrich(
                     author = detail.author,
                     description = detail.description,
                     genre = detail.genres.takeIf { it.isNotEmpty() },
-                    thumbnailUrl = detail.coverUrl,
-                    coverLastModified = detail.coverUrl?.let { System.currentTimeMillis() },
+                    thumbnailUrl = detail.coverUrl.takeUnless { keepCover },
+                    coverLastModified = detail.coverUrl
+                        ?.takeUnless { keepCover }
+                        ?.let { System.currentTimeMillis() },
                     status = detail.status?.let { CanonicalCatalog.statusOf(it, manga = true) },
                 ),
             )
@@ -91,7 +105,11 @@ class MangaBakaEnrich(
     /** Same as [run] for novels/books (`mk:mb:` novel rows). */
     suspend fun run(workId: String, novel: Novel): Boolean {
         clearTypeSeed(novel)
-        val detail = fetchDetail(workId) ?: return false
+        val bare = novel.description.isNullOrBlank() || novel.thumbnailUrl.isNullOrBlank()
+        val detail = fetchDetail(workId, force = bare) ?: return false
+        val keepCover = novel.hasCustomCover() ||
+            eu.kanade.tachiyomi.data.cover.HiResCoverResolver
+                .isPreferredCoverUrl(novel.thumbnailUrl)
         runCatching {
             novelRepository.updateNovel(
                 NovelUpdate(
@@ -99,8 +117,10 @@ class MangaBakaEnrich(
                     author = detail.author,
                     description = detail.description,
                     genre = detail.genres.takeIf { it.isNotEmpty() },
-                    thumbnailUrl = detail.coverUrl,
-                    coverLastModified = detail.coverUrl?.let { System.currentTimeMillis() },
+                    thumbnailUrl = detail.coverUrl.takeUnless { keepCover },
+                    coverLastModified = detail.coverUrl
+                        ?.takeUnless { keepCover }
+                        ?.let { System.currentTimeMillis() },
                     status = detail.status?.let { CanonicalCatalog.statusOf(it, manga = false) },
                 ),
             )
@@ -140,11 +160,11 @@ class MangaBakaEnrich(
 
     // ---------- fetch ----------
 
-    private suspend fun fetchDetail(workId: String): Detail? {
+    private suspend fun fetchDetail(workId: String, force: Boolean = false): Detail? {
         val mbId = workId.removePrefix(MB_PREFIX)
             .takeIf { it != workId && it.isNotBlank() } ?: return null
         val row = bridge.byWorkId(workId)
-        if (row?.resolutionSource == RESOLUTION_MB_DETAIL) return null
+        if (row?.resolutionSource == RESOLUTION_MB_DETAIL && !force) return null
         return try {
             val response = networkHelper.client.newCall(
                 GET(

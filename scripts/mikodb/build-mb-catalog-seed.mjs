@@ -37,6 +37,36 @@ const TYPES = new Set([
     'manga', 'manhwa', 'manhua', 'novel', 'oel', 'other', 'comic', 'webtoon',
 ]);
 
+// Derived kind: the dump never types rows `webtoon` — platform-published
+// works land as manhwa/manhua/oel/other. A row retypes to `webtoon` when
+// links_v2 carries one of these webplatform domains, so `kind=webtoon`
+// becomes real and Discovery's webtoon pill is MikoDB-backed (covers +
+// MangaBaka popularity) instead of depending on an installed extension.
+const WEBTOON_PLATFORMS = [
+    'webtoons.com', 'webtoon.naver.com', 'comic.naver.com', 'series.naver.com',
+    'm.webtoons.com', 'lezhin.com', 'lezhinus.com', 'tapas.io', 'tapastic.com',
+    'tappytoon.com', 'toomics.com', 'manta.net', 'kakaopage.com',
+    'page.kakao.com', 'webtoon.kakao.com', 'piccoma.com', 'toptoon.com',
+    'bomtoon.com', 'ridibooks.com', 'manga.bilibili.com', 'comico.',
+    'delitoon', 'pocketcomics', 'globalcomix', 'verytoon',
+];
+const WEBTOON_RETYPE = new Set(['manhwa', 'manhua', 'oel', 'other']);
+
+function isPlatformWebtoon(linksJson, type) {
+    if (!WEBTOON_RETYPE.has(type) || !linksJson) return false;
+    try {
+        const links = JSON.parse(linksJson);
+        if (!Array.isArray(links)) return false;
+        return links.some((l) => {
+            if (!l || (l.type && l.type !== 'webplatform')) return false;
+            const target = String(l.url || l.name || '').toLowerCase();
+            return WEBTOON_PLATFORMS.some((d) => target.includes(d));
+        });
+    } catch {
+        return false;
+    }
+}
+
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 const [,, src = DEFAULT_SRC, outDir = 'seed-mb'] = process.argv;
 
@@ -90,7 +120,8 @@ async function build() {
     const rows = db.prepare(
         `SELECT id, type, title, romanized_title, native_title, year,
                 total_chapters, authors, cover_x250_x1, cover_raw_url,
-                rating, popularity_type_current, genres, content_rating
+                rating, popularity_type_current, genres, content_rating,
+                links_v2
          FROM series
          WHERE (rating IS NOT NULL OR popularity_type_current IS NOT NULL)`,
     );
@@ -98,7 +129,7 @@ async function build() {
     fs.mkdirSync(outDir, { recursive: true });
     const fetchedAt = Date.now();
     const hash = createHash('sha256');
-    let works = 0, titles = 0, extIds = 0, badType = 0, fileNo = 0, inFile = 0;
+    let works = 0, titles = 0, extIds = 0, badType = 0, webtoons = 0, fileNo = 0, inFile = 0;
     let fh = null;
     const openFile = () => {
         fileNo += 1;
@@ -111,6 +142,12 @@ async function build() {
         await new Promise((res, rej) => { fh.once('error', rej); fh.end(res); });
     };
     const w = (line) => { hash.update(line + '\n'); fh.write(line + '\n'); };
+    // Consolidated kind-flip file — already-seeded DBs apply ONLY this
+    // to pick up the derived webtoon kind (the per-file UPDATEs below
+    // exist so fresh full reseeds get it too).
+    const retypePath = path.join(outDir, 'webtoon-retype.sql');
+    if (fs.existsSync(retypePath)) fs.rmSync(retypePath);
+    const retype = fs.createWriteStream(retypePath);
 
     for (const r of rows.iterate()) {
         if (!TYPES.has(r.type)) { badType++; continue; }
@@ -125,9 +162,18 @@ async function build() {
         const medium = r.type === 'novel' ? 'books' : 'manga';
         const rating = r.content_rating;
         const nsfw = rating === 'erotica' || rating === 'pornographic' ? 1 : 0;
+        const kind = isPlatformWebtoon(r.links_v2, r.type) ? 'webtoon' : r.type;
+        if (kind === 'webtoon') webtoons++;
 
-        w(`INSERT OR IGNORE INTO works_cache (miko_work_id, type, title, romanized_title, native_title, normalized_title, year, total_chapters, author, provider_links, medium, nsfw, content_rating, rating, popularity, cover_url, genres, fetched_at) VALUES (${sql(workId)}, ${sql(r.type)}, ${sql(title)}, ${sqlOrNull(r.romanized_title)}, ${sqlOrNull(r.native_title)}, ${sql(norm)}, ${numOrNull(r.year)}, ${sqlOrNull(r.total_chapters)}, ${sqlOrNull(author)}, '[]', '${medium}', ${nsfw}, ${sqlOrNull(rating)}, ${numOrNull(r.rating)}, ${numOrNull(r.popularity_type_current)}, ${sqlOrNull(cover)}, ${sqlOrNull(genres)}, ${fetchedAt});`);
+        w(`INSERT OR IGNORE INTO works_cache (miko_work_id, type, title, romanized_title, native_title, normalized_title, year, total_chapters, author, provider_links, medium, nsfw, content_rating, rating, popularity, cover_url, genres, fetched_at) VALUES (${sql(workId)}, ${sql(kind)}, ${sql(title)}, ${sqlOrNull(r.romanized_title)}, ${sqlOrNull(r.native_title)}, ${sql(norm)}, ${numOrNull(r.year)}, ${sqlOrNull(r.total_chapters)}, ${sqlOrNull(author)}, '[]', '${medium}', ${nsfw}, ${sqlOrNull(rating)}, ${numOrNull(r.rating)}, ${numOrNull(r.popularity_type_current)}, ${sqlOrNull(cover)}, ${sqlOrNull(genres)}, ${fetchedAt});`);
         works++;
+        // OR IGNORE keeps the OLD kind on already-seeded rows — re-seeds
+        // must flip the derived kind explicitly.
+        if (kind === 'webtoon') {
+            const upd = `UPDATE works_cache SET type = 'webtoon' WHERE miko_work_id = ${sql(workId)} AND type IN ('manhwa','manhua','oel','other');`;
+            w(upd);
+            retype.write(upd + '\n');
+        }
         if (norm) {
             // works_titles has no unique constraint — WHERE NOT EXISTS
             // makes the re-seed idempotent (OR IGNORE can't help here).
@@ -143,10 +189,12 @@ async function build() {
         }
     }
     if (inFile > 0) await closeFile();
+    await new Promise((res, rej) => { retype.once('error', rej); retype.end(res); });
+    if (webtoons === 0) fs.rmSync(retypePath);
     db.close();
     console.log(JSON.stringify({
         files: fileNo, works, titles, external_ids: extIds,
-        skipped: total - works - badType, bad_type: badType,
+        skipped: total - works - badType, bad_type: badType, webtoons,
         source_rows: total, source_sha256: hash.digest('hex'),
     }, null, 2));
 }

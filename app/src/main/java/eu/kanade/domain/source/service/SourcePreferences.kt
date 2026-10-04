@@ -59,6 +59,46 @@ class SourcePreferences(
     fun disabledMangaSources() = preferenceStore.getStringSet("hidden_catalogues", emptySet())
     fun disabledNovelSources() = preferenceStore.getStringSet("hidden_novel_catalogues", emptySet())
 
+    /** Per-work carrier preference (16-04) — `workId|pkgName` entries.
+     *  The canonical router ranks the preferred carrier above
+     *  stickiness/tier; the source picker writes it. */
+    fun preferredWorkCarriers() = preferenceStore.getStringSet("preferred_work_carriers", emptySet())
+
+    fun preferredCarrierFor(workId: String): String? = preferredWorkCarriers().get()
+        .firstNotNullOfOrNull { e ->
+            e.split('|', limit = 2).takeIf { it[0] == workId }?.get(1)
+        }
+
+    fun setPreferredCarrier(workId: String, pkgName: String?) {
+        val cur = preferredWorkCarriers().get()
+            .filterNotTo(mutableSetOf()) { it.substringBefore('|') == workId }
+        if (pkgName != null) cur += "$workId|$pkgName"
+        preferredWorkCarriers().set(cur)
+    }
+
+    /** Per-chapter carrier override (16-04) — `workId|seq|pkgName`
+     *  entries; ranks above [preferredCarrierFor] for that chapter's
+     *  routing, cleared back to the work default by writing null. */
+    fun preferredChapterCarriers() =
+        preferenceStore.getStringSet("preferred_chapter_carriers", emptySet())
+
+    fun preferredChapterCarrier(workId: String, seq: Int): String? =
+        preferredChapterCarriers().get().firstNotNullOfOrNull { e ->
+            e.split('|', limit = 3)
+                .takeIf { it[0] == workId && it[1].toIntOrNull() == seq }
+                ?.get(2)
+        }
+
+    fun setPreferredChapterCarrier(workId: String, seq: Int, pkgName: String?) {
+        val cur = preferredChapterCarriers().get()
+            .filterNotTo(mutableSetOf()) {
+                it.substringBefore('|') == workId &&
+                    it.substringAfter('|').substringBefore('|').toIntOrNull() == seq
+            }
+        if (pkgName != null) cur += "$workId|$seq|$pkgName"
+        preferredChapterCarriers().set(cur)
+    }
+
     fun incognitoAnimeExtensions() = preferenceStore.getStringSet("incognito_anime_extensions", emptySet())
     fun incognitoMangaExtensions() = preferenceStore.getStringSet("incognito_manga_extensions", emptySet())
     fun incognitoNovelExtensions() = preferenceStore.getStringSet("incognito_novel_extensions", emptySet())

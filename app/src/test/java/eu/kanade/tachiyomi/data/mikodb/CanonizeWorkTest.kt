@@ -18,8 +18,9 @@ class CanonizeWorkTest {
     private val collector = mockk<CanonicalFeedCollector>()
     private val chapterMap = mockk<CanonicalChapterMap>()
     private val api = mockk<WorkIdentityApi>()
+    private val goldenSources = mockk<GoldenSources>(relaxed = true)
 
-    private val canonize = CanonizeWork(bridge, collector, chapterMap, api)
+    private val canonize = CanonizeWork(bridge, collector, chapterMap, api, goldenSources)
 
     private val work = MangaNovelIdBridge.WorkRow(
         mikoWorkId = "mk:mb:1",

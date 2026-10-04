@@ -10,7 +10,14 @@
       "\\b(buy|free|win)\\s+(now|here|followers|crypto)\\b",
       "\\b(onlyfans|casino|slots|airdrop)\\b"
     ],
-    "rate": { "posts_per_min": 3, "posts_per_hour": 20 },
+    "rate": {
+      "posts_per_min": 3,
+      "posts_per_hour": 20,
+      "new_device_ms": 86400000,
+      "new_device_posts_per_hour": 8,
+      "thread_burst_per_window": 6,
+      "thread_burst_window_ms": 600000
+    },
     "duplicate_window_h": 24
   },
   "name": {

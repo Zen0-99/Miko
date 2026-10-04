@@ -38,8 +38,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.entries.components.ItemCover
-import eu.kanade.presentation.entries.novel.components.PreExtractNovelCoverColor
+import eu.kanade.presentation.entries.components.PreExtractEntryCoverColor
+import eu.kanade.tachiyomi.util.EntryCoverMetadata
+import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.entries.novel.model.NovelCover
+import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.BadgeGroup
 import tachiyomi.presentation.core.i18n.stringResource
@@ -64,6 +67,18 @@ private val ContinueViewingButtonGridPadding = 6.dp
 private val ContinueViewingButtonListSpacing = 8.dp
 
 private const val GRID_SELECTED_COVER_ALPHA = 0.76f
+
+/** Pre-extracts the cover accent for any medium — detail screens seed
+ *  from [EntryCoverMetadata] so the accent lands with no flash. */
+@Composable
+private fun PreExtractItemCoverColor(coverData: EntryCoverModel) {
+    when (coverData) {
+        is MangaCover -> PreExtractEntryCoverColor(coverData.mangaId, coverData, EntryCoverMetadata.EntryType.MANGA)
+        is NovelCover -> PreExtractEntryCoverColor(coverData.novelId, coverData, EntryCoverMetadata.EntryType.NOVEL)
+        is AnimeCover -> PreExtractEntryCoverColor(coverData.animeId, coverData, EntryCoverMetadata.EntryType.SHOWS)
+        else -> Unit
+    }
+}
 
 /**
  * Layout of grid list item with title overlaying the cover.
@@ -100,9 +115,7 @@ fun EntryCompactGridItem(
                             .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
                         data = coverData,
                     )
-                    if (coverData is NovelCover) {
-                        PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
-                    }
+                    PreExtractItemCoverColor(coverData)
                 }
             },
             badgesStart = coverBadgeStart,
@@ -220,9 +233,7 @@ fun EntryComfortableGridItem(
                                 .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
                             data = coverData,
                         )
-                        if (coverData is NovelCover) {
-                            PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
-                        }
+                        PreExtractItemCoverColor(coverData)
                     }
                 },
                 badgesStart = coverBadgeStart,
@@ -447,9 +458,7 @@ fun EntryListItem(
                         .alpha(coverAlpha),
                     data = coverData,
                 )
-                if (coverData is NovelCover) {
-                    PreExtractNovelCoverColor(novelId = coverData.novelId, cover = coverData)
-                }
+                PreExtractItemCoverColor(coverData)
             }
         }
         Column(

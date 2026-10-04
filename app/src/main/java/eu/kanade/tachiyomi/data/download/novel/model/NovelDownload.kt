@@ -67,6 +67,20 @@ data class NovelDownload(
         ): NovelDownload? {
             val chapter = getNovelChapter.await(chapterId) ?: return null
             val novel = getNovel.await(chapter.novelId) ?: return null
+
+            // Canon chapters carry source id 0 — resolve the serving
+            // carrier's source + chapter url via the router.
+            if (eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCanonUrl(chapter.url)) {
+                val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                    .workIdFromNovelUrl(novel.url) ?: return null
+                val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                    .seqFromCanonUrl(workId, chapter.url) ?: return null
+                val (carrier, candidate) = Injekt.get<eu.kanade.tachiyomi.data.mikodb
+                    .CanonicalChapterRouter>()
+                    .novelDownloadTarget(workId, seq) ?: return null
+                return NovelDownload(carrier, novel, chapter.copy(url = candidate.chapterUrl))
+            }
+
             val source = sourceManager.get(novel.source) as? NovelHttpSource ?: return null
 
             return NovelDownload(source, novel, chapter)

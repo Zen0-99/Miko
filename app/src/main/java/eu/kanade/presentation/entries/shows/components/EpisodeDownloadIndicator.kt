@@ -30,6 +30,7 @@ import eu.kanade.presentation.components.IndicatorModifier
 import eu.kanade.presentation.components.IndicatorSize
 import eu.kanade.presentation.components.IndicatorStrokeWidth
 import eu.kanade.presentation.components.commonClickable
+import eu.kanade.presentation.entries.components.rememberOnAccentColor
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.shows.model.ShowsDownload
 import tachiyomi.i18n.MR
@@ -55,7 +56,7 @@ fun EpisodeDownloadIndicator(
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
 ) {
-    val iconTint = accentColor ?: MaterialTheme.colorScheme.onSurfaceVariant
+    val iconTint = accentColor ?: MaterialTheme.colorScheme.onSurface
     when (val downloadState = downloadStateProvider()) {
         ShowsDownload.State.NOT_DOWNLOADED -> NotDownloadedIndicator(
             enabled = enabled,
@@ -202,6 +203,9 @@ private fun DownloadedIndicator(
     iconTint: Color,
 ) {
     var isMenuExpanded by remember { mutableStateOf(false) }
+    // The same circled-arrow icon — its circle filled with the accent —
+    // with the glyph drawn in a contrast-aware black/white on top.
+    val glyphTint = rememberOnAccentColor(iconTint)
     Box(
         modifier = modifier
             .size(IconButtonTokens.StateLayerSize)
@@ -214,10 +218,16 @@ private fun DownloadedIndicator(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_download_item_24dp),
+            painter = painterResource(R.drawable.ic_item_circle_filled_24dp),
             contentDescription = null,
             modifier = Modifier.size(IndicatorSize),
             tint = iconTint,
+        )
+        Icon(
+            painter = painterResource(R.drawable.ic_download_item_24dp),
+            contentDescription = null,
+            modifier = Modifier.size(IndicatorSize),
+            tint = glyphTint,
         )
         DropdownMenu(expanded = isMenuExpanded, onDismissRequest = { isMenuExpanded = false }) {
             DropdownMenuItem(

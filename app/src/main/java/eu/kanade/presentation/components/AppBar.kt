@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -48,10 +49,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -63,6 +66,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import eu.kanade.presentation.entries.components.HeroSharedKind
+import eu.kanade.presentation.entries.components.heroSharedBoundsModifier
+import eu.kanade.presentation.util.navTransitionFadeAlpha
 import eu.kanade.tachiyomi.R
 import kotlinx.collections.immutable.ImmutableList
 import tachiyomi.i18n.MR
@@ -165,32 +171,52 @@ fun AppBar(
             .background(resolvedBg)
             .then(if (skipStatusBarPadding) Modifier else Modifier.padding(top = statusBarHeight)),
     ) {
-        TopAppBar(
-            navigationIcon = {
-                if (isActionMode) {
-                    IconButton(onClick = onCancelActionMode) {
-                        Icon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = stringResource(MR.strings.action_cancel),
-                        )
-                    }
-                } else {
-                    navigateUp?.let {
-                        IconButton(onClick = it) {
-                            UpIcon(navigationIcon = navigationIcon)
+        // The bar's icons/title aren't shared elements — fade them with the
+        // nav transition so they don't blink under the shared-element
+        // overlay mid-morph. The overflow icon is shared (NAV_OVERFLOW_
+        // SHARED_KEY) and escapes this alpha inside the overlay.
+        val navFade = navTransitionFadeAlpha()
+        Box {
+            TopAppBar(
+                modifier = Modifier.graphicsLayer { alpha = navFade },
+                navigationIcon = {
+                    if (isActionMode) {
+                        IconButton(onClick = onCancelActionMode) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = stringResource(MR.strings.action_cancel),
+                            )
+                        }
+                    } else {
+                        navigateUp?.let {
+                            IconButton(
+                                onClick = it,
+                                // The up arrow pairs with the home bar's
+                                // leading icon slot — the element
+                                // crossfades through the overlay during
+                                // transit (like the overflow icon) instead
+                                // of riding the bar's late alpha ramp and
+                                // appearing only at the end.
+                                modifier = heroSharedBoundsModifier(
+                                    NAV_LEADING_ICON_SHARED_KEY,
+                                    HeroSharedKind.Text,
+                                ),
+                            ) {
+                                UpIcon(navigationIcon = navigationIcon)
+                            }
                         }
                     }
-                }
-            },
-            title = titleContent,
-            actions = actions,
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color.Transparent,
-                scrolledContainerColor = Color.Transparent,
-            ),
-            scrollBehavior = scrollBehavior,
-            windowInsets = WindowInsets(0, 0, 0, 0),
-        )
+                },
+                title = titleContent,
+                actions = actions,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                ),
+                scrollBehavior = scrollBehavior,
+                windowInsets = WindowInsets(0, 0, 0, 0),
+            )
+        }
     }
 }
 
@@ -243,6 +269,30 @@ fun AppBarTitle(
     }
 }
 
+/** Shared-element key for the three-dot overflow icon — constant so the
+ *  home top bar's icon pairs with the detail toolbar's during the
+ *  push/pop transition. */
+internal const val NAV_OVERFLOW_SHARED_KEY = "nav-overflow"
+
+/** Shared-element key for the top bar's leading 48dp icon slot — the home
+ *  bar's search/back icon pairs with the detail toolbar's up arrow so it
+ *  crossfades in place during the nav transition instead of appearing only
+ *  after the screen's fade completes. */
+internal const val NAV_LEADING_ICON_SHARED_KEY = "nav-leading-icon"
+
+/** Shared-element key for the detail toolbar's download action — pairs
+ *  with an invisible anchor on the home bar and the loading preview so
+ *  it glides through transit instead of popping with the bar's alpha. */
+internal const val NAV_DOWNLOAD_SHARED_KEY = "nav-download"
+
+/** Shared-element key for the home glass pill. The haze blur cannot
+ *  render in the transition overlay, so while transit runs the home
+ *  endpoint swaps the haze for an opaque surface fill; the detail
+ *  endpoint is an invisible anchor at the toolbar's trailing slot —
+ *  the bounds morph + crossfade reads as the pill collapsing into the
+ *  overflow corner instead of dying with the screen's early fade-out. */
+internal const val NAV_PILL_SHARED_KEY = "nav-pill"
+
 @OptIn(ExperimentalAnimationGraphicsApi::class)
 @Composable
 fun AppBarActions(
@@ -263,6 +313,9 @@ fun AppBarActions(
             IconButton(
                 onClick = it.onClick,
                 enabled = it.enabled,
+                modifier = it.sharedKey?.let { key ->
+                    heroSharedBoundsModifier(key, HeroSharedKind.Text)
+                } ?: Modifier,
             ) {
                 Icon(
                     imageVector = it.icon,
@@ -292,6 +345,16 @@ fun AppBarActions(
             val moreImage = AnimatedImageVector.animatedVectorResource(R.drawable.anim_more_enter)
             IconButton(
                 onClick = { showMenu = !showMenu },
+                // The overflow icon exists on both the home top bar and
+                // the detail toolbar — one shared element makes it glide
+                // between positions on navigation instead of rebuilding.
+                // NavIcon (sharedElement) rather than a bounds morph: all
+                // endpoints draw the same glyph, so skipping the content
+                // crossfade removes the mid-flight alpha dip.
+                modifier = heroSharedBoundsModifier(
+                    NAV_OVERFLOW_SHARED_KEY,
+                    HeroSharedKind.NavIcon,
+                ),
             ) {
                 Icon(
                     rememberAnimatedVectorPainter(moreImage, showMenu),
@@ -573,6 +636,11 @@ sealed interface AppBar {
         val iconTint: Color? = null,
         val onClick: () -> Unit,
         val enabled: Boolean = true,
+        /** Shared-element key pairing this action with a counterpart on
+         *  the navigating screen's bar (or an invisible anchor) — the icon
+         *  then glides through the overlay like the overflow button
+         *  instead of popping with the screen's chrome alpha. */
+        val sharedKey: String? = null,
     ) : AppBarAction
 
     data class OverflowAction(

@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.ColorUtils
 import coil3.asDrawable
@@ -120,6 +121,46 @@ fun rememberOnAccentColor(
     ).value
 }
 
+/** Height above/below the page background an accent-tinted surface sits. */
+private const val TINTED_SURFACE_STEP = 0.075f
+
+/** Extra darkening applied to a tinted surface in its "consumed" state. */
+private const val TINTED_SURFACE_DIMMED_DELTA = 0.035f
+
+/** Saturation kept from the entry accent — hue stays recognizable. */
+private const val TINTED_SURFACE_SATURATION = 0.38f
+
+/**
+ * Surface color derived from the entry accent: the accent's hue with its
+ * saturation damped, seated just off the page background. On dark themes the
+ * accent is lighter than the background, so the surface lands a step *above*
+ * it — darkened, desaturated accent that is never darker than the page
+ * behind it. On light themes the accent is darker than the background, so
+ * the surface sits the same step *below*. [dimmed] drops the lightness a
+ * notch for already-consumed rows while staying above the background on
+ * dark themes.
+ */
+fun accentTintedSurface(accent: Color, background: Color, dimmed: Boolean): Color {
+    val accentHsl = FloatArray(3).also { ColorUtils.colorToHSL(accent.toArgb(), it) }
+    val bgHsl = FloatArray(3).also { ColorUtils.colorToHSL(background.toArgb(), it) }
+    val direction = if (accentHsl[2] >= bgHsl[2]) 1f else -1f
+    val lightness = (bgHsl[2] + direction * TINTED_SURFACE_STEP).coerceIn(0f, 1f)
+    val dimmedLightness = if (direction > 0f) {
+        (lightness - TINTED_SURFACE_DIMMED_DELTA).coerceAtLeast(bgHsl[2] + 0.012f)
+    } else {
+        (lightness - TINTED_SURFACE_DIMMED_DELTA).coerceIn(0f, 1f)
+    }
+    return Color(
+        ColorUtils.HSLToColor(
+            floatArrayOf(
+                accentHsl[0],
+                accentHsl[1] * TINTED_SURFACE_SATURATION,
+                if (dimmed) dimmedLightness else lightness,
+            ),
+        ),
+    )
+}
+
 /**
  * Stable identity for a cover object — the image URL + last-modified stamp.
  * Domain entry objects (Anime/Manga/Novel) change identity on any field
@@ -127,7 +168,7 @@ fun rememberOnAccentColor(
  * metadata refreshes; keying on url+lastModified only re-extracts when the
  * actual image changes.
  */
-private fun coverKeyOf(cover: Any): String {
+internal fun coverKeyOf(cover: Any): String {
     // "v2" busts colors cached before perimeter sampling replaced the
     // full-image palette — without it, stale logo-skewed accents persist.
     val base = when (cover) {

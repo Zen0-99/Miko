@@ -106,6 +106,16 @@ data class CachedHeroItem(
     val coverLastModified: Long,
     val subId: Long,
     val mediaType: String,
+    // Defaults keep pre-existing cached JSON parseable — without backdropUrl
+    // a cached shows hero renders the poster instead of the fanart the live
+    // hero (and the detail screen) shows.
+    val backdropUrl: String? = null,
+    val season: Int? = null,
+    val runtime: String? = null,
+    val isCinemetaMovie: Boolean = false,
+    val genres: List<String> = emptyList(),
+    val logoId: Long? = null,
+    val chapterTitle: String? = null,
 )
 
 @Serializable

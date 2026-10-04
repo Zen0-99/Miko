@@ -64,6 +64,7 @@ class WorkIdentityApi {
         val total_chapters: String? = null,
         val author: String? = null,
         val provider_links: String = "[]",
+        val cover_url: String? = null,
         val external_ids: Map<String, String> = emptyMap(),
     )
 
@@ -135,6 +136,13 @@ class WorkIdentityApi {
         val tier: String? = null,
         val verified: Boolean = true,
         val score: Double? = null,
+        /** Source-internal entry ref — mints the provider_bindings row
+         *  server-side. Without it a feed contributes chapters but the
+         *  work↔carrier link never persists (17-01). */
+        val provider_ref: String? = null,
+        /** 'device_feed' default; 'user_picked' for Find Provider sheet
+         *  confirmations (confidence floor applied server-side). */
+        val provenance: String? = null,
         val chapters: List<FeedChapter>,
     )
 
@@ -176,6 +184,37 @@ class WorkIdentityApi {
                 ),
             ).awaitSuccess().parseAs<CanonizeResponse>()
         }
+    } catch (_: Exception) {
+        null
+    }
+
+    // ---------- Phase 16-02/16-04: carrier bindings + alignment ----------
+
+    @Serializable
+    data class BindingDto(
+        val source_key: String,
+        val provider_ref: String,
+        val confidence: Double? = null,
+        val provenance: String? = null,
+        val last_seen_at: Long? = null,
+    )
+
+    @Serializable
+    data class BindingsResponse(
+        val work_id: String,
+        val bindings: List<BindingDto> = emptyList(),
+    )
+
+    /** The work's durable carrier bindings — which providers/extensions
+     *  hold an entry for it (16-02). Empty list when none; null on failure. */
+    suspend fun getBindings(workId: String): BindingsResponse? = try {
+        networkHelper.client.newCall(
+            okhttp3.Request.Builder()
+                .url("${baseUrl()}/v1/works/${java.net.URLEncoder.encode(workId, "UTF-8")}/bindings")
+                .headers(Headers.headersOf("User-Agent", USER_AGENT))
+                .get()
+                .build(),
+        ).awaitSuccess().let { with(json) { it.parseAs<BindingsResponse>() } }
     } catch (_: Exception) {
         null
     }

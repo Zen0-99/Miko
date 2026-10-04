@@ -51,6 +51,7 @@ import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.storage.service.StorageManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.io.File
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
@@ -59,9 +60,10 @@ class NovelDownloadCache(
     private val context: Context,
     private val provider: NovelDownloadProvider = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
-    private val extensionManager: NovelExtensionManager = Injekt.get(),
     private val storageManager: StorageManager = Injekt.get(),
 ) {
+
+    private val extensionManager: NovelExtensionManager by injectLazy()
 
     private val scope = CoroutineScope(Dispatchers.IO)
 

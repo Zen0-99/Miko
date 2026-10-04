@@ -58,6 +58,15 @@ fun ChapterGroupPillRow(
             val isSelected = group == selectedGroup
 
             val selectedBg = accentColor ?: MaterialTheme.colorScheme.primary
+            val isComplete = group in completedGroups
+            // Unselected pills sit on the entry accent darkened into a
+            // surface (chapter-card logic); fully-read groups dim a notch
+            // further, same as read chapter cards.
+            val unselectedBg = accentTintedSurface(
+                accent = selectedBg,
+                background = MaterialTheme.colorScheme.background,
+                dimmed = isComplete,
+            )
             // Readable text via the theme-transition machinery — animates
             // with the accent fadethrough instead of snapping mid-swap.
             val selectedText = rememberOnAccentColor(accentColor)
@@ -69,7 +78,7 @@ fun ChapterGroupPillRow(
                         if (isSelected) {
                             selectedBg
                         } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
+                            unselectedBg
                         },
                     )
                     .clickable { onGroupSelected(group) }
@@ -79,7 +88,7 @@ fun ChapterGroupPillRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    if (group in completedGroups) {
+                    if (isComplete) {
                         Icon(
                             imageVector = Icons.Outlined.Check,
                             contentDescription = null,
@@ -97,8 +106,12 @@ fun ChapterGroupPillRow(
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) {
                             selectedText
+                        } else if (isComplete) {
+                            // Read group: the accent text darkened to
+                            // match the dimmed surface — "consumed" look.
+                            selectedBg.copy(alpha = 0.72f)
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            selectedBg
                         },
                     )
                 }

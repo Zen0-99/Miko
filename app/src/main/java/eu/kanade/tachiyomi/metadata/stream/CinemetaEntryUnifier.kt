@@ -112,6 +112,7 @@ class CinemetaEntryUnifier(
             runtime = canonical.runtime,
             episodeScanlator = episodeScanlator,
             coverData = canonical.asAnimeCover(),
+            canonicalAnimeId = canonical.id,
         )
     }
 

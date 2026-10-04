@@ -20,4 +20,37 @@ object TitleNormalizer {
         ?.replace(SPACES, " ")
         ?.trim()
         .orEmpty()
+
+    private val ROMAN_NUMERAL = Regex("^[IVXLCDM]{2,}$")
+
+    /**
+     * Display casing for canonical titles — upstream catalogs store many
+     * headline titles ALL CAPS ("BLEACH", "ONE PIECE"). Fires only when
+     * the title has cased letters but no lowercase at all, so mixed-case
+     * and stylized titles pass through untouched. Words that are pure
+     * roman numerals keep their capitals ("PART II" → "Part II").
+     */
+    fun displayTitle(title: String): String {
+        if (title.none { it.isLetter() } || title.any { it.isLowerCase() }) return title
+        return title.split(SPACES).joinToString(" ") { word ->
+            if (word.matches(ROMAN_NUMERAL)) word else capitalizeWord(word)
+        }
+    }
+
+    private fun capitalizeWord(word: String): String {
+        val sb = StringBuilder(word.lowercase())
+        var cap = true
+        for (i in sb.indices) {
+            val c = sb[i]
+            when {
+                c.isLetter() && cap -> {
+                    sb[i] = c.uppercaseChar()
+                    cap = false
+                }
+                c.isLetterOrDigit() -> cap = false
+                else -> cap = true // hyphen/apostrophe boundary: "K-ON" → "K-On"
+            }
+        }
+        return sb.toString()
+    }
 }

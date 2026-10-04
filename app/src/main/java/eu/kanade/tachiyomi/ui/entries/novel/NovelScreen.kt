@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
@@ -68,6 +69,8 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.model.ReadingOrder
+import eu.kanade.presentation.entries.components.EntryHeroLoadingPreview
+import tachiyomi.presentation.core.screens.DelayedLoadingScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -75,6 +78,16 @@ import uy.kohesive.injekt.api.get
 class NovelScreen(
     private val novelId: Long,
     val fromSource: Boolean = false,
+    /**
+     * Artwork the caller already displays for this entry (e.g. the home
+     * hero's). Shown as a shared element during Loading so the push
+     * transition morphs the hero image instead of a blank spinner.
+     */
+    private val previewCover: Any? = null,
+    /** Title for the shared `hero-title-` element during Loading. */
+    private val previewTitle: String? = null,
+    /** Clearlogo for the shared `hero-title-` element during Loading. */
+    private val previewLogo: String? = null,
 ) : Screen(), AssistContentScreen {
 
     private var assistUrl: String? = null
@@ -103,13 +116,33 @@ class NovelScreen(
         val redirectId by screenModel.redirectToEntryId.collectAsStateWithLifecycle()
 
         // Extension-source duplicate of a canonical `miko:` entry — swap
-        // to the canonical entry so there's one entry per work.
+        // to the canonical entry so there's one entry per work. Hand the
+        // current entry's artwork to the new screen's Loading preview so
+        // the cover stays painted through the mint handoff instead of
+        // flashing blank.
         LaunchedEffect(redirectId) {
-            redirectId?.let { navigator.replace(NovelScreen(it, fromSource)) }
+            redirectId?.let {
+                val current = (state as? NovelScreenModel.State.Success)?.novel
+                navigator.replace(
+                    NovelScreen(
+                        it,
+                        fromSource,
+                        previewCover = current?.thumbnailUrl ?: previewCover,
+                        previewTitle = current?.title ?: previewTitle,
+                        previewLogo = previewLogo,
+                    ),
+                )
+            }
         }
 
         if (state is NovelScreenModel.State.Loading) {
-            LoadingScreen()
+            EntryHeroLoadingPreview(
+                cover = previewCover,
+                sharedKey = "hero-image-$novelId",
+                heroContentPadding = 440.dp,
+                title = previewTitle,
+                logo = previewLogo,
+            )
             return
         }
 
@@ -145,6 +178,7 @@ class NovelScreen(
 
         NovelScreen(
             state = successState,
+            previewCover = previewCover,
             snackbarHostState = screenModel.snackbarHostState,
             isTabletUi = isTabletUi(),
             chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
@@ -160,7 +194,14 @@ class NovelScreen(
                     }
                 }
             },
-            onDownloadChapter = screenModel::runChapterDownloadActions.takeIf { !successState.source.isLocalOrStub() },
+            onDownloadChapter = screenModel::runChapterDownloadActions.takeIf {
+                // Canon entries ride a stub source but DO support
+                // downloads — the queue resolves each chapter to its
+                // carrier at enqueue time.
+                !successState.source.isLocalOrStub() ||
+                    eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                        .isCanonicalUrl(successState.novel.url)
+            },
             onAudioChapter = { items: List<NovelChapterList.Item>, action: NovelChapterAudioAction ->
                 when (action) {
                     // D-04: Play opens the audiobook player overlay — same
@@ -210,6 +251,7 @@ class NovelScreen(
             onTrackingClicked = { screenModel.showTrackSheet() },
             onCommentsClicked = screenModel::showCommentsDialog
                 .takeIf { screenModel.commentsEnabled },
+            onFindProviderClicked = screenModel::showFindProviderDialog,
             onRefresh = screenModel::fetchAllFromSource,
             onContinueReading = {
                 val firstUnread = successState.nextContinueChapter
@@ -305,6 +347,7 @@ class NovelScreen(
                     onConfirm = { include, _ ->
                         screenModel.moveNovelToCollectionsAndAddToLibrary(dialog.novel, include)
                     },
+                    accentColor = successState.accentColor,
                 )
             }
             is NovelScreenModel.Dialog.DeleteChapters -> {
@@ -405,6 +448,23 @@ class NovelScreen(
                     ),
                     onDismissRequest = onDismissRequest,
                 )
+            }
+            NovelScreenModel.Dialog.FindProvider -> {
+                val search = successState.providerSearch
+                if (search != null) {
+                    eu.kanade.presentation.entries.components.FindProviderDialog(
+                        searching = search.searching,
+                        rows = search.rows,
+                        confirmed = search.confirmed,
+                        recommendations = search.recommendations,
+                        installSteps = successState.carrierInstallSteps,
+                        accentColor = successState.accentColor,
+                        onToggle = screenModel::toggleProviderPick,
+                        onInstall = screenModel::installRecommendedProvider,
+                        onConfirm = screenModel::confirmProviderPicks,
+                        onDismissRequest = onDismissRequest,
+                    )
+                }
             }
         }
 

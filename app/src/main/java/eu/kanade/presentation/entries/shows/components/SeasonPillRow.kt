@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import eu.kanade.presentation.entries.components.accentTintedSurface
 import eu.kanade.presentation.entries.components.rememberOnAccentColor
 
 /**
@@ -63,6 +64,15 @@ fun SeasonPillRow(
             val label = if (season == 0) "Specials" else "Season $season"
 
             val selectedBg = accentColor ?: MaterialTheme.colorScheme.primary
+            val isWatched = season in watchedSeasons
+            // Unselected pills sit on the entry accent darkened into a
+            // surface (chapter-card logic); fully-watched seasons dim a
+            // notch further, same as read chapter cards.
+            val unselectedBg = accentTintedSurface(
+                accent = selectedBg,
+                background = MaterialTheme.colorScheme.background,
+                dimmed = isWatched,
+            )
             // Readable text via the theme-transition machinery — animates
             // with the accent fadethrough instead of snapping mid-swap.
             val selectedText = rememberOnAccentColor(accentColor)
@@ -74,7 +84,7 @@ fun SeasonPillRow(
                         if (isSelected) {
                             selectedBg
                         } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
+                            unselectedBg
                         },
                     )
                     .clickable { onSeasonSelected(season) }
@@ -84,7 +94,7 @@ fun SeasonPillRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    if (season in watchedSeasons) {
+                    if (isWatched) {
                         Icon(
                             imageVector = Icons.Outlined.Check,
                             contentDescription = null,
@@ -102,8 +112,12 @@ fun SeasonPillRow(
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) {
                             selectedText
+                        } else if (isWatched) {
+                            // Watched: the accent text darkened to match
+                            // the dimmed surface — reads as "consumed".
+                            selectedBg.copy(alpha = 0.72f)
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            selectedBg
                         },
                     )
                 }

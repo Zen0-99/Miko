@@ -16,7 +16,8 @@ CREATE TABLE works_cache(
     normalized_title TEXT NOT NULL,
     resolution_source TEXT NOT NULL,
     resolved_at INTEGER NOT NULL,
-    nsfw INTEGER NOT NULL DEFAULT 0
+    nsfw INTEGER NOT NULL DEFAULT 0,
+    cover_url TEXT
 );
 
 CREATE INDEX works_cache_normalized_idx ON works_cache(normalized_title);
@@ -58,11 +59,11 @@ upsertWork:
 INSERT OR REPLACE INTO works_cache(
     miko_work_id, type, title, romanized_title, native_title, year,
     total_chapters, author, provider_links, normalized_title,
-    resolution_source, resolved_at, nsfw
+    resolution_source, resolved_at, nsfw, cover_url
 ) VALUES (
     :workId, :type, :title, :romanizedTitle, :nativeTitle, :year,
     :totalChapters, :author, :providerLinks, :normalizedTitle,
-    :resolutionSource, :resolvedAt, :nsfw
+    :resolutionSource, :resolvedAt, :nsfw, :coverUrl
 );
 
 upsertExternalId:

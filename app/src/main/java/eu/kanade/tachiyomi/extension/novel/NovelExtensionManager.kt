@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.extension.novel.util.NovelExtensionInstaller
 import eu.kanade.tachiyomi.extension.novel.util.NovelExtensionLoader
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,7 +68,7 @@ class NovelExtensionManager(
     val untrustedExtensionsFlow = untrustedExtensionsMapFlow.mapExtensions(scope)
 
     init {
-        initExtensions()
+        scope.launch(Dispatchers.IO) { initExtensions() }
         NovelExtensionInstallReceiver(NovelInstallationListener()).register(context)
         seedDefaultRepoIfNeeded()
     }

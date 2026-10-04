@@ -304,7 +304,10 @@ private fun CinemetaCatalogGrid(
                     verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(metas.size) { index ->
+                    items(
+                        count = metas.size,
+                        key = { metas[it].id },
+                    ) { index ->
                         val meta = metas[index]
                         val coverData = AnimeCover(
                             animeId = meta.id.hashCode().toLong(),

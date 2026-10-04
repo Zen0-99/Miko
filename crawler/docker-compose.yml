@@ -1,0 +1,84 @@
+# MikoDB chapter crawler — Suwayomi behind NordVPN.
+#
+#   docker compose up -d            # start tunnel + suwayomi
+#   docker compose logs -f gluetun  # watch the tunnel handshake
+#   node crawler.mjs                # scheduler runs on the host
+#
+# Only suwayomi's source traffic needs the VPN — the scheduler talks to
+# localhost:4567 and to the worker, so it runs outside Docker. Rotate
+# egress by changing SERVER_REGIONS below and `compose up -d
+# --force-recreate gluetun`.
+#
+# Nord service credentials live in .env (gitignored) — OpenVPN type
+# because Nord issues WireGuard keys only via account OAuth, not the
+# service-credential pair.
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:v3
+    container_name: miko-gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    env_file: .env
+    environment:
+      VPN_SERVICE_PROVIDER: nordvpn
+      VPN_TYPE: openvpn
+      OPENVPN_USER: ${NORD_SERVICE_USER}
+      OPENVPN_PASSWORD: ${NORD_SERVICE_PASS}
+      # Pick a region pool; recreate to rotate exits.
+      SERVER_REGIONS: Netherlands
+      # UDP:1194 stopped handshaking 2026-09-30 — TCP:443 is the fallback.
+      OPENVPN_PROTOCOL: tcp
+      HEALTH_TARGET_ADDRESS: github.com:443
+      # HTTP proxy for host-side runners (novel crawler) — same Nord egress.
+      HTTPPROXY: "on"
+    ports:
+      # Suwayomi shares gluetun's netns — its API is published here.
+      - "4567:4567"
+      # Gluetun HTTP/SOCKS proxies — host-side runners (novel plugins)
+      # egress the same Nord IP so server-side cookies stay IP-bound.
+      - "8888:8888"
+      # Byparr shares the same netns — publishing here lets the
+      # host-side novel crawler solve challenges on the Nord IP.
+      - "8191:8191"
+    restart: unless-stopped
+
+  suwayomi:
+    image: ghcr.io/suwayomi/suwayomi-server:stable
+    container_name: miko-suwayomi
+    network_mode: service:gluetun
+    volumes:
+      - ./suwayomi-data:/home/suwayomi/.local/share/Tachidesk
+    environment:
+      TZ: UTC
+      # Byparr shares this netns → localhost:8191, and its browser
+      # egresses the same Nord IP — cf_clearance stays usable here.
+      FLARESOLVERR_ENABLED: "true"
+      FLARESOLVERR_URL: "http://localhost:8191"
+      FLARESOLVERR_TIMEOUT: "90"
+      FLARESOLVERR_SESSION_TTL: "30"
+      FLARESOLVERR_AS_RESPONSE_FALLBACK: "true"
+    depends_on:
+      - gluetun
+      - byparr
+    restart: unless-stopped
+
+  # Cloudflare-challenge solver (patchright-based, FlareSolverr API).
+  byparr:
+    image: ghcr.io/thephaseless/byparr:latest
+    container_name: miko-byparr
+    network_mode: service:gluetun
+    # Xvfb + Chromium need more than docker's default 64MB /dev/shm.
+    shm_size: "1gb"
+    environment:
+      TZ: UTC
+      LOG_LEVEL: info
+      # Skip Xvfb entirely — true headless applies the same stealth
+      # fingerprint, and on the shared gluetun netns the Xvfb :99
+      # abstract socket leaks between retries.
+      INVPW_TRUE_HEADLESS: "1"
+    depends_on:
+      - gluetun
+    restart: unless-stopped

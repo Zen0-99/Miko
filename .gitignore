@@ -37,10 +37,39 @@ libs/*
 # Code graph cache
 graphify-out/
 
+# Local secrets — never commit credentials
+.env
+**/.env
+!.env.example
+
 # Comments worker
 worker/node_modules/
+crawler/node_modules/
 worker/.wrangler/
 
 # Regenerable catalog seeds
 seed-hs/
 seed-mb/
+seed-ol/
+
+# Local wrangler secrets (never commit)
+.dev.vars
+
+# Crawler runtime state (code is committed; data/profiles are not)
+crawler/suwayomi-data/
+crawler/solver-profile*/
+crawler/state*.json
+crawler/novel-state.json
+crawler/misses*.json
+
+# Local artifacts, dumps, and generated output
+.wrangler/
+__pycache__/
+*.log
+hs_err_pid*.log
+miko-render-cache/
+window_dump.xml
+lock.xml
+agg.html
+step-back-*.md
+scripts/mangadex_coverage.jsonl

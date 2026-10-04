@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -72,7 +71,6 @@ fun NuvioEpisodeCard(
     episodeString: String,
     rating: String? = null,
     date: String?,
-    runtime: String? = null,
     watchProgress: String? = null,
     progressFraction: Float?,
     scanlator: String?,
@@ -81,6 +79,9 @@ fun NuvioEpisodeCard(
     seen: Boolean,
     bookmark: Boolean,
     selected: Boolean,
+    /** The next-in-line episode to watch — the card outline switches to
+     *  the entry accent. */
+    isNext: Boolean = false,
     downloadIndicatorEnabled: Boolean,
     downloadStateProvider: () -> ShowsDownload.State,
     downloadProgressProvider: () -> Int,
@@ -112,7 +113,7 @@ fun NuvioEpisodeCard(
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .border(
                 1.dp,
-                Color.White.copy(alpha = 0.12f),
+                if (isNext) accent else Color.White.copy(alpha = 0.12f),
                 RoundedCornerShape(16.dp),
             )
             .combinedClickable(
@@ -172,45 +173,66 @@ fun NuvioEpisodeCard(
             )
         }
 
-        // Completed badge (top-left, accent circle with white ring)
-        if (seen) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(10.dp)
-                    .size(24.dp)
-                    .background(accent, RoundedCornerShape(12.dp))
-                    .border(2.dp, Color.White, RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Check,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(13.dp),
+        // Top-left status cluster: watched → completed badge; partially
+        // watched → "time watched" pill; bookmark beside either.
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (seen) {
+                // Completed badge (accent circle with white ring)
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(accent, RoundedCornerShape(12.dp))
+                        .border(2.dp, Color.White, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp),
+                    )
+                }
+            } else if (watchProgress != null) {
+                // "Time watched" pill — same top-left slot, swapped for
+                // the check badge once the episode finishes.
+                Text(
+                    text = watchProgress,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .background(
+                            Color.Black.copy(alpha = 0.55f),
+                            RoundedCornerShape(12.dp),
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
             }
-        }
-
-        // Bookmark marker (top-left, next to the completed badge)
-        if (bookmark) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = if (seen) 42.dp else 10.dp, top = 10.dp)
-                    .size(24.dp)
-                    .background(
-                        Color.Black.copy(alpha = 0.55f),
-                        RoundedCornerShape(12.dp),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Bookmark,
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier.size(14.dp),
-                )
+            if (bookmark) {
+                // Bookmark marker
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.55f),
+                            RoundedCornerShape(12.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Bookmark,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
         }
 
@@ -285,43 +307,19 @@ fun NuvioEpisodeCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        if (runtime != null) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Schedule,
-                                    contentDescription = null,
-                                    tint = LocalContentColor.current,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Text(
-                                    text = runtime,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                )
-                            }
-                        }
-                        if (rating != null) {
-                            val metaColor = LocalContentColor.current
-                            ImdbRatingLabel(
-                                rating = rating,
-                                style = MaterialTheme.typography.labelSmall.merge(fontSize = 11.sp),
-                                fontWeight = FontWeight.SemiBold,
-                                color = metaColor,
-                                tint = metaColor,
-                            )
-                        }
-                        if (watchProgress != null) {
+                        // Left cluster: release date + scanlator
+                        // (truncates against the slack). Rating pins to
+                        // the right edge.
+                        if (date != null) {
                             Text(
-                                text = watchProgress,
+                                text = date,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
+                                // Same color as the summary/description
+                                // text, not the dimmer meta-channel color.
+                                color = Color.White.copy(alpha = 0.9f * metaAlpha),
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         if (scanlator != null) {
@@ -331,18 +329,19 @@ fun NuvioEpisodeCard(
                                 fontSize = 11.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false),
+                                modifier = Modifier.weight(1f),
                             )
                         } else {
                             Spacer(modifier = Modifier.weight(1f))
                         }
-                        if (date != null) {
-                            Text(
-                                text = date,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                        if (rating != null) {
+                            val metaColor = LocalContentColor.current
+                            ImdbRatingLabel(
+                                rating = rating,
+                                style = MaterialTheme.typography.labelSmall.merge(fontSize = 11.sp),
+                                fontWeight = FontWeight.SemiBold,
+                                color = metaColor,
+                                tint = metaColor,
                             )
                         }
                     }

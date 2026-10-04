@@ -1,11 +1,12 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
-import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
@@ -13,6 +14,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import logcat.logcat
+import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
@@ -37,6 +39,7 @@ class CanonicalFeedCollector(
     private val goldenSources: GoldenSources = Injekt.get(),
     private val sourceManager: MangaSourceManager = Injekt.get(),
     private val novelSourceManager: NovelSourceManager = Injekt.get(),
+    private val animeSourceManager: AnimeSourceManager = Injekt.get(),
     private val matcher: SeriesMatcher = Injekt.get(),
 ) {
 
@@ -86,14 +89,25 @@ class CanonicalFeedCollector(
      * Collect verified chapter feeds for [work]. ACCEPT feeds first,
      * TENTATIVE appended after (caller should flag `identity_review`
      * when [Result.hasTentative]). Caps at [maxFeeds] accepted feeds.
+     *
+     * [onSourceDone] fires as each source resolves — the Find Provider
+     *  sheet (17-02) streams live status from it.
      */
     suspend fun collect(
         work: MangaNovelIdBridge.WorkRow,
         medium: String = "manga",
         maxFeeds: Int = 5,
+        /** Candidate override — the Find Provider sheet (17-02) passes
+         *  the uncapped `allForWorkRow` set; null = capped pipeline set. */
+        sources: List<GoldenSources.GoldenSource>? = null,
+        /** Search-result window evaluated per source — the interactive
+         *  path passes a wider window since extension ordering can push
+         *  the real entry behind spin-offs/colored editions. */
+        topCandidates: Int = TOP_CANDIDATES,
+        onSourceDone: ((pkgName: String, feed: Feed?, error: String?) -> Unit)? = null,
     ): Result = withContext(Dispatchers.IO) {
         val query = SeriesMatcher.Query.of(work)
-        val goldens = goldenSources.forWorkRow(work, medium)
+        val goldens = sources ?: goldenSources.forWorkRow(work, medium)
         if (goldens.isEmpty()) {
             return@withContext Result(emptyList(), emptyList(), emptyList(), emptyMap())
         }
@@ -102,7 +116,6 @@ class CanonicalFeedCollector(
         val rejected = mutableListOf<Feed>()
         val failed = mutableMapOf<String, String>()
 
-        val isBooks = medium == WorkIdResolver.MEDIUM_BOOKS
         coroutineScope {
             goldens.map { g ->
                 async {
@@ -112,10 +125,13 @@ class CanonicalFeedCollector(
                     val res = try {
                         withTimeout(SOURCE_TIMEOUT_MS) {
                             runCatching {
-                                if (isBooks) {
-                                    collectNovelFrom(g, query, work.title ?: "")
-                                } else {
-                                    collectFrom(g, query, work.title ?: "")
+                                when (medium) {
+                                    WorkIdResolver.MEDIUM_BOOKS ->
+                                        collectNovelFrom(g, query, work.title ?: "", topCandidates)
+                                    WorkIdResolver.MEDIUM_SHOWS ->
+                                        collectAnimeFrom(g, query, work.title ?: "", topCandidates)
+                                    else ->
+                                        collectFrom(g, query, work.title ?: "", topCandidates)
                                 }
                             }
                         }
@@ -123,10 +139,21 @@ class CanonicalFeedCollector(
                         failed[g.pkgName] = "timeout"
                         null
                     }
-                    res?.getOrElse { e ->
+                    val feed = res?.getOrElse { e ->
+                        // Cancellation must propagate — it carries the
+                        // scope's identity (Coroutine "Screen"…) and
+                        // surfaces as meaningless raw text on the row.
+                        if (e is CancellationException) throw e
                         failed[g.pkgName] = e.message ?: e.javaClass.simpleName
                         null
                     }
+                    logcat {
+                        "canonicalFeed ${g.pkgName} → ${feed?.seriesTitle ?: "-"} " +
+                            "${feed?.verdict ?: "-"} ${feed?.score ?: ""} " +
+                            "err=${failed[g.pkgName] ?: "-"}"
+                    }
+                    onSourceDone?.invoke(g.pkgName, feed, failed[g.pkgName])
+                    feed
                 }
             }.forEach { deferred ->
                 val f = deferred.await() ?: return@forEach
@@ -152,10 +179,11 @@ class CanonicalFeedCollector(
         g: GoldenSources.GoldenSource,
         query: SeriesMatcher.Query,
         searchTitle: String,
+        topCandidates: Int = TOP_CANDIDATES,
     ): Feed? {
         // Resolve the first live installed source id for this package.
         val source = g.sourceIds.firstNotNullOfOrNull { id -> sourceManager.get(id) }
-            as? CatalogueSource ?: return null
+            as? CatalogueSource ?: error("source unavailable")
 
         // Provider-linked url tried first — but a carrier URL is usually
         // not the extension's internal url shape, so a failed or rejected
@@ -165,9 +193,13 @@ class CanonicalFeedCollector(
                 ?.takeIf { it.verdict != SeriesMatcher.Decision.REJECT }
                 ?.let { return it }
         }
-        val page = runCatching { source.getSearchManga(1, searchTitle, FilterList()) }
-            .getOrNull() ?: return null
-        return evalMangaFeed(source, g, query, page.mangas.take(TOP_CANDIDATES))
+        // Each source's own filter list — extensions read expected filter
+        // slots by position/type and throw on an empty list (the raw
+        // NoSuchElementException leak we used to surface).
+        val page = runCatching { source.getSearchManga(1, searchTitle, source.getFilterList()) }
+            .getOrElse { e -> throw IllegalStateException("search failed: ${e.message}") }
+        logcat { "canonicalFeed ${g.pkgName} search '${searchTitle}': ${page.mangas.size} hits" }
+        return evalMangaFeed(source, g, query, page.mangas.take(topCandidates))
     }
 
     /** Details → pairwise verify → chapter list for [candidates]. */
@@ -182,7 +214,9 @@ class CanonicalFeedCollector(
             runCatching { source.getMangaDetails(sm) to sm }
                 .getOrNull()
         }
-        if (detailed.isEmpty()) return null
+        // Search hit but every details fetch failed — that's a source
+        // failure, not "no match"; surface it instead of a silent null.
+        if (detailed.isEmpty()) error("details fetch failed for ${candidates.size} hits")
 
         val matchCands = detailed.map { (d, _) ->
             SeriesMatcher.Candidate(
@@ -250,9 +284,10 @@ class CanonicalFeedCollector(
         g: GoldenSources.GoldenSource,
         query: SeriesMatcher.Query,
         searchTitle: String,
+        topCandidates: Int = TOP_CANDIDATES,
     ): Feed? {
         val source = g.sourceIds.firstNotNullOfOrNull { id -> novelSourceManager.get(id) }
-            as? NovelCatalogueSource ?: return null
+            as? NovelCatalogueSource ?: error("source unavailable")
 
         if (!g.url.isNullOrBlank()) {
             evalNovelFeed(source, g, query, listOf(SNovel.create().apply { url = g.url!! }))
@@ -260,9 +295,10 @@ class CanonicalFeedCollector(
                 ?.let { return it }
         }
         val page = runCatching {
-            source.getSearchNovels(1, searchTitle, NovelFilterList(emptyList()))
-        }.getOrNull() ?: return null
-        return evalNovelFeed(source, g, query, page.novels.take(TOP_CANDIDATES))
+            source.getSearchNovels(1, searchTitle, source.getFilterList())
+        }.getOrElse { e -> throw IllegalStateException("search failed: ${e.message}") }
+        logcat { "canonicalFeed(novel) ${g.pkgName} search '${searchTitle}': ${page.novels.size} hits" }
+        return evalNovelFeed(source, g, query, page.novels.take(topCandidates))
     }
 
     private suspend fun evalNovelFeed(
@@ -276,7 +312,7 @@ class CanonicalFeedCollector(
             runCatching { source.getNovelDetails(sn) to sn }
                 .getOrNull()
         }
-        if (detailed.isEmpty()) return null
+        if (detailed.isEmpty()) error("details fetch failed for ${candidates.size} hits")
 
         val matchCands = detailed.map { (d, _) ->
             SeriesMatcher.Candidate(
@@ -334,8 +370,99 @@ class CanonicalFeedCollector(
         )
     }
 
+    /**
+     * Shows collection (17-02) — same shape but drives
+     * [AnimeCatalogueSource] via [AnimeSourceManager], and the feed is
+     * chapterless: episodes aren't canonical rows (`CanonizeWork` rejects
+     * SHOWS) so the pick mints a `provider_bindings` row only. SeriesMatcher
+     * still gates identity — a wrong anime match never binds.
+     */
+    private suspend fun collectAnimeFrom(
+        g: GoldenSources.GoldenSource,
+        query: SeriesMatcher.Query,
+        searchTitle: String,
+        topCandidates: Int = TOP_CANDIDATES,
+    ): Feed? {
+        val source = g.sourceIds.firstNotNullOfOrNull { id -> animeSourceManager.get(id) }
+            as? AnimeCatalogueSource ?: error("source unavailable")
+
+        if (!g.url.isNullOrBlank()) {
+            evalAnimeFeed(source, g, query, listOf(SAnime.create().apply { url = g.url!! }))
+                ?.takeIf { it.verdict != SeriesMatcher.Decision.REJECT }
+                ?.let { return it }
+        }
+        val page = runCatching {
+            source.getSearchAnime(1, searchTitle, source.getFilterList())
+        }.getOrElse { e -> throw IllegalStateException("search failed: ${e.message}") }
+        logcat { "canonicalFeed(anime) ${g.pkgName} search '${searchTitle}': ${page.animes.size} hits" }
+        return evalAnimeFeed(source, g, query, page.animes.take(topCandidates))
+    }
+
+    private suspend fun evalAnimeFeed(
+        source: AnimeCatalogueSource,
+        g: GoldenSources.GoldenSource,
+        query: SeriesMatcher.Query,
+        candidates: List<SAnime>,
+    ): Feed? {
+        if (candidates.isEmpty()) return null
+        val detailed = candidates.mapNotNull { sa ->
+            runCatching { source.getAnimeDetails(sa.copy()) to sa }
+                .getOrNull()
+        }
+        if (detailed.isEmpty()) error("details fetch failed for ${candidates.size} hits")
+
+        val matchCands = detailed.map { (d, _) ->
+            SeriesMatcher.Candidate(
+                title = d.title,
+                author = d.author,
+                artist = d.artist,
+                chapterCount = null,
+            )
+        }
+        val verdicts = matcher.verifyAll(query, matchCands)
+
+        val idx = verdicts.indices.firstOrNull {
+            verdicts[it].decision != SeriesMatcher.Decision.REJECT
+        } ?: verdicts.indices.maxByOrNull { verdicts[it].score } ?: return null
+        val verdict = verdicts[idx]
+        val (details, sa) = detailed[idx]
+
+        if (verdict.decision == SeriesMatcher.Decision.REJECT) {
+            return Feed(
+                source.id, g.pkgName, g.tier, sa.url, details.title,
+                emptyList(), verdict.decision, verdict.score, verdict.reasons,
+            )
+        }
+
+        // Chapterless — episodes aren't canonical rows; the binding is
+        // the payload.
+        return Feed(
+            sourceId = source.id,
+            pkgName = g.pkgName,
+            tier = g.tier,
+            url = sa.url,
+            seriesTitle = details.title,
+            chapters = emptyList(),
+            verdict = verdict.decision,
+            score = verdict.score,
+            reasons = verdict.reasons,
+            details = FeedDetails(
+                description = details.description?.takeIf { it.isNotBlank() },
+                author = details.author?.takeIf { it.isNotBlank() },
+                genre = details.getGenres().orEmpty(),
+                thumbnailUrl = details.thumbnail_url?.takeIf { it.isNotBlank() },
+                status = null,
+            ),
+        )
+    }
+
     companion object {
         private const val TOP_CANDIDATES = 3
+
+        /** Wider search window for the interactive find-provider path —
+         *  common titles surface spin-offs above the main entry. */
+        const val TOP_CANDIDATES_INTERACTIVE = 8
+
         private const val SOURCE_TIMEOUT_MS = 45_000L
     }
 }

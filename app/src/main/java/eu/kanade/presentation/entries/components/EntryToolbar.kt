@@ -2,6 +2,7 @@ package eu.kanade.presentation.entries.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -32,6 +33,7 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.AppBarTitle
 import eu.kanade.presentation.components.EntryDownloadDropdownMenu
+import eu.kanade.presentation.components.NAV_DOWNLOAD_SHARED_KEY
 import eu.kanade.presentation.entries.DownloadAction
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
@@ -85,7 +87,11 @@ fun EntryToolbar(
                 AppBarTitle(title, modifier = Modifier.alpha(titleAlphaProvider()))
             }
         },
-        modifier = modifier,
+        // Shifted up 2dp so the icon slots align with the home top bar's
+        // (home icon center = statusBar + 6 + 24 = +30; TopAppBar centers
+        // at +32 in its 64dp row). Equal heights kill the residual
+        // vertical travel on the shared icon elements.
+        modifier = modifier.offset(y = (-2).dp),
         backgroundColor = (
             toolbarBackgroundColor ?: MaterialTheme.colorScheme
                 .surfaceColorAtElevation(3.dp)
@@ -140,6 +146,7 @@ fun EntryToolbar(
                                 } else {
                                     Icons.Outlined.Download
                                 },
+                                sharedKey = NAV_DOWNLOAD_SHARED_KEY,
                                 onClick = {
                                     if (directDownloadAction) {
                                         onClickDownload(DownloadAction.NEXT_1_ITEM)

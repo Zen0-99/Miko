@@ -17,13 +17,16 @@ import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
+import eu.kanade.presentation.components.AppBarTitle
 import eu.kanade.presentation.reader.components.ChapterNavigator
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
@@ -43,6 +46,7 @@ fun ReaderAppBars(
 
     mangaTitle: String?,
     chapterTitle: String?,
+    sourceLabel: String? = null,
     navigateUp: () -> Unit,
     onClickTopAppBar: () -> Unit,
     bookmarked: Boolean,
@@ -98,8 +102,20 @@ fun ReaderAppBars(
                 modifier = Modifier
                     .clickable(onClick = onClickTopAppBar),
                 backgroundColor = backgroundColor,
-                title = mangaTitle,
-                subtitle = chapterTitle,
+                titleContent = {
+                    Column {
+                        AppBarTitle(mangaTitle, subtitle = chapterTitle)
+                        sourceLabel?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                },
                 navigateUp = navigateUp,
                 actions = {
                     AppBarActions(

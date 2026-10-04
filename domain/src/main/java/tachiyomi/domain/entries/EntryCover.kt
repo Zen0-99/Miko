@@ -1,3 +1,3 @@
 package tachiyomi.domain.entries
 
-interface EntryCover
+interface EntryCover : java.io.Serializable

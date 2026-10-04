@@ -145,6 +145,7 @@
     <string name="action_start">Start</string>
     <string name="action_resume">Resume</string>
     <string name="action_continue">Continue</string>
+    <string name="action_continue_named">Continue: %1$s</string>
     <string name="action_open_in_browser">Open in browser</string>
     <string name="action_show_manga">Show entry</string>
     <string name="action_copy_to_clipboard">Copy to clipboard</string>
@@ -782,6 +783,7 @@
     <string name="local_source_help_guide">Local source guide</string>
     <string name="no_pinned_sources">You have no pinned sources</string>
     <string name="chapter_not_found">Chapter not found</string>
+    <string name="no_cover_found">No cover found</string>
     <string name="local_invalid_format">Invalid chapter format</string>
     <string name="local_filter_order_by">Order by</string>
     <string name="date">Date</string>
@@ -1127,6 +1129,8 @@
     <string name="comment_rule_min_len">Comment is too short</string>
     <string name="comment_rule_max_len">Comment is too long</string>
     <string name="comment_rule_max_links">Too many links</string>
+    <string name="comment_rate_limited">You’re posting too fast — give it a moment</string>
+    <string name="comment_rule_duplicate">You’ve already posted this comment</string>
     <string name="comment_rule_blocked">Comment blocked by community rules</string>
     <string name="comment_name_title">Choose a display name</string>
     <string name="comment_name_body">This is shown next to your comments.</string>
@@ -1146,4 +1150,11 @@
     <string name="comment_hide_replies">Hide replies</string>
     <string name="comment_options">Comment options</string>
     <string name="comment_scroll_to_latest">Scroll to latest</string>
+    <string name="carrier_needed_title">Extension needed</string>
+    <string name="carrier_needed_body">This title is carried by these sources. Install one to read.</string>
+    <string name="carrier_none_known">No extension is known to carry this yet — try browsing sources.</string>
+    <string name="carrier_preferred_source">Preferred source</string>
+    <string name="carrier_auto">Automatic</string>
+    <string name="carrier_install_short">Needs extension</string>
+    <string name="carrier_unavailable">Missing provider</string>
 </resources>

@@ -128,7 +128,13 @@ class CommentsScreenModel(
                 }?.let(::applyPostResult)
                 is CommentsApi.Result.Degraded -> mutableState.update { it.copy(posting = false, degraded = true) }
                 is CommentsApi.Result.Failure -> mutableState.update {
-                    it.copy(posting = false, error = r.message ?: "http_${r.code}")
+                    if (r.code == 429) {
+                        // Server-side anti-spam quota — surface inline
+                        // under the composer like a ruleset violation.
+                        it.copy(posting = false, composerViolation = "rate_limited")
+                    } else {
+                        it.copy(posting = false, error = r.message ?: "http_${r.code}")
+                    }
                 }
                 else -> mutableState.update { it.copy(posting = false) }
             }

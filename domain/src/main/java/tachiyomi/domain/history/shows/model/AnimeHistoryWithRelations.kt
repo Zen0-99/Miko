@@ -16,7 +16,15 @@ data class AnimeHistoryWithRelations(
     val animeUrl: String = "",
     val runtime: String? = null,
     val episodeScanlator: String? = null,
+    // Populated by CinemetaEntryUnifier when this extension-source row was
+    // mapped onto a canonical Cinemeta entry. Dedupe/group consumers should
+    // key on canonicalAnimeId ?: animeId — episodes of one show can land on
+    // several extension entries, so raw animeId is NOT a stable show key.
+    val canonicalAnimeId: Long? = null,
 ) {
+    /** Stable per-show key across extension-source duplicate entries. */
+    val showKey: Long
+        get() = canonicalAnimeId ?: animeId
     val isCinemetaMovie: Boolean
         get() = animeUrl.startsWith("cinemeta:movie")
 

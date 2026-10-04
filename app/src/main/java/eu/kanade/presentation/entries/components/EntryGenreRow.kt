@@ -13,11 +13,13 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.util.formatGenreLabel
+import eu.kanade.presentation.util.sortGenresByPrevalence
 
 /**
  * Text-led genre row: comma/dot-separated genres rendered as plain text with
@@ -32,6 +34,7 @@ fun EntryGenreRow(
     accentColor: Color? = null,
 ) {
     if (pills.isEmpty()) return
+    val orderedPills = remember(pills) { sortGenresByPrevalence(pills) }
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
@@ -53,9 +56,9 @@ fun EntryGenreRow(
     )
     val separatorColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
 
-    val text = remember(pills, genreColor, separatorColor, onPillClick) {
+    val text = remember(orderedPills, genreColor, separatorColor, onPillClick) {
         buildAnnotatedString {
-            pills.forEachIndexed { index, pill ->
+            orderedPills.forEachIndexed { index, pill ->
                 if (index > 0) {
                     withStyle(SpanStyle(color = separatorColor)) {
                         append(" · ")
@@ -79,6 +82,8 @@ fun EntryGenreRow(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         textAlign = TextAlign.Center,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),

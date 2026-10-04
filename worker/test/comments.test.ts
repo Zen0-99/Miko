@@ -179,6 +179,87 @@ describe('comments', () => {
     });
 });
 
+describe('anti-spam rate limits', () => {
+    async function makeEstablished(device: string) {
+        await env.COMMENTS_DB.prepare(
+            'UPDATE identities SET created_at = ? WHERE device_hash = ?',
+        ).bind(Date.now() - 2 * 86_400_000, device).run();
+    }
+
+    async function seedComments(
+        rows: Array<{ thread: string; device: string; body: string; at: number }>,
+    ) {
+        await env.COMMENTS_DB.batch(rows.map((r) =>
+            env.COMMENTS_DB.prepare(
+                'INSERT INTO comments (thread_id, device_hash, body, created_at) VALUES (?,?,?,?)',
+            ).bind(r.thread, r.device, r.body, r.at),
+        ));
+    }
+
+    it('caps any device at 3 comments per minute', async () => {
+        const token = await namedUser();
+        await makeEstablished(DEVICE);
+        for (let i = 0; i < 3; i++) {
+            expect((await post(
+                '/v1/comments', { thread_id: THREAD, body: `thought ${i}` }, token,
+            )).status).toBe(201);
+        }
+        const res = await post(
+            '/v1/comments', { thread_id: 'manga:mk:mb:2', body: 'fourth' }, token,
+        );
+        expect(res.status).toBe(422);
+        expect(await res.json()).toMatchObject({ error: 'rule', rule: 'rate_min' });
+    });
+
+    it('first-day devices get the tighter hourly cap', async () => {
+        const token = await namedUser(); // registered now → new-device tier
+        // 8 posts in the last hour — at the new-device cap (8), under
+        // the established cap (20), and all outside the per-minute window.
+        const at = Date.now() - 30 * 60_000;
+        await seedComments(
+            Array.from({ length: 8 }, (_, i) => ({
+                thread: THREAD, device: DEVICE, body: `seed ${i}`, at: at + i,
+            })),
+        );
+        const res = await post('/v1/comments', { thread_id: THREAD, body: 'over quota' }, token);
+        expect(res.status).toBe(422);
+        expect(await res.json()).toMatchObject({ error: 'rule', rule: 'rate_hour' });
+    });
+
+    it('caps any device at 6 comments per thread per 10 min', async () => {
+        const token = await namedUser();
+        await makeEstablished(DEVICE); // keep the per-min cap out of the way
+        const at = Date.now() - 120_000; // 2 min ago — inside the 10-min window
+        await seedComments(
+            Array.from({ length: 6 }, (_, i) => ({
+                thread: THREAD, device: DEVICE, body: `take ${i}`, at: at + i,
+            })),
+        );
+        // A different thread in the same window is still fine — the
+        // cap is thread-scoped. (Checked first: the violation below
+        // strikes the device, which suspends it for an hour.)
+        expect((await post(
+            '/v1/comments', { thread_id: 'manga:mk:mb:2', body: 'elsewhere' }, token,
+        )).status).toBe(201);
+        const res = await post('/v1/comments', { thread_id: THREAD, body: 'flood' }, token);
+        expect(res.status).toBe(422);
+        expect(await res.json()).toMatchObject({ error: 'rule', rule: 'rate_thread' });
+    });
+
+    it('rejects reposting an identical body', async () => {
+        const token = await namedUser();
+        await makeEstablished(DEVICE);
+        await seedComments([
+            { thread: 'manga:mk:mb:old', device: DEVICE, body: 'same words', at: Date.now() - 1_800_000 },
+        ]);
+        const res = await post(
+            '/v1/comments', { thread_id: THREAD, body: 'same words' }, token,
+        );
+        expect(res.status).toBe(422);
+        expect(await res.json()).toMatchObject({ error: 'rule', rule: 'duplicate' });
+    });
+});
+
 describe('votes + reports + delete', () => {
     it('votes up/down/off and sums score', async () => {
         const t1 = await namedUser(DEVICE, 'One');

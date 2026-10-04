@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.data.download.manga
 import android.content.Context
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
 import eu.kanade.tachiyomi.source.MangaSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.size
 import kotlinx.coroutines.flow.Flow
@@ -32,6 +33,7 @@ import tachiyomi.source.local.io.ArchiveManga
 import tachiyomi.source.local.io.manga.LocalMangaSourceFileSystem
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
 /**
  * This class is used to manage chapter downloads in the application. It must be instantiated once
@@ -47,6 +49,8 @@ class MangaDownloadManager(
     private val sourceManager: MangaSourceManager = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
 ) {
+
+    private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers by injectLazy()
 
     /**
      * Downloader whose only task is to download chapters.
@@ -138,8 +142,39 @@ class MangaDownloadManager(
      * @param chapters the list of chapters to enqueue.
      * @param autoStart whether to start the downloader after enqueing the chapters.
      */
-    fun downloadChapters(manga: Manga, chapters: List<Chapter>, autoStart: Boolean = true) {
-        downloader.queueChapters(manga, chapters, autoStart)
+    suspend fun downloadChapters(
+        manga: Manga,
+        chapters: List<Chapter>,
+        autoStart: Boolean = true,
+        forcedCarrierPkg: String? = null,
+    ) {
+        downloader.queueChapters(manga, chapters, autoStart, forcedCarrierPkg)
+    }
+
+    /**
+     * The carrier source holding a canon chapter's downloaded files, if
+     * any — canon rows have no single home source, so the check scans
+     * every bound carrier's download dir. Returns null when the chapter
+     * isn't canon or no carrier dir contains it.
+     */
+    suspend fun canonDownloadSource(
+        chapterName: String,
+        chapterScanlator: String?,
+        manga: Manga,
+    ): HttpSource? {
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromMangaUrl(manga.url) ?: return null
+        val sourceIds = runCatching {
+            workCarriers.forWork(
+                workId,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_MANGA,
+            ).carriers
+        }.getOrNull()?.flatMap { it.sourceIds } ?: return null
+        return sourceIds.firstNotNullOfOrNull { id ->
+            (sourceManager.get(id) as? HttpSource)?.takeIf {
+                cache.isChapterDownloaded(chapterName, chapterScanlator, manga.title, id, true)
+            }
+        }
     }
 
     /**
@@ -270,15 +305,39 @@ class MangaDownloadManager(
 
             removeFromDownloadQueue(filteredChapters)
 
-            val (mangaDir, chapterDirs) = provider.findChapterDirs(filteredChapters, manga, source)
-            chapterDirs.forEach { it.delete() }
-            cache.removeChapters(filteredChapters, manga)
-
-            // Delete manga directory if empty
-            if (mangaDir?.listFiles()?.isEmpty() == true) {
-                deleteManga(manga, source, removeQueued = false)
+            // Canon rows download under whichever carrier served them —
+            // scan every bound carrier's dir, not just the entry's own
+            // (stub) source dir.
+            val sourcesToScan = if (
+                eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                    .workIdFromMangaUrl(manga.url) != null
+            ) {
+                carrierSources(manga).ifEmpty { listOf(source) }
+            } else {
+                listOf(source)
             }
+            sourcesToScan.forEach { src ->
+                val (mangaDir, chapterDirs) = provider.findChapterDirs(filteredChapters, manga, src)
+                chapterDirs.forEach { it.delete() }
+                // Delete manga directory if empty
+                if (mangaDir?.listFiles()?.isEmpty() == true) {
+                    deleteManga(manga, src, removeQueued = false)
+                }
+            }
+            cache.removeChapters(filteredChapters, manga)
         }
+    }
+
+    /** Installed sources behind this work's bound carriers — where canon
+     *  chapter downloads physically live. */
+    private suspend fun carrierSources(manga: Manga): List<MangaSource> {
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromMangaUrl(manga.url) ?: return emptyList()
+        val sourceIds = runCatching {
+            workCarriers.forWork(workId, eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_MANGA)
+                .carriers
+        }.getOrNull()?.flatMap { it.sourceIds }.orEmpty()
+        return sourceIds.mapNotNull { sourceManager.get(it) }
     }
 
     /**

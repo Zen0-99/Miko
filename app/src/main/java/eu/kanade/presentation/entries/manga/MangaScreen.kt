@@ -10,9 +10,15 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,12 +28,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,6 +44,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -53,17 +64,20 @@ import androidx.compose.ui.util.fastMap
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
-import eu.kanade.presentation.components.relativeDateTimeText
+import eu.kanade.presentation.components.fullDateText
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.components.ChapterGroupPillRow
 import eu.kanade.presentation.entries.components.EntryChapterCarouselCard
 import eu.kanade.presentation.entries.components.EntryContinueRow
+import eu.kanade.presentation.entries.components.EntryFindProviderButton
 import eu.kanade.presentation.entries.components.EntryViewCommentsButton
 import eu.kanade.presentation.entries.components.EntryNextUpAction
 import eu.kanade.presentation.entries.components.EnhancedEntryInfoBox
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryChapterHeader
+import eu.kanade.presentation.entries.components.chapterCountPair
+import eu.kanade.presentation.entries.components.RatingMark
 import eu.kanade.presentation.entries.components.EntryGenreRow
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.MissingItemCountListItem
@@ -80,6 +94,7 @@ import eu.kanade.tachiyomi.source.manga.getNameForMangaInfo
 import eu.kanade.tachiyomi.ui.browse.manga.extension.details.MangaSourcePreferencesScreen
 import eu.kanade.tachiyomi.ui.entries.manga.ChapterList
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreenModel
+import eu.kanade.tachiyomi.util.EntryDescriptionParser
 import eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.entries.manga.model.Manga
@@ -107,11 +122,14 @@ fun MangaScreen(
     chapterSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
     navigateUp: () -> Unit,
     onChapterClicked: (Chapter) -> Unit,
-    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
+    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction, String?) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
     onCommentsClicked: (() -> Unit)? = null,
+    /** Find Content Provider (17-02) — replaces the comments button on
+     *  canonical entries with zero bound carriers. */
+    onFindProviderClicked: (() -> Unit)? = null,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -154,6 +172,16 @@ fun MangaScreen(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    /** Canonical carrier chip (16-04) — opens the preferred-source
+     *  picker on canonical entries. */
+    onCarrierPickerClicked: (() -> Unit)? = null,
+    /** Per-row carrier label resolver + chapter-scoped override tap
+     *  (16-04). Null on non-canonical entries. */
+    chapterCarrierLabel: (suspend (Chapter) -> String?)? = null,
+    onChapterCarrierClicked: ((Chapter) -> Unit)? = null,
+    /** Artwork the caller already shows for this entry (home hero) —
+     *  underlays the shared hero image so the morph never draws empty. */
+    previewCover: Any? = null,
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -167,8 +195,9 @@ fun MangaScreen(
         navigator.push(MangaSourcePreferencesScreen(state.source.id))
     }.takeIf { state.source is ConfigurableSource }
 
-    if (!isTabletUi) {
-        MangaScreenSmallImpl(
+    Box {
+        if (!isTabletUi) {
+            MangaScreenSmallImpl(
             state = state,
             snackbarHostState = snackbarHostState,
             nextUpdate = nextUpdate,
@@ -181,6 +210,7 @@ fun MangaScreen(
             onWebViewClicked = onWebViewClicked,
             onTrackingClicked = onTrackingClicked,
             onCommentsClicked = onCommentsClicked,
+            onFindProviderClicked = onFindProviderClicked,
             onTagSearch = onTagSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterClicked = onFilterButtonClicked,
@@ -210,6 +240,10 @@ fun MangaScreen(
             onSuggestionClick = onSuggestionClick,
             onOpenSuggestions = onOpenSuggestions,
             onRetrySuggestions = onRetrySuggestions,
+            onCarrierPickerClicked = onCarrierPickerClicked,
+            chapterCarrierLabel = chapterCarrierLabel,
+            onChapterCarrierClicked = onChapterCarrierClicked,
+            previewCover = previewCover,
         )
     } else {
         MangaScreenLargeImpl(
@@ -225,6 +259,7 @@ fun MangaScreen(
             onWebViewClicked = onWebViewClicked,
             onTrackingClicked = onTrackingClicked,
             onCommentsClicked = onCommentsClicked,
+            onFindProviderClicked = onFindProviderClicked,
             onTagSearch = onTagSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterButtonClicked = onFilterButtonClicked,
@@ -254,7 +289,46 @@ fun MangaScreen(
             onSuggestionClick = onSuggestionClick,
             onOpenSuggestions = onOpenSuggestions,
             onRetrySuggestions = onRetrySuggestions,
+            onCarrierPickerClicked = onCarrierPickerClicked,
+            chapterCarrierLabel = chapterCarrierLabel,
+            onChapterCarrierClicked = onChapterCarrierClicked,
+            previewCover = previewCover,
         )
+    }
+
+        // Mint veil — a canonical mint is running on-device; the entry
+        // redirects to its `miko:` row when it lands. A dim scrim +
+        // elevated progress dot, no copy: the transition itself carries
+        // the meaning.
+        if (state.isMinting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {},
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    tonalElevation = 6.dp,
+                    shadowElevation = 6.dp,
+                ) {
+                    Box(
+                        modifier = Modifier.size(64.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(36.dp),
+                            strokeWidth = 3.dp,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -267,11 +341,14 @@ private fun MangaScreenSmallImpl(
     chapterSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
     navigateUp: () -> Unit,
     onChapterClicked: (Chapter) -> Unit,
-    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
+    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction, String?) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
     onCommentsClicked: (() -> Unit)? = null,
+    /** Find Content Provider (17-02) — replaces the comments button on
+     *  canonical entries with zero bound carriers. */
+    onFindProviderClicked: (() -> Unit)? = null,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -316,8 +393,30 @@ private fun MangaScreenSmallImpl(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    /** Canonical carrier chip (16-04) — opens the preferred-source
+     *  picker on canonical entries. */
+    onCarrierPickerClicked: (() -> Unit)? = null,
+    /** Per-row carrier label resolver + chapter-scoped override tap
+     *  (16-04). Null on non-canonical entries. */
+    chapterCarrierLabel: (suspend (Chapter) -> String?)? = null,
+    onChapterCarrierClicked: ((Chapter) -> Unit)? = null,
+    previewCover: Any? = null,
 ) {
     val chapterListState = rememberLazyListState()
+
+    // Logical vs raw counts — sub-part numbering (1.1/1.2, "Part N")
+    // collapses to whole chapters while the entry list counts rows.
+    val (chapterCountText, entryCountText) = run {
+        val (logical, raw) = chapterCountPair(
+            state.processedChapters.map { it.chapter.chapterNumber },
+        )
+        pluralStringResource(MR.plurals.manga_num_chapters, count = logical, logical) to
+            if (raw != logical) {
+                pluralStringResource(MR.plurals.num_entries, count = raw, raw)
+            } else {
+                null
+            }
+    }
 
     val (chapters, listItem, isAnySelected) = remember(state) {
         Triple(
@@ -325,6 +424,13 @@ private fun MangaScreenSmallImpl(
             second = state.chapterListItems,
             third = state.isAnySelected,
         )
+    }
+
+    // Provider-stat/alt-title noise lives inside scraped descriptions —
+    // parse once: rating feeds the info-box star, alt titles their own
+    // row, the cleaned text is what the description shows.
+    val parsedDescription = remember(state.manga.description) {
+        EntryDescriptionParser.parse(state.manga.description)
     }
 
     // Chapter-group pills — "Volume N"/"Book N"/etc. parsed from chapter
@@ -398,6 +504,45 @@ private fun MangaScreenSmallImpl(
         }
     }
 
+    val carrierMatrix = state.carrierMatrix
+    val carrierNote = carrierMatrix
+        ?.takeIf { it.fetched && it.readable.isEmpty() }
+        ?.let {
+            if (it.installable.isNotEmpty()) {
+                stringResource(MR.strings.carrier_install_short)
+            } else {
+                stringResource(MR.strings.carrier_unavailable)
+            }
+        }
+    val carrierLabel = carrierMatrix
+        ?.takeIf { it.fetched && it.carriers.isNotEmpty() }
+        ?.let { m ->
+            state.preferredCarrier
+                ?.let { pkg -> m.carriers.firstOrNull { it.pkgName == pkg }?.displayName }
+                ?: stringResource(MR.strings.carrier_auto)
+        }
+    val carrierFetched = carrierMatrix?.fetched == true
+    val carrierReadable = carrierMatrix?.readable.orEmpty().size
+    val rowCarrierProvider = if (carrierFetched && carrierReadable > 0) {
+        chapterCarrierLabel
+    } else {
+        null
+    }
+    val rowCarrierClick = if (carrierFetched && carrierReadable > 1) {
+        onChapterCarrierClicked
+    } else {
+        null
+    }
+    // No *usable* carrier on a fetched canonical entry — bound-but-
+    // uninstalled carriers count too (a dead-source mint binds the dead
+    // pkg) — the comments slot swaps to Find Content Provider (17-02).
+    val hasNoCarriers = carrierMatrix?.let { it.fetched && it.readable.isEmpty() } == true
+    // Enabled carriers but no chapter rows yet — the extension fetch is
+    // still expanding; the slot shows a spinner. An empty readable set
+    // can't expand — that's the Find Provider state, not loading.
+    val chaptersLoading = carrierMatrix?.let { it.fetched && it.readable.isNotEmpty() } == true &&
+        listItem.none { it is ChapterList.Item }
+
     BackHandler(onBack = {
         if (isAnySelected) {
             onAllChapterSelected(false)
@@ -407,24 +552,13 @@ private fun MangaScreenSmallImpl(
     })
 
     Scaffold(
+        // The bar stays put (back/download/menu always reachable) but the
+        // scroll-reveal is gone — title and background are pinned transparent
+        // outside multi-select; action mode forces both to full alpha itself.
         topBar = {
             val selectedChapterCount: Int = remember(chapters) {
                 chapters.count { it.selected }
             }
-            // Scroll-dependent alpha: top-bar opacity gradually increases as the user
-            // scrolls down, proportional to how far the first item has scrolled.
-            val titleAlpha by remember {
-                derivedStateOf {
-                    if (chapterListState.firstVisibleItemIndex == 0) {
-                        val offset = chapterListState.firstVisibleItemScrollOffset
-                        val itemHeight = chapterListState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 1
-                        (offset.toFloat() / itemHeight.toFloat()).coerceIn(0f, 1f)
-                    } else {
-                        1f
-                    }
-                }
-            }
-            val backgroundAlpha = titleAlpha
             EntryToolbar(
                 title = state.manga.title,
                 hasFilters = state.filterActive,
@@ -440,8 +574,8 @@ private fun MangaScreenSmallImpl(
                 onCancelActionMode = { onAllChapterSelected(false) },
                 onSelectAll = { onAllChapterSelected(true) },
                 onInvertSelection = { onInvertSelection() },
-                titleAlphaProvider = { titleAlpha },
-                backgroundAlphaProvider = { backgroundAlpha },
+                titleAlphaProvider = { 0f },
+                backgroundAlphaProvider = { 0f },
                 isManga = true,
                 toolbarBackgroundColor = MaterialTheme.colorScheme.background,
                 onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
@@ -467,6 +601,9 @@ private fun MangaScreenSmallImpl(
         snackbarHost = { AchievementStyledSnackbarHost(hostState = snackbarHostState) },
     ) { contentPadding ->
         val topPadding = contentPadding.calculateTopPadding()
+        // The bar renders but is transparent outside selection — still keep
+        // the indicator/hero clear of the status bar.
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
         val pullState = rememberPullToRefreshState()
         // Pull distance in px — drives the Nuvio-style hero zoom and tracks
@@ -477,7 +614,7 @@ private fun MangaScreenSmallImpl(
             refreshing = state.isRefreshingData,
             onRefresh = onRefresh,
             enabled = !isAnySelected,
-            indicatorPadding = PaddingValues(top = topPadding),
+            indicatorPadding = PaddingValues(top = maxOf(topPadding, statusBarTop)),
             state = pullState,
         ) {
             val layoutDirection = LocalLayoutDirection.current
@@ -507,9 +644,10 @@ private fun MangaScreenSmallImpl(
                         contentType = EntryScreenItem.INFO_BOX,
                     ) {
                         EnhancedEntryInfoBox(
-                            appBarPadding = topPadding,
+                            appBarPadding = maxOf(topPadding, statusBarTop),
                             title = state.manga.title,
                             backdrop = state.manga,
+                            sharedKey = "hero-image-${state.manga.id}",
                             logoUrl = null,
                             metaItems = listOfNotNull(
                                 state.manga.author?.takeIf { it.isNotBlank() },
@@ -522,13 +660,15 @@ private fun MangaScreenSmallImpl(
                                     }
                                 },
                             ),
-                            rating = null,
+                            rating = parsedDescription.rating,
+                            ratingMark = RatingMark.STAR,
                             onCoverClick = onCoverClicked,
                             // Portrait covers — taller hero, no horizontal pan.
                             heroContentPadding = 440.dp,
                             overscrollPullPx = heroOverscrollPx,
                             parallaxOffsetPx = heroParallaxPx,
                             accentColor = state.accentColor,
+                            previewCover = previewCover,
                         )
                     }
 
@@ -538,14 +678,25 @@ private fun MangaScreenSmallImpl(
                     ) {
                         Column {
                             val nextChapter = remember(chapters) {
-                                chapters.firstOrNull { !it.chapter.read }?.chapter
+                                // Lowest-numbered unread — the "next in
+                                // line" chapter regardless of the display
+                                // sort direction (firstOrNull on a
+                                // descending list would return the newest
+                                // unread chapter, not the next one).
+                                chapters
+                                    .filter { !it.chapter.read }
+                                    .minByOrNull { it.chapter.chapterNumber }
+                                    ?.chapter
                             }
                             val hasReadChapters = remember(state.chapters) {
                                 state.chapters.fastAny { it.chapter.read }
                             }
+                            val hasStarted = hasReadChapters ||
+                                (nextChapter?.lastPageRead ?: 0L) > 0
                             val allRead = chapters.isNotEmpty() &&
                                 chapters.fastAll { it.chapter.read }
                             EntryContinueRow(
+                                sharedKey = "hero-resume-${state.manga.id}",
                                 actions = listOf(
                                     EntryNextUpAction(
                                         icon = if (allRead) {
@@ -557,8 +708,22 @@ private fun MangaScreenSmallImpl(
                                             allRead -> stringResource(
                                                 AYMR.strings.fetching_overlay_all_up_to_date,
                                             )
-                                            nextChapter != null && hasReadChapters ->
-                                                stringResource(MR.strings.action_continue)
+                                            nextChapter != null && hasStarted ->
+                                                stringResource(
+                                                    MR.strings.action_continue_named,
+                                                    if (state.manga.displayMode ==
+                                                        Manga.CHAPTER_DISPLAY_NUMBER
+                                                    ) {
+                                                        stringResource(
+                                                            MR.strings.display_mode_chapter,
+                                                            formatChapterNumber(
+                                                                nextChapter.chapterNumber,
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        nextChapter.name
+                                                    },
+                                                )
                                             else -> stringResource(MR.strings.action_start)
                                         },
                                         onClickLabel = stringResource(MR.strings.action_resume),
@@ -607,7 +772,7 @@ private fun MangaScreenSmallImpl(
                     ) {
                         ExpandableMangaDescription(
                             defaultExpandState = false,
-                            description = state.manga.description,
+                            description = parsedDescription.description,
                             // Genres live in the pill scroll row — no pills
                             // inside the description.
                             tagsProvider = { null },
@@ -634,15 +799,14 @@ private fun MangaScreenSmallImpl(
                         contentType = EntryScreenItem.ITEM_HEADER,
                     ) {
                         EntryChapterHeader(
-                            itemCountText = pluralStringResource(
-                                MR.plurals.manga_num_chapters,
-                                count = chapters.size,
-                                chapters.size,
-                            ),
+                            itemCountText = chapterCountText,
+                            entryCountText = entryCountText,
                             onClick = onFilterClicked,
                             accentColor = state.accentColor,
                             intervalDays = state.intervalDays,
                             showInterval = state.showInterval,
+                            carrierLabel = carrierLabel,
+                            onCarrierClick = onCarrierPickerClicked,
                         )
                     }
 
@@ -671,6 +835,16 @@ private fun MangaScreenSmallImpl(
                         accentColor = state.accentColor,
                         commentsCount = state.commentsCount,
                         onCommentsClicked = onCommentsClicked,
+                        hasNoCarriers = hasNoCarriers,
+                        onFindProviderClicked = onFindProviderClicked,
+                        chaptersLoading = chaptersLoading,
+                        carrierNote = carrierNote,
+                        carrierNoteWarning = true,
+                        carrierLabelProvider = rowCarrierProvider,
+                        carrierLabelVersion = state.chapterCarriers to state.preferredCarrier,
+                        onCarrierLabelClick = rowCarrierClick,
+                        downloadCarriers = carrierMatrix?.readable
+                            ?.map { it.pkgName to it.displayName },
                     )
                 }
             }
@@ -687,11 +861,14 @@ fun MangaScreenLargeImpl(
     chapterSwipeEndAction: LibraryPreferences.ChapterSwipeAction,
     navigateUp: () -> Unit,
     onChapterClicked: (Chapter) -> Unit,
-    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
+    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction, String?) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
     onCommentsClicked: (() -> Unit)? = null,
+    /** Find Content Provider (17-02) — replaces the comments button on
+     *  canonical entries with zero bound carriers. */
+    onFindProviderClicked: (() -> Unit)? = null,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -736,6 +913,14 @@ fun MangaScreenLargeImpl(
     onSuggestionClick: (SuggestionItem) -> Unit = {},
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
+    /** Canonical carrier chip (16-04) — opens the preferred-source
+     *  picker on canonical entries. */
+    onCarrierPickerClicked: (() -> Unit)? = null,
+    /** Per-row carrier label resolver + chapter-scoped override tap
+     *  (16-04). Null on non-canonical entries. */
+    chapterCarrierLabel: (suspend (Chapter) -> String?)? = null,
+    onChapterCarrierClicked: ((Chapter) -> Unit)? = null,
+    previewCover: Any? = null,
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
@@ -746,6 +931,27 @@ fun MangaScreenLargeImpl(
             second = state.chapterListItems,
             third = state.isAnySelected,
         )
+    }
+
+    // Logical vs raw counts — sub-part numbering (1.1/1.2, "Part N")
+    // collapses to whole chapters while the entry list counts rows.
+    val (chapterCountText, entryCountText) = run {
+        val (logical, raw) = chapterCountPair(
+            state.processedChapters.map { it.chapter.chapterNumber },
+        )
+        pluralStringResource(MR.plurals.manga_num_chapters, count = logical, logical) to
+            if (raw != logical) {
+                pluralStringResource(MR.plurals.num_entries, count = raw, raw)
+            } else {
+                null
+            }
+    }
+
+    // Provider-stat/alt-title noise lives inside scraped descriptions —
+    // parse once: rating feeds the info-box star, alt titles their own
+    // row, the cleaned text is what the description shows.
+    val parsedDescription = remember(state.manga.description) {
+        EntryDescriptionParser.parse(state.manga.description)
     }
 
     // Chapter-group pills — "Volume N"/"Book N"/etc. parsed from chapter
@@ -818,6 +1024,45 @@ fun MangaScreenLargeImpl(
             }
         }
     }
+
+    val carrierMatrix = state.carrierMatrix
+    val carrierNote = carrierMatrix
+        ?.takeIf { it.fetched && it.readable.isEmpty() }
+        ?.let {
+            if (it.installable.isNotEmpty()) {
+                stringResource(MR.strings.carrier_install_short)
+            } else {
+                stringResource(MR.strings.carrier_unavailable)
+            }
+        }
+    val carrierLabel = carrierMatrix
+        ?.takeIf { it.fetched && it.carriers.isNotEmpty() }
+        ?.let { m ->
+            state.preferredCarrier
+                ?.let { pkg -> m.carriers.firstOrNull { it.pkgName == pkg }?.displayName }
+                ?: stringResource(MR.strings.carrier_auto)
+        }
+    val carrierFetched = carrierMatrix?.fetched == true
+    val carrierReadable = carrierMatrix?.readable.orEmpty().size
+    val rowCarrierProvider = if (carrierFetched && carrierReadable > 0) {
+        chapterCarrierLabel
+    } else {
+        null
+    }
+    val rowCarrierClick = if (carrierFetched && carrierReadable > 1) {
+        onChapterCarrierClicked
+    } else {
+        null
+    }
+    // No *usable* carrier on a fetched canonical entry — bound-but-
+    // uninstalled carriers count too (a dead-source mint binds the dead
+    // pkg) — the comments slot swaps to Find Content Provider (17-02).
+    val hasNoCarriers = carrierMatrix?.let { it.fetched && it.readable.isEmpty() } == true
+    // Enabled carriers but no chapter rows yet — the extension fetch is
+    // still expanding; the slot shows a spinner. An empty readable set
+    // can't expand — that's the Find Provider state, not loading.
+    val chaptersLoading = carrierMatrix?.let { it.fetched && it.readable.isNotEmpty() } == true &&
+        listItem.none { it is ChapterList.Item }
 
     val insetPadding = WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).asPaddingValues()
     var topBarHeight by remember { mutableIntStateOf(0) }
@@ -914,6 +1159,7 @@ fun MangaScreenLargeImpl(
                             appBarPadding = contentPadding.calculateTopPadding(),
                             title = state.manga.title,
                             backdrop = state.manga,
+                            sharedKey = "hero-image-${state.manga.id}",
                             logoUrl = null,
                             metaItems = listOfNotNull(
                                 state.manga.author?.takeIf { it.isNotBlank() },
@@ -926,23 +1172,36 @@ fun MangaScreenLargeImpl(
                                     }
                                 },
                             ),
-                            rating = null,
+                            rating = parsedDescription.rating,
+                            ratingMark = RatingMark.STAR,
                             onCoverClick = onCoverClicked,
                             heroContentPadding = 440.dp,
                             overscrollPullPx = heroOverscrollPx,
                             parallaxOffsetPx = heroScrollState.value.toFloat(),
                             accentColor = state.accentColor,
+                            previewCover = previewCover,
                         )
                         run {
                             val nextChapter = remember(chapters) {
-                                chapters.firstOrNull { !it.chapter.read }?.chapter
+                                // Lowest-numbered unread — the "next in
+                                // line" chapter regardless of the display
+                                // sort direction (firstOrNull on a
+                                // descending list would return the newest
+                                // unread chapter, not the next one).
+                                chapters
+                                    .filter { !it.chapter.read }
+                                    .minByOrNull { it.chapter.chapterNumber }
+                                    ?.chapter
                             }
                             val hasReadChapters = remember(state.chapters) {
                                 state.chapters.fastAny { it.chapter.read }
                             }
+                            val hasStarted = hasReadChapters ||
+                                (nextChapter?.lastPageRead ?: 0L) > 0
                             val allRead = chapters.isNotEmpty() &&
                                 chapters.fastAll { it.chapter.read }
                             EntryContinueRow(
+                                sharedKey = "hero-resume-${state.manga.id}",
                                 actions = listOf(
                                     EntryNextUpAction(
                                         icon = if (allRead) {
@@ -954,8 +1213,22 @@ fun MangaScreenLargeImpl(
                                             allRead -> stringResource(
                                                 AYMR.strings.fetching_overlay_all_up_to_date,
                                             )
-                                            nextChapter != null && hasReadChapters ->
-                                                stringResource(MR.strings.action_continue)
+                                            nextChapter != null && hasStarted ->
+                                                stringResource(
+                                                    MR.strings.action_continue_named,
+                                                    if (state.manga.displayMode ==
+                                                        Manga.CHAPTER_DISPLAY_NUMBER
+                                                    ) {
+                                                        stringResource(
+                                                            MR.strings.display_mode_chapter,
+                                                            formatChapterNumber(
+                                                                nextChapter.chapterNumber,
+                                                            ),
+                                                        )
+                                                    } else {
+                                                        nextChapter.name
+                                                    },
+                                                )
                                             else -> stringResource(MR.strings.action_start)
                                         },
                                         onClickLabel = stringResource(MR.strings.action_resume),
@@ -998,7 +1271,7 @@ fun MangaScreenLargeImpl(
                         }
                         ExpandableMangaDescription(
                             defaultExpandState = false,
-                            description = state.manga.description,
+                            description = parsedDescription.description,
                             tagsProvider = { null },
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
@@ -1034,15 +1307,14 @@ fun MangaScreenLargeImpl(
                                 contentType = EntryScreenItem.ITEM_HEADER,
                             ) {
                                 EntryChapterHeader(
-                                    itemCountText = pluralStringResource(
-                                        MR.plurals.manga_num_chapters,
-                                        count = chapters.size,
-                                        chapters.size,
-                                    ),
+                                    itemCountText = chapterCountText,
+                                    entryCountText = entryCountText,
                                     onClick = onFilterButtonClicked,
                                     accentColor = state.accentColor,
                                     intervalDays = state.intervalDays,
                                     showInterval = state.showInterval,
+                                    carrierLabel = carrierLabel,
+                                    onCarrierClick = onCarrierPickerClicked,
                                 )
                             }
 
@@ -1071,6 +1343,16 @@ fun MangaScreenLargeImpl(
                                 accentColor = state.accentColor,
                                 commentsCount = state.commentsCount,
                                 onCommentsClicked = onCommentsClicked,
+                                hasNoCarriers = hasNoCarriers,
+                                onFindProviderClicked = onFindProviderClicked,
+                                chaptersLoading = chaptersLoading,
+                                carrierNote = carrierNote,
+                                carrierNoteWarning = true,
+                                carrierLabelProvider = rowCarrierProvider,
+                                carrierLabelVersion = state.chapterCarriers to state.preferredCarrier,
+                                onCarrierLabelClick = rowCarrierClick,
+                                downloadCarriers = carrierMatrix?.readable
+                                    ?.map { it.pkgName to it.displayName },
                             )
                         }
                     }
@@ -1086,7 +1368,7 @@ private fun SharedMangaBottomActionMenu(
     onMultiBookmarkClicked: (List<Chapter>, bookmarked: Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<Chapter>, markAsRead: Boolean) -> Unit,
     onMarkPreviousAsReadClicked: (Chapter, Boolean) -> Unit,
-    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
+    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction, String?) -> Unit)?,
     onMultiDeleteClicked: (List<Chapter>) -> Unit,
     fillFraction: Float,
     modifier: Modifier = Modifier,
@@ -1110,7 +1392,7 @@ private fun SharedMangaBottomActionMenu(
             onMarkPreviousAsReadClicked(selected[0].chapter, true)
         }.takeIf { selected.size == 1 },
         onDownloadClicked = {
-            onDownloadChapter!!(selected.toList(), ChapterDownloadAction.START)
+            onDownloadChapter!!(selected.toList(), ChapterDownloadAction.START, null)
         }.takeIf {
             onDownloadChapter != null && selected.fastAny { it.downloadState != MangaDownload.State.DOWNLOADED }
         },
@@ -1128,11 +1410,34 @@ private fun LazyListScope.sharedChapterItems(
     chapters: List<ChapterList>,
     isAnyChapterSelected: Boolean,
     onChapterClicked: (Chapter) -> Unit,
-    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
+    onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction, String?) -> Unit)?,
     onChapterSelected: (ChapterList.Item, Boolean, Boolean, Boolean) -> Unit,
     accentColor: Color? = null,
     commentsCount: Long? = null,
     onCommentsClicked: (() -> Unit)? = null,
+    /** True when the canonical work has zero bound carriers — swaps the
+     *  comments slot to Find Content Provider (17-02). */
+    hasNoCarriers: Boolean = false,
+    onFindProviderClicked: (() -> Unit)? = null,
+    /** Carriers are bound but chapter rows haven't materialized yet —
+     *  the extension fetch is running; show a spinner in the slot. */
+    chaptersLoading: Boolean = false,
+    /** Canonical-entry carrier note shown on chapter cards when no
+     *  installed carrier can serve the work (16-04). */
+    carrierNote: String? = null,
+    carrierNoteWarning: Boolean = false,
+    /** Per-row carrier label provider (suspend — resolved via the
+     *  router's cheap direct-candidate peek). [carrierLabelVersion]
+     *  retriggers resolution when per-chapter overrides change. */
+    carrierLabelProvider: (suspend (Chapter) -> String?)? = null,
+    carrierLabelVersion: Any? = null,
+    /** Row-note tap — opens the chapter-scoped carrier picker. Pass
+     *  only when ≥2 readable carriers exist (otherwise there's no
+     *  choice to make). */
+    onCarrierLabelClick: ((Chapter) -> Unit)? = null,
+    /** (pkgName → display name) for the per-chapter download carrier
+     *  picker — only consulted on canon rows. */
+    downloadCarriers: List<Pair<String, String>>? = null,
 ) {
     // Horizontal chapter carousel — Nuvio episode-card styling without a
     // still. Opens snapped to the next unread chapter; long-press drives
@@ -1149,7 +1454,20 @@ private fun LazyListScope.sharedChapterItems(
                 ?.takeIf { !it.chapter.read }
                 ?.let { index to it.chapter.chapterNumber }
         }.minByOrNull { it.second }?.first ?: 0
-        val rowState = rememberLazyListState(initialFirstVisibleItemIndex = nextIndex)
+        // The same chapter carries a thin accent outline on its card.
+        val nextChapterId = chapters.filterIsInstance<ChapterList.Item>()
+            .filter { !it.chapter.read }
+            .minByOrNull { it.chapter.chapterNumber }
+            ?.chapter?.id
+        // Cards are 75% of screen width — a negative initial offset lands
+        // the next-up card centered instead of pinned to the start edge.
+        val centeredOffsetPx = with(LocalDensity.current) {
+            (16.dp - LocalConfiguration.current.screenWidthDp.dp * 0.125f).roundToPx()
+        }
+        val rowState = rememberLazyListState(
+            initialFirstVisibleItemIndex = nextIndex,
+            initialFirstVisibleItemScrollOffset = centeredOffsetPx,
+        )
         LazyRow(
             state = rowState,
             modifier = Modifier.fillMaxWidth(),
@@ -1177,6 +1495,17 @@ private fun LazyListScope.sharedChapterItems(
                         )
                     }
                     is ChapterList.Item -> {
+                        val rowLabel = if (carrierLabelProvider != null) {
+                            produceState<String?>(
+                                null,
+                                item.chapter.id,
+                                carrierLabelVersion,
+                            ) {
+                                value = carrierLabelProvider(item.chapter)
+                            }.value
+                        } else {
+                            null
+                        }
                         EntryChapterCarouselCard(
                             title = if (manga.displayMode == Manga.CHAPTER_DISPLAY_NUMBER) {
                                 stringResource(
@@ -1186,19 +1515,21 @@ private fun LazyListScope.sharedChapterItems(
                             } else {
                                 item.chapter.name
                             },
-                            date = relativeDateTimeText(item.chapter.dateUpload),
-                            metaParts = listOfNotNull(
-                                item.chapter.lastPageRead
-                                    .takeIf { !item.chapter.read && it > 0L }
-                                    ?.let {
-                                        stringResource(MR.strings.chapter_progress, it + 1)
-                                    },
-                                item.chapter.scanlator.takeIf { !it.isNullOrBlank() },
-                            ),
-                            progressFraction = null,
+                            dateUpload = item.chapter.dateUpload,
+                            scanlator = item.chapter.scanlator.takeIf { !it.isNullOrBlank() },
+                            progress = item.chapter.lastPageRead
+                                .takeIf { !item.chapter.read && it > 0L }
+                                ?.let {
+                                    stringResource(MR.strings.chapter_progress, it + 1)
+                                },
                             read = item.chapter.read,
                             bookmark = item.chapter.bookmark,
                             selected = item.selected,
+                            isNext = item.chapter.id == nextChapterId,
+                            carrierNote = rowLabel ?: carrierNote,
+                            carrierNoteWarning = carrierNoteWarning && rowLabel == null,
+                            onCarrierNoteClick = onCarrierLabelClick
+                                ?.let { cb -> { cb(item.chapter) } },
                             onLongClick = {
                                 onChapterSelected(item, !item.selected, true, true)
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1220,8 +1551,24 @@ private fun LazyListScope.sharedChapterItems(
                                         enabled = true,
                                         downloadStateProvider = { item.downloadState },
                                         downloadProgressProvider = { item.downloadProgress },
-                                        onClick = { onDownloadChapter?.invoke(listOf(item), it) },
-                                        accentColor = accentColor,
+                                        onClick = {
+                                            onDownloadChapter?.invoke(listOf(item), it, null)
+                                        },
+                                        downloadCarriers = if (
+                                            eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                                                .isCanonUrl(item.chapter.url)
+                                        ) {
+                                            downloadCarriers
+                                        } else {
+                                            null
+                                        },
+                                        onCarrierPick = { pkg ->
+                                            onDownloadChapter?.invoke(
+                                                listOf(item),
+                                                ChapterDownloadAction.START,
+                                                pkg,
+                                            )
+                                        },
                                     )
                                 }
                             },
@@ -1232,9 +1579,39 @@ private fun LazyListScope.sharedChapterItems(
         }
     }
 
-    // Comments live under the chapter cards — accent-outlined button,
-    // same bottom sheet as the removed header icon.
-    if (onCommentsClicked != null) {
+    // The action slot under the chapter cards. Priority: Find Content
+    // Provider on zero-carrier canonical entries (17-02) → a spinner
+    // while bound carriers are still expanding into chapter rows →
+    // comments, which only renders when chapters actually exist.
+    val hasChapterItems = chapters.any { it is ChapterList.Item }
+    if (hasNoCarriers && onFindProviderClicked != null) {
+        item(
+            key = "chapter-find-provider-button",
+            contentType = EntryScreenItem.ITEM,
+        ) {
+            EntryFindProviderButton(
+                accentColor = accentColor,
+                onClick = onFindProviderClicked,
+            )
+        }
+    } else if (chaptersLoading && !hasChapterItems) {
+        item(
+            key = "chapter-loading",
+            contentType = EntryScreenItem.ITEM,
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(32.dp),
+                    color = accentColor ?: MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    } else if (onCommentsClicked != null && hasChapterItems) {
         item(
             key = "chapter-comments-button",
             contentType = EntryScreenItem.ITEM,

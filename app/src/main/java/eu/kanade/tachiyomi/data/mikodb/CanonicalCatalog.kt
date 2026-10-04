@@ -26,6 +26,7 @@ import uy.kohesive.injekt.injectLazy
 class CanonicalCatalog {
 
     private val bridge: MangaNovelIdBridge by injectLazy()
+    private val resolver: WorkIdResolver by injectLazy()
     private val networkToLocalManga: NetworkToLocalManga by injectLazy()
     private val networkToLocalNovel: NetworkToLocalNovel by injectLazy()
     private val mangaRepository: MangaRepository by injectLazy()
@@ -48,7 +49,7 @@ class CanonicalCatalog {
         bridge.upsert(work)
         val manga = Manga.create().copy(
             url = "$MANGA_URL_PREFIX${work.mikoWorkId}",
-            title = work.title,
+            title = TitleNormalizer.displayTitle(work.title),
             author = work.author,
             description = work.description,
             // Genres come only from real catalog/enrichment data — the
@@ -67,7 +68,7 @@ class CanonicalCatalog {
         bridge.upsert(work)
         val novel = Novel.create().copy(
             url = "$NOVEL_URL_PREFIX${work.mikoWorkId}",
-            title = work.title,
+            title = TitleNormalizer.displayTitle(work.title),
             author = work.author,
             description = work.description,
             genre = work.genres?.takeIf { it.isNotEmpty() }.orEmpty(),
@@ -80,61 +81,111 @@ class CanonicalCatalog {
     }
 
     /**
-     * Local library rows bound to [works] — favorited extension entries
-     * whose normalized title matches any of the work's titles, keyed by
-     * `mikoWorkId`. Discovery routes a bound work's tap to the local row
-     * instead of materializing a parallel canonical one: read/tracking/
-     * download state lives on the user's entry, and the unifier's
-     * favorites-never-redirect rule already names it the right surface
-     * (same proven-carrier signal [GoldenSources] uses, resolved to
-     * rows). Author is checked when both sides carry one — extension
-     * author strings differ in shape, so containment counts as a match.
+     * Local library rows bound to [works], keyed by `mikoWorkId`.
+     *
+     * Two bind paths:
+     *  - Favorited canonical rows (`miko:` URL, source [CANONICAL_SOURCE_ID])
+     *    bind by URL-carried work id — exact, no title guesswork. These
+     *    rows ARE the library entry; the badge and tap-through land on
+     *    the canonical row itself.
+     *  - Favorited extension entries bind on normalized title (+ author
+     *    containment when both sides carry one — extension author strings
+     *    differ in shape).
+     *
+     * The map values are the bound library entries — taps on bound cards
+     * open the library entry (not a fresh canonical fork), and bound
+     * cards show the library row's cover so discovery and library agree.
      */
     suspend fun localLibraryEntryIds(
         works: List<MangaNovelIdBridge.WorkRow>,
         medium: String,
-    ): Map<String, Long> {
+    ): Map<String, BoundEntry> {
         if (works.isEmpty()) return emptyMap()
-        val rows: List<BoundRow> = if (medium == WorkIdResolver.MEDIUM_BOOKS) {
+        val isBooks = medium == WorkIdResolver.MEDIUM_BOOKS
+        val bound = HashMap<String, BoundEntry>()
+        val workIds = works.mapTo(HashSet()) { it.mikoWorkId }
+
+        // Canonical favorites — the miko: URL carries the work id.
+        val canonicalRows: List<BoundRow> = if (isBooks) {
+            novelRepository.getNovelFavorites()
+                .filter { it.source == CANONICAL_SOURCE_ID }
+                .map { BoundRow(it.id, it.title, it.author, it.url, it.thumbnailUrl) }
+        } else {
+            mangaRepository.getMangaFavorites()
+                .filter { it.source == CANONICAL_SOURCE_ID }
+                .map { BoundRow(it.id, it.title, it.author, it.url, it.thumbnailUrl) }
+        }
+        canonicalRows.forEach { row ->
+            val workId = if (isBooks) {
+                workIdFromNovelUrl(row.url)
+            } else {
+                workIdFromMangaUrl(row.url)
+            }
+            if (workId != null && workId in workIds) bound[workId] = BoundEntry(row.id, row.coverUrl)
+        }
+
+        val favorites = if (isBooks) {
             novelRepository.getNovelFavorites()
                 .filter { it.source != CANONICAL_SOURCE_ID }
-                .map { BoundRow(it.id, it.title, it.author) }
+                .map { BoundRow(it.id, it.title, it.author, it.url, it.thumbnailUrl) }
         } else {
             mangaRepository.getMangaFavorites()
                 .filter { it.source != CANONICAL_SOURCE_ID }
-                .map { BoundRow(it.id, it.title, it.author) }
+                .map { BoundRow(it.id, it.title, it.author, it.url, it.thumbnailUrl) }
         }
-        if (rows.isEmpty()) return emptyMap()
+        if (favorites.isEmpty()) return bound
 
-        val bound = HashMap<String, Long>()
+        // Identity bind: the favorite row's URL-carried provider id (or
+        // its works_cache title row) resolves to the SAME canonical work
+        // id the feed carries — this catches the title-variant cases the
+        // normalized-title pass misses ("Bleach (Colored)", "ONE
+        // PUNCH-MAN", romanized alternates). Local-only resolve: no
+        // Worker round-trip, no mints — misses simply fall through.
+        if (favorites.isNotEmpty()) {
+            for (row in favorites) {
+                val workId = resolver.resolveLocal(
+                    WorkIdResolver.Candidate(
+                        medium = medium,
+                        title = row.title.orEmpty(),
+                        url = row.url,
+                        author = row.author,
+                        isBook = isBooks,
+                    ),
+                )?.takeUnless { it.ambiguous }?.value ?: continue
+                if (workId in workIds && workId !in bound) bound[workId] = BoundEntry(row.id, row.coverUrl)
+            }
+        }
+
         for (work in works) {
+            // A canonical favorite already bound by work id wins over a
+            // title-matched extension duplicate.
+            if (work.mikoWorkId in bound) continue
             val wanted = listOfNotNull(work.title, work.romanizedTitle, work.nativeTitle)
                 .map(TitleNormalizer::normalize)
                 .filter { it.isNotEmpty() }
                 .toSet()
             if (wanted.isEmpty()) continue
             val workAuthor = TitleNormalizer.normalize(work.author)
-            val hit = rows.firstOrNull { row ->
+            val hit = favorites.firstOrNull { row ->
                 TitleNormalizer.normalize(row.title) in wanted &&
                     authorFits(row.author, workAuthor)
             } ?: continue
-            bound[work.mikoWorkId] = hit.id
+            bound[work.mikoWorkId] = BoundEntry(hit.id, hit.coverUrl)
         }
         return bound
     }
 
-    /** Single-work convenience of [localLibraryEntryIds]. */
-    suspend fun localLibraryEntryId(work: MangaNovelIdBridge.WorkRow, medium: String): Long? =
-        localLibraryEntryIds(listOf(work), medium)[work.mikoWorkId]
+    /** A library entry bound to a discovery work — row id + its cover so
+     *  bound cards render the same art the library shows. */
+    data class BoundEntry(val entryId: Long, val coverUrl: String?)
 
-    private fun authorFits(entryAuthor: String?, workAuthor: String): Boolean =
-        workAuthor.isEmpty() ||
-            entryAuthor.isNullOrBlank() ||
-            TitleNormalizer.normalize(entryAuthor).let {
-                it == workAuthor || it.contains(workAuthor) || workAuthor.contains(it)
-            }
-
-    private class BoundRow(val id: Long, val title: String?, val author: String?)
+    private class BoundRow(
+        val id: Long,
+        val title: String?,
+        val author: String?,
+        val url: String,
+        val coverUrl: String?,
+    )
 
     companion object {
         /**
@@ -171,6 +222,24 @@ class CanonicalCatalog {
             } else {
                 const(SNovel.ONGOING, SNovel.COMPLETED, SNovel.ON_HIATUS, SNovel.CANCELLED).toLong()
             }
+        }
+
+        /**
+         * Library-row author → work-author compatibility gate. Either side
+         * blank fits; ordered-string containment fits; otherwise compare
+         * token bags so name-order flips ("KUBO Tite" vs "Tite Kubo") and
+         * co-author subsets ("MURATA Yuusuke, ONE" vs "ONE") still bind.
+         */
+        internal fun authorFits(entryAuthor: String?, workAuthor: String): Boolean {
+            if (workAuthor.isEmpty() || entryAuthor.isNullOrBlank()) return true
+            val entry = TitleNormalizer.normalize(entryAuthor)
+            if (entry == workAuthor || entry.contains(workAuthor) || workAuthor.contains(entry)) {
+                return true
+            }
+            val entryTokens = entry.split(' ').filter(String::isNotBlank).toSet()
+            val workTokens = workAuthor.split(' ').filter(String::isNotBlank).toSet()
+            return entryTokens.isNotEmpty() && workTokens.isNotEmpty() &&
+                (entryTokens.containsAll(workTokens) || workTokens.containsAll(entryTokens))
         }
     }
 }

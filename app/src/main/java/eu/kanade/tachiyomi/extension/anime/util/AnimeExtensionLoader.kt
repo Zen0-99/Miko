@@ -34,9 +34,11 @@ internal object AnimeExtensionLoader {
 
     private val preferences: SourcePreferences by injectLazy()
     private val trustExtension: TrustAnimeExtension by injectLazy()
-    private val loadNsfwSource by lazy {
-        preferences.showNsfwSource().get()
-    }
+
+    // Read per extension load — a process-lifetime `by lazy` kept a
+    // toggled pref stale for the whole session (see MangaExtensionLoader).
+    private val loadNsfwSource: Boolean
+        get() = preferences.showNsfwSource().get()
 
     private const val EXTENSION_FEATURE = "tachiyomi.animeextension"
     private const val METADATA_SOURCE_CLASS = "tachiyomi.animeextension.class"

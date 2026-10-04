@@ -175,6 +175,10 @@ class ShowsScreenModel(
     private val workIdResolver: eu.kanade.tachiyomi.data.mikodb.WorkIdResolver = Injekt.get(),
     private val workIdentityApi: eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi = Injekt.get(),
     private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
+    private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
+    private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
+    private val goldenSources: eu.kanade.tachiyomi.data.mikodb.GoldenSources = Injekt.get(),
+    private val animeExtensionManager: eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager = Injekt.get(),
     private val threadIdResolver: eu.kanade.tachiyomi.data.comments.ThreadIdResolver = Injekt.get(),
     private val commentsApi: eu.kanade.tachiyomi.data.comments.CommentsApi = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
@@ -417,6 +421,20 @@ class ShowsScreenModel(
     }
 
     init {
+        // Warm-start: reopening an entry renders the last Success instantly
+        // instead of flashing the spinner — the flows below overwrite every
+        // field within a frame anyway. Cleared dialogs/refresh flags.
+        lastSuccess[animeId]?.let {
+            mutableState.value = it.copy(dialog = null, isRefreshingData = false)
+        }
+        screenModelScope.launch {
+            state.collect { s ->
+                if (s is State.Success) {
+                    synchronized(lastSuccess) { lastSuccess[s.anime.id] = s.copy(dialog = null) }
+                }
+            }
+        }
+
         screenModelScope.launchIO {
             combine(
                 getAnimeAndEpisodesAndSeasons.subscribe(animeId).distinctUntilChanged(),
@@ -467,26 +485,36 @@ class ShowsScreenModel(
             // fire-and-forget — never blocks the screen).
             screenModelScope.launchIO { resolveShowsWorkId(anime) }
 
-            val source = sourceManager.getOrStub(anime.source)
-
-            val episodes = if (anime.fetchType == FetchType.Seasons) {
-                emptyList()
-            } else {
-                getAnimeAndEpisodesAndSeasons.awaitEpisodes(animeId)
-                    .toEpisodeListItems(anime)
+            // Independent reads run in parallel — first-open latency is
+            // dominated by these round-trips back to back.
+            val sourceDeferred = async { sourceManager.getOrStub(anime.source) }
+            val episodesDeferred = async {
+                if (anime.fetchType == FetchType.Seasons) {
+                    emptyList()
+                } else {
+                    getAnimeAndEpisodesAndSeasons.awaitEpisodes(animeId)
+                        .toEpisodeListItems(anime)
+                }
+            }
+            val seasonsDeferred = async {
+                if (anime.fetchType == FetchType.Episodes) {
+                    emptyList()
+                } else {
+                    getAnimeAndEpisodesAndSeasons.awaitSeasons(animeId)
+                        .toAnimeSeasonItems()
+                }
+            }
+            val flagsDeferred = async {
+                if (!anime.favorite) {
+                    setAnimeDefaultEpisodeFlags.await(anime)
+                    setAnimeDefaultSeasonFlags.await(anime)
+                }
             }
 
-            val seasons = if (anime.fetchType == FetchType.Episodes) {
-                emptyList()
-            } else {
-                getAnimeAndEpisodesAndSeasons.awaitSeasons(animeId)
-                    .toAnimeSeasonItems()
-            }
-
-            if (!anime.favorite) {
-                setAnimeDefaultEpisodeFlags.await(anime)
-                setAnimeDefaultSeasonFlags.await(anime)
-            }
+            val source = sourceDeferred.await()
+            val episodes = episodesDeferred.await()
+            val seasons = seasonsDeferred.await()
+            flagsDeferred.await()
 
             val needRefreshInfo = !anime.initialized
             val needRefreshEpisode = episodes.isEmpty() && anime.fetchType == FetchType.Episodes
@@ -508,6 +536,21 @@ class ShowsScreenModel(
             // picks the results up as they land in the DB.
             val isCinemetaEntry = anime.source == 0L && anime.url.startsWith("cinemeta:")
 
+            // Seed the accent synchronously — this update REPLACES the
+            // warm-started Success, so a default `accentColor = null`
+            // would erase the extracted color and the composable's
+            // LaunchedEffect never refires (its key didn't change).
+            val isDark =
+                (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                    android.content.res.Configuration.UI_MODE_NIGHT_YES
+            val cachedAccentColor = eu.kanade.tachiyomi.util.EntryCoverMetadata.getBaseColor(
+                eu.kanade.tachiyomi.util.EntryCoverMetadata.EntryType.SHOWS,
+                anime.id,
+                eu.kanade.presentation.entries.components.coverKeyOf(anime),
+            )?.let {
+                Color(eu.kanade.presentation.entries.components.adjustForTheme(it, isDark))
+            }
+
             // Show what we have earlier
             val intervalDays = fetchInterval.calculateInterval(
                 episodes.map { it.episode },
@@ -516,7 +559,7 @@ class ShowsScreenModel(
             // Hide interval badge if series is completed or last update is
             // older than 2 months (stale schedule).
             val showInterval = shouldShowInterval(anime.status, episodes.map { it.episode })
-            mutableState.update {
+            mutableState.update { prev ->
                 State.Success(
                     anime = anime,
                     source = source,
@@ -525,6 +568,8 @@ class ShowsScreenModel(
                     seasons = seasons,
                     isRefreshingData = needRefreshInfo || needRefreshEpisode || needRefreshSeason,
                     dialog = null,
+                    accentColor = cachedAccentColor
+                        ?: (prev as? State.Success)?.accentColor,
                     intervalDays = intervalDays,
                     showInterval = showInterval,
                 )
@@ -616,6 +661,12 @@ class ShowsScreenModel(
                 ),
             ) ?: return
             workIdentityApi.markSeen(resolved.value, resolved.medium)
+            // Retain the work id + worker kind for carrier/provider
+            // state (17-02) — non-anime movies/series are ID-only.
+            updateSuccessState {
+                it.copy(canonicalWorkId = resolved.value, canonicalKind = resolved.kind)
+            }
+            loadCarriers(resolved.value)
         } catch (e: Exception) {
             logcat(LogPriority.DEBUG) { "shows work resolve failed for '${anime.title}': ${e.message}" }
         }
@@ -2222,6 +2273,8 @@ class ShowsScreenModel(
         data object TrackSheet : Dialog
         data object Comments : Dialog
         data class FullImages(val coverData: Any? = null) : Dialog
+        /** Find Content Provider — zero-bound canonical anime entry (17-02). */
+        data object FindProvider : Dialog
     }
 
     fun dismissDialog() {
@@ -2251,6 +2304,129 @@ class ShowsScreenModel(
 
     val commentsEnabled: Boolean
         get() = basePreferences.commentsEnabled().get()
+
+    // ---------- Find Content Provider (17-02) ----------
+
+    /** Fetch the work's carrier matrix into state (resolved canonical
+     *  shows entries only). */
+    private fun loadCarriers(workId: String) {
+        screenModelScope.launchIO {
+            val matrix = workCarriers.forWork(
+                workId,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_SHOWS,
+            )
+            updateSuccessState { it.copy(carrierMatrix = matrix) }
+        }
+    }
+
+    /** Active collector of the finder's search flow — cancelled when a
+     *  new search attaches so stale collectors can't overwrite picks. */
+    private var providerSearchJob: kotlinx.coroutines.Job? = null
+
+    /** Open the Find Provider sheet and stream per-extension search
+     *  results into state. Anime only — non-anime movies/series mint
+     *  canonical IDs without extension pursuit. The finder owns the
+     *  search job — closing the sheet never cancels it; reopening within
+     *  5 min reattaches to the cached/live flow instead of restarting. */
+    fun showFindProviderDialog() {
+        val workId = successState?.canonicalWorkId ?: return
+        updateSuccessState {
+            it.copy(
+                dialog = Dialog.FindProvider,
+                providerSearch = (it.providerSearch
+                    ?: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search())
+                    .copy(recommendations = providerRecommendations()),
+            )
+        }
+        providerSearchJob?.cancel()
+        providerSearchJob = screenModelScope.launchIO {
+            val flow = providerFinder.search(
+                workId,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_SHOWS,
+            )
+            if (flow == null) {
+                updateSuccessState { s ->
+                    s.providerSearch?.let { s.copy(providerSearch = it.copy(searching = false)) } ?: s
+                }
+                return@launchIO
+            }
+            flow.collect { search ->
+                updateSuccessState { s ->
+                    s.copy(
+                        providerSearch = search.copy(
+                            confirmed = s.providerSearch?.confirmed.orEmpty(),
+                            recommendations = s.providerSearch?.recommendations.orEmpty(),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleProviderPick(pkgName: String) {
+        updateSuccessState { s ->
+            s.providerSearch?.let { p ->
+                s.copy(
+                    providerSearch = p.copy(
+                        confirmed = if (pkgName in p.confirmed) p.confirmed - pkgName else p.confirmed + pkgName,
+                    ),
+                )
+            } ?: s
+        }
+    }
+
+    /** Mint every confirmed pick as a `user_picked` binding, then
+     *  refresh carriers so the entry flips back to the comments button. */
+    fun confirmProviderPicks() {
+        val search = successState?.providerSearch ?: return
+        val feeds = search.rows.filter { it.pkgName in search.confirmed }
+            .mapNotNull { it.feed }
+        val workId = successState?.canonicalWorkId ?: return
+        screenModelScope.launchIO {
+            providerFinder.mint(workId, feeds)
+            workCarriers.invalidate(workId)
+            dismissDialog()
+            updateSuccessState { it.copy(providerSearch = null) }
+            loadCarriers(workId)
+        }
+    }
+
+    /** Install a recommended extension from the repo — progress feeds
+     *  the sheet's install buttons. */
+    fun installRecommendedProvider(pkgName: String) {
+        val ext = animeExtensionManager.availableExtensionsFlow.value
+            .firstOrNull { it.pkgName == pkgName } ?: return
+        screenModelScope.launchIO {
+            animeExtensionManager.installExtension(ext).collect { step ->
+                updateSuccessState {
+                    it.copy(carrierInstallSteps = it.carrierInstallSteps + (pkgName to step))
+                }
+            }
+        }
+    }
+
+    /** Available-but-uninstalled anime extensions ranked by the surveyed
+     *  S/A/B/C/D tier — the "likely to have it" list. */
+    private fun providerRecommendations(): List<eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension> {
+        val installed = animeExtensionManager.installedExtensionsFlow.value
+            .map { it.pkgName }.toSet()
+        val meta = mikoDbManager.allSourceMeta()
+        return animeExtensionManager.availableExtensionsFlow.value
+            .asSequence()
+            .filter { it.pkgName !in installed }
+            .map { ext ->
+                eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension(
+                    pkgName = ext.pkgName,
+                    name = ext.name,
+                    tier = meta[ext.pkgName]?.tier ?: "",
+                    iconUrl = ext.iconUrl,
+                    lang = ext.lang,
+                )
+            }
+            .sortedWith(compareBy({ goldenSources.tierRank(it.tier) }, { it.name }))
+            .take(eu.kanade.tachiyomi.data.mikodb.ProviderFinder.MAX_RECOMMENDATIONS)
+            .toList()
+    }
 
     fun showImagesDialog(coverData: Any? = null) {
         updateSuccessState { it.copy(dialog = Dialog.FullImages(coverData)) }
@@ -2295,6 +2471,16 @@ class ShowsScreenModel(
             val showInterval: Boolean = true,
             val suggestions: SuggestionState = SuggestionState.Idle,
             val commentsCount: Long? = null,
+            /** Resolved canonical work id + worker kind (15-02/17-02);
+             *  null until resolve finishes — never treat as unbound. */
+            val canonicalWorkId: String? = null,
+            val canonicalKind: String? = null,
+            /** Server bindings ∩ installed/enabled extensions (17-02). */
+            val carrierMatrix: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Matrix? = null,
+            /** pkgName → install progress for recommended extensions. */
+            val carrierInstallSteps: Map<String, eu.kanade.tachiyomi.extension.InstallStep> = emptyMap(),
+            /** Find Content Provider sheet state (17-02). */
+            val providerSearch: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search? = null,
         ) : State {
 
             val processedSeasons by lazy {
@@ -2416,6 +2602,18 @@ class ShowsScreenModel(
                         )
                     }
             }
+        }
+    }
+
+    private companion object {
+        /** Warm-start cache — the last [State.Success] emitted per anime,
+         *  so reopening a detail screen renders instantly instead of
+         *  flashing the spinner. Tiny LRU: heroes/recents only ever touch
+         *  a handful of entries. */
+        val lastSuccess = object : LinkedHashMap<Long, State.Success>(8, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<Long, State.Success>?,
+            ): Boolean = size > 8
         }
     }
 }

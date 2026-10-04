@@ -1,6 +1,16 @@
 package eu.kanade.tachiyomi.data.mikodb
 
 import android.database.sqlite.SQLiteDatabase
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.parseAs
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import logcat.LogPriority
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import uy.kohesive.injekt.injectLazy
 import java.io.File
@@ -44,32 +54,39 @@ class MangaNovelIdBridge(
         val genres: List<String>? = null,
         val coverUrl: String? = null,
         val description: String? = null,
+        /** Non-primary catalog titles (scanlation vs publisher names
+         *  diverge — "SSS-Class Suicide Hunter" vs "SSS-Class Revival
+         *  Hunter"). Feeds SeriesMatcher's title set so a carrier feed
+         *  named by the alt title still verifies. */
+        val altTitles: List<String> = emptyList(),
     ) {
         /** Kind vocabulary alias for [type] — same column, new name. */
         val kind: String get() = type
     }
 
     private val handler: MangaDatabaseHandler by injectLazy()
+    private val networkHelper: NetworkHelper by injectLazy()
+    private val json: Json by injectLazy()
+    private val identityApi: WorkIdentityApi by injectLazy()
 
     @Volatile private var mapDb: SQLiteDatabase? = null
 
-    @Volatile private var mapDbChecked = false
-
     private fun fullDb(): SQLiteDatabase? {
-        if (mapDbChecked) return mapDb
+        mapDb?.let { return it }
         synchronized(this) {
-            if (!mapDbChecked) {
-                mapDb = try {
-                    val f = mapFile()
-                    if (f.exists()) {
-                        SQLiteDatabase.openDatabase(f.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-                    } else {
-                        null
-                    }
-                } catch (_: Exception) {
+            mapDb?.let { return it }
+            // Retry-on-null: the artifact may not exist on the first call
+            // (pre-sync) and appears later — latching a miss would starve
+            // altTitlesFor + the works fallback for the whole session.
+            mapDb = try {
+                val f = mapFile()
+                if (f.exists()) {
+                    SQLiteDatabase.openDatabase(f.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+                } else {
                     null
                 }
-                mapDbChecked = true
+            } catch (_: Exception) {
+                null
             }
             return mapDb
         }
@@ -80,7 +97,6 @@ class MangaNovelIdBridge(
         synchronized(this) {
             mapDb?.close()
             mapDb = null
-            mapDbChecked = false
         }
     }
 
@@ -90,10 +106,32 @@ class MangaNovelIdBridge(
         handler.awaitOneOrNull { works_cacheQueries.selectByWorkId(workId) }
             ?.let { row ->
                 return row.toWorkRow(externalIdsFor(workId))
+                    .copy(altTitles = altTitlesFor(workId))
             }
         return fullDb()?.let { db ->
             db.rawQuery("SELECT * FROM works WHERE miko_work_id = ?", arrayOf(workId))
                 .use { c -> if (c.moveToNext()) c.toWorkRow(db) else null }
+                ?.copy(altTitles = altTitlesFor(workId))
+        }
+    }
+
+    /**
+     * The work's non-primary catalog titles from the map artifact — the
+     * `titles` table carries no miko_work_id index, so this is a scan
+     * (~250ms on a 2M-row artifact): single-row callers only, never
+     * per-row inside list results.
+     */
+    private fun altTitlesFor(workId: String): List<String> {
+        val db = fullDb() ?: return emptyList()
+        return try {
+            db.rawQuery(
+                "SELECT title FROM titles WHERE miko_work_id = ? AND is_primary = 0",
+                arrayOf(workId),
+            ).use { c ->
+                buildList { while (c.moveToNext()) c.getString(0)?.let { add(it) } }
+            }
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 
@@ -184,11 +222,107 @@ class MangaNovelIdBridge(
         val merged = LinkedHashMap<String, Pair<WorkRow, Int>>()
         delta.forEach { (row, r) -> merged[row.mikoWorkId] = row to r }
         map.forEach { (row, r) -> merged.putIfAbsent(row.mikoWorkId, row to r) }
-        return merged.values
-            .sortedWith(compareBy({ it.second }, { it.first.title.length }))
+        return hydrateRemote(
+            dedupe(
+                merged.values
+                    .sortedWith(compareBy({ it.second }, { it.first.title.length }))
+                    .map { it.first },
+            ),
+        )
             .take(limit)
-            .map { it.first }
     }
+
+    @Serializable
+    private data class HydrateDto(
+        val miko_work_id: String,
+        val author: String? = null,
+        val cover_url: String? = null,
+        val year: Long? = null,
+        val total_chapters: String? = null,
+        val genres: List<String> = emptyList(),
+    )
+
+    @Serializable
+    private data class HydrateResponse(
+        val works: List<HydrateDto> = emptyList(),
+    )
+
+    /**
+     * The offline map artifact has no covers/authors — ask the worker
+     * for display fields per winning id and merge them where the local
+     * row is blank. Best-effort: offline or HTTP failure returns the
+     * local rows untouched.
+     */
+    private suspend fun hydrateRemote(rows: List<WorkRow>): List<WorkRow> {
+        if (rows.isEmpty()) return rows
+        return try {
+            val url = "${identityApi.baseUrl()}/v1/works/hydrate".toHttpUrl().newBuilder()
+                .addQueryParameter("ids", rows.joinToString(",") { it.mikoWorkId })
+                .build()
+            val response = networkHelper.client.newCall(
+                GET(url, headers = Headers.headersOf("User-Agent", WorkIdentityApi.USER_AGENT)),
+            ).awaitSuccess()
+            val hydrated = with(json) { response.parseAs<HydrateResponse>() }.works
+                .associateBy { it.miko_work_id }
+            rows.map { row ->
+                val h = hydrated[row.mikoWorkId] ?: return@map row
+                row.copy(
+                    coverUrl = row.coverUrl ?: h.cover_url,
+                    author = row.author ?: h.author,
+                    year = row.year ?: h.year,
+                    totalChapters = row.totalChapters ?: h.total_chapters,
+                    genres = row.genres ?: h.genres.takeIf { it.isNotEmpty() },
+                )
+            }
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN) { "search hydrate failed: ${e.message}" }
+            rows
+        }
+    }
+
+    /**
+     * Collapse catalog duplicate rows — the dump carries several sparse
+     * rows per title (variants, re-ingested editions) that share a
+     * normalized title. Search shows one card per normalized title: the
+     * row carrying the most identity evidence (a cover beats rank,
+     * provider links beat bare title) so the card renders art and taps
+     * materialize the well-linked work.
+     */
+    private fun dedupe(rows: List<WorkRow>): List<WorkRow> {
+        val groups = LinkedHashMap<String, MutableList<WorkRow>>()
+        for (row in rows) {
+            groups.getOrPut(TitleNormalizer.normalize(row.title)) { mutableListOf() }
+                .add(row)
+        }
+        return groups.values.map { group ->
+            if (group.size == 1) return@map group.first()
+            // The winner must be the bindable row — provider links and
+            // external ids ARE the work identity, they can't be borrowed
+            // from a sibling's miko_work_id. Display fields can: sparse
+            // dump variants often carry the only cover/description, so a
+            // well-linked-but-bare winner still renders art.
+            val best = group.maxWithOrNull(
+                compareBy<WorkRow> { it.providerLinks.isNotBlank() && it.providerLinks != "[]" }
+                    .thenBy { it.externalIds.isNotEmpty() }
+                    .thenBy { it.richness() },
+            )!!
+            best.copy(
+                coverUrl = best.coverUrl ?: group.firstNotNullOfOrNull { it.coverUrl },
+                author = best.author ?: group.firstNotNullOfOrNull { it.author },
+                year = best.year ?: group.firstNotNullOfOrNull { it.year },
+                totalChapters = best.totalChapters ?: group.firstNotNullOfOrNull { it.totalChapters },
+                description = best.description ?: group.firstNotNullOfOrNull { it.description },
+            )
+        }
+    }
+
+    private fun WorkRow.richness(): Int = listOf(
+        coverUrl != null,
+        providerLinks != "[]",
+        author != null,
+        year != null,
+        totalChapters != null,
+    ).count { it }
 
     suspend fun externalIdsFor(workId: String): Map<String, String> =
         handler.awaitList { works_cacheQueries.selectExternalIdsByWork(workId) }
@@ -222,6 +356,7 @@ class MangaNovelIdBridge(
                 resolutionSource = row.resolutionSource,
                 resolvedAt = System.currentTimeMillis(),
                 nsfw = if (row.nsfw) 1L else 0L,
+                coverUrl = row.coverUrl,
             )
             externalIds.forEach { (provider, id) ->
                 works_cacheQueries.upsertExternalId(provider, id, row.mikoWorkId)
@@ -247,6 +382,7 @@ class MangaNovelIdBridge(
         nsfw = nsfw != 0L,
         providerLinks = provider_links,
         resolutionSource = resolution_source,
+        coverUrl = cover_url,
         externalIds = externalIds,
     )
 
@@ -295,6 +431,7 @@ class MangaNovelIdBridge(
             nsfw = (l("nsfw") ?: 0L) != 0L,
             providerLinks = "[${items.joinToString(",")}]",
             resolutionSource = "full_db",
+            coverUrl = s("cover_url"),
             externalIds = ext,
         )
     }

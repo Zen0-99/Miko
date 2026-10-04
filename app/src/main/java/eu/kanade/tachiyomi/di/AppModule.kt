@@ -344,11 +344,36 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterMap() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.SeriesMatcher() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalFeedCollector() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.ProviderFinder() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonizeWork() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkCarriers() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.LibraryCanonizer() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher() }
+
+        // --- User-built home catalog rows (Phase 18) ---
+        addSingletonFactory { eu.kanade.tachiyomi.data.catalogrows.CatalogRowStore(get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.catalogrows.ExtensionCatalogFeed(get(), get(), get()) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.catalogrows.LibraryCatalogFeed(get(), get(), get()) }
+
+        // --- Discovery feeds: disk cache, webtoon pill source, start warmer ---
+        addSingletonFactory {
+            eu.kanade.tachiyomi.data.catalogrows.DiscoveryFeedStore(
+                java.io.File(app.filesDir, "discovery_feeds.json"),
+                get(),
+            )
+        }
+        addSingletonFactory { eu.kanade.tachiyomi.data.catalogrows.DiscoveryFeeds() }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.data.catalogrows.CatalogRowResolver(
+                get(), get(), get(), get(), get(), get(), get(),
+            )
+        }
+        addSingletonFactory {
+            eu.kanade.tachiyomi.metadata.cinemeta.CinemetaCatalogFeed(get(), get(), get())
+        }
         addSingletonFactory { eu.kanade.tachiyomi.data.comments.CommentsApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.comments.DeviceIdentityProvider(app) }
         addSingletonFactory { eu.kanade.tachiyomi.data.comments.RulesetProvider() }

@@ -412,13 +412,11 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
             // Phase 14-02: a completed refresh mints + canonizes the whole
             // library in the background (resolve → markSeen → canonize).
-            if (basePreferences.commentsEnabled().get()) {
-                workPrefetcher.start(canonize = true)
-            }
+            workPrefetcher.start(canonize = true)
         }
     }
 
-    private fun downloadChapters(manga: Manga, chapters: List<Chapter>) {
+    private suspend fun downloadChapters(manga: Manga, chapters: List<Chapter>) {
         // We don't want to start downloading while the library is updating, because websites
         // may don't like it and they could ban the user.
         downloadManager.downloadChapters(manga, chapters, false)

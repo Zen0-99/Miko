@@ -328,6 +328,8 @@ class ReaderViewModel @JvmOverloads constructor(
                 it.copy(
                     viewerChapters = newChapters,
                     bookmarked = newChapters.currChapter.chapter.bookmark,
+                    sourceName = newChapters.currChapter.pageLoader?.sourceName
+                        ?: manga?.source?.let { id -> sourceManager.get(id)?.name },
                 )
             }
         }
@@ -988,6 +990,13 @@ class ReaderViewModel @JvmOverloads constructor(
         val dialog: Dialog? = null,
         val menuVisible: Boolean = false,
         @IntRange(from = -100, to = 100) val brightnessOverlayValue: Int = 0,
+
+        /**
+         * Display name of the source serving the current chapter — the
+         * resolved carrier for canonical chapters, the entry's source
+         * otherwise. Null until the chapter's page loader resolves it.
+         */
+        val sourceName: String? = null,
     ) {
         val currentChapter: ReaderChapter?
             get() = viewerChapters?.currChapter

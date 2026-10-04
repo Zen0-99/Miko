@@ -49,3 +49,19 @@ no silent bad mints.
 
 Book comments use the existing `novel:` thread prefix
 (`novel:mk:ol:OL…W`); no separate medium.
+
+## `POST /v1/chapters/canonize` — feed provenance vocabulary
+
+`feeds[].provenance` is a free-form ≤40-char string stamped onto the
+`external_ids` binding row (when `provider_ref` is present — a feed may
+carry `chapters: []` and still mint the binding). Accepted values:
+
+| provenance | meaning |
+|---|---|
+| `device_feed` | default — device-submitted chapter list |
+| `user_picked` | a human confirmed the extension result in the Find Provider sheet; `verified=true` lifts `confidence` to ≥0.9 |
+| `crawler` | managed crawler host — requires `x-crawler-key`; unauthenticated claims degrade to `device_feed` |
+| `mangadex` / `mangabaka` | seed-provenance records, not app-drivable carriers |
+
+Feeds with `verified=false` always write an `identity_review` row
+(the pending tier) regardless of provenance.

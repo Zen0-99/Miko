@@ -50,7 +50,7 @@ class CanonicalChapterMap(
     suspend fun forWork(workId: String): List<CanonChapter> {
         synchronized(cache) { cache[workId] }?.let { return it }
         val dto = api.getChapters(workId) ?: return emptyList()
-        val list = dto.chapters.map { c ->
+        val parsed = dto.chapters.map { c ->
             CanonChapter(
                 seq = c.seq,
                 number = c.number,
@@ -65,6 +65,20 @@ class CanonicalChapterMap(
                 dateUpload = c.date_upload,
             )
         }
+        // Carrier feeds occasionally list one chapter twice under two
+        // labels (MangaFire "Ch.5" + "Chapter 5"); the worker merges
+        // both into canon as separate seqs → a doubled local list.
+        // Dedupe on the parsed identity, first seq wins; rows with no
+        // number can't be proven dupes and pass through.
+        val seen = HashSet<Triple<Double, Int?, ChapterNumberParser.Kind>>()
+        val list = parsed.filter { c ->
+            val n = c.number ?: return@filter true
+            seen.add(Triple(n, c.part, c.kind))
+        }
+        // Empty sequences are NOT cached — "no feed materialized yet",
+        // not a fresh result — canonize must retry (a migrating
+        // favorite's own source may be the feed that finally populates).
+        if (list.isEmpty()) return emptyList()
         synchronized(cache) {
             cache[workId] = list
             fetchedAt[workId] = System.currentTimeMillis()
@@ -74,6 +88,10 @@ class CanonicalChapterMap(
 
     /** True when the work has no cached sequence or it exceeds the SWR window. */
     fun isStale(workId: String): Boolean = synchronized(cache) {
+        // An empty cached list is "no feed materialized yet", not a
+        // fresh result — canonize must retry (a migrating favorite's
+        // own source may be the feed that finally populates it).
+        if (cache[workId].isNullOrEmpty()) return true
         val ts = fetchedAt[workId] ?: return true
         System.currentTimeMillis() - ts > STALE_AFTER_MS
     }

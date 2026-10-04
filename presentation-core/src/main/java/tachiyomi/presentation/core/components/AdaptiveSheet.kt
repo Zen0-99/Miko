@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -56,6 +57,9 @@ fun AdaptiveSheet(
     enableSwipeDismiss: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Optional surface color override; unspecified keeps
+     *  `surfaceContainerHigh`. */
+    color: Color = Color.Unspecified,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -101,7 +105,11 @@ fun AdaptiveSheet(
                     .padding(vertical = 16.dp)
                     .then(modifier),
                 shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = if (color != Color.Unspecified) {
+                    color
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
                 content = {
                     BackHandler(enabled = alpha > 0f, onBack = internalOnDismissRequest)
                     content()
@@ -213,7 +221,11 @@ fun AdaptiveSheet(
                         enabled = enableSwipeDismiss,
                     ),
                 shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = if (color != Color.Unspecified) {
+                    color
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
                 content = {
                     BackHandler(
                         enabled = anchoredDraggableState.targetValue == 0,

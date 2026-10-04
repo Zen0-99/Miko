@@ -138,7 +138,7 @@ private fun BaseTachiyomiTheme(
     )
 }
 
-private const val THEME_ANIMATION_DURATION_MS = 400
+private const val THEME_ANIMATION_DURATION_MS = 200
 
 /**
  * Synchronized theme color transition using a single [Animatable] progress value.

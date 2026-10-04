@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,6 +35,7 @@ import eu.kanade.presentation.collection.components.ChangeCollectionDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
+import eu.kanade.presentation.entries.components.EntryHeroLoadingPreview
 import eu.kanade.presentation.entries.components.SetIntervalDialog
 import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.presentation.entries.manga.ChapterSettingsDialog
@@ -78,6 +80,7 @@ import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.screens.DelayedLoadingScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -85,6 +88,16 @@ import uy.kohesive.injekt.api.get
 class MangaScreen(
     private val mangaId: Long,
     val fromSource: Boolean = false,
+    /**
+     * Artwork the caller already displays for this entry (e.g. the home
+     * hero's). Shown as a shared element during Loading so the push
+     * transition morphs the hero image instead of a blank spinner.
+     */
+    private val previewCover: Any? = null,
+    /** Title for the shared `hero-title-` element during Loading. */
+    private val previewTitle: String? = null,
+    /** Clearlogo for the shared `hero-title-` element during Loading. */
+    private val previewLogo: String? = null,
 ) : Screen(), AssistContentScreen {
 
     private var assistUrl: String? = null
@@ -115,13 +128,33 @@ class MangaScreen(
         val redirectId by screenModel.redirectToEntryId.collectAsStateWithLifecycle()
 
         // Extension-source duplicate of a canonical `miko:` entry — swap
-        // to the canonical entry so there's one entry per work.
+        // to the canonical entry so there's one entry per work. Hand the
+        // current entry's artwork to the new screen's Loading preview so
+        // the cover stays painted through the mint handoff instead of
+        // flashing blank.
         LaunchedEffect(redirectId) {
-            redirectId?.let { navigator.replace(MangaScreen(it, fromSource)) }
+            redirectId?.let {
+                val current = (state as? MangaScreenModel.State.Success)?.manga
+                navigator.replace(
+                    MangaScreen(
+                        it,
+                        fromSource,
+                        previewCover = current?.thumbnailUrl ?: previewCover,
+                        previewTitle = current?.title ?: previewTitle,
+                        previewLogo = previewLogo,
+                    ),
+                )
+            }
         }
 
         if (state is MangaScreenModel.State.Loading) {
-            LoadingScreen()
+            EntryHeroLoadingPreview(
+                cover = previewCover,
+                sharedKey = "hero-image-$mangaId",
+                heroContentPadding = 440.dp,
+                title = previewTitle,
+                logo = previewLogo,
+            )
             return
         }
 
@@ -153,6 +186,7 @@ class MangaScreen(
 
         MangaScreen(
             state = successState,
+            previewCover = previewCover,
             snackbarHostState = screenModel.snackbarHostState,
             nextUpdate = successState.manga.expectedNextUpdate,
             isTabletUi = isTabletUi(),
@@ -160,11 +194,20 @@ class MangaScreen(
             chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
             navigateUp = navigator::pop,
             onChapterClicked = {
-                openChapterWithLockCheck(context, it, scope, getLockedReadingOrders) { lockedOrders ->
-                    lockDialog = lockedOrders
+                if (!screenModel.interceptChapterTap(it)) {
+                    openChapterWithLockCheck(context, it, scope, getLockedReadingOrders) { lockedOrders ->
+                        lockDialog = lockedOrders
+                    }
                 }
             },
-            onDownloadChapter = screenModel::runChapterDownloadActions.takeIf { !successState.source.isLocalOrStub() },
+            onDownloadChapter = screenModel::runChapterDownloadActions.takeIf {
+                // Canon entries ride a stub source but DO support
+                // downloads — the queue resolves each chapter to its
+                // carrier at enqueue time.
+                !successState.source.isLocalOrStub() ||
+                    eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                        .isCanonicalUrl(successState.manga.url)
+            },
             onAddToLibraryClicked = {
                 screenModel.toggleFavorite()
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -185,10 +228,16 @@ class MangaScreen(
             },
             onCommentsClicked = screenModel::showCommentsDialog
                 .takeIf { screenModel.commentsEnabled },
+            onFindProviderClicked = screenModel::showFindProviderDialog,
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
             onFilterButtonClicked = screenModel::showSettingsDialog,
             onRefresh = screenModel::fetchAllFromSource,
-            onContinueReading = { continueReading(context, screenModel.getNextUnreadChapter()) },
+            onContinueReading = {
+                val next = screenModel.getNextUnreadChapter()
+                if (next == null || !screenModel.interceptChapterTap(next)) {
+                    continueReading(context, next)
+                }
+            },
             onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
             onCoverClicked = screenModel::showCoverDialog,
             onShareClicked = { shareManga(context, screenModel.manga, screenModel.source) }.takeIf { isHttpSource },
@@ -235,6 +284,9 @@ class MangaScreen(
                 }
             },
             onRetrySuggestions = { screenModel.retrySuggestions() },
+            onCarrierPickerClicked = screenModel::showCarrierPicker,
+            chapterCarrierLabel = screenModel::carrierLabelFor,
+            onChapterCarrierClicked = screenModel::showChapterCarrierPicker,
         )
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
@@ -259,6 +311,7 @@ class MangaScreen(
                     onConfirm = { include, _ ->
                         screenModel.moveMangaToCollectionsAndAddToLibrary(dialog.manga, include)
                     },
+                    accentColor = successState.accentColor,
                 )
             }
             is MangaScreenModel.Dialog.DeleteChapters -> {
@@ -363,6 +416,65 @@ class MangaScreen(
                     onValueChanged = { interval: Int -> screenModel.setFetchInterval(dialog.manga, interval) }
                         .takeIf { screenModel.isUpdateIntervalEnabled },
                 )
+            }
+            is MangaScreenModel.Dialog.CarrierInstall -> {
+                eu.kanade.presentation.entries.manga.CarrierInstallDialog(
+                    matrix = successState.carrierMatrix,
+                    steps = successState.carrierInstallSteps,
+                    accentColor = successState.accentColor,
+                    onInstall = screenModel::installCarrier,
+                    onDismissRequest = onDismissRequest,
+                )
+            }
+            is MangaScreenModel.Dialog.CarrierPicker -> {
+                val pickedChapter = dialog.chapter
+                eu.kanade.presentation.entries.manga.CarrierPickerDialog(
+                    matrix = successState.carrierMatrix,
+                    preferred = pickedChapter?.let { screenModel.chapterCarrierFor(it) }
+                        ?: successState.preferredCarrier,
+                    chapter = pickedChapter,
+                    accentColor = successState.accentColor,
+                    // Chapter-scoped picks stay purely a routing choice —
+                    // the work-level sheet offers provider discovery.
+                    onFindMoreProviders = if (pickedChapter == null) {
+                        { screenModel.showFindProviderDialog() }
+                    } else {
+                        null
+                    },
+                    onSelect = { pkg ->
+                        if (pickedChapter != null) {
+                            // Chapter scope: store the override and read
+                            // immediately — "read this chapter with…".
+                            screenModel.setChapterCarrier(pickedChapter, pkg)
+                            openChapterWithLockCheck(
+                                context,
+                                pickedChapter,
+                                scope,
+                                getLockedReadingOrders,
+                            ) { lockedOrders -> lockDialog = lockedOrders }
+                        } else {
+                            screenModel.setPreferredCarrier(pkg)
+                        }
+                    },
+                    onDismissRequest = onDismissRequest,
+                )
+            }
+            MangaScreenModel.Dialog.FindProvider -> {
+                val search = successState.providerSearch
+                if (search != null) {
+                    eu.kanade.presentation.entries.components.FindProviderDialog(
+                        searching = search.searching,
+                        rows = search.rows,
+                        confirmed = search.confirmed,
+                        recommendations = search.recommendations,
+                        installSteps = successState.carrierInstallSteps,
+                        accentColor = successState.accentColor,
+                        onToggle = screenModel::toggleProviderPick,
+                        onInstall = screenModel::installRecommendedProvider,
+                        onConfirm = screenModel::confirmProviderPicks,
+                        onDismissRequest = onDismissRequest,
+                    )
+                }
             }
         }
 

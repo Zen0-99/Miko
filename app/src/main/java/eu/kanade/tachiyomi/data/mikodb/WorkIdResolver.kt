@@ -121,6 +121,47 @@ class WorkIdResolver {
         )
     }
 
+    /**
+     * [resolve] steps 1-2 only — local `works_cache` hits (URL-carried
+     * provider ids + unambiguous normalized title), never the Worker and
+     * never a deterministic mint. A canonical `miko:` row can only exist
+     * for a work already materialized into the cache, so a null here
+     * means there is nothing canonical to redirect to — used where the
+     * canonical id is needed without blocking on network (home heroes).
+     */
+    suspend fun resolveLocal(candidate: Candidate): CanonicalWorkId? {
+        val allowedTypes = allowedTypes(candidate.medium)
+        val norm = TitleNormalizer.normalize(candidate.title) ?: return null
+
+        val ids = urlCandidates(candidate) +
+            listOfNotNull(candidate.isbn?.let { normalizeIsbn(it)?.let { n -> "isbn" to n } })
+        for ((provider, id) in ids) {
+            val row = bridge.byExternalId(provider, id)
+            if (row != null && row.type in allowedTypes) {
+                return CanonicalWorkId(
+                    row.mikoWorkId,
+                    candidate.medium,
+                    Confidence.EXTERNAL_ID,
+                    kind = row.type,
+                    nsfw = row.nsfw,
+                )
+            }
+        }
+
+        val titleHits = bridge.byNormalizedTitle(norm)
+            .filter { it.type in allowedTypes }
+        if (titleHits.size == 1) {
+            return CanonicalWorkId(
+                titleHits.single().mikoWorkId,
+                candidate.medium,
+                Confidence.TITLE,
+                kind = titleHits.single().type,
+                nsfw = titleHits.single().nsfw,
+            )
+        }
+        return null
+    }
+
     private suspend fun resolveRemote(
         candidate: Candidate,
         norm: String,
@@ -179,6 +220,7 @@ class WorkIdResolver {
         year = year?.toLong(), totalChapters = total_chapters, author = author,
         nsfw = nsfw,
         providerLinks = provider_links,
+        coverUrl = cover_url,
         resolutionSource = "worker",
         externalIds = external_ids + linkExternalIds(provider_links),
     )

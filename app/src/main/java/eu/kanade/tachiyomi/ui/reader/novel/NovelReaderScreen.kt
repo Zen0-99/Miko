@@ -149,6 +149,7 @@ class NovelReaderScreen(
         val contentItems by screenModel.contentItems.collectAsStateWithLifecycle()
         val isLoading by screenModel.isLoading.collectAsStateWithLifecycle()
         val currentChapter by screenModel.currentChapter.collectAsStateWithLifecycle()
+        val currentSourceName by screenModel.currentSourceName.collectAsStateWithLifecycle()
         val novel by screenModel.novel.collectAsStateWithLifecycle()
         val chapters by screenModel.chapters.collectAsStateWithLifecycle()
         val isControlsVisible by screenModel.isControlsVisible.collectAsStateWithLifecycle()
@@ -701,6 +702,7 @@ class NovelReaderScreen(
                 isMenuVisible = isControlsVisible,
                 title = currentChapter?.name ?: "Loading...",
                 subtitle = novel?.title ?: "",
+                sourceLabel = currentSourceName,
                 accentColor = accentColor,
                 progressPercent = if (screenModel.preferences.showScrollPercentage().get()) progressPercent else -1,
                 wordCount = if (screenModel.preferences.showWordCount().get()) {

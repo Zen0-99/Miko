@@ -41,6 +41,7 @@ import eu.kanade.presentation.browse.InLibraryBadge
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.EntryCompactGridItem
+import eu.kanade.tachiyomi.data.catalogrows.WEBTOON_KINDS_CSV
 import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
@@ -136,7 +137,6 @@ fun CatalogBrowseContent(
                     CatalogBrowseGrid(
                         carrier = carrier,
                         feedKindsCsv = pills[page].kindsCsv,
-                        live = page == selectedIndex,
                         screenModel = screenModel,
                         contentPadding = innerPadding,
                         libraryPreferences = libraryPreferences,
@@ -147,22 +147,24 @@ fun CatalogBrowseContent(
     }
 }
 
-/** Per-carrier pill set. [kindsCsv] null = the OpenLibrary trending feed. */
+/** Per-carrier pill set. [kindsCsv] null on BOOKS = the seeded book
+ *  chart (`books|book`, live OL trending fallback until seeded). */
 private class SubPill(val labelRes: StringResource, val kindsCsv: String?)
 
 private fun pillsFor(carrier: Carrier): List<SubPill> = when (carrier) {
     Carrier.BOOKS -> listOf(
         // Webnovels live in the Worker's MangaBaka mirror; published
-        // books come from OpenLibrary's trending feed.
+        // books come from the MikoDB book chart (OpenLibrary trending
+        // until the seed lands).
         SubPill(AYMR.strings.discovery_pill_novels, "novel"),
         SubPill(AYMR.strings.carrier_books, null),
     )
     else -> listOf(
         SubPill(AYMR.strings.carrier_manga, "manga,comic"),
-        // All vertical-scroll content lives here — MangaBaka has no
-        // literal `webtoon` type, so manhwa/manhua carry the scroll
-        // formats alongside oel/other.
-        SubPill(AYMR.strings.discovery_pill_webtoons, "manhwa,manhua,webtoon,oel,other"),
+        // All vertical-scroll content lives here — platform-linked
+        // works carry the derived `webtoon` kind; the worker's
+        // kind-filtered feed backs the pill, no extension needed.
+        SubPill(AYMR.strings.discovery_pill_webtoons, WEBTOON_KINDS_CSV),
     )
 }
 
@@ -234,7 +236,6 @@ private fun SubTypePillRow(
 private fun CatalogBrowseGrid(
     carrier: Carrier,
     feedKindsCsv: String?,
-    live: Boolean,
     screenModel: CanonicalCatalogScreenModel,
     contentPadding: PaddingValues,
     libraryPreferences: LibraryPreferences,
@@ -246,12 +247,25 @@ private fun CatalogBrowseGrid(
     val gridState = rememberLazyGridState()
     val displayMode by libraryPreferences.displayMode().collectAsState()
 
-    // The settled page reads the live feed; incoming pages preview their
-    // own pill's cached items so the outgoing feed never bleeds across.
+    // A page is live only while the model's feed belongs to its pill —
+    // matching on (medium, kindsCsv) rather than the raw feed key so the
+    // webtoon pill's extension feed (`manga|webtoon:{pkg}`) still counts
+    // as live. Non-live pages preview their own pill's cached items AND
+    // its last-known library bindings, so the in-library badge rides the
+    // preview frame instead of popping in after the swap.
+    val liveFeed = state.browseFeed
+    val live = liveFeed != null &&
+        liveFeed.startsWith("${carrier.medium}|") &&
+        state.browseKindsCsv == feedKindsCsv
     val items = if (live) {
         state.browseItems
     } else {
         screenModel.peekCachedFeed(carrier.medium, feedKindsCsv)
+    }
+    val boundEntryIds = if (live) {
+        state.boundEntryIds
+    } else {
+        screenModel.peekCachedBound(carrier.medium, feedKindsCsv)
     }
     val loading = live && state.browseLoading
     val error = if (live) state.browseError else null
@@ -268,18 +282,28 @@ private fun CatalogBrowseGrid(
         ).collectAsState()
 
     // Infinite scroll: load next page when near the end — live page only,
-    // a preview page's scroll must not page the other pill's feed.
+    // a preview page's scroll must not page the other pill's feed. All
+    // gating reads happen inside the snapshotFlow: `live`/`state` are
+    // composition-time values and a LaunchedEffect captures the first
+    // composition's `live` forever, freezing the pager when the grid
+    // composes before its feed is selected.
     LaunchedEffect(gridState) {
         snapshotFlow {
             val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val totalItems = gridState.layoutInfo.totalItemsCount
-            lastVisible >= totalItems - 6
+            val s = state
+            val isLive = s.browseFeed != null &&
+                s.browseFeed.startsWith("${carrier.medium}|") &&
+                s.browseKindsCsv == feedKindsCsv
+            lastVisible >= totalItems - 6 &&
+                isLive &&
+                s.browseHasMore &&
+                !s.browseLoading &&
+                s.browseError == null
         }
             .distinctUntilChanged()
             .collect { shouldLoad ->
-                if (shouldLoad && live && state.browseHasMore && !state.browseLoading && state.browseError == null) {
-                    screenModel.loadNextBrowsePage()
-                }
+                if (shouldLoad) screenModel.loadNextBrowsePage()
             }
     }
 
@@ -332,6 +356,8 @@ private fun CatalogBrowseGrid(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    } else {
+                        CircularProgressIndicator()
                     }
                 }
             }
@@ -351,10 +377,19 @@ private fun CatalogBrowseGrid(
                     verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(items.size) { index ->
+                    items(
+                        count = items.size,
+                        // Stable work keys — the preview → live handoff
+                        // swaps the list instance, not the rows.
+                        key = { items[it].work.mikoWorkId },
+                    ) { index ->
                         val item = items[index]
                         val work = item.work
-                        val bound = live && work.mikoWorkId in state.boundEntryIds
+                        val boundEntry = boundEntryIds[work.mikoWorkId]
+                        val bound = boundEntry != null
+                        // A bound card shows the library row's cover —
+                        // discovery and library agree on the same entry.
+                        val coverUrl = boundEntry?.coverUrl ?: item.coverUrl
 
                         // Mint-on-browse: once per work id per session;
                         // the model dedupes and throttles off-thread.
@@ -367,7 +402,7 @@ private fun CatalogBrowseGrid(
                                 novelId = work.mikoWorkId.hashCode().toLong(),
                                 sourceId = CanonicalCatalog.CANONICAL_SOURCE_ID,
                                 isNovelFavorite = bound,
-                                url = item.coverUrl,
+                                url = coverUrl,
                                 lastModified = 0L,
                             )
                         } else {
@@ -375,13 +410,14 @@ private fun CatalogBrowseGrid(
                                 mangaId = work.mikoWorkId.hashCode().toLong(),
                                 sourceId = CanonicalCatalog.CANONICAL_SOURCE_ID,
                                 isMangaFavorite = bound,
-                                url = item.coverUrl,
+                                url = coverUrl,
                                 lastModified = 0L,
                             )
                         }
                         val onClick: () -> Unit = {
                             scope.launch {
-                                val entryId = screenModel.materializeEntryId(work, carrier.medium)
+                                val entryId = screenModel.entryIdFor(item, carrier.medium)
+                                    ?: return@launch
                                 if (isNovel) {
                                     navigator.push(NovelScreen(entryId, true))
                                 } else {

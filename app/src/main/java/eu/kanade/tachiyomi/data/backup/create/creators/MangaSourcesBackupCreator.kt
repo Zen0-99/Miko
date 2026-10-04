@@ -5,12 +5,11 @@ import eu.kanade.tachiyomi.data.backup.models.BackupSource
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import tachiyomi.domain.source.manga.service.MangaSourceManager
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
-class MangaSourcesBackupCreator(
-    private val mangaSourceManager: MangaSourceManager = Injekt.get(),
-) {
+class MangaSourcesBackupCreator {
+
+    private val mangaSourceManager: MangaSourceManager by injectLazy()
 
     operator fun invoke(mangas: List<BackupManga>): List<BackupSource> {
         return mangas

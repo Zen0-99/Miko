@@ -114,7 +114,7 @@ export async function handlePostComment(req: Request, env: Env): Promise<Respons
         }
     }
 
-    const verdict = await evaluateCommentFull(env, id.device_hash, text);
+    const verdict = await evaluateCommentFull(env, id, body.thread_id, text);
     if (!verdict.ok) {
         const suspendedUntil = await addStrike(env, id.device_hash);
         await logModeration(env, {

@@ -11,6 +11,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
@@ -79,6 +80,10 @@ fun AdaptiveSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     enableSwipeDismiss: Boolean = true,
+    /** Optional container override (e.g. the entry-accent tinted surface
+     *  used by carrier/provider sheets, 17-02). Unspecified keeps the
+     *  default `surfaceContainerHigh`. */
+    containerColor: Color = Color.Unspecified,
     contentWindowInsets: @Composable () -> WindowInsets = { BottomSheetDefaults.windowInsets },
     content: @Composable () -> Unit,
 ) {
@@ -102,6 +107,11 @@ fun AdaptiveSheet(
                 isTabletUi = true,
                 enableSwipeDismiss = enableSwipeDismiss,
                 onDismissRequest = onDismissRequest,
+                color = if (containerColor != Color.Unspecified) {
+                    containerColor
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
             ) {
                 content()
             }
@@ -113,7 +123,11 @@ fun AdaptiveSheet(
         ModalBottomSheet(
             onDismissRequest = onDismissRequest,
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = if (containerColor != Color.Unspecified) {
+                containerColor
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            },
             shape = MaterialTheme.shapes.extraLarge,
             dragHandle = null,
             contentWindowInsets = contentWindowInsets,

@@ -30,6 +30,7 @@ import eu.kanade.presentation.components.IndicatorModifier
 import eu.kanade.presentation.components.IndicatorSize
 import eu.kanade.presentation.components.IndicatorStrokeWidth
 import eu.kanade.presentation.components.commonClickable
+import eu.kanade.presentation.entries.components.rememberOnAccentColor
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
 import tachiyomi.i18n.MR
@@ -53,14 +54,24 @@ fun ChapterDownloadIndicator(
     onClick: (ChapterDownloadAction) -> Unit,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
+    /**
+     * Canon chapters: (pkgName → display name) carriers that could serve
+     * this download. Non-empty swaps the not-downloaded long-press from
+     * "queue at start" to a per-chapter carrier picker — the tap still
+     * downloads via the preferred/automatic routing.
+     */
+    downloadCarriers: List<Pair<String, String>>? = null,
+    onCarrierPick: ((String) -> Unit)? = null,
 ) {
-    val iconTint = accentColor ?: MaterialTheme.colorScheme.onSurfaceVariant
+    val iconTint = accentColor ?: MaterialTheme.colorScheme.onSurface
     when (val downloadState = downloadStateProvider()) {
         MangaDownload.State.NOT_DOWNLOADED -> NotDownloadedIndicator(
             enabled = enabled,
             modifier = modifier,
             onClick = onClick,
             iconTint = iconTint,
+            downloadCarriers = downloadCarriers,
+            onCarrierPick = onCarrierPick,
         )
         MangaDownload.State.QUEUE, MangaDownload.State.DOWNLOADING -> DownloadingIndicator(
             enabled = enabled,
@@ -90,14 +101,24 @@ private fun NotDownloadedIndicator(
     modifier: Modifier = Modifier,
     onClick: (ChapterDownloadAction) -> Unit,
     iconTint: Color,
+    downloadCarriers: List<Pair<String, String>>? = null,
+    onCarrierPick: ((String) -> Unit)? = null,
 ) {
+    var carrierMenuExpanded by remember { mutableStateOf(false) }
+    val carrierPicker = downloadCarriers?.takeIf { it.isNotEmpty() && onCarrierPick != null }
     Box(
         modifier = modifier
             .size(IconButtonTokens.StateLayerSize)
             .commonClickable(
                 enabled = enabled,
                 hapticFeedback = LocalHapticFeedback.current,
-                onLongClick = { onClick(ChapterDownloadAction.START_NOW) },
+                onLongClick = {
+                    if (carrierPicker != null) {
+                        carrierMenuExpanded = true
+                    } else {
+                        onClick(ChapterDownloadAction.START_NOW)
+                    }
+                },
                 onClick = { onClick(ChapterDownloadAction.START) },
             )
             .secondaryItemAlpha(),
@@ -109,6 +130,22 @@ private fun NotDownloadedIndicator(
             modifier = Modifier.size(IndicatorSize),
             tint = iconTint,
         )
+        if (carrierPicker != null) {
+            DropdownMenu(
+                expanded = carrierMenuExpanded,
+                onDismissRequest = { carrierMenuExpanded = false },
+            ) {
+                carrierPicker.forEach { (pkg, name) ->
+                    DropdownMenuItem(
+                        text = { Text(text = name) },
+                        onClick = {
+                            onCarrierPick?.invoke(pkg)
+                            carrierMenuExpanded = false
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -201,6 +238,9 @@ private fun DownloadedIndicator(
     iconTint: Color,
 ) {
     var isMenuExpanded by remember { mutableStateOf(false) }
+    // The same circled-arrow icon — its circle filled with the accent —
+    // with the glyph drawn in a contrast-aware black/white on top.
+    val glyphTint = rememberOnAccentColor(iconTint)
     Box(
         modifier = modifier
             .size(IconButtonTokens.StateLayerSize)
@@ -213,10 +253,16 @@ private fun DownloadedIndicator(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_download_item_24dp),
+            painter = painterResource(R.drawable.ic_item_circle_filled_24dp),
             contentDescription = null,
             modifier = Modifier.size(IndicatorSize),
             tint = iconTint,
+        )
+        Icon(
+            painter = painterResource(R.drawable.ic_download_item_24dp),
+            contentDescription = null,
+            modifier = Modifier.size(IndicatorSize),
+            tint = glyphTint,
         )
         DropdownMenu(expanded = isMenuExpanded, onDismissRequest = { isMenuExpanded = false }) {
             DropdownMenuItem(

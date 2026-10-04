@@ -62,6 +62,36 @@ class CanonicalCatalogTest {
         assertFalse("manhwa" in types)
     }
 
+    // ---------- library binding author gate ----------
+
+    @Test
+    fun `author name-order flip still fits`() {
+        // Weeb Central "KUBO Tite" vs MangaBaka "Tite Kubo" — the Bleach
+        // bind miss that hid the in-library badge.
+        assertTrue(CanonicalCatalog.authorFits("KUBO Tite", "tite kubo"))
+        assertTrue(CanonicalCatalog.authorFits("Tite Kubo", "kubo tite"))
+    }
+
+    @Test
+    fun `co-author subsets still fit`() {
+        // Extension lists full credits, the work row keeps a single name.
+        assertTrue(CanonicalCatalog.authorFits("MURATA Yuusuke, ONE", "one"))
+        assertTrue(CanonicalCatalog.authorFits("ONE", "murata yuusuke one"))
+    }
+
+    @Test
+    fun `unrelated authors do not fit`() {
+        assertFalse(CanonicalCatalog.authorFits("Eiichiro Oda", "tite kubo"))
+        assertFalse(CanonicalCatalog.authorFits("Oda Eiichiro", "kubo tite"))
+    }
+
+    @Test
+    fun `blank author never blocks a bind`() {
+        assertTrue(CanonicalCatalog.authorFits(null, "tite kubo"))
+        assertTrue(CanonicalCatalog.authorFits("  ", "tite kubo"))
+        assertTrue(CanonicalCatalog.authorFits("Anyone", ""))
+    }
+
     // ---------- search ranking ----------
 
     @Test

@@ -14,6 +14,8 @@ import logcat.LogPriority
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
@@ -182,6 +184,12 @@ class MikoDbManager(
             animeBridge = null
         }
         outTmp.renameTo(dbFile(artifact))
+        if (artifact == "manga") {
+            // The bridge's fullDb() holds an open handle — post-swap it
+            // would keep serving the unlinked old map (stale titles,
+            // missing alt-titles → identity-gate rejects everywhere).
+            Injekt.get<MangaNovelIdBridge>().invalidateFullDb()
+        }
         swapListeners.forEach { it(artifact) }
     }
 

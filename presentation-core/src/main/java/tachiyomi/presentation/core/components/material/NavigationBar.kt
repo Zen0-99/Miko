@@ -1,5 +1,6 @@
 package tachiyomi.presentation.core.components.material
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
@@ -100,6 +102,11 @@ fun FloatingGlassNavigationBar(
         .fillMaxWidth()
         .windowInsetsPadding(windowInsets)
         .padding(horizontal = horizontalPadding, vertical = bottomPadding)
+        // The margins/inset gaps around the glass pill are part of this
+        // layout's bounds but drew nothing — taps there fell through to
+        // the content behind (accidental row/card hits when aiming at a
+        // tab). Claim the whole footprint so the gaps are dead zones.
+        .pointerInput(Unit) { detectTapGestures { } }
 
     val glassModifier = baseModifier
         .shadow(elevation = 8.dp, shape = shape)
@@ -170,6 +177,10 @@ fun FloatingGlassNavigationBarWithModes(
             vertical = 0.dp,
         )
         .padding(top = topPadding, bottom = bottomPadding)
+        // Same dead-zone shield as FloatingGlassNavigationBar — the
+        // margins/gaps around the pill must swallow taps instead of
+        // passing them to the content behind the bar.
+        .pointerInput(Unit) { detectTapGestures { } }
 
     val glassModifier = baseModifier
         .shadow(elevation = 8.dp, shape = shape)

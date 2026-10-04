@@ -54,6 +54,12 @@
         <item quantity="many">%1$s розділів</item>
         <item quantity="other">%1$s розділів</item>
     </plurals>
+    <plurals name="num_entries">
+        <item quantity="one">%1$s запис</item>
+        <item quantity="few">%1$s записи</item>
+        <item quantity="many">%1$s записів</item>
+        <item quantity="other">%1$s записів</item>
+    </plurals>
     <plurals name="num_trackers">
         <item quantity="one">%d трекер</item>
         <item quantity="few">%d трекери</item>

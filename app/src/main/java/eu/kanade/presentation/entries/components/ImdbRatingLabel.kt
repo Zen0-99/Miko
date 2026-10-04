@@ -12,6 +12,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -20,6 +22,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import eu.kanade.tachiyomi.R
+
+/** Which mark precedes a rating number — IMDb glyph for Cinemeta
+ *  scores, a plain star for source/feed-scraped ratings. */
+enum class RatingMark { IMDB, STAR }
 
 /**
  * IMDb rating label — the IMDb glyph logo followed by the rating number.
@@ -38,6 +44,7 @@ fun ImdbRatingLabel(
     color: Color = Color.Unspecified,
     tint: Color = Color.Unspecified,
     fontWeight: FontWeight? = null,
+    mark: RatingMark = RatingMark.IMDB,
 ) {
     val glyphHeight: Dp = if (style.fontSize.isSpecified) {
         with(LocalDensity.current) {
@@ -50,14 +57,24 @@ fun ImdbRatingLabel(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_imdb_glyph),
-            contentDescription = "IMDb",
-            tint = tint,
-            modifier = Modifier
-                .height(glyphHeight)
-                .width(glyphHeight * (500f / 230f)),
-        )
+        when (mark) {
+            RatingMark.IMDB -> Icon(
+                painter = painterResource(R.drawable.ic_imdb_glyph),
+                contentDescription = "IMDb",
+                tint = tint,
+                modifier = Modifier
+                    .height(glyphHeight)
+                    .width(glyphHeight * (500f / 230f)),
+            )
+            RatingMark.STAR -> Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier
+                    .height(glyphHeight)
+                    .width(glyphHeight),
+            )
+        }
         Spacer(Modifier.width(4.dp))
         Text(
             text = rating,

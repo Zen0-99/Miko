@@ -81,6 +81,14 @@ class UpdateManga(
                     )
                     now
                 }
+                // Hi-res provider covers (MangaDex/AniList/…) are immutable
+                // at their URL — a manual refresh must not bust the cache;
+                // a real cover change arrives as a different remote URL.
+                eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(
+                    localManga.thumbnailUrl,
+                ) &&
+                    (remoteManga.thumbnail_url.isNullOrEmpty() ||
+                        localManga.thumbnailUrl == remoteManga.thumbnail_url) -> null
                 // Cover exists and URL hasn't changed — no need to refresh
                 !manualFetch && localManga.thumbnailUrl == remoteManga.thumbnail_url -> null
                 localManga.isLocal() -> Instant.now().toEpochMilli()

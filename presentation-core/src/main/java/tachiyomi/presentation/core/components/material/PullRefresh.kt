@@ -1,6 +1,7 @@
 package tachiyomi.presentation.core.components.material
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -29,7 +30,7 @@ fun PullRefresh(
     modifier: Modifier = Modifier,
     indicatorPadding: PaddingValues = PaddingValues(0.dp),
     state: PullToRefreshState = rememberPullToRefreshState(),
-    content: @Composable () -> Unit,
+    content: @Composable BoxScope.() -> Unit,
 ) {
     val overlaySlot = LocalPullRefreshOverlay.current
 

@@ -5,12 +5,11 @@ import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.data.backup.models.BackupAnime
 import eu.kanade.tachiyomi.data.backup.models.BackupAnimeSource
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
-class AnimeSourcesBackupCreator(
-    private val animeSourceManager: AnimeSourceManager = Injekt.get(),
-) {
+class AnimeSourcesBackupCreator {
+
+    private val animeSourceManager: AnimeSourceManager by injectLazy()
 
     operator fun invoke(animes: List<BackupAnime>): List<BackupAnimeSource> {
         return animes

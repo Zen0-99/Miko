@@ -75,9 +75,90 @@ class CanonicalEntryUnifier(
                     CanonicalCatalog.CANONICAL_SOURCE_ID,
                 )?.takeIf { canonical ->
                     chapterRepository.getChapterByMangaId(canonical.id).isNotEmpty()
+                }?.also { canonical ->
+                    preferExtensionCover(manga, canonical)
                 }
             }
         } as? Manga
+    }
+
+    /**
+     * Local-only variant of [resolve] — identifies the work purely from
+     * `works_cache` (never the Worker, never a mint). A canonical row can
+     * only exist for a work already materialized into the cache, so a
+     * local miss means there is nothing to redirect to. Used where the
+     * canonical id is needed without blocking on network (home heroes).
+     *
+     * Positive verdicts feed [canonicalCache] — a local hit is identical
+     * to what [resolve] would return. Misses are NOT cached: the cache
+     * can gain the work later, unlike a full-resolve verdict.
+     */
+    suspend fun resolveLocal(manga: Manga): Manga? {
+        if (manga.favorite ||
+            manga.source == CanonicalCatalog.CANONICAL_SOURCE_ID ||
+            CanonicalCatalog.isCanonicalUrl(manga.url)
+        ) {
+            return null
+        }
+        when (val cached = canonicalCache[manga.id]) {
+            is Manga -> return cached
+            NoCanonical -> return null
+        }
+        val canonical = resolveLocalWorkId(
+            WorkIdResolver.Candidate(
+                medium = WorkIdResolver.MEDIUM_MANGA,
+                title = manga.title,
+                url = manga.url,
+                author = manga.author,
+            ),
+        )?.let { workId ->
+            mangaRepository.getMangaByUrlAndSourceId(
+                CanonicalCatalog.MANGA_URL_PREFIX + workId,
+                CanonicalCatalog.CANONICAL_SOURCE_ID,
+            )?.takeIf { row ->
+                chapterRepository.getChapterByMangaId(row.id).isNotEmpty()
+            }
+        }
+        if (canonical != null) {
+            canonicalCache[manga.id] = canonical
+            preferExtensionCover(manga, canonical)
+        }
+        return canonical
+    }
+
+    /** Same as [resolveLocal] for novels and books (`mk:ol:` works). */
+    suspend fun resolveLocal(novel: Novel): Novel? {
+        if (novel.favorite ||
+            novel.source == CanonicalCatalog.CANONICAL_SOURCE_ID ||
+            CanonicalCatalog.isCanonicalUrl(novel.url)
+        ) {
+            return null
+        }
+        when (val cached = canonicalCache[novel.id]) {
+            is Novel -> return cached
+            NoCanonical -> return null
+        }
+        val canonical = resolveLocalWorkId(
+            WorkIdResolver.Candidate(
+                medium = WorkIdResolver.MEDIUM_BOOKS,
+                title = novel.title,
+                url = novel.url,
+                author = novel.author,
+                isbn = WorkIdResolver.isbnFromGenre(novel.genre),
+            ),
+        )?.let { workId ->
+            novelRepository.getNovelByUrlAndSourceId(
+                CanonicalCatalog.NOVEL_URL_PREFIX + workId,
+                CanonicalCatalog.CANONICAL_SOURCE_ID,
+            )?.takeIf { row ->
+                novelChapterRepository.getNovelChaptersByNovelId(row.id).isNotEmpty()
+            }
+        }
+        if (canonical != null) {
+            canonicalCache[novel.id] = canonical
+            preferExtensionCover(novel, canonical)
+        }
+        return canonical
     }
 
     /** Same as [resolve] for novels and books (`mk:ol:` works). */
@@ -103,6 +184,8 @@ class CanonicalEntryUnifier(
                     CanonicalCatalog.CANONICAL_SOURCE_ID,
                 )?.takeIf { canonical ->
                     novelChapterRepository.getNovelChaptersByNovelId(canonical.id).isNotEmpty()
+                }?.also { canonical ->
+                    preferExtensionCover(novel, canonical)
                 }
             }
         } as? Novel
@@ -132,8 +215,53 @@ class CanonicalEntryUnifier(
         )
     }
 
+    /**
+     * Redirect swaps the entry wholesale — the canonical row would show
+     * its own (usually lower-quality seeded) cover even when the
+     * extension entry carried recognized hi-res art. Carry the better
+     * URL over so the redirect doesn't visibly downgrade the cover.
+     * Non-preferred extension covers never win: the canonical seed is
+     * already the better art in that case.
+     */
+    private suspend fun preferExtensionCover(from: Manga, to: Manga) {
+        if (eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(from.thumbnailUrl) &&
+            !eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(to.thumbnailUrl)
+        ) {
+            mangaRepository.updateManga(
+                tachiyomi.domain.entries.manga.model.MangaUpdate(
+                    id = to.id,
+                    thumbnailUrl = from.thumbnailUrl,
+                    coverLastModified = java.time.Instant.now().toEpochMilli(),
+                ),
+            )
+        }
+    }
+
+    private suspend fun preferExtensionCover(from: Novel, to: Novel) {
+        if (eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(from.thumbnailUrl) &&
+            !eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(to.thumbnailUrl)
+        ) {
+            novelRepository.updateNovel(
+                tachiyomi.domain.entries.novel.model.NovelUpdate(
+                    id = to.id,
+                    thumbnailUrl = from.thumbnailUrl,
+                    coverLastModified = java.time.Instant.now().toEpochMilli(),
+                ),
+            )
+        }
+    }
+
     /** Clears memoized verdicts (e.g. after a canonical row materializes). */
     fun invalidate() = canonicalCache.clear()
+
+    private suspend fun resolveLocalWorkId(candidate: WorkIdResolver.Candidate): String? {
+        val resolved = try {
+            workIdResolver.resolveLocal(candidate)
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        return resolved.value.takeUnless { resolved.ambiguous }
+    }
 
     private suspend fun resolveWorkId(candidate: WorkIdResolver.Candidate): String? {
         val resolved = try {

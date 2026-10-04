@@ -54,6 +54,14 @@ fun EntryContinueRow(
     onToggleDoneClick: () -> Unit,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 16.dp,
+    /**
+     * Shared-element key pairing the accent action bar with the home
+     * hero's resume pill — the pill morphs width-wise into this bar on
+     * push and back on pop while labels crossfade and the fill animates
+     * between theme primary and the entry accent. The flanking toggles
+     * stay unshared and fade with the screen.
+     */
+    sharedKey: Any? = null,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
     val onAccent = rememberOnAccentColor(accentColor)
@@ -73,6 +81,7 @@ fun EntryContinueRow(
         )
         Row(
             modifier = Modifier
+                .then(heroSharedBoundsModifier(sharedKey, HeroSharedKind.Container))
                 .weight(1f)
                 .padding(horizontal = 8.dp)
                 .clip(RoundedCornerShape(16.dp))
@@ -80,7 +89,14 @@ fun EntryContinueRow(
                     if (actionsEnabled) {
                         accent
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant
+                        // Disabled ("All up to date") — the entry accent
+                        // darkened into a muted surface, same recipe as
+                        // the chapter cards.
+                        accentTintedSurface(
+                            accent = accent,
+                            background = MaterialTheme.colorScheme.background,
+                            dimmed = false,
+                        )
                     },
                 ),
             verticalAlignment = Alignment.CenterVertically,
@@ -89,7 +105,9 @@ fun EntryContinueRow(
                 val contentColor = if (actionsEnabled) {
                     onAccent
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    // Disabled ("All up to date") — accent text on the
+                    // accent-tinted surface, same as the pill rows.
+                    accent
                 }
                 ActionZone(
                     icon = action.icon,
@@ -122,8 +140,9 @@ fun EntryContinueRow(
 }
 
 /**
- * Rounded-square toggle button — inactive = accent-outline box with a
- * neutral icon; active = filled accent box with a contrast-aware icon.
+ * Rounded-square toggle button — inactive = dimmed white/black outline
+ * box with a neutral icon; active = filled accent box with a
+ * contrast-aware icon.
  */
 @Composable
 private fun ToggleBoxAction(
@@ -144,7 +163,11 @@ private fun ToggleBoxAction(
                 if (active) {
                     Modifier.background(activeColor)
                 } else {
-                    Modifier.border(1.5.dp, activeColor, shape)
+                    Modifier.border(
+                        1.5.dp,
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        shape,
+                    )
                 },
             )
             .clickable(onClickLabel = contentDescription, onClick = onClick),
@@ -221,7 +244,9 @@ private fun ActionZone(
     Row(
         modifier = modifier
             .clickable(enabled = enabled, onClickLabel = onClickLabel, onClick = onClick)
-            .padding(vertical = 11.dp),
+            // Horizontal inset keeps a long ellipsized label visibly clear
+            // of the bar's rounded ends instead of running edge-to-edge.
+            .padding(horizontal = 20.dp, vertical = 11.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -237,7 +262,11 @@ private fun ActionZone(
             style = MaterialTheme.typography.labelLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 6.dp),
+            // fill=false lets short labels stay centred while long
+            // chapter names ellipsize instead of bleeding past the bar.
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(start = 6.dp),
         )
     }
 }

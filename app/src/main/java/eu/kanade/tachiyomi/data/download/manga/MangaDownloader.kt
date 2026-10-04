@@ -82,6 +82,7 @@ class MangaDownloader(
     private val provider: MangaDownloadProvider,
     private val cache: MangaDownloadCache,
     private val sourceManager: MangaSourceManager = Injekt.get(),
+    private val canonRouter: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter = Injekt.get(),
     private val chapterCache: ChapterCache = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
     private val xml: XML = Injekt.get(),
@@ -284,21 +285,29 @@ class MangaDownloader(
      * @param chapters the list of chapters to download.
      * @param autoStart whether to start the downloader after enqueing the chapters.
      */
-    fun queueChapters(manga: Manga, chapters: List<Chapter>, autoStart: Boolean) {
+    suspend fun queueChapters(
+        manga: Manga,
+        chapters: List<Chapter>,
+        autoStart: Boolean,
+        forcedCarrierPkg: String? = null,
+    ) {
         if (chapters.isEmpty()) return
 
-        val source = sourceManager.get(manga.source) as? HttpSource ?: return
+        // Canon chapters carry source id 0 (the local stub) — each one
+        // routes to a carrier source via the chapter router instead.
+        val source = sourceManager.get(manga.source) as? HttpSource
         val wasEmpty = queueState.value.isEmpty()
-        val chaptersToQueue = chapters.asSequence()
-            // Filter out those already downloaded.
-            .filter { provider.findChapterDir(it.name, it.scanlator, manga.title, source) == null }
-            // Add chapters to queue from the start.
-            .sortedByDescending { it.sourceOrder }
+        // (No asSequence — resolveDownload suspends, which Sequence
+        //  lambdas can't.)
+        val chaptersToQueue = chapters
             // Filter out those already enqueued.
             .filter { chapter -> queueState.value.none { it.chapter.id == chapter.id } }
-            // Create a download for each one.
-            .map { MangaDownload(source, manga, it) }
-            .toList()
+            // Resolve each chapter to (source, chapter) — canon rows get
+            // their carrier's source + chapter url; regular rows keep
+            // the manga's own source.
+            .mapNotNull { ch -> resolveDownload(manga, ch, source, forcedCarrierPkg) }
+            // Add chapters to queue from the start.
+            .sortedByDescending { it.chapter.sourceOrder }
 
         if (chaptersToQueue.isNotEmpty()) {
             addAllToQueue(chaptersToQueue)
@@ -324,6 +333,39 @@ class MangaDownloader(
                 MangaDownloadJob.start(context)
             }
         }
+    }
+
+    /**
+     * Maps a chapter to the [MangaDownload] it would create — regular
+     * chapters take the manga's own source; canon rows resolve to the
+     * carrier that would serve them (preferred pick → ranking), with
+     * the download bound to the carrier's real chapter url so the
+     * fetch path stays unchanged. Null when already downloaded,
+     * unresolvable, or no carrier is installed.
+     */
+    private suspend fun resolveDownload(
+        manga: Manga,
+        chapter: Chapter,
+        mangaSource: HttpSource?,
+        forcedCarrierPkg: String?,
+    ): MangaDownload? {
+        if (eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCanonUrl(chapter.url)) {
+            val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                .workIdFromMangaUrl(manga.url) ?: return null
+            val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                .seqFromCanonUrl(workId, chapter.url) ?: return null
+            val (carrier, candidate) = canonRouter
+                .downloadTarget(workId, seq, forcedCarrierPkg) ?: return null
+            if (provider.findChapterDir(chapter.name, chapter.scanlator, manga.title, carrier) != null) {
+                return null
+            }
+            return MangaDownload(carrier, manga, chapter.copy(url = candidate.chapterUrl))
+        }
+        if (mangaSource == null) return null
+        if (provider.findChapterDir(chapter.name, chapter.scanlator, manga.title, mangaSource) != null) {
+            return null
+        }
+        return MangaDownload(mangaSource, manga, chapter)
     }
 
     /**
@@ -427,11 +469,16 @@ class MangaDownloader(
             } else {
                 tmpDir.renameTo(chapterDirname)
             }
-            cache.addChapter(chapterDirname, mangaDir, download.manga)
 
-            DiskUtil.createNoMediaFile(tmpDir, context)
-
+            // The files are in place — the download is complete.
+            // Bookkeeping failures must not downgrade it to ERROR.
             download.status = MangaDownload.State.DOWNLOADED
+            try {
+                cache.addChapter(chapterDirname, mangaDir, download.manga)
+                DiskUtil.createNoMediaFile(tmpDir, context)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+            }
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
             // If the page list threw, it will resume here

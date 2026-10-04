@@ -37,6 +37,10 @@ class TmdbDiscover(
         val withoutGenres: List<Int> = emptyList(),
         val withKeywords: List<Int> = emptyList(),
         val withoutKeywords: List<Int> = emptyList(),
+        /** Streaming-service facet (Phase 18) — Netflix/Crunchyroll ids
+         *  from [watchProviders]; `watch_region` rides along. */
+        val withWatchProviders: List<Int> = emptyList(),
+        val watchRegion: String = DEFAULT_WATCH_REGION,
         val yearGte: Int? = null,
         val yearLte: Int? = null,
         val voteAverageGte: Double? = null,
@@ -80,6 +84,20 @@ class TmdbDiscover(
     @Serializable
     private data class ExternalIds(
         val imdb_id: String? = null,
+    )
+
+    /** One streaming-service entry from `watch/providers/{type}` —
+     *  Netflix, Crunchyroll etc. (Phase 18 catalog builder). */
+    @Serializable
+    data class WatchProvider(
+        val provider_id: Int,
+        val provider_name: String,
+        val logo_path: String? = null,
+    )
+
+    @Serializable
+    private data class WatchProvidersResponse(
+        val results: List<WatchProvider> = emptyList(),
     )
 
     private val client: OkHttpClient get() = networkHelper.client
@@ -127,6 +145,29 @@ class TmdbDiscover(
         }
     }
 
+    /** In-memory per-type cache — the provider list is slow-moving. */
+    private val watchProvidersCache = java.util.concurrent.ConcurrentHashMap<MediaType, List<WatchProvider>>()
+
+    /**
+     * Streaming-service catalog for [type] in the default region — feeds
+     * the catalog builder's provider picker and `displayTitle` lookups.
+     * Empty when no key resolves or the fetch fails.
+     */
+    suspend fun watchProviders(type: MediaType): List<WatchProvider> {
+        watchProvidersCache[type]?.let { return it }
+        val apiKey = keyProvider.apiKey().takeIf { it.isNotBlank() } ?: return emptyList()
+        return try {
+            val url = "$BASE_URL/watch/providers/${type.path}?api_key=$apiKey&watch_region=$DEFAULT_WATCH_REGION"
+            val response = client.newCall(GET(url)).awaitSuccess()
+            val providers = with(json) { response.parseAs<WatchProvidersResponse>() }.results
+            watchProvidersCache[type] = providers
+            providers
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN) { "TmdbDiscover: watch providers failed: ${e.message}" }
+            emptyList()
+        }
+    }
+
     private fun DiscoverResult.toItem(type: MediaType): Item {
         val dateField = if (type == MediaType.MOVIE) release_date else first_air_date
         return Item(
@@ -142,6 +183,10 @@ class TmdbDiscover(
     companion object {
         private const val BASE_URL = "https://api.themoviedb.org/3"
         private const val POSTER_BASE = "https://image.tmdb.org/t/p/w342"
+
+        /** Streaming-service facet region — fixed to US like Flexio
+         *  (a per-row region field can land later without a spec bump). */
+        const val DEFAULT_WATCH_REGION = "US"
 
         private val MediaType.path: String
             get() = when (this) {
@@ -177,6 +222,13 @@ class TmdbDiscover(
             }
             if (query.withoutKeywords.isNotEmpty()) {
                 params["without_keywords"] = query.withoutKeywords.joinToString(",")
+            }
+            if (query.withWatchProviders.isNotEmpty()) {
+                params["with_watch_providers"] = query.withWatchProviders.joinToString(",")
+                // watch_region is meaningless without providers — emit
+                // them together so a provider-less query stays region-
+                // neutral.
+                params["watch_region"] = query.watchRegion
             }
             val dateGte = if (type == MediaType.MOVIE) "primary_release_date.gte" else "first_air_date.gte"
             val dateLte = if (type == MediaType.MOVIE) "primary_release_date.lte" else "first_air_date.lte"

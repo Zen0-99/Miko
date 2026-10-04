@@ -32,6 +32,9 @@ export default defineWorkersConfig(async () => {
                             // Appeals tests intercept api.typesafe.ai via
                             // fetchMock; a non-empty key enables the path.
                             JEV_MODERATION_KEY: 'test-key',
+                            // Crawler-provenance gate — bindings tests send
+                            // this as X-Crawler-Key for 'crawler' claims.
+                            CRAWLER_KEY: 'test-crawler-key',
                         },
                     },
                 },

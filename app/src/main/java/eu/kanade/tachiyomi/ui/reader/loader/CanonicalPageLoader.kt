@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.data.database.models.manga.toDomainChapter
 import eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
 import eu.kanade.tachiyomi.ui.reader.model.ReaderChapter
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
+import kotlinx.coroutines.CompletableDeferred
 import tachiyomi.domain.entries.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -29,30 +30,42 @@ internal class CanonicalPageLoader(
 
     override var isLocal: Boolean = false
 
+    // Page holders can call loadPage the moment ChapterLoader assigns
+    // chapter.pageLoader — before getPages finishes carrier resolution.
+    // They must await the delegate, not crash the dispatcher.
     private var delegate: HttpPageLoader? = null
+    private val delegateReady = CompletableDeferred<HttpPageLoader>()
 
     override suspend fun getPages(): List<ReaderPage> {
-        val resolved = router.resolveForRead(
-            manga,
-            chapter.chapter.url,
-            chapter.chapter.name,
-        ) ?: throw NoCarrierException(chapter.chapter.name)
+        try {
+            val resolved = router.resolveForRead(
+                manga,
+                chapter.chapter.url,
+                chapter.chapter.name,
+            ) ?: throw NoCarrierException(chapter.chapter.name)
+            sourceName = resolved.source.name
 
-        // Rebuild the reader chapter with the carrier's real URL so the
-        // carrier's HttpSource resolves image/page paths correctly.
-        val routed = chapter.chapter.toDomainChapter()
-            ?.copy(url = resolved.chapter.url)
-            ?.let { ReaderChapter(it.toDbChapter()) }
-            ?: chapter
-        delegate = HttpPageLoader(routed, resolved.source)
+            // Rebuild the reader chapter with the carrier's real URL so the
+            // carrier's HttpSource resolves image/page paths correctly.
+            val routed = chapter.chapter.toDomainChapter()
+                ?.copy(url = resolved.chapter.url)
+                ?.let { ReaderChapter(it.toDbChapter()) }
+                ?: chapter
+            val carrier = HttpPageLoader(routed, resolved.source)
+            delegate = carrier
+            delegateReady.complete(carrier)
 
-        return resolved.pages.mapIndexed { index, page ->
-            ReaderPage(index, page.url, page.imageUrl)
+            return resolved.pages.mapIndexed { index, page ->
+                ReaderPage(index, page.url, page.imageUrl)
+            }
+        } catch (e: Throwable) {
+            delegateReady.completeExceptionally(e)
+            throw e
         }
     }
 
     override suspend fun loadPage(page: ReaderPage) {
-        delegate?.loadPage(page) ?: error("canonical loader used before getPages")
+        delegateReady.await().loadPage(page)
     }
 
     override fun retryPage(page: ReaderPage) {

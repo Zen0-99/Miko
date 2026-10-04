@@ -136,3 +136,9 @@ backfillReadCharCountForNovel:
 UPDATE novelchapters
 SET total_char_count = :charCount
 WHERE read = 1 AND total_char_count = 0 AND novel_id = :novelId;
+
+-- Re-point a deduped novel's chapters at the surviving row.
+reassignNovelChapters:
+UPDATE novelchapters
+SET novel_id = :toId
+WHERE novel_id = :fromId;

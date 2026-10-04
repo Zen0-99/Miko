@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,6 +43,7 @@ import eu.kanade.presentation.entries.shows.SeasonSettingsDialog
 import eu.kanade.presentation.entries.shows.components.ShowsImagesDialog
 import eu.kanade.presentation.entries.shows.components.EpisodeDownloadAction
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
+import eu.kanade.presentation.entries.components.EntryHeroLoadingPreview
 import eu.kanade.presentation.entries.components.SetIntervalDialog
 import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.presentation.metadata.stream.StreamPickerSheet
@@ -94,6 +96,7 @@ import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.screens.DelayedLoadingScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -101,6 +104,25 @@ import uy.kohesive.injekt.api.get
 class ShowsScreen(
     private val animeId: Long,
     val fromSource: Boolean = false,
+    /**
+     * Artwork the caller already displays for this entry (e.g. the home
+     * hero's). Shown as a shared element during Loading so the push
+     * transition morphs the hero image instead of a blank spinner.
+     */
+    private val previewCover: Any? = null,
+    /** Title for the shared `hero-title-` element during Loading. */
+    private val previewTitle: String? = null,
+    /** Clearlogo for the shared `hero-title-` element during Loading. */
+    private val previewLogo: String? = null,
+    /**
+     * Id the caller's shared elements are keyed on when it differs from
+     * [animeId] — the extension→canonical redirect re-pushes this screen
+     * with the canonical id, and without the override the Loading
+     * preview's `hero-image-` key would no longer match the home hero's
+     * (still keyed on the pushed extension id), un-pairing the artwork
+     * mid-flight.
+     */
+    private val sharedIdOverride: Long? = null,
 ) : Screen(), AssistContentScreen {
 
     private var assistUrl: String? = null
@@ -128,11 +150,29 @@ class ShowsScreen(
         // Extension-source duplicate of a canonical Cinemeta entry —
         // swap to the canonical entry so there's one entry per anime.
         LaunchedEffect(redirectId) {
-            redirectId?.let { navigator.replace(ShowsScreen(it, fromSource)) }
+            redirectId?.let {
+                navigator.replace(
+                    ShowsScreen(
+                        it,
+                        fromSource,
+                        previewCover,
+                        previewTitle,
+                        previewLogo,
+                        sharedIdOverride = sharedIdOverride ?: animeId,
+                    ),
+                )
+            }
         }
 
         if (state is ShowsScreenModel.State.Loading) {
-            LoadingScreen()
+            EntryHeroLoadingPreview(
+                cover = previewCover,
+                sharedKey = "hero-image-${sharedIdOverride ?: animeId}",
+                heroContentPadding = 320.dp,
+                title = previewTitle,
+                logo = previewLogo,
+                panOversize = true,
+            )
             return
         }
 
@@ -179,6 +219,7 @@ class ShowsScreen(
 
         ShowsScreen(
             state = successState,
+            previewCover = previewCover,
             snackbarHostState = screenModel.snackbarHostState,
             nextUpdate = successState.anime.expectedNextUpdate,
             isTabletUi = isTabletUi(),
@@ -258,6 +299,7 @@ class ShowsScreen(
             }.takeIf { successState.anime.fetchType == FetchType.Episodes },
             onCommentsClicked = screenModel::showCommentsDialog
                 .takeIf { screenModel.commentsEnabled },
+            onFindProviderClicked = screenModel::showFindProviderDialog,
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
             onFilterButtonClicked = screenModel::showSettingsDialog,
             onRefresh = screenModel::fetchAllFromSource,
@@ -376,6 +418,7 @@ class ShowsScreen(
                     onConfirm = { include, _ ->
                         screenModel.moveAnimeToCollectionsAndAddToLibrary(dialog.anime, include)
                     },
+                    accentColor = successState.accentColor,
                 )
             }
             is ShowsScreenModel.Dialog.DeleteEpisodes -> {
@@ -463,6 +506,23 @@ class ShowsScreen(
                     ),
                     onDismissRequest = onDismissRequest,
                 )
+            }
+            ShowsScreenModel.Dialog.FindProvider -> {
+                val search = successState.providerSearch
+                if (search != null) {
+                    eu.kanade.presentation.entries.components.FindProviderDialog(
+                        searching = search.searching,
+                        rows = search.rows,
+                        confirmed = search.confirmed,
+                        recommendations = search.recommendations,
+                        installSteps = successState.carrierInstallSteps,
+                        accentColor = successState.accentColor,
+                        onToggle = screenModel::toggleProviderPick,
+                        onInstall = screenModel::installRecommendedProvider,
+                        onConfirm = screenModel::confirmProviderPicks,
+                        onDismissRequest = onDismissRequest,
+                    )
+                }
             }
             is ShowsScreenModel.Dialog.FullImages -> {
                 val sm = rememberScreenModel { ShowsImageScreenModel(successState.anime.id) }

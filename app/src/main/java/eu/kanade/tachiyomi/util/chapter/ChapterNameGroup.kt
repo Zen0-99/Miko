@@ -6,7 +6,7 @@ package eu.kanade.tachiyomi.util.chapter
  * "Vol.4 Ch.30: Title" -> "Volume 4", "Book 2 - Interlude" -> "Book 2".
  *
  * The marker must be at the start of the name; chapters without one return
- * null and fall into the caller-defined ungrouped bucket.
+ * null — [computeGroups] treats any unmarked chapter as a full disable.
  */
 object ChapterNameGroup {
 

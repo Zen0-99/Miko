@@ -40,6 +40,7 @@ class NovelDownloader(
     private val sourceManager: NovelSourceManager = Injekt.get(),
     private val downloadPreferences: DownloadPreferences = Injekt.get(),
     private val getCollections: GetNovelCollections = Injekt.get(),
+    private val canonRouter: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter = Injekt.get(),
 ) {
 
     private val store = NovelDownloadStore(context)
@@ -185,17 +186,24 @@ class NovelDownloader(
         downloaderJob = null
     }
 
-    fun queueChapters(novel: Novel, chapters: List<NovelChapter>, autoStart: Boolean) {
+    suspend fun queueChapters(
+        novel: Novel,
+        chapters: List<NovelChapter>,
+        autoStart: Boolean,
+        forcedCarrierPkg: String? = null,
+    ) {
         if (chapters.isEmpty()) return
 
-        val source = sourceManager.get(novel.source) as? NovelHttpSource ?: return
+        // Canon chapters carry source id 0 (the local stub) — each one
+        // routes to a carrier source via the chapter router instead.
+        val source = sourceManager.get(novel.source) as? NovelHttpSource
         val wasEmpty = queueState.value.isEmpty()
-        val chaptersToQueue = chapters.asSequence()
-            .filter { provider.findChapterDir(it.name, it.scanlator, novel.title, source) == null }
-            .sortedByDescending { it.sourceOrder }
+        // (No asSequence — resolveDownload suspends, which Sequence
+        //  lambdas can't.)
+        val chaptersToQueue = chapters
             .filter { chapter -> queueState.value.none { it.chapter.id == chapter.id } }
-            .map { NovelDownload(source, novel, it) }
-            .toList()
+            .mapNotNull { ch -> resolveDownload(novel, ch, source, forcedCarrierPkg) }
+            .sortedByDescending { it.chapter.sourceOrder }
 
         if (chaptersToQueue.isNotEmpty()) {
             addAllToQueue(chaptersToQueue)
@@ -204,6 +212,37 @@ class NovelDownloader(
                 NovelDownloadJob.start(context)
             }
         }
+    }
+
+    /**
+     * Maps a chapter to the [NovelDownload] it would create — canon rows
+     * resolve to their serving carrier (preferred pick → ranking) and
+     * carry the carrier's real chapter url so `getChapterText` works
+     * unchanged. Null when already downloaded or unresolvable.
+     */
+    private suspend fun resolveDownload(
+        novel: Novel,
+        chapter: NovelChapter,
+        novelSource: NovelHttpSource?,
+        forcedCarrierPkg: String?,
+    ): NovelDownload? {
+        if (eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCanonUrl(chapter.url)) {
+            val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                .workIdFromNovelUrl(novel.url) ?: return null
+            val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                .seqFromCanonUrl(workId, chapter.url) ?: return null
+            val (carrier, candidate) = canonRouter
+                .novelDownloadTarget(workId, seq, forcedCarrierPkg) ?: return null
+            if (provider.findChapterDir(chapter.name, chapter.scanlator, novel.title, carrier) != null) {
+                return null
+            }
+            return NovelDownload(carrier, novel, chapter.copy(url = candidate.chapterUrl))
+        }
+        if (novelSource == null) return null
+        if (provider.findChapterDir(chapter.name, chapter.scanlator, novel.title, novelSource) != null) {
+            return null
+        }
+        return NovelDownload(novelSource, novel, chapter)
     }
 
     private suspend fun downloadChapter(download: NovelDownload) {
@@ -245,11 +284,15 @@ class NovelDownloader(
             finalFile?.delete()
             tmpFile.renameTo(chapterDirname)
 
-            cache.addChapter(chapterDirname, novelDir, download.novel)
-
-            DiskUtil.createNoMediaFile(novelDir, context)
-
+            // The file is in place — the download is complete. Bookkeeping
+            // failures must not downgrade it to ERROR.
             download.status = NovelDownload.State.DOWNLOADED
+            try {
+                cache.addChapter(chapterDirname, novelDir, download.novel)
+                DiskUtil.createNoMediaFile(novelDir, context)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e)
+            }
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
             logcat(LogPriority.ERROR, error)

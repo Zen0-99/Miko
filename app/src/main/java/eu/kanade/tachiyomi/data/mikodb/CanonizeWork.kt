@@ -26,6 +26,7 @@ class CanonizeWork(
     private val collector: CanonicalFeedCollector = Injekt.get(),
     private val chapterMap: CanonicalChapterMap = Injekt.get(),
     private val api: WorkIdentityApi = Injekt.get(),
+    private val goldenSources: GoldenSources = Injekt.get(),
 ) {
 
     sealed interface Outcome {
@@ -49,14 +50,27 @@ class CanonizeWork(
         data object UnsupportedMedium : Outcome
     }
 
-    suspend fun run(workId: String, carrier: Carrier = Carrier.MANGA): Outcome {
+    suspend fun run(
+        workId: String,
+        carrier: Carrier = Carrier.MANGA,
+        extraSources: List<GoldenSources.GoldenSource> = emptyList(),
+    ): Outcome {
         if (carrier == Carrier.SHOWS) return Outcome.UnsupportedMedium
         if (!chapterMap.isStale(workId)) return Outcome.Fresh
         val work = bridge.byWorkId(workId) ?: return Outcome.NoWork.also {
             logcat { "canonize $workId: no work row" }
         }
 
-        val r = collector.collect(work, carrier.medium)
+        // Extra candidates (a migrating favorite's own source, 17-03)
+        // lead the list so their ext-internal URL survives the pkg dedupe
+        // and lands in the canon refs as that source's carrier path.
+        val sources = if (extraSources.isEmpty()) {
+            null
+        } else {
+            (extraSources + goldenSources.forWorkRow(work, carrier.medium))
+                .distinctBy { it.pkgName }
+        }
+        val r = collector.collect(work, carrier.medium, sources = sources)
         if (r.feeds.isEmpty() && r.failed.size > MAX_FAILURES) {
             return Outcome.TooManyFailures.also {
                 logcat { "canonize $workId: ${r.failed.size} source failures (${r.failed.keys})" }
@@ -87,14 +101,18 @@ class CanonizeWork(
         return Outcome.Canonized(resp.count, r.tentative.size, bestDetails)
     }
 
-    private fun CanonicalFeedCollector.Feed.wire(verified: Boolean) =
-        WorkIdentityApi.CanonizeFeed(
-            source_key = pkgName,
-            tier = tier,
-            verified = verified,
-            score = score,
-            chapters = chapters,
-        )
+    private fun CanonicalFeedCollector.Feed.wire(
+        verified: Boolean,
+        provenance: String? = null,
+    ) = WorkIdentityApi.CanonizeFeed(
+        source_key = pkgName,
+        tier = tier,
+        verified = verified,
+        score = score,
+        provider_ref = url.takeIf { it.isNotBlank() },
+        provenance = provenance,
+        chapters = chapters,
+    )
 
     private companion object {
         const val MAX_FAILURES = 2

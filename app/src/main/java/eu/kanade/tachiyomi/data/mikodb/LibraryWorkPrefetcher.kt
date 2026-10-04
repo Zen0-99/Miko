@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.data.mikodb
 
-import eu.kanade.domain.ui.model.Carrier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,12 +19,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Sequential and self-paced — roughly one Worker round-trip per entry on
  * a cold cache, cache-hits afterwards.
  *
- * Phase 14: the pass doubles as the mass-minting/canonization driver.
- * Every resolved id is reported to `/v1/ids/seen` once per process
- * (ID-only telemetry — no user/device fields). When invoked with
- * `canonize = true` (library refresh, backup restore), catalog-resolved
- * works also run [CanonizeWork] so one pass mints + canonizes the library.
- * Locally-minted works skip feed collection — no verified-feed basis.
+ * Phase 14: the pass doubles as the mass-minting driver. Every
+ * resolved id is reported to `/v1/ids/seen` once per process (ID-only
+ * telemetry — no user/device fields). The pass tail then hands the
+ * favorites list to [LibraryCanonizer], which does the actual
+ * canonize + favorite-transfer per entry (extension fan-out lives
+ * there, not here — see [resolveQuietly]).
  */
 class LibraryWorkPrefetcher {
 
@@ -34,7 +33,7 @@ class LibraryWorkPrefetcher {
     private val animeHandler: AnimeDatabaseHandler by injectLazy()
     private val resolver: WorkIdResolver by injectLazy()
     private val api: WorkIdentityApi by injectLazy()
-    private val canonizeWork: CanonizeWork by injectLazy()
+    private val canonizer: LibraryCanonizer by injectLazy()
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private var job: Job? = null
@@ -64,6 +63,16 @@ class LibraryWorkPrefetcher {
                     prefetchNovels()
                     prefetchShows()
                 } while (rerunRequested.get())
+                // Pass tail: move favorites onto canonical rows. On a
+                // canonize pass (library refresh) the full enrich +
+                // canonize + sync chain runs per entry; on plain passes
+                // only works with an existing canon sequence migrate —
+                // no extension traffic for a speculative batch.
+                try {
+                    canonizer.migrateAllFavorites(networkHeavy = canonizeRequested.get())
+                } catch (e: Exception) {
+                    logcat { "canonize pass failed: ${e.message}" }
+                }
             } finally {
                 canonizeRequested.set(false)
             }
@@ -137,6 +146,16 @@ class LibraryWorkPrefetcher {
         }
     }
 
+    /**
+     * Resolve → markSeen, nothing more. Canonize deliberately does NOT
+     * run here: [LibraryCanonizer.migrateManga] canonizes each favorite
+     * itself (with the entry's own source injected as a feed candidate)
+     * right before syncing its chapters, and [CanonizeWork]'s staleness
+     * gate makes repeat calls cheap. Fanning out to extensions inside
+     * the prefetch loop serialized ~500 extension crawls ahead of the
+     * migration tail — the pass ran for hours and produced zero visible
+     * migrations before dying with the process.
+     */
     private suspend fun resolveQuietly(candidate: WorkIdResolver.Candidate) {
         try {
             val resolved = resolver.resolve(candidate) ?: return
@@ -144,18 +163,6 @@ class LibraryWorkPrefetcher {
                 api.markSeen(resolved.value, resolved.medium)
             }
             delay(150) // keep bursts off the Worker/MangaBaka path
-            // resolved.medium is a carrier key (shows|manga|books).
-            val carrier = Carrier.fromMedium(resolved.medium) ?: Carrier.MANGA
-            if (canonizeRequested.get() &&
-                carrier != Carrier.SHOWS &&
-                resolved.confidence != WorkIdResolver.Confidence.LOCAL_MINT
-            ) {
-                try {
-                    canonizeWork.run(resolved.value, carrier)
-                } catch (e: Exception) {
-                    logcat { "prefetch canonize failed for '${candidate.title}': ${e.message}" }
-                }
-            }
         } catch (e: Exception) {
             logcat { "prefetch resolve failed for '${candidate.title}': ${e.message}" }
         }

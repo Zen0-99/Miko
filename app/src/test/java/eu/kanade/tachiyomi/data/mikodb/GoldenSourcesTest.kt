@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.repository.NovelRepository
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
 
 class GoldenSourcesTest {
 
@@ -25,18 +27,25 @@ class GoldenSourcesTest {
     private val novelExtensions = mockk<NovelExtensionManager>()
     private val mangaRepository = mockk<MangaRepository>()
     private val novelRepository = mockk<NovelRepository>()
+    private val animeRepository = mockk<AnimeRepository>()
+    private val animeExtensions = mockk<AnimeExtensionManager>()
 
     private val golden = GoldenSources(
         mikoDbManager = mikoDbManager,
         bridge = bridge,
         mangaExtensions = mangaExtensions,
         novelExtensions = novelExtensions,
+        animeExtensions = animeExtensions,
         json = json,
         mangaRepository = mangaRepository,
         novelRepository = novelRepository,
+        animeRepository = animeRepository,
     )
 
     init {
+        every { mangaExtensions.isInitialized } returns MutableStateFlow(true)
+        every { novelExtensions.isInitialized } returns MutableStateFlow(true)
+        every { animeExtensions.isInitialized } returns MutableStateFlow(true)
         coEvery { mangaRepository.getMangaFavorites() } returns emptyList()
         coEvery { mangaRepository.getReadMangaNotInLibrary() } returns emptyList()
         coEvery { novelRepository.getNovelFavorites() } returns emptyList()
@@ -240,7 +249,7 @@ class GoldenSourcesTest {
     }
 
     @Test
-    fun `nsfw extensions are never probed for sfw works`() = runBlocking {
+    fun `nsfw extensions sort last but stay in the pool for sfw works`() = runBlocking {
         every { mangaExtensions.installedExtensionsFlow } returns
             MutableStateFlow(
                 listOf(
@@ -252,10 +261,10 @@ class GoldenSourcesTest {
             "eu.kanade.tachiyomi.extension.all.nhentai" to meta(emptyList(), "S", "NHentai"),
             "eu.kanade.tachiyomi.extension.en.mangabat" to meta(emptyList(), "B", "MangaBat"),
         )
-        val w = work("[]") // SFW work → broad fallback must skip the S-tier porn ext.
+        val w = work("[]") // SFW work → flagged ext deprioritized, not excluded.
 
         val out = golden.forWorkRow(w, WorkIdResolver.MEDIUM_MANGA)
-        assertEquals(listOf("MangaBat"), out.map { it.name })
+        assertEquals(listOf("MangaBat", "NHentai"), out.map { it.name })
     }
 
     @Test

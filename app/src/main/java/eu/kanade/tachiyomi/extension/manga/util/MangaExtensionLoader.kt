@@ -45,9 +45,13 @@ internal object MangaExtensionLoader {
 
     private val preferences: SourcePreferences by injectLazy()
     private val trustExtension: TrustMangaExtension by injectLazy()
-    private val loadNsfwSource by lazy {
-        preferences.showNsfwSource().get()
-    }
+
+    // Read per extension load, not once per process — a `by lazy` latch
+    // silently kept NSFW-flagged extensions as LoadResult.Error for the
+    // rest of the session when the pref was toggled after first load,
+    // removing them from Find Provider with no visible reason.
+    private val loadNsfwSource: Boolean
+        get() = preferences.showNsfwSource().get()
 
     private const val EXTENSION_FEATURE = "tachiyomi.extension"
     private const val METADATA_SOURCE_CLASS = "tachiyomi.extension.class"

@@ -1,7 +1,6 @@
 package eu.kanade.presentation.comments
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -60,11 +59,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.relativeDateTimeText
+import eu.kanade.presentation.entries.components.accentTintedSurface
 import eu.kanade.tachiyomi.data.comments.CommentsApi
 import eu.kanade.tachiyomi.ui.comments.CommentsScreenModel
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
-import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import java.text.DateFormat
 import java.util.Date
@@ -101,7 +100,14 @@ fun CommentSection(
     onAppeal: (Long, String?) -> Unit,
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Entry cover accent the host sheet resolved. The sheet also overrides
+     * `colorScheme.primary` with it — this explicit param exists so tinting
+     * decisions here don't depend on that override staying in place.
+     */
+    accentColor: Color? = null,
 ) {
+    val accent = accentColor ?: MaterialTheme.colorScheme.primary
     var sort by rememberSaveable { mutableStateOf(CommentSort.NEWEST.name) }
     // Local-only UI state: which threads have their replies collapsed.
     var collapsedThreads by remember { mutableStateOf(setOf<Long>()) }
@@ -146,7 +152,7 @@ fun CommentSection(
             when {
                 state.loading && state.comments.isEmpty() -> {
                     items(4, key = { "skeleton_$it" }) {
-                        CommentSkeleton()
+                        CommentSkeleton(accent = accent)
                     }
                 }
                 threads.isEmpty() -> {
@@ -211,6 +217,7 @@ fun CommentSection(
             posting = state.posting,
             replyTarget = state.replyTarget,
             violation = state.composerViolation,
+            accent = accent,
             onClearReply = { onReply(null) },
             onPost = onPost,
         )
@@ -383,54 +390,40 @@ private fun CommentThreadItem(
             onReport = onReport,
             onDelete = onDelete,
             onAppeal = onAppeal,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+            modifier = Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+                .then(
+                    // Tapping a parent comment with replies collapses /
+                    // reopens the branch — no separate "N replies" row.
+                    if (thread.replyCount > 0) {
+                        Modifier.clickable(
+                            onClickLabel = stringResource(
+                                if (collapsed) {
+                                    MR.strings.comment_collapse
+                                } else {
+                                    MR.strings.comment_hide_replies
+                                },
+                            ),
+                            onClick = onToggleCollapsed,
+                        )
+                    } else {
+                        Modifier
+                    },
+                ),
         )
 
         if (thread.replyCount > 0) {
-            val chevronRotation by animateFloatAsState(
-                targetValue = if (collapsed) -90f else 0f,
-                label = "replies_chevron",
-            )
-            Row(
-                modifier = Modifier
-                    .padding(start = 16.dp, top = 2.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onToggleCollapsed)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = stringResource(
-                        if (collapsed) {
-                            MR.strings.comment_collapse
-                        } else {
-                            MR.strings.comment_hide_replies
-                        },
-                    ),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(18.dp)
-                        .rotate(chevronRotation),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = pluralStringResource(
-                        MR.plurals.comment_replies,
-                        thread.replyCount,
-                        thread.replyCount,
-                    ),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-
             AnimatedVisibility(visible = !collapsed) {
-                Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = REPLY_INDENT.dp)
+                        .height(IntrinsicSize.Min),
+                ) {
                     // Thread bar — Summit-style vertical guide for the reply branch.
                     Box(
                         modifier = Modifier
-                            .padding(start = 12.dp, top = 4.dp, bottom = 8.dp)
+                            .padding(top = 4.dp, bottom = 8.dp)
                             .width(2.dp)
                             .fillMaxHeight()
                             .clip(CircleShape)
@@ -449,7 +442,7 @@ private fun CommentThreadItem(
                                 onDelete = onDelete,
                                 onAppeal = onAppeal,
                                 modifier = Modifier.padding(
-                                    start = 8.dp,
+                                    start = 12.dp,
                                     end = 16.dp,
                                     top = 8.dp,
                                 ),
@@ -480,20 +473,26 @@ private fun CommentRow(
 
     Row(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header line: name (+ you badge) · relative time · edited marker
+            // Header line: name (+ accent #tag) (+ you badge) · relative time
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = comment.author.displayName,
+                    text = comment.author.name,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isMine) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                comment.author.tag?.let { tag ->
+                    Text(
+                        text = "#$tag",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                    )
+                }
                 if (isMine) {
                     Surface(
                         modifier = Modifier.padding(start = 6.dp),
@@ -757,13 +756,21 @@ private fun CommentOverflowMenu(
 
 /** Shimmer-ish placeholder shown while the thread loads. */
 @Composable
-private fun CommentSkeleton() {
+private fun CommentSkeleton(accent: Color) {
+    // Ghost shapes carry the entry accent — same damped-hue recipe as the
+    // tinted sheet surface behind them, anchored off the neutral container
+    // tone so they stay readable as placeholders.
+    val ghost = accentTintedSurface(
+        accent = accent,
+        background = MaterialTheme.colorScheme.surfaceContainerHighest,
+        dimmed = false,
+    )
     Row(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)) {
         Box(
             modifier = Modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                .background(ghost),
         )
         Spacer(Modifier.width(10.dp))
         Column {
@@ -772,7 +779,7 @@ private fun CommentSkeleton() {
                     .width(120.dp)
                     .height(12.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    .background(ghost),
             )
             Spacer(Modifier.height(6.dp))
             Box(
@@ -780,7 +787,7 @@ private fun CommentSkeleton() {
                     .fillMaxWidth()
                     .height(12.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    .background(ghost),
             )
             Spacer(Modifier.height(4.dp))
             Box(
@@ -788,7 +795,7 @@ private fun CommentSkeleton() {
                     .fillMaxWidth(0.6f)
                     .height(12.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    .background(ghost),
             )
         }
     }
@@ -816,17 +823,26 @@ private fun CommentComposer(
     posting: Boolean,
     replyTarget: CommentsApi.CommentDto?,
     violation: String?,
+    accent: Color,
     onClearReply: () -> Unit,
     onPost: (String, Long?) -> Unit,
 ) {
     var text by rememberSaveable { mutableStateOf("") }
+    // The composer band carries the entry accent the same way the sheet
+    // surface and ghost shapes do — divider, reply chip, and the field's
+    // resting outline all pick the accent hue up.
+    val chipColor = accentTintedSurface(
+        accent = accent,
+        background = MaterialTheme.colorScheme.surface,
+        dimmed = false,
+    )
     Column(modifier = Modifier.fillMaxWidth()) {
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        HorizontalDivider(color = accent.copy(alpha = 0.35f))
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             replyTarget?.let { target ->
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    color = chipColor,
                     modifier = Modifier.padding(bottom = 8.dp),
                 ) {
                     Row(
@@ -836,7 +852,7 @@ private fun CommentComposer(
                         Text(
                             text = stringResource(MR.strings.comment_replying_to, target.author.displayName),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
@@ -845,7 +861,7 @@ private fun CommentComposer(
                             Icon(
                                 imageVector = Icons.Outlined.Close,
                                 contentDescription = stringResource(MR.strings.action_cancel),
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(16.dp),
                             )
                         }
@@ -867,6 +883,9 @@ private fun CommentComposer(
                     placeholder = { Text(stringResource(MR.strings.comment_hint)) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(20.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = accent.copy(alpha = 0.5f),
+                    ),
                     maxLines = 4,
                     trailingIcon = {
                         IconButton(
@@ -941,6 +960,8 @@ private fun ruleMessage(rule: String): String = when (rule) {
     "min_len" -> stringResource(MR.strings.comment_rule_min_len)
     "max_len" -> stringResource(MR.strings.comment_rule_max_len)
     "max_links" -> stringResource(MR.strings.comment_rule_max_links)
+    "rate_min", "rate_hour", "rate_thread" -> stringResource(MR.strings.comment_rate_limited)
+    "duplicate" -> stringResource(MR.strings.comment_rule_duplicate)
     else -> stringResource(MR.strings.comment_rule_blocked)
 }
 
@@ -952,3 +973,7 @@ private fun nameRuleMessage(rule: String): String = when (rule) {
     "reserved" -> stringResource(MR.strings.comment_name_reserved)
     else -> stringResource(MR.strings.comment_name_failed)
 }
+
+/** Left gutter for reply branches — far enough in that replies read as
+ * a nested branch, not a flat list. */
+private const val REPLY_INDENT = 28

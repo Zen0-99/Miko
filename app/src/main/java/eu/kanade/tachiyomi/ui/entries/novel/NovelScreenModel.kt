@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -88,6 +89,7 @@ import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
 import tachiyomi.domain.entries.novel.interactor.SetNovelChapterFlags
 import tachiyomi.domain.entries.novel.interactor.SetNovelDefaultChapterFlags
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChapter
 import tachiyomi.domain.items.chapter.interactor.UpdateNovelChapter
@@ -139,7 +141,14 @@ class NovelScreenModel(
     private val trackerManager: TrackerManager = Injekt.get(),
     private val getTracks: GetNovelTracks = Injekt.get(),
     private val canonicalEntryUnifier: eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier = Injekt.get(),
+    private val libraryCanonizer: eu.kanade.tachiyomi.data.mikodb.LibraryCanonizer = Injekt.get(),
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
+    private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
+    private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
+    private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
+    private val goldenSources: eu.kanade.tachiyomi.data.mikodb.GoldenSources = Injekt.get(),
+    private val novelExtensionManager: eu.kanade.tachiyomi.extension.novel.NovelExtensionManager = Injekt.get(),
+    private val bridge: eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
 
@@ -402,6 +411,20 @@ class NovelScreenModel(
     }
 
     init {
+        // Warm-start: reopening an entry renders the last Success instantly
+        // instead of flashing the spinner — the flows below overwrite every
+        // field within a frame anyway. Cleared dialogs/refresh flags.
+        lastSuccess[novelId]?.let {
+            mutableState.value = it.copy(dialog = null, isRefreshingData = false)
+        }
+        screenModelScope.launch {
+            state.collect { s ->
+                if (s is State.Success) {
+                    synchronized(lastSuccess) { lastSuccess[s.novel.id] = s.copy(dialog = null) }
+                }
+            }
+        }
+
         screenModelScope.launchIO {
             combine(
                 getNovelAndChapters.subscribe(novelId).distinctUntilChanged(),
@@ -442,8 +465,40 @@ class NovelScreenModel(
                 return@launchIO
             }
 
-            val chapters = getNovelAndChapters.awaitChapters(novelId)
-                .toNovelChapterListItems(novel)
+            // Extension-source favorites never unify (read state lives on
+            // this row) — kick the canonizer: resolve → materialize →
+            // canonize → move the favorite onto the canonical row. On
+            // success this screen swaps to the canonical entry whose
+            // chapters come from the carrier matrix, not one source.
+            if (novel.favorite &&
+                novel.source != eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.CANONICAL_SOURCE_ID &&
+                !eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.isCanonicalUrl(novel.url)
+            ) {
+                // Veil first, then mint — Success may not exist yet, so
+                // wait for it before flagging. The redirect lands when
+                // the mint resolves.
+                screenModelScope.launchIO {
+                    state.first { it is NovelScreenModel.State.Success }
+                    updateSuccessState { it.copy(isMinting = true) }
+                    val c = runCatching { libraryCanonizer.migrateNovel(novel, heavy = true) }.getOrNull()
+                    updateSuccessState { it.copy(isMinting = false) }
+                    if (c != null) redirectToEntryId.value = c.id
+                }
+            }
+
+            // Independent DB reads run in parallel — first-open latency is
+            // dominated by these round-trips back to back.
+            val chaptersDeferred = async {
+                getNovelAndChapters.awaitChapters(novelId)
+                    .toNovelChapterListItems(novel)
+            }
+            val sourceDeferred = async { Injekt.get<NovelSourceManager>().getOrStub(novel.source) }
+            val hiddenIdsDeferred = async { chapterHideManager.getHiddenChapterIds(novelId) }
+            val flagsDeferred = async {
+                if (!novel.favorite) setNovelDefaultChapterFlags.await(novel)
+            }
+
+            val chapters = chaptersDeferred.await()
 
             // Canonical rows have no backing extension — details/chapters
             // come from the canonical chapter pipeline (12-04), not the
@@ -453,19 +508,23 @@ class NovelScreenModel(
             // For book sources (Anna's Archive), don't auto-fetch chapters when
             // empty — the user must manually press "Download book" to trigger
             // the EPUB download + splitting, since it's a heavy operation.
-            val source = Injekt.get<NovelSourceManager>().getOrStub(novel.source)
+            val source = sourceDeferred.await()
             val isBookSource = source.id == 6400L
             val needRefreshChapter = chapters.isEmpty() && !isBookSource && !isCanonical
 
-            if (!novel.favorite) {
-                setNovelDefaultChapterFlags.await(novel)
-            }
+            flagsDeferred.await()
 
-            // Load cached accent color synchronously to avoid flash on open
+            // Load cached accent color synchronously to avoid flash on open —
+            // keyed to the current cover so a changed cover can't seed a stale
+            // accent (the composable extractor would then flash the correction).
             val isDark =
                 (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                     android.content.res.Configuration.UI_MODE_NIGHT_YES
-            val cachedAccentColor = NovelCoverMetadata.getBaseColor(novel.id)?.let {
+            val cachedAccentColor = eu.kanade.tachiyomi.util.EntryCoverMetadata.getBaseColor(
+                eu.kanade.tachiyomi.util.EntryCoverMetadata.EntryType.NOVEL,
+                novel.id,
+                eu.kanade.presentation.entries.components.coverKeyOf(novel.asNovelCover()),
+            )?.let {
                 Color(adjustForTheme(it, isDark))
             }
 
@@ -476,16 +535,21 @@ class NovelScreenModel(
             // older than 2 months (stale schedule).
             val showInterval = shouldShowInterval(novel.status, chapters.map { it.chapter })
 
-            mutableState.update {
+            mutableState.update { prev ->
                 State.Success(
                     novel = novel,
                     source = source,
                     isFromSource = isFromSource,
                     chapters = chapters,
-                    hiddenChapterIds = chapterHideManager.getHiddenChapterIds(novelId),
+                    hiddenChapterIds = hiddenIdsDeferred.await(),
                     isRefreshingData = needRefreshInfo || needRefreshChapter,
                     dialog = null,
-                    accentColor = cachedAccentColor,
+                    // Never erase an accent the composable already set —
+                    // this update replaces the whole Success and the
+                    // extractor's LaunchedEffect wouldn't refire (key
+                    // unchanged), leaving the theme color stuck.
+                    accentColor = cachedAccentColor
+                        ?: (prev as? State.Success)?.accentColor,
                     intervalDays = intervalDays,
                     showInterval = showInterval,
                 )
@@ -514,7 +578,17 @@ class NovelScreenModel(
             if (isCanonical) {
                 eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
                     .workIdFromNovelUrl(novel.url)
-                    ?.let { workId -> canonicalPipelineRunner.launchNovel(workId, novel) }
+                    ?.let { workId ->
+                        canonicalPipelineRunner.launchNovel(workId, novel)
+                        loadCarriers(workId)
+                        // Books (kind=book) carry no chapter feed — they
+                        // resolve to an Anna's Archive entry that owns
+                        // the EPUB download + split path.
+                        if (bridge.byWorkId(workId)?.type == "book") {
+                            updateSuccessState { it.copy(isBookWork = true) }
+                            resolveBookCarrier(workId)
+                        }
+                    }
             }
 
             // Fetch suggestions asynchronously
@@ -566,7 +640,10 @@ class NovelScreenModel(
         }
     }
 
-    private suspend fun fetchChaptersFromSource(manualFetch: Boolean = false) {
+    private suspend fun fetchChaptersFromSource(
+        manualFetch: Boolean = false,
+        bookCarrier: BookCarrier? = null,
+    ) {
         val state = successState ?: return
         var primaryError: Throwable? = null
         var primarySucceeded = false
@@ -574,8 +651,19 @@ class NovelScreenModel(
         // --- Primary source fetch ---
         try {
             withIOContext {
-                val source = state.source as? NovelCatalogueSource ?: return@withIOContext
-                val remoteChapters = source.getChapterList(state.novel.toSNovel())
+                // Canonical books route to the resolved carrier source
+                // (Anna's Archive) + its entry url — state.source is the
+                // canonical stub, which can't serve chapters.
+                val (source, snovel) = if (bookCarrier != null) {
+                    val s = sourceManager.get(bookCarrier.sourceId) as? NovelCatalogueSource
+                        ?: return@withIOContext
+                    s to eu.kanade.tachiyomi.novelsource.model.SNovel.create()
+                        .apply { url = bookCarrier.url }
+                } else {
+                    (state.source as? NovelCatalogueSource ?: return@withIOContext) to
+                        state.novel.toSNovel()
+                }
+                val remoteChapters = source.getChapterList(snovel)
 
                 if (remoteChapters.isEmpty()) {
                     throw NoChaptersException()
@@ -666,19 +754,61 @@ class NovelScreenModel(
     }
 
     fun fetchAllFromSource(manualFetch: Boolean = true) {
-        screenModelScope.launch {
-            updateSuccessState { it.copy(isRefreshingData = true) }
-            try {
-                val tasks = listOf(
-                    async { fetchNovelFromSource(manualFetch) },
-                    async { fetchChaptersFromSource(manualFetch) },
-                )
-                tasks.awaitAll()
-            } catch (e: Throwable) {
-                logcat(LogPriority.ERROR, e) { "fetchAllFromSource failed" }
-            } finally {
-                updateSuccessState { it.copy(isRefreshingData = false) }
+        // Manual refresh on an extension-linked favorite is also a
+        // migration retry — canonize may have failed earlier (empty
+        // feed, offline, no carriers) and init only kicks it once.
+        val mintCandidate = successState?.novel
+            ?.takeIf {
+                manualFetch && it.favorite &&
+                    it.source != eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.CANONICAL_SOURCE_ID &&
+                    !eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.isCanonicalUrl(it.url)
             }
+        if (mintCandidate != null) {
+            updateSuccessState { it.copy(isMinting = true) }
+            screenModelScope.launchIO {
+                val canonical = runCatching {
+                    libraryCanonizer.migrateNovel(mintCandidate, heavy = true)
+                }.getOrNull()
+                updateSuccessState { it.copy(isMinting = false, isRefreshingData = false) }
+                if (canonical != null) {
+                    redirectToEntryId.value = canonical.id
+                } else {
+                    // Mint couldn't take over — run the deferred fetch so
+                    // a failure still surfaces honestly.
+                    fetchAllFromSourceBody(manualFetch)
+                }
+            }
+            return
+        }
+        screenModelScope.launch { fetchAllFromSourceBody(manualFetch) }
+    }
+
+    private suspend fun fetchAllFromSourceBody(manualFetch: Boolean) {
+        updateSuccessState { it.copy(isRefreshingData = true) }
+        try {
+            // Canonical rows have no extension source to refresh —
+            // pull-to-refresh must re-run enrich + canonize + sync
+            // (force: refresh is the explicit "retry now" action).
+            val state = successState ?: return
+            val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                .workIdFromNovelUrl(state.novel.url)
+            if (workId != null) {
+                workCarriers.invalidate(workId)
+                canonicalPipelineRunner.launchNovel(workId, state.novel, force = true)
+                loadCarriers(workId)
+            } else {
+                kotlinx.coroutines.coroutineScope {
+                    val tasks = listOf(
+                        async { fetchNovelFromSource(manualFetch) },
+                        async { fetchChaptersFromSource(manualFetch) },
+                    )
+                    tasks.awaitAll()
+                }
+            }
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "fetchAllFromSource failed" }
+        } finally {
+            updateSuccessState { it.copy(isRefreshingData = false) }
         }
     }
 
@@ -1136,7 +1266,9 @@ class NovelScreenModel(
         screenModelScope.launch {
             updateSuccessState { it.copy(isRefreshingData = true) }
             try {
-                fetchChaptersFromSource(manualFetch = true)
+                // Canonical books fetch via the resolved carrier entry —
+                // that's the AA EPUB download + split path.
+                fetchChaptersFromSource(manualFetch = true, bookCarrier = state.bookCarrier)
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e) { "downloadBook: fetchChaptersFromSource failed" }
             } finally {
@@ -1258,6 +1390,206 @@ class NovelScreenModel(
         get() = basePreferences.commentsEnabled().get()
 
     // Track sheet - end
+
+    // ---------- Find Content Provider (17-02) ----------
+
+    /** Fetch the work's carrier matrix into state (canonical entries only). */
+    private fun loadCarriers(workId: String) {
+        screenModelScope.launchIO {
+            val matrix = workCarriers.forWork(
+                workId,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+            )
+            updateSuccessState { it.copy(carrierMatrix = matrix) }
+        }
+    }
+
+    /** Active collector of the finder's search flow — cancelled when a
+     *  new search attaches so stale collectors can't overwrite picks. */
+    private var providerSearchJob: kotlinx.coroutines.Job? = null
+
+    /** Open the Find Provider sheet and stream per-extension search
+     *  results into state (canonical entries only). The finder owns the
+     *  search job — closing the sheet never cancels it; reopening within
+     *  5 min reattaches to the cached/live flow instead of restarting. */
+    fun showFindProviderDialog() {
+        val novel = successState?.novel ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return
+        updateSuccessState {
+            it.copy(
+                dialog = Dialog.FindProvider,
+                providerSearch = (it.providerSearch
+                    ?: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search())
+                    .copy(recommendations = providerRecommendations()),
+            )
+        }
+        providerSearchJob?.cancel()
+        providerSearchJob = screenModelScope.launchIO {
+            val flow = providerFinder.search(
+                workId,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+            )
+            if (flow == null) {
+                updateSuccessState { s ->
+                    s.providerSearch?.let { s.copy(providerSearch = it.copy(searching = false)) } ?: s
+                }
+                return@launchIO
+            }
+            flow.collect { search ->
+                updateSuccessState { s ->
+                    s.copy(
+                        providerSearch = search.copy(
+                            confirmed = s.providerSearch?.confirmed.orEmpty(),
+                            recommendations = s.providerSearch?.recommendations.orEmpty(),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleProviderPick(pkgName: String) {
+        updateSuccessState { s ->
+            s.providerSearch?.let { p ->
+                s.copy(
+                    providerSearch = p.copy(
+                        confirmed = if (pkgName in p.confirmed) p.confirmed - pkgName else p.confirmed + pkgName,
+                    ),
+                )
+            } ?: s
+        }
+    }
+
+    /** Mint every confirmed pick as a `user_picked` binding, then
+     *  refresh carriers + chapters so the entry flips back to the
+     *  comments button. Canonical rows have no real source —
+     *  `fetchAllFromSource` is meaningless here; the canon map's
+     *  process cache must be invalidated and the merged sequence
+     *  re-materialized instead, or the chapter area spins until the
+     *  screen is re-entered. */
+    fun confirmProviderPicks() {
+        val search = successState?.providerSearch ?: return
+        val feeds = search.rows.filter { it.pkgName in search.confirmed }
+            .mapNotNull { it.feed }
+        val novel = successState?.novel ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return
+        screenModelScope.launchIO {
+            providerFinder.mint(workId, feeds)
+            providerFinder.invalidate(
+                workId,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+            )
+            workCarriers.invalidate(workId)
+            Injekt.get<eu.kanade.tachiyomi.data.mikodb.CanonicalChapterMap>()
+                .invalidate(workId)
+            dismissDialog()
+            updateSuccessState { it.copy(providerSearch = null) }
+            loadCarriers(workId)
+            Injekt.get<eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync>()
+                .syncNovel(novel, workId)
+        }
+    }
+
+    /**
+     * Resolve the carrier entry a canonical book maps to. A minted
+     * binding wins ([WorkCarriers.Carrier.providerRef] is the carrier's
+     * internal entry url); otherwise the finder's live search IS the
+     * resolution — Anna's Archive is the only book carrier, so the
+     * first FOUND feed supplies the download url and feeds the entry's
+     * description/genre/cover (books come through AA, not OpenLibrary).
+     */
+    private fun resolveBookCarrier(workId: String) {
+        screenModelScope.launchIO {
+            val bound = workCarriers.forWork(
+                workId,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+            ).readable.firstOrNull { it.providerRef.isNotBlank() && it.sourceIds.isNotEmpty() }
+            if (bound != null) {
+                applyBookCarrier(bound.sourceIds.first(), bound.providerRef, feed = null)
+                return@launchIO
+            }
+            val flow = providerFinder.search(
+                workId,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+            ) ?: return@launchIO
+            val resolved = flow.first { s ->
+                s.rows.any {
+                    it.status == eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Status.FOUND
+                } || !s.searching
+            }
+            val feed = resolved.rows.firstOrNull {
+                it.status == eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Status.FOUND
+            }?.feed ?: return@launchIO
+            applyBookCarrier(feed.sourceId, feed.url, feed)
+        }
+    }
+
+    /** Store the resolved carrier and pour its details into the local
+     *  row — description/genre/cover the canonical work doesn't carry. */
+    private suspend fun applyBookCarrier(
+        sourceId: Long,
+        url: String,
+        feed: eu.kanade.tachiyomi.data.mikodb.CanonicalFeedCollector.Feed?,
+    ) {
+        updateSuccessState { it.copy(bookCarrier = BookCarrier(sourceId, url)) }
+        val state = successState ?: return
+        val details = feed?.details ?: return
+        if (details.isEmpty) return
+        updateNovel.awaitUpdateFromSource(
+            localNovel = state.novel,
+            remoteTitle = state.novel.title,
+            remoteAuthor = details.author ?: state.novel.author,
+            remoteArtist = null,
+            remoteDescription = details.description,
+            remoteGenre = details.genre,
+            remoteThumbnailUrl = details.thumbnailUrl ?: state.novel.thumbnailUrl,
+            remoteStatus = details.status?.toLong() ?: state.novel.status,
+            remoteUpdateStrategy = eu.kanade.tachiyomi.novelsource.model.NovelUpdateStrategy.ALWAYS_UPDATE,
+            manualFetch = true,
+        )
+        getNovelAndChapters.awaitNovel(state.novel.id).let { refreshed ->
+            updateSuccessState { it.copy(novel = refreshed) }
+        }
+    }
+
+    /** Install a recommended extension from the repo — progress feeds
+     *  the sheet's install buttons. */
+    fun installRecommendedProvider(pkgName: String) {
+        val ext = novelExtensionManager.availableExtensionsFlow.value
+            .firstOrNull { it.pkgName == pkgName } ?: return
+        screenModelScope.launchIO {
+            novelExtensionManager.installExtension(ext).collect { step ->
+                updateSuccessState {
+                    it.copy(carrierInstallSteps = it.carrierInstallSteps + (pkgName to step))
+                }
+            }
+        }
+    }
+
+    /** Available-but-uninstalled novel extensions ranked by the surveyed
+     *  S/A/B/C/D tier — the "likely to have it" list. */
+    private fun providerRecommendations(): List<eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension> {
+        val installed = novelExtensionManager.installedExtensionsFlow.value
+            .map { it.pkgName }.toSet()
+        val meta = mikoDbManager.allSourceMeta()
+        return novelExtensionManager.availableExtensionsFlow.value
+            .asSequence()
+            .filter { it.pkgName !in installed }
+            .map { ext ->
+                eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension(
+                    pkgName = ext.pkgName,
+                    name = ext.name,
+                    tier = meta[ext.pkgName]?.tier ?: "",
+                    iconUrl = ext.iconUrl,
+                    lang = ext.lang,
+                )
+            }
+            .sortedWith(compareBy({ goldenSources.tierRank(it.tier) }, { it.name }))
+            .take(eu.kanade.tachiyomi.data.mikodb.ProviderFinder.MAX_RECOMMENDATIONS)
+            .toList()
+    }
 
     fun updateNovelMetadata(
         title: String,
@@ -1577,15 +1909,23 @@ class NovelScreenModel(
     private fun startDownload(
         chapters: List<NovelChapter>,
         startNow: Boolean,
+        forcedCarrierPkg: String? = null,
     ) {
         val successState = successState ?: return
 
         screenModelScope.launchNonCancellable {
             if (startNow) {
                 val chapterId = chapters.singleOrNull()?.id ?: return@launchNonCancellable
+                if (forcedCarrierPkg != null) {
+                    // A carrier-picked download supersedes anything
+                    // already queued for the chapter.
+                    downloadManager.getQueuedDownloadOrNull(chapterId)
+                        ?.let { downloadManager.cancelQueuedDownloads(listOf(it)) }
+                    downloadChapters(chapters, forcedCarrierPkg)
+                }
                 downloadManager.startDownloadNow(chapterId)
             } else {
-                downloadChapters(chapters)
+                downloadChapters(chapters, forcedCarrierPkg)
             }
 
             if (!isFavorited && !successState.hasPromptedToAddBefore) {
@@ -1607,17 +1947,18 @@ class NovelScreenModel(
     fun runChapterDownloadActions(
         items: List<NovelChapterList.Item>,
         action: NovelChapterDownloadAction,
+        forcedCarrierPkg: String? = null,
     ) {
         when (action) {
             NovelChapterDownloadAction.START -> {
-                startDownload(items.map { it.chapter }, false)
+                startDownload(items.map { it.chapter }, false, forcedCarrierPkg)
                 if (items.any { it.downloadState == NovelDownload.State.ERROR }) {
                     downloadManager.startDownloads()
                 }
             }
             NovelChapterDownloadAction.START_NOW -> {
                 val chapter = items.singleOrNull()?.chapter ?: return
-                startDownload(listOf(chapter), true)
+                startDownload(listOf(chapter), true, forcedCarrierPkg)
             }
             NovelChapterDownloadAction.CANCEL -> {
                 val chapterId = items.singleOrNull()?.id ?: return
@@ -1750,9 +2091,9 @@ class NovelScreenModel(
         updateDownloadState(activeDownload.apply { status = NovelDownload.State.NOT_DOWNLOADED })
     }
 
-    private fun downloadChapters(chapters: List<NovelChapter>) {
+    private suspend fun downloadChapters(chapters: List<NovelChapter>, forcedCarrierPkg: String? = null) {
         val novel = successState?.novel ?: return
-        downloadManager.downloadChapters(novel, chapters)
+        downloadManager.downloadChapters(novel, chapters, forcedCarrierPkg = forcedCarrierPkg)
         toggleAllSelection(false)
     }
 
@@ -1786,14 +2127,44 @@ class NovelScreenModel(
         }
         val audioQueue = audioRenderManager.queueState.value
 
+        // Canon rows keep downloads under the serving carrier's dir —
+        // "downloaded" = exists under ANY bound carrier.
+        val isCanonical = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.isCanonicalUrl(novel.url)
+        val carrierSourceIds = if (isCanonical) {
+            eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.workIdFromNovelUrl(novel.url)
+                ?.let { workId ->
+                    runCatching {
+                        workCarriers.forWork(
+                            workId,
+                            eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+                        ).carriers
+                    }.getOrNull()
+                }
+                ?.flatMap { it.sourceIds }
+                .orEmpty()
+        } else {
+            emptyList()
+        }
+
         return map { chapter ->
             val activeDownload = downloadManager.getQueuedDownloadOrNull(chapter.id)
-            val downloaded = downloadManager.isChapterDownloaded(
-                chapter.name,
-                chapter.scanlator,
-                novel.title,
-                novel.source,
-            )
+            val downloaded = if (isCanonical) {
+                carrierSourceIds.any {
+                    downloadManager.isChapterDownloaded(
+                        chapter.name,
+                        chapter.scanlator,
+                        novel.title,
+                        it,
+                    )
+                }
+            } else {
+                downloadManager.isChapterDownloaded(
+                    chapter.name,
+                    chapter.scanlator,
+                    novel.title,
+                    novel.source,
+                )
+            }
             val downloadState = when {
                 activeDownload != null -> activeDownload.status
                 downloaded -> NovelDownload.State.DOWNLOADED
@@ -1867,6 +2238,8 @@ class NovelScreenModel(
         data object FullCover : Dialog
         data object TrackSheet : Dialog
         data object Comments : Dialog
+        /** Find Content Provider — zero-bound canonical entry (17-02). */
+        data object FindProvider : Dialog
     }
 
     sealed interface State {
@@ -1883,6 +2256,9 @@ class NovelScreenModel(
             val trackingCount: Int = 0,
             val hasLoggedInTrackers: Boolean = false,
             val isRefreshingData: Boolean = false,
+            /** Canonical mint in flight — the screen shows the mint
+             *  veil instead of the extension fetch's instant error. */
+            val isMinting: Boolean = false,
             val dialog: Dialog? = null,
             val hasPromptedToAddBefore: Boolean = false,
             val accentColor: Color? = null,
@@ -1890,6 +2266,19 @@ class NovelScreenModel(
             val showInterval: Boolean = true,
             val suggestions: SuggestionState = SuggestionState.Idle,
             val commentsCount: Long? = null,
+            /** Server bindings ∩ installed/enabled extensions (17-02);
+             *  null until fetched — treat as unknown, never "no carriers". */
+            val carrierMatrix: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Matrix? = null,
+            /** pkgName → install progress for recommended extensions. */
+            val carrierInstallSteps: Map<String, eu.kanade.tachiyomi.extension.InstallStep> = emptyMap(),
+            /** Find Content Provider sheet state (17-02). */
+            val providerSearch: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search? = null,
+            /** Canonical work kind is `book` — the entry resolves to an
+             *  Anna's Archive download instead of a chapter feed. */
+            val isBookWork: Boolean = false,
+            /** Resolved carrier entry (source + internal url) the
+             *  Download Book action drives on canonical books. */
+            val bookCarrier: BookCarrier? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(novel).toList()
@@ -1917,7 +2306,7 @@ class NovelScreenModel(
              * hidden, and a "Delete book" action replaces the download dropdown.
              */
             val isBookSource: Boolean
-                get() = source.id == 6400L
+                get() = source.id == 6400L || isBookWork
 
             private fun List<NovelChapterList.Item>.applyFilters(novel: Novel): Sequence<NovelChapterList.Item> {
                 val unreadFilter = novel.unreadFilter
@@ -1933,7 +2322,23 @@ class NovelScreenModel(
             }
         }
     }
+
+    private companion object {
+        /** Warm-start cache — the last [State.Success] emitted per novel,
+         *  so reopening a detail screen renders instantly instead of
+         *  flashing the spinner. Tiny LRU: heroes/recents only ever touch
+         *  a handful of entries. */
+        val lastSuccess = object : LinkedHashMap<Long, State.Success>(8, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<Long, State.Success>?,
+            ): Boolean = size > 8
+        }
+    }
 }
+
+/** A resolved carrier entry for a canonical book — the extension's
+ *  source id + its internal entry url (drives the AA EPUB path). */
+data class BookCarrier(val sourceId: Long, val url: String)
 
 @Immutable
 sealed class NovelChapterList {

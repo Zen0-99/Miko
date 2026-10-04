@@ -62,8 +62,8 @@ class SeriesMatcher {
     ) {
         companion object {
             fun of(row: MangaNovelIdBridge.WorkRow) = Query(
-                titles = listOfNotNull(row.title, row.romanizedTitle, row.nativeTitle)
-                    .distinct(),
+                titles = (listOfNotNull(row.title, row.romanizedTitle, row.nativeTitle) +
+                    row.altTitles).distinct(),
                 author = row.author,
                 year = row.year,
                 totalChapters = row.totalChapters?.toDoubleOrNull(),

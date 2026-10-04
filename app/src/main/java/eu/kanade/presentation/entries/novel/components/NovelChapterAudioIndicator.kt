@@ -4,7 +4,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,6 +31,7 @@ import eu.kanade.presentation.components.IndicatorModifier
 import eu.kanade.presentation.components.IndicatorSize
 import eu.kanade.presentation.components.IndicatorStrokeWidth
 import eu.kanade.presentation.components.commonClickable
+import eu.kanade.presentation.entries.components.rememberOnAccentColor
 import eu.kanade.tachiyomi.R
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -62,7 +62,7 @@ fun NovelChapterAudioIndicator(
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
 ) {
-    val accent = accentColor ?: MaterialTheme.colorScheme.onSurfaceVariant
+    val accent = accentColor ?: MaterialTheme.colorScheme.onSurface
     when (audioStateProvider()) {
         NovelChapterAudioState.NOT_RENDERED -> NotRenderedAudioIndicator(
             enabled = enabled,
@@ -251,19 +251,20 @@ private fun RenderedAudioIndicator(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        // CheckCircle-style filled state: accent disc with the speaker
-        // glyph knocked out in the background colour.
+        // Same circled-speaker icon — circle filled with the accent,
+        // glyph drawn in a contrast-aware black/white on top.
+        val glyphTint = rememberOnAccentColor(tint)
         Icon(
-            imageVector = Icons.Filled.Circle,
+            painter = painterResource(R.drawable.ic_item_circle_filled_24dp),
             contentDescription = null,
             modifier = Modifier.size(IndicatorSize),
             tint = tint,
         )
         Icon(
-            imageVector = Icons.Filled.VolumeUp,
+            painter = painterResource(R.drawable.ic_audio_item_24dp),
             contentDescription = stringResource(AYMR.strings.novel_audio_available_cd),
-            modifier = Modifier.size(IndicatorSize - 8.dp),
-            tint = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.size(IndicatorSize),
+            tint = glyphTint,
         )
         DropdownMenu(expanded = isMenuExpanded, onDismissRequest = { isMenuExpanded = false }) {
             // D-08 verbatim order: Play / Delete / Re-render.

@@ -10,6 +10,8 @@ export interface OlEdition {
     publish_date?: string;
     /** Work rollup — the canonical identity we mint from. */
     works?: Array<{ key: string }>; // /works/OL…W
+    /** Cover record ids — renders as covers.openlibrary.org/b/id/{n}-L.jpg */
+    covers?: number[];
 }
 
 export interface OlSearchDoc {
@@ -18,6 +20,8 @@ export interface OlSearchDoc {
     author_name?: string[];
     first_publish_year?: number;
     isbn?: string[];
+    /** Cover record id — renders as covers.openlibrary.org/b/id/{n}-L.jpg */
+    cover_i?: number;
 }
 
 const UA = 'Miko/2.0 (github.com/Zen0-99/Miko)';
@@ -62,7 +66,7 @@ export async function searchWorks(
     limit = 10,
     base = OPENLIBRARY_BASE,
 ): Promise<OlSearchDoc[]> {
-    const fields = 'key,title,author_name,first_publish_year,isbn';
+    const fields = 'key,title,author_name,first_publish_year,isbn,cover_i';
     let q = `title=${encodeURIComponent(title)}`;
     if (author) q += `&author=${encodeURIComponent(author)}`;
     const body = (await getJson(base, `/search.json?${q}&limit=${limit}&fields=${fields}`)) as {
@@ -75,4 +79,9 @@ export async function searchWorks(
 export function workIdFromKey(key: string | undefined): string | null {
     const m = /^\/works\/(OL\d+W)$/.exec(key ?? '');
     return m?.[1] ?? null;
+}
+
+/** OL cover record id → image URL (large size). */
+export function olCoverUrl(coverId: number | undefined | null): string | null {
+    return coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : null;
 }

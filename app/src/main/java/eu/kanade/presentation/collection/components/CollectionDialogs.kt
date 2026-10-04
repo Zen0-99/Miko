@@ -1,15 +1,19 @@
 package eu.kanade.presentation.collection.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -25,7 +29,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.asToggleableState
+import eu.kanade.presentation.components.AdaptiveSheet
+import eu.kanade.presentation.entries.components.accentTintedSurface
+import eu.kanade.presentation.entries.components.rememberOnAccentColor
 import eu.kanade.presentation.collection.visualName
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
@@ -199,105 +209,159 @@ fun ChangeCollectionDialog(
     onDismissRequest: () -> Unit,
     onEditCollections: () -> Unit,
     onConfirm: (List<Long>, List<Long>) -> Unit,
+    accentColor: Color? = null,
 ) {
-    if (initialSelection.isEmpty()) {
-        AlertDialog(
-            onDismissRequest = onDismissRequest,
-            confirmButton = {
-                tachiyomi.presentation.core.components.material.TextButton(
-                    onClick = {
-                        onDismissRequest()
-                        onEditCollections()
-                    },
-                ) {
-                    Text(text = stringResource(MR.strings.action_edit_collections))
-                }
-            },
-            title = {
-                Text(text = stringResource(MR.strings.action_move_collection))
-            },
-            text = {
-                Text(text = stringResource(MR.strings.information_empty_collection_dialog))
-            },
-        )
-        return
-    }
-    var selection by remember { mutableStateOf(initialSelection) }
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        confirmButton = {
-            Row {
-                tachiyomi.presentation.core.components.material.TextButton(onClick = {
-                    onDismissRequest()
-                    onEditCollections()
-                }) {
-                    Text(text = stringResource(MR.strings.action_edit))
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                tachiyomi.presentation.core.components.material.TextButton(onClick = onDismissRequest) {
-                    Text(text = stringResource(MR.strings.action_cancel))
-                }
-                tachiyomi.presentation.core.components.material.TextButton(
-                    onClick = {
-                        onDismissRequest()
-                        onConfirm(
-                            selection
-                                .filter { it is CheckboxState.State.Checked || it is CheckboxState.TriState.Include }
-                                .map { it.value.id },
-                            selection
-                                .filter { it is CheckboxState.State.None || it is CheckboxState.TriState.None }
-                                .map { it.value.id },
-                        )
-                    },
-                ) {
-                    Text(text = stringResource(MR.strings.action_ok))
-                }
-            }
-        },
-        title = {
-            Text(text = stringResource(MR.strings.action_move_collection))
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-            ) {
-                selection.forEach { checkbox ->
-                    val onChange: (CheckboxState<Collection>) -> Unit = {
-                        val index = selection.indexOf(it)
-                        if (index != -1) {
-                            val mutableList = selection.toMutableList()
-                            mutableList[index] = it.next()
-                            selection = mutableList.toList().toImmutableList()
-                        }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onChange(checkbox) },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        when (checkbox) {
-                            is CheckboxState.TriState -> {
-                                TriStateCheckbox(
-                                    state = checkbox.asToggleableState(),
-                                    onClick = { onChange(checkbox) },
-                                )
-                            }
-                            is CheckboxState.State -> {
-                                Checkbox(
-                                    checked = checkbox.isChecked,
-                                    onCheckedChange = { onChange(checkbox) },
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = checkbox.value.visualName,
-                            modifier = Modifier.padding(horizontal = MaterialTheme.padding.medium),
-                        )
-                    }
-                }
-            }
-        },
+    // Bottom-sheet presentation (same surface/title/button language as the
+    // catalog manage sheet) — slides on phones, centered dialog on tablets.
+    // Controls take the detail-view accent, not theme primary — the same
+    // tinting the chapter cards and carrier sheets use.
+    val accent = accentColor ?: MaterialTheme.colorScheme.primary
+    val buttonColors = ButtonDefaults.textButtonColors(contentColor = accent)
+    val checkboxColors = CheckboxDefaults.colors(
+        checkedColor = accent,
+        // Black on light accents, white on dark — same rule as the
+        // pills' selected-label color.
+        checkmarkColor = rememberOnAccentColor(accentColor),
+        uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    AdaptiveSheet(
+        onDismissRequest = onDismissRequest,
+        containerColor = accentTintedSurface(
+            accent = accent,
+            background = MaterialTheme.colorScheme.background,
+            dimmed = false,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 480.dp),
+        ) {
+            Text(
+                text = stringResource(MR.strings.action_move_collection),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(
+                    start = 24.dp, top = 24.dp, end = 24.dp, bottom = 12.dp,
+                ),
+            )
+
+            if (initialSelection.isEmpty()) {
+                Text(
+                    text = stringResource(MR.strings.information_empty_collection_dialog),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        onClick = {
+                            onDismissRequest()
+                            onEditCollections()
+                        },
+                        colors = buttonColors,
+                    ) {
+                        Text(text = stringResource(MR.strings.action_edit_collections))
+                    }
+                }
+            } else {
+                var selection by remember { mutableStateOf(initialSelection) }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    selection.forEach { checkbox ->
+                        val onChange: (CheckboxState<Collection>) -> Unit = {
+                            val index = selection.indexOf(it)
+                            if (index != -1) {
+                                val mutableList = selection.toMutableList()
+                                mutableList[index] = it.next()
+                                selection = mutableList.toList().toImmutableList()
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                // The 48dp checkbox touch target pads its
+                                // visible box ~14dp — 10dp of row padding
+                                // lands the box flush with the 24dp title.
+                                .padding(horizontal = 10.dp)
+                                .clickable { onChange(checkbox) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            when (checkbox) {
+                                is CheckboxState.TriState -> {
+                                    TriStateCheckbox(
+                                        state = checkbox.asToggleableState(),
+                                        onClick = { onChange(checkbox) },
+                                        colors = checkboxColors,
+                                    )
+                                }
+                                is CheckboxState.State -> {
+                                    Checkbox(
+                                        checked = checkbox.isChecked,
+                                        onCheckedChange = { onChange(checkbox) },
+                                        colors = checkboxColors,
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = checkbox.value.visualName,
+                                modifier = Modifier.padding(horizontal = MaterialTheme.padding.medium),
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = {
+                            onDismissRequest()
+                            onEditCollections()
+                        },
+                        colors = buttonColors,
+                    ) {
+                        Text(text = stringResource(MR.strings.action_edit))
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(
+                        onClick = onDismissRequest,
+                        colors = buttonColors,
+                    ) {
+                        Text(text = stringResource(MR.strings.action_cancel))
+                    }
+                    TextButton(
+                        onClick = {
+                            onDismissRequest()
+                            onConfirm(
+                                selection
+                                    .filter { it is CheckboxState.State.Checked || it is CheckboxState.TriState.Include }
+                                    .map { it.value.id },
+                                selection
+                                    .filter { it is CheckboxState.State.None || it is CheckboxState.TriState.None }
+                                    .map { it.value.id },
+                            )
+                        },
+                        colors = buttonColors,
+                    ) {
+                        Text(text = stringResource(MR.strings.action_ok))
+                    }
+                }
+            }
+        }
+    }
 }

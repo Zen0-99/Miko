@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.AppBarTitle
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderBackgroundTexture
 
@@ -58,6 +60,7 @@ fun NovelReaderTopBar(
     progressPercent: Int = -1,
     wordCount: Int = -1,
     fullscreen: Boolean = false,
+    sourceLabel: String? = null,
     readerBackgroundColor: Color = MaterialTheme.colorScheme.surface,
 ) {
     // Use the reader background color (semi-transparent) instead of theme
@@ -68,8 +71,20 @@ fun NovelReaderTopBar(
     AppBar(
         modifier = modifier,
         backgroundColor = backgroundColor,
-        title = title,
-        subtitle = subtitle.takeIf { it.isNotBlank() },
+        titleContent = {
+            Column {
+                AppBarTitle(title, subtitle = subtitle.takeIf { it.isNotBlank() })
+                sourceLabel?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = onColor.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
         navigateUp = onBackClick,
         actions = {
             if (progressPercent in 0..100) {
@@ -187,6 +202,7 @@ fun NovelReaderChrome(
     edgeFadeEnabled: Boolean = false,
     showCommentsButton: Boolean = false,
     isTtsActive: Boolean = false,
+    sourceLabel: String? = null,
     onBackClick: () -> Unit,
     onChaptersClick: () -> Unit,
     onWebviewClick: () -> Unit,
@@ -219,6 +235,7 @@ fun NovelReaderChrome(
                 progressPercent = progressPercent,
                 wordCount = wordCount,
                 fullscreen = fullscreen,
+                sourceLabel = sourceLabel,
                 readerBackgroundColor = readerBackgroundColor,
             )
         }

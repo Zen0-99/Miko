@@ -33,7 +33,7 @@ fun EntryViewCommentsButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.5.dp, accent),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),

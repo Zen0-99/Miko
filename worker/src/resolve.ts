@@ -3,6 +3,7 @@ import type { MbSeries } from './mangabaka';
 import { searchSeries } from './mangabaka';
 import type { OlEdition, OlSearchDoc } from './openlibrary';
 import {
+    olCoverUrl,
     isValidIsbn,
     isbnToEdition,
     normalizeIsbn,
@@ -11,6 +12,7 @@ import {
 } from './openlibrary';
 import { deriveShowKind, fetchMeta, metaYear } from './cinemeta';
 import type { CinemetaMeta } from './cinemeta';
+import { liveWorkId } from './bindings';
 import { findHsEntry, hsYear, loadCatalog } from './hentaistream';
 import { normalize } from './normalize';
 import { err, now, ok } from './util';
@@ -66,6 +68,8 @@ interface WorkRow {
     total_chapters: string | null;
     author: string | null;
     provider_links: string;
+    /** Cover art URL (migration 0012) — null for pre-migration rows. */
+    cover_url: string | null;
 }
 
 function toDto(row: WorkRow, externalIds: Record<string, string>) {
@@ -84,6 +88,7 @@ function toDto(row: WorkRow, externalIds: Record<string, string>) {
         total_chapters: row.total_chapters,
         author: row.author,
         provider_links: row.provider_links,
+        cover_url: row.cover_url ?? null,
         external_ids: externalIds,
     };
 }
@@ -209,7 +214,7 @@ async function persistSeries(env: Env, s: MbSeries, medium: string): Promise<Wor
         romanized_title: s.romanized_title, native_title: s.native_title,
         year: s.year, total_chapters: s.total_chapters, author,
         provider_links: JSON.stringify(links),
-        medium, nsfw, content_rating: contentRating,
+        medium, nsfw, content_rating: contentRating, cover_url: null,
     };
 }
 
@@ -243,6 +248,15 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
         // rows (honest-null mints); the kind set is the fallback for
         // legacy rows whose medium was backfilled by guesswork.
         if (row && (row.medium === medium || (row.type != null && allowed.has(row.type)))) {
+            // A bound provider can point at a dead (merged) work —
+            // substitute the live row when the catalog deduped.
+            const liveId = await liveWorkId(env, row.miko_work_id);
+            if (liveId !== row.miko_work_id) {
+                const live = await env.COMMENTS_DB.prepare(
+                    'SELECT * FROM works_cache WHERE miko_work_id = ?',
+                ).bind(liveId).first<WorkRow>();
+                if (live) return ok({ work: toDto(live, await externalIdsFor(env, liveId)) });
+            }
             return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
         }
     }
@@ -256,12 +270,25 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
     const typed = titleHits.filter(
         (r) => r.medium === medium || (r.type != null && allowed.has(r.type)),
     );
-    if (typed.length === 1) {
-        return ok({ work: toDto(typed[0], await externalIdsFor(env, typed[0].miko_work_id)) });
-    }
-    if (typed.length > 1) {
-        await review(env, 'divergence', { normTitle, medium, hits: typed.map((t) => t.miko_work_id) });
-        return ok({ work: null });
+    // Collapse through work_merges first — dead ids are aliases of one
+    // work, not separate candidates (OPM's catalog triplet).
+    if (typed.length >= 1) {
+        const liveIds = new Set<string>();
+        for (const r of typed) liveIds.add(await liveWorkId(env, r.miko_work_id));
+        if (liveIds.size === 1) {
+            const liveId = [...liveIds][0];
+            const direct = typed.find((r) => r.miko_work_id === liveId);
+            const row = direct ?? await env.COMMENTS_DB.prepare(
+                'SELECT * FROM works_cache WHERE miko_work_id = ?',
+            ).bind(liveId).first<WorkRow>();
+            if (row) {
+                return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+            }
+        }
+        if (liveIds.size > 1) {
+            await review(env, 'divergence', { normTitle, medium, hits: [...liveIds] });
+            return ok({ work: null });
+        }
     }
 
     // 3. Shows path — Cinemeta (imdb) / hentaistream (hs). Shows never
@@ -374,7 +401,7 @@ async function persistShow(env: Env, w: ShowWrite): Promise<WorkRow> {
         romanized_title: null, native_title: null,
         year: w.year, total_chapters: null, author: null,
         provider_links: JSON.stringify(w.providerLinks),
-        medium: 'shows', nsfw: w.nsfw, content_rating: null,
+        medium: 'shows', nsfw: w.nsfw, content_rating: null, cover_url: null,
     };
 }
 
@@ -451,6 +478,7 @@ async function persistBook(
     author: string | null,
     year: number | null,
     isbns: string[],
+    coverUrl: string | null = null,
 ): Promise<WorkRow> {
     const workId = `mk:ol:${olWorkId}`;
     const norm = normalize(title);
@@ -459,12 +487,14 @@ async function persistBook(
         `INSERT INTO works_cache
          (miko_work_id, type, title, romanized_title, native_title,
           normalized_title, year, total_chapters, author, provider_links,
-          medium, nsfw, content_rating, fetched_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-         ON CONFLICT(miko_work_id) DO UPDATE SET fetched_at = excluded.fetched_at`,
+          medium, nsfw, content_rating, cover_url, fetched_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(miko_work_id) DO UPDATE SET
+          fetched_at = excluded.fetched_at,
+          cover_url = COALESCE(excluded.cover_url, works_cache.cover_url)`,
     ).bind(
         workId, 'book', title, null, null, norm, year, null, author, '[]',
-        'books', 0, null, now(),
+        'books', 0, null, coverUrl, now(),
     ).run();
 
     await env.COMMENTS_DB.prepare(
@@ -487,7 +517,7 @@ async function persistBook(
         miko_work_id: workId, type: 'book', title,
         romanized_title: null, native_title: null,
         year, total_chapters: null, author, provider_links: '[]',
-        medium: 'books', nsfw: 0, content_rating: null,
+        medium: 'books', nsfw: 0, content_rating: null, cover_url: coverUrl,
     };
 }
 
@@ -519,6 +549,7 @@ async function resolveBook(req: ResolveRequest, normTitle: string, env: Env): Pr
                     env, workKey,
                     edition.title ?? req.title, req.author ?? null,
                     null, [isbn, ...(edition.isbn_13 ?? []), ...(edition.isbn_10 ?? [])],
+                    olCoverUrl(edition.covers?.[0]),
                 );
                 return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
             }
@@ -558,6 +589,7 @@ async function resolveBook(req: ResolveRequest, normTitle: string, env: Env): Pr
         best.d.author_name?.[0] ?? req.author ?? null,
         best.d.first_publish_year ?? req.year ?? null,
         best.d.isbn ?? [],
+        olCoverUrl(best.d.cover_i),
     );
     return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
 }

@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.extension.anime.util.AnimeExtensionInstaller
 import eu.kanade.tachiyomi.extension.anime.util.AnimeExtensionLoader
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
@@ -79,7 +81,7 @@ class AnimeExtensionManager(
     val untrustedExtensionsFlow = untrustedExtensionsMapFlow.mapExtensions(scope)
 
     init {
-        initAnimeExtensions()
+        scope.launch(Dispatchers.IO) { initAnimeExtensions() }
         AnimeExtensionInstallReceiver(AnimeInstallationListener()).register(context)
     }
 

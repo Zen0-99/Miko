@@ -1,0 +1,23 @@
+{
+    "comment": "Tier pools — crawler alternates so no single source takes a crawl-shaped load. pkgSuffix matches keiyoushi index pkgName endings; jarUrl is resolved at install time, never hardcoded.",
+    "tiers": {
+        "S": [
+            { "name": "Weeb Central", "pkgSuffix": ".en.weebcentral" }
+        ],
+        "A": [
+            { "name": "Asura Scans", "pkgSuffix": ".en.asurascans" },
+            { "name": "Flame Comics", "pkgSuffix": ".en.flamecomics" },
+            { "name": "MangaBat", "pkgSuffix": ".en.mangabat" }
+        ],
+        "B": [
+            { "name": "MangaPill", "pkgSuffix": ".en.mangapill" },
+            { "name": "MangaKakalot", "pkgSuffix": ".en.mangakakalot" }
+        ]
+    },
+    "limits": {
+        "dailyFetchBudget": 400,
+        "cooldownAfterConsecutiveFailures": 3,
+        "cooldownMs": 3600000,
+        "browsePageCap": 6
+    }
+}

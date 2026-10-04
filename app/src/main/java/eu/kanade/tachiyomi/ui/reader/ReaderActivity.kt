@@ -401,6 +401,7 @@ class ReaderActivity : BaseActivity() {
 
                 mangaTitle = state.manga?.title,
                 chapterTitle = state.currentChapter?.chapter?.name,
+                sourceLabel = state.sourceName,
                 navigateUp = onBackPressedDispatcher::onBackPressed,
                 onClickTopAppBar = ::openMangaScreen,
                 bookmarked = state.bookmarked,

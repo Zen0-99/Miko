@@ -17,6 +17,7 @@ fun NovelChapterHeader(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
+    entryCountText: String? = null,
     onFetchNewChapters: (() -> Unit)? = null,
     onFetchAllChapters: (() -> Unit)? = null,
     intervalDays: Int? = null,
@@ -24,6 +25,7 @@ fun NovelChapterHeader(
 ) {
     EntryChapterHeader(
         itemCountText = pluralStringResource(MR.plurals.manga_num_chapters, count = itemCount, itemCount),
+        entryCountText = entryCountText,
         onClick = onClick,
         modifier = modifier,
         accentColor = accentColor,

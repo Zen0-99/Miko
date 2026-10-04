@@ -61,6 +61,7 @@ import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.util.concurrent.ConcurrentHashMap
 
 class NovelReaderScreenModel(
     private val novelId: Long,
@@ -112,6 +113,16 @@ class NovelReaderScreenModel(
 
     private val _currentChapter = MutableStateFlow<NovelChapter?>(null)
     val currentChapter = _currentChapter.asStateFlow()
+
+    /**
+     * Display name of the source serving the current chapter — the
+     * resolved carrier for canonical chapters, the entry's source
+     * otherwise. Keyed per chapter id because prefetches resolve
+     * carriers for chapters that are not current yet.
+     */
+    private val chapterSourceNames = ConcurrentHashMap<Long, String>()
+    private val _currentSourceName = MutableStateFlow<String?>(null)
+    val currentSourceName = _currentSourceName.asStateFlow()
 
     private val _novel = MutableStateFlow<Novel?>(null)
     val novel = _novel.asStateFlow()
@@ -1289,10 +1300,20 @@ class NovelReaderScreenModel(
         if (novel != null &&
             eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCanonUrl(chapter.url)
         ) {
-            return canonicalChapterRouter.resolveNovelText(novel, chapter.url, chapter.name)
+            return canonicalChapterRouter.resolveNovelText(
+                novel,
+                chapter.url,
+                chapter.name,
+                onCarrier = { name ->
+                    chapterSourceNames[chapter.id] = name
+                    if (chapter.id == _currentChapter.value?.id) _currentSourceName.value = name
+                },
+            )
                 ?: error("No installed carrier serves ${chapter.name}")
         }
         source ?: error("No source available")
+        chapterSourceNames[chapter.id] = source.name
+        if (chapter.id == _currentChapter.value?.id) _currentSourceName.value = source.name
         val sChapter = SNovelChapterImpl().apply {
             url = chapter.url
             name = chapter.name
@@ -1309,17 +1330,38 @@ class NovelReaderScreenModel(
         // the loading circle would flash unnecessarily.
         val novel = _novel.value
         val source = currentSource
+        val isCanonChapter = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+            .isCanonUrl(chapter.url)
         val isLoadedCached = loadedChapterCache.containsKey(chapter.id)
-        val isDownloaded = novel != null &&
-            source != null &&
-            downloadManager.isChapterDownloaded(
-                chapterName = chapter.name,
-                chapterScanlator = chapter.scanlator,
-                novelTitle = novel.title,
-                sourceId = source.id,
-            )
+        // Canon chapters download under their serving carrier's dir —
+        // the stub source can't answer isChapterDownloaded.
+        val canonDownloadSource = if (isCanonChapter && novel != null) {
+            downloadManager.canonDownloadSource(chapter.name, chapter.scanlator, novel)
+        } else {
+            null
+        }
+        val isDownloaded = when {
+            canonDownloadSource != null -> true
+            novel != null && source != null && !isCanonChapter ->
+                downloadManager.isChapterDownloaded(
+                    chapterName = chapter.name,
+                    chapterScanlator = chapter.scanlator,
+                    novelTitle = novel.title,
+                    sourceId = source.id,
+                )
+            else -> false
+        }
         val isPrefetched = prefetchedChapterCache.containsKey(chapter.id)
         val isCached = isLoadedCached || isDownloaded || isPrefetched
+
+        // Carrier label: resolved names recorded by fetchChapterText win;
+        // the download dir's carrier is the honest label for canon chapters
+        // served from disk; an unresolved canon chapter clears the label
+        // until the router reports its carrier.
+        _currentSourceName.value = when {
+            isCanonChapter -> chapterSourceNames[chapter.id] ?: canonDownloadSource?.name
+            else -> source?.name
+        }
         android.util.Log.d(
             "NovelReader",
             "loadChapter: isCached=$isCached (loadedCached=$isLoadedCached downloaded=$isDownloaded prefetched=$isPrefetched)",
@@ -1349,12 +1391,14 @@ class NovelReaderScreenModel(
                 // Try downloaded content first (offline reading / instant load)
                 var htmlContent: String? = null
                 if (isDownloaded && novel != null) {
-                    val chapterFile = downloadProvider.findChapterDir(
-                        chapterName = chapter.name,
-                        chapterScanlator = chapter.scanlator,
-                        novelTitle = novel.title,
-                        source = source,
-                    )
+                    val chapterFile = (canonDownloadSource ?: source)?.let { chapterSource ->
+                        downloadProvider.findChapterDir(
+                            chapterName = chapter.name,
+                            chapterScanlator = chapter.scanlator,
+                            novelTitle = novel.title,
+                            source = chapterSource,
+                        )
+                    }
                     if (chapterFile != null) {
                         android.util.Log.d("NovelReader", "loadChapter: reading downloaded file ${chapterFile.name}")
                         val fileContent = chapterFile.openInputStream().use { it.readBytes().toString(Charsets.UTF_8) }

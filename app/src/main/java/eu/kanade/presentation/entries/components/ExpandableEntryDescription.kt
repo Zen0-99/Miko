@@ -203,10 +203,12 @@ fun ExpandableEntryDescription(
                         .background(
                             brush = Brush.horizontalGradient(
                                 0f to MaterialTheme.colorScheme.background.copy(alpha = 0f),
-                                0.5f to MaterialTheme.colorScheme.background,
+                                0.55f to MaterialTheme.colorScheme.background,
                             ),
                         )
-                        .padding(start = 24.dp)
+                        // Wide left padding so the fade reaches well past
+                        // the label — the text beneath dies out gradually.
+                        .padding(start = 96.dp)
                         .clickable { onExpanded(true) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

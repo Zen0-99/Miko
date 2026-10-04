@@ -254,6 +254,17 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             }
         }
 
+        // Discovery: refresh the cached catalog feeds in the background so
+        // the first Discovery visit renders today's content from disk —
+        // new chart entries merge ahead of the retained backlog.
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Injekt.get<eu.kanade.tachiyomi.data.catalogrows.DiscoveryFeeds>().warm()
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Discovery feed warm failed" }
+            }
+        }
+
         // Defer achievement init past the first frame so it doesn't block startup.
         // Loads achievement definitions from assets into the DB, then starts the
         // event handler so emitted events (chapter read, etc.) are processed.

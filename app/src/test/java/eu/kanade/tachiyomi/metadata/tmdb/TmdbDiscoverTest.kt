@@ -120,4 +120,24 @@ class TmdbDiscoverTest {
         assertFalse("vote_count.gte" in params)
         assertFalse("vote_average.gte" in params)
     }
+
+    @Test
+    fun `watch providers emit with the region together`() {
+        val params = TmdbDiscover.queryParams(
+            MediaType.TV,
+            TmdbDiscover.DiscoverQuery(withWatchProviders = listOf(8, 337)),
+        )
+        assertEquals("8,337", params["with_watch_providers"])
+        assertEquals("US", params["watch_region"])
+    }
+
+    @Test
+    fun `no providers means no region param either`() {
+        val params = TmdbDiscover.queryParams(
+            MediaType.TV,
+            TmdbDiscover.DiscoverQuery(),
+        )
+        assertFalse("with_watch_providers" in params)
+        assertFalse("watch_region" in params)
+    }
 }
