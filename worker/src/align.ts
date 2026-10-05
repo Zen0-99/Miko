@@ -39,12 +39,11 @@ export async function handleAlign(req: Request, env: Env): Promise<Response> {
     ) {
         return err(400, 'bad_request');
     }
-    // Phase 15 carrier vocabulary — canonical only; anything but
-    // 'shows' falls through to the normal alignment path.
+    // Phase 19: shows align against canonical_episodes + sibling
+    // episode_* tables; every other medium keeps the chapter_* pool.
     const medium = body.medium;
-    if (medium === 'shows') {
-        return err(400, 'shows_episodes_skip_alignment');
-    }
+    const fpTable = medium === 'shows' ? 'episode_fingerprints' : 'chapter_fingerprints';
+    const alTable = medium === 'shows' ? 'episode_alignments' : 'chapter_alignments';
 
     // Numbering exceptions applied before hashing/scoring.
     const { results: aliases } = await env.COMMENTS_DB.prepare(
@@ -59,7 +58,7 @@ export async function handleAlign(req: Request, env: Env): Promise<Response> {
 
     // Cached verdict on the exact fingerprint.
     const cached = await env.COMMENTS_DB.prepare(
-        `SELECT status, score, reference FROM chapter_alignments
+        `SELECT status, score, reference FROM ${alTable}
          WHERE work_id = ? AND source_key = ? AND fingerprint_hash = ?`,
     ).bind(workId, sourceKey, fingerprintHash)
         .first<{ status: string; score: number; reference: string }>();
@@ -71,7 +70,7 @@ export async function handleAlign(req: Request, env: Env): Promise<Response> {
     // verdict ends up `unknown`.
     const ts = now();
     await env.COMMENTS_DB.prepare(
-        `INSERT INTO chapter_fingerprints
+        `INSERT INTO ${fpTable}
          (work_id, source_key, fingerprint_hash, count, numbers_json, names_hash, first_seen, last_seen)
          VALUES (?,?,?,?,?,?,?,?)
          ON CONFLICT(work_id, source_key, fingerprint_hash)
@@ -81,16 +80,28 @@ export async function handleAlign(req: Request, env: Env): Promise<Response> {
         JSON.stringify(aliased), body.names_hash ?? '', ts, ts,
     ).run();
 
-    // Reference: MangaDex for manga; inter-source consensus otherwise
-    // (and as manga fallback when MangaDex can't match).
+    // Reference: canonical episode abs numbers for shows; MangaDex for
+    // manga; inter-source consensus otherwise (and as the fallback when
+    // the primary reference can't produce a set).
     let reference: Set<number> | null = null;
     let referenceKind = 'none';
-    if (medium === 'manga' && typeof body.title === 'string' && body.title) {
+    if (medium === 'shows') {
+        const { results } = await env.COMMENTS_DB.prepare(
+            `SELECT abs_number FROM canonical_episodes
+             WHERE work_id = ? AND kind = 'episode' AND abs_number IS NOT NULL
+             ORDER BY abs_number`,
+        ).bind(workId).all<{ abs_number: number }>();
+        if (results.length > 0) {
+            reference = new Set(results.map((r) => r.abs_number));
+            referenceKind = 'canonical_episodes';
+        }
+    }
+    if (!reference && medium === 'manga' && typeof body.title === 'string' && body.title) {
         reference = await referenceChapters(body.title, env.MANGADEX_BASE);
         if (reference) referenceKind = 'mangadex';
     }
     if (!reference) {
-        reference = await consensus(env, workId, sourceKey);
+        reference = await consensus(env, workId, sourceKey, fpTable);
         if (reference) referenceKind = 'consensus';
     }
 
@@ -109,7 +120,7 @@ export async function handleAlign(req: Request, env: Env): Promise<Response> {
     }
 
     await env.COMMENTS_DB.prepare(
-        `INSERT INTO chapter_alignments
+        `INSERT INTO ${alTable}
          (work_id, source_key, fingerprint_hash, status, score, reference, checked_at)
          VALUES (?,?,?,?,?,?,?)`,
     ).bind(workId, sourceKey, fingerprintHash, status, score, referenceKind, ts).run();
@@ -125,9 +136,10 @@ async function consensus(
     env: Env,
     workId: string,
     sourceKey: string,
+    fpTable: string,
 ): Promise<Set<number> | null> {
     const { results } = await env.COMMENTS_DB.prepare(
-        `SELECT DISTINCT source_key, numbers_json FROM chapter_fingerprints
+        `SELECT DISTINCT source_key, numbers_json FROM ${fpTable}
          WHERE work_id = ? AND source_key != ?`,
     ).bind(workId, sourceKey).all<{ source_key: string; numbers_json: string }>();
     if (results.length < 2) return null;
