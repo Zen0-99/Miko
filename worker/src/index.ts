@@ -4,6 +4,7 @@ import { handleAppeal, handleMyAppeals } from './appeals';
 import { handleRegister } from './auth';
 import { handleBrowse, handleHydrate } from './browse';
 import { handleCanonize, handleGetChapters } from './chaptermap';
+import { handleCanonizeEpisodes, handleGetEpisodes } from './episodemap';
 import {
     handleDelete,
     handleGetComments,
@@ -32,6 +33,8 @@ const router = new Router<Env>()
     .add('POST', '/v1/chapters/align', (req, _p, _u, env) => handleAlign(req, env))
     .add('POST', '/v1/chapters/canonize', (req, _p, _u, env) => handleCanonize(req, env))
     .add('GET', '/v1/works/:id/chapters', handleGetChapters)
+    .add('POST', '/v1/episodes/canonize', (req, _p, _u, env) => handleCanonizeEpisodes(req, env))
+    .add('GET', '/v1/works/:id/episodes', handleGetEpisodes)
     .add('GET', '/v1/works/:id/bindings', handleGetBindings)
     // Manual chart refresh — same X-Crawler-Key gate as crawler feeds.
     .add('POST', '/v1/charts/webtoon/refresh', (req, _p, _u, env) => {
