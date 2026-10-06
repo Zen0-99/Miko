@@ -152,7 +152,7 @@ class MangaScreenModel(
     private val mangaExtensionManager: eu.kanade.tachiyomi.extension.manga.MangaExtensionManager = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
     private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
-    private val goldenSources: eu.kanade.tachiyomi.data.mikodb.GoldenSources = Injekt.get(),
+    private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -1929,7 +1929,6 @@ class MangaScreenModel(
     private fun providerRecommendations(): List<eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension> {
         val installed = mangaExtensionManager.installedExtensionsFlow.value
             .map { it.pkgName }.toSet()
-        val meta = mikoDbManager.allSourceMeta()
         return mangaExtensionManager.availableExtensionsFlow.value
             .asSequence()
             .filter { it.pkgName !in installed }
@@ -1937,12 +1936,19 @@ class MangaScreenModel(
                 eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension(
                     pkgName = ext.pkgName,
                     name = ext.name,
-                    tier = meta[ext.pkgName]?.tier ?: "",
+                    // 20-04: effective tier — the community overlay
+                    // promotes/demotes on top of the manifest survey.
+                    tier = providerTiers.effectiveTier(ext.pkgName),
                     iconUrl = ext.iconUrl,
                     lang = ext.lang,
                 )
             }
-            .sortedWith(compareBy({ goldenSources.tierRank(it.tier) }, { it.name }))
+            .sortedWith(
+                compareBy(
+                    { eu.kanade.tachiyomi.data.mikodb.tierRank(it.tier) },
+                    { it.name },
+                ),
+            )
             .take(eu.kanade.tachiyomi.data.mikodb.ProviderFinder.MAX_RECOMMENDATIONS)
             .toList()
     }

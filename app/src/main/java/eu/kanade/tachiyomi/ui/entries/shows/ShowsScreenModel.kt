@@ -179,7 +179,7 @@ class ShowsScreenModel(
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
     private val episodeMap: eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap = Injekt.get(),
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
-    private val goldenSources: eu.kanade.tachiyomi.data.mikodb.GoldenSources = Injekt.get(),
+    private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
     private val animeExtensionManager: eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager = Injekt.get(),
     private val threadIdResolver: eu.kanade.tachiyomi.data.comments.ThreadIdResolver = Injekt.get(),
     private val commentsApi: eu.kanade.tachiyomi.data.comments.CommentsApi = Injekt.get(),
@@ -2426,7 +2426,6 @@ class ShowsScreenModel(
     private fun providerRecommendations(): List<eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension> {
         val installed = animeExtensionManager.installedExtensionsFlow.value
             .map { it.pkgName }.toSet()
-        val meta = mikoDbManager.allSourceMeta()
         return animeExtensionManager.availableExtensionsFlow.value
             .asSequence()
             .filter { it.pkgName !in installed }
@@ -2434,12 +2433,19 @@ class ShowsScreenModel(
                 eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension(
                     pkgName = ext.pkgName,
                     name = ext.name,
-                    tier = meta[ext.pkgName]?.tier ?: "",
+                    // 20-04: effective tier — the community overlay
+                    // promotes/demotes on top of the manifest survey.
+                    tier = providerTiers.effectiveTier(ext.pkgName),
                     iconUrl = ext.iconUrl,
                     lang = ext.lang,
                 )
             }
-            .sortedWith(compareBy({ goldenSources.tierRank(it.tier) }, { it.name }))
+            .sortedWith(
+                compareBy(
+                    { eu.kanade.tachiyomi.data.mikodb.tierRank(it.tier) },
+                    { it.name },
+                ),
+            )
             .take(eu.kanade.tachiyomi.data.mikodb.ProviderFinder.MAX_RECOMMENDATIONS)
             .toList()
     }

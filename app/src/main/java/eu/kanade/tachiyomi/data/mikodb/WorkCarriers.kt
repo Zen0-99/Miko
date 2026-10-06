@@ -32,6 +32,7 @@ class WorkCarriers(
     private val api: WorkIdentityApi = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val mikoDbManager: MikoDbManager = Injekt.get(),
+    private val providerTiers: ProviderTiers = Injekt.get(),
 ) {
 
     // Lazily resolved: extension-manager init is expensive (async APK scan), so keep it
@@ -221,7 +222,11 @@ class WorkCarriers(
                     ?: inst?.name
                     ?: avail?.name
                     ?: b.source_key.substringAfterLast('.'),
-                tier = m?.tier ?: "",
+                // 20-04: effective tier — manifest overlaid with the
+                // community-verified dynamic tier / report cap, so the
+                // router's candidateOrder and the carrier sheets rank
+                // by what the ledger earned, not just the survey.
+                tier = providerTiers.effectiveTier(b.source_key),
                 providerRef = b.provider_ref,
                 provenance = b.provenance,
                 lastSeenAt = b.last_seen_at,

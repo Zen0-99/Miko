@@ -178,6 +178,17 @@ private fun ProviderRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            // Phase 20-04: the worker's ledger promoted this provider
+            // past its surveyed manifest tier — a real trust mark,
+            // never shown for equal or demoted overlays.
+            if (row.communityVerified) {
+                Text(
+                    text = stringResource(MR.strings.miko_provider_community_verified),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accent,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+            }
             // Phase 20: a binding this device just minted is provisional
             // until the ledger confirms it — honest state on the row.
             if (row.provisionalMint) {

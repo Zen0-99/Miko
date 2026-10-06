@@ -514,12 +514,5 @@ class CanonicalChapterRouter(
             return url.removePrefix(CARRIER_URL_PREFIX).substringAfter(':', "")
         }
 
-        private fun tierRank(tier: String) = when (tier.uppercase()) {
-            "S" -> 0
-            "A" -> 1
-            "B" -> 2
-            "C" -> 3
-            else -> 4
-        }
     }
 }

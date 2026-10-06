@@ -478,6 +478,43 @@ class WorkIdentityApi {
         UnbindResult.Failed
     }
 
+    // ---------- Phase 20-04: provider trust overlay ----------
+
+    @Serializable
+    data class TierDto(
+        /** Community-earned tier — promotes only, never 'S'. */
+        val dynamic_tier: String? = null,
+        /** Report-derank ceiling — demotes only. */
+        val tier_cap: String? = null,
+        val minted_count: Int = 0,
+        val solidified_count: Int = 0,
+    )
+
+    @Serializable
+    data class TiersResponse(
+        val version: Int = 0,
+        val providers: Map<String, TierDto> = emptyMap(),
+    )
+
+    /**
+     * `GET /v1/providers/tiers` — the worker's dynamic-tier/cap overlay
+     * for every tracked provider. PERIODIC ONLY: [ProviderTiers] holds
+     * the 1h TTL + stale cache; this must never be called per mint or
+     * per render. Null on any failure (incl. a pre-20-04 worker's 404)
+     * — callers fall back to manifest tiers.
+     */
+    suspend fun getProviderTiers(): TiersResponse? = try {
+        authedCall(read = true) { headers ->
+            okhttp3.Request.Builder()
+                .url("${baseUrl()}/v1/providers/tiers")
+                .headers(headers)
+                .get()
+                .build()
+        }.let { with(json) { it.parseAs<TiersResponse>() } }
+    } catch (_: Exception) {
+        null
+    }
+
     // ---------- Phase 14-01: coverage-gap telemetry ----------
 
     @Serializable

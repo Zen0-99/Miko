@@ -145,8 +145,7 @@ class NovelScreenModel(
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
     private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
-    private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
-    private val goldenSources: eu.kanade.tachiyomi.data.mikodb.GoldenSources = Injekt.get(),
+    private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
     private val novelExtensionManager: eu.kanade.tachiyomi.extension.novel.NovelExtensionManager = Injekt.get(),
     private val bridge: eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
@@ -1573,7 +1572,6 @@ class NovelScreenModel(
     private fun providerRecommendations(): List<eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension> {
         val installed = novelExtensionManager.installedExtensionsFlow.value
             .map { it.pkgName }.toSet()
-        val meta = mikoDbManager.allSourceMeta()
         return novelExtensionManager.availableExtensionsFlow.value
             .asSequence()
             .filter { it.pkgName !in installed }
@@ -1581,12 +1579,19 @@ class NovelScreenModel(
                 eu.kanade.tachiyomi.data.mikodb.ProviderFinder.RecommendedExtension(
                     pkgName = ext.pkgName,
                     name = ext.name,
-                    tier = meta[ext.pkgName]?.tier ?: "",
+                    // 20-04: effective tier — the community overlay
+                    // promotes/demotes on top of the manifest survey.
+                    tier = providerTiers.effectiveTier(ext.pkgName),
                     iconUrl = ext.iconUrl,
                     lang = ext.lang,
                 )
             }
-            .sortedWith(compareBy({ goldenSources.tierRank(it.tier) }, { it.name }))
+            .sortedWith(
+                compareBy(
+                    { eu.kanade.tachiyomi.data.mikodb.tierRank(it.tier) },
+                    { it.name },
+                ),
+            )
             .take(eu.kanade.tachiyomi.data.mikodb.ProviderFinder.MAX_RECOMMENDATIONS)
             .toList()
     }

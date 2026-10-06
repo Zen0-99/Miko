@@ -38,6 +38,7 @@ class ProviderFinder(
     private val workCarriers: WorkCarriers = Injekt.get(),
     private val episodeMap: CanonicalEpisodeMap = Injekt.get(),
     private val mintTelemetry: MintTelemetry = Injekt.get(),
+    private val providerTiers: ProviderTiers = Injekt.get(),
 ) {
 
     // Outlives any ScreenModel — a sheet close must not kill the fan-out.
@@ -100,6 +101,11 @@ class ProviderFinder(
          *  it is provisional until the ledger confirms it; the sheet
          *  badges the honest state. */
         val provisionalMint: Boolean = false,
+        /** Phase 20-04: the worker's dynamic tier promoted this
+         *  provider past its manifest tier — the sheet's
+         *  "community-verified" micro-label. Equal/demoted/absent
+         *  overlays never flag. */
+        val communityVerified: Boolean = false,
     )
 
     private data class Entry(
@@ -147,17 +153,30 @@ class ProviderFinder(
                 goldens.joinToString(",") { it.pkgName.substringAfterLast('.') }
         }
         val meta = mikoDbManager.allSourceMeta()
+        // 20-04: `community-verified` flags a provider whose ledger-earned
+        // dynamic tier beat its manifest tier — computed once against the
+        // persisted overlay (the collector callback isn't a suspend site).
+        val communityVerified = goldens.mapNotNullTo(HashSet()) { g ->
+            g.pkgName.takeIf {
+                providerTiers.dynamic(it)
+                    ?.let { d -> tierRank(d) < tierRank(meta[it]?.tier ?: "") }
+                    ?: false
+            }
+        }
         val rows = ConcurrentHashMap<String, Row>()
         fun snapshot() = goldens.mapNotNull { rows[it.pkgName] }
-            .sortedBy { goldenSources.tierRank(it.tier) }
+            .sortedBy { tierRank(it.tier) }
         for (g in goldens) {
             rows[g.pkgName] = Row(
                 pkgName = g.pkgName,
                 displayName = meta[g.pkgName]?.name?.takeIf { it.isNotBlank() } ?: g.name,
-                tier = meta[g.pkgName]?.tier ?: g.tier,
+                // g.tier is already the effective tier (20-04 overlay
+                // applied inside GoldenSources.candidatePool).
+                tier = g.tier,
                 status = Status.SEARCHING,
                 icon = g.icon,
                 medium = medium,
+                communityVerified = g.pkgName in communityVerified,
             )
         }
         val state = MutableStateFlow(Search(rows = snapshot(), searching = goldens.isNotEmpty()))
@@ -183,7 +202,8 @@ class ProviderFinder(
                     rows[pkg] = Row(
                         pkgName = pkg,
                         displayName = meta[pkg]?.name?.takeIf { it.isNotBlank() } ?: g.name,
-                        tier = meta[pkg]?.tier ?: g.tier,
+                        tier = g.tier, // effective tier — see above
+                        communityVerified = pkg in communityVerified,
                         icon = g.icon,
                         status = when {
                             feed == null -> if (error != null) Status.FAILED else Status.NO_MATCH

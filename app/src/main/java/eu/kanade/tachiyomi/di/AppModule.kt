@@ -336,6 +336,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.SeenReporter() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.MintTelemetry() }
+        // 20-04: community-verified tier overlay — the single
+        // effectiveTier seam all carrier/ranking reads go through.
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.ProviderTiers() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorksBrowseApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdResolver() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog() }

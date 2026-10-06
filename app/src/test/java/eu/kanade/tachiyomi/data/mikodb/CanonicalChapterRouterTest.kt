@@ -33,10 +33,12 @@ class CanonicalChapterRouterTest {
     private val handler = mockk<MangaDatabaseHandler>()
     private val sourcePreferences = mockk<SourcePreferences>()
     private val db = mockk<Database>(relaxed = true)
+    private val mintTelemetry = mockk<MintTelemetry>(relaxed = true)
 
     private val router = CanonicalChapterRouter(
         chapterMap, goldenSources, sourceManager, novelSourceManager,
         workCarriers, bridge, matcher, commentsApi, handler, sourcePreferences,
+        mintTelemetry,
     )
 
     init {

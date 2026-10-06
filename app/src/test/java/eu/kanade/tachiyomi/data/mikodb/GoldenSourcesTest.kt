@@ -29,6 +29,17 @@ class GoldenSourcesTest {
     private val novelRepository = mockk<NovelRepository>()
     private val animeRepository = mockk<AnimeRepository>()
     private val animeExtensions = mockk<AnimeExtensionManager>()
+    private val workIdentityApi = mockk<WorkIdentityApi>()
+
+    // 20-04: real ProviderTiers with a dead api — the overlay is empty,
+    // so effectiveTier(pkg) ≡ the manifest tier, matching pre-overlay
+    // expectations in every golden below.
+    private val providerTiers = ProviderTiers(
+        api = workIdentityApi,
+        mikoDbManager = mikoDbManager,
+        preferenceStore = tachiyomi.core.common.preference.InMemoryPreferenceStore(),
+        json = json,
+    )
 
     private val golden = GoldenSources(
         mikoDbManager = mikoDbManager,
@@ -40,6 +51,7 @@ class GoldenSourcesTest {
         mangaRepository = mangaRepository,
         novelRepository = novelRepository,
         animeRepository = animeRepository,
+        providerTiers = providerTiers,
     )
 
     init {
@@ -49,6 +61,12 @@ class GoldenSourcesTest {
         coEvery { mangaRepository.getMangaFavorites() } returns emptyList()
         coEvery { mangaRepository.getReadMangaNotInLibrary() } returns emptyList()
         coEvery { novelRepository.getNovelFavorites() } returns emptyList()
+        coEvery { workIdentityApi.getProviderTiers() } returns null
+        // ProviderTiers reads the same manifest — route the per-pkg
+        // lookup through the test's allSourceMeta stub.
+        every { mikoDbManager.sourceMeta(any()) } answers {
+            mikoDbManager.allSourceMeta()[firstArg()]
+        }
     }
 
     private fun ext(pkg: String, vararg sourceIds: Long, nsfw: Boolean = false) = MangaExtension.Installed(
@@ -83,10 +101,10 @@ class GoldenSourcesTest {
 
     @Test
     fun `tier ranking orders S A B C`() {
-        assertTrue(golden.tierRank("S") < golden.tierRank("A"))
-        assertTrue(golden.tierRank("A") < golden.tierRank("B"))
-        assertTrue(golden.tierRank("B") < golden.tierRank("C"))
-        assertTrue(golden.tierRank("C") < golden.tierRank(""))
+        assertTrue(tierRank("S") < tierRank("A"))
+        assertTrue(tierRank("A") < tierRank("B"))
+        assertTrue(tierRank("B") < tierRank("C"))
+        assertTrue(tierRank("C") < tierRank(""))
     }
 
     @Test

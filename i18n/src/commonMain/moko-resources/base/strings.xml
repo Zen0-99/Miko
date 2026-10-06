@@ -1162,4 +1162,5 @@
     <string name="miko_binding_unbind">wrong work? unbind</string>
     <string name="miko_binding_unbound">Binding removed</string>
     <string name="miko_binding_unbind_failed">Couldn\'t remove the binding</string>
+    <string name="miko_provider_community_verified">community-verified</string>
 </resources>

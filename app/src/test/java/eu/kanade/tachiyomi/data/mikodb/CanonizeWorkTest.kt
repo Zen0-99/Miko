@@ -24,10 +24,19 @@ class CanonizeWorkTest {
     private val episodeMap = mockk<CanonicalEpisodeMap>()
     private val mikoDbManager = mockk<MikoDbManager>()
     private val animeBridge = mockk<AnimeIdBridge>()
+    private val mintTelemetry = mockk<MintTelemetry>(relaxed = true)
+    private val workCarriers = mockk<WorkCarriers>(relaxed = true)
 
     private val canonize = CanonizeWork(
         bridge, collector, chapterMap, api, goldenSources, episodeMap, mikoDbManager,
+        mintTelemetry, workCarriers,
     )
+
+    init {
+        // An empty queue drains to null — the canonize stubs below
+        // predate the bundled-telemetry field and match on null.
+        coEvery { mintTelemetry.drain() } returns null
+    }
 
     private val work = MangaNovelIdBridge.WorkRow(
         mikoWorkId = "mk:mb:1",

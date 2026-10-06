@@ -40,6 +40,7 @@ class GoldenSources(
     private val mangaExtensions: MangaExtensionManager = Injekt.get(),
     private val novelExtensions: NovelExtensionManager = Injekt.get(),
     private val animeExtensions: AnimeExtensionManager = Injekt.get(),
+    private val providerTiers: ProviderTiers = Injekt.get(),
 ) {
 
     /** A provider link joined to an installed, tiered extension. */
@@ -55,15 +56,6 @@ class GoldenSources(
          *  render it via the browse-screen ExtensionIcon logic. */
         val icon: Drawable? = null,
     )
-
-    /** Tier rank for sorting — S best, then A, B, C; unknown last. */
-    internal fun tierRank(tier: String) = when (tier.uppercase()) {
-        "S" -> 0
-        "A" -> 1
-        "B" -> 2
-        "C" -> 3
-        else -> 4
-    }
 
     /**
      * Provider links ∩ installed extensions ∩ tier ∈ {S, A}, ordered by
@@ -131,6 +123,12 @@ class GoldenSources(
         val meta = mikoDbManager.allSourceMeta()
 
         // Declared path: miko.json `providers` ∩ provider_links ∩ installed.
+        // Phase 20-04: every tier stamped on a candidate is the
+        // EFFECTIVE tier — manifest overlaid with the worker's
+        // community-verified promotion / report-cap demotion in the
+        // single ProviderTiers seam. Readers of GoldenSource.tier
+        // (ranking here, collector feeds, router carriers, the Find
+        // Provider sheet) see the composed value for free.
         val byProvider = mutableMapOf<String, MutableList<GoldenSource>>()
         for ((pkg, m) in meta) {
             val ext = installedByPkg[pkg] ?: continue
@@ -141,7 +139,7 @@ class GoldenSources(
                             pkgName = pkg,
                             sourceIds = ext.sourceIds,
                             name = m.name,
-                            tier = m.tier,
+                            tier = providerTiers.effectiveTier(pkg),
                             provider = provider,
                             externalId = null,
                             url = null,
@@ -168,7 +166,7 @@ class GoldenSources(
                     pkgName = ext.pkgName,
                     sourceIds = ext.sourceIds,
                     name = meta[ext.pkgName]?.name ?: ext.pkgName.substringAfterLast('.'),
-                    tier = meta[ext.pkgName]?.tier ?: "",
+                    tier = providerTiers.effectiveTier(ext.pkgName),
                     provider = link.provider,
                     externalId = link.externalId,
                     url = link.url,
@@ -196,7 +194,7 @@ class GoldenSources(
                 compareBy(
                     { if (it.pkgName in localPkgs) 0 else 1 },
                     { if (!work.nsfw && it.isNsfw) 1 else 0 },
-                    { tierRank(meta[it.pkgName]?.tier ?: "") },
+                    { tierRank(providerTiers.effectiveTier(it.pkgName)) },
                     { it.pkgName },
                 ),
             )
@@ -205,7 +203,7 @@ class GoldenSources(
                     pkgName = ext.pkgName,
                     sourceIds = ext.sourceIds,
                     name = meta[ext.pkgName]?.name ?: ext.pkgName.substringAfterLast('.'),
-                    tier = meta[ext.pkgName]?.tier ?: "",
+                    tier = providerTiers.effectiveTier(ext.pkgName),
                     provider = "",
                     externalId = null,
                     url = null,
@@ -344,4 +342,16 @@ class GoldenSources(
                     .map { InstalledExt(it.pkgName, it.sources.map { s -> s.id }, it.isNsfw, it.icon) }
         }
     }
+}
+
+/** THE tier rank for the mikodb package — S best, then A, B, C;
+ *  unknown last. File scope so the 20-04 overlay ([ProviderTiers]),
+ *  the router, and the screen models share one definition (the old
+ *  per-class copies were drift risk). */
+internal fun tierRank(tier: String) = when (tier.uppercase()) {
+    "S" -> 0
+    "A" -> 1
+    "B" -> 2
+    "C" -> 3
+    else -> 4
 }
