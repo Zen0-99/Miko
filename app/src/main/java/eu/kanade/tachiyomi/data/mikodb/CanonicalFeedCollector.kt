@@ -41,6 +41,9 @@ class CanonicalFeedCollector(
     private val novelSourceManager: NovelSourceManager = Injekt.get(),
     private val animeSourceManager: AnimeSourceManager = Injekt.get(),
     private val matcher: SeriesMatcher = Injekt.get(),
+    private val mikoDbManager: MikoDbManager = Injekt.get(),
+    private val sourcePreferences: eu.kanade.domain.source.service.SourcePreferences = Injekt.get(),
+    private val identityApi: WorkIdentityApi = Injekt.get(),
 ) {
 
     /** Entry metadata carried by a source's series details — lets the
@@ -73,7 +76,8 @@ class CanonicalFeedCollector(
         val details: FeedDetails? = null,
         /** Carrier episode rows — populated only on the shows path
          *  (19-03 courier); stays empty for manga/books feeds. `abs`
-         *  is not canonicalized here — that is 19-04's coverage pass. */
+         *  is canonicalized by 19-04's [EpisodeCoverage] pass when the
+         *  bound artifact entry proves the carrier's numbering. */
         val episodes: List<WorkIdentityApi.FeedEpisode> = emptyList(),
     )
 
@@ -133,7 +137,10 @@ class CanonicalFeedCollector(
                                     WorkIdResolver.MEDIUM_BOOKS ->
                                         collectNovelFrom(g, query, work.title ?: "", topCandidates)
                                     WorkIdResolver.MEDIUM_SHOWS ->
-                                        collectAnimeFrom(g, query, work.title ?: "", topCandidates)
+                                        collectAnimeFrom(
+                                            g, query, work.title ?: "", topCandidates,
+                                            work.mikoWorkId,
+                                        )
                                     else ->
                                         collectFrom(g, query, work.title ?: "", topCandidates)
                                 }
@@ -375,25 +382,27 @@ class CanonicalFeedCollector(
     }
 
     /**
-     * Shows collection (17-02, 19-03) — same shape but drives
-     * [AnimeCatalogueSource] via [AnimeSourceManager]; the feed carries
-     * the source's episode list as [FeedEpisode] rows for the
-     * `/v1/episodes/canonize` courier (D-04a). Numbers are the carrier's
-     * raw numbering — `abs` canonicalization against artifact rows is
-     * 19-04's coverage pass. SeriesMatcher still gates identity — a
-     * wrong anime match never binds.
+     * Shows collection (17-02, 19-03, abs canonicalization 19-04) —
+     * same shape but drives [AnimeCatalogueSource] via
+     * [AnimeSourceManager]; the feed carries the source's episode list
+     * as [FeedEpisode] rows for the `/v1/episodes/canonize` courier
+     * (D-04a). `number` stays the carrier's raw numbering; `abs` is
+     * filled from the bound artifact entry's rows when proven (D-06).
+     * SeriesMatcher still gates identity — a wrong anime match never
+     * binds.
      */
     private suspend fun collectAnimeFrom(
         g: GoldenSources.GoldenSource,
         query: SeriesMatcher.Query,
         searchTitle: String,
         topCandidates: Int = TOP_CANDIDATES,
+        workId: String = "",
     ): Feed? {
         val source = g.sourceIds.firstNotNullOfOrNull { id -> animeSourceManager.get(id) }
             as? AnimeCatalogueSource ?: error("source unavailable")
 
         if (!g.url.isNullOrBlank()) {
-            evalAnimeFeed(source, g, query, listOf(SAnime.create().apply { url = g.url!! }))
+            evalAnimeFeed(source, g, query, listOf(SAnime.create().apply { url = g.url!! }), workId)
                 ?.takeIf { it.verdict != SeriesMatcher.Decision.REJECT }
                 ?.let { return it }
         }
@@ -401,7 +410,7 @@ class CanonicalFeedCollector(
             source.getSearchAnime(1, searchTitle, source.getFilterList())
         }.getOrElse { e -> throw IllegalStateException("search failed: ${e.message}") }
         logcat { "canonicalFeed(anime) ${g.pkgName} search '${searchTitle}': ${page.animes.size} hits" }
-        return evalAnimeFeed(source, g, query, page.animes.take(topCandidates))
+        return evalAnimeFeed(source, g, query, page.animes.take(topCandidates), workId)
     }
 
     private suspend fun evalAnimeFeed(
@@ -409,6 +418,7 @@ class CanonicalFeedCollector(
         g: GoldenSources.GoldenSource,
         query: SeriesMatcher.Query,
         candidates: List<SAnime>,
+        workId: String,
     ): Feed? {
         if (candidates.isEmpty()) return null
         val detailed = candidates.mapNotNull { sa ->
@@ -457,6 +467,12 @@ class CanonicalFeedCollector(
                     number = ep.episode_number.toDouble().takeIf { n -> n >= 0.0 },
                 )
             }
+            // 19-04 abs canonicalization: when the bound artifact
+            // entry's episode rows prove the carrier's numbering, lift
+            // `abs` into canonical space (the worker merge-key prefers
+            // abs). Unmapped numbers keep abs=null — a wrong map is
+            // worse than none; divergence flags police raw merges.
+            .let { canonicalizeAbs(workId, g, sa.url, it) }
 
         return Feed(
             sourceId = source.id,
@@ -486,6 +502,60 @@ class CanonicalFeedCollector(
         SPECIAL_NAME_RE.containsMatchIn(name) -> "special"
         NC_NAME_RE.containsMatchIn(name) -> "nc"
         else -> "episode"
+    }
+
+    /**
+     * Carrier-number → canonical-abs overlay (19-04, D-06). Binding
+     * signals in order: the winning entry's own extension url under the
+     * source's declared id vocabulary (that url mints the
+     * `provider_bindings` row), the work's provider-link id under its
+     * provider vocabulary, then the preferred carrier's stored binding
+     * (Design §10 — blank/unmappable refs fall back to the donor
+     * carrier's proven entry). All three only choose WHICH artifact
+     * entry proves the mapping; the carrier's own numbers still have to
+     * match `anime_episodes.number` to canonicalize.
+     */
+    private suspend fun canonicalizeAbs(
+        workId: String,
+        g: GoldenSources.GoldenSource,
+        providerRef: String?,
+        episodes: List<WorkIdentityApi.FeedEpisode>,
+    ): List<WorkIdentityApi.FeedEpisode> {
+        if (episodes.none { it.number != null }) return episodes
+        if (!workId.startsWith(CanonizeWork.IMDB_WORK_PREFIX)) return episodes
+        val bridge = mikoDbManager.bridge() ?: return episodes
+        val rows = bridge.byImdb(workId.removePrefix(CanonizeWork.IMDB_WORK_PREFIX))
+        if (rows.isEmpty()) return episodes
+
+        val entry = EpisodeCoverage.boundEntry(
+            rows, providerRef, mikoDbManager.sourceMeta(g.pkgName)?.idType,
+        ) ?: EpisodeCoverage.boundEntry(rows, g.externalId, g.provider)
+            ?: preferredBoundEntry(workId, rows)
+            ?: return episodes
+
+        val anidb = entry.anidbId ?: return episodes
+        val abs = EpisodeCoverage.canonicalizeNumbers(
+            episodes.mapNotNull { it.number },
+            bridge.episodesForAnidb(anidb),
+        )
+        if (abs.isEmpty()) return episodes
+        return episodes.map { ep ->
+            ep.number?.let { abs[it] }?.let { ep.copy(abs = it) } ?: ep
+        }
+    }
+
+    /** The donor carrier's stored provider ref, resolved under its own
+     *  id vocabulary — the §10 fallback when a feed carries no usable
+     *  `provider_ref`. */
+    private suspend fun preferredBoundEntry(
+        workId: String,
+        rows: List<AnimeIdBridge.AnimeMapping>,
+    ): AnimeIdBridge.AnimeMapping? {
+        val pkg = sourcePreferences.preferredCarrierFor(workId) ?: return null
+        val ref = runCatching { identityApi.getBindings(workId) }.getOrNull()
+            ?.bindings?.firstOrNull { it.source_key == pkg }?.provider_ref
+            ?: return null
+        return EpisodeCoverage.boundEntry(rows, ref, mikoDbManager.sourceMeta(pkg)?.idType)
     }
 
     companion object {

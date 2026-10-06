@@ -74,6 +74,10 @@ val backupEpisodeMapper = {
         summary: String?,
         previewUrl: String?,
         fillermark: Boolean,
+        // 19-04 canonical overlay columns — derived, not backed up;
+        // the canonical pipeline rehydrates them on next launchShows.
+        _: String?,
+        _: Boolean?,
     ->
     BackupEpisode(
         url = url,

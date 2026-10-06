@@ -11,6 +11,13 @@ import eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
  *   books:mk:m:ab12:b2c7           — "Book 2" + chapter 7
  *   shows:mk:imdb:tt0944947:e5     — episode scope (shows skip alignment)
  *
+ * 19-04 adds the canonical episode keyspace (D-06), mirroring the
+ * worker `episodemap.ts` merge keys:
+ *
+ *   shows:mk:imdb:tt0944947:e26    — main canon row, ABSOLUTE number
+ *   shows:mk:imdb:tt0944947:s0e3   — special/NC canon row,
+ *                                    (season ?: 0, epInSeason) scoped
+ *
  * Server-side THREAD_RE `^(shows|manga|books):[^\s]{1,200}$` already
  * accepts these suffixes, so chapter threads need no protocol change.
  * Chapters whose number can't be resolved produce null — callers hide
@@ -66,9 +73,52 @@ object ChapterBinder {
         }
     }
 
-    /** Episode-scope thread ID for shows. */
+    /** Episode-scope thread ID for shows — the legacy raw-number key,
+     *  kept as the fallback when no canonical row binds (D-06). */
     fun bindEpisode(workId: String, episodeNumber: Float): String =
         "shows:$workId:e${formatNumber(episodeNumber)}"
+
+    /**
+     * Canonical episode thread ID for a bound
+     * [CanonicalEpisodeMap.CanonEpisode] row — the worker's merge-key
+     * identity restated as a comment thread:
+     *
+     *   mains (kind 'episode'):       `shows:<w>:e<abs ?? number>`
+     *   specials/NC:                  `shows:<w>:s<season ?: 0>e<epInSeason ?: number>`
+     *
+     * Null when the row carries no usable coordinate — callers fall
+     * back to [bindEpisode]'s raw key so threads stay usable while
+     * canon is absent, offline, or stale.
+     */
+    fun bindEpisodeCanon(
+        workId: String,
+        kind: String,
+        abs: Int?,
+        season: Int?,
+        epInSeason: Int?,
+        number: Double? = null,
+    ): String? {
+        if (kind == "episode") {
+            val n = abs?.toFloat() ?: number?.toFloat() ?: return null
+            return "shows:$workId:e${formatNumber(n)}"
+        }
+        val e = epInSeason?.toFloat() ?: number?.toFloat() ?: return null
+        return "shows:$workId:s${season ?: 0}e${formatNumber(e)}"
+    }
+
+    /**
+     * "Season N" prefix of a Cinemeta episode scanlator —
+     * "Season 2|★8.1" → 2, "Season 0" → 0. Non-season scanlators
+     * (release-group names) and null → null; unlike the UI's
+     * `parseCinemetaSeason` helpers this never defaults to 1 — the
+     * caller chooses the fallback.
+     */
+    fun parseSeason(scanlator: String?): Int? {
+        val head = scanlator?.substringBefore('|')?.trim()
+            ?.takeIf { it.startsWith("Season ") }
+            ?: return null
+        return head.removePrefix("Season ").trim().toIntOrNull()
+    }
 
     /** "Chapter 9" → 9f; null when no chapter marker is present. */
     fun numberFromName(name: String): Float? =

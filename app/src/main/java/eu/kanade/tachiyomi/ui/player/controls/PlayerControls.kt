@@ -63,6 +63,7 @@ import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.more.settings.screen.player.custombutton.getButtons
 import eu.kanade.presentation.theme.playerRippleConfiguration
+import eu.kanade.tachiyomi.data.comments.ChapterBinder
 import eu.kanade.tachiyomi.ui.comments.CommentsSheetScreen
 import eu.kanade.tachiyomi.ui.player.Dialogs
 import eu.kanade.tachiyomi.ui.player.Panels
@@ -711,6 +712,7 @@ fun PlayerControls(
                         name = commentsEpisode.name,
                         number = commentsEpisode.episode_number,
                         sourceKey = commentsSourceName,
+                        season = ChapterBinder.parseSeason(commentsEpisode.scanlator),
                         allChapters = playlist.map { it.name to it.episode_number },
                     ),
                     // The docked panel is full-height; the sheet wraps content.

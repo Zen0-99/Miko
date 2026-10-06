@@ -56,13 +56,15 @@ class CommentsSheetScreen(
 
     /**
      * Chapter/episode-scope thread input. [allChapters] is the source's
-     * full (name, number) list — used for the alignment fingerprint
-     * (manga/books only; ignored for shows).
+     * full (name, number) list — used for the alignment fingerprint.
+     * [season] is the Cinemeta "Season N" carrier for shows episodes
+     * (0 = specials; null for flat-numbered episodes and manga/books).
      */
     data class ChapterRef(
         val name: String,
         val number: Float,
         val sourceKey: String,
+        val season: Int? = null,
         val allChapters: List<Pair<String, Float>> = emptyList(),
     )
 
@@ -199,7 +201,14 @@ class CommentsSheetScreen(
         // colons (mk:mb:1), so strip only the first segment.
         val workId = workThread.substringAfter(':')
         val threadId = when (carrier) {
-            Carrier.SHOWS -> chapterResolver.episode(workId, chapter.number)
+            Carrier.SHOWS -> chapterResolver.episode(
+                workId = workId,
+                season = chapter.season,
+                episodeNumber = chapter.number,
+                sourceKey = chapter.sourceKey,
+                title = title,
+                episodes = chapter.allChapters,
+            )
             Carrier.MANGA -> chapterResolver.chapter(
                 carrier = Carrier.MANGA,
                 workId = workId,

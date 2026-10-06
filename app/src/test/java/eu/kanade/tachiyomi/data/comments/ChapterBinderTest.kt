@@ -75,6 +75,75 @@ class ChapterBinderTest {
         )
     }
 
+    // ---------- 19-04: canonical episode keys (D-06) ----------
+
+    @Test
+    fun `canonical main episode binds the absolute key`() {
+        assertEquals(
+            "shows:mk:imdb:tt0944947:e26",
+            ChapterBinder.bindEpisodeCanon(
+                "mk:imdb:tt0944947",
+                kind = "episode",
+                abs = 26,
+                season = 2,
+                epInSeason = 5,
+            ),
+        )
+    }
+
+    @Test
+    fun `canonical special binds the season-scoped key`() {
+        assertEquals(
+            "shows:mk:imdb:tt0944947:s0e3",
+            ChapterBinder.bindEpisodeCanon(
+                "mk:imdb:tt0944947",
+                kind = "special",
+                abs = null,
+                season = 0,
+                epInSeason = 3,
+            ),
+        )
+    }
+
+    @Test
+    fun `canonical nc binds the extras keyspace`() {
+        assertEquals(
+            "shows:mk:imdb:tt0944947:s1e2",
+            ChapterBinder.bindEpisodeCanon(
+                "mk:imdb:tt0944947",
+                kind = "nc",
+                abs = null,
+                season = 1,
+                epInSeason = 2,
+            ),
+        )
+        // No coordinates at all → null, callers fall back to :e<raw>.
+        assertNull(
+            ChapterBinder.bindEpisodeCanon(
+                "mk:imdb:tt0944947",
+                kind = "episode",
+                abs = null,
+                season = null,
+                epInSeason = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `parseSeason reads the Season prefix and ignores the rating suffix`() {
+        assertEquals(2, ChapterBinder.parseSeason("Season 2|★8.1"))
+        assertEquals(0, ChapterBinder.parseSeason("Season 0"))
+        assertEquals(12, ChapterBinder.parseSeason("Season 12|★7.4"))
+    }
+
+    @Test
+    fun `parseSeason returns null for non-season scanlators`() {
+        assertNull(ChapterBinder.parseSeason("[SubsPlease]"))
+        assertNull(ChapterBinder.parseSeason("Some Group"))
+        assertNull(ChapterBinder.parseSeason(null))
+        assertNull(ChapterBinder.parseSeason(""))
+    }
+
     @Test
     fun `produced ids satisfy worker thread regex`() {
         val re = Regex("^(shows|manga|books):[^\\s]{1,200}$")
@@ -82,6 +151,8 @@ class ChapterBinderTest {
             ChapterBinder.bind(Carrier.MANGA, work, "Vol.4 Ch.30", 30f),
             ChapterBinder.bind(Carrier.BOOKS, work, "Chapter 7", 7f),
             ChapterBinder.bindEpisode("mk:imdb:tt0944947", 12.5f),
+            ChapterBinder.bindEpisodeCanon("mk:imdb:tt0944947", "episode", 26, 2, 5),
+            ChapterBinder.bindEpisodeCanon("mk:imdb:tt0944947", "special", null, 0, 3),
         )
         ids.forEach { assert(it.matches(re)) { "bad thread id: $it" } }
     }

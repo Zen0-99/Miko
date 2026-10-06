@@ -74,6 +74,8 @@ class EpisodeRepositoryImpl(
                     summary = episodeUpdate.summary,
                     previewUrl = episodeUpdate.previewUrl,
                     fillermark = episodeUpdate.fillermark,
+                    episodeType = episodeUpdate.episodeType,
+                    canonicalFiller = episodeUpdate.canonicalFiller,
                 )
             }
         }
@@ -144,6 +146,8 @@ class EpisodeRepositoryImpl(
         summary: String?,
         previewUrl: String?,
         fillermark: Boolean,
+        episodeType: String?,
+        canonicalFiller: Boolean?,
     ): Episode = Episode(
         id = id,
         animeId = animeId,
@@ -163,5 +167,7 @@ class EpisodeRepositoryImpl(
         previewUrl = previewUrl,
         lastModifiedAt = lastModifiedAt,
         version = version,
+        episodeType = episodeType,
+        canonicalFiller = canonicalFiller,
     )
 }

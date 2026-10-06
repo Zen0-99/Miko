@@ -20,6 +20,8 @@ CREATE TABLE episodes(
     summary TEXT,
     preview_url TEXT,
     fillermark INTEGER AS Boolean NOT NULL,
+    episode_type TEXT,
+    canonical_filler INTEGER AS Boolean,
     FOREIGN KEY(anime_id) REFERENCES animes (_id)
     ON DELETE CASCADE
 );
@@ -111,7 +113,9 @@ SET anime_id = coalesce(:animeId, anime_id),
     is_syncing = coalesce(:isSyncing, is_syncing),
     summary = coalesce(:summary, summary),
     preview_url = coalesce(:previewUrl, preview_url),
-    fillermark = coalesce(:fillermark, fillermark)
+    fillermark = coalesce(:fillermark, fillermark),
+    episode_type = coalesce(:episodeType, episode_type),
+    canonical_filler = coalesce(:canonicalFiller, canonical_filler)
 WHERE _id = :episodeId;
 
 selectLastInsertedRowId:

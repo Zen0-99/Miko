@@ -254,7 +254,7 @@ class CanonizeWork(
         episodes = episodes,
     )
 
-    private companion object {
+    companion object {
         const val MAX_FAILURES = 2
 
         /** Reserved artifact `source_key` — the worker demotes any feed

@@ -18,6 +18,8 @@ data class EpisodeUpdate(
     val summary: String? = null,
     val previewUrl: String? = null,
     val version: Long? = null,
+    val episodeType: String? = null,
+    val canonicalFiller: Boolean? = null,
 )
 
 fun Episode.toEpisodeUpdate(): EpisodeUpdate {
@@ -39,5 +41,7 @@ fun Episode.toEpisodeUpdate(): EpisodeUpdate {
         summary,
         previewUrl,
         version,
+        episodeType,
+        canonicalFiller,
     )
 }

@@ -270,6 +270,10 @@ class AnimeRestorer(
                     episodeId = episode.id,
                     version = episode.version,
                     isSyncing = 0,
+                    // Canonical overlay (19-04) is not part of backups —
+                    // the canonical pipeline rehydrates it.
+                    episodeType = null,
+                    canonicalFiller = null,
                 )
             }
         }

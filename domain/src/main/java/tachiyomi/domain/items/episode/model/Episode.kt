@@ -19,6 +19,12 @@ data class Episode(
     val previewUrl: String?,
     val lastModifiedAt: Long,
     val version: Long,
+    /** Canonical episode kind (19-04): 'main'|'special'|'nc'; null
+     *  until canonical hydration binds the row. */
+    val episodeType: String? = null,
+    /** Feed-asserted filler flag (canonical data, not user state) —
+     *  the UI reads `fillermark || canonicalFiller`. */
+    val canonicalFiller: Boolean? = null,
 ) {
     val isRecognizedNumber: Boolean
         get() = episodeNumber >= 0f

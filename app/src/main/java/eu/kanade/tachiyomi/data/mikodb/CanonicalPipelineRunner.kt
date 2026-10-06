@@ -11,6 +11,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.shows.model.Anime
+import tachiyomi.domain.items.episode.repository.EpisodeRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
@@ -32,6 +33,9 @@ class CanonicalPipelineRunner(
     private val canonizeWork: CanonizeWork = Injekt.get(),
     private val canonicalChapterSync: CanonicalChapterSync = Injekt.get(),
     private val canonizer: LibraryCanonizer = Injekt.get(),
+    private val episodeMap: CanonicalEpisodeMap = Injekt.get(),
+    private val episodeRepository: EpisodeRepository = Injekt.get(),
+    private val loadCanonicalEpisodes: LoadCanonicalEpisodes = Injekt.get(),
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -128,7 +132,19 @@ class CanonicalPipelineRunner(
             try {
                 canonizeWork.run(workId, Carrier.SHOWS)
                 // 19-04: canonical hydration (canonical_episodes →
-                // episode rows) lands here, then comment-key binding.
+                // episode rows) — overlays canon fields onto the
+                // materialized Cinemeta rows; user-owned fields are
+                // never part of the update. Runs regardless of the
+                // canonize outcome (a fresh canon may still not have
+                // hydrated this device).
+                val canon = episodeMap.forWork(workId)
+                if (canon.isNotEmpty()) {
+                    loadCanonicalEpisodes.apply(
+                        anime,
+                        episodeRepository.getEpisodeByAnimeId(anime.id),
+                        canon,
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

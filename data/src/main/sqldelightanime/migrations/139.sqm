@@ -1,0 +1,9 @@
+import kotlin.Boolean;
+
+-- Phase 19-04: canonical episode overlay. episode_type carries the
+-- worker's kind vocabulary mapped to 'main'|'special'|'nc';
+-- canonical_filler is the feed-asserted filler flag, kept separate
+-- from the user-owned `fillermark` (the UI reads
+-- fillermark || canonical_filler).
+ALTER TABLE episodes ADD COLUMN episode_type TEXT;
+ALTER TABLE episodes ADD COLUMN canonical_filler INTEGER AS Boolean;
