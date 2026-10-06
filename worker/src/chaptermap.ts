@@ -4,7 +4,12 @@ import { parseChapter } from './chapterparse';
 import type { Env } from './env';
 import { normalize } from './normalize';
 import type { BindingWritePlan } from './trust';
-import { ingestTelemetry, planBindingWrite } from './trust';
+import {
+    evaluateBindingRate,
+    ingestTelemetry,
+    planBindingWrite,
+    recordBindingRate,
+} from './trust';
 import { err, now, ok } from './util';
 
 const MAX_FEEDS = 20;
@@ -146,6 +151,19 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
                 }
             }
         }
+    }
+
+    // Mint rate gate (SD-17): an identified canonize carrying
+    // provider_refs is a device-attributed mint burst — D1
+    // window-counted via binding_rate_log. Unauthenticated canonize
+    // can't be device-capped; it dead-writes provisionally and the CF
+    // dashboard rule is the cost ceiling.
+    if (identity != null && body.feeds.some(
+        (f) => typeof f.provider_ref === 'string' && f.provider_ref,
+    )) {
+        const rate = await evaluateBindingRate(env, identity, 'mint');
+        if (!rate.ok) return err(429, rate.rule);
+        await recordBindingRate(env, identity.device_hash, 'mint');
     }
 
     // Persist each feed (latest-wins per source_key) then remerge the

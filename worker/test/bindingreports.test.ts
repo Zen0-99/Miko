@@ -423,3 +423,181 @@ describe('POST /v1/bindings/report — ledger', () => {
         expect(post?.n).toBe(0);
     });
 });
+
+describe('POST /v1/bindings/unbind', () => {
+    it('the minter deletes their own provisional row and the audit row lands', async () => {
+        const work = 'mk:mb:unbind-own';
+        const ref = '/series/oops';
+        await seedWork(work);
+        const a = await newDevice();
+        await canonize(canonBody(work, SRC, ref), a.token);
+
+        const res = await unbind(repBody(work, SRC, ref), a.token);
+        expect(res.status).toBe(200);
+        expect(await res.json() as any).toEqual({ unbound: true });
+
+        // Row, confirms, and the caller-submitted feed are all gone.
+        expect(await bindingRow(SRC, ref)).toBeNull();
+        const confirms = await env.COMMENTS_DB.prepare(
+            'SELECT COUNT(*) AS n FROM binding_confirms WHERE provider = ? AND external_id = ?',
+        ).bind(SRC, ref).first<{ n: number }>();
+        expect(confirms?.n).toBe(0);
+        const feed = await env.COMMENTS_DB.prepare(
+            'SELECT COUNT(*) AS n FROM canonical_feeds WHERE work_id = ? AND source_key = ?',
+        ).bind(work, SRC).first<{ n: number }>();
+        expect(feed?.n).toBe(0);
+        const audit = await env.COMMENTS_DB.prepare(
+            `SELECT weight, kind FROM binding_reports
+             WHERE provider = ? AND external_id = ? AND device_hash = ?`,
+        ).bind(SRC, ref, a.hash).first<{ weight: number; kind: string }>();
+        expect(audit).toEqual({ weight: 0, kind: 'unbind' });
+
+        // The freed (provider, ref) PK takes a correct re-mint cleanly.
+        const b = await newDevice();
+        await canonize(canonBody(work, SRC, ref), b.token);
+        const remint = await bindingRow(SRC, ref);
+        expect(remint?.status).toBe('provisional');
+        expect(remint?.minter_device_hash).toBe(b.hash);
+    });
+
+    it('404s on rows the caller cannot revoke; 401/403/429 guards hold', async () => {
+        const work = 'mk:mb:unbind-guard';
+        const a = await newDevice();
+        const b = await newDevice();
+        await canonize(canonBody(work, SRC, '/r/mine'), a.token);
+
+        // Another device can't revoke a's mint.
+        expect((await unbind(repBody(work, SRC, '/r/mine'), b.token)).status).toBe(404);
+        // A confirmed row can't be unbound — even by its minter.
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO external_ids
+             (provider, external_id, miko_work_id, status, confirmed_at, minter_device_hash)
+             VALUES (?,?,?,'confirmed',?,?)`,
+        ).bind(SRC, '/r/conf', work, Date.now(), a.hash).run();
+        expect((await unbind(repBody(work, SRC, '/r/conf'), a.token)).status).toBe(404);
+        // NULL-minter rows belong to nobody.
+        await canonize(canonBody(work, SRC, '/r/anon')); // no Bearer
+        expect((await unbind(repBody(work, SRC, '/r/anon'), a.token)).status).toBe(404);
+        // Missing row.
+        expect((await unbind(repBody(work, SRC, '/r/nope'), a.token)).status).toBe(404);
+        // No Bearer.
+        expect((await unbind(repBody(work, SRC, '/r/mine'))).status).toBe(401);
+        // Suspended — checkWrite applies to unbind too.
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO strikes (device_hash, strike_level, suspended_until, last_strike_at, updated_at)
+             VALUES (?,1,?,0,0)`,
+        ).bind(b.hash, Date.now() + 60_000).run();
+        expect((await unbind(repBody(work, SRC, '/r/mine'), b.token)).status).toBe(403);
+        // Over the unbinds_per_hour cap → 429 (rate fires before the
+        // ownership check — denied attempts need no valid target).
+        const spam = await newDevice();
+        await seedRateRows(spam.hash, 'unbind', 10);
+        const capped = await unbind(repBody(work, SRC, '/r/mine'), spam.token);
+        expect(capped.status).toBe(429);
+        expect((await capped.json() as any).error).toBe('rate_unbind');
+    });
+
+    it('a feed submitted by another device is never deleted on unbind', async () => {
+        const work = 'mk:mb:unbind-feed';
+        const ref = '/series/sharedfeed';
+        await seedWork(work);
+        const a = await newDevice();
+        const b = await newDevice();
+        await canonize(canonBody(work, SRC, ref), a.token);
+        // b's re-post REPLACEs the feed row — b becomes the submitter.
+        await canonize(canonBody(work, SRC, ref), b.token);
+        const pre = await env.COMMENTS_DB.prepare(
+            'SELECT pending, submitter_device_hash FROM canonical_feeds WHERE work_id = ? AND source_key = ?',
+        ).bind(work, SRC).first<{ pending: number; submitter_device_hash: string }>();
+        expect(pre?.submitter_device_hash).toBe(b.hash);
+
+        expect((await unbind(repBody(work, SRC, ref), a.token)).status).toBe(200);
+        const feed = await env.COMMENTS_DB.prepare(
+            'SELECT pending FROM canonical_feeds WHERE work_id = ? AND source_key = ?',
+        ).bind(work, SRC).first<{ pending: number }>();
+        // The feed SURVIVES — b owns it. syncFeedPending re-pends it:
+        // no confirmed binding covers (work, SRC) anymore.
+        expect(feed?.pending).toBe(1);
+    });
+
+    it('the audit INSERT OR IGNORE keeps unbind idempotent on the PK', async () => {
+        const work = 'mk:mb:unbind-idem';
+        // report-then-unbind by the same device — self-report is
+        // allowed, and the unbind audit insert OR-IGNOREs into the
+        // existing PK row instead of throwing post-delete.
+        const a = await newDevice();
+        await canonize(canonBody(work, SRC, '/r/self'), a.token);
+        await report(repBody(work, SRC, '/r/self', 'wrong_work'), a.token);
+        const res = await unbind(repBody(work, SRC, '/r/self'), a.token);
+        expect(await res.json() as any).toEqual({ unbound: true });
+        const { n } = await env.COMMENTS_DB.prepare(
+            `SELECT COUNT(*) AS n FROM binding_reports
+             WHERE provider = ? AND external_id = ? AND device_hash = ?`,
+        ).bind(SRC, '/r/self', a.hash).first<{ n: number }>() as { n: number };
+        expect(n).toBe(1); // the report row only — unbind deduped
+
+        // unbind → re-mint → unbind: the second audit write dedupes too.
+        const b = await newDevice();
+        await canonize(canonBody(work, SRC, '/r/cycle'), b.token);
+        expect((await unbind(repBody(work, SRC, '/r/cycle'), b.token)).status).toBe(200);
+        await canonize(canonBody(work, SRC, '/r/cycle'), b.token);
+        expect((await unbind(repBody(work, SRC, '/r/cycle'), b.token)).status).toBe(200);
+        const audit = await env.COMMENTS_DB.prepare(
+            `SELECT kind, weight, COUNT(*) AS n FROM binding_reports
+             WHERE provider = ? AND external_id = ? AND device_hash = ?`,
+        ).bind(SRC, '/r/cycle', b.hash).first<{ kind: string; weight: number; n: number }>();
+        expect(audit).toEqual({ kind: 'unbind', weight: 0, n: 1 });
+
+        // Unbind writes no provider report weight — self-revocation is
+        // not derank evidence (the 0.25 came from a's self-report).
+        const stats = await env.COMMENTS_DB.prepare(
+            'SELECT report_weight FROM provider_stats WHERE provider = ?',
+        ).bind(SRC).first<{ report_weight: number }>();
+        expect(stats?.report_weight).toBe(0.25);
+    });
+});
+
+describe('mint rate gate on canonize', () => {
+    it('established devices cap at mints_per_hour; fresh at the new-device tier', async () => {
+        const work = 'mk:mb:mintrate';
+        // Established device: base cap 60 — the 61st gated post denies.
+        const vet = await establishedDevice();
+        await seedRateRows(vet.hash, 'mint', 60);
+        const capped = await canonize(canonBody(work, SRC, '/r/cap60'), vet.token);
+        expect(capped.status).toBe(429);
+        expect((await capped.json() as any).error).toBe('rate_mint');
+
+        // Fresh device: new_device_mints_per_hour (15).
+        const fresh = await newDevice();
+        await seedRateRows(fresh.hash, 'mint', 15);
+        const capped2 = await canonize(canonBody(work, SRC, '/r/cap15'), fresh.token);
+        expect(capped2.status).toBe(429);
+        expect((await capped2.json() as any).error).toBe('rate_mint');
+
+        // A canonize with no provider_ref isn't a mint — not gated.
+        const feedOnly = await canonize({
+            work_id: work,
+            feeds: [{ source_key: SRC, chapters: [{ name: 'Chapter 1' }] }],
+        }, fresh.token);
+        expect(feedOnly.status).toBe(200);
+
+        // Unauthenticated canonize can't be device-capped — the
+        // provisional NULL-minter dead write stands (20-01).
+        const anon = await canonize(canonBody(work, SRC, '/r/uncapped'));
+        expect(anon.status).toBe(200);
+        const row = await bindingRow(SRC, '/r/uncapped');
+        expect(row?.status).toBe('provisional');
+        expect(row?.minter_device_hash).toBeNull();
+
+        // Under the cap the attempt logs a rate row.
+        const under = await newDevice();
+        await seedRateRows(under.hash, 'mint', 14);
+        const okRes = await canonize(canonBody(work, SRC, '/r/under'), under.token);
+        expect(okRes.status).toBe(200);
+        const { n } = await env.COMMENTS_DB.prepare(
+            `SELECT COUNT(*) AS n FROM binding_rate_log
+             WHERE device_hash = ? AND action = 'mint'`,
+        ).bind(under.hash).first<{ n: number }>() as { n: number };
+        expect(n).toBe(15);
+    });
+});
