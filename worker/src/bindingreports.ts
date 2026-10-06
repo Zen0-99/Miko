@@ -1,6 +1,7 @@
 import { requireIdentity } from './auth';
 import { liveWorkId } from './bindings';
 import type { Env } from './env';
+import { recomputeProviderStats } from './providerstats';
 import { RULESET } from './ruleset';
 import { checkWrite } from './strikes';
 import {
@@ -104,6 +105,10 @@ export async function handleReportBinding(req: Request, env: Env): Promise<Respo
         quarantined = await quarantineBinding(env, body.provider, body.provider_ref, workId);
     }
     await applyProviderDerank(env, body.provider);
+    // The accepted report row moved the provider's ledger sums — full
+    // recompute (20-04; report_weight/confirm_count/quarantined_count
+    // and the dynamic_tier evaluation all derive in one write).
+    await recomputeProviderStats(env, body.provider);
     return ok(quarantined ? { reported: true, quarantined: true } : { reported: true });
 }
 
@@ -188,5 +193,8 @@ export async function handleUnbindBinding(req: Request, env: Env): Promise<Respo
          (provider, external_id, miko_work_id, device_hash, weight, kind, created_at)
          VALUES (?,?,?,?,0,'unbind',?)`,
     ).bind(body.provider, body.provider_ref, workId, id.device_hash, now()).run();
+    // The delete dropped a device-attributed row + its confirms —
+    // recompute the provider's counts (20-04).
+    await recomputeProviderStats(env, body.provider);
     return ok({ unbound: true });
 }

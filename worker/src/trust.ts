@@ -2,6 +2,7 @@ import type { Identity } from './auth';
 import { remergeChapters } from './chaptermap';
 import { remergeEpisodes } from './episodemap';
 import type { Env } from './env';
+import { recomputeProviderStats } from './providerstats';
 import { RULESET } from './ruleset';
 import { logModeration } from './strikes';
 import { now } from './util';
@@ -161,6 +162,9 @@ export async function maybeSolidify(
     // Same coverage invariant as quarantine's re-pend (SD-12): the
     // just-confirmed binding covers (work, provider) → pending = 0.
     await syncFeedPending(env, workId, provider);
+    // The flip moved solidified_count — provider tier credit recomputes
+    // from the ledgers (20-04).
+    await recomputeProviderStats(env, provider);
     return true;
 }
 
@@ -267,6 +271,12 @@ export async function planBindingWrite(env: Env, a: BindingWriteArgs): Promise<B
         // recompute runs post-batch so it sees the self-seed.
         plan.post.push(async () => {
             await recomputePoints(env, a.provider, a.ref);
+            // Provider stats move only on a NEW device-attributed row
+            // (20-04) — direct-confirmed mints (crawler/trusted) write
+            // NULL minter and earn no tier credit.
+            if (!confirmed && a.deviceHash != null) {
+                await recomputeProviderStats(env, a.provider);
+            }
         });
         return plan;
     }
@@ -466,12 +476,10 @@ async function review(env: Env, kind: string, payload: unknown): Promise<void> {
  * non-quarantined row — provisional AND confirmed (a bad incumbent's
  * escape hatch, SD-14) — while a racing solidify can't win (its own
  * `status='provisional'` guard). On the flip: the feed re-pends by
- * coverage (SD-12) and remerges out of shared canon, provider_stats
- * gets SELECT-RECOMPUTED `quarantined_count`/`report_weight`
- * (recompute-on-write, SD-33 — never `+=`; `recomputeProviderStats`
- * in 20-04 subsumes this two-column version), and the audit trail is
- * a deduped identity_review row + a moderation_log entry. Returns
- * whether the row flipped.
+ * coverage (SD-12) and remerges out of shared canon, `provider_stats`
+ * is recomputed wholesale from the ledgers (SD-33 — never `+=`),
+ * and the audit trail is a deduped identity_review row + a
+ * moderation_log entry. Returns whether the row flipped.
  */
 export async function quarantineBinding(
     env: Env,
@@ -489,24 +497,10 @@ export async function quarantineBinding(
     await syncFeedPending(env, workId, provider);
     await remergeForWork(env, workId);
 
-    const [quarantinedCount, reportWeight] = await Promise.all([
-        env.COMMENTS_DB.prepare(
-            `SELECT COUNT(*) AS n FROM external_ids
-             WHERE provider = ? AND status = 'quarantined'`,
-        ).bind(provider).first<{ n: number }>(),
-        env.COMMENTS_DB.prepare(
-            `SELECT COALESCE(SUM(weight),0) AS w FROM binding_reports
-             WHERE provider = ? AND kind != 'unbind'`,
-        ).bind(provider).first<{ w: number }>(),
-    ]);
-    await env.COMMENTS_DB.prepare(
-        `INSERT INTO provider_stats (provider, quarantined_count, report_weight, updated_at)
-         VALUES (?,?,?,?)
-         ON CONFLICT(provider) DO UPDATE SET
-            quarantined_count = excluded.quarantined_count,
-            report_weight = excluded.report_weight,
-            updated_at = excluded.updated_at`,
-    ).bind(provider, quarantinedCount?.n ?? 0, reportWeight?.w ?? 0, now()).run();
+    // Full ledger recompute (20-04) — subsumes 20-02's two-column
+    // quarantined_count/report_weight write; tier_cap and telemetry
+    // counters are preserved by omission (SD-33).
+    await recomputeProviderStats(env, provider);
 
     await review(env, 'binding_quarantined', { work_id: workId, provider, ref });
     await logModeration(env, {

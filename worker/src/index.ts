@@ -16,6 +16,7 @@ import {
     handleVote,
 } from './comments';
 import type { Env } from './env';
+import { handleGetProviderTiers } from './providerstats';
 import { handleResolve } from './resolve';
 import { runMangadexCron } from './mangadexseed';
 import { refreshWebtoonChart } from './webtoonchart';
@@ -39,6 +40,9 @@ const router = new Router<Env>()
     .add('GET', '/v1/works/:id/bindings', handleGetBindings)
     .add('POST', '/v1/bindings/report', (req, _p, _u, env) => handleReportBinding(req, env))
     .add('POST', '/v1/bindings/unbind', (req, _p, _u, env) => handleUnbindBinding(req, env))
+    // Phase 20-04: provider trust overlay — dynamic tiers + report caps
+    // for every provider, keyed map, read-only.
+    .add('GET', '/v1/providers/tiers', (req, _p, _u, env) => handleGetProviderTiers(req, env))
     // Manual chart refresh — same X-Crawler-Key gate as crawler feeds.
     .add('POST', '/v1/charts/webtoon/refresh', (req, _p, _u, env) => {
         if (!env.CRAWLER_KEY || req.headers.get('x-crawler-key') !== env.CRAWLER_KEY) {

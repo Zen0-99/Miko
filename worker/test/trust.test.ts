@@ -659,15 +659,19 @@ describe('mint telemetry — provider_stats observational counters', () => {
         const row = await bindingRow(SRC, '/series/tel3');
         expect(row?.status).toBe('provisional');
         expect(row?.points).toBeCloseTo(1);
-        // provider_stats telemetry columns are the only writes.
+        // Telemetry columns accumulate; the ledger-derived columns now
+        // reflect the mint itself (20-04) — minted_count counts the
+        // attributed row, but telemetry cannot solidify or promote.
         const stats = await env.COMMENTS_DB.prepare(
-            `SELECT minted_count, solidified_count, served_count
+            `SELECT minted_count, solidified_count, served_count, dynamic_tier
              FROM provider_stats WHERE provider = ?`,
         ).bind(SRC).first<{
-            minted_count: number; solidified_count: number; served_count: number;
+            minted_count: number; solidified_count: number;
+            served_count: number; dynamic_tier: string | null;
         }>();
         expect(stats?.served_count).toBe(9999);
-        expect(stats?.minted_count).toBe(0);
+        expect(stats?.minted_count).toBe(1);
         expect(stats?.solidified_count).toBe(0);
+        expect(stats?.dynamic_tier).toBeNull();
     });
 });
