@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "comment": {
     "min_len": 1,
     "max_len": 2000,
@@ -29,5 +29,31 @@
       "anonymous", "staff", "support", "official", "dev", "developer",
       "jev", "mangabaka", "cognition"
     ]
+  },
+  "bindings": {
+    "confirm_points_required": 3,
+    "margin_multiplier": 2.0,
+    "report_quarantine_weight": 3.0,
+    "reporter_age_full_ms": 2592000000,
+    "report_weight_established": 1.0,
+    "report_weight_new_device": 0.25,
+    "age_bonus_per_day": 0.1,
+    "age_bonus_cap": 1.0,
+    "provider_derank_weight": 12.0,
+    "provider_derank_cap": "C",
+    "rate": {
+      "mints_per_hour": 60,
+      "new_device_mints_per_hour": 15,
+      "new_device_ms": 86400000,
+      "reports_per_hour": 30,
+      "reports_per_min": 5,
+      "unbinds_per_hour": 10
+    },
+    "tiers": {
+      "min_minted": 20,
+      "acceptance_floor_pct": 80,
+      "ladder": { "C": 10, "B": 50, "A": 200 }
+    },
+    "telemetry": { "max_entries": 50, "max_count": 100000 }
   }
 }

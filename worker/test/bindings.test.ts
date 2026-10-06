@@ -1,19 +1,39 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
-async function canonize(body: unknown, crawlerKey?: string): Promise<Response> {
+async function canonize(
+    body: unknown,
+    crawlerKey?: string,
+    token?: string,
+): Promise<Response> {
     return SELF.fetch('http://test/v1/chapters/canonize', {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
             ...(crawlerKey ? { 'x-crawler-key': crawlerKey } : {}),
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(body),
     });
 }
 
-async function get(path: string): Promise<Response> {
-    return SELF.fetch(`http://test${path}`);
+async function get(path: string, token?: string): Promise<Response> {
+    return SELF.fetch(`http://test${path}`, {
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+}
+
+/** Phase 20: an untrusted mint is provisional — visible only to its
+ *  minter. Register a device and carry its Bearer on reads that expect
+ *  the mint's content. */
+async function registerDevice(): Promise<string> {
+    const hash = crypto.randomUUID().replaceAll('-', '').padEnd(64, 'f').slice(0, 64);
+    const res = await SELF.fetch('http://test/v1/device/register', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ device_hash: hash }),
+    });
+    return (await res.json<{ token: string }>()).token;
 }
 
 const SRC = 'eu.kanade.tachiyomi.extension.en.weebcentral';
@@ -121,21 +141,26 @@ describe('bindings + work_merges', () => {
         ).bind(dead, live, Date.now()).run();
 
         // Canonize against the DEAD id — feed lands on the live work.
+        // Bearer'd so the provisional binding + pending feed serve the
+        // minter (anonymous reads correctly see nothing yet).
+        const token = await registerDevice();
         await canonize({
             work_id: dead,
             feeds: [{
                 source_key: SRC, provider_ref: '/series/live',
                 chapters: [{ name: 'Chapter 1' }, { name: 'Chapter 2' }],
             }],
-        });
-        const listDead = await (await get(`/v1/works/${dead}/chapters`)).json() as any;
-        const listLive = await (await get(`/v1/works/${live}/chapters`)).json() as any;
+        }, undefined, token);
+        const listDead = await (await get(`/v1/works/${dead}/chapters`, token)).json() as any;
+        const listLive = await (await get(`/v1/works/${live}/chapters`, token)).json() as any;
         expect(listDead.chapters).toHaveLength(2);
         expect(listLive.chapters).toHaveLength(2);
         expect(listDead.work_id).toBe(live);
 
-        const binds = await (await get(`/v1/works/${dead}/bindings`)).json() as any;
+        const binds = await (await get(`/v1/works/${dead}/bindings`, token)).json() as any;
         expect(binds.work_id).toBe(live);
         expect(binds.bindings[0].provider_ref).toBe('/series/live');
+        expect(binds.bindings[0].status).toBe('provisional');
+        expect(binds.bindings[0].mine).toBe(true);
     });
 });

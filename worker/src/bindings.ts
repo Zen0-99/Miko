@@ -1,3 +1,4 @@
+import { identityFrom } from './auth';
 import type { Env } from './env';
 import { ok } from './util';
 
@@ -16,24 +17,37 @@ export async function liveWorkId(env: Env, id: string): Promise<string> {
 /**
  * GET /v1/works/:id/bindings — the work's carrier list: which providers
  * (mangadex / extension pkg names) hold an entry for it, with the ref
- * that reopens it, provenance, and freshness. `__none__` tombstones are
- * resolve markers, not carriers — excluded.
+ * that reopens it, provenance, lifecycle status and confirm points.
+ * `__none__` tombstones are resolve markers, not carriers — excluded.
+ *
+ * Provisional rows are visible only to their minter (optional Bearer);
+ * quarantined rows are listed flagged to everyone for transparency —
+ * this is a LISTING predicate: the strict serve gate lives on the
+ * content-driving reads (resolve ext-id JOIN, externalIdsFor, feed
+ * overlay — SD-8).
  */
 export async function handleGetBindings(
-    _req: Request,
+    req: Request,
     params: Record<string, string>,
     _url: URL,
     env: Env,
 ): Promise<Response> {
     const workId = await liveWorkId(env, params.id);
+    // Optional — readers need no auth; a Bearer unlocks the caller's own
+    // provisional rows and sets `mine`.
+    const me = await identityFrom(req, env);
     const { results } = await env.COMMENTS_DB.prepare(
-        `SELECT provider, external_id, confidence, provenance, last_seen_at
+        `SELECT provider, external_id, confidence, provenance, last_seen_at,
+                status, minter_device_hash, points
          FROM external_ids
          WHERE miko_work_id = ? AND external_id != '__none__'
-         ORDER BY provider`,
-    ).bind(workId).all<{
+           AND (status != 'provisional' OR minter_device_hash = ?)
+         ORDER BY (CASE status WHEN 'confirmed' THEN 0 WHEN 'provisional' THEN 1 ELSE 2 END),
+                  points DESC, external_id ASC`,
+    ).bind(workId, me?.device_hash ?? '').all<{
         provider: string; external_id: string; confidence: number | null;
         provenance: string | null; last_seen_at: number | null;
+        status: string; minter_device_hash: string | null; points: number;
     }>();
     return ok({
         work_id: workId,
@@ -43,6 +57,9 @@ export async function handleGetBindings(
             confidence: r.confidence,
             provenance: r.provenance,
             last_seen_at: r.last_seen_at,
+            status: r.status,
+            mine: r.minter_device_hash != null && r.minter_device_hash === me?.device_hash,
+            points: r.points,
         })),
     });
 }

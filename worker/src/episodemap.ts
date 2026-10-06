@@ -1,6 +1,9 @@
+import { identityFrom } from './auth';
 import { liveWorkId } from './bindings';
 import type { Env } from './env';
 import { normalize } from './normalize';
+import type { BindingWritePlan } from './trust';
+import { ingestTelemetry, planBindingWrite } from './trust';
 import { err, now, ok } from './util';
 
 const MAX_FEEDS = 20;
@@ -69,10 +72,13 @@ interface CanonizeFeed {
 interface CanonizeRequest {
     work_id?: string;
     feeds?: CanonizeFeed[];
+    /** Bundled mint telemetry (Phase 20) — observational provider_stats
+     *  counters, never an input to lifecycle math. */
+    telemetry?: unknown;
 }
 
 /** Stored feed row → the shape the merge loop consumes. */
-interface StoredFeed {
+export interface StoredFeed {
     source_key: string;
     episodes: FeedEpisode[];
 }
@@ -183,6 +189,11 @@ export async function handleCanonizeEpisodes(req: Request, env: Env): Promise<Re
     if (typeof body.work_id !== 'string' || !body.work_id) return err(400, 'bad_request');
     // Dead-id canonize targets redirect onto the merged live work.
     const workId = await liveWorkId(env, body.work_id);
+    // Optional Bearer — identified devices attribute mints to their
+    // device hash; unauthenticated canonize still writes the feed but
+    // its binding lands provisional with NULL minter (invisible until
+    // identified devices confirm it — the safe degrade, SD-6).
+    const identity = await identityFrom(req, env);
     if (!Array.isArray(body.feeds) || body.feeds.length === 0 || body.feeds.length > MAX_FEEDS) {
         return err(400, 'bad_request');
     }
@@ -231,11 +242,14 @@ export async function handleCanonizeEpisodes(req: Request, env: Env): Promise<Re
 
     // Persist each feed (latest-wins per source_key) then remerge the
     // work's full stored corpus — feeds are durable inputs, and
-    // canonical_episodes is their materialized view.
+    // canonical_episodes is their materialized view. A feed whose
+    // provider_ref minted a non-confirmed binding persists pending=1 —
+    // withheld from the shared merge until solidification (SD-1).
     const ts0 = now();
     const writes: D1PreparedStatement[] = [];
     const refConflicts: Array<{ provider: string; ref: string; existing: string }> = [];
     const demoted: string[] = [];
+    const bindingPlans: BindingWritePlan[] = [];
     for (const f of body.feeds) {
         // Forge guard: a feed claiming the artifact source_key without
         // artifact-shaped rows demotes to a plain carrier key — stored
@@ -245,52 +259,55 @@ export async function handleCanonizeEpisodes(req: Request, env: Env): Promise<Re
             src = `feed:${ARTIFACT_SOURCE}`;
             demoted.push(src);
         }
+        // The lifecycle decision precedes the feed write — the binding's
+        // status decides whether this feed's content joins shared canon
+        // now or stays pending (SD-10).
+        let pending = 0;
+        if (typeof f.provider_ref === 'string' && f.provider_ref) {
+            const wantsCrawler = f.provenance === 'crawler';
+            const authed = !!env.CRAWLER_KEY &&
+                req.headers.get('x-crawler-key') === env.CRAWLER_KEY;
+            const provenance = wantsCrawler && !authed
+                ? 'device_feed'
+                : (f.provenance ?? 'device_feed');
+            const confidence = provenance === 'user_picked' && f.verified === true
+                ? Math.max(typeof f.score === 'number' ? f.score : 0, USER_PICKED_FLOOR)
+                : (typeof f.score === 'number' ? f.score : null);
+            const plan = await planBindingWrite(env, {
+                provider: src, ref: f.provider_ref, workId,
+                confidence, provenance,
+                deviceHash: identity?.device_hash ?? null, ts: ts0,
+            });
+            if (plan.conflict) {
+                refConflicts.push({
+                    provider: src, ref: f.provider_ref, existing: plan.conflict,
+                });
+            } else {
+                writes.push(...plan.writes);
+                bindingPlans.push(plan);
+                pending = plan.pendingFeed ? 1 : 0;
+            }
+        }
         writes.push(env.COMMENTS_DB.prepare(
             `REPLACE INTO canonical_feeds
-             (work_id, source_key, feed_json, verified, score, received_at)
-             VALUES (?,?,?,?,?,?)`,
+             (work_id, source_key, feed_json, verified, score, received_at,
+              pending, submitter_device_hash)
+             VALUES (?,?,?,?,?,?,?,?)`,
         ).bind(
             workId, src, JSON.stringify(f.episodes ?? []),
             f.verified === true ? 1 : 0, f.score ?? null, ts0,
+            pending, identity?.device_hash ?? null,
         ));
-        if (typeof f.provider_ref === 'string' && f.provider_ref) {
-            // Same binding contract as chaptermap: a ref bound to a
-            // DIFFERENT work is an identity conflict — flag, never
-            // silently rebind.
-            const existing = await env.COMMENTS_DB.prepare(
-                `SELECT miko_work_id FROM external_ids
-                 WHERE provider = ? AND external_id = ?`,
-            ).bind(src, f.provider_ref).first<{ miko_work_id: string }>();
-            if (existing && existing.miko_work_id !== workId) {
-                refConflicts.push({
-                    provider: src, ref: f.provider_ref, existing: existing.miko_work_id,
-                });
-            } else {
-                const wantsCrawler = f.provenance === 'crawler';
-                const authed = !!env.CRAWLER_KEY &&
-                    req.headers.get('x-crawler-key') === env.CRAWLER_KEY;
-                const provenance = wantsCrawler && !authed
-                    ? 'device_feed'
-                    : (f.provenance ?? 'device_feed');
-                const confidence = provenance === 'user_picked' && f.verified === true
-                    ? Math.max(typeof f.score === 'number' ? f.score : 0, USER_PICKED_FLOOR)
-                    : (typeof f.score === 'number' ? f.score : null);
-                writes.push(env.COMMENTS_DB.prepare(
-                    `INSERT INTO external_ids
-                     (provider, external_id, miko_work_id, confidence, provenance, last_seen_at)
-                     VALUES (?,?,?,?,?,?)
-                     ON CONFLICT(provider, external_id) DO UPDATE SET
-                        confidence = COALESCE(excluded.confidence, external_ids.confidence),
-                        provenance = excluded.provenance,
-                        last_seen_at = excluded.last_seen_at`,
-                ).bind(
-                    src, f.provider_ref, workId,
-                    confidence, provenance, ts0,
-                ));
-            }
-        }
     }
     await env.COMMENTS_DB.batch(writes);
+    // Post-batch lifecycle effects — the just-queued confirm rows are
+    // now visible to the ledger (SD-10), and a solidify clears pending
+    // so THIS request's remerge publishes the feed into canon.
+    const solidified: string[] = [];
+    for (const plan of bindingPlans) {
+        for (const fx of plan.post) await fx();
+        if (plan.solidified) solidified.push(plan.ref);
+    }
     if (refConflicts.length > 0) {
         await review(env, 'provider_ref_conflict', {
             work_id: workId, conflicts: refConflicts,
@@ -312,36 +329,65 @@ export async function handleCanonizeEpisodes(req: Request, env: Env): Promise<Re
         });
     }
 
+    // Bundled mint telemetry — observational counters only (locked:
+    // zero new per-event requests); malformed/over-cap payloads clamp
+    // out inside and can never fail the canonize.
+    await ingestTelemetry(env, body.telemetry);
+
     const summary = await remergeEpisodes(env, workId);
     return ok({
         work_id: workId,
         ...summary,
+        solidified,
     });
 }
 
-/**
- * Rebuild a work's canonical episode sequence from its ENTIRE stored
- * feed corpus (canonical_feeds). Merge keys and confidence per Design
- * §4/§5; divergent feeds and numbering conflicts go to identity_review.
- */
-export async function remergeEpisodes(env: Env, workId: string): Promise<{
-    count: number;
-    verified: number;
+/** A merged canonical row — what remergeEpisodes persists and the
+ *  pending-feed overlay shapes into the GET DTO. */
+interface MergedEpisode {
+    kind: string;
+    number: number | null;
+    abs: number | null;
+    season: number | null;
+    epInSeason: number | null;
+    epKey: string | null;
+    doc: string | null;
+    label: string;
+    air_date: string | null;
+    dateUpload: number | null;
+    image: string | null;
+    overview: string | null;
+    runtime: number | null;
+    anidbEid: number | null;
+    tvdbEid: number | null;
+    tvdbShowId: number | null;
+    filler: number;
+    confidence: string;
+    sources: string[];
+    refs: Record<string, string>;
+}
+
+interface EpisodeCorpus {
+    merged: MergedEpisode[];
     skipped: number;
-    conflicts: number;
+    /** Numbering conflicts: same track point, >1 merge key across
+     *  >1 source — carried whole into the divergence review. */
+    conflicts: Array<{ at: string; keys: string[]; sources: string[] }>;
+    /** Substantive feeds whose episode merge keys are <50%
+     *  corroborated. */
     divergent: string[];
-}> {
-    const { results: rows } = await env.COMMENTS_DB.prepare(
-        'SELECT source_key, feed_json FROM canonical_feeds WHERE work_id = ?',
-    ).bind(workId).all<{ source_key: string; feed_json: string }>();
+    /** Feeds with ≥DIVERGENCE_MIN_FEED main-episode keys — the
+     *  divergence review's `> 1` gate operand. */
+    substantive: number;
+}
 
-    const feeds: StoredFeed[] = [];
-    for (const r of rows) {
-        try {
-            feeds.push({ source_key: r.source_key, episodes: JSON.parse(r.feed_json) });
-        } catch { /* corrupt feed row — skip, next canonize repairs */ }
-    }
-
+/**
+ * The pure merge core of remergeEpisodes — parse → group → flag →
+ * order over an arbitrary feed set. No reads, no writes: the persist
+ * wrapper owns reviews and the canonical_episodes rewrite; the pending
+ * overlay reuses it to answer a minter's GET in memory (SD-2).
+ */
+export function mergeEpisodeCorpus(feeds: StoredFeed[]): EpisodeCorpus {
     const entries: EEntry[] = [];
     let skipped = 0;
     for (const f of feeds) {
@@ -452,14 +498,6 @@ export async function remergeEpisodes(env: Env, workId: string): Promise<{
         const corroborated = [...keys].filter((k) => (allKeys.get(k)?.size ?? 0) > 1).length;
         if (corroborated / keys.size < DIVERGENCE_THRESHOLD) divergent.push(src);
     }
-    if ((divergent.length > 0 && substantive.size > 1) || conflicts.length > 0) {
-        await review(env, 'episode_feed_divergent', {
-            work_id: workId,
-            divergent: substantive.size > 1 ? divergent : [],
-            conflicts,
-        });
-    }
-
     const merged = [...groups.values()].map((g) => {
         const sources = [...new Set(g.map((e) => e.src))];
         const refs: Record<string, string> = {};
@@ -518,10 +556,53 @@ export async function remergeEpisodes(env: Env, workId: string): Promise<{
         return (a.number ?? inf) - (b.number ?? inf);
     });
 
+    return {
+        merged,
+        skipped,
+        conflicts,
+        divergent,
+        substantive: substantive.size,
+    };
+}
+
+/**
+ * Rebuild a work's canonical episode sequence from its ENTIRE stored
+ * feed corpus (canonical_feeds) — pending feeds stay withheld until
+ * their binding solidifies (SD-1). Merge keys and confidence per Design
+ * §4/§5; divergent feeds and numbering conflicts go to identity_review.
+ */
+export async function remergeEpisodes(env: Env, workId: string): Promise<{
+    count: number;
+    verified: number;
+    skipped: number;
+    conflicts: number;
+    divergent: string[];
+}> {
+    const { results: rows } = await env.COMMENTS_DB.prepare(
+        `SELECT source_key, feed_json FROM canonical_feeds
+         WHERE work_id = ? AND pending = 0`,
+    ).bind(workId).all<{ source_key: string; feed_json: string }>();
+
+    const feeds: StoredFeed[] = [];
+    for (const r of rows) {
+        try {
+            feeds.push({ source_key: r.source_key, episodes: JSON.parse(r.feed_json) });
+        } catch { /* corrupt feed row — skip, next canonize repairs */ }
+    }
+
+    const corpus = mergeEpisodeCorpus(feeds);
+    if ((corpus.divergent.length > 0 && corpus.substantive > 1) || corpus.conflicts.length > 0) {
+        await review(env, 'episode_feed_divergent', {
+            work_id: workId,
+            divergent: corpus.substantive > 1 ? corpus.divergent : [],
+            conflicts: corpus.conflicts,
+        });
+    }
+
     const ts = now();
     const stmts = [
         env.COMMENTS_DB.prepare('DELETE FROM canonical_episodes WHERE work_id = ?').bind(workId),
-        ...merged.map((m, i) =>
+        ...corpus.merged.map((m, i) =>
             env.COMMENTS_DB.prepare(
                 `INSERT INTO canonical_episodes
                  (work_id, seq, kind, number, abs_number, season, ep_in_season,
@@ -541,22 +622,78 @@ export async function remergeEpisodes(env: Env, workId: string): Promise<{
     await env.COMMENTS_DB.batch(stmts);
 
     return {
-        count: merged.length,
-        verified: merged.filter((m) => m.confidence === 'verified').length,
-        skipped,
-        conflicts: conflicts.length,
-        divergent,
+        count: corpus.merged.length,
+        verified: corpus.merged.filter((m) => m.confidence === 'verified').length,
+        skipped: corpus.skipped,
+        conflicts: corpus.conflicts.length,
+        divergent: corpus.divergent,
     };
 }
 
-/** GET /v1/works/:id/episodes — the canonical sequence, empty list if never canonized. */
+/** GET /v1/works/:id/episodes — the canonical sequence, empty list if
+ *  never canonized. A Bearer whose pending feeds are withheld from
+ *  canon (own submissions, or feeds on source_keys carrying the
+ *  caller's provisional binding) gets the in-memory overlay merge —
+ *  shared feeds ∪ caller-visible pending feeds, never persisted (SD-2). */
 export async function handleGetEpisodes(
-    _req: Request,
+    req: Request,
     params: Record<string, string>,
     _url: URL,
     env: Env,
 ): Promise<Response> {
     const workId = await liveWorkId(env, params.id);
+    const me = await identityFrom(req, env);
+    if (me) {
+        const { results: pending } = await env.COMMENTS_DB.prepare(
+            `SELECT source_key, feed_json FROM canonical_feeds
+             WHERE work_id = ? AND pending = 1
+               AND (submitter_device_hash = ?
+                    OR source_key IN (
+                        SELECT provider FROM external_ids
+                        WHERE miko_work_id = ? AND minter_device_hash = ?
+                          AND status = 'provisional'))`,
+        ).bind(workId, me.device_hash, workId, me.device_hash)
+            .all<{ source_key: string; feed_json: string }>();
+        if (pending.length > 0) {
+            const { results: shared } = await env.COMMENTS_DB.prepare(
+                `SELECT source_key, feed_json FROM canonical_feeds
+                 WHERE work_id = ? AND pending = 0`,
+            ).bind(workId).all<{ source_key: string; feed_json: string }>();
+            const feeds: StoredFeed[] = [];
+            for (const r of [...shared, ...pending]) {
+                try {
+                    feeds.push({ source_key: r.source_key, episodes: JSON.parse(r.feed_json) });
+                } catch { /* corrupt feed row — skip */ }
+            }
+            const corpus = mergeEpisodeCorpus(feeds);
+            return ok({
+                work_id: workId,
+                episodes: corpus.merged.map((m, i) => ({
+                    seq: i,
+                    kind: m.kind,
+                    number: m.number,
+                    abs: m.abs,
+                    season: m.season,
+                    ep_in_season: m.epInSeason,
+                    ep_key: m.epKey,
+                    doc: m.doc,
+                    label: m.label,
+                    air_date: m.air_date,
+                    date_upload: m.dateUpload,
+                    image: m.image,
+                    overview: m.overview,
+                    runtime: m.runtime,
+                    anidb_eid: m.anidbEid,
+                    tvdb_eid: m.tvdbEid,
+                    tvdb_show_id: m.tvdbShowId,
+                    filler: m.filler,
+                    confidence: m.confidence,
+                    sources: m.sources,
+                    refs: m.refs,
+                })),
+            });
+        }
+    }
     const { results } = await env.COMMENTS_DB.prepare(
         `SELECT seq, kind, number, abs_number, season, ep_in_season, ep_key, doc_id,
                 label, air_date, date_upload, image, overview, runtime,

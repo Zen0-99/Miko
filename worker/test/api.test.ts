@@ -16,13 +16,13 @@ describe('scaffold', () => {
         expect(await res.json()).toEqual({ ok: true });
     });
 
-    it('ruleset serves version 1', async () => {
+    it('ruleset serves version 2', async () => {
         const res = await SELF.fetch('http://test/v1/ruleset');
         const body = await res.json<{
             ruleset_version: number;
             ruleset: { version: number; comment: { max_len: number } };
         }>();
-        expect(body.ruleset_version).toBe(1);
+        expect(body.ruleset_version).toBe(2);
         expect(body.ruleset.comment.max_len).toBe(2000);
     });
 

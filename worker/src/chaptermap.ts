@@ -1,7 +1,10 @@
+import { identityFrom } from './auth';
 import { liveWorkId } from './bindings';
 import { parseChapter } from './chapterparse';
 import type { Env } from './env';
 import { normalize } from './normalize';
+import type { BindingWritePlan } from './trust';
+import { ingestTelemetry, planBindingWrite } from './trust';
 import { err, now, ok } from './util';
 
 const MAX_FEEDS = 20;
@@ -49,6 +52,9 @@ interface CanonizeFeed {
 interface CanonizeRequest {
     work_id?: string;
     feeds?: CanonizeFeed[];
+    /** Bundled mint telemetry (Phase 20) — observational provider_stats
+     *  counters, never an input to lifecycle math. */
+    telemetry?: unknown;
 }
 
 interface Entry {
@@ -105,6 +111,11 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
     if (typeof body.work_id !== 'string' || !body.work_id) return err(400, 'bad_request');
     // Dead-id canonize targets redirect onto the merged live work.
     const workId = await liveWorkId(env, body.work_id);
+    // Optional Bearer — identified devices attribute mints to their
+    // device hash; unauthenticated canonize still writes the feed but
+    // its binding lands provisional with NULL minter (invisible until
+    // identified devices confirm it — the safe degrade, SD-6).
+    const identity = await identityFrom(req, env);
     if (!Array.isArray(body.feeds) || body.feeds.length === 0 || body.feeds.length > MAX_FEEDS) {
         return err(400, 'bad_request');
     }
@@ -139,66 +150,72 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
 
     // Persist each feed (latest-wins per source_key) then remerge the
     // work's full stored corpus — feeds are durable inputs, and
-    // canonical_chapters is their materialized view.
+    // canonical_chapters is their materialized view. A feed whose
+    // provider_ref minted a non-confirmed binding persists pending=1 —
+    // withheld from the shared merge until solidification (SD-1).
     const ts0 = now();
     const writes: D1PreparedStatement[] = [];
     const refConflicts: Array<{ provider: string; ref: string; existing: string }> = [];
+    const bindingPlans: BindingWritePlan[] = [];
     for (const f of body.feeds) {
         const src = f.source_key as string;
+        // The lifecycle decision precedes the feed write — the binding's
+        // status decides whether this feed's content joins shared canon
+        // now or stays pending (SD-10).
+        let pending = 0;
+        if (typeof f.provider_ref === 'string' && f.provider_ref) {
+            // 'crawler' provenance is a privileged claim — it says
+            // "a managed host vouches for this binding". Require the
+            // shared key; unauthenticated claims degrade to
+            // 'device_feed' rather than reject the feed itself.
+            const wantsCrawler = f.provenance === 'crawler';
+            const authed = !!env.CRAWLER_KEY &&
+                req.headers.get('x-crawler-key') === env.CRAWLER_KEY;
+            const provenance = wantsCrawler && !authed
+                ? 'device_feed'
+                : (f.provenance ?? 'device_feed');
+            // 'user_picked' = a human confirmed this result IS the work
+            // in the Find Provider sheet (17-01). The confirmation is
+            // the signal, not the sender — no auth, but verified=true is
+            // required and the floor outranks a bare matcher ACCEPT.
+            const confidence = provenance === 'user_picked' && f.verified === true
+                ? Math.max(typeof f.score === 'number' ? f.score : 0, USER_PICKED_FLOOR)
+                : (typeof f.score === 'number' ? f.score : null);
+            const plan = await planBindingWrite(env, {
+                provider: src, ref: f.provider_ref, workId,
+                confidence, provenance,
+                deviceHash: identity?.device_hash ?? null, ts: ts0,
+            });
+            if (plan.conflict) {
+                refConflicts.push({
+                    provider: src, ref: f.provider_ref, existing: plan.conflict,
+                });
+            } else {
+                writes.push(...plan.writes);
+                bindingPlans.push(plan);
+                pending = plan.pendingFeed ? 1 : 0;
+            }
+        }
         writes.push(env.COMMENTS_DB.prepare(
             `REPLACE INTO canonical_feeds
-             (work_id, source_key, feed_json, verified, score, received_at)
-             VALUES (?,?,?,?,?,?)`,
+             (work_id, source_key, feed_json, verified, score, received_at,
+              pending, submitter_device_hash)
+             VALUES (?,?,?,?,?,?,?,?)`,
         ).bind(
             workId, src, JSON.stringify(f.chapters ?? []),
             f.verified === true ? 1 : 0, f.score ?? null, ts0,
+            pending, identity?.device_hash ?? null,
         ));
-        if (typeof f.provider_ref === 'string' && f.provider_ref) {
-            // The binding is keyed (provider, ref) → a ref already bound
-            // to a DIFFERENT work is an identity conflict: flag it,
-            // never rebind silently (OPM sibling-work collision).
-            const existing = await env.COMMENTS_DB.prepare(
-                `SELECT miko_work_id FROM external_ids
-                 WHERE provider = ? AND external_id = ?`,
-            ).bind(src, f.provider_ref).first<{ miko_work_id: string }>();
-            if (existing && existing.miko_work_id !== workId) {
-                refConflicts.push({
-                    provider: src, ref: f.provider_ref, existing: existing.miko_work_id,
-                });
-            } else {
-                // 'crawler' provenance is a privileged claim — it says
-                // "a managed host vouches for this binding". Require the
-                // shared key; unauthenticated claims degrade to
-                // 'device_feed' rather than reject the feed itself.
-                const wantsCrawler = f.provenance === 'crawler';
-                const authed = !!env.CRAWLER_KEY &&
-                    req.headers.get('x-crawler-key') === env.CRAWLER_KEY;
-                const provenance = wantsCrawler && !authed
-                    ? 'device_feed'
-                    : (f.provenance ?? 'device_feed');
-                // 'user_picked' = a human confirmed this result IS the work
-                // in the Find Provider sheet (17-01). The confirmation is
-                // the signal, not the sender — no auth, but verified=true is
-                // required and the floor outranks a bare matcher ACCEPT.
-                const confidence = provenance === 'user_picked' && f.verified === true
-                    ? Math.max(typeof f.score === 'number' ? f.score : 0, USER_PICKED_FLOOR)
-                    : (typeof f.score === 'number' ? f.score : null);
-                writes.push(env.COMMENTS_DB.prepare(
-                    `INSERT INTO external_ids
-                     (provider, external_id, miko_work_id, confidence, provenance, last_seen_at)
-                     VALUES (?,?,?,?,?,?)
-                     ON CONFLICT(provider, external_id) DO UPDATE SET
-                        confidence = COALESCE(excluded.confidence, external_ids.confidence),
-                        provenance = excluded.provenance,
-                        last_seen_at = excluded.last_seen_at`,
-                ).bind(
-                    src, f.provider_ref, workId,
-                    confidence, provenance, ts0,
-                ));
-            }
-        }
     }
     await env.COMMENTS_DB.batch(writes);
+    // Post-batch lifecycle effects — the just-queued confirm rows are
+    // now visible to the ledger (SD-10), and a solidify clears pending
+    // so THIS request's remerge publishes the feed into canon.
+    const solidified: string[] = [];
+    for (const plan of bindingPlans) {
+        for (const fx of plan.post) await fx();
+        if (plan.solidified) solidified.push(plan.ref);
+    }
     if (refConflicts.length > 0) {
         await review(env, 'provider_ref_conflict', {
             work_id: workId, conflicts: refConflicts,
@@ -216,44 +233,58 @@ export async function handleCanonize(req: Request, env: Env): Promise<Response> 
         });
     }
 
+    // Bundled mint telemetry — observational counters only (locked:
+    // zero new per-event requests); malformed/over-cap payloads clamp
+    // out inside and can never fail the canonize.
+    await ingestTelemetry(env, body.telemetry);
+
     const summary = await remergeChapters(env, workId);
     return ok({
         work_id: workId,
         ...summary,
+        solidified,
     });
 }
 
 /** Stored feed row → the shape the merge loop consumes. */
-interface StoredFeed {
+export interface StoredFeed {
     source_key: string;
     chapters: FeedChapter[];
 }
 
-/**
- * Rebuild a work's canonical chapter sequence from its ENTIRE stored
- * feed corpus (canonical_feeds). Entries merge by (kind, number|label,
- * part); ≥2 sources → verified. Divergent feeds and kind conflicts go
- * to identity_review (deduped on identical payloads so re-merges don't
- * spam the queue).
- */
-export async function remergeChapters(env: Env, workId: string): Promise<{
-    count: number;
-    verified: number;
+/** A merged canonical row — what remergeChapters persists and the
+ *  pending-feed overlay shapes into the GET DTO. */
+interface MergedChapter {
+    number: number | null;
+    part: number | null;
+    volume: number | null;
+    kind: string;
+    label: string;
+    confidence: string;
+    sources: string[];
+    refs: Record<string, string>;
+    dateUpload: number | null;
+}
+
+interface ChapterCorpus {
+    merged: MergedChapter[];
     skipped: number;
+    /** Same-number+part groups carrying >1 kind — the review count. */
     conflicts: number;
+    /** Substantive feeds whose numbers are <50% corroborated. */
     divergent: string[];
-}> {
-    const { results: rows } = await env.COMMENTS_DB.prepare(
-        'SELECT source_key, feed_json FROM canonical_feeds WHERE work_id = ?',
-    ).bind(workId).all<{ source_key: string; feed_json: string }>();
+    /** Feeds with ≥DIVERGENCE_MIN_FEED parsed numbers — the divergence
+     *  review's `> 1` gate operand. */
+    substantive: number;
+}
 
-    const feeds: StoredFeed[] = [];
-    for (const r of rows) {
-        try {
-            feeds.push({ source_key: r.source_key, chapters: JSON.parse(r.feed_json) });
-        } catch { /* corrupt feed row — skip, next canonize repairs */ }
-    }
-
+/**
+ * The pure merge core of remergeChapters — parse → group → flag →
+ * order over an arbitrary feed set. No reads, no writes: the persist
+ * wrapper owns reviews and the canonical_chapters rewrite; the pending
+ * overlay reuses it to answer a minter's GET in memory (SD-2).
+ */
+export function mergeChapterCorpus(feeds: StoredFeed[]): ChapterCorpus {
     const entries: Entry[] = [];
     const feedNums = new Map<string, Set<number>>();
     let skipped = 0;
@@ -309,9 +340,6 @@ export async function remergeChapters(env: Env, workId: string): Promise<{
         byNum.set(nk, kinds);
     }
     const conflicts = [...byNum.values()].filter((s) => s.size > 1).length;
-    if (conflicts > 0) {
-        await review(env, 'chapter_kind_conflict', { work_id: workId, conflicts });
-    }
 
     // Divergent feed: ≥10 parsed chapters with <50% corroboration.
     // Only substantive feeds (≥MIN themselves) count as corroborating
@@ -333,9 +361,6 @@ export async function remergeChapters(env: Env, workId: string): Promise<{
         const nums = feedNums.get(src) as Set<number>;
         const corroborated = [...nums].filter((n) => (allNums.get(n)?.size ?? 0) > 1).length;
         if (corroborated / nums.size < DIVERGENCE_THRESHOLD) divergent.push(src);
-    }
-    if (divergent.length > 0 && substantive.size > 1) {
-        await review(env, 'chapter_feed_divergent', { work_id: workId, divergent });
     }
 
     const merged = [...groups.values()].map((g) => {
@@ -360,10 +385,54 @@ export async function remergeChapters(env: Env, workId: string): Promise<{
     });
     merged.sort((a, b) => sortKey(a) - sortKey(b));
 
+    return {
+        merged,
+        skipped,
+        conflicts,
+        divergent,
+        substantive: substantive.size,
+    };
+}
+
+/**
+ * Rebuild a work's canonical chapter sequence from its ENTIRE stored
+ * feed corpus (canonical_feeds) — pending feeds stay withheld until
+ * their binding solidifies (SD-1). Entries merge by (kind, number|label,
+ * part); ≥2 sources → verified. Divergent feeds and kind conflicts go
+ * to identity_review (deduped on identical payloads so re-merges don't
+ * spam the queue).
+ */
+export async function remergeChapters(env: Env, workId: string): Promise<{
+    count: number;
+    verified: number;
+    skipped: number;
+    conflicts: number;
+    divergent: string[];
+}> {
+    const { results: rows } = await env.COMMENTS_DB.prepare(
+        `SELECT source_key, feed_json FROM canonical_feeds
+         WHERE work_id = ? AND pending = 0`,
+    ).bind(workId).all<{ source_key: string; feed_json: string }>();
+
+    const feeds: StoredFeed[] = [];
+    for (const r of rows) {
+        try {
+            feeds.push({ source_key: r.source_key, chapters: JSON.parse(r.feed_json) });
+        } catch { /* corrupt feed row — skip, next canonize repairs */ }
+    }
+
+    const corpus = mergeChapterCorpus(feeds);
+    if (corpus.conflicts > 0) {
+        await review(env, 'chapter_kind_conflict', { work_id: workId, conflicts: corpus.conflicts });
+    }
+    if (corpus.divergent.length > 0 && corpus.substantive > 1) {
+        await review(env, 'chapter_feed_divergent', { work_id: workId, divergent: corpus.divergent });
+    }
+
     const ts = now();
     const stmts = [
         env.COMMENTS_DB.prepare('DELETE FROM canonical_chapters WHERE work_id = ?').bind(workId),
-        ...merged.map((m, i) =>
+        ...corpus.merged.map((m, i) =>
             env.COMMENTS_DB.prepare(
                 `INSERT INTO canonical_chapters
                  (work_id, seq, number, part, volume, kind, label, confidence, sources_json, refs_json, date_upload, updated_at)
@@ -378,22 +447,67 @@ export async function remergeChapters(env: Env, workId: string): Promise<{
     await env.COMMENTS_DB.batch(stmts);
 
     return {
-        count: merged.length,
-        verified: merged.filter((m) => m.confidence === 'verified').length,
-        skipped,
-        conflicts,
-        divergent,
+        count: corpus.merged.length,
+        verified: corpus.merged.filter((m) => m.confidence === 'verified').length,
+        skipped: corpus.skipped,
+        conflicts: corpus.conflicts,
+        divergent: corpus.divergent,
     };
 }
 
-/** GET /v1/works/:id/chapters — the canonical sequence, empty list if never canonized. */
+/** GET /v1/works/:id/chapters — the canonical sequence, empty list if
+ *  never canonized. A Bearer whose pending feeds are withheld from
+ *  canon (own submissions, or feeds on source_keys carrying the
+ *  caller's provisional binding) gets the in-memory overlay merge —
+ *  shared feeds ∪ caller-visible pending feeds, never persisted (SD-2). */
 export async function handleGetChapters(
-    _req: Request,
+    req: Request,
     params: Record<string, string>,
     _url: URL,
     env: Env,
 ): Promise<Response> {
     const workId = await liveWorkId(env, params.id);
+    const me = await identityFrom(req, env);
+    if (me) {
+        const { results: pending } = await env.COMMENTS_DB.prepare(
+            `SELECT source_key, feed_json FROM canonical_feeds
+             WHERE work_id = ? AND pending = 1
+               AND (submitter_device_hash = ?
+                    OR source_key IN (
+                        SELECT provider FROM external_ids
+                        WHERE miko_work_id = ? AND minter_device_hash = ?
+                          AND status = 'provisional'))`,
+        ).bind(workId, me.device_hash, workId, me.device_hash)
+            .all<{ source_key: string; feed_json: string }>();
+        if (pending.length > 0) {
+            const { results: shared } = await env.COMMENTS_DB.prepare(
+                `SELECT source_key, feed_json FROM canonical_feeds
+                 WHERE work_id = ? AND pending = 0`,
+            ).bind(workId).all<{ source_key: string; feed_json: string }>();
+            const feeds: StoredFeed[] = [];
+            for (const r of [...shared, ...pending]) {
+                try {
+                    feeds.push({ source_key: r.source_key, chapters: JSON.parse(r.feed_json) });
+                } catch { /* corrupt feed row — skip */ }
+            }
+            const corpus = mergeChapterCorpus(feeds);
+            return ok({
+                work_id: workId,
+                chapters: corpus.merged.map((m, i) => ({
+                    seq: i,
+                    number: m.number,
+                    part: m.part,
+                    volume: m.volume,
+                    kind: m.kind,
+                    label: m.label,
+                    confidence: m.confidence,
+                    sources: m.sources,
+                    refs: m.refs,
+                    date_upload: m.dateUpload,
+                })),
+            });
+        }
+    }
     const { results } = await env.COMMENTS_DB.prepare(
         `SELECT seq, number, part, volume, kind, label, confidence, sources_json, refs_json, date_upload
          FROM canonical_chapters WHERE work_id = ? ORDER BY seq`,
