@@ -1,5 +1,6 @@
 import { handleAlign } from './align';
 import { handleGetBindings } from './bindings';
+import { handleReportBinding, handleUnbindBinding } from './bindingreports';
 import { handleAppeal, handleMyAppeals } from './appeals';
 import { handleRegister } from './auth';
 import { handleBrowse, handleHydrate } from './browse';
@@ -36,6 +37,8 @@ const router = new Router<Env>()
     .add('POST', '/v1/episodes/canonize', (req, _p, _u, env) => handleCanonizeEpisodes(req, env))
     .add('GET', '/v1/works/:id/episodes', handleGetEpisodes)
     .add('GET', '/v1/works/:id/bindings', handleGetBindings)
+    .add('POST', '/v1/bindings/report', (req, _p, _u, env) => handleReportBinding(req, env))
+    .add('POST', '/v1/bindings/unbind', (req, _p, _u, env) => handleUnbindBinding(req, env))
     // Manual chart refresh — same X-Crawler-Key gate as crawler feeds.
     .add('POST', '/v1/charts/webtoon/refresh', (req, _p, _u, env) => {
         if (!env.CRAWLER_KEY || req.headers.get('x-crawler-key') !== env.CRAWLER_KEY) {

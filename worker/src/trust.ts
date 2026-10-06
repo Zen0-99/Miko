@@ -1,5 +1,9 @@
+import type { Identity } from './auth';
+import { remergeChapters } from './chaptermap';
+import { remergeEpisodes } from './episodemap';
 import type { Env } from './env';
 import { RULESET } from './ruleset';
+import { logModeration } from './strikes';
 import { now } from './util';
 
 /**
@@ -154,10 +158,9 @@ export async function maybeSolidify(
          WHERE provider = ? AND external_id = ? AND status = 'provisional'`,
     ).bind(now(), ledger.score, provider, ref).run();
     if ((res.meta.changes ?? 0) !== 1) return false;
-    await env.COMMENTS_DB.prepare(
-        `UPDATE canonical_feeds SET pending = 0
-         WHERE work_id = ? AND source_key = ?`,
-    ).bind(workId, provider).run();
+    // Same coverage invariant as quarantine's re-pend (SD-12): the
+    // just-confirmed binding covers (work, provider) → pending = 0.
+    await syncFeedPending(env, workId, provider);
     return true;
 }
 
@@ -335,4 +338,215 @@ export async function ingestTelemetry(env: Env, telemetry: unknown): Promise<voi
         ).bind(pkg, s, f, ts));
     }
     if (stmts.length > 0) await env.COMMENTS_DB.batch(stmts);
+}
+
+// ---------- 20-02: reports, quarantine, provider derank, rate caps ----------
+
+const HOUR_MS = 60 * 60 * 1000;
+const MIN_MS = 60 * 1000;
+
+/**
+ * D1 window-count rate caps for binding mutations — the rules.ts
+ * shape over `binding_rate_log` keyed (device_hash, action). Caps are
+ * versioned `RULESET.bindings.rate` entries (no KV/Rate-Limit binding
+ * exists — the CF dashboard rule documented in worker/README is the
+ * cost ceiling; this is the soft in-worker complement). 'mint' tiers
+ * by device age like comment posts: identities younger than
+ * `new_device_ms` get the tighter `new_device_*` cap. A missing key
+ * disables that check. Returns the rule id the caller 429s with.
+ */
+export async function evaluateBindingRate(
+    env: Env,
+    id: Identity,
+    action: 'mint' | 'report' | 'unbind',
+): Promise<{ ok: true } | { ok: false; rule: string }> {
+    const ts = now();
+    const r = RULESET.bindings.rate ?? {};
+    const isNew = ts - id.created_at < (r.new_device_ms ?? 0);
+    const count = async (windowMs: number): Promise<number> =>
+        (await env.COMMENTS_DB.prepare(
+            `SELECT COUNT(*) AS n FROM binding_rate_log
+             WHERE device_hash = ? AND action = ? AND created_at > ?`,
+        ).bind(id.device_hash, action, ts - windowMs).first<{ n: number }>())?.n ?? 0;
+
+    if (action === 'mint') {
+        const cap = isNew
+            ? (r.new_device_mints_per_hour ?? r.mints_per_hour)
+            : r.mints_per_hour;
+        if (cap != null && (await count(HOUR_MS)) >= cap) {
+            return { ok: false, rule: 'rate_mint' };
+        }
+        return { ok: true };
+    }
+    if (action === 'report') {
+        if (r.reports_per_min != null && (await count(MIN_MS)) >= r.reports_per_min) {
+            return { ok: false, rule: 'rate_report' };
+        }
+        const perHour = isNew
+            ? (r.new_device_reports_per_hour ?? r.reports_per_hour)
+            : r.reports_per_hour;
+        if (perHour != null && (await count(HOUR_MS)) >= perHour) {
+            return { ok: false, rule: 'rate_report' };
+        }
+        return { ok: true };
+    }
+    if (r.unbinds_per_hour != null && (await count(HOUR_MS)) >= r.unbinds_per_hour) {
+        return { ok: false, rule: 'rate_unbind' };
+    }
+    return { ok: true };
+}
+
+/**
+ * Stamp an allowed attempt — rate rows are written on the attempt
+ * (SD-15: after the cap check passes, before the mutation work) and
+ * each event prunes the CALLER's own >24h rows — bounded and
+ * index-friendly, no global sweep.
+ */
+export async function recordBindingRate(
+    env: Env,
+    deviceHash: string,
+    action: 'mint' | 'report' | 'unbind',
+): Promise<void> {
+    const ts = now();
+    await env.COMMENTS_DB.batch([
+        env.COMMENTS_DB.prepare(
+            'INSERT INTO binding_rate_log (device_hash, action, created_at) VALUES (?,?,?)',
+        ).bind(deviceHash, action, ts),
+        env.COMMENTS_DB.prepare(
+            'DELETE FROM binding_rate_log WHERE device_hash = ? AND created_at < ?',
+        ).bind(deviceHash, ts - DAY_MS),
+    ]);
+}
+
+/**
+ * Re-derive a feed's pending flag from binding coverage (SD-12): the
+ * (work, provider) feed joins shared canon iff SOME confirmed binding
+ * covers the pair — quarantining the only covering ref re-pends it; a
+ * second confirmed ref keeps it published. No canonical_feeds row →
+ * no-op.
+ */
+export async function syncFeedPending(env: Env, workId: string, provider: string): Promise<void> {
+    await env.COMMENTS_DB.prepare(
+        `UPDATE canonical_feeds SET pending = CASE WHEN EXISTS (
+             SELECT 1 FROM external_ids
+             WHERE miko_work_id = ? AND provider = ? AND status = 'confirmed'
+         ) THEN 0 ELSE 1 END
+         WHERE work_id = ? AND source_key = ?`,
+    ).bind(workId, provider, workId, provider).run();
+}
+
+/**
+ * Remerge dispatch on works_cache.medium — 'shows' merges episodes,
+ * everything else merges chapters; a work we don't know can't remerge.
+ */
+export async function remergeForWork(env: Env, workId: string): Promise<void> {
+    const work = await env.COMMENTS_DB.prepare(
+        'SELECT medium FROM works_cache WHERE miko_work_id = ?',
+    ).bind(workId).first<{ medium: string | null }>();
+    if (work == null) return;
+    if (work.medium === 'shows') await remergeEpisodes(env, workId);
+    else await remergeChapters(env, workId);
+}
+
+/** identity_review dedupe — chaptermap's review() shape: an
+ *  already-known (kind, payload) never enqueues twice. */
+async function review(env: Env, kind: string, payload: unknown): Promise<void> {
+    const json = JSON.stringify(payload);
+    const { results } = await env.COMMENTS_DB.prepare(
+        'SELECT 1 AS x FROM identity_review WHERE kind = ? AND payload = ? LIMIT 1',
+    ).bind(kind, json).all();
+    if (results.length > 0) return;
+    await env.COMMENTS_DB.prepare(
+        'INSERT INTO identity_review (kind, payload, created_at) VALUES (?,?,?)',
+    ).bind(kind, json, now()).run();
+}
+
+/**
+ * Quarantine transition (20-02): the guarded UPDATE flips any
+ * non-quarantined row — provisional AND confirmed (a bad incumbent's
+ * escape hatch, SD-14) — while a racing solidify can't win (its own
+ * `status='provisional'` guard). On the flip: the feed re-pends by
+ * coverage (SD-12) and remerges out of shared canon, provider_stats
+ * gets SELECT-RECOMPUTED `quarantined_count`/`report_weight`
+ * (recompute-on-write, SD-33 — never `+=`; `recomputeProviderStats`
+ * in 20-04 subsumes this two-column version), and the audit trail is
+ * a deduped identity_review row + a moderation_log entry. Returns
+ * whether the row flipped.
+ */
+export async function quarantineBinding(
+    env: Env,
+    provider: string,
+    ref: string,
+    workId: string,
+): Promise<boolean> {
+    const res = await env.COMMENTS_DB.prepare(
+        `UPDATE external_ids
+         SET status = 'quarantined', quarantined_at = ?
+         WHERE provider = ? AND external_id = ? AND status != 'quarantined'`,
+    ).bind(now(), provider, ref).run();
+    if ((res.meta.changes ?? 0) !== 1) return false;
+
+    await syncFeedPending(env, workId, provider);
+    await remergeForWork(env, workId);
+
+    const [quarantinedCount, reportWeight] = await Promise.all([
+        env.COMMENTS_DB.prepare(
+            `SELECT COUNT(*) AS n FROM external_ids
+             WHERE provider = ? AND status = 'quarantined'`,
+        ).bind(provider).first<{ n: number }>(),
+        env.COMMENTS_DB.prepare(
+            `SELECT COALESCE(SUM(weight),0) AS w FROM binding_reports
+             WHERE provider = ? AND kind != 'unbind'`,
+        ).bind(provider).first<{ w: number }>(),
+    ]);
+    await env.COMMENTS_DB.prepare(
+        `INSERT INTO provider_stats (provider, quarantined_count, report_weight, updated_at)
+         VALUES (?,?,?,?)
+         ON CONFLICT(provider) DO UPDATE SET
+            quarantined_count = excluded.quarantined_count,
+            report_weight = excluded.report_weight,
+            updated_at = excluded.updated_at`,
+    ).bind(provider, quarantinedCount?.n ?? 0, reportWeight?.w ?? 0, now()).run();
+
+    await review(env, 'binding_quarantined', { work_id: workId, provider, ref });
+    await logModeration(env, {
+        layer: 'report_threshold', rule_id: 'binding_quarantine', action: 'quarantine',
+    }, RULESET.version);
+    return true;
+}
+
+/**
+ * Cross-entry provider derank: recompute `provider_stats.report_weight`
+ * over every non-'unbind' report row (recompute-on-write, SD-33 —
+ * self-revocation is the minter fixing their own mistake, not provider
+ * malfeasance, SD-13) and write the demotion ceiling once the sum
+ * reaches `provider_derank_weight`. The tier_cap is a ceiling consumed
+ * by 20-04's promotion math — it deletes no bindings and resets no
+ * stats.
+ */
+export async function applyProviderDerank(env: Env, provider: string): Promise<void> {
+    const weight = (await env.COMMENTS_DB.prepare(
+        `SELECT COALESCE(SUM(weight),0) AS w FROM binding_reports
+         WHERE provider = ? AND kind != 'unbind'`,
+    ).bind(provider).first<{ w: number }>())?.w ?? 0;
+    await env.COMMENTS_DB.prepare(
+        `INSERT INTO provider_stats (provider, report_weight, updated_at)
+         VALUES (?,?,?)
+         ON CONFLICT(provider) DO UPDATE SET
+            report_weight = excluded.report_weight,
+            updated_at = excluded.updated_at`,
+    ).bind(provider, weight, now()).run();
+
+    const threshold = RULESET.bindings.provider_derank_weight;
+    const cap = RULESET.bindings.provider_derank_cap;
+    if (threshold == null || cap == null || weight < threshold) return;
+    const existing = await env.COMMENTS_DB.prepare(
+        'SELECT tier_cap FROM provider_stats WHERE provider = ?',
+    ).bind(provider).first<{ tier_cap: string | null }>();
+    // Written once — a cap already at the ruleset value stands.
+    if (existing?.tier_cap === cap) return;
+    await env.COMMENTS_DB.prepare(
+        'UPDATE provider_stats SET tier_cap = ?, updated_at = ? WHERE provider = ?',
+    ).bind(cap, now(), provider).run();
+    await review(env, 'provider_deranked', { provider, tier_cap: cap });
 }

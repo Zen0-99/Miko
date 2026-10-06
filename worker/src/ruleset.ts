@@ -57,6 +57,7 @@ export interface Ruleset {
             new_device_mints_per_hour?: number;
             new_device_ms?: number;
             reports_per_hour?: number;
+            new_device_reports_per_hour?: number;
             reports_per_min?: number;
             unbinds_per_hour?: number;
         };
