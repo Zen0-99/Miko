@@ -36,6 +36,7 @@ class ProviderFinder(
     private val mikoDbManager: MikoDbManager = Injekt.get(),
     private val workCarriers: WorkCarriers = Injekt.get(),
     private val episodeMap: CanonicalEpisodeMap = Injekt.get(),
+    private val mintTelemetry: MintTelemetry = Injekt.get(),
 ) {
 
     // Outlives any ScreenModel — a sheet close must not kill the fan-out.
@@ -254,7 +255,14 @@ class ProviderFinder(
         if (confirmed.isEmpty()) return null
         if (medium == WorkIdResolver.MEDIUM_SHOWS) {
             val feeds = confirmed.map { it.toEpisodeFeed() }
-            val resp = api.canonizeEpisodes(workId, feeds) ?: return null
+            // Phase 20: telemetry piggybacks on the mint request; a
+            // failed POST marks the carried pkgs failed.
+            val resp = api.canonizeEpisodes(workId, feeds, mintTelemetry.drain())
+                ?: run {
+                    feeds.forEach { mintTelemetry.recordFailed(it.sourceKey) }
+                    return null
+                }
+            mintTelemetry.commitFlush()
             logcat {
                 "providerFinder $workId: minted ${feeds.map { it.sourceKey }} " +
                     "(${resp.count} episodes)"
@@ -272,8 +280,13 @@ class ProviderFinder(
                 chapters = f.chapters,
             )
         }
-        val resp = api.canonize(WorkIdentityApi.CanonizeRequest(workId, feeds))
-            ?: return null
+        val resp = api.canonize(
+            WorkIdentityApi.CanonizeRequest(workId, feeds, mintTelemetry.drain()),
+        ) ?: run {
+            feeds.forEach { mintTelemetry.recordFailed(it.source_key) }
+            return null
+        }
+        mintTelemetry.commitFlush()
         logcat { "providerFinder $workId: minted ${feeds.map { it.source_key }} (${resp.count} chapters)" }
         return resp.count
     }

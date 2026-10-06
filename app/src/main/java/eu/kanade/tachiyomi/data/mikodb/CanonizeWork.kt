@@ -37,6 +37,7 @@ class CanonizeWork(
     private val goldenSources: GoldenSources = Injekt.get(),
     private val episodeMap: CanonicalEpisodeMap = Injekt.get(),
     private val mikoDbManager: MikoDbManager = Injekt.get(),
+    private val mintTelemetry: MintTelemetry = Injekt.get(),
 ) {
 
     sealed interface Outcome {
@@ -102,11 +103,19 @@ class CanonizeWork(
         val feeds = r.feeds.map { it.wire(verified = true) } +
             r.tentative.map { it.wire(verified = false) }
 
+        // Phase 20: bundled mint telemetry rides the canonize body;
+        // a POST failure marks every carried pkg failed.
         val resp = api.canonize(
-            WorkIdentityApi.CanonizeRequest(work_id = workId, feeds = feeds),
+            WorkIdentityApi.CanonizeRequest(
+                work_id = workId,
+                feeds = feeds,
+                telemetry = mintTelemetry.drain(),
+            ),
         ) ?: return Outcome.PostFailed.also {
+            feeds.forEach { mintTelemetry.recordFailed(it.source_key) }
             logcat { "canonize $workId: POST failed (${feeds.size} feeds)" }
         }
+        mintTelemetry.commitFlush()
 
         chapterMap.invalidate(workId)
         val bestDetails = r.feeds.filter { it.details != null && !it.details.isEmpty }
@@ -161,9 +170,12 @@ class CanonizeWork(
             r.feeds.map { it.episodeWire(verified = true) } +
             r.tentative.map { it.episodeWire(verified = false) }
 
-        val resp = api.canonizeEpisodes(workId, feeds) ?: return Outcome.PostFailed.also {
-            logcat { "canonize(episodes) $workId: POST failed (${feeds.size} feeds)" }
-        }
+        val resp = api.canonizeEpisodes(workId, feeds, mintTelemetry.drain())
+            ?: return Outcome.PostFailed.also {
+                feeds.forEach { mintTelemetry.recordFailed(it.sourceKey) }
+                logcat { "canonize(episodes) $workId: POST failed (${feeds.size} feeds)" }
+            }
+        mintTelemetry.commitFlush()
 
         episodeMap.invalidate(workId)
         episodeMap.prime(workId)

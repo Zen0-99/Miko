@@ -55,6 +55,7 @@ class CanonicalChapterRouter(
     private val commentsApi: CommentsApi = Injekt.get(),
     private val handler: MangaDatabaseHandler = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
+    private val mintTelemetry: MintTelemetry = Injekt.get(),
 ) {
 
     data class Candidate(
@@ -155,6 +156,44 @@ class CanonicalChapterRouter(
             },
             { tierRank(it.tier) },
         )
+    }
+
+    /**
+     * Identity-verified cover from a bound carrier — the extension's
+     * own `getMangaDetails`/`getNovelDetails` thumbnail for the work,
+     * gated through [identityOk] so a mismatched binding never donates
+     * its art. Used to fill canonical rows whose cover is blank; an
+     * existing cover is never replaced by this path.
+     */
+    suspend fun carrierCoverUrl(workId: String, medium: String): String? {
+        val matrix = runCatching { workCarriers.forWork(workId, medium) }.getOrNull()
+            ?: return null
+        val isBooks = medium == WorkIdResolver.MEDIUM_BOOKS
+        val work = bridge.byWorkId(workId) ?: return null
+        val query = SeriesMatcher.Query.of(work)
+        val preferred = sourcePreferences.preferredCarrierFor(workId)
+        for (carrier in matrix.readable.sortedBy { if (it.pkgName == preferred) 0 else 1 }) {
+            if (carrier.providerRef.isBlank()) continue
+            val cover = if (isBooks) {
+                val source = carrier.sourceIds
+                    .firstNotNullOfOrNull { novelSourceManager.get(it) } as? NovelCatalogueSource
+                    ?: continue
+                val sn = SNovel.create().apply { url = carrier.providerRef }
+                val details = runCatching { source.getNovelDetails(sn) }.getOrNull() ?: continue
+                if (!identityOk(query, details.title, details.author, details.artist)) continue
+                details.thumbnail_url
+            } else {
+                val source = carrier.sourceIds
+                    .firstNotNullOfOrNull { sourceManager.get(it) } as? HttpSource
+                    ?: continue
+                val sm = SManga.create().apply { url = carrier.providerRef }
+                val details = runCatching { source.getMangaDetails(sm) }.getOrNull() ?: continue
+                if (!identityOk(query, details.title, details.author, details.artist)) continue
+                details.thumbnail_url
+            }
+            if (!cover.isNullOrBlank()) return cover
+        }
+        return null
     }
 
     // ---------- bound-source expansion (16-04) ----------
@@ -335,9 +374,14 @@ class CanonicalChapterRouter(
             val pages = runCatching { src.getPageList(sch) }
                 .onFailure { logcat { "canonRouter $workId@${c.pkgName}: ${it.message}" } }
                 .getOrNull()
-                ?: continue
-            if (pages.isEmpty()) continue
+            if (pages.isNullOrEmpty()) {
+                // Phase 20 telemetry: a bound carrier's serve attempt
+                // failed — counted against its pkg, observational only.
+                mintTelemetry.recordFailed(c.pkgName)
+                continue
+            }
             lastWorking[workId] = c.pkgName
+            mintTelemetry.recordServed(c.pkgName)
             return Resolved(src, sch, pages, c.pkgName)
         }
         return null
@@ -384,7 +428,7 @@ class CanonicalChapterRouter(
         workId: String,
         seq: Int,
         forcedPkg: String? = null,
-    ): Pair<eu.kanade.tachiyomi.novelsource.online.NovelHttpSource, Candidate>? {
+    ): Pair<NovelCatalogueSource, Candidate>? {
         // Pinned carriers are exclusive for downloads — see downloadTarget.
         val pin = forcedPkg
             ?: sourcePreferences.preferredChapterCarrier(workId, seq)
@@ -393,7 +437,7 @@ class CanonicalChapterRouter(
             .let { list -> if (pin != null) list.filter { it.pkgName == pin } else list }
         for (c in cands) {
             val src = novelSourceManager.get(c.sourceId)
-                as? eu.kanade.tachiyomi.novelsource.online.NovelHttpSource ?: continue
+                as? NovelCatalogueSource ?: continue
             return src to c
         }
         return null
@@ -423,9 +467,12 @@ class CanonicalChapterRouter(
             val text = runCatching { src.getChapterText(sch) }
                 .onFailure { logcat { "canonRouter(novel) $workId@${c.pkgName}: ${it.message}" } }
                 .getOrNull()
-                ?: continue
-            if (text.isBlank()) continue
+            if (text.isNullOrBlank()) {
+                mintTelemetry.recordFailed(c.pkgName)
+                continue
+            }
             lastWorking[workId] = c.pkgName
+            mintTelemetry.recordServed(c.pkgName)
             onCarrier?.invoke(src.name)
             return text
         }
@@ -438,6 +485,34 @@ class CanonicalChapterRouter(
         /** `canon:{workId}:{seq}` → seq. */
         fun seqFromCanonUrl(workId: String, url: String): Int? =
             url.removePrefix("canon:$workId:").toIntOrNull()
+
+        /**
+         * `carrier:{sourceId}:{url}` — chapter rows written by a carrier
+         * source on a stub-sourced canonical entry (the book EPUB flow).
+         * Unlike canon rows there is no work-map seq to route through;
+         * the row itself records which source serves it, so the reader,
+         * the download queue and the delete paths all recover the
+         * carrier without re-running carrier resolution.
+         */
+        private const val CARRIER_URL_PREFIX = "carrier:"
+
+        fun isCarrierUrl(url: String) = url.startsWith(CARRIER_URL_PREFIX)
+
+        fun carrierUrl(sourceId: Long, url: String) = "$CARRIER_URL_PREFIX$sourceId:$url"
+
+        /** `carrier:{sourceId}:{url}` → sourceId; null for non-carrier
+         *  urls and malformed rows. */
+        fun carrierSourceId(url: String): Long? {
+            if (!isCarrierUrl(url)) return null
+            return url.removePrefix(CARRIER_URL_PREFIX).substringBefore(':', "").toLongOrNull()
+        }
+
+        /** `carrier:{sourceId}:{url}` → the serving source's real url;
+         *  non-carrier urls pass through unchanged. */
+        fun carrierRawUrl(url: String): String {
+            if (!isCarrierUrl(url)) return url
+            return url.removePrefix(CARRIER_URL_PREFIX).substringAfter(':', "")
+        }
 
         private fun tierRank(tier: String) = when (tier.uppercase()) {
             "S" -> 0

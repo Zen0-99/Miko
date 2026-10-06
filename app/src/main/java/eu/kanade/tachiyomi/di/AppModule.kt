@@ -335,6 +335,7 @@ class AppModule(val app: Application) : InjektModule {
         }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.SeenReporter() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.MintTelemetry() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorksBrowseApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdResolver() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog() }

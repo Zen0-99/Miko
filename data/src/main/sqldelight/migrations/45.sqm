@@ -1,0 +1,8 @@
+-- Phase 20: persisted per-provider-pkg mint-outcome queue. The client
+-- accumulates served/failed counters and bundles them onto existing
+-- MikoDB requests (persist-before-POST, SeenReporter idiom).
+CREATE TABLE mint_outcomes(
+    pkg_name TEXT NOT NULL PRIMARY KEY,
+    served INTEGER NOT NULL DEFAULT 0,
+    failed INTEGER NOT NULL DEFAULT 0
+);

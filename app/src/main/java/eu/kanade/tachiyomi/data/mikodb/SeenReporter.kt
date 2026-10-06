@@ -27,6 +27,7 @@ class SeenReporter {
 
     private val handler: MangaDatabaseHandler by injectLazy()
     private val api: WorkIdentityApi by injectLazy()
+    private val mintTelemetry: MintTelemetry by injectLazy()
 
     /** Session fast-path in front of the persisted table. */
     private val reported = ConcurrentHashMap.newKeySet<String>()
@@ -68,7 +69,13 @@ class SeenReporter {
         handler.await {
             seen_reportedQueries.insertReported(workId, medium, System.currentTimeMillis())
         }
-        api.markSeen(workId, medium)
+        // Phase 20: bundled mint telemetry rides this POST — the rows
+        // persist before the request; commitFlush drops them only when
+        // the carrier succeeds, a failure leaves them for the next one.
+        val telemetry = mintTelemetry.drain()
+        if (api.markSeen(workId, medium, telemetry)) {
+            mintTelemetry.commitFlush()
+        }
         return true
     }
 }

@@ -1,0 +1,30 @@
+-- Mint-outcome telemetry queue (Phase 20 / NCM-014) — the SeenReporter
+-- shape verbatim. recordServed/recordFailed accumulate per-provider-pkg
+-- counters here BEFORE they can reach the wire (persist-before-POST: a
+-- crash loses nothing already counted). drain() merges the rows into
+-- the next existing request's `telemetry` field (resolve/canonize/
+-- canonizeEpisodes/ids-seen) — zero dedicated requests — and
+-- commitFlush() clears them only after that carrier call succeeds, so
+-- a failed carrier keeps the rows for the next one. Counters are
+-- observational only server-side; a saturated queue drops overflow.
+
+CREATE TABLE mint_outcomes(
+    pkg_name TEXT NOT NULL PRIMARY KEY,
+    served INTEGER NOT NULL DEFAULT 0,
+    failed INTEGER NOT NULL DEFAULT 0
+);
+
+insertPkg:
+INSERT OR IGNORE INTO mint_outcomes(pkg_name) VALUES (:pkg);
+
+incrementServed:
+UPDATE mint_outcomes SET served = served + 1 WHERE pkg_name = :pkg;
+
+incrementFailed:
+UPDATE mint_outcomes SET failed = failed + 1 WHERE pkg_name = :pkg;
+
+drainAll:
+SELECT pkg_name, served, failed FROM mint_outcomes;
+
+clearRows:
+DELETE FROM mint_outcomes;
