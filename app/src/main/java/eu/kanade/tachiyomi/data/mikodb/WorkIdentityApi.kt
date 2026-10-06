@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.tachiyomi.data.comments.DeviceIdentityProvider
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.awaitSuccess
@@ -10,7 +12,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import tachiyomi.core.common.preference.PreferenceStore
 import uy.kohesive.injekt.injectLazy
 
@@ -40,6 +44,9 @@ class WorkIdentityApi {
         val kindHint: String? = null,
         /** Strong book identity — ISBN-10/13, edition → work rollup. */
         val isbn: String? = null,
+        /** Bundled mint telemetry (Phase 20) — piggybacks on this call,
+         *  never its own request. */
+        val telemetry: List<TelemetryEntry>? = null,
     )
 
     @Serializable
@@ -74,6 +81,7 @@ class WorkIdentityApi {
     private val networkHelper: NetworkHelper by injectLazy()
     private val preferenceStore: PreferenceStore by injectLazy()
     private val json: Json by injectLazy()
+    private val identityProvider: DeviceIdentityProvider by injectLazy()
 
     private val baseUrlPref by lazy {
         preferenceStore.getString("miko_comments_base_url", DEFAULT_BASE_URL)
@@ -81,17 +89,45 @@ class WorkIdentityApi {
 
     fun baseUrl(): String = baseUrlPref.get().trim().trimEnd('/')
 
+    /**
+     * Bearer plumbing (Phase 20): mutation paths (`read=false`) register
+     * the device lazily via [DeviceIdentityProvider.ensureToken] so every
+     * mint carries identity; read paths attach the cached pref token
+     * only — never an auth network call just to read.
+     */
+    private suspend fun authHeaders(read: Boolean): Headers {
+        val token = if (read) identityProvider.token() else identityProvider.ensureToken()
+        return Headers.headersOf(
+            "User-Agent",
+            USER_AGENT,
+            *(token?.let { arrayOf("Authorization", "Bearer $it") } ?: emptyArray()),
+        )
+    }
+
+    /**
+     * Execute [build] once; on HTTP 401 refresh the device token and
+     * retry once (the comments mapError convention). A second 401 or a
+     * failed refresh rethrows and degrades to the caller's fallback.
+     */
+    private suspend fun authedCall(read: Boolean, build: (Headers) -> Request): Response = try {
+        networkHelper.client.newCall(build(authHeaders(read))).awaitSuccess()
+    } catch (e: HttpException) {
+        if (e.code != 401) throw e
+        identityProvider.refreshToken() ?: throw e
+        networkHelper.client.newCall(build(authHeaders(read))).awaitSuccess()
+    }
+
     /** Resolve to a canonical work row, or null on miss/timeout/offline. */
     suspend fun resolve(request: ResolveRequest): WorkDto? = try {
         val body = json.encodeToString(request).toRequestBody(jsonMime)
         with(json) {
-            networkHelper.client.newCall(
+            authedCall(read = true) { headers ->
                 POST(
                     "${baseUrl()}/v1/works/resolve",
-                    headers = Headers.headersOf("User-Agent", USER_AGENT),
+                    headers = headers,
                     body = body,
-                ),
-            ).awaitSuccess().parseAs<ResolveResponse>().work
+                )
+            }.parseAs<ResolveResponse>().work
         }
     } catch (_: Exception) {
         null
@@ -147,7 +183,12 @@ class WorkIdentityApi {
     )
 
     @Serializable
-    data class CanonizeRequest(val work_id: String, val feeds: List<CanonizeFeed>)
+    data class CanonizeRequest(
+        val work_id: String,
+        val feeds: List<CanonizeFeed>,
+        /** Bundled mint telemetry (Phase 20). */
+        val telemetry: List<TelemetryEntry>? = null,
+    )
 
     @Serializable
     data class CanonizeResponse(
@@ -157,17 +198,21 @@ class WorkIdentityApi {
         val skipped: Int,
         val conflicts: Int,
         val divergent: List<String> = emptyList(),
+        /** Provider refs that solidified on this request (20-01 workers).
+         *  Empty on pre-20 workers — the client treats it as "nothing
+         *  changed" and skips the matrix-cache invalidation. */
+        val solidified: List<String> = emptyList(),
     )
 
     /** The work's canonical chapter sequence — empty list if never canonized; null on failure. */
     suspend fun getChapters(workId: String): ChaptersResponse? = try {
-        networkHelper.client.newCall(
+        authedCall(read = true) { headers ->
             okhttp3.Request.Builder()
                 .url("${baseUrl()}/v1/works/${java.net.URLEncoder.encode(workId, "UTF-8")}/chapters")
-                .headers(Headers.headersOf("User-Agent", USER_AGENT))
+                .headers(headers)
                 .get()
-                .build(),
-        ).awaitSuccess().let { with(json) { it.parseAs<ChaptersResponse>() } }
+                .build()
+        }.let { with(json) { it.parseAs<ChaptersResponse>() } }
     } catch (_: Exception) {
         null
     }
@@ -176,13 +221,13 @@ class WorkIdentityApi {
     suspend fun canonize(request: CanonizeRequest): CanonizeResponse? = try {
         val body = json.encodeToString(request).toRequestBody(jsonMime)
         with(json) {
-            networkHelper.client.newCall(
+            authedCall(read = false) { headers ->
                 POST(
                     "${baseUrl()}/v1/chapters/canonize",
-                    headers = Headers.headersOf("User-Agent", USER_AGENT),
+                    headers = headers,
                     body = body,
-                ),
-            ).awaitSuccess().parseAs<CanonizeResponse>()
+                )
+            }.parseAs<CanonizeResponse>()
         }
     } catch (_: Exception) {
         null
@@ -256,6 +301,8 @@ class WorkIdentityApi {
         @SerialName("work_id")
         val workId: String,
         val feeds: List<EpisodeFeed>,
+        /** Bundled mint telemetry (Phase 20). */
+        val telemetry: List<TelemetryEntry>? = null,
     )
 
     @Serializable
@@ -267,6 +314,9 @@ class WorkIdentityApi {
         val skipped: Int,
         val conflicts: Int,
         val divergent: List<String> = emptyList(),
+        /** Provider refs that solidified on this request (20-01
+         *  workers). Empty on pre-20 workers. */
+        val solidified: List<String> = emptyList(),
     )
 
     @Serializable
@@ -310,13 +360,13 @@ class WorkIdentityApi {
 
     /** The work's canonical episode sequence — empty list if never canonized; null on failure. */
     suspend fun getEpisodes(workId: String): EpisodesResponse? = try {
-        networkHelper.client.newCall(
+        authedCall(read = true) { headers ->
             okhttp3.Request.Builder()
                 .url("${baseUrl()}/v1/works/${java.net.URLEncoder.encode(workId, "UTF-8")}/episodes")
-                .headers(Headers.headersOf("User-Agent", USER_AGENT))
+                .headers(headers)
                 .get()
-                .build(),
-        ).awaitSuccess().let { with(json) { it.parseAs<EpisodesResponse>() } }
+                .build()
+        }.let { with(json) { it.parseAs<EpisodesResponse>() } }
     } catch (_: Exception) {
         null
     }
@@ -326,17 +376,18 @@ class WorkIdentityApi {
     suspend fun canonizeEpisodes(
         workId: String,
         feeds: List<EpisodeFeed>,
+        telemetry: List<TelemetryEntry>? = null,
     ): CanonizeEpisodesResponse? = try {
-        val body = json.encodeToString(EpisodesCanonizeRequest(workId, feeds))
+        val body = json.encodeToString(EpisodesCanonizeRequest(workId, feeds, telemetry))
             .toRequestBody(jsonMime)
         with(json) {
-            networkHelper.client.newCall(
+            authedCall(read = false) { headers ->
                 POST(
                     "${baseUrl()}/v1/episodes/canonize",
-                    headers = Headers.headersOf("User-Agent", USER_AGENT),
+                    headers = headers,
                     body = body,
-                ),
-            ).awaitSuccess().parseAs<CanonizeEpisodesResponse>()
+                )
+            }.parseAs<CanonizeEpisodesResponse>()
         }
     } catch (_: Exception) {
         null
@@ -351,6 +402,15 @@ class WorkIdentityApi {
         val confidence: Double? = null,
         val provenance: String? = null,
         val last_seen_at: Long? = null,
+        /** 'confirmed' | 'provisional' | 'quarantined' (Phase 20).
+         *  NULL on pre-20 workers — the client maps it to
+         *  confirmed-equivalent semantics. */
+        val status: String? = null,
+        /** This device minted the binding (server-computed from the
+         *  Bearer hash — never trusted when client-supplied). */
+        val mine: Boolean = false,
+        /** Ledger-derived binding score; display/diagnostic only. */
+        val points: Double? = null,
     )
 
     @Serializable
@@ -362,38 +422,109 @@ class WorkIdentityApi {
     /** The work's durable carrier bindings — which providers/extensions
      *  hold an entry for it (16-02). Empty list when none; null on failure. */
     suspend fun getBindings(workId: String): BindingsResponse? = try {
-        networkHelper.client.newCall(
+        authedCall(read = true) { headers ->
             okhttp3.Request.Builder()
                 .url("${baseUrl()}/v1/works/${java.net.URLEncoder.encode(workId, "UTF-8")}/bindings")
-                .headers(Headers.headersOf("User-Agent", USER_AGENT))
+                .headers(headers)
                 .get()
-                .build(),
-        ).awaitSuccess().let { with(json) { it.parseAs<BindingsResponse>() } }
+                .build()
+        }.let { with(json) { it.parseAs<BindingsResponse>() } }
     } catch (_: Exception) {
         null
     }
 
+    // ---------- Phase 20: binding lifecycle ----------
+
+    @Serializable
+    data class UnbindRequest(
+        val work_id: String,
+        val provider: String,
+        val provider_ref: String,
+    )
+
+    /** Outcome of `POST /v1/bindings/unbind` (20-02; the endpoint may be
+     *  absent on a pre-20-02 worker — that is [NotFound], not a crash). */
+    sealed interface UnbindResult {
+        data object Ok : UnbindResult
+
+        /** Endpoint absent (404) OR the row isn't this device's own
+         *  provisional mint — the worker maps both to 404. */
+        data object NotFound : UnbindResult
+        data object Failed : UnbindResult
+    }
+
+    /**
+     * Revoke this device's own provisional binding ("wrong work? unbind").
+     * The worker deletes the row + counts a kind='unbind' report.
+     */
+    suspend fun unbindBinding(
+        workId: String,
+        provider: String,
+        providerRef: String,
+    ): UnbindResult = try {
+        val body = json.encodeToString(UnbindRequest(workId, provider, providerRef))
+            .toRequestBody(jsonMime)
+        authedCall(read = false) { headers ->
+            POST(
+                "${baseUrl()}/v1/bindings/unbind",
+                headers = headers,
+                body = body,
+            )
+        }
+        UnbindResult.Ok
+    } catch (e: HttpException) {
+        if (e.code == 404) UnbindResult.NotFound else UnbindResult.Failed
+    } catch (_: Exception) {
+        UnbindResult.Failed
+    }
+
     // ---------- Phase 14-01: coverage-gap telemetry ----------
+
+    @Serializable
+    data class SeenRequest(
+        val id: String,
+        val medium: String,
+        /** Bundled mint telemetry (Phase 20). */
+        val telemetry: List<TelemetryEntry>? = null,
+    )
 
     /**
      * Reports a resolved/minted work id so MikoDB can rank coverage gaps.
-     * Sends ONLY the id + medium — no user, device, or metadata.
-     * Returns false on any failure; callers never retry.
+     * Sends ONLY the id + medium — no user, device, or metadata beyond
+     * the shared Bearer identity. Returns false on any failure; callers
+     * never retry.
      */
-    suspend fun markSeen(workId: String, medium: String): Boolean = try {
-        val body = json.encodeToString(mapOf("id" to workId, "medium" to medium))
+    suspend fun markSeen(
+        workId: String,
+        medium: String,
+        telemetry: List<TelemetryEntry>? = null,
+    ): Boolean = try {
+        val body = json.encodeToString(SeenRequest(workId, medium, telemetry))
             .toRequestBody(jsonMime)
-        networkHelper.client.newCall(
+        authedCall(read = true) { headers ->
             POST(
                 "${baseUrl()}/v1/ids/seen",
-                headers = Headers.headersOf("User-Agent", USER_AGENT),
+                headers = headers,
                 body = body,
-            ),
-        ).awaitSuccess()
+            )
+        }
         true
     } catch (_: Exception) {
         false
     }
+
+    /**
+     * One bundled mint-telemetry row (Phase 20): per-package
+     * served/failed counters accumulated by [MintTelemetry] and carried
+     * piggyback on the next existing request body — never a dedicated
+     * flush call. Observational only server-side.
+     */
+    @Serializable
+    data class TelemetryEntry(
+        val pkg: String,
+        val served: Long = 0,
+        val failed: Long = 0,
+    )
 
     companion object {
         const val DEFAULT_BASE_URL = "https://miko-comments.keypop3750.workers.dev"
