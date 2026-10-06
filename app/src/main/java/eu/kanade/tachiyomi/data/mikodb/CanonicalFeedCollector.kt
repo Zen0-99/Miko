@@ -114,7 +114,25 @@ class CanonicalFeedCollector(
         topCandidates: Int = TOP_CANDIDATES,
         onSourceDone: ((pkgName: String, feed: Feed?, error: String?) -> Unit)? = null,
     ): Result = withContext(Dispatchers.IO) {
-        val query = SeriesMatcher.Query.of(work)
+        // 19-05: shows queries carry the artifact's season/part/format
+        // expectations (veto signals); manga/books stay on the plain
+        // work-row query — books candidates never assert season data.
+        val query = when {
+            medium == WorkIdResolver.MEDIUM_SHOWS -> {
+                val animeRows = work.mikoWorkId
+                    .takeIf { it.startsWith(CanonizeWork.IMDB_WORK_PREFIX) }
+                    ?.let {
+                        mikoDbManager.bridge()?.byImdb(it.removePrefix(CanonizeWork.IMDB_WORK_PREFIX))
+                    }
+                    .orEmpty()
+                if (animeRows.isNotEmpty()) {
+                    SeriesMatcher.Query.forShows(work, animeRows)
+                } else {
+                    SeriesMatcher.Query.of(work)
+                }
+            }
+            else -> SeriesMatcher.Query.of(work)
+        }
         val goldens = sources ?: goldenSources.forWorkRow(work, medium)
         if (goldens.isEmpty()) {
             return@withContext Result(emptyList(), emptyList(), emptyList(), emptyMap())
@@ -235,6 +253,7 @@ class CanonicalFeedCollector(
                 author = d.author,
                 artist = d.artist,
                 chapterCount = null,
+                format = SeriesMatcher.formatMarker(d.title),
             )
         }
         val verdicts = matcher.verifyAll(query, matchCands)
@@ -331,6 +350,7 @@ class CanonicalFeedCollector(
                 author = d.author,
                 artist = d.artist,
                 chapterCount = null,
+                format = SeriesMatcher.formatMarker(d.title),
             )
         }
         val verdicts = matcher.verifyAll(query, matchCands)
@@ -427,12 +447,19 @@ class CanonicalFeedCollector(
         }
         if (detailed.isEmpty()) error("details fetch failed for ${candidates.size} hits")
 
+        // 19-05: shows candidates assert season/part parsed from the
+        // title (hard vetoes against the query's expected set) plus the
+        // title-marker format (soft penalty vs the artifact media type).
         val matchCands = detailed.map { (d, _) ->
+            val (season, part) = SeriesMatcher.parseSeasonPart(d.title)
             SeriesMatcher.Candidate(
                 title = d.title,
                 author = d.author,
                 artist = d.artist,
                 chapterCount = null,
+                season = season,
+                part = part,
+                format = SeriesMatcher.formatMarker(d.title),
             )
         }
         val verdicts = matcher.verifyAll(query, matchCands)

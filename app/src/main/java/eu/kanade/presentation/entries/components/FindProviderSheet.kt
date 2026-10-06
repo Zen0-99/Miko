@@ -30,7 +30,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
@@ -225,28 +228,56 @@ private fun ProviderRow(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        // Status chain: "N episodes/chapters" →
+                        // "uncertain match" (error-colored segment only)
+                        // → "missing M" → the one minimal-copy reason.
+                        // The reason is meta text, never error-colored.
+                        val countLabel = if (row.chapterCount > 0) {
+                            stringResource(
+                                if (row.medium == "shows") {
+                                    AYMR.strings.find_provider_episodes
+                                } else {
+                                    AYMR.strings.find_provider_chapters
+                                },
+                                row.chapterCount,
+                            )
+                        } else {
+                            null
+                        }
+                        val missingLabel = row.missingCount
+                            .takeIf { it > 0 }
+                            ?.let { stringResource(AYMR.strings.find_provider_missing, it) }
+                        val uncertainLabel = if (row.tentative) {
+                            stringResource(AYMR.strings.find_provider_uncertain)
+                        } else {
+                            null
+                        }
+                        val reasonLabel = if (row.tentative) {
+                            row.reason?.let { findProviderReasonText(it) }
+                        } else {
+                            null
+                        }
                         Text(
-                            text = listOfNotNull(
-                                if (row.chapterCount > 0) {
-                                    stringResource(
-                                        AYMR.strings.find_provider_chapters,
-                                        row.chapterCount,
-                                    )
-                                } else {
-                                    null
-                                },
-                                if (row.tentative) {
-                                    stringResource(AYMR.strings.find_provider_uncertain)
-                                } else {
-                                    null
-                                },
-                            ).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (row.tentative) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                            text = buildAnnotatedString {
+                                var first = true
+                                fun appendSep() {
+                                    if (!first) append(" · ")
+                                    first = false
+                                }
+                                countLabel?.let { appendSep(); append(it) }
+                                uncertainLabel?.let {
+                                    appendSep()
+                                    withStyle(
+                                        SpanStyle(color = MaterialTheme.colorScheme.error),
+                                    ) {
+                                        append(it)
+                                    }
+                                }
+                                missingLabel?.let { appendSep(); append(it) }
+                                reasonLabel?.let { appendSep(); append(it) }
                             },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -263,6 +294,7 @@ private fun ProviderRow(
                             row.foundTitle?.let {
                                 stringResource(AYMR.strings.find_provider_closest, it)
                             },
+                            row.reason?.let { findProviderReasonText(it) },
                         ).joinToString(" · ")
                         else -> stringResource(
                             when (row.error) {
@@ -281,6 +313,27 @@ private fun ProviderRow(
             }
         }
     }
+}
+
+/**
+ * Minimal-copy scorecard segment (19-05, D-08): maps the matcher's
+ * stable `dominantReason` key to one fixed string — unknown/new keys
+ * render nothing (null-safe). Scores and machine codes never reach
+ * the sheet; the verbose verdict stays in logcat.
+ */
+@Composable
+private fun findProviderReasonText(key: String): String? = when (key) {
+    "season_veto" -> stringResource(AYMR.strings.find_provider_reason_season_veto)
+    "part_veto" -> stringResource(AYMR.strings.find_provider_reason_part_veto)
+    "sequel" -> stringResource(AYMR.strings.find_provider_reason_sequel)
+    "spinoff" -> stringResource(AYMR.strings.find_provider_reason_spinoff)
+    "format" -> stringResource(AYMR.strings.find_provider_reason_format)
+    "year" -> stringResource(AYMR.strings.find_provider_reason_year)
+    "media_type" -> stringResource(AYMR.strings.find_provider_reason_media_type)
+    "weak_title" -> stringResource(AYMR.strings.find_provider_reason_weak_title)
+    "thin_margin" -> stringResource(AYMR.strings.find_provider_reason_thin_margin)
+    "subtitle_tail" -> stringResource(AYMR.strings.find_provider_reason_subtitle_tail)
+    else -> null
 }
 
 @Composable

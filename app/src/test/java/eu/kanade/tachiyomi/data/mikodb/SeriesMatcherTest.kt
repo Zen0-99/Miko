@@ -159,4 +159,189 @@ class SeriesMatcherTest {
         val v = matcher.verify(naruto, SeriesMatcher.Candidate(title = "Naruto Shinden"))
         assertTrue(v.decision != Decision.REJECT || v.score < SeriesMatcher.FLOOR)
     }
+
+    // ── 19-05: season/part vetoes + format/year penalties ─────────────
+
+    private val attackOnTitan = SeriesMatcher.Query(
+        titles = listOf("Attack on Titan", "Shingeki no Kyojin"),
+        year = 2013,
+        type = "anime",
+        expectedSeasons = setOf(1),
+        expectedParts = setOf(1),
+        format = "TV",
+    )
+
+    @Test
+    fun `season mismatch vetoes when both sides assert`() {
+        val v = matcher.verify(
+            attackOnTitan,
+            SeriesMatcher.Candidate(title = "Attack on Titan Season 2", season = 2),
+        )
+        assertEquals(Decision.REJECT, v.decision)
+        assertTrue("veto:season" in v.reasons)
+        assertEquals("season_veto", v.dominantReason())
+    }
+
+    @Test
+    fun `expected season survives the sequel-marker rule`() {
+        // A work covering S1+S2 keeps its "Season 2" candidate — the
+        // digit is the season marker, not a sequel claim.
+        val v = matcher.verify(
+            attackOnTitan.copy(expectedSeasons = setOf(1, 2)),
+            SeriesMatcher.Candidate(title = "Attack on Titan Season 2", season = 2),
+        )
+        assertTrue(v.decision != Decision.REJECT)
+        assertTrue(v.reasons.none { it.startsWith("veto:") })
+    }
+
+    @Test
+    fun `implicit season is a soft penalty not a veto`() {
+        // No expectedSeasons (e.g. a mk:m mint) — a S2+ claim can't be
+        // disproven, so it soft-penalizes instead of vetoing.
+        val v = matcher.verify(
+            attackOnTitan.copy(expectedSeasons = emptySet(), expectedParts = emptySet()),
+            SeriesMatcher.Candidate(title = "Attack on Titan Season 2", season = 2),
+        )
+        assertTrue(v.reasons.none { it == "veto:season" })
+        assertTrue("penalty:season-implicit" in v.reasons)
+        assertEquals("season_veto", v.dominantReason())
+    }
+
+    @Test
+    fun `part mismatch vetoes when both sides assert`() {
+        val v = matcher.verify(
+            attackOnTitan,
+            SeriesMatcher.Candidate(title = "Attack on Titan Part 2", part = 2),
+        )
+        assertEquals(Decision.REJECT, v.decision)
+        assertTrue("veto:part" in v.reasons)
+        assertEquals("part_veto", v.dominantReason())
+    }
+
+    @Test
+    fun `format mismatch soft-penalizes shows`() {
+        // Artifact says MOVIE; the candidate page is marked "(TV)".
+        val v = matcher.verify(
+            attackOnTitan.copy(format = "MOVIE"),
+            SeriesMatcher.Candidate(title = "Attack on Titan (TV)", format = "tv"),
+        )
+        assertTrue("penalty:format" in v.reasons)
+        assertEquals("format", v.dominantReason())
+    }
+
+    @Test
+    fun `manga format marker mismatch soft-penalizes`() {
+        // Per-medium vocab: manga work vs a "(Webtoon)"-marked page.
+        val v = matcher.verify(
+            naruto,
+            SeriesMatcher.Candidate(title = "Naruto (Webtoon)", format = "webtoon"),
+        )
+        assertTrue("penalty:format" in v.reasons)
+        assertEquals("format", v.dominantReason())
+    }
+
+    @Test
+    fun `large year gap is an explainable penalty`() {
+        val v = matcher.verify(
+            naruto,
+            SeriesMatcher.Candidate(title = "Naruto", year = 1990),
+        )
+        assertTrue("penalty:year" in v.reasons)
+        assertEquals("year", v.dominantReason())
+    }
+
+    @Test
+    fun `books candidates never assert season`() {
+        // The medium gate lives at candidate construction — books feeds
+        // leave season/part null, so "Book 2" titles can't veto or
+        // penalty even with expected data absent.
+        val v = matcher.verify(
+            naruto.copy(type = "novel", expectedSeasons = setOf(1)),
+            SeriesMatcher.Candidate(title = "Naruto Book 2"),
+        )
+        assertTrue(v.reasons.none { it == "veto:season" || it == "penalty:season-implicit" })
+    }
+
+    @Test
+    fun `spinoff reject still dominates season signals`() {
+        // Ragnarok regression: the derivative reject outranks a
+        // co-asserted season difference only when the veto also fired;
+        // without a season marker on the title, spinoff stands alone.
+        val v = matcher.verify(
+            soloLeveling.copy(expectedSeasons = setOf(1)),
+            SeriesMatcher.Candidate(title = "Solo Leveling: Ragnarok"),
+        )
+        assertEquals(Decision.REJECT, v.decision)
+        assertEquals("spinoff", v.dominantReason())
+    }
+
+    @Test
+    fun `dominantReason precedence veto beats reject`() {
+        val v = SeriesMatcher.Verdict(
+            Decision.REJECT, 0.0, null,
+            listOf("veto:season", "reject:spinoff:ragnarok"),
+        )
+        assertEquals("season_veto", v.dominantReason())
+    }
+
+    @Test
+    fun `dominantReason thin margin`() {
+        val cands = listOf(
+            SeriesMatcher.Candidate(title = "Solo Leveling"),
+            SeriesMatcher.Candidate(title = "Solo Leveling"),
+        )
+        val verdicts = matcher.verifyAll(soloLeveling, cands)
+        assertEquals("thin_margin", verdicts[0].dominantReason())
+    }
+
+    @Test
+    fun `dominantReason identifier`() {
+        val v = SeriesMatcher.Verdict(
+            Decision.ACCEPT, 1.0, null,
+            listOf("identifier:mangadex"),
+        )
+        assertEquals("identifier", v.dominantReason())
+    }
+
+    @Test
+    fun `dominantReason empty on clean accept`() {
+        val v = matcher.verify(
+            soloLeveling,
+            SeriesMatcher.Candidate(title = "Solo Leveling", author = "Chugong"),
+        )
+        assertEquals(null, v.dominantReason())
+    }
+
+    // ── parseSeasonPart / formatMarker ────────────────────────────────
+
+    @Test
+    fun `parseSeasonPart extracts season forms`() {
+        assertEquals(2 to null, SeriesMatcher.parseSeasonPart("Title S2"))
+        assertEquals(2 to null, SeriesMatcher.parseSeasonPart("Title S2E05"))
+        assertEquals(2 to null, SeriesMatcher.parseSeasonPart("Title Season 2"))
+        assertEquals(2 to null, SeriesMatcher.parseSeasonPart("Title 2nd Season"))
+        assertEquals(2 to null, SeriesMatcher.parseSeasonPart("Title Cours 2"))
+        assertEquals(3 to null, SeriesMatcher.parseSeasonPart("Title Season III"))
+        assertEquals(null to null, SeriesMatcher.parseSeasonPart("Title"))
+    }
+
+    @Test
+    fun `parseSeasonPart extracts part forms`() {
+        assertEquals(null to 3, SeriesMatcher.parseSeasonPart("Title Part 3"))
+        assertEquals(null to 3, SeriesMatcher.parseSeasonPart("Title Part III"))
+        assertEquals(null to 2, SeriesMatcher.parseSeasonPart("Title Pt 2"))
+        assertEquals(2 to 3, SeriesMatcher.parseSeasonPart("Title Season 2 Part 3"))
+    }
+
+    @Test
+    fun `formatMarker reads title markers`() {
+        assertEquals("tv", SeriesMatcher.formatMarker("Title (TV)"))
+        assertEquals("movie", SeriesMatcher.formatMarker("Title (Movie)"))
+        assertEquals("ova", SeriesMatcher.formatMarker("Title OVA"))
+        assertEquals("ona", SeriesMatcher.formatMarker("Title ONA"))
+        assertEquals("novel", SeriesMatcher.formatMarker("Title (Novel)"))
+        assertEquals("webtoon", SeriesMatcher.formatMarker("Title (Webtoon)"))
+        assertEquals("audiobook", SeriesMatcher.formatMarker("Title (Audiobook)"))
+        assertEquals(null, SeriesMatcher.formatMarker("Title"))
+    }
 }

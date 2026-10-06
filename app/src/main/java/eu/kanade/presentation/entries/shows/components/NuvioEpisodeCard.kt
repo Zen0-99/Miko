@@ -74,6 +74,10 @@ fun NuvioEpisodeCard(
     watchProgress: String? = null,
     progressFraction: Float?,
     scanlator: String?,
+    /** Provider-coverage note (19-05, D-03b) — "Missing provider" on
+     *  canon episodes no readable carrier serves. Renders at the
+     *  scanlator slot, dimmed-error; rows stay tappable. */
+    note: String? = null,
     summary: String?,
     previewUrl: String?,
     seen: Boolean,
@@ -322,7 +326,18 @@ fun NuvioEpisodeCard(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (scanlator != null) {
+                        if (note != null) {
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.error
+                                    .copy(alpha = SECONDARY_ALPHA),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                        } else if (scanlator != null) {
                             Text(
                                 text = scanlator,
                                 style = MaterialTheme.typography.labelSmall,

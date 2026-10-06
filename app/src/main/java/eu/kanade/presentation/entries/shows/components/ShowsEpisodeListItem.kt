@@ -71,10 +71,19 @@ fun ShowsEpisodeListItem(
     date: String?,
     watchProgress: String?,
     scanlator: String?,
+    /** Provider-coverage note (19-05, D-03b) — "Missing provider"
+     *  renders at the scanlator slot in dimmed error color. */
+    note: String? = null,
+    /** Canonical episode kind ("special"/"nc") — renders a leading
+     *  type tag before the filler label; "main"/null renders nothing. */
+    typeTag: String? = null,
     summary: String?,
     previewUrl: String?,
     seen: Boolean,
     bookmark: Boolean,
+    /** Callers pass the union `fillermark || canonicalFiller` (19-05)
+     *  — the label shows feed-populated filler without touching the
+     *  user-owned flag. */
     fillermark: Boolean,
     selected: Boolean,
     isAnyEpisodeSelected: Boolean,
@@ -134,6 +143,8 @@ fun ShowsEpisodeListItem(
                     watchProgress = watchProgress,
                     fillermark = fillermark,
                     scanlator = scanlator,
+                    note = note,
+                    typeTag = typeTag,
                     seen = seen,
                     bookmark = bookmark,
                     downloadIndicatorEnabled = downloadIndicatorEnabled,
@@ -202,6 +213,8 @@ fun ShowsEpisodeListItem(
                         watchProgress = watchProgress,
                         fillermark = fillermark,
                         scanlator = scanlator,
+                        note = note,
+                        typeTag = typeTag,
                     )
 
                     if (previewUrl != null) {
@@ -228,6 +241,8 @@ private fun RowScope.SimpleEpisodeListItemImpl(
     watchProgress: String?,
     fillermark: Boolean,
     scanlator: String?,
+    note: String?,
+    typeTag: String?,
     seen: Boolean,
     bookmark: Boolean,
     downloadIndicatorEnabled: Boolean,
@@ -256,6 +271,8 @@ private fun RowScope.SimpleEpisodeListItemImpl(
             watchProgress = watchProgress,
             fillermark = fillermark,
             scanlator = scanlator,
+            note = note,
+            typeTag = typeTag,
         )
     }
 
@@ -428,11 +445,33 @@ private fun EpisodeInformation(
     watchProgress: String?,
     fillermark: Boolean,
     scanlator: String?,
+    note: String?,
+    typeTag: String?,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val subtitleStyle = MaterialTheme.typography.bodySmall
             .merge(color = LocalContentColor.current.copy(alpha = if (seen) DISABLED_ALPHA else SECONDARY_ALPHA))
+        // Canonical kind tag (19-05): "special"/"nc" map to a fixed
+        // label rendered before the filler label; mains get nothing.
+        val typeTagText = when (typeTag) {
+            "special" -> stringResource(AYMR.strings.episode_type_special)
+            "nc" -> stringResource(AYMR.strings.episode_type_nc)
+            else -> null
+        }
         ProvideTextStyle(value = subtitleStyle) {
+            if (typeTagText != null) {
+                Text(
+                    text = typeTagText,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                        .copy(alpha = SECONDARY_ALPHA),
+                )
+                if (fillermark || date != null || watchProgress != null ||
+                    scanlator != null || note != null
+                ) {
+                    DotSeparatorText()
+                }
+            }
             if (fillermark) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Label,
@@ -453,7 +492,7 @@ private fun EpisodeInformation(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (watchProgress != null || scanlator != null) DotSeparatorText()
+                if (watchProgress != null || scanlator != null || note != null) DotSeparatorText()
             }
             if (watchProgress != null) {
                 Text(
@@ -462,9 +501,17 @@ private fun EpisodeInformation(
                     overflow = TextOverflow.Ellipsis,
                     color = LocalContentColor.current.copy(alpha = DISABLED_ALPHA),
                 )
-                if (scanlator != null) DotSeparatorText()
+                if (scanlator != null || note != null) DotSeparatorText()
             }
-            if (scanlator != null) {
+            if (note != null) {
+                Text(
+                    text = note,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.error
+                        .copy(alpha = SECONDARY_ALPHA),
+                )
+            } else if (scanlator != null) {
                 Text(
                     text = scanlator,
                     maxLines = 1,

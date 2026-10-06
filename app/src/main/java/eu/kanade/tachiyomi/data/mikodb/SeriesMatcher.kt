@@ -36,7 +36,14 @@ class SeriesMatcher {
         val score: Double,
         val margin: Double?,
         val reasons: List<String>,
-    )
+    ) {
+        /**
+         * One stable UI-facing reason key (19-05, D-08) — the sheet
+         * maps it to a `find_provider_reason_*` string; the full
+         * [reasons] list stays the logcat-level record.
+         */
+        fun dominantReason(): String? = dominantReason(reasons)
+    }
 
     /** Source-side series details, normalized for comparison. */
     data class Candidate(
@@ -48,6 +55,16 @@ class SeriesMatcher {
         val chapterCount: Int? = null,
         /** Provider ids extractable from the series page/details. */
         val providerIds: Map<String, String> = emptyMap(),
+        /** Season parsed from the title via [parseSeasonPart] (19-05) —
+         *  populated only on media with season semantics; books feeds
+         *  never set it, so season signals can't misfire on them. */
+        val season: Int? = null,
+        /** Part/cours parsed from the title via [parseSeasonPart]. */
+        val part: Int? = null,
+        /** Normalized format marker from the title ([formatMarker]) —
+         *  shows vocab (`tv`/`movie`/`ova`/`ona`/`special`) or a
+         *  medium tag (`novel`/`webtoon`/`manhwa`/`audiobook`/…). */
+        val format: String? = null,
     )
 
     /** Canonical-side work facts (adapts `MangaNovelIdBridge.WorkRow`). */
@@ -59,6 +76,16 @@ class SeriesMatcher {
         val type: String? = null,
         /** provider → external_id from provider_links + external_ids. */
         val identifiers: Map<String, String> = emptyMap(),
+        /** Seasons the canonical work covers (artifact `tvdb_season`
+         *  set; absolute-order "a" folds to 1). Empty = season data
+         *  unknown — season vetoes never fire on absent data. */
+        val expectedSeasons: Set<Int> = emptySet(),
+        /** Part/cours numbers the canonical work covers. */
+        val expectedParts: Set<Int> = emptySet(),
+        /** Canonical format for the work's medium — shows feeds carry
+         *  the artifact's `anime_media_type` (TV/MOVIE/OVA/ONA/SPECIAL);
+         *  manga/books fall back to [type]. */
+        val format: String? = null,
     ) {
         companion object {
             fun of(row: MangaNovelIdBridge.WorkRow) = Query(
@@ -70,6 +97,27 @@ class SeriesMatcher {
                 type = row.type,
                 identifiers = row.externalIds,
             )
+
+            /**
+             * Shows-flavored query (19-05, D-09): the artifact's anime
+             *  rows contribute the expected season/part set and the main
+             *  entry's `anime_media_type` seeds the format signal.
+             */
+            fun forShows(
+                row: MangaNovelIdBridge.WorkRow,
+                animeRows: List<AnimeIdBridge.AnimeMapping>,
+            ): Query {
+                val mainEntry = animeRows.firstOrNull {
+                    it.animeMediaType == "TV" || it.animeMediaType == "MOVIE"
+                } ?: animeRows.firstOrNull()
+                return of(row).copy(
+                    expectedSeasons = animeRows.mapNotNull { r ->
+                        r.tvdbSeason?.toIntOrNull() ?: if (r.tvdbSeason == "a") 1 else null
+                    }.toSet(),
+                    expectedParts = animeRows.mapNotNull { it.tvdbPart }.toSet(),
+                    format = mainEntry?.animeMediaType,
+                )
+            }
         }
     }
 
@@ -95,6 +143,23 @@ class SeriesMatcher {
             return Verdict(Decision.REJECT, 0.0, null, reasons)
         }
 
+        // ── L3 vetoes: season/part — only when BOTH sides confidently
+        // assert different values (19-05, D-07). Absent data never
+        // vetoes; a candidate asserting a season the query doesn't
+        // track gets the soft implicit penalty after scoring instead.
+        candidate.season?.let { s ->
+            if (query.expectedSeasons.isNotEmpty() && s !in query.expectedSeasons) {
+                reasons += "veto:season"
+                return Verdict(Decision.REJECT, 0.0, null, reasons)
+            }
+        }
+        candidate.part?.let { p ->
+            if (query.expectedParts.isNotEmpty() && p !in query.expectedParts) {
+                reasons += "veto:part"
+                return Verdict(Decision.REJECT, 0.0, null, reasons)
+            }
+        }
+
         // ── L2: weighted fields ───────────────────────────────────────
         val titleScore = bestTitleScore(query.titles, listOf(candidate.title) + candidate.altTitles)
         val tokenScore = tfTokenOverlap(query.titles, candidate.title)
@@ -114,8 +179,24 @@ class SeriesMatcher {
         var score = fields.sumOf { it.w * it.s } / wSum
         reasons += "title=${"%.2f".format(titleScore)} tokens=${"%.2f".format(tokenScore)}"
 
+        // ── L2 soft penalties (19-05) — implicit season assertion
+        // (candidate claims S2+ while the work carries no season
+        // data — Seanime's −3 precedent, never a veto), format
+        // mismatch, and the explainable year miss.
+        if (candidate.season != null && candidate.season >= 2 && query.expectedSeasons.isEmpty()) {
+            score *= 0.85
+            reasons += "penalty:season-implicit"
+        }
+        if (formatMismatch(query, candidate)) {
+            score *= 0.85
+            reasons += "penalty:format"
+        }
+        // yearMatch already zeroed the field weight — name it so the
+        // scorecard can explain the drag.
+        if (yearScore == 0.0) reasons += "penalty:year"
+
         // ── L3: negative rules ────────────────────────────────────────
-        val neg = negativeRules(query.titles, candidate.title)
+        val neg = negativeRules(query, candidate)
         if (neg.first) {
             reasons += "reject:${neg.second}"
             return Verdict(Decision.REJECT, score * 0.3, null, reasons + listOfNotNull(neg.second))
@@ -241,7 +322,9 @@ class SeriesMatcher {
     // ── L3 rules ──────────────────────────────────────────────────────
 
     /** True → hard reject; false + reason → downgrade only. */
-    private fun negativeRules(queryTitles: List<String>, candTitle: String): Pair<Boolean, String?> {
+    private fun negativeRules(query: Query, candidate: Candidate): Pair<Boolean, String?> {
+        val queryTitles = query.titles
+        val candTitle = candidate.title
         val candNorm = TitleNormalizer.normalize(candTitle)
         val candTokens = candNorm.split(" ").toSet() - BENIGN_TOKENS
 
@@ -257,7 +340,22 @@ class SeriesMatcher {
             // Bare digits only count as sequels at 2+ ("Season 1" is fine).
             val candSequel = extra.firstOrNull { it in ROMAN_NUMERALS || (it.toIntOrNull() ?: 0) in 2..9 }
             if (candSequel != null && extra.size <= 3) {
-                return true to "sequel-marker:$candSequel"
+                // 19-05: when the medium carries season/part semantics
+                // (only shows feeds populate them), a "Season 2" digit
+                // that matches the parsed marker isn't a sequel claim —
+                // it either cleared the veto (expected) or takes the
+                // implicit penalty (unknown). Non-season media keep the
+                // bare-digit sequel reject unchanged.
+                val n = candSequel.toIntOrNull() ?: ROMAN_VALUES[candSequel]
+                val explainsSeason =
+                    candidate.season != null && candidate.season == n &&
+                        (query.expectedSeasons.isEmpty() || n in query.expectedSeasons)
+                val explainsPart =
+                    candidate.part != null && candidate.part == n &&
+                        (query.expectedParts.isEmpty() || n in query.expectedParts)
+                if (!explainsSeason && !explainsPart) {
+                    return true to "sequel-marker:$candSequel"
+                }
             }
 
             // Subtitle/spin-off markers the query lacks → reject.
@@ -282,6 +380,36 @@ class SeriesMatcher {
             else -> false
         }
     }
+
+    /**
+     * Per-medium format signal (19-05, D-09): shows compare the
+     * artifact `anime_media_type` against title markers; manga/books
+     * compare [Query.type] against `(Novel)`/`(Webtoon)`/`(Audiobook)`-
+     * style markers. Sparse by design — either side unknown → no
+     * penalty (mismatch claims need both sides asserted).
+     */
+    private fun formatMismatch(query: Query, candidate: Candidate): Boolean {
+        val q = normalizeFormat(query.format ?: query.type ?: return false) ?: return false
+        val c = normalizeFormat(candidate.format ?: return false) ?: return false
+        return q != c
+    }
+
+    /** Fold format aliases onto a per-medium vocabulary; unknown
+     *  strings normalize to null (no signal). */
+    private fun normalizeFormat(format: String): String? =
+        when (format.trim().lowercase()) {
+            "tv", "television", "tv series", "series" -> "tv"
+            "movie", "film", "theatrical" -> "movie"
+            "ova", "oad" -> "ova"
+            "ona" -> "ona"
+            "special", "specials", "sp" -> "special"
+            "novel", "light novel", "ln", "book", "books" -> "novel"
+            "audiobook" -> "audiobook"
+            "webtoon", "manhwa", "manhua", "manga", "comic", "comics",
+            "oel", "oneshot", "one-shot",
+            -> format.trim().lowercase()
+            else -> null
+        }
 
     private data class Field(val w: Double, val s: Double)
 
@@ -323,5 +451,98 @@ class SeriesMatcher {
 
         private val ROMAN_NUMERALS = setOf("ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x")
         private val MANGA_TYPES = setOf("manga", "manhwa", "manhua", "comic", "webtoon")
+
+        /** Roman numeral → int for season/part parsing ("Part III"). */
+        private val ROMAN_VALUES = mapOf(
+            "i" to 1, "ii" to 2, "iii" to 3, "iv" to 4, "v" to 5,
+            "vi" to 6, "vii" to 7, "viii" to 8, "ix" to 9, "x" to 10,
+        )
+
+        private val SEASON_RES = listOf(
+            // "S2E05" pins the season first — the bare "S2" pattern
+            // can't match inside it (no word boundary before 'e').
+            Regex("""\bs(\d{1,2})e\d{1,3}\b""", RegexOption.IGNORE_CASE),
+            Regex("""\b(\d{1,2})(?:st|nd|rd|th)\s+season\b""", RegexOption.IGNORE_CASE),
+            Regex("""\bseason\s*(\d{1,2}|[ivx]{1,4})\b""", RegexOption.IGNORE_CASE),
+            Regex("""\bs(\d{1,2})\b""", RegexOption.IGNORE_CASE),
+            Regex("""\bcours?\s*(\d{1,2}|[ivx]{1,4})\b""", RegexOption.IGNORE_CASE),
+        )
+        private val PART_RES = listOf(
+            Regex("""\bpart\s*(\d{1,2}|[ivx]{1,4})\b""", RegexOption.IGNORE_CASE),
+            Regex("""\bpt\.?\s*(\d{1,2}|[ivx]{1,4})\b""", RegexOption.IGNORE_CASE),
+        )
+        private val PAREN_TAG_RE = Regex("""\(([^)]{1,20})\)""")
+        private val OVA_RE = Regex("""\b(?:ova|oad)\b""", RegexOption.IGNORE_CASE)
+        private val ONA_RE = Regex("""\bona\b""", RegexOption.IGNORE_CASE)
+
+        /**
+         * The single dominant reason a candidate lost (or nearly
+         * lost), as a stable UI key (19-05, D-08): precedence is
+         * veto > reject > penalty > floor/margin per the spec order
+         * below — `null` when nothing explainable fired. The full
+         * verbose [Verdict.reasons] list stays logcat-only; the
+         * sheet maps this key to one `find_provider_reason_*` string.
+         */
+        fun dominantReason(reasons: List<String>): String? = when {
+            reasons.any { it == "veto:season" || it == "penalty:season-implicit" } -> "season_veto"
+            reasons.any { it == "veto:part" } -> "part_veto"
+            reasons.any { it.startsWith("reject:sequel-marker") || it.startsWith("sequel-marker:") } ->
+                "sequel"
+            reasons.any { it.startsWith("reject:spinoff") || it.startsWith("spinoff:") } -> "spinoff"
+            reasons.any { it == "medium-mismatch" } -> "media_type"
+            reasons.any { it == "downgrade:subtitle-tail" || it == "subtitle-tail" } ->
+                "subtitle_tail"
+            reasons.any { it == "penalty:format" } -> "format"
+            reasons.any { it.startsWith("penalty:year") } -> "year"
+            reasons.any { it == "below-floor" } -> "weak_title"
+            reasons.any { it == "thin-margin" } -> "thin_margin"
+            reasons.any { it.startsWith("identifier:") } -> "identifier"
+            else -> null
+        }
+
+        /**
+         * Season/part extractor for candidate titles (19-05 — Seanime
+         * `getFileSeason`/`getFilePart` semantics): "Season 2", "S2",
+         * "S2E05", "2nd Season", "Cours 2" → season; "Part 3",
+         * "Part III", "Pt 2" → part. Absent markers → null.
+         */
+        fun parseSeasonPart(title: String): Pair<Int?, Int?> {
+            fun scan(res: List<Regex>): Int? = res.firstNotNullOfOrNull { re ->
+                re.find(title)?.groupValues?.getOrNull(1)?.let(::ordinalValue)
+            }
+            return scan(SEASON_RES) to scan(PART_RES)
+        }
+
+        /**
+         * Title-marker → normalized format vocab (19-05): parenthesized
+         * tags first (`(TV)`, `(Movie)`, `(Novel)`, `(Webtoon)`,
+         * `(Audiobook)`…), then distinctive bare markers (`OVA`/`OAD`/
+         * `ONA`). Null when nothing marks the format — sparse by
+         * design so the penalty never fires on absent data.
+         */
+        fun formatMarker(title: String): String? {
+            for (m in PAREN_TAG_RE.findAll(title)) {
+                when (m.groupValues[1].trim().lowercase()) {
+                    "tv", "tv series", "television" -> return "tv"
+                    "movie", "film", "theatrical" -> return "movie"
+                    "ova", "oad" -> return "ova"
+                    "ona" -> return "ona"
+                    "special", "specials", "sp" -> return "special"
+                    "novel", "light novel", "ln" -> return "novel"
+                    "audiobook" -> return "audiobook"
+                    "webtoon", "manhwa", "manhua", "manga", "comic", "comics",
+                    "oel", "oneshot", "one-shot",
+                    -> return m.groupValues[1].trim().lowercase()
+                }
+            }
+            return when {
+                OVA_RE.containsMatchIn(title) -> "ova"
+                ONA_RE.containsMatchIn(title) -> "ona"
+                else -> null
+            }
+        }
+
+        private fun ordinalValue(token: String): Int? =
+            token.toIntOrNull() ?: ROMAN_VALUES[token.lowercase()]
     }
 }

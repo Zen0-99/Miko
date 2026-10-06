@@ -901,7 +901,12 @@ private fun ShowsScreenSmallImpl(
                                 modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                             )
                             if (!isCinemetaEntry) {
-                                MissingItemCountListItem(count = maxOf(missingEpisodesCount, missingSeasonsCount))
+                                // 19-05: canonical-unserved mains add to the
+                                // existing aggregate missing-items slot.
+                                MissingItemCountListItem(
+                                    count = maxOf(missingEpisodesCount, missingSeasonsCount) +
+                                        state.canonicalMissingCount,
+                                )
                             }
                         }
                     }
@@ -1540,8 +1545,11 @@ fun ShowsScreenLargeImpl(
                                         modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                                     )
                                     if (!isCinemetaEntry) {
+                                        // 19-05: canonical-unserved mains add to
+                                        // the existing aggregate missing-items slot.
                                         MissingItemCountListItem(
-                                            count = maxOf(missingEpisodesCount, missingSeasonsCount),
+                                            count = maxOf(missingEpisodesCount, missingSeasonsCount) +
+                                                state.canonicalMissingCount,
                                         )
                                     }
                                 }
@@ -1855,6 +1863,13 @@ private fun LazyGridScope.sharedEpisodeItems(
                             scanlator = episodeItem.episode.scanlator
                                 ?.takeIf { !it.isNullOrBlank() && !it.startsWith("Season ") }
                                 ?.takeIf { !it.isNullOrBlank() },
+                            // 19-05 D-03b: canon row no readable carrier
+                            // serves → the meta-row note slot.
+                            note = if (episodeItem.missingProvider) {
+                                stringResource(MR.strings.carrier_unavailable)
+                            } else {
+                                null
+                            },
                             summary = episodeItem.episode.summary.takeIf { !it.isNullOrBlank() && showSummaries },
                             previewUrl = episodeItem.episode.previewUrl.takeIf { !it.isNullOrBlank() && showPreviews },
                             seen = episodeItem.episode.seen,

@@ -177,6 +177,7 @@ class ShowsScreenModel(
     private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
     private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
+    private val episodeMap: eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap = Injekt.get(),
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
     private val goldenSources: eu.kanade.tachiyomi.data.mikodb.GoldenSources = Injekt.get(),
     private val animeExtensionManager: eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager = Injekt.get(),
@@ -2322,7 +2323,11 @@ class ShowsScreenModel(
                 workId,
                 eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_SHOWS,
             )
-            updateSuccessState { it.copy(carrierMatrix = matrix) }
+            // 19-05: the canonical episode sequence feeds the coverage
+            // diff (per-row "Missing provider" + aggregate counts).
+            // Non-blocking — empty when the work was never canonized.
+            val canon = runCatching { episodeMap.forWork(workId) }.getOrDefault(emptyList())
+            updateSuccessState { it.copy(carrierMatrix = matrix, canonicalEpisodes = canon) }
         }
     }
 
@@ -2492,6 +2497,11 @@ class ShowsScreenModel(
             val carrierInstallSteps: Map<String, eu.kanade.tachiyomi.extension.InstallStep> = emptyMap(),
             /** Find Content Provider sheet state (17-02). */
             val providerSearch: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search? = null,
+            /** Canonical episode sequence for the resolved work (19-05)
+             *  — empty until fetched; the coverage diff simply renders
+             *  nothing when canon is absent. */
+            val canonicalEpisodes: List<eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap.CanonEpisode> =
+                emptyList(),
         ) : State {
 
             val processedSeasons by lazy {
@@ -2502,15 +2512,57 @@ class ShowsScreenModel(
                 episodes.applyFilters(anime).toList()
             }
 
+            /** Canon rows no readable bound carrier serves (19-05,
+             *  D-03b). An unfetched carrier matrix or absent canon
+             *  means zero flags — never a false "Missing provider". */
+            val unservedCanonical by lazy {
+                val matrix = carrierMatrix
+                if (canonicalEpisodes.isEmpty() || matrix == null || !matrix.fetched) {
+                    emptyList()
+                } else {
+                    eu.kanade.tachiyomi.data.mikodb.EpisodeCoverage.unserved(
+                        canonicalEpisodes,
+                        matrix.readable.mapTo(HashSet()) { it.pkgName },
+                    )
+                }
+            }
+
+            /** Unserved canonical MAIN episodes — the aggregate count
+             *  shown by the missing-items header/rows. */
+            val canonicalMissingCount by lazy {
+                unservedCanonical.count { it.kind == "episode" }
+            }
+
             val episodeListItems by lazy {
                 // Cinemeta entries: episode numbers reset per season, so
                 // gap-based missing count separators produce false positives.
                 // Skip separator insertion entirely for Cinemeta entries.
                 val isCinemetaEntry = anime.source == 0L && anime.url.startsWith("cinemeta:")
-                if (isCinemetaEntry) {
+                // 19-05: flag rows whose canon row no readable carrier
+                // serves — the card/list item renders the note slot.
+                val unserved = unservedCanonical.toSet()
+                val items = if (unserved.isEmpty()) {
                     processedEpisodes
                 } else {
-                    processedEpisodes.insertSeparators { before, after ->
+                    processedEpisodes.map { item ->
+                        val ep = item.episode
+                        val canonRow = canonRowFor(
+                            ep.episodeType,
+                            eu.kanade.tachiyomi.data.comments.ChapterBinder.parseSeason(ep.scanlator),
+                            ep.episodeNumber,
+                            canonicalEpisodes,
+                        )
+                        if (canonRow != null && canonRow in unserved) {
+                            item.copy(missingProvider = true)
+                        } else {
+                            item
+                        }
+                    }
+                }
+                val separated = if (isCinemetaEntry) {
+                    items
+                } else {
+                    items.insertSeparators { before, after ->
                         val (lowerEpisode, higherEpisode) = if (anime.sortDescending()) {
                             after to before
                         } else {
@@ -2534,6 +2586,16 @@ class ShowsScreenModel(
                                 )
                             }
                     }
+                }
+                // Canonical coverage diff rides the same MissingCount
+                // mechanism — appended once, at the list tail.
+                if (canonicalMissingCount > 0) {
+                    separated + EpisodeList.MissingCount(
+                        id = "canon-missing",
+                        count = canonicalMissingCount,
+                    )
+                } else {
+                    separated
                 }
             }
 
@@ -2566,7 +2628,13 @@ class ShowsScreenModel(
                 return asSequence()
                     .filter { (episode) -> applyFilter(unseenFilter) { !episode.seen } }
                     .filter { (episode) -> applyFilter(bookmarkedFilter) { episode.bookmark } }
-                    .filter { (episode) -> applyFilter(fillermarkedFilter) { episode.fillermark } }
+                    // 19-05: canonical filler counts as filler for
+                    // filtering without mutating user-owned fillermark.
+                    .filter { (episode) ->
+                        applyFilter(fillermarkedFilter) {
+                            episode.fillermark || episode.canonicalFiller == true
+                        }
+                    }
                     .filter { applyFilter(downloadedFilter) { it.isDownloaded || isLocalAnime } }
                     .sortedWith { (episode1), (episode2) ->
                         getEpisodeSort(anime).invoke(
@@ -2617,6 +2685,29 @@ class ShowsScreenModel(
     }
 
     private companion object {
+        /**
+         * Bind one library episode row to its canon row (19-05) — mirrors
+         * `CanonicalEpisodeMap.bind`/`bindKind` semantics as a pure
+         * function so the list-item diff can use it. Mains try
+         * (season, epInSeason) then canonical abs; `special`/`nc` rows
+         * bind inside their own keyspace. Null when nothing matches —
+         * an unbound episode is never flagged unserved.
+         */
+        fun canonRowFor(
+            episodeType: String?,
+            season: Int?,
+            number: Double,
+            canon: List<eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap.CanonEpisode>,
+        ): eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap.CanonEpisode? = when (episodeType) {
+            "special", "nc" -> canon.firstOrNull {
+                it.kind == episodeType &&
+                    (it.number == number || it.epInSeason?.toDouble() == number)
+            }
+            else -> canon.firstOrNull {
+                it.season == season && it.epInSeason?.toDouble() == number
+            } ?: canon.firstOrNull { it.kind == "episode" && it.abs?.toDouble() == number }
+        }
+
         /** Warm-start cache — the last [State.Success] emitted per anime,
          *  so reopening a detail screen renders instantly instead of
          *  flashing the spinner. Tiny LRU: heroes/recents only ever touch
@@ -2646,6 +2737,9 @@ sealed class EpisodeList {
         val downloadState: ShowsDownload.State,
         val downloadProgress: Int,
         val selected: Boolean = false,
+        /** Canon row exists but no readable bound carrier serves it
+         *  (19-05, D-03b) — row renders the "Missing provider" note. */
+        val missingProvider: Boolean = false,
     ) : EpisodeList() {
         val id = episode.id
         val isDownloaded = downloadState == ShowsDownload.State.DOWNLOADED

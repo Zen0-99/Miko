@@ -35,6 +35,7 @@ class ProviderFinder(
     private val api: WorkIdentityApi = Injekt.get(),
     private val mikoDbManager: MikoDbManager = Injekt.get(),
     private val workCarriers: WorkCarriers = Injekt.get(),
+    private val episodeMap: CanonicalEpisodeMap = Injekt.get(),
 ) {
 
     // Outlives any ScreenModel — a sheet close must not kill the fan-out.
@@ -73,12 +74,25 @@ class ProviderFinder(
          *  user can confirm "yes, that's this work". */
         val foundTitle: String? = null,
         val thumbnailUrl: String? = null,
+        /** Feed size — episodes for shows feeds (`feed.chapters` is
+         *  locked empty there), chapters otherwise. */
         val chapterCount: Int = 0,
         /** Matcher verdict — TENTATIVE rows surface unchecked. */
         val tentative: Boolean = false,
         /** Machine key ("timeout", "unavailable", …) — NEVER raw
          *  exception text; the sheet maps it to a readable status. */
         val error: String? = null,
+        /** The medium the search ran under — the sheet picks the count
+         *  label ("episodes" for shows, "chapters" otherwise). */
+        val medium: String = WorkIdResolver.MEDIUM_MANGA,
+        /** Stable dominantReason key (19-05, D-08) — the sheet maps it
+         *  to ONE `find_provider_reason_*` string, and only on
+         *  NO_MATCH / tentative FOUND rows. */
+        val reason: String? = null,
+        /** Canonical main episodes the feed doesn't cover (19-05,
+         *  D-03b) — 0 for non-shows media, absent canon, or unknown
+         *  feeds. */
+        val missingCount: Int = 0,
         internal val feed: CanonicalFeedCollector.Feed? = null,
     )
 
@@ -137,11 +151,21 @@ class ProviderFinder(
                 tier = meta[g.pkgName]?.tier ?: g.tier,
                 status = Status.SEARCHING,
                 icon = g.icon,
+                medium = medium,
             )
         }
         val state = MutableStateFlow(Search(rows = snapshot(), searching = goldens.isNotEmpty()))
         val job = scope.launch {
             try {
+                // 19-05: canon-side coverage for the "missing N" row
+                // segment — absent canon (uncanonized/failed fetch)
+                // just reports 0. Fetched once per search; the map's
+                // SWR cache makes sheet reopens cheap.
+                val canon = if (medium == WorkIdResolver.MEDIUM_SHOWS) {
+                    runCatching { episodeMap.forWork(workId) }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
                 collector.collect(
                     work,
                     medium,
@@ -162,9 +186,30 @@ class ProviderFinder(
                         },
                         foundTitle = feed?.seriesTitle,
                         thumbnailUrl = feed?.details?.thumbnailUrl,
-                        chapterCount = feed?.chapters?.size ?: 0,
+                        chapterCount = when (medium) {
+                            WorkIdResolver.MEDIUM_SHOWS -> feed?.episodes?.size ?: 0
+                            else -> feed?.chapters?.size ?: 0
+                        },
                         tentative = feed?.verdict == SeriesMatcher.Decision.TENTATIVE,
                         error = errorKey(error),
+                        medium = medium,
+                        // Reason only on the rows that expose one
+                        // (19-05, D-08): NO_MATCH best-candidate and
+                        // tentative FOUND. Plain FOUND/FAILED/SEARCHING
+                        // never carry it.
+                        reason = feed?.takeIf {
+                            it.verdict == SeriesMatcher.Decision.REJECT ||
+                                it.verdict == SeriesMatcher.Decision.TENTATIVE
+                        }?.reasons?.let(SeriesMatcher::dominantReason),
+                        missingCount = if (
+                            medium == WorkIdResolver.MEDIUM_SHOWS &&
+                            feed != null && feed.verdict != SeriesMatcher.Decision.REJECT &&
+                            canon.isNotEmpty()
+                        ) {
+                            canonMissingCount(canon, feed.episodes)
+                        } else {
+                            0
+                        },
                         feed = feed?.takeIf { it.verdict != SeriesMatcher.Decision.REJECT },
                     )
                     state.value = state.value.copy(rows = snapshot())
@@ -245,6 +290,26 @@ class ProviderFinder(
             provenance = "user_picked",
             episodes = episodes,
         )
+
+    /** Canon mains the feed doesn't cover (19-05 §5): a feed episode
+     *  covers a canon row when its canonical `abs` (19-04-proven) or
+     *  doc-local `number` matches — carrier specials/NC never count
+     *  toward main coverage. */
+    private fun canonMissingCount(
+        canon: List<CanonicalEpisodeMap.CanonEpisode>,
+        feedEpisodes: List<WorkIdentityApi.FeedEpisode>,
+    ): Int {
+        val feedCoords = feedEpisodes
+            .filter { it.kind == null || it.kind == "episode" }
+            .mapNotNull { it.abs?.toDouble() ?: it.number }
+            .toSet()
+        return canon.count { row ->
+            if (row.kind != "episode") return@count false
+            val coord = row.abs?.toDouble() ?: row.number
+            // No coordinate → nothing can prove the feed covers it.
+            coord == null || coord !in feedCoords
+        }
+    }
 
     /** Maps internal error strings to stable row keys — the sheet
      *  renders a readable status, logcat keeps the detail. */
