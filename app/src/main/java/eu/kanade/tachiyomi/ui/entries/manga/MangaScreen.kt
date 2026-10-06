@@ -441,6 +441,7 @@ class MangaScreen(
                     } else {
                         null
                     },
+                    onUnbind = screenModel::unbindCarrier,
                     onSelect = { pkg ->
                         if (pickedChapter != null) {
                             // Chapter scope: store the override and read

@@ -178,6 +178,16 @@ private fun ProviderRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            // Phase 20: a binding this device just minted is provisional
+            // until the ledger confirms it — honest state on the row.
+            if (row.provisionalMint) {
+                Text(
+                    text = stringResource(MR.strings.miko_binding_provisional),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+            }
             when (row.status) {
                 ProviderFinder.Status.SEARCHING ->
                     CircularProgressIndicator(

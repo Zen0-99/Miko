@@ -147,6 +147,7 @@ class MangaScreenModel(
     private val libraryCanonizer: eu.kanade.tachiyomi.data.mikodb.LibraryCanonizer = Injekt.get(),
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
     private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
+    private val workIdentityApi: eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi = Injekt.get(),
     private val canonicalChapterRouter: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter = Injekt.get(),
     private val mangaExtensionManager: eu.kanade.tachiyomi.extension.manga.MangaExtensionManager = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
@@ -1784,6 +1785,39 @@ class MangaScreenModel(
      *  point on multi-carrier canonical rows. */
     fun showChapterCarrierPicker(chapter: Chapter) {
         updateSuccessState { it.copy(dialog = Dialog.CarrierPicker(chapter)) }
+    }
+
+    /** "wrong work? unbind" (Phase 20) — revoke this device's own
+     *  provisional binding: the worker deletes the row, the matrix
+     *  cache drops, and the sheet re-fetches so the row disappears.
+     *  A 404 (row already gone / not ours) is still a refresh — the
+     *  stale row must not linger either way. */
+    fun unbindCarrier(carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier) {
+        val manga = successState?.manga ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromMangaUrl(manga.url) ?: return
+        screenModelScope.launchIO {
+            when (
+                workIdentityApi.unbindBinding(workId, carrier.pkgName, carrier.providerRef)
+            ) {
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.Ok -> {
+                    workCarriers.invalidate(workId)
+                    loadCarriers(workId)
+                    snackbarHostState.showSnackbar(
+                        message = context.stringResource(MR.strings.miko_binding_unbound),
+                    )
+                }
+                // Endpoint absent OR row not ownable — the same failure
+                // UX either way (20-03 SD-21); the row stays.
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.NotFound,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.Failed,
+                -> {
+                    snackbarHostState.showSnackbar(
+                        message = context.stringResource(MR.strings.miko_binding_unbind_failed),
+                    )
+                }
+            }
+        }
     }
 
 

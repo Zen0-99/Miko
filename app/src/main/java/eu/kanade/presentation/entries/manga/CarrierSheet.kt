@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,10 +100,26 @@ fun CarrierInstallDialog(
                         carrier = carrier,
                         step = steps[carrier.pkgName],
                         buttonColors = buttonColors,
+                        badge = carrier.lifecycleBadge()?.let { stringResource(it) },
                         onInstall = { onInstall(carrier.pkgName) },
                     )
                 }
             }
+            // Revoked bindings render dimmed — dead content, never an
+            // install candidate (Phase 20).
+            matrix?.carriers.orEmpty()
+                .filter { it.status == "quarantined" }
+                .forEach { carrier ->
+                    CarrierInstallRow(
+                        carrier = carrier,
+                        step = null,
+                        buttonColors = buttonColors,
+                        badge = stringResource(MR.strings.miko_binding_quarantined),
+                        dimmed = true,
+                        showAction = false,
+                        onInstall = {},
+                    )
+                }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -122,11 +139,15 @@ private fun CarrierInstallRow(
     carrier: WorkCarriers.Carrier,
     step: InstallStep?,
     buttonColors: ButtonColors,
+    badge: String? = null,
+    dimmed: Boolean = false,
+    showAction: Boolean = true,
     onInstall: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (dimmed) Modifier.alpha(0.55f) else Modifier)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -144,29 +165,43 @@ private fun CarrierInstallRow(
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(
-                text = carrier.lang?.uppercase() ?: carrier.pkgName.substringAfterLast('.'),
+                text = listOfNotNull(
+                    carrier.lang?.uppercase() ?: carrier.pkgName.substringAfterLast('.'),
+                    badge,
+                ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        val installed = step == InstallStep.Installed
-        val busy = step != null && !step.isCompleted()
-        TextButton(
-            onClick = onInstall,
-            enabled = !installed && !busy,
-            colors = buttonColors,
-        ) {
-            Text(
-                text = stringResource(
-                    when {
-                        installed -> MR.strings.ext_installed
-                        busy -> MR.strings.ext_installing
-                        else -> MR.strings.ext_install
-                    },
-                ),
-            )
+        if (showAction) {
+            val installed = step == InstallStep.Installed
+            val busy = step != null && !step.isCompleted()
+            TextButton(
+                onClick = onInstall,
+                enabled = !installed && !busy,
+                colors = buttonColors,
+            ) {
+                Text(
+                    text = stringResource(
+                        when {
+                            installed -> MR.strings.ext_installed
+                            busy -> MR.strings.ext_installing
+                            else -> MR.strings.ext_install
+                        },
+                    ),
+                )
+            }
         }
     }
+}
+
+/** Lifecycle label resource for a carrier row — provisional badges its
+ *  minter everywhere; quarantined is always rendered through the
+ *  dimmed path so this only returns the provisional string. */
+private fun WorkCarriers.Carrier.lifecycleBadge() = when (status) {
+    "provisional" -> MR.strings.miko_binding_provisional
+    "quarantined" -> MR.strings.miko_binding_quarantined
+    else -> null
 }
 
 /**
@@ -185,6 +220,9 @@ fun CarrierPickerDialog(
     /** "Find More Providers" — opens the provider-search sheet to mint
      *  additional carriers for this work. Null hides the button. */
     onFindMoreProviders: (() -> Unit)? = null,
+    /** "wrong work? unbind" (Phase 20) — only ever offered on
+     *  mine && provisional rows; null hides the action entirely. */
+    onUnbind: ((WorkCarriers.Carrier) -> Unit)? = null,
     onSelect: (String?) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -228,13 +266,39 @@ fun CarrierPickerDialog(
                     icon = carrier.icon,
                     iconUrl = carrier.iconUrl,
                     selected = preferred == carrier.pkgName,
+                    badge = carrier.lifecycleBadge()?.let { stringResource(it) },
                     radioColors = radioColors,
+                    trailing = if (carrier.mine && carrier.status == "provisional" && onUnbind != null) {
+                        {
+                            TextButton(onClick = { onUnbind(carrier) }, colors = buttonColors) {
+                                Text(text = stringResource(MR.strings.miko_binding_unbind))
+                            }
+                        }
+                    } else {
+                        null
+                    },
                     onClick = {
                         onSelect(carrier.pkgName)
                         onDismissRequest()
                     },
                 )
             }
+            // Revoked bindings render dimmed — visible so the matrix is
+            // honest, but they offer no pick (Phase 20).
+            matrix?.carriers.orEmpty()
+                .filter { it.status == "quarantined" }
+                .forEach { carrier ->
+                    CarrierRadioRow(
+                        label = carrier.displayName,
+                        icon = carrier.icon,
+                        iconUrl = carrier.iconUrl,
+                        selected = false,
+                        enabled = false,
+                        badge = stringResource(MR.strings.miko_binding_quarantined),
+                        radioColors = radioColors,
+                        onClick = null,
+                    )
+                }
             if (onFindMoreProviders != null) {
                 OutlinedButton(
                     onClick = onFindMoreProviders,
@@ -271,19 +335,29 @@ private fun CarrierRadioRow(
     radioColors: RadioButtonColors,
     icon: Drawable? = null,
     iconUrl: String? = null,
-    onClick: () -> Unit,
+    badge: String? = null,
+    enabled: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .then(
+                if (enabled && onClick != null) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier.alpha(0.55f)
+                },
+            )
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(
             selected = selected,
             onClick = null,
+            enabled = enabled,
             colors = radioColors,
         )
         if (icon != null || iconUrl != null) {
@@ -300,7 +374,17 @@ private fun CarrierRadioRow(
             style = MaterialTheme.typography.bodyLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 12.dp),
+            modifier = Modifier
+                .padding(start = 12.dp)
+                .weight(1f),
         )
+        if (badge != null) {
+            Text(
+                text = badge,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        trailing?.invoke()
     }
 }

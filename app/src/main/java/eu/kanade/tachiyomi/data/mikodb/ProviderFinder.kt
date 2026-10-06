@@ -8,6 +8,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.logcat
 import uy.kohesive.injekt.Injekt
@@ -95,6 +96,10 @@ class ProviderFinder(
          *  feeds. */
         val missingCount: Int = 0,
         internal val feed: CanonicalFeedCollector.Feed? = null,
+        /** Phase 20: this row's binding was just minted by this device —
+         *  it is provisional until the ledger confirms it; the sheet
+         *  badges the honest state. */
+        val provisionalMint: Boolean = false,
     )
 
     private data class Entry(
@@ -266,6 +271,7 @@ class ProviderFinder(
             // The device just minted bindings — the cached matrix must
             // reflect the new provisional rows immediately, not at TTL.
             workCarriers.invalidate(workId)
+            markMinted(workId, medium, feeds.mapTo(mutableSetOf()) { it.sourceKey })
             logcat {
                 "providerFinder $workId: minted ${feeds.map { it.sourceKey }} " +
                     "(${resp.count} episodes)"
@@ -291,8 +297,22 @@ class ProviderFinder(
         }
         mintTelemetry.commitFlush()
         workCarriers.invalidate(workId)
+        markMinted(workId, medium, feeds.mapTo(mutableSetOf()) { it.source_key })
         logcat { "providerFinder $workId: minted ${feeds.map { it.source_key }} (${resp.count} chapters)" }
         return resp.count
+    }
+
+    /** Flag the just-minted rows in the cached search so a still-open
+     *  (or TTL-reattached) Find Provider sheet shows the honest
+     *  provisional state until the bindings re-fetch lands. */
+    private fun markMinted(workId: String, medium: String, pkgs: Set<String>) {
+        entries["$medium:$workId"]?.state?.update { s ->
+            s.copy(
+                rows = s.rows.map { r ->
+                    if (r.pkgName in pkgs) r.copy(provisionalMint = true) else r
+                },
+            )
+        }
     }
 
     /** user_picked binding via the episodes route — the binding mints

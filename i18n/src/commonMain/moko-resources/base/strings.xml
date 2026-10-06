@@ -1157,4 +1157,9 @@
     <string name="carrier_auto">Automatic</string>
     <string name="carrier_install_short">Needs extension</string>
     <string name="carrier_unavailable">Missing provider</string>
+    <string name="miko_binding_provisional">provisional</string>
+    <string name="miko_binding_quarantined">quarantined</string>
+    <string name="miko_binding_unbind">wrong work? unbind</string>
+    <string name="miko_binding_unbound">Binding removed</string>
+    <string name="miko_binding_unbind_failed">Couldn\'t remove the binding</string>
 </resources>
