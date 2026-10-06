@@ -129,7 +129,8 @@ async function matchWorks(
         const nos = entries.slice(i, i + BIND_CHUNK).map((e) => String(e.titleNo));
         const { results } = await env.COMMENTS_DB.prepare(
             `SELECT external_id, miko_work_id FROM external_ids
-             WHERE provider = 'webtoons' AND external_id IN (${nos.map(() => '?').join(',')})`,
+             WHERE provider = 'webtoons' AND status = 'confirmed'
+               AND external_id IN (${nos.map(() => '?').join(',')})`,
         ).bind(...nos).all<{ external_id: string; miko_work_id: string }>();
         for (const r of results) {
             const e = byNo.get(r.external_id);
@@ -230,9 +231,19 @@ export async function refreshWebtoonChart(env: Env): Promise<ChartRefreshStats> 
                  VALUES (?, ?, ?, ?, ?)`,
             ).bind(WEBTOON_POPULAR_CHART, workId, i + 1, e.likeitCount, ts),
             env.COMMENTS_DB.prepare(
-                `INSERT OR REPLACE INTO external_ids
+                // Never OR REPLACE — that would wipe a conflicting row's
+                // lifecycle (status/minter/points, Phase 20). The chart is
+                // authoritative for the webtoons→work link itself, so
+                // rebind on conflict, but a provisional claim keeps its
+                // lifecycle until it solidifies on its own evidence.
+                `INSERT INTO external_ids
                  (provider, external_id, miko_work_id, confidence, provenance, last_seen_at)
-                 VALUES ('webtoons', ?, ?, 1.0, 'webtoon_chart', ?)`,
+                 VALUES ('webtoons', ?, ?, 1.0, 'webtoon_chart', ?)
+                 ON CONFLICT(provider, external_id) DO UPDATE SET
+                    miko_work_id = excluded.miko_work_id,
+                    confidence = excluded.confidence,
+                    provenance = excluded.provenance,
+                    last_seen_at = excluded.last_seen_at`,
             ).bind(String(e.titleNo), workId, ts),
             env.COMMENTS_DB.prepare(
                 `UPDATE works_cache SET provider_links = json_insert(

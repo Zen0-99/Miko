@@ -37,8 +37,12 @@ export async function ingestMangadexFeed(
     workId: string,
 ): Promise<{ mdId: string | null; chapters: number; skipped: string | null }> {
     const { results: existing } = await env.COMMENTS_DB.prepare(
+        // Only a CONFIRMED binding steers the managed crawler — a
+        // provisional device claim (Phase 20) must not pick which
+        // MangaDex feed becomes verified canon. Unbound → title search.
         `SELECT external_id FROM external_ids
-         WHERE provider = 'mangadex' AND miko_work_id = ? LIMIT 1`,
+         WHERE provider = 'mangadex' AND miko_work_id = ?
+           AND status = 'confirmed' LIMIT 1`,
     ).bind(workId).all<{ external_id: string }>();
     let mdId = existing[0]?.external_id ?? null;
     if (mdId === TOMBSTONE) return { mdId: null, chapters: 0, skipped: 'tombstoned' };

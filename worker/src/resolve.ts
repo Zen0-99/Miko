@@ -1,3 +1,4 @@
+import { identityFrom } from './auth';
 import type { Env } from './env';
 import type { MbSeries } from './mangabaka';
 import { searchSeries } from './mangabaka';
@@ -93,10 +94,21 @@ function toDto(row: WorkRow, externalIds: Record<string, string>) {
     };
 }
 
-async function externalIdsFor(env: Env, workId: string): Promise<Record<string, string>> {
+/** The serve predicate (SD-8): confirmed rows serve everyone;
+ *  provisional rows serve only their minter's Bearer; quarantined rows
+ *  serve no one — including the original minter. */
+const SERVEABLE =
+    `(e.status = 'confirmed' OR (e.status = 'provisional' AND e.minter_device_hash = ?))`;
+
+async function externalIdsFor(
+    env: Env,
+    workId: string,
+    viewer: string,
+): Promise<Record<string, string>> {
     const { results } = await env.COMMENTS_DB.prepare(
-        'SELECT provider, external_id FROM external_ids WHERE miko_work_id = ?',
-    ).bind(workId).all<{ provider: string; external_id: string }>();
+        `SELECT provider, external_id FROM external_ids e
+         WHERE e.miko_work_id = ? AND ${SERVEABLE}`,
+    ).bind(workId, viewer).all<{ provider: string; external_id: string }>();
     return Object.fromEntries(results.map((r) => [r.provider, r.external_id]));
 }
 
@@ -236,14 +248,18 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
     const kindHint = body.kind_hint;
     const normTitle = normalize(body.title);
     if (!normTitle) return err(400, 'missing_title');
+    // Optional Bearer — provisional bindings resolve for their minter
+    // only; everyone else falls through to title matching (SD-8).
+    const viewer = (await identityFrom(req, env))?.device_hash ?? '';
 
-    // 1. External ID hit.
+    // 1. External ID hit — gated on the serve predicate so a
+    //    provisional/quarantined binding never vouches for a work.
     if (body.provider && body.external_id) {
         const row = await env.COMMENTS_DB.prepare(
             `SELECT w.* FROM works_cache w
              JOIN external_ids e ON e.miko_work_id = w.miko_work_id
-             WHERE e.provider = ? AND e.external_id = ?`,
-        ).bind(body.provider, body.external_id).first<WorkRow>();
+             WHERE e.provider = ? AND e.external_id = ? AND ${SERVEABLE}`,
+        ).bind(body.provider, body.external_id, viewer).first<WorkRow>();
         // Carrier check first — the medium column vouches null-kind
         // rows (honest-null mints); the kind set is the fallback for
         // legacy rows whose medium was backfilled by guesswork.
@@ -255,9 +271,9 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
                 const live = await env.COMMENTS_DB.prepare(
                     'SELECT * FROM works_cache WHERE miko_work_id = ?',
                 ).bind(liveId).first<WorkRow>();
-                if (live) return ok({ work: toDto(live, await externalIdsFor(env, liveId)) });
+                if (live) return ok({ work: toDto(live, await externalIdsFor(env, liveId, viewer)) });
             }
-            return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+            return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id, viewer)) });
         }
     }
 
@@ -282,7 +298,7 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
                 'SELECT * FROM works_cache WHERE miko_work_id = ?',
             ).bind(liveId).first<WorkRow>();
             if (row) {
-                return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+                return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id, viewer)) });
             }
         }
         if (liveIds.size > 1) {
@@ -294,7 +310,7 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
     // 3. Shows path — Cinemeta (imdb) / hentaistream (hs). Shows never
     //    hit MangaBaka: bare-title resolves return null by design.
     if (medium === 'shows') {
-        return resolveShow(body, env);
+        return resolveShow(body, env, viewer);
     }
 
     // 4. MangaBaka fetch once → persist.
@@ -304,7 +320,7 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
     } catch {
         // MangaBaka down — books still have their own path.
         if (medium === 'books' && (kindHint === 'book' || body.isbn)) {
-            return resolveBook(body, normTitle, env);
+            return resolveBook(body, normTitle, env, viewer);
         }
         return ok({ work: null });
     }
@@ -317,7 +333,7 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
     if (candidates.length === 0) {
         // Books only — gated so webnovels that miss MangaBaka never hit OL.
         if (medium === 'books' && (kindHint === 'book' || body.isbn)) {
-            return resolveBook(body, normTitle, env);
+            return resolveBook(body, normTitle, env, viewer);
         }
         return ok({ work: null });
     }
@@ -349,7 +365,7 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
         }
     }
     const row = await persistSeries(env, best.s, medium);
-    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id, viewer)) });
 }
 
 // ---------- shows (Cinemeta / hentaistream) ----------
@@ -408,17 +424,25 @@ async function persistShow(env: Env, w: ShowWrite): Promise<WorkRow> {
 /** Shows dispatcher — only provider-carried requests mint; bare-title
  *  shows resolves return null by design (no shows title-search backend;
  *  MangaBaka is manga/books only). */
-async function resolveShow(body: ResolveRequest, env: Env): Promise<Response> {
+async function resolveShow(
+    body: ResolveRequest,
+    env: Env,
+    viewer: string,
+): Promise<Response> {
     if (body.provider === 'imdb' && body.external_id) {
-        return resolveImdbShow(body, env);
+        return resolveImdbShow(body, env, viewer);
     }
     if (body.provider === 'hs' && body.external_id) {
-        return resolveHsShow(body, env);
+        return resolveHsShow(body, env, viewer);
     }
     return ok({ work: null });
 }
 
-async function resolveImdbShow(body: ResolveRequest, env: Env): Promise<Response> {
+async function resolveImdbShow(
+    body: ResolveRequest,
+    env: Env,
+    viewer: string,
+): Promise<Response> {
     const ttid = (body.external_id ?? '').toLowerCase();
     if (!/^tt\d+$/.test(ttid)) return ok({ work: null });
     // kind_hint is a fetch-order hint only — never the stored kind.
@@ -441,10 +465,14 @@ async function resolveImdbShow(body: ResolveRequest, env: Env): Promise<Response
             { provider: 'imdb', external_id: ttid, url: `https://www.imdb.com/title/${ttid}/` },
         ],
     });
-    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id, viewer)) });
 }
 
-async function resolveHsShow(body: ResolveRequest, env: Env): Promise<Response> {
+async function resolveHsShow(
+    body: ResolveRequest,
+    env: Env,
+    viewer: string,
+): Promise<Response> {
     const idx = await loadCatalog(env.HENTAISTREAM_CATALOG_URL);
     // Upstream unreachable / slug unknown → null; the app falls back to
     // a provisional mk:m: mint so NSFW works stay functional (NCM-010).
@@ -465,7 +493,7 @@ async function resolveHsShow(body: ResolveRequest, env: Env): Promise<Response> 
         externalIds: aliases.map((a) => ['hs', a] as [string, string]),
         providerLinks: [],
     });
-    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id, viewer)) });
 }
 
 // ---------- books (OpenLibrary) ----------
@@ -535,7 +563,12 @@ function bookCandidateScore(d: OlSearchDoc, req: ResolveRequest, normTitle: stri
  * ISBN path is exact; title+author search is fuzzy. Edition-only results
  * (no works[] rollup) don't mint — logged to identity_review instead.
  */
-async function resolveBook(req: ResolveRequest, normTitle: string, env: Env): Promise<Response> {
+async function resolveBook(
+    req: ResolveRequest,
+    normTitle: string,
+    env: Env,
+    viewer: string,
+): Promise<Response> {
     const base = env.OPENLIBRARY_BASE;
 
     // 4a. ISBN path — edition → work rollup.
@@ -551,7 +584,7 @@ async function resolveBook(req: ResolveRequest, normTitle: string, env: Env): Pr
                     null, [isbn, ...(edition.isbn_13 ?? []), ...(edition.isbn_10 ?? [])],
                     olCoverUrl(edition.covers?.[0]),
                 );
-                return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+                return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id, viewer)) });
             }
             await review(env, 'edition_no_work', { isbn, editionKey: edition.key });
         }
@@ -591,5 +624,5 @@ async function resolveBook(req: ResolveRequest, normTitle: string, env: Env): Pr
         best.d.isbn ?? [],
         olCoverUrl(best.d.cover_i),
     );
-    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id)) });
+    return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id, viewer)) });
 }

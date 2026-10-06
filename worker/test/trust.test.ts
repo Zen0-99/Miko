@@ -428,6 +428,130 @@ describe('binding lifecycle — mint → provisional → confirm → solidify', 
         expect(after?.pending).toBe(0);
     });
 
+    it('resolve by external id is gated: anonymous misses, the minter hits, quarantine hits nobody', async () => {
+        const work = 'mk:mb:resgate1';
+        const decoy = 'mk:mb:resdecoy';
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_cache
+             (miko_work_id, type, title, normalized_title, provider_links, medium, fetched_at)
+             VALUES (?, 'manga', 'Gated Work', 'gated work', '[]', 'manga', 0)`,
+        ).bind(work).run();
+        // A decoy work with its own title — fall-through title matching
+        // lands HERE, so the gated join's miss is observable without an
+        // upstream fetch.
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_cache
+             (miko_work_id, type, title, normalized_title, provider_links, medium, fetched_at)
+             VALUES (?, 'manga', 'Decoy Title', 'decoy title', '[]', 'manga', 0)`,
+        ).bind(decoy).run();
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_titles (miko_work_id, title, normalized)
+             VALUES (?, 'Decoy Title', 'decoy title')`,
+        ).bind(decoy).run();
+        const a = await newDevice();
+        const b = await newDevice();
+        await canonize(canonBody(work, SRC, '/series/gated'), a.token);
+
+        const post = (token?: string) => SELF.fetch('http://test/v1/works/resolve', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                ...(token ? { authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+                provider: SRC, external_id: '/series/gated',
+                title: 'decoy title', medium: 'manga',
+            }),
+        });
+
+        // Anonymous and other devices: the provisional row does not
+        // vouch — resolution falls through to the title path's decoy.
+        expect(((await (await post()).json()) as any).work?.miko_work_id).toBe(decoy);
+        expect(((await (await post(b.token)).json()) as any).work?.miko_work_id).toBe(decoy);
+        // The minter resolves their own provisional binding — the
+        // external-id hit takes precedence over the title match.
+        const mine = await (await post(a.token)).json() as any;
+        expect(mine.work?.miko_work_id).toBe(work);
+        expect(mine.work.external_ids[SRC]).toBe('/series/gated');
+
+        // Quarantine the binding — even the minter falls through.
+        await env.COMMENTS_DB.prepare(
+            `UPDATE external_ids SET status = 'quarantined', quarantined_at = ?
+             WHERE provider = ? AND external_id = ?`,
+        ).bind(Date.now(), SRC, '/series/gated').run();
+        expect(((await (await post(a.token)).json()) as any).work?.miko_work_id).toBe(decoy);
+    });
+
+    it('external_ids in the resolve DTO filter by the serve predicate', async () => {
+        const work = 'mk:mb:resgate2';
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_cache
+             (miko_work_id, type, title, normalized_title, provider_links, medium, fetched_at)
+             VALUES (?, 'manga', 'Mixed Work', 'mixed work', '[]', 'manga', 0)`,
+        ).bind(work).run();
+        const a = await newDevice();
+        // One confirmed binding, one provisional (minted by a).
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO external_ids (provider, external_id, miko_work_id)
+             VALUES ('mangadex', 'md-1', ?)`,
+        ).bind(work).run();
+        await canonize(canonBody(work, SRC, '/series/mine'), a.token);
+
+        const post = (token?: string) => SELF.fetch('http://test/v1/works/resolve', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                ...(token ? { authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+                provider: 'mangadex', external_id: 'md-1',
+                title: 'x', medium: 'manga',
+            }),
+        });
+        const anon = await (await post()).json() as any;
+        expect(anon.work.miko_work_id).toBe(work);
+        expect(Object.keys(anon.work.external_ids)).toEqual(['mangadex']);
+        const mine = await (await post(a.token)).json() as any;
+        expect(mine.work.external_ids.mangadex).toBe('md-1');
+        expect(mine.work.external_ids[SRC]).toBe('/series/mine');
+    });
+
+    it('episodes path mirrors chapters: pending feed overlays only for the minter', async () => {
+        const work = 'mk:imdb:ttep1';
+        const ref = '/show/ep';
+        const a = await newDevice();
+        const canonizeEps = (token?: string) => SELF.fetch('http://test/v1/episodes/canonize', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                ...(token ? { authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+                work_id: work,
+                feeds: [{
+                    source_key: SRC, provider_ref: ref,
+                    episodes: [{ name: 'Episode 1', kind: 'episode', number: 1 }],
+                }],
+            }),
+        });
+        const getEps = (token?: string) => SELF.fetch(
+            `http://test/v1/works/${encodeURIComponent(work)}/episodes`,
+            { headers: token ? { authorization: `Bearer ${token}` } : {} },
+        );
+
+        await canonizeEps(a.token);
+        expect(((await (await getEps()).json()) as any).episodes).toHaveLength(0);
+        expect(((await (await getEps(a.token)).json()) as any).episodes).toHaveLength(1);
+
+        // K devices → solidify → episodes published for everyone.
+        for (const _ of [0, 1]) {
+            const d = await newDevice();
+            await canonizeEps(d.token);
+        }
+        const all = await (await getEps()).json() as any;
+        expect(all.episodes).toHaveLength(1);
+    });
+
     it('a second device\'s re-post keeps the feed visible to the original minter', async () => {
         const work = 'mk:mb:feedvis2';
         const ref = '/series/repost';
