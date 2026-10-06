@@ -194,14 +194,28 @@ class ProviderFinder(
     /**
      * Mint confirmed picks: each [confirmed] feed submits
      * `verified=true, provenance="user_picked"` — the worker writes the
-     * binding at the 0.9 confidence floor and remerges chapters. Returns
+     * binding at the 0.9 confidence floor and remerges canon. Shows
+     * feeds route to `/v1/episodes/canonize` (19-03) carrying their
+     * episode lists — an empty list still mints the binding, same
+     * semantics as a chapterless chapter feed. [medium] defaults to the
+     * chapter route so manga/books call sites are unchanged. Returns
      * the canonize response count, or null on POST failure.
      */
     suspend fun mint(
         workId: String,
         confirmed: List<CanonicalFeedCollector.Feed>,
+        medium: String = WorkIdResolver.MEDIUM_MANGA,
     ): Int? {
         if (confirmed.isEmpty()) return null
+        if (medium == WorkIdResolver.MEDIUM_SHOWS) {
+            val feeds = confirmed.map { it.toEpisodeFeed() }
+            val resp = api.canonizeEpisodes(workId, feeds) ?: return null
+            logcat {
+                "providerFinder $workId: minted ${feeds.map { it.sourceKey }} " +
+                    "(${resp.count} episodes)"
+            }
+            return resp.count
+        }
         val feeds = confirmed.map { f ->
             WorkIdentityApi.CanonizeFeed(
                 source_key = f.pkgName,
@@ -218,6 +232,19 @@ class ProviderFinder(
         logcat { "providerFinder $workId: minted ${feeds.map { it.source_key }} (${resp.count} chapters)" }
         return resp.count
     }
+
+    /** user_picked binding via the episodes route — the binding mints
+     *  on `provider_ref` even when the episode list is empty. */
+    private fun CanonicalFeedCollector.Feed.toEpisodeFeed() =
+        WorkIdentityApi.EpisodeFeed(
+            sourceKey = pkgName,
+            tier = tier,
+            verified = true,
+            score = score,
+            providerRef = url.takeIf { it.isNotBlank() },
+            provenance = "user_picked",
+            episodes = episodes,
+        )
 
     /** Maps internal error strings to stable row keys — the sheet
      *  renders a readable status, logcat keeps the detail. */

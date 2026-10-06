@@ -71,6 +71,10 @@ class CanonicalFeedCollector(
         val score: Double,
         val reasons: List<String>,
         val details: FeedDetails? = null,
+        /** Carrier episode rows — populated only on the shows path
+         *  (19-03 courier); stays empty for manga/books feeds. `abs`
+         *  is not canonicalized here — that is 19-04's coverage pass. */
+        val episodes: List<WorkIdentityApi.FeedEpisode> = emptyList(),
     )
 
     data class Result(
@@ -371,11 +375,13 @@ class CanonicalFeedCollector(
     }
 
     /**
-     * Shows collection (17-02) — same shape but drives
-     * [AnimeCatalogueSource] via [AnimeSourceManager], and the feed is
-     * chapterless: episodes aren't canonical rows (`CanonizeWork` rejects
-     * SHOWS) so the pick mints a `provider_bindings` row only. SeriesMatcher
-     * still gates identity — a wrong anime match never binds.
+     * Shows collection (17-02, 19-03) — same shape but drives
+     * [AnimeCatalogueSource] via [AnimeSourceManager]; the feed carries
+     * the source's episode list as [FeedEpisode] rows for the
+     * `/v1/episodes/canonize` courier (D-04a). Numbers are the carrier's
+     * raw numbering — `abs` canonicalization against artifact rows is
+     * 19-04's coverage pass. SeriesMatcher still gates identity — a
+     * wrong anime match never binds.
      */
     private suspend fun collectAnimeFrom(
         g: GoldenSources.GoldenSource,
@@ -434,8 +440,24 @@ class CanonicalFeedCollector(
             )
         }
 
-        // Chapterless — episodes aren't canonical rows; the binding is
-        // the payload.
+        // Carrier episode list — the canonize courier payload (19-03).
+        // A failed list fetch degrades to an empty feed (the binding
+        // still mints; canonical structure comes from the artifact feed).
+        val episodes = runCatching { source.getEpisodeList(sa) }
+            .getOrElse { e ->
+                logcat { "canonicalFeed(anime) ${g.pkgName} episodelist: ${e.message}" }
+                emptyList()
+            }
+            .map { ep ->
+                WorkIdentityApi.FeedEpisode(
+                    name = ep.name,
+                    url = ep.url,
+                    dateUpload = ep.date_upload.takeIf { d -> d > 0L },
+                    kind = nameKind(ep.name),
+                    number = ep.episode_number.toDouble().takeIf { n -> n >= 0.0 },
+                )
+            }
+
         return Feed(
             sourceId = source.id,
             pkgName = g.pkgName,
@@ -453,7 +475,17 @@ class CanonicalFeedCollector(
                 thumbnailUrl = details.thumbnail_url?.takeIf { it.isNotBlank() },
                 status = null,
             ),
+            episodes = episodes,
         )
+    }
+
+    /** Minimal kind hint from the episode name — specials/OVAs and
+     *  non-credit OP/ED get their own keyspace in the worker merge;
+     *  everything else is a main 'episode'. */
+    private fun nameKind(name: String): String = when {
+        SPECIAL_NAME_RE.containsMatchIn(name) -> "special"
+        NC_NAME_RE.containsMatchIn(name) -> "nc"
+        else -> "episode"
     }
 
     companion object {
@@ -464,5 +496,10 @@ class CanonicalFeedCollector(
         const val TOP_CANDIDATES_INTERACTIVE = 8
 
         private const val SOURCE_TIMEOUT_MS = 45_000L
+
+        private val SPECIAL_NAME_RE =
+            Regex("""\b(Special|OVA|OAD|ONA)\b""", RegexOption.IGNORE_CASE)
+        private val NC_NAME_RE =
+            Regex("""\bNC ?(OP|ED)\b|creditless""", RegexOption.IGNORE_CASE)
     }
 }

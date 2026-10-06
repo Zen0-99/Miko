@@ -177,6 +177,7 @@ class ShowsScreenModel(
     private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
     private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
+    private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
     private val goldenSources: eu.kanade.tachiyomi.data.mikodb.GoldenSources = Injekt.get(),
     private val animeExtensionManager: eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager = Injekt.get(),
     private val threadIdResolver: eu.kanade.tachiyomi.data.comments.ThreadIdResolver = Injekt.get(),
@@ -628,8 +629,9 @@ class ShowsScreenModel(
      * `kind_hint` (fetch-order only — the worker is the kind authority).
      * For extension entries the anime map bridges tracker-bound ids
      * (anilist > mal, then title) to an imdb id; genuinely uncovered
-     * shows fall back to a shows-kind `mk:m:` mint. canonize never runs
-     * for shows — it's chapter-shaped (CanonizeWork guards anyway).
+     * shows fall back to a shows-kind `mk:m:` mint. A resolved id kicks
+     * the shows pipeline (19-03): artifact + carrier episode feeds →
+     * `canonical_episodes`.
      */
     private suspend fun resolveShowsWorkId(anime: Anime) {
         try {
@@ -667,6 +669,11 @@ class ShowsScreenModel(
                 it.copy(canonicalWorkId = resolved.value, canonicalKind = resolved.kind)
             }
             loadCarriers(resolved.value)
+            // Shows pipeline (19-03): enrich is a no-op for anime (the
+            // artifact couriers canon into the feeds); canonize →
+            // canonical_episodes, hydration lands in 19-04. Fire-and-
+            // forget — never blocks the resolve path.
+            canonicalPipelineRunner.launchShows(resolved.value, anime)
         } catch (e: Exception) {
             logcat(LogPriority.DEBUG) { "shows work resolve failed for '${anime.title}': ${e.message}" }
         }
@@ -2383,7 +2390,11 @@ class ShowsScreenModel(
             .mapNotNull { it.feed }
         val workId = successState?.canonicalWorkId ?: return
         screenModelScope.launchIO {
-            providerFinder.mint(workId, feeds)
+            providerFinder.mint(
+                workId,
+                feeds,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_SHOWS,
+            )
             workCarriers.invalidate(workId)
             dismissDialog()
             updateSuccessState { it.copy(providerSearch = null) }

@@ -188,6 +188,160 @@ class WorkIdentityApi {
         null
     }
 
+    // ---------- Phase 19-03: canonical episode map (D-04a courier) ----------
+    // The episodes contract is a sibling of the chapters one — shows
+    // canon lives in `canonical_episodes`, never in `canonical_chapters`
+    // (its kind vocabulary is chapter-shaped). `FeedEpisode` carries the
+    // full structured surface: artifact feeds emit key/doc/abs/season/
+    // eids verbatim from `anime_episodes`; carrier feeds emit
+    // name/url/number only — their `abs` canonicalization is 19-04.
+
+    @Serializable
+    data class FeedEpisode(
+        val name: String,
+        val url: String? = null,
+        /** Source-reported upload/air time (epoch ms). */
+        @SerialName("date_upload")
+        val dateUpload: Long? = null,
+        /** 'episode'|'special'|'nc' — absent derives from the `key`
+         *  prefix worker-side, else 'episode'. */
+        val kind: String? = null,
+        /** Kind-scoped doc-local number — the carrier's raw number for
+         *  carrier feeds; the AniDB doc number for artifact rows. */
+        val number: Double? = null,
+        /** Artifact ep_key verbatim — "1", "S3", "C2" (artifact feeds only). */
+        val key: String? = null,
+        /** Artifact doc namespace — "anidb:1234" (artifact feeds only). */
+        val doc: String? = null,
+        /** Canonical absolute episode number — artifact-asserted only;
+         *  carrier abs canonicalization lands in 19-04. */
+        val abs: Int? = null,
+        val season: Int? = null,
+        @SerialName("ep_in_season")
+        val epInSeason: Int? = null,
+        /** ISO date ("1998-11-13") — wins date_upload semantics (D-05). */
+        @SerialName("air_date")
+        val airDate: String? = null,
+        val image: String? = null,
+        val overview: String? = null,
+        val runtime: Int? = null,
+        @SerialName("anidb_eid")
+        val anidbEid: Long? = null,
+        @SerialName("tvdb_eid")
+        val tvdbEid: Long? = null,
+        @SerialName("tvdb_show_id")
+        val tvdbShowId: Long? = null,
+        val filler: Boolean? = null,
+    )
+
+    @Serializable
+    data class EpisodeFeed(
+        @SerialName("source_key")
+        val sourceKey: String,
+        val tier: String? = null,
+        val verified: Boolean = true,
+        val score: Double? = null,
+        /** Carrier's entry url — mints the provider_bindings row
+         *  server-side (same contract as the chapters route). */
+        @SerialName("provider_ref")
+        val providerRef: String? = null,
+        /** 'device_feed' default; 'user_picked' for Find Provider
+         *  confirmations (confidence floor applied server-side). */
+        val provenance: String? = null,
+        val episodes: List<FeedEpisode>,
+    )
+
+    @Serializable
+    data class EpisodesCanonizeRequest(
+        @SerialName("work_id")
+        val workId: String,
+        val feeds: List<EpisodeFeed>,
+    )
+
+    @Serializable
+    data class CanonizeEpisodesResponse(
+        @SerialName("work_id")
+        val workId: String,
+        val count: Int,
+        val verified: Int,
+        val skipped: Int,
+        val conflicts: Int,
+        val divergent: List<String> = emptyList(),
+    )
+
+    @Serializable
+    data class CanonEpisodeDto(
+        val seq: Int,
+        val kind: String = "episode",
+        val number: Double? = null,
+        val abs: Int? = null,
+        val season: Int? = null,
+        @SerialName("ep_in_season")
+        val epInSeason: Int? = null,
+        @SerialName("ep_key")
+        val epKey: String? = null,
+        val doc: String? = null,
+        val label: String = "",
+        @SerialName("air_date")
+        val airDate: String? = null,
+        @SerialName("date_upload")
+        val dateUpload: Long? = null,
+        val image: String? = null,
+        val overview: String? = null,
+        val runtime: Int? = null,
+        @SerialName("anidb_eid")
+        val anidbEid: Long? = null,
+        @SerialName("tvdb_eid")
+        val tvdbEid: Long? = null,
+        @SerialName("tvdb_show_id")
+        val tvdbShowId: Long? = null,
+        val filler: Int = 0,
+        val confidence: String = "single",
+        val sources: List<String> = emptyList(),
+        val refs: Map<String, String> = emptyMap(),
+    )
+
+    @Serializable
+    data class EpisodesResponse(
+        @SerialName("work_id")
+        val workId: String,
+        val episodes: List<CanonEpisodeDto> = emptyList(),
+    )
+
+    /** The work's canonical episode sequence — empty list if never canonized; null on failure. */
+    suspend fun getEpisodes(workId: String): EpisodesResponse? = try {
+        networkHelper.client.newCall(
+            okhttp3.Request.Builder()
+                .url("${baseUrl()}/v1/works/${java.net.URLEncoder.encode(workId, "UTF-8")}/episodes")
+                .headers(Headers.headersOf("User-Agent", USER_AGENT))
+                .get()
+                .build(),
+        ).awaitSuccess().let { with(json) { it.parseAs<EpisodesResponse>() } }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Submit the artifact + carrier episode feeds for canonization.
+     *  Null on failure. */
+    suspend fun canonizeEpisodes(
+        workId: String,
+        feeds: List<EpisodeFeed>,
+    ): CanonizeEpisodesResponse? = try {
+        val body = json.encodeToString(EpisodesCanonizeRequest(workId, feeds))
+            .toRequestBody(jsonMime)
+        with(json) {
+            networkHelper.client.newCall(
+                POST(
+                    "${baseUrl()}/v1/episodes/canonize",
+                    headers = Headers.headersOf("User-Agent", USER_AGENT),
+                    body = body,
+                ),
+            ).awaitSuccess().parseAs<CanonizeEpisodesResponse>()
+        }
+    } catch (_: Exception) {
+        null
+    }
+
     // ---------- Phase 16-02/16-04: carrier bindings + alignment ----------
 
     @Serializable

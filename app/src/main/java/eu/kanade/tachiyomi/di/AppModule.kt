@@ -342,6 +342,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.MangaBakaEnrich() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.GoldenSources() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterMap() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.SeriesMatcher() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalFeedCollector() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.ProviderFinder() }

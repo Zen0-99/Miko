@@ -290,7 +290,11 @@ class CanonicalChapterRouter(
         val result = commentsApi.alignChapters(
             workId = workId,
             sourceKey = sourceKey,
-            carrier = if (medium == WorkIdResolver.MEDIUM_BOOKS) UiCarrier.BOOKS else UiCarrier.MANGA,
+            carrier = when (medium) {
+                WorkIdResolver.MEDIUM_BOOKS -> UiCarrier.BOOKS
+                WorkIdResolver.MEDIUM_SHOWS -> UiCarrier.SHOWS
+                else -> UiCarrier.MANGA
+            },
             title = title,
             fingerprint = fp,
         )

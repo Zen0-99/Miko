@@ -10,6 +10,7 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.shows.model.Anime
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
@@ -101,6 +102,37 @@ class CanonicalPipelineRunner(
                 throw e
             } catch (e: Exception) {
                 logcat(LogPriority.WARN, e) { "[CanonicalPipeline] novel run failed for $workId" }
+            } finally {
+                lastRanAt[workId] = System.currentTimeMillis()
+                running.remove(workId)
+            }
+        }
+    }
+
+    /**
+     * Shows leg (19-03): canonize episodes for a canonical shows row.
+     *
+     * Unlike manga/books there is no enrich step — shows works resolve
+     * `mk:imdb:`/`mk:hs:` ids server-side (the works_cache row is
+     * already the resolve output), there is no MangaBaka-equivalent
+     * catalog for anime to fetch, and no `mk:m:`-promotion analog
+     * exists for Anime. The artifact itself couriers canonical episode
+     * metadata inside the canonize feeds (D-04a). [anime] is carried
+     * for the 19-04 hydration seam (canonical_episodes → episode rows)
+     * and deliberately skips the cover pass — Cinemeta already supplies
+     * show covers, and `carrierCoverUrl` is manga/novel-shaped.
+     */
+    fun launchShows(workId: String, anime: Anime, force: Boolean = false) {
+        if ((!force && !shouldRun(workId)) || !running.add(workId)) return
+        scope.launch {
+            try {
+                canonizeWork.run(workId, Carrier.SHOWS)
+                // 19-04: canonical hydration (canonical_episodes →
+                // episode rows) lands here, then comment-key binding.
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.WARN, e) { "[CanonicalPipeline] shows run failed for $workId (anime ${anime.id})" }
             } finally {
                 lastRanAt[workId] = System.currentTimeMillis()
                 running.remove(workId)
