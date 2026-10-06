@@ -124,6 +124,7 @@ class LibraryCanonizer(
     private val app: Application = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val mintTelemetry: MintTelemetry = Injekt.get(),
+    private val workCarriers: WorkCarriers = Injekt.get(),
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -1223,6 +1224,11 @@ class LibraryCanonizer(
             return false
         }
         mintTelemetry.commitFlush()
+        // A solidify or this device's own provider_ref mint changed the
+        // carrier matrix — don't let the 6h cache show stale rows.
+        if (resp.solidified.isNotEmpty() || feed.provider_ref != null) {
+            workCarriers.invalidate(workId)
+        }
         chapterMap.invalidate(workId)
         logcat {
             "localFeed $workId → ${resp.count} canon chapters via $pkgName " +

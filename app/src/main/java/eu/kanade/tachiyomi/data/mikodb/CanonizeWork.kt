@@ -38,6 +38,7 @@ class CanonizeWork(
     private val episodeMap: CanonicalEpisodeMap = Injekt.get(),
     private val mikoDbManager: MikoDbManager = Injekt.get(),
     private val mintTelemetry: MintTelemetry = Injekt.get(),
+    private val workCarriers: WorkCarriers = Injekt.get(),
 ) {
 
     sealed interface Outcome {
@@ -117,6 +118,11 @@ class CanonizeWork(
         }
         mintTelemetry.commitFlush()
 
+        // A solidify or this device's own provider_ref mint changed the
+        // matrix — the 6h cache can't wait for TTL.
+        if (resp.solidified.isNotEmpty() || feeds.any { it.provider_ref != null }) {
+            workCarriers.invalidate(workId)
+        }
         chapterMap.invalidate(workId)
         val bestDetails = r.feeds.filter { it.details != null && !it.details.isEmpty }
             .maxByOrNull { it.score }?.details
@@ -177,6 +183,9 @@ class CanonizeWork(
             }
         mintTelemetry.commitFlush()
 
+        if (resp.solidified.isNotEmpty() || feeds.any { it.providerRef != null }) {
+            workCarriers.invalidate(workId)
+        }
         episodeMap.invalidate(workId)
         episodeMap.prime(workId)
         val bestDetails = r.feeds.filter { it.details != null && !it.details.isEmpty }

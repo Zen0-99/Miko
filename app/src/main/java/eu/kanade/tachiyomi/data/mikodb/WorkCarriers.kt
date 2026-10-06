@@ -62,6 +62,16 @@ class WorkCarriers(
         /** Installed extension's icon (Drawable) — the picker rows
          *  render real logos, not repo URLs. */
         val icon: Drawable? = null,
+        /** Binding lifecycle (Phase 20) — 'confirmed' | 'provisional' |
+         *  'quarantined'. 'confirmed' when the worker omits the field
+         *  (pre-20 servers) — old behavior. */
+        val status: String = "confirmed",
+        /** This device minted the binding — server-computed from the
+         *  Bearer hash; a provisional row only renders readable for its
+         *  minter. */
+        val mine: Boolean = false,
+        /** Ledger-derived binding score — display/diagnostic only. */
+        val points: Double? = null,
     )
 
     data class Matrix(
@@ -71,12 +81,25 @@ class WorkCarriers(
          *  then means "unknown", not "no carriers exist". */
         val fetched: Boolean,
     ) {
-        /** Installed + enabled carriers the router may drive. */
-        val readable: List<Carrier> get() = carriers.filter { it.enabled }
+        /** Installed + enabled carriers the router may drive.
+         *
+         *  Lifecycle gate (Phase 20): the server already filters
+         *  provisional rows to their minter — this is defense-in-depth
+         *  for cached/offline matrices and status changes inside the
+         *  [TTL_MS] window. Confirmed serves everyone; provisional
+         *  serves only its minter; quarantined NEVER serves — revoked
+         *  content, not a personalized row (mirrors the worker's
+         *  strict serve predicate). */
+        val readable: List<Carrier> get() = carriers.filter {
+            it.enabled && (it.status == "confirmed" || it.mine) &&
+                it.status != "quarantined"
+        }
 
-        /** Bound-but-uninstalled carriers the repo can install. */
+        /** Bound-but-uninstalled carriers the repo can install —
+         *  never a quarantined row (a revoked binding isn't an
+         *  install candidate). */
         val installable: List<Carrier> get() =
-            carriers.filter { !it.installed && it.installable }
+            carriers.filter { !it.installed && it.installable && it.status != "quarantined" }
     }
 
     /** Per-chapter UI state on a canonical entry. */
@@ -210,6 +233,10 @@ class WorkCarriers(
                 lang = avail?.lang,
                 installable = avail != null,
                 icon = inst?.icon,
+                // Pre-20 workers omit status — confirmed-equivalent.
+                status = b.status ?: "confirmed",
+                mine = b.mine,
+                points = b.points,
             )
         }
         return Matrix(workId, carriers, fetched = extensionsReady)

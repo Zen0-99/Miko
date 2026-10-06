@@ -263,6 +263,9 @@ class ProviderFinder(
                     return null
                 }
             mintTelemetry.commitFlush()
+            // The device just minted bindings — the cached matrix must
+            // reflect the new provisional rows immediately, not at TTL.
+            workCarriers.invalidate(workId)
             logcat {
                 "providerFinder $workId: minted ${feeds.map { it.sourceKey }} " +
                     "(${resp.count} episodes)"
@@ -287,6 +290,7 @@ class ProviderFinder(
             return null
         }
         mintTelemetry.commitFlush()
+        workCarriers.invalidate(workId)
         logcat { "providerFinder $workId: minted ${feeds.map { it.source_key }} (${resp.count} chapters)" }
         return resp.count
     }
