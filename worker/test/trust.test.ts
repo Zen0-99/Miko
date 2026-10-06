@@ -577,3 +577,97 @@ describe('binding lifecycle — mint → provisional → confirm → solidify', 
         expect(anon.chapters).toHaveLength(0);
     });
 });
+
+describe('mint telemetry — provider_stats observational counters', () => {
+    const stat = async (pkg: string) =>
+        env.COMMENTS_DB.prepare(
+            'SELECT served_count, failed_count FROM provider_stats WHERE provider = ?',
+        ).bind(pkg).first<{ served_count: number; failed_count: number }>();
+
+    it('canonize telemetry upserts served/failed counts; repeats accumulate', async () => {
+        const work = 'mk:mb:tel1';
+        const tel = [{ pkg: SRC, served: 12, failed: 3 }];
+        const res = await canonize({ ...canonBody(work, SRC, '/series/tel'), telemetry: tel });
+        expect(res.status).toBe(200);
+        expect(await stat(SRC)).toEqual({ served_count: 12, failed_count: 3 });
+        await canonize({ ...canonBody(work, SRC, '/series/tel'), telemetry: tel });
+        expect(await stat(SRC)).toEqual({ served_count: 24, failed_count: 6 });
+    });
+
+    it('resolve and ids/seen ingest telemetry too', async () => {
+        const seen = await SELF.fetch('http://test/v1/ids/seen', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                id: 'mk:local:t1', medium: 'manga',
+                telemetry: [{ pkg: 'ext.tel.two', served: 5 }],
+            }),
+        });
+        expect(seen.status).toBe(200);
+        expect(await stat('ext.tel.two')).toEqual({ served_count: 5, failed_count: 0 });
+
+        const resolve = await SELF.fetch('http://test/v1/works/resolve', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                provider: 'mangadex', external_id: 'tel-md',
+                title: 'x', medium: 'manga',
+                telemetry: [{ pkg: 'ext.tel.two', failed: 2 }],
+            }),
+        });
+        expect(resolve.status).toBe(200);
+        expect(await stat('ext.tel.two')).toEqual({ served_count: 5, failed_count: 2 });
+    });
+
+    it('malformed entries clamp out; over-cap batches are dropped whole; requests never fail', async () => {
+        const work = 'mk:mb:tel2';
+        const res = await canonize({
+            ...canonBody(work, SRC, '/series/tel2'),
+            telemetry: [
+                { pkg: 'ext.tel.ok', served: 1 },
+                { served: 9 },                       // no pkg
+                { pkg: 'ext.tel.neg', served: -1 },  // negative
+                { pkg: 'ext.tel.zero' },             // nothing to count
+                'junk',
+                { pkg: 'ext.tel.big', failed: 200000 }, // > max_count
+            ],
+        });
+        expect(res.status).toBe(200);
+        expect(await stat('ext.tel.ok')).toEqual({ served_count: 1, failed_count: 0 });
+        expect(await stat('ext.tel.neg')).toBeNull();
+        expect(await stat('ext.tel.big')).toBeNull();
+
+        // 51 entries > telemetry.max_entries (50) → whole batch ignored,
+        // the carrier request still succeeds.
+        const res2 = await canonize({
+            ...canonBody(work, SRC, '/series/tel2'),
+            telemetry: Array.from({ length: 51 }, (_, i) => ({
+                pkg: `ext.tel.cap${i}`, served: 1,
+            })),
+        });
+        expect(res2.status).toBe(200);
+        expect(await stat('ext.tel.cap0')).toBeNull();
+    });
+
+    it('telemetry never touches lifecycle math', async () => {
+        const work = 'mk:mb:tel3';
+        const a = await newDevice();
+        await canonize({
+            ...canonBody(work, SRC, '/series/tel3'),
+            telemetry: [{ pkg: SRC, served: 9999 }],
+        }, a.token);
+        const row = await bindingRow(SRC, '/series/tel3');
+        expect(row?.status).toBe('provisional');
+        expect(row?.points).toBeCloseTo(1);
+        // provider_stats telemetry columns are the only writes.
+        const stats = await env.COMMENTS_DB.prepare(
+            `SELECT minted_count, solidified_count, served_count
+             FROM provider_stats WHERE provider = ?`,
+        ).bind(SRC).first<{
+            minted_count: number; solidified_count: number; served_count: number;
+        }>();
+        expect(stats?.served_count).toBe(9999);
+        expect(stats?.minted_count).toBe(0);
+        expect(stats?.solidified_count).toBe(0);
+    });
+});

@@ -1,4 +1,5 @@
 import type { Env } from './env';
+import { ingestTelemetry } from './trust';
 import { err, now, ok } from './util';
 
 // Phase 14-01: coverage-gap telemetry. Ingests ONLY the work id + medium —
@@ -12,6 +13,9 @@ const ID_MAX = 128;
 interface SeenRequest {
     id?: string;
     medium?: string;
+    /** Bundled mint telemetry (Phase 20) — observational provider_stats
+     *  counters, never an input to lifecycle math. */
+    telemetry?: unknown;
 }
 
 export async function handleIdSeen(req: Request, env: Env): Promise<Response> {
@@ -33,5 +37,9 @@ export async function handleIdSeen(req: Request, env: Env): Promise<Response> {
     )
         .bind(id, medium, now())
         .run();
+    // Bundled mint telemetry — observational counters only (locked:
+    // zero new per-event requests); malformed/over-cap payloads clamp
+    // out inside and can never fail the request.
+    await ingestTelemetry(env, body.telemetry);
     return ok({ id, recorded: true });
 }

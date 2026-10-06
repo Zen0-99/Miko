@@ -1,5 +1,6 @@
 import { identityFrom } from './auth';
 import type { Env } from './env';
+import { ingestTelemetry } from './trust';
 import type { MbSeries } from './mangabaka';
 import { searchSeries } from './mangabaka';
 import type { OlEdition, OlSearchDoc } from './openlibrary';
@@ -52,6 +53,9 @@ interface ResolveRequest {
     kind_hint?: 'book' | 'movie' | 'series';
     /** Strong external-ID signal for books (ISBN-10/13). */
     isbn?: string;
+    /** Bundled mint telemetry (Phase 20) — observational provider_stats
+     *  counters, never an input to lifecycle math. */
+    telemetry?: unknown;
 }
 
 interface WorkRow {
@@ -251,6 +255,9 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
     // Optional Bearer — provisional bindings resolve for their minter
     // only; everyone else falls through to title matching (SD-8).
     const viewer = (await identityFrom(req, env))?.device_hash ?? '';
+    // Bundled mint telemetry — ingested on every well-formed request so
+    // conflict/miss paths count too (malformed/over-cap clamps inside).
+    await ingestTelemetry(env, body.telemetry);
 
     // 1. External ID hit — gated on the serve predicate so a
     //    provisional/quarantined binding never vouches for a work.
