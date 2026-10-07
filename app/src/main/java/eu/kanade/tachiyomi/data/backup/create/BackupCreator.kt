@@ -6,6 +6,7 @@ import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.backup.BackupFileValidator
 import eu.kanade.tachiyomi.data.backup.create.creators.AchievementBackupCreator
+import eu.kanade.tachiyomi.data.backup.create.creators.CarrierExclusionsBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeCollectionsBackupCreator
 import eu.kanade.tachiyomi.data.backup.create.creators.AnimeExtensionRepoBackupCreator
@@ -87,6 +88,7 @@ class BackupCreator(
     private val novelSourcesBackupCreator: NovelSourcesBackupCreator = NovelSourcesBackupCreator(),
     private val extensionsBackupCreator: ExtensionsBackupCreator = ExtensionsBackupCreator(context),
     private val achievementBackupCreator: AchievementBackupCreator = AchievementBackupCreator(),
+    private val carrierExclusionsBackupCreator: CarrierExclusionsBackupCreator = CarrierExclusionsBackupCreator(),
 ) {
 
     suspend fun backup(uri: Uri, options: BackupOptions): String {
@@ -158,6 +160,15 @@ class BackupCreator(
                 backupUserProfile = achievementData?.userProfile,
                 backupActivityLog = achievementData?.activityLog ?: emptyList(),
                 backupStats = achievementData?.stats,
+
+                // Always back up carrier exclusions — user decisions,
+                // not settings (20-06).
+                backupCarrierExclusions = try {
+                    carrierExclusionsBackupCreator()
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e) { "Failed to backup carrier exclusions" }
+                    emptyList()
+                },
             )
 
             val byteArray = parser.encodeToByteArray(Backup.serializer(), backup)

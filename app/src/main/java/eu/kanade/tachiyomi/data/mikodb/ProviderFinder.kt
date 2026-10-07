@@ -36,6 +36,7 @@ class ProviderFinder(
     private val api: WorkIdentityApi = Injekt.get(),
     private val mikoDbManager: MikoDbManager = Injekt.get(),
     private val workCarriers: WorkCarriers = Injekt.get(),
+    private val carrierExclusions: CarrierExclusions = Injekt.get(),
     private val episodeMap: CanonicalEpisodeMap = Injekt.get(),
     private val mintTelemetry: MintTelemetry = Injekt.get(),
     private val providerTiers: ProviderTiers = Injekt.get(),
@@ -106,6 +107,10 @@ class ProviderFinder(
          *  "community-verified" micro-label. Equal/demoted/absent
          *  overlays never flag. */
         val communityVerified: Boolean = false,
+        /** Phase 20-06: a (work, provider) carrier exclusion exists —
+         *  the user removed this provider from this entry; the sheet
+         *  tags it and offers restore instead of a mint checkbox. */
+        val previouslyRemoved: Boolean = false,
     )
 
     private data class Entry(
@@ -148,6 +153,12 @@ class ProviderFinder(
             ?: emptySet()
         val goldens = goldenSources.allForWorkRow(work, medium)
             .filter { it.pkgName !in boundPkgs }
+        // 20-06: locally-removed providers — boundPkgs can't see them
+        // (the matrix filter already dropped the rows), so they still
+        // surface here; the tag + restore affordance is the whole point
+        // of keeping them discoverable.
+        val excluded = runCatching { carrierExclusions.providersForWork(workId) }
+            .getOrElse { emptySet() }
         logcat {
             "providerFinder $workId: ${goldens.size} candidates " +
                 goldens.joinToString(",") { it.pkgName.substringAfterLast('.') }
@@ -177,6 +188,7 @@ class ProviderFinder(
                 icon = g.icon,
                 medium = medium,
                 communityVerified = g.pkgName in communityVerified,
+                previouslyRemoved = g.pkgName in excluded,
             )
         }
         val state = MutableStateFlow(Search(rows = snapshot(), searching = goldens.isNotEmpty()))
@@ -237,6 +249,7 @@ class ProviderFinder(
                             0
                         },
                         feed = feed?.takeIf { it.verdict != SeriesMatcher.Decision.REJECT },
+                        previouslyRemoved = pkg in excluded,
                     )
                     state.value = state.value.copy(rows = snapshot())
                     logcat {

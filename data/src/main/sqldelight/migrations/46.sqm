@@ -1,0 +1,10 @@
+-- Phase 20-06 (NCM-015): carrier exclusions — local (work, provider)
+-- removes that survive re-mints and ride the backup. provider_ref is
+-- stored so a restore can retract the server-side remove signal.
+CREATE TABLE carrier_exclusions(
+    work_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    provider_ref TEXT,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (work_id, provider)
+);

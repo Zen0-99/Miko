@@ -1,0 +1,38 @@
+-- Carrier exclusions (Phase 20-06 / NCM-015) — the "remove" action's
+-- durable half. A (work_id, provider) row hides that provider from the
+-- entry's carrier surfaces FOREVER: the preferred-source sheet, auto
+-- election, install offers — re-mints and worker level-ups cannot bring
+-- it back (owner-locked: a user decision that must be respected). The
+-- provider still surfaces in Find Providers with a removed tag and can
+-- be restored there; the −0.25 server signal is separate and
+-- retractible — provider_ref is stored so restore can retract it.
+-- Rows ride MikoBackup so exclusions survive restore.
+
+CREATE TABLE carrier_exclusions(
+    work_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    provider_ref TEXT,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (work_id, provider)
+);
+
+insert:
+INSERT OR REPLACE INTO carrier_exclusions(work_id, provider, provider_ref, created_at)
+VALUES (:workId, :provider, :providerRef, :createdAt);
+
+delete:
+DELETE FROM carrier_exclusions WHERE work_id = :workId AND provider = :provider;
+
+providersForWork:
+SELECT provider FROM carrier_exclusions WHERE work_id = :workId;
+
+providerRefFor:
+SELECT provider_ref FROM carrier_exclusions
+WHERE work_id = :workId AND provider = :provider;
+
+selectAll:
+SELECT work_id, provider, provider_ref, created_at FROM carrier_exclusions;
+
+insertAll:
+INSERT OR IGNORE INTO carrier_exclusions(work_id, provider, provider_ref, created_at)
+VALUES (:workId, :provider, :providerRef, :createdAt);

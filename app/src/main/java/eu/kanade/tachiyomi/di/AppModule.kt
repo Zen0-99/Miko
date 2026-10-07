@@ -336,6 +336,9 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.SeenReporter() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.MintTelemetry() }
+        // 20-06: local (work, provider) removes — survive re-mints and
+        // level-ups; restored via MikoBackup.
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CarrierExclusions() }
         // 20-04: community-verified tier overlay — the single
         // effectiveTier seam all carrier/ranking reads go through.
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.ProviderTiers() }

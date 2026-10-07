@@ -153,6 +153,7 @@ class MangaScreenModel(
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
     private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
     private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
+    private val carrierExclusions: eu.kanade.tachiyomi.data.mikodb.CarrierExclusions = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -1792,32 +1793,136 @@ class MangaScreenModel(
      *  cache drops, and the sheet re-fetches so the row disappears.
      *  A 404 (row already gone / not ours) is still a refresh — the
      *  stale row must not linger either way. */
-    fun unbindCarrier(carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier) {
+    private suspend fun unbindCarrierNow(
+        workId: String,
+        carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier,
+    ): Boolean = when (
+        workIdentityApi.unbindBinding(workId, carrier.pkgName, carrier.providerRef)
+    ) {
+        eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.Ok -> {
+            workCarriers.invalidate(workId)
+            loadCarriers(workId)
+            true
+        }
+        eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.NotFound,
+        eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.Failed,
+        -> false
+    }
+
+    /** Carrier-sheet ⋯ vote toggle (20-06): 'up'|'down'|'clear' — the
+     *  worker enforces the mutually-exclusive slot; a fresh GET of the
+     *  matrix re-renders the icons from `my`. */
+    fun voteCarrier(
+        carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier,
+        vote: String,
+    ) {
         val manga = successState?.manga ?: return
         val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
             .workIdFromMangaUrl(manga.url) ?: return
         screenModelScope.launchIO {
             when (
-                workIdentityApi.unbindBinding(workId, carrier.pkgName, carrier.providerRef)
+                workIdentityApi.voteBinding(workId, carrier.pkgName, carrier.providerRef, vote)
             ) {
-                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.Ok -> {
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.Ok -> {
                     workCarriers.invalidate(workId)
                     loadCarriers(workId)
-                    snackbarHostState.showSnackbar(
-                        message = context.stringResource(MR.strings.miko_binding_unbound),
-                    )
                 }
-                // Endpoint absent OR row not ownable — the same failure
-                // UX either way (20-03 SD-21); the row stays.
-                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.NotFound,
-                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.Failed,
-                -> {
-                    snackbarHostState.showSnackbar(
-                        message = context.stringResource(MR.strings.miko_binding_unbind_failed),
-                    )
-                }
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.NotFound,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.Failed,
+                -> snackbarHostState.showSnackbar(
+                    message = context.stringResource(MR.strings.miko_carrier_signal_failed),
+                )
             }
         }
+    }
+
+    /** Staged-sheet report submission (20-06) — a reasoned signal row
+     *  that stacks on the vote slot. */
+    fun reportCarrier(
+        carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier,
+        kind: String,
+    ) {
+        val manga = successState?.manga ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromMangaUrl(manga.url) ?: return
+        screenModelScope.launchIO {
+            when (
+                workIdentityApi.reportBinding(workId, carrier.pkgName, carrier.providerRef, kind)
+            ) {
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.Ok -> {
+                    workCarriers.invalidate(workId)
+                    loadCarriers(workId)
+                }
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.NotFound,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.Failed,
+                -> snackbarHostState.showSnackbar(
+                    message = context.stringResource(MR.strings.miko_carrier_signal_failed),
+                )
+            }
+        }
+    }
+
+    /** Local removal (20-06): write the durable exclusion FIRST so a
+     *  dead worker can never resurrect the row, then fire the −0.25
+     *  signal best-effort. The exclusion survives re-mints and
+     *  level-ups; Find Providers can still restore it. Own provisional
+     *  mints route to unbind instead — no self-punishing signal. */
+    fun removeCarrier(carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier) {
+        val manga = successState?.manga ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromMangaUrl(manga.url) ?: return
+        screenModelScope.launchIO {
+            if (carrier.mine && carrier.status == "provisional") {
+                val ok = unbindCarrierNow(workId, carrier)
+                snackbarHostState.showSnackbar(
+                    message = context.stringResource(
+                        if (ok) MR.strings.miko_binding_unbound else MR.strings.miko_binding_unbind_failed,
+                    ),
+                )
+                return@launchIO
+            }
+            carrierExclusions.exclude(workId, carrier.pkgName, carrier.providerRef)
+            workIdentityApi.removeBindingSignal(
+                workId, carrier.pkgName, carrier.providerRef, removed = true,
+            )
+            workCarriers.invalidate(workId)
+            loadCarriers(workId)
+            val result = snackbarHostState.showSnackbar(
+                message = context.stringResource(
+                    MR.strings.miko_carrier_removed_snack,
+                    carrier.displayName,
+                ),
+                actionLabel = context.stringResource(MR.strings.action_undo),
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                restoreCarrier(workId, carrier.pkgName)
+            }
+        }
+    }
+
+    /** Find-Providers restore / snackbar undo — clears the local
+     *  exclusion and retracts the remove signal (the stored
+     *  provider_ref locates the binding; absent → local-only restore).
+     *  Does NOT re-mint: the binding reappears only if the server
+     *  still holds it. */
+    fun restoreCarrier(workId: String, pkgName: String) {
+        screenModelScope.launchIO {
+            val ref = carrierExclusions.providerRefFor(workId, pkgName)
+            carrierExclusions.unexclude(workId, pkgName)
+            if (ref != null) {
+                workIdentityApi.removeBindingSignal(workId, pkgName, ref, removed = false)
+            }
+            workCarriers.invalidate(workId)
+            loadCarriers(workId)
+        }
+    }
+
+    /** Find-Providers "Restore" on a previously-removed row. */
+    fun restoreExcludedCarrier(pkgName: String) {
+        val manga = successState?.manga ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromMangaUrl(manga.url) ?: return
+        restoreCarrier(workId, pkgName)
     }
 
 

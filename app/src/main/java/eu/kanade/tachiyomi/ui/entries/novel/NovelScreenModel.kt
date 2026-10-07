@@ -144,6 +144,8 @@ class NovelScreenModel(
     private val libraryCanonizer: eu.kanade.tachiyomi.data.mikodb.LibraryCanonizer = Injekt.get(),
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
     private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
+    private val carrierExclusions: eu.kanade.tachiyomi.data.mikodb.CarrierExclusions = Injekt.get(),
+    private val workIdentityApi: eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
     private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
     private val novelExtensionManager: eu.kanade.tachiyomi.extension.novel.NovelExtensionManager = Injekt.get(),
@@ -1488,6 +1490,25 @@ class NovelScreenModel(
             loadCarriers(workId)
             Injekt.get<eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync>()
                 .syncNovel(novel, workId)
+        }
+    }
+
+    /** Find-Providers "Restore" on a previously-removed row (20-06):
+     *  clears the local carrier exclusion and retracts the remove
+     *  signal; does not re-mint — the binding returns only if the
+     *  server still holds it. */
+    fun restoreExcludedCarrier(pkgName: String) {
+        val novel = successState?.novel ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return
+        screenModelScope.launchIO {
+            val ref = carrierExclusions.providerRefFor(workId, pkgName)
+            carrierExclusions.unexclude(workId, pkgName)
+            if (ref != null) {
+                workIdentityApi.removeBindingSignal(workId, pkgName, ref, removed = false)
+            }
+            workCarriers.invalidate(workId)
+            loadCarriers(workId)
         }
     }
 

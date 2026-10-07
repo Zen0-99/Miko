@@ -80,4 +80,8 @@ data class Backup(
     @ProtoNumber(701) val backupUserProfile: BackupUserProfile? = null,
     @ProtoNumber(702) val backupActivityLog: List<BackupDayActivity> = emptyList(),
     @ProtoNumber(703) val backupStats: BackupStats? = null,
+
+    // MikoDB carrier exclusions (Phase 20-06) — local (work, provider)
+    // removes; restored unconditionally like achievements.
+    @ProtoNumber(704) val backupCarrierExclusions: List<BackupCarrierExclusion> = emptyList(),
 )

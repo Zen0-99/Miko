@@ -461,6 +461,7 @@ class NovelScreen(
                         accentColor = successState.accentColor,
                         onToggle = screenModel::toggleProviderPick,
                         onInstall = screenModel::installRecommendedProvider,
+                        onRestore = screenModel::restoreExcludedCarrier,
                         onConfirm = screenModel::confirmProviderPicks,
                         onDismissRequest = onDismissRequest,
                     )

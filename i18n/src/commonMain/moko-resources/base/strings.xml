@@ -1058,6 +1058,7 @@
     <string name="download_notifier_downloader_title">Downloader</string>
     <string name="download_notifier_title_error">Error</string>
     <string name="download_notifier_unknown_error">Could not download chapter due to unexpected error</string>
+    <string name="download_notifier_no_carrier">No installed provider can serve this chapter — bind one via Find Content Provider</string>
     <string name="download_notifier_text_only_wifi">No Wi-Fi connection available</string>
     <string name="download_notifier_no_network">No network connection available</string>
     <string name="download_notifier_download_paused">Downloads paused</string>
@@ -1162,5 +1163,20 @@
     <string name="miko_binding_unbind">wrong work? unbind</string>
     <string name="miko_binding_unbound">Binding removed</string>
     <string name="miko_binding_unbind_failed">Couldn\'t remove the binding</string>
+    <string name="miko_carrier_actions">More actions</string>
+    <string name="miko_carrier_collapse">Hide actions</string>
+    <string name="miko_carrier_upvote">Upvote this source</string>
+    <string name="miko_carrier_downvote">Downvote this source</string>
+    <string name="miko_carrier_report">Report this source</string>
+    <string name="miko_carrier_remove">Remove from this entry</string>
+    <string name="miko_carrier_removed_by_you">Removed by you</string>
+    <string name="miko_carrier_restore">Restore</string>
+    <string name="miko_carrier_report_title">Report %1$s</string>
+    <string name="miko_carrier_reason_wrong_work">Wrong work — this isn\'t the right title</string>
+    <string name="miko_carrier_reason_dead_feed">No chapters or empty feed</string>
+    <string name="miko_carrier_reason_low_quality">Broken or low-quality content</string>
+    <string name="miko_carrier_reason_other">Something else</string>
+    <string name="miko_carrier_removed_snack">%1$s removed from this entry</string>
+    <string name="miko_carrier_signal_failed">Couldn\'t send that — try again</string>
     <string name="miko_provider_community_verified">community-verified</string>
 </resources>

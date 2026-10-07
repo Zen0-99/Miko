@@ -65,6 +65,10 @@ fun FindProviderDialog(
     accentColor: Color? = null,
     onToggle: (String) -> Unit,
     onInstall: (String) -> Unit,
+    /** 20-06: restore a locally-removed provider (clears the carrier
+     *  exclusion + retracts the remove signal) — only ever offered on
+     *  `previouslyRemoved` rows; null hides the affordance. */
+    onRestore: ((String) -> Unit)? = null,
     onConfirm: () -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -99,6 +103,7 @@ fun FindProviderDialog(
                     accent = accent,
                     checked = row.pkgName in confirmed,
                     onToggle = { onToggle(row.pkgName) },
+                    onRestore = onRestore?.let { restore -> { restore(row.pkgName) } },
                 )
             }
             if (!searching && rows.none { it.status == ProviderFinder.Status.FOUND }) {
@@ -157,6 +162,7 @@ private fun ProviderRow(
     accent: Color,
     checked: Boolean,
     onToggle: () -> Unit,
+    onRestore: (() -> Unit)? = null,
 ) {
     // Global-search convention: the extension name is the row header;
     // a FOUND result renders as the matched work's cover card, not an
@@ -189,11 +195,12 @@ private fun ProviderRow(
                     modifier = Modifier.padding(end = 8.dp),
                 )
             }
-            // Phase 20: a binding this device just minted is provisional
-            // until the ledger confirms it — honest state on the row.
-            if (row.provisionalMint) {
+            // 20-06: the user removed this provider from this entry —
+            // the tag explains why it vanished elsewhere, and Restore
+            // (not a mint checkbox) is the only action offered.
+            if (row.previouslyRemoved) {
                 Text(
-                    text = stringResource(MR.strings.miko_binding_provisional),
+                    text = stringResource(MR.strings.miko_carrier_removed_by_you),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 8.dp),
@@ -206,8 +213,15 @@ private fun ProviderRow(
                         strokeWidth = 2.dp,
                         color = accent,
                     )
-                ProviderFinder.Status.FOUND ->
-                    Checkbox(
+                ProviderFinder.Status.FOUND -> when {
+                    row.previouslyRemoved && onRestore != null ->
+                        TextButton(onClick = onRestore) {
+                            Text(
+                                text = stringResource(MR.strings.miko_carrier_restore),
+                                color = accent,
+                            )
+                        }
+                    else -> Checkbox(
                         checked = checked,
                         onCheckedChange = { onToggle() },
                         colors = CheckboxDefaults.colors(
@@ -216,9 +230,21 @@ private fun ProviderRow(
                             checkmarkColor = rememberOnAccentColor(accent),
                         ),
                     )
+                }
                 ProviderFinder.Status.NO_MATCH,
                 ProviderFinder.Status.FAILED,
-                -> Unit
+                -> if (row.previouslyRemoved && onRestore != null) {
+                    // Removed providers may have no live match to show —
+                    // restore still applies (it only clears the exclusion).
+                    TextButton(onClick = onRestore) {
+                        Text(
+                            text = stringResource(MR.strings.miko_carrier_restore),
+                            color = accent,
+                        )
+                    }
+                } else {
+                    Unit
+                }
             }
         }
         when (row.status) {

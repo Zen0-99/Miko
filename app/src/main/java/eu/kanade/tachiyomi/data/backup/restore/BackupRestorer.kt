@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupNovel
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AchievementRestorer
+import eu.kanade.tachiyomi.data.backup.restore.restorers.CarrierExclusionsRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeCollectionsRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeExtensionRepoRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.AnimeRestorer
@@ -65,6 +66,7 @@ class BackupRestorer(
     private val novelRestorer: NovelRestorer = NovelRestorer(),
     private val extensionsRestorer: ExtensionsRestorer = ExtensionsRestorer(context),
     private val achievementRestorer: AchievementRestorer = AchievementRestorer(),
+    private val carrierExclusionsRestorer: CarrierExclusionsRestorer = CarrierExclusionsRestorer(),
 ) {
 
     private var restoreAmount = 0
@@ -211,6 +213,10 @@ class BackupRestorer(
                 backup.backupActivityLog,
                 backup.backupStats,
             )
+
+            // Always restore carrier exclusions — merge-semantics, so a
+            // stale backup can't undo a newer removal (20-06).
+            restoreCarrierExclusions(backup.backupCarrierExclusions)
 
             // TODO: optionally trigger online library + tracker update
         }
@@ -462,6 +468,18 @@ class BackupRestorer(
             restoreAmount,
             isSync,
         )
+    }
+
+    private fun CoroutineScope.restoreCarrierExclusions(
+        exclusions: List<eu.kanade.tachiyomi.data.backup.models.BackupCarrierExclusion>,
+    ) = launch {
+        if (exclusions.isEmpty()) return@launch
+        ensureActive()
+        try {
+            carrierExclusionsRestorer(exclusions)
+        } catch (e: Exception) {
+            errors.add(Date() to "Carrier exclusions restore: ${e.message}")
+        }
     }
 
     private fun CoroutineScope.restoreAchievements(

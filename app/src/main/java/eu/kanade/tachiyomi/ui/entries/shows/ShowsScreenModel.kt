@@ -176,6 +176,7 @@ class ShowsScreenModel(
     private val workIdentityApi: eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi = Injekt.get(),
     private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
     private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
+    private val carrierExclusions: eu.kanade.tachiyomi.data.mikodb.CarrierExclusions = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
     private val episodeMap: eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap = Injekt.get(),
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
@@ -2403,6 +2404,23 @@ class ShowsScreenModel(
             workCarriers.invalidate(workId)
             dismissDialog()
             updateSuccessState { it.copy(providerSearch = null) }
+            loadCarriers(workId)
+        }
+    }
+
+    /** Find-Providers "Restore" on a previously-removed row (20-06):
+     *  clears the local carrier exclusion and retracts the remove
+     *  signal; does not re-mint — the binding returns only if the
+     *  server still holds it. */
+    fun restoreExcludedCarrier(pkgName: String) {
+        val workId = successState?.canonicalWorkId ?: return
+        screenModelScope.launchIO {
+            val ref = carrierExclusions.providerRefFor(workId, pkgName)
+            carrierExclusions.unexclude(workId, pkgName)
+            if (ref != null) {
+                workIdentityApi.removeBindingSignal(workId, pkgName, ref, removed = false)
+            }
+            workCarriers.invalidate(workId)
             loadCarriers(workId)
         }
     }

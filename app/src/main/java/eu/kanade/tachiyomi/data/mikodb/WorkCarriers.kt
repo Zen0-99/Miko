@@ -33,6 +33,7 @@ class WorkCarriers(
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val mikoDbManager: MikoDbManager = Injekt.get(),
     private val providerTiers: ProviderTiers = Injekt.get(),
+    private val carrierExclusions: CarrierExclusions = Injekt.get(),
 ) {
 
     // Lazily resolved: extension-manager init is expensive (async APK scan), so keep it
@@ -73,6 +74,12 @@ class WorkCarriers(
         val mine: Boolean = false,
         /** Ledger-derived binding score — display/diagnostic only. */
         val points: Double? = null,
+        /** The caller's own signals (20-05): 'up'|'down'|null vote slot
+         *  plus reported/removed flags — the picker's action toggles
+         *  render from these; nulls on pre-20-05 workers. */
+        val myVote: String? = null,
+        val myReported: Boolean = false,
+        val myRemoved: Boolean = false,
     )
 
     data class Matrix(
@@ -209,7 +216,16 @@ class WorkCarriers(
             disabled = sourcePreferences.disabledMangaSources().get()
         }
 
+        // 20-06: local carrier exclusions — providers the user removed
+        // from THIS work never reach the matrix, so the picker, auto
+        // election and installable lists all inherit the filter. A
+        // re-mint or worker level-up can't resurrect them; only the
+        // Find-Providers "restore" path deletes the row.
+        val excluded = runCatching { carrierExclusions.providersForWork(workId) }
+            .getOrElse { emptySet() }
+
         val carriers = resp.bindings.mapNotNull { b ->
+            if (b.source_key in excluded) return@mapNotNull null
             val inst = installed[b.source_key]
             val avail = available[b.source_key]
             // Not an app-carrier binding (mangadex/mangabaka/etc.) or an
@@ -242,6 +258,9 @@ class WorkCarriers(
                 status = b.status ?: "confirmed",
                 mine = b.mine,
                 points = b.points,
+                myVote = b.my?.vote,
+                myReported = b.my?.reported ?: false,
+                myRemoved = b.my?.removed ?: false,
             )
         }
         return Matrix(workId, carriers, fetched = extensionsReady)

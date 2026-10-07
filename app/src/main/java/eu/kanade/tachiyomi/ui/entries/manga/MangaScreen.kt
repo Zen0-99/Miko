@@ -441,7 +441,9 @@ class MangaScreen(
                     } else {
                         null
                     },
-                    onUnbind = screenModel::unbindCarrier,
+                    onVote = screenModel::voteCarrier,
+                    onReport = screenModel::reportCarrier,
+                    onRemove = screenModel::removeCarrier,
                     onSelect = { pkg ->
                         if (pickedChapter != null) {
                             // Chapter scope: store the override and read
@@ -472,6 +474,7 @@ class MangaScreen(
                         accentColor = successState.accentColor,
                         onToggle = screenModel::toggleProviderPick,
                         onInstall = screenModel::installRecommendedProvider,
+                        onRestore = screenModel::restoreExcludedCarrier,
                         onConfirm = screenModel::confirmProviderPicks,
                         onDismissRequest = onDismissRequest,
                     )

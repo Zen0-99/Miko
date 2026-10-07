@@ -411,6 +411,18 @@ class WorkIdentityApi {
         val mine: Boolean = false,
         /** Ledger-derived binding score; display/diagnostic only. */
         val points: Double? = null,
+        /** The caller's own signal state on this binding (20-05) —
+         *  server-computed from the Bearer hash; NULL when the request
+         *  carried no identity or the worker predates the field. */
+        val my: MySignalState? = null,
+    )
+
+    @Serializable
+    data class MySignalState(
+        /** 'up' | 'down' | null — the exclusive vote slot. */
+        val vote: String? = null,
+        val reported: Boolean = false,
+        val removed: Boolean = false,
     )
 
     @Serializable
@@ -476,6 +488,83 @@ class WorkIdentityApi {
         if (e.code == 404) UnbindResult.NotFound else UnbindResult.Failed
     } catch (_: Exception) {
         UnbindResult.Failed
+    }
+
+    // ---------- Phase 20-05: carrier vote & remove signals ----------
+
+    @Serializable
+    data class VoteRequest(
+        val work_id: String,
+        val provider: String,
+        val provider_ref: String,
+        /** 'up' | 'down' | 'clear' — the mutually-exclusive slot. */
+        val vote: String,
+    )
+
+    @Serializable
+    data class ReportRequest(
+        val work_id: String,
+        val provider: String,
+        val provider_ref: String,
+        /** The report reason taxonomy — 'wrong_work' | 'dead_feed' |
+         *  'low_quality' | 'other'; omit for a bare report. */
+        val kind: String? = null,
+    )
+
+    @Serializable
+    data class RemoveRequest(
+        val work_id: String,
+        val provider: String,
+        val provider_ref: String,
+        val removed: Boolean,
+    )
+
+    /** Shared outcome for the signal endpoints — `solidified` is the
+     *  vote path's "this upvote flipped it" flag. */
+    sealed interface SignalResult {
+        data object Ok : SignalResult
+        /** Target absent / tombstone — the row stays as-is. */
+        data object NotFound : SignalResult
+        /** Identity/suspension/rate-limit/transport failure. */
+        data object Failed : SignalResult
+    }
+
+    /** 'up'|'down'|'clear' — one vote slot per device per binding. */
+    suspend fun voteBinding(
+        workId: String,
+        provider: String,
+        providerRef: String,
+        vote: String,
+    ): SignalResult = postSignal("${baseUrl()}/v1/bindings/vote", VoteRequest(workId, provider, providerRef, vote))
+
+    /** Reasoned report — stacks with the vote slot; one-way. */
+    suspend fun reportBinding(
+        workId: String,
+        provider: String,
+        providerRef: String,
+        kind: String? = null,
+    ): SignalResult = postSignal("${baseUrl()}/v1/bindings/report", ReportRequest(workId, provider, providerRef, kind))
+
+    /** The −0.25 remove signal; `removed=false` retracts it (the
+     *  Find-Providers restore path). The local exclusion row is the
+     *  durable half and lives in [CarrierExclusions]. */
+    suspend fun removeBindingSignal(
+        workId: String,
+        provider: String,
+        providerRef: String,
+        removed: Boolean,
+    ): SignalResult = postSignal("${baseUrl()}/v1/bindings/remove", RemoveRequest(workId, provider, providerRef, removed))
+
+    private suspend inline fun <reified T> postSignal(url: String, body: T): SignalResult = try {
+        val reqBody = json.encodeToString(body).toRequestBody(jsonMime)
+        authedCall(read = false) { headers ->
+            POST(url, headers = headers, body = reqBody)
+        }
+        SignalResult.Ok
+    } catch (e: HttpException) {
+        if (e.code == 404) SignalResult.NotFound else SignalResult.Failed
+    } catch (_: Exception) {
+        SignalResult.Failed
     }
 
     // ---------- Phase 20-04: provider trust overlay ----------

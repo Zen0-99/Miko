@@ -1,6 +1,12 @@
 package eu.kanade.presentation.entries.manga
 
 import android.graphics.drawable.Drawable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,8 +19,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -23,11 +41,16 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.browse.components.ExtensionIcon
@@ -100,7 +123,6 @@ fun CarrierInstallDialog(
                         carrier = carrier,
                         step = steps[carrier.pkgName],
                         buttonColors = buttonColors,
-                        badge = carrier.lifecycleBadge()?.let { stringResource(it) },
                         onInstall = { onInstall(carrier.pkgName) },
                     )
                 }
@@ -195,13 +217,18 @@ private fun CarrierInstallRow(
     }
 }
 
-/** Lifecycle label resource for a carrier row — provisional badges its
- *  minter everywhere; quarantined is always rendered through the
- *  dimmed path so this only returns the provisional string. */
-private fun WorkCarriers.Carrier.lifecycleBadge() = when (status) {
-    "provisional" -> MR.strings.miko_binding_provisional
-    "quarantined" -> MR.strings.miko_binding_quarantined
-    else -> null
+/** Report-reason rows on the staged report page — keys are the
+ *  worker-side `reason` taxonomy (20-05), labels localized. */
+private val REPORT_REASONS = listOf(
+    "wrong_work" to MR.strings.miko_carrier_reason_wrong_work,
+    "dead_feed" to MR.strings.miko_carrier_reason_dead_feed,
+    "low_quality" to MR.strings.miko_carrier_reason_low_quality,
+    "other" to MR.strings.miko_carrier_reason_other,
+)
+
+private sealed interface CarrierPickerPage {
+    data object Pick : CarrierPickerPage
+    data class Report(val carrier: WorkCarriers.Carrier) : CarrierPickerPage
 }
 
 /**
@@ -210,6 +237,11 @@ private fun WorkCarriers.Carrier.lifecycleBadge() = when (status) {
  * selection above stickiness/tier. [chapter] non-null scopes the pick
  * to that chapter (the per-chapter override); null writes the
  * work-level default. Bottom sheet, accent-tinted.
+ *
+ * Every carrier row (Automatic excluded) carries a ⋯ button that
+ * expands bare-icon actions Nuvio-detail-style — up/down the binding,
+ * report it (staged page), or remove it for this work (20-06). The
+ * provisional chip was dropped by the owner: lifecycle stays invisible.
  */
 @Composable
 fun CarrierPickerDialog(
@@ -220,9 +252,12 @@ fun CarrierPickerDialog(
     /** "Find More Providers" — opens the provider-search sheet to mint
      *  additional carriers for this work. Null hides the button. */
     onFindMoreProviders: (() -> Unit)? = null,
-    /** "wrong work? unbind" (Phase 20) — only ever offered on
-     *  mine && provisional rows; null hides the action entirely. */
-    onUnbind: ((WorkCarriers.Carrier) -> Unit)? = null,
+    /** Vote slot toggle — 'up'|'down'|'clear' (20-06). */
+    onVote: ((WorkCarriers.Carrier, String) -> Unit)? = null,
+    /** Report submission from the staged page — (carrier, reason key). */
+    onReport: ((WorkCarriers.Carrier, String) -> Unit)? = null,
+    /** Local removal — excludes the provider for this work (20-06). */
+    onRemove: ((WorkCarriers.Carrier) -> Unit)? = null,
     onSelect: (String?) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -234,94 +269,270 @@ fun CarrierPickerDialog(
         selectedColor = accent,
         unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    var page by remember { mutableStateOf<CarrierPickerPage>(CarrierPickerPage.Pick) }
+    // Only one row's action strip can be expanded at a time.
+    var expandedPkg by remember { mutableStateOf<String?>(null) }
+
     AdaptiveSheet(
         onDismissRequest = onDismissRequest,
         containerColor = carrierSheetContainerColor(accentColor),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-                .navigationBarsPadding(),
-        ) {
-            Text(
-                text = chapter?.let { "${it.name} — " }.orEmpty() +
-                    stringResource(MR.strings.carrier_preferred_source),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-            )
-            CarrierRadioRow(
-                label = stringResource(MR.strings.carrier_auto),
-                selected = preferred == null,
-                radioColors = radioColors,
-                onClick = {
-                    onSelect(null)
-                    onDismissRequest()
+        val current = page
+        when (current) {
+            is CarrierPickerPage.Report -> CarrierReportPage(
+                carrier = current.carrier,
+                accent = accent,
+                onSubmit = { kind ->
+                    onReport?.invoke(current.carrier, kind)
+                    page = CarrierPickerPage.Pick
                 },
+                onBack = { page = CarrierPickerPage.Pick },
             )
-            readable.forEach { carrier ->
+            CarrierPickerPage.Pick -> Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .navigationBarsPadding(),
+            ) {
+                Text(
+                    text = chapter?.let { "${it.name} — " }.orEmpty() +
+                        stringResource(MR.strings.carrier_preferred_source),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+                )
                 CarrierRadioRow(
-                    label = carrier.displayName,
-                    icon = carrier.icon,
-                    iconUrl = carrier.iconUrl,
-                    selected = preferred == carrier.pkgName,
-                    badge = carrier.lifecycleBadge()?.let { stringResource(it) },
+                    label = stringResource(MR.strings.carrier_auto),
+                    selected = preferred == null,
                     radioColors = radioColors,
-                    trailing = if (carrier.mine && carrier.status == "provisional" && onUnbind != null) {
-                        {
-                            TextButton(onClick = { onUnbind(carrier) }, colors = buttonColors) {
-                                Text(text = stringResource(MR.strings.miko_binding_unbind))
-                            }
-                        }
-                    } else {
-                        null
-                    },
                     onClick = {
-                        onSelect(carrier.pkgName)
+                        onSelect(null)
                         onDismissRequest()
                     },
                 )
-            }
-            // Revoked bindings render dimmed — visible so the matrix is
-            // honest, but they offer no pick (Phase 20).
-            matrix?.carriers.orEmpty()
-                .filter { it.status == "quarantined" }
-                .forEach { carrier ->
+                readable.forEach { carrier ->
+                    val expanded = expandedPkg == carrier.pkgName
                     CarrierRadioRow(
                         label = carrier.displayName,
                         icon = carrier.icon,
                         iconUrl = carrier.iconUrl,
-                        selected = false,
-                        enabled = false,
-                        badge = stringResource(MR.strings.miko_binding_quarantined),
+                        selected = preferred == carrier.pkgName,
                         radioColors = radioColors,
-                        onClick = null,
+                        trailing = {
+                            CarrierActionStrip(
+                                carrier = carrier,
+                                expanded = expanded,
+                                actionsEnabled = onVote != null,
+                                onToggle = {
+                                    expandedPkg = if (expanded) null else carrier.pkgName
+                                },
+                                onVote = onVote?.let { vote ->
+                                    {
+                                        // Tapping the active vote clears the slot.
+                                        vote(carrier, if (carrier.myVote == it) "clear" else it)
+                                    }
+                                },
+                                onReport = { page = CarrierPickerPage.Report(carrier) },
+                                onRemove = onRemove?.let { { it(carrier) } },
+                            )
+                        },
+                        onClick = {
+                            onSelect(carrier.pkgName)
+                            onDismissRequest()
+                        },
                     )
                 }
-            if (onFindMoreProviders != null) {
-                OutlinedButton(
-                    onClick = onFindMoreProviders,
+                // Revoked bindings render dimmed — visible so the matrix is
+                // honest, but they offer no pick (Phase 20).
+                matrix?.carriers.orEmpty()
+                    .filter { it.status == "quarantined" }
+                    .forEach { carrier ->
+                        CarrierRadioRow(
+                            label = carrier.displayName,
+                            icon = carrier.icon,
+                            iconUrl = carrier.iconUrl,
+                            selected = false,
+                            enabled = false,
+                            badge = stringResource(MR.strings.miko_binding_quarantined),
+                            radioColors = radioColors,
+                            onClick = null,
+                        )
+                    }
+                if (onFindMoreProviders != null) {
+                    OutlinedButton(
+                        onClick = onFindMoreProviders,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.5.dp, accent),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
+                    ) {
+                        Text(text = stringResource(tachiyomi.i18n.aniyomi.AYMR.strings.find_more_providers))
+                    }
+                }
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.5.dp, accent),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    Text(text = stringResource(tachiyomi.i18n.aniyomi.AYMR.strings.find_more_providers))
+                    TextButton(onClick = onDismissRequest, colors = buttonColors) {
+                        Text(text = stringResource(MR.strings.action_cancel))
+                    }
                 }
             }
-            Row(
+        }
+    }
+}
+
+/**
+ * The ⋯ toggle plus its expandable bare-icon action strip — the Nuvio
+ * detail-screen pattern without the circle fills: icons slide out
+ * horizontally from the trailing edge. Up/down render filled when the
+ * caller's vote slot sits there; the flag dims once reported.
+ */
+@Composable
+private fun CarrierActionStrip(
+    carrier: WorkCarriers.Carrier,
+    expanded: Boolean,
+    actionsEnabled: Boolean,
+    onToggle: () -> Unit,
+    /** Called with the target vote 'up'|'down' — the caller decides
+     *  whether that's a set or a clear. */
+    onVote: ((String) -> Unit)?,
+    onReport: () -> Unit,
+    onRemove: (() -> Unit)?,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandHorizontally(
+                expandFrom = Alignment.End,
+                animationSpec = tween(220),
+            ) + fadeIn(tween(160)),
+            exit = shrinkHorizontally(
+                shrinkTowards = Alignment.End,
+                animationSpec = tween(180),
+            ) + fadeOut(tween(120)),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SignalIcon(
+                    image = if (carrier.myVote == "up") {
+                        Icons.Filled.ThumbUp
+                    } else {
+                        Icons.Outlined.ThumbUp
+                    },
+                    desc = MR.strings.miko_carrier_upvote,
+                    enabled = actionsEnabled,
+                    onClick = { onVote?.invoke("up") },
+                )
+                SignalIcon(
+                    image = if (carrier.myVote == "down") {
+                        Icons.Filled.ThumbDown
+                    } else {
+                        Icons.Outlined.ThumbDown
+                    },
+                    desc = MR.strings.miko_carrier_downvote,
+                    enabled = actionsEnabled,
+                    onClick = { onVote?.invoke("down") },
+                )
+                SignalIcon(
+                    image = Icons.Outlined.Flag,
+                    desc = MR.strings.miko_carrier_report,
+                    enabled = actionsEnabled && !carrier.myReported,
+                    onClick = onReport,
+                )
+                if (onRemove != null) {
+                    SignalIcon(
+                        image = Icons.Outlined.RemoveCircleOutline,
+                        desc = MR.strings.miko_carrier_remove,
+                        enabled = actionsEnabled,
+                        onClick = onRemove,
+                    )
+                }
+                SignalIcon(
+                    image = Icons.Outlined.KeyboardArrowLeft,
+                    desc = MR.strings.miko_carrier_collapse,
+                    onClick = onToggle,
+                )
+            }
+        }
+        if (!expanded) {
+            IconButton(onClick = onToggle) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = stringResource(MR.strings.miko_carrier_actions),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignalIcon(
+    image: ImageVector,
+    desc: dev.icerock.moko.resources.StringResource,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, enabled = enabled) {
+        Icon(
+            imageVector = image,
+            contentDescription = stringResource(desc),
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/** Staged page inside the picker sheet — reason list for a report
+ *  against one carrier (20-06). Same staged-sheet pattern as the
+ *  create-catalog flow. */
+@Composable
+private fun CarrierReportPage(
+    carrier: WorkCarriers.Carrier,
+    accent: Color,
+    onSubmit: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .navigationBarsPadding(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(MR.strings.action_webview_back),
+                    tint = accent,
+                )
+            }
+            Text(
+                text = stringResource(
+                    MR.strings.miko_carrier_report_title,
+                    carrier.displayName,
+                ),
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        REPORT_REASONS.forEach { (kind, label) ->
+            Text(
+                text = stringResource(label),
+                style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onDismissRequest, colors = buttonColors) {
-                    Text(text = stringResource(MR.strings.action_cancel))
-                }
-            }
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onSubmit(kind) }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            )
         }
     }
 }
