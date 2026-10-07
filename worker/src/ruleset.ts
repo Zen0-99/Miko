@@ -52,6 +52,11 @@ export interface Ruleset {
         /** Cross-entry provider derank inputs (20-02). */
         provider_derank_weight?: number;
         provider_derank_cap?: string;
+        /** Flat carrier-signal weights (20-05): downvote/remove are NOT
+         *  reporter-age weighted — they are already the weak signals;
+         *  scaling them further would make fresh-device votes invisible. */
+        downvote_weight?: number;
+        remove_weight?: number;
         rate?: {
             mints_per_hour?: number;
             new_device_mints_per_hour?: number;
@@ -60,6 +65,8 @@ export interface Ruleset {
             new_device_reports_per_hour?: number;
             reports_per_min?: number;
             unbinds_per_hour?: number;
+            votes_per_hour?: number;
+            votes_per_min?: number;
         };
         tiers?: {
             min_minted?: number;

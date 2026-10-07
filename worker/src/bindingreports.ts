@@ -11,6 +11,7 @@ import {
     recordBindingRate,
     recomputePoints,
     remergeForWork,
+    REPORT_REASONS,
     syncFeedPending,
 } from './trust';
 import { err, now, ok } from './util';
@@ -34,9 +35,12 @@ const DAY_MS = 86_400_000;
  * own mistake, not provider malfeasance (SD-13).
  */
 
-/** SD-16 report kinds; 'unbind' is reserved for the unbind path
- *  (rejected client-supplied) and bare 'report' is the absent default. */
-const REPORT_KINDS = new Set(['report', 'wrong_work', 'dead_feed', 'low_quality', 'other']);
+/* REPORT_REASONS lives in trust.ts — post-0016 the request's `kind`
+ * field is stored in the `reason` column while `kind` stays 'report',
+ * so the (provider, ref, device, kind) PK keeps one-report-per-device
+ * dedupe. The flat carrier signals 'downvote'/'remove' (20-05) are
+ * written only by bindingvotes.ts; 'unbind' belongs to this file's
+ * unbind path. */
 
 export async function handleReportBinding(req: Request, env: Env): Promise<Response> {
     const id = await requireIdentity(req, env);
@@ -59,8 +63,10 @@ export async function handleReportBinding(req: Request, env: Env): Promise<Respo
     if (typeof body.provider_ref !== 'string' || !body.provider_ref || body.provider_ref.length > 500) {
         return err(400, 'bad_request');
     }
-    const kind = body.kind ?? 'report';
-    if (!REPORT_KINDS.has(kind)) return err(400, 'bad_request');
+    // The request's `kind` is the report REASON — stored in the reason
+    // column; ledger kind is always 'report' (0016 dedupe invariant).
+    const reason = body.kind ?? null;
+    if (reason != null && !REPORT_REASONS.has(reason)) return err(400, 'bad_request');
     // '__none__' tombstones assert absence — nothing to report.
     if (body.provider_ref === '__none__') return err(404, 'not_found');
 
@@ -86,9 +92,9 @@ export async function handleReportBinding(req: Request, env: Env): Promise<Respo
         : (b.report_weight_new_device ?? 0.25);
     const ins = await env.COMMENTS_DB.prepare(
         `INSERT OR IGNORE INTO binding_reports
-         (provider, external_id, miko_work_id, device_hash, weight, kind, created_at)
-         VALUES (?,?,?,?,?,?,?)`,
-    ).bind(body.provider, body.provider_ref, workId, id.device_hash, weight, kind, now()).run();
+         (provider, external_id, miko_work_id, device_hash, weight, kind, reason, created_at)
+         VALUES (?,?,?,?,?,'report',?,?)`,
+    ).bind(body.provider, body.provider_ref, workId, id.device_hash, weight, reason, now()).run();
     if ((ins.meta.changes ?? 0) === 0) {
         // PK dedupe — a second report by this device never
         // double-weights; skip the threshold recompute entirely.
@@ -96,9 +102,11 @@ export async function handleReportBinding(req: Request, env: Env): Promise<Respo
     }
 
     await recomputePoints(env, body.provider, body.provider_ref);
+    // Quarantine reads kind='report' only (20-05) — flat downvote/remove
+    // signals erode the margin score but can never quarantine alone.
     const total = (await env.COMMENTS_DB.prepare(
         `SELECT COALESCE(SUM(weight),0) AS w FROM binding_reports
-         WHERE provider = ? AND external_id = ?`,
+         WHERE provider = ? AND external_id = ? AND kind = 'report'`,
     ).bind(body.provider, body.provider_ref).first<{ w: number }>())?.w ?? 0;
     let quarantined = false;
     if (total >= b.report_quarantine_weight) {
@@ -181,17 +189,16 @@ export async function handleUnbindBinding(req: Request, env: Env): Promise<Respo
     await remergeForWork(env, workId);
 
     // Audit row — INSERT OR IGNORE is load-bearing, not stylistic: the
-    // (provider, external_id, device_hash) PK may already hold this
-    // device's row (a prior self-report — reporting your own
-    // provisional mint is allowed — or an earlier unbind of a
-    // re-minted ref) and a constraint throw HERE would land after the
-    // deletes committed, returning a 503 with side effects. weight=0
-    // keeps self-revocation out of quarantine thresholds and provider
-    // derank sums by construction.
+    // (provider, external_id, device_hash, kind) PK (0016) may already
+    // hold this device's 'unbind' row (an earlier unbind of a re-minted
+    // ref) and a constraint throw HERE would land after the deletes
+    // committed, returning a 503 with side effects. weight=0 keeps
+    // self-revocation out of quarantine thresholds and provider derank
+    // sums by construction.
     await env.COMMENTS_DB.prepare(
         `INSERT OR IGNORE INTO binding_reports
-         (provider, external_id, miko_work_id, device_hash, weight, kind, created_at)
-         VALUES (?,?,?,?,0,'unbind',?)`,
+         (provider, external_id, miko_work_id, device_hash, weight, kind, reason, created_at)
+         VALUES (?,?,?,?,0,'unbind',NULL,?)`,
     ).bind(body.provider, body.provider_ref, workId, id.device_hash, now()).run();
     // The delete dropped a device-attributed row + its confirms —
     // recompute the provider's counts (20-04).

@@ -93,7 +93,32 @@ Every `external_ids` binding carries a lifecycle:
   `confirm_points_required − reportWeight`.
 - `GET /v1/works/:id/bindings` lists confirmed rows for everyone,
   provisional rows only to their minter (`mine: true`), and quarantined
-  rows flagged for transparency.
+  rows flagged for transparency. Bearer callers also get per-row
+  `my: {vote, reported, removed}` signal state for the carrier picker's
+  toggles.
+
+### Carrier signals (20-05 / NCM-015)
+
+User-facing carrier actions map to four signals:
+
+| Action | Endpoint | Ledger effect | Reversible |
+|---|---|---|---|
+| upvote | `POST /v1/bindings/vote` `vote:'up'` | +1 `binding_confirms` row | yes (`vote:'clear'`) |
+| downvote | `POST /v1/bindings/vote` `vote:'down'` | −`downvote_weight` (flat 0.25), `kind='downvote'` | yes (`'clear'` / `'up'`) |
+| report | `POST /v1/bindings/report` `kind:<reason>` | −reporter-age weight, `kind='report'` + `reason` | no |
+| remove | `POST /v1/bindings/remove` `removed:bool` | −`remove_weight` (flat 0.25), `kind='remove'` | yes (`removed:false`) |
+
+Up/down share one mutually-exclusive slot — the handler deletes the
+opposite signal, so a device can never hold both. Report and remove
+**stack** on the vote slot: per-device maximum influence is −1.5 vs
++1 for an upvote (owner-locked 1/1.5). Report `kind` values
+(`wrong_work`/`dead_feed`/`low_quality`/`other`) are stored in the
+`reason` column — ledger `kind` stays `'report'` so the kind-scoped PK
+(`provider, external_id, device_hash, kind`, migration 0016) still
+dedupes one report per device. Only `kind='report'` weight counts
+toward `report_quarantine_weight` — downvotes/removes erode margin
+score, incumbency floor and provider derank sums but can never
+quarantine alone.
 
 ### Seeding a trusted minter
 
@@ -115,6 +140,8 @@ dashboard rate-limit rule (owner action, one-time per endpoint):
 - `POST /v1/episodes/canonize`
 - `POST /v1/bindings/report`
 - `POST /v1/bindings/unbind`
+- `POST /v1/bindings/vote`
+- `POST /v1/bindings/remove`
 
 Configure under **Security → WAF → Rate limiting rules** on the
 `miko-comments` zone/route. This is what actually prices a multi-device

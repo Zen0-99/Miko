@@ -1,6 +1,7 @@
 import { handleAlign } from './align';
 import { handleGetBindings } from './bindings';
 import { handleReportBinding, handleUnbindBinding } from './bindingreports';
+import { handleRemoveBinding, handleVoteBinding } from './bindingvotes';
 import { handleAppeal, handleMyAppeals } from './appeals';
 import { handleRegister } from './auth';
 import { handleBrowse, handleHydrate } from './browse';
@@ -40,6 +41,8 @@ const router = new Router<Env>()
     .add('GET', '/v1/works/:id/bindings', handleGetBindings)
     .add('POST', '/v1/bindings/report', (req, _p, _u, env) => handleReportBinding(req, env))
     .add('POST', '/v1/bindings/unbind', (req, _p, _u, env) => handleUnbindBinding(req, env))
+    .add('POST', '/v1/bindings/vote', (req, _p, _u, env) => handleVoteBinding(req, env))
+    .add('POST', '/v1/bindings/remove', (req, _p, _u, env) => handleRemoveBinding(req, env))
     // Phase 20-04: provider trust overlay — dynamic tiers + report caps
     // for every provider, keyed map, read-only.
     .add('GET', '/v1/providers/tiers', (req, _p, _u, env) => handleGetProviderTiers(req, env))

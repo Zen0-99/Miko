@@ -191,10 +191,15 @@ describe('POST /v1/bindings/report — ledger', () => {
         expect(r1.status).toBe(200);
         expect(await r1.json() as any).toEqual({ reported: true });
         const row = await env.COMMENTS_DB.prepare(
-            `SELECT weight, kind FROM binding_reports
+            `SELECT weight, kind, reason FROM binding_reports
              WHERE provider = ? AND external_id = ? AND device_hash = ?`,
-        ).bind(SRC, ref, fresh.hash).first<{ weight: number; kind: string }>();
-        expect(row).toEqual({ weight: 0.25, kind: 'wrong_work' });
+        ).bind(SRC, ref, fresh.hash).first<{
+            weight: number; kind: string; reason: string | null;
+        }>();
+        // 0016: the request `kind` lands in `reason`; ledger kind is
+        // always 'report' so one-report-per-device dedupe survives the
+        // kind-scoped PK.
+        expect(row).toEqual({ weight: 0.25, kind: 'report', reason: 'wrong_work' });
 
         // Same device again → PK dedupe; the weight never doubles.
         const dup = await report(repBody(work, SRC, ref), fresh.token);
@@ -534,7 +539,10 @@ describe('POST /v1/bindings/unbind', () => {
             `SELECT COUNT(*) AS n FROM binding_reports
              WHERE provider = ? AND external_id = ? AND device_hash = ?`,
         ).bind(SRC, '/r/self', a.hash).first<{ n: number }>() as { n: number };
-        expect(n).toBe(1); // the report row only — unbind deduped
+        // 0016 kind-scoped PK: the 'report' row and the 'unbind' audit
+        // row coexist (stacked signals are the design) — the insert
+        // still OR-IGNOREs cleanly post-delete.
+        expect(n).toBe(2);
 
         // unbind → re-mint → unbind: the second audit write dedupes too.
         const b = await newDevice();

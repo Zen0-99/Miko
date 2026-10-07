@@ -41,13 +41,17 @@
     "age_bonus_cap": 1.0,
     "provider_derank_weight": 12.0,
     "provider_derank_cap": "C",
+    "downvote_weight": 0.25,
+    "remove_weight": 0.25,
     "rate": {
       "mints_per_hour": 60,
       "new_device_mints_per_hour": 15,
       "new_device_ms": 86400000,
       "reports_per_hour": 30,
       "reports_per_min": 5,
-      "unbinds_per_hour": 10
+      "unbinds_per_hour": 10,
+      "votes_per_hour": 60,
+      "votes_per_min": 10
     },
     "tiers": {
       "min_minted": 20,

@@ -29,25 +29,44 @@ import { now } from './util';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * The report taxonomy (SD-16) — post-0016 these live in the `reason`
+ * column; `kind` stays 'report' so the (provider, ref, device, kind) PK
+ * keeps the one-report-per-device dedupe (stacking report reasons would
+ * let a single device solo-quarantine). The flat carrier signals
+ * 'downvote'/'remove' (20-05) erode margin score and incumbency floor
+ * but never count toward `report_quarantine_weight`. 'unbind' is the
+ * zero-weight audit kind reserved for the unbind path.
+ */
+export const REPORT_REASONS = new Set(['report', 'wrong_work', 'dead_feed', 'low_quality', 'other']);
+
 interface Ledger {
     /** Raw distinct-device confirm COUNT — the solidify floor. */
     confirmCount: number;
-    /** SUM(binding_reports.weight) — subtracts from the margin score,
-     *  erodes the incumbency stamp, blocks solidify at the cap. */
+    /** SUM over kind='report' rows — the quarantine input (20-05 split:
+     *  downvote/remove signals are excluded). */
     reportWeight: number;
-    /** Pure-ledger score (SD-4): confirms − reports + age bonus. */
+    /** SUM over every non-'unbind' kind — reports + flat downvote/remove
+     *  signals. Subtracts from the margin score and erodes the
+     *  incumbency stamp. */
+    signalWeight: number;
+    /** Pure-ledger score (SD-4): confirms − all signals + age bonus. */
     score: number;
 }
 
 async function bindingLedger(env: Env, provider: string, ref: string): Promise<Ledger> {
-    const [confirms, reports, first] = await Promise.all([
+    const [confirms, signals, reports, first] = await Promise.all([
         env.COMMENTS_DB.prepare(
             `SELECT COUNT(*) AS n FROM binding_confirms
              WHERE provider = ? AND external_id = ?`,
         ).bind(provider, ref).first<{ n: number }>(),
         env.COMMENTS_DB.prepare(
             `SELECT COALESCE(SUM(weight), 0) AS w FROM binding_reports
-             WHERE provider = ? AND external_id = ?`,
+             WHERE provider = ? AND external_id = ? AND kind != 'unbind'`,
+        ).bind(provider, ref).first<{ w: number }>(),
+        env.COMMENTS_DB.prepare(
+            `SELECT COALESCE(SUM(weight), 0) AS w FROM binding_reports
+             WHERE provider = ? AND external_id = ? AND kind = 'report'`,
         ).bind(provider, ref).first<{ w: number }>(),
         env.COMMENTS_DB.prepare(
             `SELECT MIN(created_at) AS t FROM binding_confirms
@@ -55,18 +74,20 @@ async function bindingLedger(env: Env, provider: string, ref: string): Promise<L
         ).bind(provider, ref).first<{ t: number | null }>(),
     ]);
     const confirmCount = confirms?.n ?? 0;
+    const signalWeight = signals?.w ?? 0;
     const reportWeight = reports?.w ?? 0;
-    // Age bonus (SD-4): only while the binding carries zero report
-    // weight; NULL-minter rows have no first-confirm stamp and earn none.
+    // Age bonus (SD-4): only while the binding carries zero negative
+    // signal — ANY downvote/report/remove kills it; NULL-minter rows
+    // have no first-confirm stamp and earn none.
     let ageBonus = 0;
-    if (reportWeight === 0 && first?.t != null) {
+    if (signalWeight === 0 && first?.t != null) {
         const days = (now() - first.t) / DAY_MS;
         ageBonus = Math.min(
             days * (RULESET.bindings.age_bonus_per_day ?? 0),
             RULESET.bindings.age_bonus_cap ?? 0,
         );
     }
-    return { confirmCount, reportWeight, score: confirmCount - reportWeight + ageBonus };
+    return { confirmCount, reportWeight, signalWeight, score: confirmCount - signalWeight + ageBonus };
 }
 
 /** Pure-ledger binding score (SD-4) — no incumbency floor. */
@@ -78,7 +99,7 @@ export async function bindingScore(env: Env, provider: string, ref: string): Pro
  * Recompute the denormalized `points` cache on a binding row. For an
  * un-lifecycle-stamped confirmed row (`confirmed_at IS NULL` — every
  * pre-0015 grandfather and every resolve-side catalog mint, SD-31) the
- * effective score floors at `MAX(0, confirm_floor − reportWeight)`;
+ * effective score floors at `MAX(0, confirm_floor − signalWeight)`;
  * all other rows carry the pure-ledger score. Returns the value written.
  */
 export async function recomputePoints(env: Env, provider: string, ref: string): Promise<number> {
@@ -92,7 +113,7 @@ export async function recomputePoints(env: Env, provider: string, ref: string): 
     if (row.status === 'confirmed' && row.confirmed_at === null) {
         effective = Math.max(
             ledger.score,
-            Math.max(0, RULESET.bindings.confirm_points_required - ledger.reportWeight),
+            Math.max(0, RULESET.bindings.confirm_points_required - ledger.signalWeight),
         );
     }
     await env.COMMENTS_DB.prepare(
@@ -368,7 +389,7 @@ const MIN_MS = 60 * 1000;
 export async function evaluateBindingRate(
     env: Env,
     id: Identity,
-    action: 'mint' | 'report' | 'unbind',
+    action: 'mint' | 'report' | 'unbind' | 'vote',
 ): Promise<{ ok: true } | { ok: false; rule: string }> {
     const ts = now();
     const r = RULESET.bindings.rate ?? {};
@@ -400,6 +421,15 @@ export async function evaluateBindingRate(
         }
         return { ok: true };
     }
+    if (action === 'vote') {
+        if (r.votes_per_min != null && (await count(MIN_MS)) >= r.votes_per_min) {
+            return { ok: false, rule: 'rate_vote' };
+        }
+        if (r.votes_per_hour != null && (await count(HOUR_MS)) >= r.votes_per_hour) {
+            return { ok: false, rule: 'rate_vote' };
+        }
+        return { ok: true };
+    }
     if (r.unbinds_per_hour != null && (await count(HOUR_MS)) >= r.unbinds_per_hour) {
         return { ok: false, rule: 'rate_unbind' };
     }
@@ -415,7 +445,7 @@ export async function evaluateBindingRate(
 export async function recordBindingRate(
     env: Env,
     deviceHash: string,
-    action: 'mint' | 'report' | 'unbind',
+    action: 'mint' | 'report' | 'unbind' | 'vote',
 ): Promise<void> {
     const ts = now();
     await env.COMMENTS_DB.batch([
