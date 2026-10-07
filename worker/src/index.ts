@@ -22,6 +22,8 @@ import { handleResolve } from './resolve';
 import { runMangadexCron } from './mangadexseed';
 import { refreshWebtoonChart } from './webtoonchart';
 import { handleIdSeen } from './seen';
+import { handleGetWorkVolumes, handleSeedWorkVolumes } from './workvolumes';
+import { runVolumeSeed } from './volumeseed';
 import { Router } from './router';
 import { RULESET } from './ruleset';
 import { err, ok } from './util';
@@ -39,6 +41,22 @@ const router = new Router<Env>()
     .add('POST', '/v1/episodes/canonize', (req, _p, _u, env) => handleCanonizeEpisodes(req, env))
     .add('GET', '/v1/works/:id/episodes', handleGetEpisodes)
     .add('GET', '/v1/works/:id/bindings', handleGetBindings)
+    // Phase 21-01: per-work volume covers + consensus boundaries; a
+    // Bearer read on an unmapped work feeds the harvest queue.
+    .add('GET', '/v1/works/:id/volumes', handleGetWorkVolumes)
+    .add('POST', '/v1/works/:id/volumes/seed', (req, p, _u, env) =>
+        handleSeedWorkVolumes(req, p, _u, env))
+    // Maintainer seeder — same crawler-key gate as the chart refresh;
+    // fills work_volumes covers/meta from MangaBaka only.
+    .add('POST', '/v1/volumes/seed-run', (req, _p, _u, env) => {
+        if (!env.CRAWLER_KEY || req.headers.get('x-crawler-key') !== env.CRAWLER_KEY) {
+            return Promise.resolve(err(403, 'forbidden'));
+        }
+        return req.json()
+            .catch(() => ({}))
+            .then((b) =>
+                runVolumeSeed(env, Math.min((b as { limit?: number })?.limit ?? 500, 2000)).then(ok));
+    })
     .add('POST', '/v1/bindings/report', (req, _p, _u, env) => handleReportBinding(req, env))
     .add('POST', '/v1/bindings/unbind', (req, _p, _u, env) => handleUnbindBinding(req, env))
     .add('POST', '/v1/bindings/vote', (req, _p, _u, env) => handleVoteBinding(req, env))

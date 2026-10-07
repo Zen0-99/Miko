@@ -148,6 +148,34 @@ Configure under **Security → WAF → Rate limiting rules** on the
 sybil attack; `bindings.rate.*` in `ruleset.json` is the soft in-worker
 complement, not the ceiling.
 
+## Work volumes — covers + consensus boundaries (Phase 21 / migration 0017)
+
+MangaBaka is canonical for `final_volume`, per-volume covers, and edition
+metadata (ISBN/release date/pages). Chapter→volume boundaries are a
+multi-source consensus ledger — sources vote, majority wins per chapter,
+`confidence` = agreeing/total, losing votes stay in `sources`.
+
+- `GET /v1/works/:id/volumes` — unauthenticated read. Returns
+  `{final_volume, covers_count, volumes[], boundaries{chapter→volume},
+  boundary_confidence, schemes, queued_for_seed}`. A **Bearer** read on a
+  work with no volume data enqueues it into `volume_seed_queue` (the
+  tail-feed the local harvester drains); anonymous reads never enqueue.
+- `POST /v1/works/:id/volumes/seed` — trusted-minter lane. Body:
+  `{final_volume?, covers_count?, volumes[], boundaries[]}`.
+  Upsert-only — a re-seed may raise confidence but never regresses an
+  existing row's confidence (`MAX(confidence)` on conflict). Seeding
+  dequeues the work from `volume_seed_queue`.
+- `POST /v1/volumes/seed-run` — maintainer trigger behind
+  `x-crawler-key` (same gate as the chart refresh). Runs the MangaBaka
+  covers/meta seeder over `volume_seed_queue` ∪ top-`limit` works by
+  catalog popularity; fills `work_volumes` + `works_cache.final_volume`/
+  `covers_count`. Chapter boundaries are NOT filled here — they come
+  from the local 21-02 harvester (ComicK-via-Patchright, geospiza dump,
+  wiki tables, feed markers) POSTing merged votes to `/volumes/seed`.
+
+Source vocabulary for `volumes[].source` / `boundaries[].sources`:
+`mangabaka`, `mangadex`, `comick`, `cubari`, `wiki`, `feed_markers`.
+
 ### Bundled mint telemetry
 
 `POST /v1/ids/seen`, `POST /v1/works/resolve`, and both canonize routes

@@ -25,6 +25,9 @@ export interface MbSeries {
     content_rating?: string | null;
     state?: string;
     merged_with?: number | null;
+    /** Phase 21 — tankōbon count + gallery size (per-volume cover lane). */
+    final_volume?: number | string | null;
+    covers_count?: number | string | null;
 }
 
 const UA = 'Miko/2.0 (github.com/Zen0-99/Miko)';
@@ -56,4 +59,60 @@ export async function getSeries(id: number, base = MANGABAKA_BASE): Promise<MbSe
     const body = (await getJson(base, `/v1/series/${id}`)) as MbSeries | { data?: MbSeries };
     if (body && typeof body === 'object' && 'data' in body && body.data) return body.data;
     return body as MbSeries;
+}
+
+/* ---------- Phase 21: volume covers + edition records ---------- */
+
+export interface MbImage {
+    id: number;
+    index_numeric: number | null;
+    type: string;                    // 'volume' | 'volume_back' | ...
+    language: string | null;
+    image?: {
+        raw?: { url?: string; blurhash?: string };
+        x350?: { x1?: string };
+    } | null;
+}
+
+export interface MbWork {
+    id: string;
+    sequence_numeric: number | null;
+    count_type: string | null;
+    release_date: string | null;
+    pages: number | null;
+    inc_chapters: unknown | null;
+    identifiers?: Array<{ id?: string; name?: string }> | null;
+    images?: MbImage[] | null;
+}
+
+export async function getSeriesImages(
+    id: number,
+    base = MANGABAKA_BASE,
+): Promise<MbImage[]> {
+    const out: MbImage[] = [];
+    for (let page = 1; page <= 40; page++) {
+        const body = (await getJson(
+            base, `/v1/series/${id}/images?page=${page}`,
+        )) as { data?: MbImage[]; pagination?: { next?: string | null } };
+        const rows = Array.isArray(body?.data) ? body.data : [];
+        out.push(...rows);
+        if (!body?.pagination?.next || rows.length === 0) break;
+    }
+    return out;
+}
+
+export async function getSeriesWorks(
+    id: number,
+    base = MANGABAKA_BASE,
+): Promise<MbWork[]> {
+    const out: MbWork[] = [];
+    for (let page = 1; page <= 40; page++) {
+        const body = (await getJson(
+            base, `/v1/series/${id}/works?page=${page}`,
+        )) as { data?: MbWork[]; pagination?: { next?: string | null } };
+        const rows = Array.isArray(body?.data) ? body.data : [];
+        out.push(...rows);
+        if (!body?.pagination?.next || rows.length === 0) break;
+    }
+    return out;
 }
