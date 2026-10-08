@@ -393,6 +393,50 @@ class WorkIdentityApi {
         null
     }
 
+    // ---------- Phase 21-03: per-volume covers + boundaries ----------
+
+    @Serializable
+    data class VolumeDto(
+        val volume_no: Double,
+        val language: String,
+        val cover_url: String? = null,
+        val cover_thumb_url: String? = null,
+        val cover_blurhash: String? = null,
+        val isbn: String? = null,
+        val release_date: String? = null,
+        val pages: Int? = null,
+        val source: String? = null,
+    )
+
+    @Serializable
+    data class VolumesResponse(
+        val work_id: String,
+        val final_volume: Double? = null,
+        val covers_count: Int? = null,
+        val volumes: List<VolumeDto> = emptyList(),
+        /** chapter number -> volume number — a map, not a row list. */
+        val boundaries: Map<String, Double> = emptyMap(),
+        /** Mean boundary confidence across the map; null when unmapped. */
+        val boundary_confidence: Double? = null,
+        val queued_for_seed: Boolean = false,
+    )
+
+    /** Per-volume covers + chapter→volume map for a canonical work —
+     *  empty shape when the worker has none; null on failure. A Bearer
+     *  read of an unmapped work queues it for the next seed run
+     *  server-side (no client action needed). */
+    suspend fun getVolumes(workId: String): VolumesResponse? = try {
+        authedCall(read = true) { headers ->
+            okhttp3.Request.Builder()
+                .url("${baseUrl()}/v1/works/${java.net.URLEncoder.encode(workId, "UTF-8")}/volumes")
+                .headers(headers)
+                .get()
+                .build()
+        }.let { with(json) { it.parseAs<VolumesResponse>() } }
+    } catch (_: Exception) {
+        null
+    }
+
     // ---------- Phase 16-02/16-04: carrier bindings + alignment ----------
 
     @Serializable

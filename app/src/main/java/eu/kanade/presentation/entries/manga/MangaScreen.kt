@@ -81,6 +81,7 @@ import eu.kanade.presentation.entries.components.RatingMark
 import eu.kanade.presentation.entries.components.EntryGenreRow
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.MissingItemCountListItem
+import eu.kanade.presentation.entries.components.VolumeSectionHeader
 import eu.kanade.presentation.entries.components.enhancedEntryStatusText
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.entries.manga.components.ExpandableMangaDescription
@@ -436,10 +437,30 @@ private fun MangaScreenSmallImpl(
     // Chapter-group pills — "Volume N"/"Book N"/etc. parsed from chapter
     // names. All-or-nothing: any unmarked chapter disables the row.
     val ungroupedChaptersLabel = stringResource(MR.strings.chapters)
-    val chapterGroups = remember(listItem) {
+    val markedChapterGroups = remember(listItem) {
         ChapterNameGroup.computeGroups(
             listItem.mapNotNull { (it as? ChapterList.Item)?.chapter?.name },
         )
+    }
+    // Canonical volume boundaries (21-03) supply the groups when name
+    // markers don't — one or the other, never double-grouped.
+    val volumeGrouping = remember(listItem, state.volumes, ungroupedChaptersLabel) {
+        if (markedChapterGroups.size <= 1) {
+            state.volumes?.grouping(
+                listItem.mapNotNull { (it as? ChapterList.Item)?.chapter?.chapterNumber },
+                ungroupedChaptersLabel,
+            )
+        } else {
+            null
+        }
+    }
+    val chapterGroups = volumeGrouping?.groups ?: markedChapterGroups
+    val chapterGroupLabel = { chapter: Chapter ->
+        if (volumeGrouping != null) {
+            volumeGrouping.chapterToGroup[chapter.chapterNumber] ?: ungroupedChaptersLabel
+        } else {
+            ChapterNameGroup.parse(chapter.name)
+        }
     }
     // Reading position is progress-derived — the group holding the newest
     // unread chapter; falls back to the newest group. Pill taps are
@@ -448,7 +469,7 @@ private fun MangaScreenSmallImpl(
     val progressChapterGroup = remember(listItem, chapterGroups) {
         listItem
             .firstOrNull { it is ChapterList.Item && !it.chapter.read }
-            ?.let { ChapterNameGroup.parse((it as ChapterList.Item).chapter.name) }
+            ?.let { chapterGroupLabel((it as ChapterList.Item).chapter) }
             ?.takeIf { it in chapterGroups }
     }
 
@@ -458,7 +479,7 @@ private fun MangaScreenSmallImpl(
             emptySet()
         } else {
             listItem.mapNotNull { (it as? ChapterList.Item)?.chapter }
-                .groupBy { ChapterNameGroup.parse(it.name) ?: ungroupedChaptersLabel }
+                .groupBy { chapterGroupLabel(it) ?: ungroupedChaptersLabel }
                 .filterValues { chs -> chs.all { it.read } }
                 .keys
         }
@@ -479,7 +500,7 @@ private fun MangaScreenSmallImpl(
     val selectedChapterGroup = chapterGroupBrowseOverride?.takeIf { it in chapterGroups }
         ?: pinnedChapterGroup?.takeIf { it in chapterGroups }
         ?: progressChapterGroup
-        ?: chapterGroups.lastOrNull()
+        ?: chapterGroups.lastOrNull { it != ungroupedChaptersLabel }
         ?: ungroupedChaptersLabel
     LaunchedEffect(progressChapterGroup) {
         val p = progressChapterGroup ?: return@LaunchedEffect
@@ -499,7 +520,7 @@ private fun MangaScreenSmallImpl(
         } else {
             listItem.filter { item ->
                 item !is ChapterList.Item ||
-                    (ChapterNameGroup.parse(item.chapter.name) ?: ungroupedChaptersLabel) == selectedChapterGroup
+                    (chapterGroupLabel(item.chapter) ?: ungroupedChaptersLabel) == selectedChapterGroup
             }
         }
     }
@@ -825,6 +846,23 @@ private fun MangaScreenSmallImpl(
                         }
                     }
 
+                    if (volumeGrouping != null && selectedChapterGroup != ungroupedChaptersLabel) {
+                        item(
+                            key = "volume-section-header",
+                            contentType = EntryScreenItem.ITEM,
+                        ) {
+                            val range = filteredChapterListItem.mapNotNull {
+                                (it as? ChapterList.Item)?.chapter?.chapterNumber
+                            }
+                            VolumeSectionHeader(
+                                label = selectedChapterGroup,
+                                meta = volumeGrouping.meta[selectedChapterGroup],
+                                firstChapter = range.minOrNull(),
+                                lastChapter = range.maxOrNull(),
+                            )
+                        }
+                    }
+
                     sharedChapterItems(
                         manga = state.manga,
                         chapters = filteredChapterListItem,
@@ -957,10 +995,30 @@ fun MangaScreenLargeImpl(
     // Chapter-group pills — "Volume N"/"Book N"/etc. parsed from chapter
     // names. All-or-nothing: any unmarked chapter disables the row.
     val ungroupedChaptersLabel = stringResource(MR.strings.chapters)
-    val chapterGroups = remember(listItem) {
+    val markedChapterGroups = remember(listItem) {
         ChapterNameGroup.computeGroups(
             listItem.mapNotNull { (it as? ChapterList.Item)?.chapter?.name },
         )
+    }
+    // Canonical volume boundaries (21-03) supply the groups when name
+    // markers don't — one or the other, never double-grouped.
+    val volumeGrouping = remember(listItem, state.volumes, ungroupedChaptersLabel) {
+        if (markedChapterGroups.size <= 1) {
+            state.volumes?.grouping(
+                listItem.mapNotNull { (it as? ChapterList.Item)?.chapter?.chapterNumber },
+                ungroupedChaptersLabel,
+            )
+        } else {
+            null
+        }
+    }
+    val chapterGroups = volumeGrouping?.groups ?: markedChapterGroups
+    val chapterGroupLabel = { chapter: Chapter ->
+        if (volumeGrouping != null) {
+            volumeGrouping.chapterToGroup[chapter.chapterNumber] ?: ungroupedChaptersLabel
+        } else {
+            ChapterNameGroup.parse(chapter.name)
+        }
     }
     // Reading position is progress-derived — the group holding the newest
     // unread chapter; falls back to the newest group. Pill taps are
@@ -969,7 +1027,7 @@ fun MangaScreenLargeImpl(
     val progressChapterGroup = remember(listItem, chapterGroups) {
         listItem
             .firstOrNull { it is ChapterList.Item && !it.chapter.read }
-            ?.let { ChapterNameGroup.parse((it as ChapterList.Item).chapter.name) }
+            ?.let { chapterGroupLabel((it as ChapterList.Item).chapter) }
             ?.takeIf { it in chapterGroups }
     }
 
@@ -979,7 +1037,7 @@ fun MangaScreenLargeImpl(
             emptySet()
         } else {
             listItem.mapNotNull { (it as? ChapterList.Item)?.chapter }
-                .groupBy { ChapterNameGroup.parse(it.name) ?: ungroupedChaptersLabel }
+                .groupBy { chapterGroupLabel(it) ?: ungroupedChaptersLabel }
                 .filterValues { chs -> chs.all { it.read } }
                 .keys
         }
@@ -1000,7 +1058,7 @@ fun MangaScreenLargeImpl(
     val selectedChapterGroup = chapterGroupBrowseOverride?.takeIf { it in chapterGroups }
         ?: pinnedChapterGroup?.takeIf { it in chapterGroups }
         ?: progressChapterGroup
-        ?: chapterGroups.lastOrNull()
+        ?: chapterGroups.lastOrNull { it != ungroupedChaptersLabel }
         ?: ungroupedChaptersLabel
     LaunchedEffect(progressChapterGroup) {
         val p = progressChapterGroup ?: return@LaunchedEffect
@@ -1020,7 +1078,7 @@ fun MangaScreenLargeImpl(
         } else {
             listItem.filter { item ->
                 item !is ChapterList.Item ||
-                    (ChapterNameGroup.parse(item.chapter.name) ?: ungroupedChaptersLabel) == selectedChapterGroup
+                    (chapterGroupLabel(item.chapter) ?: ungroupedChaptersLabel) == selectedChapterGroup
             }
         }
     }
@@ -1329,6 +1387,23 @@ fun MangaScreenLargeImpl(
                                         completedGroups = completedChapterGroups,
                                         onGroupSelected = { chapterGroupBrowseOverride = it },
                                         accentColor = state.accentColor,
+                                    )
+                                }
+                            }
+
+                            if (volumeGrouping != null && selectedChapterGroup != ungroupedChaptersLabel) {
+                                item(
+                                    key = "volume-section-header",
+                                    contentType = EntryScreenItem.ITEM,
+                                ) {
+                                    val range = filteredChapterListItem.mapNotNull {
+                                        (it as? ChapterList.Item)?.chapter?.chapterNumber
+                                    }
+                                    VolumeSectionHeader(
+                                        label = selectedChapterGroup,
+                                        meta = volumeGrouping.meta[selectedChapterGroup],
+                                        firstChapter = range.minOrNull(),
+                                        lastChapter = range.maxOrNull(),
                                     )
                                 }
                             }

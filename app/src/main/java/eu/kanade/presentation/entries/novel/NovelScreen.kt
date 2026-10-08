@@ -58,6 +58,7 @@ import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryGenreRow
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.RatingMark
+import eu.kanade.presentation.entries.components.VolumeSectionHeader
 import eu.kanade.presentation.entries.components.chapterCountPair
 import eu.kanade.presentation.entries.components.enhancedEntryStatusText
 import eu.kanade.presentation.entries.novel.components.ExpandableNovelDescription
@@ -367,10 +368,30 @@ private fun NovelScreenSmallImpl(
     // Chapter-group pills — "Volume N"/"Book N"/etc. parsed from chapter
     // names. All-or-nothing: any unmarked chapter disables the row.
     val ungroupedChaptersLabel = stringResource(MR.strings.chapters)
-    val chapterGroups = remember(chapters) {
+    val markedChapterGroups = remember(chapters) {
         ChapterNameGroup.computeGroups(
             chapters.map { it.chapter.name },
         )
+    }
+    // Canonical volume boundaries (21-03) supply the groups when name
+    // markers don't — one or the other, never double-grouped.
+    val volumeGrouping = remember(chapters, state.volumes, ungroupedChaptersLabel) {
+        if (markedChapterGroups.size <= 1) {
+            state.volumes?.grouping(
+                chapters.map { it.chapter.chapterNumber },
+                ungroupedChaptersLabel,
+            )
+        } else {
+            null
+        }
+    }
+    val chapterGroups = volumeGrouping?.groups ?: markedChapterGroups
+    val chapterGroupLabel = { chapter: NovelChapter ->
+        if (volumeGrouping != null) {
+            volumeGrouping.chapterToGroup[chapter.chapterNumber] ?: ungroupedChaptersLabel
+        } else {
+            ChapterNameGroup.parse(chapter.name)
+        }
     }
     // Reading position is progress-derived — the group holding the newest
     // unread chapter; falls back to the newest group. Pill taps are
@@ -379,7 +400,7 @@ private fun NovelScreenSmallImpl(
     val progressChapterGroup = remember(chapters, chapterGroups) {
         chapters
             .firstOrNull { !it.chapter.read }
-            ?.let { ChapterNameGroup.parse(it.chapter.name) }
+            ?.let { chapterGroupLabel(it.chapter) }
             ?.takeIf { it in chapterGroups }
     }
 
@@ -389,7 +410,7 @@ private fun NovelScreenSmallImpl(
             emptySet()
         } else {
             chapters
-                .groupBy { ChapterNameGroup.parse(it.chapter.name) ?: ungroupedChaptersLabel }
+                .groupBy { chapterGroupLabel(it.chapter) ?: ungroupedChaptersLabel }
                 .filterValues { items -> items.all { it.chapter.read } }
                 .keys
         }
@@ -410,7 +431,7 @@ private fun NovelScreenSmallImpl(
     val selectedChapterGroup = chapterGroupBrowseOverride?.takeIf { it in chapterGroups }
         ?: pinnedChapterGroup?.takeIf { it in chapterGroups }
         ?: progressChapterGroup
-        ?: chapterGroups.lastOrNull()
+        ?: chapterGroups.lastOrNull { it != ungroupedChaptersLabel }
         ?: ungroupedChaptersLabel
     LaunchedEffect(progressChapterGroup) {
         val p = progressChapterGroup ?: return@LaunchedEffect
@@ -429,7 +450,7 @@ private fun NovelScreenSmallImpl(
             chapters
         } else {
             chapters.filter { item ->
-                (ChapterNameGroup.parse(item.chapter.name) ?: ungroupedChaptersLabel) == selectedChapterGroup
+                (chapterGroupLabel(item.chapter) ?: ungroupedChaptersLabel) == selectedChapterGroup
             }
         }
     }
@@ -778,6 +799,21 @@ private fun NovelScreenSmallImpl(
                             completedGroups = completedChapterGroups,
                             onGroupSelected = { chapterGroupBrowseOverride = it },
                             accentColor = state.accentColor,
+                        )
+                    }
+                }
+
+                if (volumeGrouping != null && selectedChapterGroup != ungroupedChaptersLabel) {
+                    item(
+                        key = "volume-section-header",
+                        contentType = EntryScreenItem.ITEM,
+                    ) {
+                        val range = filteredChapters.map { it.chapter.chapterNumber }
+                        VolumeSectionHeader(
+                            label = selectedChapterGroup,
+                            meta = volumeGrouping.meta[selectedChapterGroup],
+                            firstChapter = range.minOrNull(),
+                            lastChapter = range.maxOrNull(),
                         )
                     }
                 }

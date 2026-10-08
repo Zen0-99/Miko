@@ -145,6 +145,7 @@ class NovelScreenModel(
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
     private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
     private val carrierExclusions: eu.kanade.tachiyomi.data.mikodb.CarrierExclusions = Injekt.get(),
+    private val canonicalVolumes: eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes = Injekt.get(),
     private val workIdentityApi: eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
     private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
@@ -582,6 +583,7 @@ class NovelScreenModel(
                     ?.let { workId ->
                         canonicalPipelineRunner.launchNovel(workId, novel)
                         loadCarriers(workId)
+                        loadVolumes(workId)
                         // Books (kind=book) carry no chapter feed — they
                         // resolve to an Anna's Archive entry that owns
                         // the EPUB download + split path.
@@ -1402,6 +1404,20 @@ class NovelScreenModel(
                 eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
             )
             updateSuccessState { it.copy(carrierMatrix = matrix) }
+        }
+    }
+
+    /**
+     * Canonical volume covers + boundaries (21-03) — one cached fetch
+     * per work; only a groupable map reaches state so the chapter list
+     * stays byte-equivalent to the flat view on miss/low confidence.
+     */
+    private fun loadVolumes(workId: String) {
+        screenModelScope.launchIO {
+            val volumes = canonicalVolumes.ensureFetched(workId)
+            if (volumes?.groupable() == true) {
+                updateSuccessState { it.copy(volumes = volumes) }
+            }
         }
     }
 
@@ -2305,6 +2321,10 @@ class NovelScreenModel(
             /** Resolved carrier entry (source + internal url) the
              *  Download Book action drives on canonical books. */
             val bookCarrier: BookCarrier? = null,
+            /** Canonical volume covers + boundary map (21-03) — only set
+             *  when the cached data clears the confidence floor; the
+             *  screen keeps the flat list otherwise. */
+            val volumes: eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes.WorkVolumes? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(novel).toList()

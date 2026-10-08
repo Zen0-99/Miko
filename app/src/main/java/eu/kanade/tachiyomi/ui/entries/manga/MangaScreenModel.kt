@@ -154,6 +154,7 @@ class MangaScreenModel(
     private val mikoDbManager: eu.kanade.tachiyomi.data.mikodb.MikoDbManager = Injekt.get(),
     private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
     private val carrierExclusions: eu.kanade.tachiyomi.data.mikodb.CarrierExclusions = Injekt.get(),
+    private val canonicalVolumes: eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -585,6 +586,7 @@ class MangaScreenModel(
                     ?.let { workId ->
                         canonicalPipelineRunner.launchManga(workId, manga)
                         loadCarriers(workId)
+                        loadVolumes(workId)
                     }
             }
 
@@ -1664,6 +1666,20 @@ class MangaScreenModel(
         }
     }
 
+    /**
+     * Canonical volume covers + boundaries (21-03) — one cached fetch
+     * per work; only a groupable map reaches state so the chapter list
+     * stays byte-equivalent to the flat view on miss/low confidence.
+     */
+    private fun loadVolumes(workId: String) {
+        screenModelScope.launchIO {
+            val volumes = canonicalVolumes.ensureFetched(workId)
+            if (volumes?.groupable() == true) {
+                updateSuccessState { it.copy(volumes = volumes) }
+            }
+        }
+    }
+
     /** Chapter-level read state on a canonical entry: READY when an
      *  enabled carrier can serve the work, INSTALL_REQUIRED when only
      *  uninstalled carriers exist, UNAVAILABLE when nothing is bound.
@@ -2097,6 +2113,10 @@ class MangaScreenModel(
             /** Find Content Provider sheet state (17-02) — non-null while
              *  the dialog is open; per-extension rows stream in. */
             val providerSearch: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search? = null,
+            /** Canonical volume covers + boundary map (21-03) — only set
+             *  when the cached data clears the confidence floor; the
+             *  screen keeps the flat list otherwise. */
+            val volumes: eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes.WorkVolumes? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(manga).toList()

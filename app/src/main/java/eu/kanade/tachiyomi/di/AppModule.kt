@@ -358,6 +358,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkCarriers() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.LibraryCanonizer() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher() }
