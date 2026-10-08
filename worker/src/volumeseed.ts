@@ -27,8 +27,6 @@ import { now } from './util';
 
 const MB_ID = /^mk:mb:(\d+)$/;
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 interface WorkEdition {
     isbn: string | null;
     releaseDate: string | null;
@@ -66,14 +64,18 @@ export async function runVolumeSeed(env: Env, limit = 500): Promise<{
     skipped: string[];
 }> {
     // Scan set = volume_seed_queue ∪ top-N unseeded by popularity.
-    // popularity is a rank — lower number = more popular.
+    // "Unseeded" = neither stamp set: final_volume is legitimately null
+    // forever on ongoing series (One Piece has no last tankōbon), so
+    // covers_count is the convergence marker — a fetched work always
+    // gets covers_count = gallery size (≥1 for any real series).
     const { results: works } = await env.COMMENTS_DB.prepare(
         `SELECT DISTINCT miko_work_id FROM works_cache
          WHERE miko_work_id LIKE 'mk:mb:%' AND (
              miko_work_id IN (SELECT work_id FROM volume_seed_queue)
              OR miko_work_id IN (
                  SELECT miko_work_id FROM works_cache
-                 WHERE miko_work_id LIKE 'mk:mb:%' AND final_volume IS NULL
+                 WHERE miko_work_id LIKE 'mk:mb:%'
+                   AND final_volume IS NULL AND covers_count IS NULL
                  ORDER BY popularity ASC LIMIT ?
              )
          )`,
@@ -132,7 +134,8 @@ export async function runVolumeSeed(env: Env, limit = 500): Promise<{
 
             seeded += 1;
             written += stmts.length - 2;
-            await sleep(1100); // ~3 calls/work → stays well under 180/min
+            // per-request pacing lives in mangabaka.getJson — no extra
+            // sleep needed here.
         } catch (e) {
             skipped.push(`${workId}: ${e instanceof Error ? e.message : String(e)}`);
         }

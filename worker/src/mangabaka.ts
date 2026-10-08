@@ -34,7 +34,15 @@ const UA = 'Miko/2.0 (github.com/Zen0-99/Miko)';
 
 export const MANGABAKA_BASE = 'https://api.mangabaka.org';
 
+// Shared pace — MB's ~180/min bucket counts every call, and a
+// covers-rich work burns 20+ (images + works paginate separately).
+// 400ms/request keeps the heaviest work under the ceiling.
+let lastFetch = 0;
+
 async function getJson(base: string, path: string): Promise<unknown> {
+    const wait = 400 - (Date.now() - lastFetch);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastFetch = Date.now();
     const res = await fetch(`${base}${path}`, {
         headers: { 'User-Agent': UA, Accept: 'application/json' },
         signal: AbortSignal.timeout(5_000),
