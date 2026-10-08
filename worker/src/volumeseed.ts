@@ -95,8 +95,10 @@ export async function runVolumeSeed(env: Env, limit = 500): Promise<{
 
             const images = await getSeriesImages(Number(mbId));
             // MB has no covers_count field — the site count is just the
-            // image gallery size, which we already fetched.
-            const coversCount = images.length || null;
+            // image gallery size, which we already fetched. Zero is a
+            // real stamp (fetched, gallery empty) — null stays reserved
+            // for never-attempted so the scan set converges.
+            const coversCount = images.length;
             const fronts = images.filter((i) => i.type === 'volume' && i.index_numeric != null);
 
             const editions = editionsByVolume(await getSeriesWorks(Number(mbId)));
