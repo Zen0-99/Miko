@@ -1,0 +1,32 @@
+name: Spike 012 — iOS CMP feasibility
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ios-spike:
+    name: Tracks A+B — compile, link, simulator
+    runs-on: macos-15
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up JDK
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up gradle
+        uses: gradle/actions/setup-gradle@94baf225fe0a508e581a564467443d0e2379123b # v4.3.0
+        with:
+          gradle-version: "8.13"
+
+      - name: Track A — compile + link iOS framework (proves CMP/commonMain → iOS)
+        working-directory: spikes/012-ios-cmp-feasibility/ios-shell
+        run: gradle linkDebugFrameworkIosSimulatorArm64 --stacktrace
+
+      - name: Track B — simulator test binary (ComposeUIViewController, JSCore, fetch bridge)
+        working-directory: spikes/012-ios-cmp-feasibility/ios-shell
+        run: gradle iosSimulatorArm64Test --stacktrace
