@@ -12,9 +12,12 @@ plugins {
 }
 
 kotlin {
-    iosArm64()
-    iosX64()
-    iosSimulatorArm64()
+    listOf(iosArm64(), iosX64(), iosSimulatorArm64()).forEach {
+        it.binaries.framework {
+            baseName = "MikoSpike"
+            isStatic = true
+        }
+    }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     compilerOptions {
