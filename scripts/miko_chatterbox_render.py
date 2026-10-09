@@ -245,7 +245,17 @@ def load_model(model_key, device=None):
             device = "cuda" if torch.cuda.is_available() else "cpu"
         except ImportError:
             device = "cpu"
-    return cls.from_pretrained(device=device)
+    model = cls.from_pretrained(device=device)
+    # chatterbox 0.1.7: norm_loudness() multiplies the voice-ref wav by a
+    # np.float64 gain scalar → the array upcasts to float64 → the s3tokenizer
+    # mel matmul then dies with "expected scalar type Double but found
+    # Float". Wrap it so the normalized wav is cast back to float32.
+    orig_norm = getattr(model, "norm_loudness", None)
+    if orig_norm is not None:
+        def norm_loudness_f32(wav, sr, target_lufs=-27):
+            return orig_norm(wav, sr, target_lufs).astype(np.float32)
+        model.norm_loudness = norm_loudness_f32
+    return model
 
 
 def to_pcm(wav):
