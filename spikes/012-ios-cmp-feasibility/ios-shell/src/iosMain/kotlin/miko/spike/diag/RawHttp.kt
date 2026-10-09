@@ -99,23 +99,3 @@ fun tcpProbe(ip: String, port: String): String = memScoped {
     freeaddrinfo(addr)
     if (rc == 0) "connected" else "connect rc=$rc"
 }
-
-/**
- * TCP connect to a literal IP — bypasses DNS entirely. Distinguishes
- * "no DNS" from "no network at all" in the spawned test binary.
- */
-@OptIn(ExperimentalForeignApi::class)
-fun tcpConnectProbe(ip: String, port: Int): String = memScoped {
-    val addr = alloc<platform.posix.sockaddr_in>()
-    memset(addr.ptr, 0, sizeOf<platform.posix.sockaddr_in>().toULong())
-    addr.sin_family = AF_INET.convert()
-    addr.sin_port = port.toUShort().reverseBytes()
-    if (inet_pton(AF_INET, ip, addr.sin_addr.ptr) != 1) {
-        return@memScoped "FAILED: inet_pton"
-    }
-    val sock = socket(AF_INET, SOCK_STREAM, 0)
-    if (sock < 0) return@memScoped "FAILED: socket"
-    val ok = connect(sock, addr.ptr.reinterpret(), sizeOf<platform.posix.sockaddr_in>().toUInt())
-    close(sock)
-    if (ok == 0) "CONNECTED" else "FAILED: connect($ok)"
-}
