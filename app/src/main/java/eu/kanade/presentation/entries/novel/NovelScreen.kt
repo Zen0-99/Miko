@@ -1,6 +1,8 @@
 package eu.kanade.presentation.entries.novel
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -35,8 +38,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,13 +63,14 @@ import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryGenreRow
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.RatingMark
-import eu.kanade.presentation.entries.components.VolumeSectionHeader
+import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.presentation.entries.components.chapterCountPair
 import eu.kanade.presentation.entries.components.enhancedEntryStatusText
 import eu.kanade.presentation.entries.novel.components.ExpandableNovelDescription
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadAction
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioIndicator
+import eu.kanade.presentation.entries.novel.components.NovelChapterAudioState
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadIndicator
 import eu.kanade.presentation.entries.novel.components.NovelChapterHeader
 import eu.kanade.presentation.entries.novel.components.NovelEditDialog
@@ -82,9 +88,12 @@ import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
 import eu.kanade.tachiyomi.ui.entries.novel.NovelChapterList
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreenModel
+import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.tachiyomi.util.EntryDescriptionParser
 import eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
 import eu.kanade.presentation.util.formatChapterNumber
+import eu.kanade.domain.entries.novel.interactor.UpdateNovel
+import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -93,7 +102,9 @@ import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
+import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.time.Instant
 
 @Composable
 fun NovelScreen(
@@ -107,7 +118,7 @@ fun NovelScreen(
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction, String?) -> Unit)?,
     onAudioChapter: ((List<NovelChapterList.Item>, NovelChapterAudioAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
-    onCoverClick: () -> Unit,
+    onCoverClick: (Any?) -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
@@ -118,6 +129,14 @@ fun NovelScreen(
     /** Find Content Provider (17-02) — replaces the comments button on
      *  canonical entries with zero bound carriers. */
     onFindProviderClicked: (() -> Unit)? = null,
+    /** Carrier chip in the chapter header — opens the preferred-carrier
+     *  picker on multi-carrier canonical works. */
+    onCarrierPickerClicked: (() -> Unit)? = null,
+    /** Per-row carrier label resolver + chapter-scoped override tap
+     *  (16-04 parity with the manga detail). Null on non-canonical
+     *  entries. */
+    chapterCarrierLabel: (suspend (NovelChapter) -> String?)? = null,
+    onChapterCarrierClicked: ((NovelChapter) -> Unit)? = null,
     onRefresh: () -> Unit,
     onContinueReading: () -> Unit,
     onContinueListening: (() -> Unit)? = null,
@@ -152,6 +171,11 @@ fun NovelScreen(
     /** Artwork the caller already shows for this entry (home hero) —
      *  underlays the shared hero image so the morph never draws empty. */
     previewCover: Any? = null,
+    /** Skeleton item heights measured during Loading, keyed by
+     *  [EntryScreenItem] — real items mount constrained to the ghost's
+     *  height for one frame, then animateContentSize glides every
+     *  boundary the ghosts got wrong so nothing snaps on swap. */
+    seedHeightsPx: Map<Any, Int> = emptyMap(),
 ) {
     Box {
         if (isTabletUi) {
@@ -205,6 +229,9 @@ fun NovelScreen(
             onDeleteBook = onDeleteBook,
             onHideChapter = onHideChapter,
             onUnhideChapters = onUnhideChapters,
+            onCarrierPickerClicked = onCarrierPickerClicked,
+            chapterCarrierLabel = chapterCarrierLabel,
+            onChapterCarrierClicked = onChapterCarrierClicked,
             previewCover = previewCover,
         )
     } else {
@@ -258,7 +285,11 @@ fun NovelScreen(
             onDeleteBook = onDeleteBook,
             onHideChapter = onHideChapter,
             onUnhideChapters = onUnhideChapters,
+            onCarrierPickerClicked = onCarrierPickerClicked,
+            chapterCarrierLabel = chapterCarrierLabel,
+            onChapterCarrierClicked = onChapterCarrierClicked,
             previewCover = previewCover,
+            seedHeightsPx = seedHeightsPx,
         )
     }
 
@@ -290,6 +321,7 @@ fun NovelScreen(
                         CircularProgressIndicator(
                             modifier = Modifier.size(36.dp),
                             strokeWidth = 3.dp,
+                            color = state.accentColor ?: MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -309,7 +341,7 @@ private fun NovelScreenSmallImpl(
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction, String?) -> Unit)?,
     onAudioChapter: ((List<NovelChapterList.Item>, NovelChapterAudioAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
-    onCoverClick: () -> Unit,
+    onCoverClick: (Any?) -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
@@ -351,9 +383,36 @@ private fun NovelScreenSmallImpl(
     onDeleteBook: (() -> Unit)? = null,
     onHideChapter: ((NovelChapter) -> Unit)? = null,
     onUnhideChapters: (() -> Unit)? = null,
+    onCarrierPickerClicked: (() -> Unit)? = null,
+    chapterCarrierLabel: (suspend (NovelChapter) -> String?)? = null,
+    onChapterCarrierClicked: ((NovelChapter) -> Unit)? = null,
     previewCover: Any? = null,
+    seedHeightsPx: Map<Any, Int> = emptyMap(),
 ) {
     val chapterListState = rememberLazyListState()
+
+    // Settle pass after a skeleton→real swap: each item mounts at the
+    // ghost's measured height, then all release on the same frame so
+    // every boundary the skeleton got slightly wrong glides instead of
+    // snapping.
+    var settling by remember(seedHeightsPx) { mutableStateOf(seedHeightsPx.isNotEmpty()) }
+    LaunchedEffect(seedHeightsPx) {
+        if (settling) {
+            withFrameNanos { }
+            withFrameNanos { }
+            settling = false
+        }
+    }
+    val settleDensity = LocalDensity.current
+    fun Modifier.settleIn(key: Any): Modifier = animateContentSize(
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 350f),
+    ).then(
+        if (settling) {
+            Modifier.height(with(settleDensity) { (seedHeightsPx[key] ?: 0).toDp() })
+        } else {
+            Modifier
+        },
+    )
 
     val chapters = remember(state) { state.processedChapters }
     val isAnySelected = remember(state) { state.isAnySelected }
@@ -393,13 +452,14 @@ private fun NovelScreenSmallImpl(
             ChapterNameGroup.parse(chapter.name)
         }
     }
-    // Reading position is progress-derived — the group holding the newest
+    // Reading position is progress-derived — the group holding the lowest
     // unread chapter; falls back to the newest group. Pill taps are
     // browse-only session state: they must not persist as "current" or
     // re-entering the entry would land on the wrong group.
     val progressChapterGroup = remember(chapters, chapterGroups) {
         chapters
-            .firstOrNull { !it.chapter.read }
+            .filter { !it.chapter.read }
+            .minByOrNull { it.chapter.chapterNumber }
             ?.let { chapterGroupLabel(it.chapter) }
             ?.takeIf { it in chapterGroups }
     }
@@ -454,6 +514,47 @@ private fun NovelScreenSmallImpl(
             }
         }
     }
+
+    // Volume-cover override — the hero artwork + accent follow the volume
+    // the user is looking at, same swap as the shows screen's per-season
+    // posters. The persisted library cover is untouched: browsing a volume
+    // is session state, not progress.
+    val volumeCoverOverride = volumeGrouping?.meta?.get(selectedChapterGroup)
+        ?.let { it.coverUrl ?: it.coverThumbUrl }
+    val displayedAccent = rememberEntryAccentColor(
+        entryId = state.novel.id,
+        cover = volumeCoverOverride ?: state.novel.asNovelCover(),
+        type = EntryCoverMetadata.EntryType.NOVEL,
+    ) ?: state.accentColor
+
+    // The progress volume's cover becomes the entry's cover everywhere —
+    // library grid, home rail, history, and the discovery overlay that
+    // re-reads bound rows all pull thumbnailUrl. Same write-back as
+    // shows' libraryPoster; browse overrides and tap-throughs never
+    // reach this, only the reading position does (all-read → last vol).
+    val updateNovel = remember { Injekt.get<UpdateNovel>() }
+    val progressVolumeCover = (
+        progressChapterGroup
+            ?: chapterGroups.lastOrNull { it != ungroupedChaptersLabel }
+        )
+        ?.let { volumeGrouping?.meta?.get(it) }
+        ?.let { it.coverUrl ?: it.coverThumbUrl }
+    LaunchedEffect(progressVolumeCover, state.novel.thumbnailUrl) {
+        val cover = progressVolumeCover
+        if (cover != null && cover != state.novel.thumbnailUrl) {
+            try {
+                updateNovel.await(
+                    NovelUpdate(
+                        id = state.novel.id,
+                        thumbnailUrl = cover,
+                        coverLastModified = Instant.now().toEpochMilli(),
+                    ),
+                )
+            } catch (e: Exception) {
+                // Non-fatal — the hero still shows the override.
+            }
+        }
+    }
     var showEditDialog by remember { mutableStateOf(false) }
 
     if (showEditDialog) {
@@ -465,6 +566,15 @@ private fun NovelScreenSmallImpl(
                 showEditDialog = false
             },
         )
+    }
+
+    // First-mount budget: the hero + chrome compose on frame one (they carry
+    // the shared elements); the chapter carousel streams in next frame so a
+    // Success landing mid-push can't stall the flight.
+    var listContentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        listContentReady = true
     }
 
     BackHandler(onBack = {
@@ -615,7 +725,7 @@ private fun NovelScreenSmallImpl(
                     EnhancedEntryInfoBox(
                         appBarPadding = maxOf(topPadding, statusBarTop),
                         title = state.novel.title,
-                        backdrop = state.novel.asNovelCover(),
+                        backdrop = volumeCoverOverride ?: state.novel.asNovelCover(),
                         sharedKey = "hero-image-${state.novel.id}",
                         logoUrl = null,
                         metaItems = listOfNotNull(
@@ -629,13 +739,14 @@ private fun NovelScreenSmallImpl(
                         ),
                         rating = parsedDescription.rating,
                         ratingMark = RatingMark.STAR,
-                        onCoverClick = onCoverClick,
+                        onCoverClick = { onCoverClick(volumeCoverOverride ?: state.novel) },
                         // Portrait covers — taller hero, no horizontal pan.
                         heroContentPadding = 440.dp,
                         overscrollPullPx = heroOverscrollPx,
                         parallaxOffsetPx = heroParallaxPx,
-                        accentColor = state.accentColor,
+                        accentColor = displayedAccent,
                         previewCover = previewCover,
+                        liveCover = volumeCoverOverride,
                     )
                 }
 
@@ -646,7 +757,7 @@ private fun NovelScreenSmallImpl(
                     // Continue row: accent action bar flanked by
                     // favourite / mark-all toggle boxes. Genre pills
                     // stay in the row below.
-                    Column {
+                    Column(modifier = Modifier.settleIn(EntryScreenItem.ACTION_ROW)) {
                         // For book sources (Anna's Archive) with no
                         // chapters, the action zone becomes "Download
                         // book" and triggers the EPUB download + splitting
@@ -687,7 +798,8 @@ private fun NovelScreenSmallImpl(
                                     label = if (nextChapter != null && hasStarted) {
                                         stringResource(
                                             MR.strings.action_continue_named,
-                                            nextChapter.name,
+                                            eu.kanade.presentation.entries.components
+                                                .qualifiedChapterLabel(nextChapter.name),
                                         )
                                     } else {
                                         stringResource(MR.strings.action_start)
@@ -701,11 +813,12 @@ private fun NovelScreenSmallImpl(
                             sharedKey = "hero-resume-${state.novel.id}",
                             actions = actions,
                             actionsEnabled = when {
-                                isBookSourceEmpty -> !state.isRefreshingData
+                                isBookSourceEmpty ->
+                                    !state.isRefreshingData && !state.isDownloadingBook
                                 allRead -> false
                                 else -> nextChapter != null
                             },
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
                             favorite = state.novel.favorite,
                             allDone = allRead,
                             favoriteContentDescription = stringResource(
@@ -734,7 +847,7 @@ private fun NovelScreenSmallImpl(
                         EntryGenreRow(
                             pills = state.novel.genre.orEmpty(),
                             onPillClick = { onSearch(it, true) },
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
                             modifier = Modifier.padding(vertical = 4.dp),
                         )
                     }
@@ -750,8 +863,9 @@ private fun NovelScreenSmallImpl(
                         // Genres live in the pill scroll row — no pills
                         // inside the description.
                         tagsProvider = { null },
-                        accentColor = state.accentColor,
+                        accentColor = displayedAccent,
                         onTagSearch = onTagSearch,
+                        modifier = Modifier.settleIn(EntryScreenItem.DESCRIPTION_WITH_TAG),
                     )
                 }
 
@@ -763,7 +877,7 @@ private fun NovelScreenSmallImpl(
 //                        onOpenSuggestions = onOpenSuggestions,
 //                        onRetryClick = onRetrySuggestions,
 //                        modifier = Modifier.fillMaxWidth(),
-//                        accentColor = state.accentColor,
+//                        accentColor = displayedAccent,
 //                    )
 //                }
 
@@ -774,17 +888,50 @@ private fun NovelScreenSmallImpl(
                     val (logicalChapters, rawChapters) = chapterCountPair(
                         chapters.map { it.chapter.chapterNumber },
                     )
+                    // Book-scoped view: the pills always pin one group, so
+                    // the headline count is that book's and the secondary
+                    // line carries the work-wide total. Ungrouped novels
+                    // keep the raw-row "N entries" on sub-part numbering.
+                    val grouped = chapterGroups.size > 1
+                    val scopedCount = if (grouped) {
+                        chapterCountPair(
+                            filteredChapters.map { it.chapter.chapterNumber },
+                        ).first
+                    } else {
+                        logicalChapters
+                    }
+                    // Carrier chip — same semantics as the manga detail:
+                    // a picked carrier shows its extension name, no pick
+                    // on a multi-carrier work reads "Automatic".
+                    val carrierLabel = state.carrierMatrix
+                        ?.takeIf { it.fetched && it.carriers.isNotEmpty() }
+                        ?.let { m ->
+                            state.preferredCarrier
+                                ?.let { pkg -> m.carriers.firstOrNull { it.pkgName == pkg }?.displayName }
+                                ?: stringResource(MR.strings.carrier_auto)
+                        }
                     NovelChapterHeader(
-                        itemCount = logicalChapters,
-                        entryCountText = if (rawChapters != logicalChapters) {
-                            pluralStringResource(MR.plurals.num_entries, count = rawChapters, rawChapters)
-                        } else {
-                            null
+                        itemCount = scopedCount,
+                        entryCountText = when {
+                            grouped -> pluralStringResource(
+                                MR.plurals.num_chapters_in_total,
+                                count = logicalChapters,
+                                logicalChapters,
+                            )
+                            rawChapters != logicalChapters -> pluralStringResource(
+                                MR.plurals.num_entries,
+                                count = rawChapters,
+                                rawChapters,
+                            )
+                            else -> null
                         },
+                        modifier = Modifier.settleIn(EntryScreenItem.ITEM_HEADER),
                         onClick = onFilterButtonClicked,
-                        accentColor = state.accentColor,
+                        accentColor = displayedAccent,
                         intervalDays = state.intervalDays,
                         showInterval = state.showInterval,
+                        carrierLabel = carrierLabel,
+                        onCarrierClick = onCarrierPickerClicked,
                     )
                 }
 
@@ -797,23 +944,22 @@ private fun NovelScreenSmallImpl(
                             groups = chapterGroups,
                             selectedGroup = selectedChapterGroup,
                             completedGroups = completedChapterGroups,
+                            modifier = Modifier.settleIn("chapter-group-pills"),
                             onGroupSelected = { chapterGroupBrowseOverride = it },
-                            accentColor = state.accentColor,
-                        )
-                    }
-                }
-
-                if (volumeGrouping != null && selectedChapterGroup != ungroupedChaptersLabel) {
-                    item(
-                        key = "volume-section-header",
-                        contentType = EntryScreenItem.ITEM,
-                    ) {
-                        val range = filteredChapters.map { it.chapter.chapterNumber }
-                        VolumeSectionHeader(
-                            label = selectedChapterGroup,
-                            meta = volumeGrouping.meta[selectedChapterGroup],
-                            firstChapter = range.minOrNull(),
-                            lastChapter = range.maxOrNull(),
+                            onGroupLongPressed = { group ->
+                                // Hold = read/unread the whole group —
+                                // read unless every chapter is already read.
+                                val groupChapters = chapters
+                                    .filter { chapterGroupLabel(it.chapter) == group }
+                                    .map { it.chapter }
+                                if (groupChapters.isNotEmpty()) {
+                                    onMultiMarkAsReadClicked(
+                                        groupChapters,
+                                        !groupChapters.all { it.read },
+                                    )
+                                }
+                            },
+                            accentColor = displayedAccent,
                         )
                     }
                 }
@@ -822,22 +968,22 @@ private fun NovelScreenSmallImpl(
                 // without a still. Opens snapped to the next unread chapter;
                 // long-press still drives selection, swipe actions are gone
                 // (they collide with horizontal scrolling).
-                if (filteredChapters.isNotEmpty()) {
+                if (listContentReady && filteredChapters.isNotEmpty()) {
                     item(
                         key = "chapter-carousel",
                         contentType = EntryScreenItem.ITEM,
                     ) {
-                        // Land on the lowest-numbered unread chapter —
-                        // "next up" regardless of sort direction.
-                        val nextIndex = filteredChapters.mapIndexedNotNull { index, item ->
-                            item.takeIf { !it.chapter.read }
-                                ?.let { index to it.chapter.chapterNumber }
-                        }.minByOrNull { it.second }?.first ?: 0
-                        // The same chapter carries a thin accent outline.
+                        // Land on the continue chapter — the lowest-
+                        // numbered unread — wherever the sort puts it.
+                        // Sort direction only flips which way the NEXT
+                        // chapter sits, never the anchor.
                         val nextChapterId = filteredChapters
                             .filter { !it.chapter.read }
                             .minByOrNull { it.chapter.chapterNumber }
                             ?.chapter?.id
+                        val nextIndex = filteredChapters.indexOfFirst {
+                            it.chapter.id == nextChapterId
+                        }.takeIf { it >= 0 } ?: 0
                         // Cards are 75% of screen width — a negative
                         // initial offset lands the next-up chapter centered
                         // instead of pinned to the start edge.
@@ -848,6 +994,15 @@ private fun NovelScreenSmallImpl(
                             initialFirstVisibleItemIndex = nextIndex,
                             initialFirstVisibleItemScrollOffset = centeredOffsetPx,
                         )
+                        // Re-anchor when the sort direction flips or the
+                        // group pill swaps the list — LazyRow otherwise
+                        // keeps the stale scroll index and strands the
+                        // user at the wrong end, needing a backwards scroll.
+                        val sortDescending = state.novel.sortDescending()
+                        val listHeadId = filteredChapters.firstOrNull()?.chapter?.id
+                        LaunchedEffect(listHeadId, sortDescending) {
+                            rowState.scrollToItem(nextIndex, centeredOffsetPx)
+                        }
                         LazyRow(
                             state = rowState,
                             modifier = Modifier.fillMaxWidth(),
@@ -861,20 +1016,47 @@ private fun NovelScreenSmallImpl(
                                 contentType = { EntryScreenItem.ITEM },
                             ) { chapterItem ->
                                 val haptic = LocalHapticFeedback.current
-                                // Per-chapter indicators stay hidden for book
-                                // sources — the whole book downloads at once.
-                                // Canon rows download through their carriers,
-                                // so the stub source is no reason to hide the
-                                // download control; audio render stays gated on
-                                // a real source (it isn't canon-aware yet).
+                                // Per-chapter download indicators stay hidden
+                                // for book sources — the whole book downloads
+                                // at once. Canon rows download through their
+                                // carriers, so the stub source is no reason to
+                                // hide the controls; audio render resolves the
+                                // serving carrier source per row.
                                 val isCanonChapter = eu.kanade.tachiyomi.data.mikodb
                                     .CanonicalChapterRouter.isCanonUrl(chapterItem.chapter.url)
-                                val audioIndicatorEnabled =
-                                    !state.source.isLocalOrStub() && !state.isBookSource
+                                // Audio render is canon-aware now — the icon
+                                // only appears on downloaded rows either way,
+                                // so no source gate is needed here. 22-02:
+                                // audiobook-entry rows stream instead — their
+                                // badge shows without a text download.
+                                val audioIndicatorEnabled = true
                                 val downloadIndicatorEnabled = !state.isBookSource &&
+                                    !state.novel.isAudiobook &&
                                     (!state.source.isLocalOrStub() || isCanonChapter)
+                                // Row carrier label (manga-detail parity):
+                                // the extension this chapter routes through,
+                                // bottom-right where manga shows scanlator.
+                                val readableCarriers = state.carrierMatrix
+                                    ?.takeIf { it.fetched }?.readable.orEmpty()
+                                val rowLabel = if (
+                                    chapterCarrierLabel != null && readableCarriers.isNotEmpty()
+                                ) {
+                                    produceState<String?>(
+                                        null,
+                                        chapterItem.chapter.id,
+                                        state.chapterCarriers to state.preferredCarrier,
+                                    ) {
+                                        value = chapterCarrierLabel(chapterItem.chapter)
+                                    }.value
+                                } else {
+                                    null
+                                }
                                 EntryChapterCarouselCard(
-                                    title = chapterItem.chapter.name,
+                                    title = eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
+                                        .displayName(chapterItem.chapter.name)
+                                        ?: eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
+                                        .bareNumberDisplayName(chapterItem.chapter.name)
+                                        ?: chapterItem.chapter.name,
                                     dateUpload = chapterItem.chapter.dateUpload,
                                     scanlator = chapterItem.chapter.scanlator?.takeIf { it.isNotBlank() },
                                     progress = chapterItem.readProgress?.let {
@@ -884,6 +1066,14 @@ private fun NovelScreenSmallImpl(
                                     bookmark = chapterItem.chapter.bookmark,
                                     selected = chapterItem.selected,
                                     isNext = chapterItem.chapter.id == nextChapterId,
+                                    carrierNote = rowLabel,
+                                    onCarrierNoteClick = if (
+                                        readableCarriers.size > 1 && onChapterCarrierClicked != null
+                                    ) {
+                                        { onChapterCarrierClicked.invoke(chapterItem.chapter) }
+                                    } else {
+                                        null
+                                    },
                                     onLongClick = {
                                         onChapterSelected(chapterItem, !chapterItem.selected, true, true)
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -897,21 +1087,31 @@ private fun NovelScreenSmallImpl(
                                             onChapterClicked(chapterItem.chapter)
                                         }
                                     },
-                                    accentColor = state.accentColor,
-                                    trailing = {
+                                    accentColor = displayedAccent,
+                                    trailing = { indicatorTint ->
                                         if (audioIndicatorEnabled &&
-                                            chapterItem.downloadState == NovelDownload.State.DOWNLOADED
+                                            (
+                                                chapterItem.downloadState ==
+                                                    NovelDownload.State.DOWNLOADED ||
+                                                    (
+                                                        state.novel.isAudiobook &&
+                                                            chapterItem.audioState !=
+                                                            NovelChapterAudioState.NOT_RENDERED
+                                                        )
+                                                )
                                         ) {
                                             NovelChapterAudioIndicator(
                                                 enabled = audioIndicatorEnabled,
                                                 audioStateProvider = { chapterItem.audioState },
                                                 audioProgressProvider = { chapterItem.audioProgress },
+                                                accentColor = indicatorTint,
                                                 onClick = { onAudioChapter?.invoke(listOf(chapterItem), it) },
                                             )
                                         }
                                         if (downloadIndicatorEnabled) {
                                             NovelChapterDownloadIndicator(
                                                 enabled = downloadIndicatorEnabled,
+                                                accentColor = indicatorTint,
                                                 downloadStateProvider = { chapterItem.downloadState },
                                                 downloadProgressProvider = { chapterItem.downloadProgress },
                                                 onClick = {
@@ -950,16 +1150,19 @@ private fun NovelScreenSmallImpl(
                 // rows yet is still expanding → spinner.
                 val hasNoCarriers = state.carrierMatrix
                     ?.let { it.fetched && it.readable.isEmpty() } == true
-                val chaptersLoading = state.carrierMatrix
-                    ?.let { it.fetched && it.readable.isNotEmpty() } == true &&
-                    filteredChapters.isEmpty()
+                val chaptersLoading = state.isDownloadingBook ||
+                    (
+                        state.carrierMatrix
+                            ?.let { it.fetched && it.readable.isNotEmpty() } == true &&
+                            filteredChapters.isEmpty()
+                        )
                 if (hasNoCarriers && onFindProviderClicked != null) {
                     item(
                         key = "chapter-find-provider-button",
                         contentType = EntryScreenItem.ITEM,
                     ) {
                         EntryFindProviderButton(
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
                             onClick = onFindProviderClicked,
                         )
                     }
@@ -987,7 +1190,7 @@ private fun NovelScreenSmallImpl(
                     ) {
                         EntryViewCommentsButton(
                             commentsCount = state.commentsCount,
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
                             onClick = onCommentsClicked,
                         )
                     }
@@ -1008,7 +1211,7 @@ private fun NovelScreenLargeImpl(
     onDownloadChapter: ((List<NovelChapterList.Item>, NovelChapterDownloadAction, String?) -> Unit)?,
     onAudioChapter: ((List<NovelChapterList.Item>, NovelChapterAudioAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
-    onCoverClick: () -> Unit,
+    onCoverClick: (Any?) -> Unit,
     onWebViewClicked: (() -> Unit)?,
     onTagSearch: (String) -> Unit,
     onFilterButtonClicked: () -> Unit,
@@ -1050,6 +1253,9 @@ private fun NovelScreenLargeImpl(
     onDeleteBook: (() -> Unit)? = null,
     onHideChapter: ((NovelChapter) -> Unit)? = null,
     onUnhideChapters: (() -> Unit)? = null,
+    onCarrierPickerClicked: (() -> Unit)? = null,
+    chapterCarrierLabel: (suspend (NovelChapter) -> String?)? = null,
+    onChapterCarrierClicked: ((NovelChapter) -> Unit)? = null,
     previewCover: Any? = null,
 ) {
     NovelScreenSmallImpl(
@@ -1102,6 +1308,9 @@ private fun NovelScreenLargeImpl(
         onDeleteBook = onDeleteBook,
         onHideChapter = onHideChapter,
         onUnhideChapters = onUnhideChapters,
+        onCarrierPickerClicked = onCarrierPickerClicked,
+        chapterCarrierLabel = chapterCarrierLabel,
+        onChapterCarrierClicked = onChapterCarrierClicked,
         previewCover = previewCover,
     )
 }

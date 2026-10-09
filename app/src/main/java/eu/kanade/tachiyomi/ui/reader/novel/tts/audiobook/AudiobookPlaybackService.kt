@@ -2,16 +2,26 @@ package eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import eu.kanade.tachiyomi.core.common.Constants
+import eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import tachiyomi.domain.source.novel.service.NovelSourceManager
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * Media3 library session service hosting the audiobook player's ExoPlayer.
@@ -34,11 +44,58 @@ class AudiobookPlaybackService : MediaLibraryService() {
     private var mediaSession: MediaLibrarySession? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * `host:port` of a request URI, port normalized to the scheme default —
+     * the same shape [AbsClient.hostKey] emits, so a configured
+     * `https://abs.local` (implicit 443) matches a `?`-less request to
+     * `abs.local:443` and nothing else.
+     */
+    private fun hostKeyOf(uri: Uri): String? {
+        val host = uri.host ?: return null
+        val port = uri.port.takeIf { it >= 0 }
+            ?: if (uri.scheme.equals("https", ignoreCase = true)) 443 else 80
+        return "$host:$port"
+    }
+
+    /**
+     * Host-scoped Bearer injection (SD-1, T-22-02-01): the ABS token is
+     * attached ONLY when the request targets the configured server —
+     * `setDefaultRequestProperties` on the whole HttpDataSource would leak
+     * it to every streamed host. Credentials are re-read per resolve (no
+     * cached snapshot) so a token change mid-session applies on the next
+     * request; an unconfigured/mismatched request passes through untouched.
+     */
+    private fun absAuthResolver(): ResolvingDataSource.Resolver =
+        ResolvingDataSource.Resolver { dataSpec: DataSpec ->
+            val client = runCatching {
+                Injekt.get<NovelSourceManager>()
+                    .get(AbsNovelSource.ABS_SOURCE_ID) as? AbsNovelSource
+            }.getOrNull()?.client
+            if (client != null && client.isConfigured() &&
+                hostKeyOf(dataSpec.uri) == client.hostKey()
+            ) {
+                dataSpec.withAdditionalHeaders(client.authHeaders())
+            } else {
+                dataSpec
+            }
+        }
+
     override fun onCreate() {
         super.onCreate()
+        // Remote audiobook URIs (abs://track → https stream) resolve through
+        // DefaultMediaSourceFactory → ResolvingDataSource → DefaultDataSource:
+        // http(s) hits the DefaultHttpDataSource arm (where the resolver's
+        // Bearer header lands), file:// /content:// local tracks dispatch to
+        // their own sources and pass the resolver through untouched (the
+        // header is attached iff hostKeyOf matches the configured ABS host).
+        val dataSourceFactory = ResolvingDataSource.Factory(
+            DefaultDataSource.Factory(this, DefaultHttpDataSource.Factory()),
+            absAuthResolver(),
+        )
         // -30s/+10s increments: the notification's rewind/forward buttons and
         // AudiobookPlayerController.rewind()/forward() share these (REQ-008).
         val player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setSeekBackIncrementMs(REWIND_MS)
             .setSeekForwardIncrementMs(FORWARD_MS)
             .build()

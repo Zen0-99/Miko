@@ -235,13 +235,28 @@ class AudiobookLibraryCallback(
         )
         .build()
 
-    /** Library novels that actually have rendered audio — Auto is audio-only. */
+    /**
+     * The ABS source behind an audio-scheme chapter url — the novel's own
+     * source when it IS the built-in, else the built-in directly (a
+     * canonical audiobook-flagged entry rides a stub source but still
+     * streams from the configured server).
+     */
+    private fun absSourceFor(source: NovelSource): eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource? =
+        source as? eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
+            ?: Injekt.get<NovelSourceManager>()
+                .get(eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource.ABS_SOURCE_ID)
+                as? eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
+
+    /** Library novels that actually have rendered audio — Auto is audio-only.
+     *  Audiobook-flagged entries (abs:// items) qualify by streaming alone. */
     private suspend fun novelItems(): List<MediaItem> {
         val provider = Injekt.get<NovelDownloadProvider>()
         val sourceManager = Injekt.get<NovelSourceManager>()
         return Injekt.get<GetNovelFavorites>().await().mapNotNull { novel ->
             val source = sourceManager.get(novel.source) ?: return@mapNotNull null
-            if (provider.renderedAudioFileNames(novel.title, source).isEmpty()) {
+            if (!novel.isAudiobook &&
+                provider.renderedAudioFileNames(novel.title, source).isEmpty()
+            ) {
                 return@mapNotNull null
             }
             novelItem(novel)
@@ -251,13 +266,22 @@ class AudiobookLibraryCallback(
     private suspend fun chapterItems(novel: Novel, source: NovelSource): List<MediaItem> {
         val provider = Injekt.get<NovelDownloadProvider>()
         val rendered = provider.renderedAudioFileNames(novel.title, source)
-        val notRendered = context.stringResource(AYMR.strings.audiobook_auto_not_rendered)
         return Injekt.get<GetNovelChaptersByNovelId>().await(novel.id)
             .sortedBy { it.chapterNumber }
             .map { chapter ->
+                // 22-02: audio-scheme chapters stream — the playable URI is
+                // the header-clean server file URL (Bearer rides the
+                // service's host-scoped resolver, never the URI itself).
+                // A same-chapter local .m4a remains playable as fallback.
                 val isRendered =
                     provider.getAudioFileName(chapter.name, chapter.scanlator) in rendered
-                chapterItemBuilder(novel, chapter.id, chapter.name, isRendered, source)
+                val streamUri = if (novel.isAudiobook) {
+                    eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+                        .streamUriFor(chapter.url, absSourceFor(source))
+                } else {
+                    null
+                }
+                chapterItemBuilder(novel, chapter.id, chapter.name, isRendered, source, streamUri)
             }
     }
 
@@ -267,7 +291,13 @@ class AudiobookLibraryCallback(
         val chapter = Injekt.get<GetNovelChapter>().await(chapterId) ?: return null
         val provider = Injekt.get<NovelDownloadProvider>()
         val isRendered = provider.findAudioFile(chapter.name, chapter.scanlator, novel.title, source) != null
-        return chapterItemBuilder(novel, chapterId, chapter.name, isRendered, source)
+        val streamUri = if (novel.isAudiobook) {
+            eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+                .streamUriFor(chapter.url, absSourceFor(source))
+        } else {
+            null
+        }
+        return chapterItemBuilder(novel, chapterId, chapter.name, isRendered, source, streamUri)
     }
 
     private suspend fun chapterItemBuilder(
@@ -276,24 +306,30 @@ class AudiobookLibraryCallback(
         chapterName: String,
         isRendered: Boolean,
         source: NovelSource,
+        remoteUri: String? = null,
     ): MediaItem {
         val provider = Injekt.get<NovelDownloadProvider>()
         val builder = MediaItem.Builder()
             .setMediaId("$CHAPTER_PREFIX${novel.id}/$chapterId")
-        if (isRendered) {
+        // Remote stream wins (the server copy is canonical); a rendered
+        // local file stays as fallback when the stream can't resolve.
+        if (remoteUri != null) {
+            builder.setUri(remoteUri)
+        } else if (isRendered) {
             provider.findAudioFile(chapterName, null, novel.title, source)
                 ?.let { builder.setUri(it.uri.toString()) }
         }
+        val playable = remoteUri != null || isRendered
         return builder.setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(chapterName)
                 .setArtist(novel.title)
                 .setAlbumTitle(novel.title)
                 .setSubtitle(
-                    if (isRendered) null else context.stringResource(AYMR.strings.audiobook_auto_not_rendered),
+                    if (playable) null else context.stringResource(AYMR.strings.audiobook_auto_not_rendered),
                 )
                 .setIsBrowsable(false)
-                .setIsPlayable(isRendered)
+                .setIsPlayable(playable)
                 .setMediaType(MediaMetadata.MEDIA_TYPE_AUDIO_BOOK_CHAPTER)
                 .build(),
         ).build()

@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.data.download.novel
 import android.content.Context
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
-import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import eu.kanade.tachiyomi.util.storage.DiskUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +21,7 @@ import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import logcat.LogPriority
+import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
@@ -30,6 +30,7 @@ import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.source.novel.service.NovelSourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -196,14 +197,25 @@ class NovelDownloader(
 
         // Canon chapters carry source id 0 (the local stub) — each one
         // routes to a carrier source via the chapter router instead.
-        val source = sourceManager.get(novel.source) as? NovelHttpSource
+        val source = sourceManager.get(novel.source) as? eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
         val wasEmpty = queueState.value.isEmpty()
         // (No asSequence — resolveDownload suspends, which Sequence
         //  lambdas can't.)
+        val unrouted = mutableListOf<NovelChapter>()
         val chaptersToQueue = chapters
             .filter { chapter -> queueState.value.none { it.chapter.id == chapter.id } }
-            .mapNotNull { ch -> resolveDownload(novel, ch, source, forcedCarrierPkg) }
+            .mapNotNull { ch -> resolveDownload(novel, ch, source, forcedCarrierPkg, unrouted) }
             .sortedByDescending { it.chapter.sourceOrder }
+
+        // Canon chapters with no serving carrier would otherwise vanish
+        // silently — the tap must explain itself.
+        if (unrouted.isNotEmpty()) {
+            notifier.onError(
+                context.stringResource(MR.strings.download_notifier_no_carrier),
+                novelTitle = novel.title,
+                novelId = novel.id,
+            )
+        }
 
         if (chaptersToQueue.isNotEmpty()) {
             addAllToQueue(chaptersToQueue)
@@ -223,20 +235,61 @@ class NovelDownloader(
     private suspend fun resolveDownload(
         novel: Novel,
         chapter: NovelChapter,
-        novelSource: NovelHttpSource?,
+        novelSource: eu.kanade.tachiyomi.novelsource.NovelCatalogueSource?,
         forcedCarrierPkg: String?,
+        unrouted: MutableList<NovelChapter>? = null,
     ): NovelDownload? {
+        // Audio-scheme chapters (abs://track/…) are remote media, not text
+        // — they must never enter the download queue (its getChapterText
+        // call would throw or write a dead .txt). This guard runs before
+        // every routing branch; an audio download path is the v1.5 note
+        // (RESEARCH §4.5).
+        if (eu.kanade.tachiyomi.source.novel.AudioChapterSchemes.isAudioChapterUrl(chapter.url)) {
+            return null
+        }
         if (eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCanonUrl(chapter.url)) {
             val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
                 .workIdFromNovelUrl(novel.url) ?: return null
             val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
                 .seqFromCanonUrl(workId, chapter.url) ?: return null
             val (carrier, candidate) = canonRouter
-                .novelDownloadTarget(workId, seq, forcedCarrierPkg) ?: return null
+                .novelDownloadTarget(
+                    workId,
+                    seq,
+                    forcedCarrierPkg,
+                    chapter.chapterNumber.takeIf { it >= 0.0 },
+                )
+                ?: run {
+                    unrouted?.add(chapter)
+                    return null
+                }
             if (provider.findChapterDir(chapter.name, chapter.scanlator, novel.title, carrier) != null) {
                 return null
             }
             return NovelDownload(carrier, novel, chapter.copy(url = candidate.chapterUrl))
+        }
+        // `carrier:{id}:{url}` rows route to their recorded source — an
+        // uninstalled carrier is unrouted, not silently queueable.
+        if (eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCarrierUrl(chapter.url)) {
+            val carrierId = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                .carrierSourceId(chapter.url) ?: return null
+            val carrier = sourceManager.get(carrierId)
+                as? eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
+                ?: run {
+                    unrouted?.add(chapter)
+                    return null
+                }
+            if (provider.findChapterDir(chapter.name, chapter.scanlator, novel.title, carrier) != null) {
+                return null
+            }
+            return NovelDownload(
+                carrier,
+                novel,
+                chapter.copy(
+                    url = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                        .carrierRawUrl(chapter.url),
+                ),
+            )
         }
         if (novelSource == null) return null
         if (provider.findChapterDir(chapter.name, chapter.scanlator, novel.title, novelSource) != null) {

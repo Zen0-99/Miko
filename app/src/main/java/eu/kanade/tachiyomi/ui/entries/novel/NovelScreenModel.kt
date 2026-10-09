@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.entries.novel
 
 import android.content.Context
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Immutable
@@ -59,6 +60,7 @@ import eu.kanade.tachiyomi.util.system.notify
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.catch
@@ -147,6 +149,7 @@ class NovelScreenModel(
     private val carrierExclusions: eu.kanade.tachiyomi.data.mikodb.CarrierExclusions = Injekt.get(),
     private val canonicalVolumes: eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes = Injekt.get(),
     private val workIdentityApi: eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi = Injekt.get(),
+    private val canonicalChapterRouter: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter = Injekt.get(),
     private val providerFinder: eu.kanade.tachiyomi.data.mikodb.ProviderFinder = Injekt.get(),
     private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
     private val novelExtensionManager: eu.kanade.tachiyomi.extension.novel.NovelExtensionManager = Injekt.get(),
@@ -189,6 +192,14 @@ class NovelScreenModel(
 
     private val selectedPositions: Array<Int> = arrayOf(-1, -1)
     private val selectedChapterIds: HashSet<Long> = HashSet()
+
+    /** Completed by the screen once the nav transition lands — heavy
+     *  secondary work holds here so nothing contends with the
+     *  shared-element flight (see MangaScreenModel's note). */
+    private val transitionSettled = CompletableDeferred<Unit>()
+    fun onTransitionSettled() {
+        transitionSettled.complete(Unit)
+    }
 
     private inline fun updateSuccessState(func: (State.Success) -> State.Success) {
         mutableState.update {
@@ -481,6 +492,7 @@ class NovelScreenModel(
                 // the mint resolves.
                 screenModelScope.launchIO {
                     state.first { it is NovelScreenModel.State.Success }
+                    transitionSettled.await()
                     updateSuccessState { it.copy(isMinting = true) }
                     val c = runCatching { libraryCanonizer.migrateNovel(novel, heavy = true) }.getOrNull()
                     updateSuccessState { it.copy(isMinting = false) }
@@ -538,6 +550,7 @@ class NovelScreenModel(
             val showInterval = shouldShowInterval(novel.status, chapters.map { it.chapter })
 
             mutableState.update { prev ->
+                val p = prev as? State.Success
                 State.Success(
                     novel = novel,
                     source = source,
@@ -550,12 +563,28 @@ class NovelScreenModel(
                     // this update replaces the whole Success and the
                     // extractor's LaunchedEffect wouldn't refire (key
                     // unchanged), leaving the theme color stuck.
-                    accentColor = cachedAccentColor
-                        ?: (prev as? State.Success)?.accentColor,
+                    accentColor = cachedAccentColor ?: p?.accentColor,
                     intervalDays = intervalDays,
                     showInterval = showInterval,
+                    // Secondary overlays the warm-started snapshot already
+                    // carries — wiping them here makes their chrome vanish
+                    // mid-transition and pop back when the gated refetch
+                    // lands post-settle (carrier label, book action).
+                    trackingCount = p?.trackingCount ?: 0,
+                    hasLoggedInTrackers = p?.hasLoggedInTrackers ?: false,
+                    suggestions = p?.suggestions ?: SuggestionState.Idle,
+                    commentsCount = p?.commentsCount,
+                    carrierMatrix = p?.carrierMatrix,
+                    preferredCarrier = p?.preferredCarrier,
+                    chapterCarriers = p?.chapterCarriers ?: emptyMap(),
+                    isBookWork = p?.isBookWork ?: false,
+                    bookCarrier = p?.bookCarrier,
                 )
             }
+
+            // Everything below is secondary — holds until the nav
+            // transition lands (see transitionSettled).
+            transitionSettled.await()
 
             // Start observe tracking since it only needs novelId
             observeTrackers()
@@ -564,6 +593,7 @@ class NovelScreenModel(
             // and counts its visible comments. Silent on failure.
             if (commentsEnabled) {
                 screenModelScope.launchIO {
+                    transitionSettled.await()
                     val threadId = threadIdResolver.forNovel(novel) ?: return@launchIO
                     val result = commentsApi.threadCounts(listOf(threadId))
                     if (result is eu.kanade.tachiyomi.data.comments.CommentsApi.Result.Ok) {
@@ -676,7 +706,15 @@ class NovelScreenModel(
                 val newChapters = remoteChapters.mapIndexed { i, sNovelChapter ->
                     tachiyomi.domain.items.chapter.model.NovelChapter.create().copy(
                         novelId = state.novel.id,
-                        url = sNovelChapter.url,
+                        // Carrier-fetched rows record their serving
+                        // source on the url — the entry's stub source
+                        // can't answer reads/downloads for them.
+                        url = if (bookCarrier != null) {
+                            eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                                .carrierUrl(bookCarrier.sourceId, sNovelChapter.url)
+                        } else {
+                            sNovelChapter.url
+                        },
                         name = sNovelChapter.name,
                         chapterNumber = sNovelChapter.chapter_number.toDouble(),
                         sourceOrder = i.toLong(),
@@ -1261,25 +1299,47 @@ class NovelScreenModel(
      * Anna's Archive "Download book" action.
      * Triggers a chapter list refresh which downloads the EPUB and splits it
      * into chapters, then queues all chapters for download. The UI shows a
-     * progress indicator via [State.Success.isRefreshingData] while the EPUB
-     * is being downloaded and split.
+     * single in-content progress indicator via [State.Success.isDownloadingBook]
+     * while the EPUB is being downloaded and split.
      */
     fun downloadBook() {
         val state = successState ?: return
         screenModelScope.launch {
-            updateSuccessState { it.copy(isRefreshingData = true) }
+            updateSuccessState { it.copy(isDownloadingBook = true) }
             try {
-                // Canonical books fetch via the resolved carrier entry —
-                // that's the AA EPUB download + split path.
-                fetchChaptersFromSource(manualFetch = true, bookCarrier = state.bookCarrier)
+                val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                    .workIdFromNovelUrl(state.novel.url)
+                if (workId != null) {
+                    // Canonical book — the carrier resolves async at open,
+                    // so a quick tap can beat it (and the stub-source
+                    // fallback in fetchChaptersFromSource fails silently).
+                    // Await it inline; search() reattaches to the in-flight
+                    // provider scan rather than starting a second one.
+                    val carrier = state.bookCarrier ?: resolveBookCarrierNow(workId)
+                    when {
+                        carrier == null -> snackbarHostState.showSnackbar(
+                            message = "No book source found for this title — install a book extension to download",
+                        )
+                        sourceManager.get(carrier.sourceId) !is NovelCatalogueSource ->
+                            snackbarHostState.showSnackbar(
+                                message = "The book extension for this title isn't installed — install or enable it and retry",
+                            )
+                        else -> fetchChaptersFromSource(manualFetch = true, bookCarrier = carrier)
+                    }
+                } else {
+                    // Direct book-source entry (e.g. an AA row) — the entry's
+                    // own source serves the EPUB split path.
+                    fetchChaptersFromSource(manualFetch = true, bookCarrier = state.bookCarrier)
+                }
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e) { "downloadBook: fetchChaptersFromSource failed" }
             } finally {
-                updateSuccessState { it.copy(isRefreshingData = false) }
+                updateSuccessState { it.copy(isDownloadingBook = false) }
             }
             // After chapters are fetched (EPUB downloaded + split), queue all
-            // chapters for download so their content is cached for offline reading.
-            val chaptersToDownload = successState?.chapters?.map { it.chapter } ?: emptyList()
+            // chapters for download so their content is cached for offline
+            // reading. Read fresh — state.chapters can lag the DB write.
+            val chaptersToDownload = getNovelAndChapters.awaitChapters(state.novel.id)
             if (chaptersToDownload.isNotEmpty()) {
                 downloadManager.downloadChapters(state.novel, chaptersToDownload)
             }
@@ -1313,7 +1373,8 @@ class NovelScreenModel(
         val chapters = state.chapters.filter { !it.chapter.bookmark }.map { it.chapter }
         if (chapters.isNotEmpty()) {
             screenModelScope.launchNonCancellable {
-                downloadManager.deleteChapters(chapters, state.novel, state.source)
+                val deleted = downloadManager.deleteChapters(chapters, state.novel, state.source)
+                markChaptersNotDownloaded(deleted.map { it.id }.toSet())
             }
         }
     }
@@ -1323,7 +1384,8 @@ class NovelScreenModel(
         val chapters = state.chapters.filter { it.chapter.read }.map { it.chapter }
         if (chapters.isNotEmpty()) {
             screenModelScope.launchNonCancellable {
-                downloadManager.deleteChapters(chapters, state.novel, state.source)
+                val deleted = downloadManager.deleteChapters(chapters, state.novel, state.source)
+                markChaptersNotDownloaded(deleted.map { it.id }.toSet())
             }
         }
     }
@@ -1403,7 +1465,12 @@ class NovelScreenModel(
                 workId,
                 eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
             )
-            updateSuccessState { it.copy(carrierMatrix = matrix) }
+            updateSuccessState {
+                it.copy(
+                    carrierMatrix = matrix,
+                    preferredCarrier = sourcePreferences.preferredCarrierFor(workId),
+                )
+            }
         }
     }
 
@@ -1417,6 +1484,198 @@ class NovelScreenModel(
             val volumes = canonicalVolumes.ensureFetched(workId)
             if (volumes?.groupable() == true) {
                 updateSuccessState { it.copy(volumes = volumes) }
+            }
+        }
+    }
+
+    /** Open the preferred-carrier picker (canonical entries only). */
+    fun showCarrierPicker() {
+        updateSuccessState { it.copy(dialog = Dialog.CarrierPicker()) }
+    }
+
+    /** Chapter-scoped carrier picker — the per-chapter override entry
+     *  point on multi-carrier canonical rows. */
+    fun showChapterCarrierPicker(chapter: NovelChapter) {
+        updateSuccessState { it.copy(dialog = Dialog.CarrierPicker(chapter)) }
+    }
+
+    /** Per-chapter carrier override — null clears back to the work
+     *  default. Updates the state snapshot so row labels recompose. */
+    fun setChapterCarrier(chapter: NovelChapter, pkgName: String?) {
+        val novel = successState?.novel ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return
+        val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+            .seqFromCanonUrl(workId, chapter.url) ?: return
+        sourcePreferences.setPreferredChapterCarrier(workId, seq, pkgName)
+        updateSuccessState {
+            it.copy(
+                chapterCarriers = if (pkgName == null) {
+                    it.chapterCarriers - seq
+                } else {
+                    it.chapterCarriers + (seq to pkgName)
+                },
+            )
+        }
+    }
+
+    /** The override currently stored for [chapter]'s seq — picker
+     *  preselection. */
+    fun chapterCarrierFor(chapter: NovelChapter): String? {
+        val novel = successState?.novel ?: return null
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return null
+        val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+            .seqFromCanonUrl(workId, chapter.url) ?: return null
+        return sourcePreferences.preferredChapterCarrier(workId, seq)
+    }
+
+    /** Carrier pkg a row would route through (top direct candidate),
+     *  resolved to a display name for the row label — the novel
+     *  counterpart of the manga row label. Suspend; cheap — no source
+     *  I/O. `carrier:`-url rows (the book EPUB flow) record the serving
+     *  source in the url itself, so the label is a direct lookup. */
+    suspend fun carrierLabelFor(chapter: NovelChapter): String? {
+        val novel = successState?.novel ?: return null
+        val matrix = successState?.carrierMatrix
+        eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+            .carrierSourceId(chapter.url)?.let { sourceId ->
+                return matrix?.carriers
+                    ?.firstOrNull { sourceId in it.sourceIds }
+                    ?.displayName
+                    ?: sourceManager.get(sourceId)?.name
+            }
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return null
+        val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+            .seqFromCanonUrl(workId, chapter.url) ?: return null
+        val pkg = canonicalChapterRouter.peekNovelCarrier(workId, seq)
+            ?: matrix?.readable?.singleOrNull()?.pkgName
+            ?: return null
+        return matrix?.carriers
+            ?.firstOrNull { it.pkgName == pkg }
+            ?.displayName ?: pkg.substringAfterLast('.')
+    }
+
+    /** Persist the user's preferred carrier for this work — the router
+     *  ranks it above stickiness/tier on the next read. */
+    fun setPreferredCarrier(pkgName: String?) {
+        val novel = successState?.novel ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return
+        sourcePreferences.setPreferredCarrier(workId, pkgName)
+        updateSuccessState { it.copy(preferredCarrier = pkgName) }
+    }
+
+    /** "wrong work? unbind" — revoke this device's own provisional
+     *  binding: the worker deletes the row, the matrix cache drops, and
+     *  the sheet re-fetches so the row disappears. A 404 (row already
+     *  gone / not ours) is still a refresh — the stale row must not
+     *  linger either way. */
+    private suspend fun unbindCarrierNow(
+        workId: String,
+        carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier,
+    ): Boolean = when (
+        workIdentityApi.unbindBinding(workId, carrier.pkgName, carrier.providerRef)
+    ) {
+        eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.Ok -> {
+            workCarriers.invalidate(workId)
+            loadCarriers(workId)
+            true
+        }
+        eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.NotFound,
+        eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.UnbindResult.Failed,
+        -> false
+    }
+
+    /** Carrier-sheet ⋯ vote toggle: 'up'|'down'|'clear' — the workId is
+     *  this work's canonical id, the worker scopes the signal row. */
+    fun voteCarrier(
+        carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier,
+        vote: String,
+    ) {
+        val novel = successState?.novel ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return
+        screenModelScope.launchIO {
+            when (
+                workIdentityApi.voteBinding(workId, carrier.pkgName, carrier.providerRef, vote)
+            ) {
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.Ok -> {
+                    workCarriers.invalidate(workId)
+                    loadCarriers(workId)
+                }
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.NotFound,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.Failed,
+                -> snackbarHostState.showSnackbar(
+                    message = context.stringResource(MR.strings.miko_carrier_signal_failed),
+                )
+            }
+        }
+    }
+
+    /** Staged-sheet report submission — a reasoned signal row that
+     *  stacks on the vote slot. */
+    fun reportCarrier(
+        carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier,
+        kind: String,
+    ) {
+        val novel = successState?.novel ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return
+        screenModelScope.launchIO {
+            when (
+                workIdentityApi.reportBinding(workId, carrier.pkgName, carrier.providerRef, kind)
+            ) {
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.Ok -> {
+                    workCarriers.invalidate(workId)
+                    loadCarriers(workId)
+                }
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.NotFound,
+                eu.kanade.tachiyomi.data.mikodb.WorkIdentityApi.SignalResult.Failed,
+                -> snackbarHostState.showSnackbar(
+                    message = context.stringResource(MR.strings.miko_carrier_signal_failed),
+                )
+            }
+        }
+    }
+
+    /** Local removal: write the durable exclusion FIRST so a dead
+     *  worker can never resurrect the row, then fire the remove
+     *  signal. Undo restores via [restoreExcludedCarrier]. */
+    fun removeCarrier(carrier: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Carrier) {
+        val novel = successState?.novel ?: return
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url) ?: return
+        screenModelScope.launchIO {
+            if (carrier.mine && carrier.status == "provisional") {
+                val ok = unbindCarrierNow(workId, carrier)
+                snackbarHostState.showSnackbar(
+                    message = context.stringResource(
+                        if (ok) MR.strings.miko_binding_unbound else MR.strings.miko_binding_unbind_failed,
+                    ),
+                )
+                return@launchIO
+            }
+            carrierExclusions.exclude(workId, carrier.pkgName, carrier.providerRef)
+            workIdentityApi.removeBindingSignal(
+                workId, carrier.pkgName, carrier.providerRef, removed = true,
+            )
+            workCarriers.invalidate(workId)
+            loadCarriers(workId)
+            val result = snackbarHostState.showSnackbar(
+                message = context.stringResource(
+                    MR.strings.miko_carrier_removed_snack,
+                    carrier.displayName,
+                ),
+                actionLabel = context.stringResource(MR.strings.action_undo),
+                // M3 defaults an actionLabel snackbar to Indefinite — it
+                // would sit until the screen leaves. Undo is a courtesy,
+                // not a decision prompt: give it a bounded window.
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                restoreExcludedCarrier(carrier.pkgName)
             }
         }
     }
@@ -1494,6 +1753,31 @@ class NovelScreenModel(
             .workIdFromNovelUrl(novel.url) ?: return
         screenModelScope.launchIO {
             providerFinder.mint(workId, feeds)
+            // Confirmed carriers carry the extension's own cover art —
+            // adopt the highest-scoring pick when the canonical entry's
+            // cover is blank or a non-preferred URL (same guard as the
+            // pipeline's cover pass; recognized hi-res never restomps).
+            feeds
+                .filter { !it.details?.thumbnailUrl.isNullOrBlank() }
+                .maxByOrNull { it.score }
+                ?.details?.thumbnailUrl
+                ?.let { cover ->
+                    val stored = novel.thumbnailUrl
+                    if (stored.isNullOrBlank() ||
+                        !eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(stored)
+                    ) {
+                        updateNovel.await(
+                            tachiyomi.domain.entries.novel.model.NovelUpdate(
+                                id = novel.id,
+                                thumbnailUrl = cover,
+                                coverLastModified = System.currentTimeMillis(),
+                            ),
+                        )
+                        updateSuccessState {
+                            it.copy(novel = novelRepository.getNovelById(novel.id))
+                        }
+                    }
+                }
             providerFinder.invalidate(
                 workId,
                 eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
@@ -1537,29 +1821,40 @@ class NovelScreenModel(
      * description/genre/cover (books come through AA, not OpenLibrary).
      */
     private fun resolveBookCarrier(workId: String) {
-        screenModelScope.launchIO {
-            val bound = workCarriers.forWork(
-                workId,
-                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
-            ).readable.firstOrNull { it.providerRef.isNotBlank() && it.sourceIds.isNotEmpty() }
-            if (bound != null) {
-                applyBookCarrier(bound.sourceIds.first(), bound.providerRef, feed = null)
-                return@launchIO
-            }
-            val flow = providerFinder.search(
-                workId,
-                eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
-            ) ?: return@launchIO
-            val resolved = flow.first { s ->
+        screenModelScope.launchIO { resolveBookCarrierNow(workId) }
+    }
+
+    /**
+     * Suspends until the carrier resolves (or provably can't) and returns
+     * it — the download path's honest version of [resolveBookCarrier].
+     */
+    private suspend fun resolveBookCarrierNow(workId: String): BookCarrier? {
+        successState?.bookCarrier?.let { return it }
+        val bound = workCarriers.forWork(
+            workId,
+            eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+        ).readable.firstOrNull { it.providerRef.isNotBlank() && it.sourceIds.isNotEmpty() }
+        if (bound != null) {
+            applyBookCarrier(bound.sourceIds.first(), bound.providerRef, feed = null)
+            return successState?.bookCarrier
+        }
+        val flow = providerFinder.search(
+            workId,
+            eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+        ) ?: return null
+        // Bounded — a stuck provider scan must not hang the download tap.
+        val resolved = kotlinx.coroutines.withTimeoutOrNull(60_000) {
+            flow.first { s ->
                 s.rows.any {
                     it.status == eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Status.FOUND
                 } || !s.searching
             }
-            val feed = resolved.rows.firstOrNull {
-                it.status == eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Status.FOUND
-            }?.feed ?: return@launchIO
-            applyBookCarrier(feed.sourceId, feed.url, feed)
-        }
+        } ?: return null
+        val feed = resolved.rows.firstOrNull {
+            it.status == eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Status.FOUND
+        }?.feed ?: return null
+        applyBookCarrier(feed.sourceId, feed.url, feed)
+        return successState?.bookCarrier
     }
 
     /** Store the resolved carrier and pour its details into the local
@@ -1621,6 +1916,7 @@ class NovelScreenModel(
                     tier = providerTiers.effectiveTier(ext.pkgName),
                     iconUrl = ext.iconUrl,
                     lang = ext.lang,
+                    points = providerTiers.confirmCount(ext.pkgName),
                 )
             }
             .sortedWith(
@@ -2017,6 +2313,14 @@ class NovelScreenModel(
      * intercepted at the screen call site — it navigates to the reader with
      * `autoStartTts`, it never reaches this function.
      */
+    /**
+     * The source a chapter's downloads/rendered audio physically live
+     * under — the recorded carrier for `carrier:{id}:{url}` canon rows,
+     * else the entry's own source.
+     */
+    private fun audioServingSource(state: State.Success, chapter: NovelChapter): NovelSource =
+        downloadManager.carrierDownloadSource(chapter.url) ?: state.source
+
     fun runChapterAudioActions(
         items: List<NovelChapterList.Item>,
         action: NovelChapterAudioAction,
@@ -2029,7 +2333,11 @@ class NovelScreenModel(
                 // synchronous enqueue failure surfaces via snackbar.
                 items.forEach { item ->
                     try {
-                        audioRenderManager.enqueueRender(state.novel, item.chapter, state.source)
+                        audioRenderManager.enqueueRender(
+                            state.novel,
+                            item.chapter,
+                            audioServingSource(state, item.chapter),
+                        )
                     } catch (e: Throwable) {
                         logcat(LogPriority.ERROR, e)
                         screenModelScope.launch {
@@ -2056,7 +2364,11 @@ class NovelScreenModel(
                 screenModelScope.launchNonCancellable {
                     try {
                         items.forEach { item ->
-                            audioRenderManager.deleteAudio(state.novel, item.chapter, state.source)
+                            audioRenderManager.deleteAudio(
+                                state.novel,
+                                item.chapter,
+                                audioServingSource(state, item.chapter),
+                            )
                             // PB-21: prune the saved position and stop playback
                             // if this chapter's file was under the playhead.
                             audiobookPlayer.onAudioDeleted(item.chapter.id)
@@ -2073,9 +2385,17 @@ class NovelScreenModel(
                 screenModelScope.launchNonCancellable {
                     items.forEach { item ->
                         try {
-                            audioRenderManager.deleteAudio(state.novel, item.chapter, state.source)
+                            audioRenderManager.deleteAudio(
+                                state.novel,
+                                item.chapter,
+                                audioServingSource(state, item.chapter),
+                            )
                             audiobookPlayer.onAudioDeleted(item.chapter.id)
-                            audioRenderManager.enqueueRender(state.novel, item.chapter, state.source)
+                            audioRenderManager.enqueueRender(
+                                state.novel,
+                                item.chapter,
+                                audioServingSource(state, item.chapter),
+                            )
                         } catch (e: Throwable) {
                             logcat(LogPriority.ERROR, e)
                             screenModelScope.launch {
@@ -2100,7 +2420,11 @@ class NovelScreenModel(
                     )
                     if (result == SnackbarResult.ActionPerformed) {
                         try {
-                            audioRenderManager.enqueueRender(state.novel, item.chapter, state.source)
+                            audioRenderManager.enqueueRender(
+                                state.novel,
+                                item.chapter,
+                                audioServingSource(state, item.chapter),
+                            )
                         } catch (e: Throwable) {
                             logcat(LogPriority.ERROR, e)
                             snackbarHostState.showSnackbar(
@@ -2143,15 +2467,43 @@ class NovelScreenModel(
         screenModelScope.launchNonCancellable {
             try {
                 successState?.let { state ->
-                    downloadManager.deleteChapters(
+                    val deleted = downloadManager.deleteChapters(
                         chapters,
                         state.novel,
                         state.source,
                     )
+                    markChaptersNotDownloaded(deleted.map { it.id }.toSet())
                 }
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
             }
+        }
+    }
+
+    /**
+     * Drops a deleted chapter's download/audio state on its row — file
+     * deletions emit nothing on `downloadManager.statusFlow` (that flow
+     * only tracks queued items), so without this the icon stayed
+     * DOWNLOADED until the next full list rebuild.
+     */
+    private fun markChaptersNotDownloaded(deletedIds: Set<Long>) {
+        if (deletedIds.isEmpty()) return
+        updateSuccessState { state ->
+            state.copy(
+                chapters = state.chapters.map { item ->
+                    if (item.id in deletedIds) {
+                        item.copy(
+                            downloadState = NovelDownload.State.NOT_DOWNLOADED,
+                            downloadProgress = 0,
+                            audioState = NovelChapterAudioState.NOT_RENDERED,
+                            audioProgress = 0,
+                            audioError = null,
+                        )
+                    } else {
+                        item
+                    }
+                },
+            )
         }
     }
 
@@ -2161,13 +2513,6 @@ class NovelScreenModel(
         // scroll (T-05-04-02). An unreadable audio dir seeds all-idle rather
         // than blanking the icon (UI-SPEC partial-state lift).
         val source = sourceManager.getOrStub(novel.source)
-        val renderedAudioNames = runCatching {
-            audioRenderManager.renderedAudioFileNames(novel, source)
-        }.getOrElse {
-            logcat(LogPriority.WARN, it) { "audio dir listing failed for '${novel.title}'" }
-            emptySet()
-        }
-        val audioQueue = audioRenderManager.queueState.value
 
         // Canon rows keep downloads under the serving carrier's dir —
         // "downloaded" = exists under ANY bound carrier.
@@ -2188,10 +2533,29 @@ class NovelScreenModel(
             emptyList()
         }
 
+        // Rendered audio lives under whichever carrier dir holds the
+        // chapter — for canon rows the seed scan covers every bound
+        // carrier's `audio/` dir, not just the stub source's.
+        val audioSources = (
+            listOf(source) +
+                carrierSourceIds.mapNotNull { sourceManager.get(it) }
+            ).distinctBy { it.id }
+        val renderedAudioNames = runCatching {
+            audioSources.flatMap { audioRenderManager.renderedAudioFileNames(novel, it) }.toSet()
+        }.getOrElse {
+            logcat(LogPriority.WARN, it) { "audio dir listing failed for '${novel.title}'" }
+            emptySet()
+        }
+        val audioQueue = audioRenderManager.queueState.value
+
         return map { chapter ->
             val activeDownload = downloadManager.getQueuedDownloadOrNull(chapter.id)
             val downloaded = if (isCanonical) {
-                carrierSourceIds.any {
+                // `carrier:{id}:{url}` rows record their own serving
+                // source — an unbound carrier's download still counts.
+                val carrierId = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                    .carrierSourceId(chapter.url)
+                (carrierSourceIds + listOfNotNull(carrierId)).distinct().any {
                     downloadManager.isChapterDownloaded(
                         chapter.name,
                         chapter.scanlator,
@@ -2215,6 +2579,17 @@ class NovelScreenModel(
 
             val activeRender = audioQueue.find { it.chapter.id == chapter.id }
             val audioState = when {
+                // 22-02/SD-4: audiobook entries stream — the render queue
+                // never applies. A locally-rendered .m4a still wins
+                // (user-mixed edge case), every other audio-scheme row is
+                // REMOTE (streamable, not on disk).
+                novel.isAudiobook -> when {
+                    downloadProvider.getAudioFileName(chapter.name, chapter.scanlator) in
+                        renderedAudioNames -> NovelChapterAudioState.RENDERED
+                    eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+                        .isAudioChapterUrl(chapter.url) -> NovelChapterAudioState.REMOTE
+                    else -> NovelChapterAudioState.NOT_RENDERED
+                }
                 activeRender != null -> activeRender.status.toAudioState()
                 downloadProvider.getAudioFileName(chapter.name, chapter.scanlator) in renderedAudioNames ->
                     NovelChapterAudioState.RENDERED
@@ -2255,8 +2630,8 @@ class NovelScreenModel(
         updateSuccessState { it.copy(dialog = Dialog.SettingsSheet) }
     }
 
-    fun showFullCoverDialog() {
-        updateSuccessState { it.copy(dialog = Dialog.FullCover) }
+    fun showFullCoverDialog(coverData: Any? = null) {
+        updateSuccessState { it.copy(dialog = Dialog.FullCover(coverData)) }
     }
 
     fun dismissDialog() {
@@ -2277,11 +2652,18 @@ class NovelScreenModel(
         data class DuplicateNovel(val novel: Novel, val duplicate: Novel) : Dialog
         data class Migrate(val newNovel: Novel, val oldNovel: Novel) : Dialog
         data object SettingsSheet : Dialog
-        data object FullCover : Dialog
+        /** [coverData] = the artwork currently painted in the hero —
+         *  the selected volume's cover when grouped, else the entry's
+         *  own cover. The dialog views/shares what the user saw. */
+        data class FullCover(val coverData: Any? = null) : Dialog
         data object TrackSheet : Dialog
         data object Comments : Dialog
         /** Find Content Provider — zero-bound canonical entry (17-02). */
         data object FindProvider : Dialog
+
+        /** Preferred-carrier picker on multi-carrier canonical works —
+         *  a non-null [chapter] scopes the pick to that row's seq. */
+        data class CarrierPicker(val chapter: NovelChapter? = null) : Dialog
     }
 
     sealed interface State {
@@ -2298,6 +2680,10 @@ class NovelScreenModel(
             val trackingCount: Int = 0,
             val hasLoggedInTrackers: Boolean = false,
             val isRefreshingData: Boolean = false,
+            /** Whole-book EPUB download+split in flight — drives the
+             *  in-content spinner instead of the pull-refresh bar so the
+             *  screen never shows two indicators for one operation. */
+            val isDownloadingBook: Boolean = false,
             /** Canonical mint in flight — the screen shows the mint
              *  veil instead of the extension fetch's instant error. */
             val isMinting: Boolean = false,
@@ -2311,6 +2697,13 @@ class NovelScreenModel(
             /** Server bindings ∩ installed/enabled extensions (17-02);
              *  null until fetched — treat as unknown, never "no carriers". */
             val carrierMatrix: eu.kanade.tachiyomi.data.mikodb.WorkCarriers.Matrix? = null,
+            /** Locally-picked preferred carrier for this work — the
+             *  router ranks it above stickiness/tier on reads. */
+            val preferredCarrier: String? = null,
+            /** Per-seq carrier overrides — reactivity snapshot of the
+             *  `preferred_chapter_carriers` pref; chapter picker writes
+             *  it, row labels read it. */
+            val chapterCarriers: Map<Int, String> = emptyMap(),
             /** pkgName → install progress for recommended extensions. */
             val carrierInstallSteps: Map<String, eu.kanade.tachiyomi.extension.InstallStep> = emptyMap(),
             /** Find Content Provider sheet state (17-02). */

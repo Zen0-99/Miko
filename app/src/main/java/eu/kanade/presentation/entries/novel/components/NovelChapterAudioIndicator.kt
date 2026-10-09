@@ -1,8 +1,10 @@
 package eu.kanade.presentation.entries.novel.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -19,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -33,6 +36,9 @@ import eu.kanade.presentation.components.IndicatorStrokeWidth
 import eu.kanade.presentation.components.commonClickable
 import eu.kanade.presentation.entries.components.rememberOnAccentColor
 import eu.kanade.tachiyomi.R
+import com.woowla.compose.icon.collections.tabler.Tabler
+import com.woowla.compose.icon.collections.tabler.tabler.Outline
+import com.woowla.compose.icon.collections.tabler.tabler.outline.CloudDownload
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.IconButtonTokens
@@ -43,7 +49,8 @@ import tachiyomi.presentation.core.util.secondaryItemAlpha
  * Per-chapter audio-render state — the `NovelDownload.State` analog for the
  * second chapter-row icon (D-07). `NOT_RENDERED`/`RENDERED` are derived from
  * the `.m4a` on disk; `QUEUED`/`RENDERING`/`ERROR` mirror the render queue's
- * `ChapterRender.State`.
+ * `ChapterRender.State`. `REMOTE` (22-02) is the audiobook-entry state:
+ * streamable from the server, never rendered or queued locally.
  */
 enum class NovelChapterAudioState {
     NOT_RENDERED,
@@ -51,6 +58,7 @@ enum class NovelChapterAudioState {
     RENDERING,
     RENDERED,
     ERROR,
+    REMOTE,
 }
 
 @Composable
@@ -93,6 +101,12 @@ fun NovelChapterAudioIndicator(
             enabled = enabled,
             modifier = modifier,
             onClick = onClick,
+        )
+        NovelChapterAudioState.REMOTE -> RemoteAudioIndicator(
+            enabled = enabled,
+            modifier = modifier,
+            onClick = onClick,
+            tint = accent,
         )
     }
 }
@@ -248,23 +262,32 @@ private fun RenderedAudioIndicator(
                 hapticFeedback = LocalHapticFeedback.current,
                 onLongClick = { isMenuExpanded = true },
                 onClick = { isMenuExpanded = true },
-            ),
+            )
+            // Same off-white as NOT_RENDERED — the state reads from the
+            // filled disc + punched glyph, not from a brighter tint.
+            .secondaryItemAlpha(),
         contentAlignment = Alignment.Center,
     ) {
-        // Same circled-speaker icon — circle filled with the accent,
-        // glyph drawn in a contrast-aware black/white on top.
-        val glyphTint = rememberOnAccentColor(tint)
-        Icon(
-            painter = painterResource(R.drawable.ic_item_circle_filled_24dp),
-            contentDescription = null,
-            modifier = Modifier.size(IndicatorSize),
-            tint = tint,
+        // Rendered = the idle glyph inverted: a filled disc in the card's
+        // contrast tint with the ring still on top in the same tint and
+        // the speaker punched through in the on-tint color.
+        Box(
+            modifier = Modifier
+                .size(IndicatorSize - 4.dp)
+                .clip(CircleShape)
+                .background(tint),
         )
         Icon(
             painter = painterResource(R.drawable.ic_audio_item_24dp),
             contentDescription = stringResource(AYMR.strings.novel_audio_available_cd),
             modifier = Modifier.size(IndicatorSize),
-            tint = glyphTint,
+            tint = tint,
+        )
+        Icon(
+            imageVector = Icons.Filled.VolumeUp,
+            contentDescription = null,
+            modifier = AudioGlyphModifier,
+            tint = rememberOnAccentColor(tint),
         )
         DropdownMenu(expanded = isMenuExpanded, onDismissRequest = { isMenuExpanded = false }) {
             // D-08 verbatim order: Play / Delete / Re-render.
@@ -315,6 +338,39 @@ private fun AudioErrorIndicator(
             contentDescription = stringResource(AYMR.strings.novel_audio_error_cd),
             modifier = Modifier.size(IndicatorSize),
             tint = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+/**
+ * REMOTE (22-02): the chapter is a streamable server track — a cloud glyph
+ * in the same idle off-white as NOT_RENDERED. There is no render/download
+ * affordance for remote audio; tap plays it straight through the player.
+ */
+@Composable
+private fun RemoteAudioIndicator(
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: (NovelChapterAudioAction) -> Unit,
+    tint: Color,
+) {
+    Box(
+        modifier = modifier
+            .size(IconButtonTokens.StateLayerSize)
+            .commonClickable(
+                enabled = enabled,
+                hapticFeedback = LocalHapticFeedback.current,
+                onLongClick = { onClick(NovelChapterAudioAction.PLAY) },
+                onClick = { onClick(NovelChapterAudioAction.PLAY) },
+            )
+            .secondaryItemAlpha(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Tabler.Outline.CloudDownload,
+            contentDescription = stringResource(AYMR.strings.novel_audio_remote_cd),
+            modifier = Modifier.size(IndicatorSize),
+            tint = tint,
         )
     }
 }

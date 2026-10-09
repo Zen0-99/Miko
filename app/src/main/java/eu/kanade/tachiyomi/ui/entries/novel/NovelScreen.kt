@@ -3,17 +3,24 @@ package eu.kanade.tachiyomi.ui.entries.novel
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -32,6 +39,7 @@ import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
+import eu.kanade.presentation.entries.manga.carrierSheetContainerColor
 import eu.kanade.presentation.entries.novel.NovelScreen
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
 import eu.kanade.presentation.entries.novel.components.rememberNovelAccentColor
@@ -58,8 +66,10 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerControll
 import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
 import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
+import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
@@ -69,7 +79,13 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.model.ReadingOrder
+import eu.kanade.presentation.entries.components.EntryDetailSkeleton
 import eu.kanade.presentation.entries.components.EntryHeroLoadingPreview
+import eu.kanade.presentation.entries.components.SKELETON_FADE_MS
+import eu.kanade.presentation.entries.components.SKELETON_LATE_ARRIVAL_MS
+import eu.kanade.presentation.entries.components.isNavEntering
+import eu.kanade.presentation.entries.components.rememberCachedAccentColor
+import eu.kanade.presentation.util.LocalNavAnimatedVisibilityScope
 import tachiyomi.presentation.core.screens.DelayedLoadingScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
@@ -88,6 +104,17 @@ class NovelScreen(
     private val previewTitle: String? = null,
     /** Clearlogo for the shared `hero-title-` element during Loading. */
     private val previewLogo: String? = null,
+    /** Continue-row label the caller already knows (home hero / library
+     *  position) — rendered inside the shared resume pill during Loading. */
+    private val previewResumeLabel: String? = null,
+    /** The pre-filled action is a real resume target — the skeleton's
+     *  continue bar renders the accent fill, not the "all up to date" tint. */
+    private val previewResumeEnabled: Boolean = false,
+    /** Callers that already display the entry's genres (home hero, library
+     *  rows) tell the skeleton whether the genre row will exist so a
+     *  genre-less entry doesn't get a ghost bar for content that never
+     *  loads. Defaults true — most entries have genres. */
+    private val previewHasGenres: Boolean = true,
 ) : Screen(), AssistContentScreen {
 
     private var assistUrl: String? = null
@@ -130,11 +157,80 @@ class NovelScreen(
                         previewCover = current?.thumbnailUrl ?: previewCover,
                         previewTitle = current?.title ?: previewTitle,
                         previewLogo = previewLogo,
+                        previewResumeLabel = previewResumeLabel,
+                        previewResumeEnabled = previewResumeEnabled,
+                        previewHasGenres = previewHasGenres,
                     ),
                 )
             }
         }
 
+        // Secondary work in the screen model (canonical pipelines,
+        // carriers, source fetches, suggestions, badges) waits for the
+        // push to land — mid-flight DB merges and network writes are
+        // what made cold opens adjust the hero mid-transition. Screens
+        // without a nav scope settle on their first frame.
+        val navScope = LocalNavAnimatedVisibilityScope.current
+        val entering = navScope.isNavEntering()
+        LaunchedEffect(entering) {
+            if (!entering) screenModel.onTransitionSettled()
+        }
+
+        // Ghost bars are for genuinely-slow loads only — a cached
+        // entry's Success lands inside a few frames, and painting the
+        // bars anyway reads as the skeleton hijacking every push.
+        var showGhosts by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            delay(220)
+            showGhosts = true
+        }
+        // A Success inside SKELETON_LATE_ARRIVAL_MS resolved from cache —
+        // the real screen mounts immediately so cached opens skip the
+        // skeleton entirely. Later arrivals hold the skeleton (identical
+        // geometry) to landing so its mount can't stall the flight; the
+        // skeleton then crossfades out over the real screen instead of
+        // the ghost bars popping off in a single frame.
+        val mountNanos = remember { System.nanoTime() }
+        var firstSuccessNanos by remember { mutableLongStateOf(-1L) }
+        LaunchedEffect(state is NovelScreenModel.State.Success) {
+            if (state is NovelScreenModel.State.Success && firstSuccessNanos < 0L) {
+                firstSuccessNanos = System.nanoTime()
+            }
+        }
+        val earlySuccess = state is NovelScreenModel.State.Success &&
+            (firstSuccessNanos.takeIf { it >= 0L } ?: System.nanoTime()) - mountNanos <
+            SKELETON_LATE_ARRIVAL_MS * 1_000_000L
+        val skeletonWanted = previewCover != null && !isTabletUi() &&
+            (state is NovelScreenModel.State.Loading || (entering && !earlySuccess))
+        val skeletonAlpha by animateFloatAsState(
+            targetValue = if (skeletonWanted) 1f else 0f,
+            animationSpec = tween(SKELETON_FADE_MS),
+            label = "detailSkeletonFade",
+        )
+        val seedHeightsPx = remember { mutableStateMapOf<Any, Int>() }
+        if (skeletonWanted) {
+            EntryDetailSkeleton(
+                cover = previewCover,
+                sharedKey = "hero-image-$novelId",
+                heroContentPadding = 440.dp,
+                title = previewTitle,
+                logo = previewLogo,
+                navigateUp = navigator::pop,
+                isManga = true,
+                favorite = (previewCover as? tachiyomi.domain.entries.novel.model.NovelCover)
+                    ?.isNovelFavorite == true,
+                showGhosts = showGhosts,
+                accentColor = rememberCachedAccentColor(
+                    novelId,
+                    EntryCoverMetadata.EntryType.NOVEL,
+                ),
+                resumeLabel = previewResumeLabel,
+                resumeEnabled = previewResumeEnabled,
+                genreGhostVisible = previewHasGenres,
+                onItemHeight = { key, height -> seedHeightsPx[key] = height },
+            )
+            return
+        }
         if (state is NovelScreenModel.State.Loading) {
             EntryHeroLoadingPreview(
                 cover = previewCover,
@@ -176,19 +272,33 @@ class NovelScreen(
             }
         }
 
-        NovelScreen(
-            state = successState,
-            previewCover = previewCover,
-            snackbarHostState = screenModel.snackbarHostState,
-            isTabletUi = isTabletUi(),
-            chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
-            chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
-            navigateUp = navigator::pop,
+        Box(Modifier.fillMaxSize()) {
+            NovelScreen(
+                state = successState,
+                previewCover = previewCover,
+                seedHeightsPx = seedHeightsPx,
+                snackbarHostState = screenModel.snackbarHostState,
+                isTabletUi = isTabletUi(),
+                chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
+                chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
+                navigateUp = navigator::pop,
             onChapterClicked = { chapter ->
                 scope.launch {
                     val lockedOrders = getLockedReadingOrders.await(novelId)
                     if (lockedOrders.isNotEmpty()) {
                         lockDialog = lockedOrders
+                    } else if (successState.novel.isAudiobook) {
+                        // 22-02: audio entries have no text — the reader
+                        // route is meaningless, the tap goes straight to
+                        // the player. A failed play reports inline instead
+                        // of falling back to a reader that can't load.
+                        if (!audiobookPlayer.play(successState.novel, chapter)) {
+                            screenModel.snackbarHostState.showSnackbar(
+                                context.stringResource(
+                                    tachiyomi.i18n.aniyomi.AYMR.strings.audiobook_no_stream,
+                                ),
+                            )
+                        }
                     } else {
                         navigator.push(NovelReaderScreen(novelId, chapter.id))
                     }
@@ -197,10 +307,14 @@ class NovelScreen(
             onDownloadChapter = screenModel::runChapterDownloadActions.takeIf {
                 // Canon entries ride a stub source but DO support
                 // downloads — the queue resolves each chapter to its
-                // carrier at enqueue time.
-                !successState.source.isLocalOrStub() ||
-                    eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
-                        .isCanonicalUrl(successState.novel.url)
+                // carrier at enqueue time. Audiobook entries stream —
+                // audio tracks aren't text-downloadable (22-02).
+                !successState.novel.isAudiobook &&
+                    (
+                        !successState.source.isLocalOrStub() ||
+                            eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                                .isCanonicalUrl(successState.novel.url)
+                        )
             },
             onAudioChapter = { items: List<NovelChapterList.Item>, action: NovelChapterAudioAction ->
                 when (action) {
@@ -225,12 +339,18 @@ class NovelScreen(
                     else -> screenModel.runChapterAudioActions(items, action)
                 }
                 Unit
-            }.takeIf { !successState.source.isLocalOrStub() },
+            }.takeIf {
+                // Same carve-out as onDownloadChapter above: canon entries
+                // ride a stub source but their carrier files render/play.
+                !successState.source.isLocalOrStub() ||
+                    eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                        .isCanonicalUrl(successState.novel.url)
+            },
             onAddToLibraryClicked = {
                 screenModel.toggleFavorite()
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             },
-            onCoverClick = { screenModel.showFullCoverDialog() },
+            onCoverClick = { screenModel.showFullCoverDialog(it) },
             onWebViewClicked = {
                 openNovelInWebView(navigator, screenModel.novel, screenModel.source)
             }.takeIf { isHttpSource },
@@ -252,6 +372,9 @@ class NovelScreen(
             onCommentsClicked = screenModel::showCommentsDialog
                 .takeIf { screenModel.commentsEnabled },
             onFindProviderClicked = screenModel::showFindProviderDialog,
+            onCarrierPickerClicked = screenModel::showCarrierPicker,
+            chapterCarrierLabel = screenModel::carrierLabelFor,
+            onChapterCarrierClicked = screenModel::showChapterCarrierPicker,
             onRefresh = screenModel::fetchAllFromSource,
             onContinueReading = {
                 val firstUnread = successState.nextContinueChapter
@@ -278,7 +401,8 @@ class NovelScreen(
             },
             onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
             onShareClicked = { shareNovel(context, screenModel.novel, screenModel.source) }.takeIf { isHttpSource },
-            onDownloadActionClicked = screenModel::runDownloadAction.takeIf { !successState.source.isLocalOrStub() },
+            onDownloadActionClicked = screenModel::runDownloadAction
+                .takeIf { !successState.source.isLocalOrStub() && !successState.novel.isAudiobook },
             onEditCollectionClicked = screenModel::showChangeCollectionDialog.takeIf { successState.novel.favorite },
             onEditNovel = { title, author, desc, status, tags ->
                 screenModel.updateNovelMetadata(title, author, desc, status, tags)
@@ -332,7 +456,38 @@ class NovelScreen(
                 .takeIf { successState.isBookSource },
             onDeleteBook = { screenModel.deleteBook() }
                 .takeIf { successState.isBookSource },
-        )
+            )
+
+            // Post-landing swap dissolves the held skeleton over the real
+            // screen instead of popping the ghost bars off in one frame.
+            // "settle-fade" keys keep its shared elements from colliding
+            // with the real screen's while both are composed; mid-flight
+            // swaps skip the overlay since the morph needs an instant
+            // target, not a fade.
+            if (skeletonAlpha > 0f && !entering) {
+                Box(Modifier.fillMaxSize().alpha(skeletonAlpha)) {
+                    EntryDetailSkeleton(
+                        cover = previewCover,
+                        sharedKey = "hero-image-settle-fade",
+                        heroContentPadding = 440.dp,
+                        title = previewTitle,
+                        logo = previewLogo,
+                        navigateUp = navigator::pop,
+                        isManga = true,
+                        favorite = (previewCover as? tachiyomi.domain.entries.novel.model.NovelCover)
+                            ?.isNovelFavorite == true,
+                        showGhosts = showGhosts,
+                        accentColor = rememberCachedAccentColor(
+                            novelId,
+                            EntryCoverMetadata.EntryType.NOVEL,
+                        ),
+                        resumeLabel = previewResumeLabel,
+                        resumeEnabled = previewResumeEnabled,
+                        genreGhostVisible = previewHasGenres,
+                    )
+                }
+            }
+        }
 
         val onDismissRequest = {
             screenModel.dismissDialog()
@@ -394,7 +549,7 @@ class NovelScreen(
                     accentColor = successState.accentColor,
                 )
             }
-            NovelScreenModel.Dialog.FullCover -> {
+            is NovelScreenModel.Dialog.FullCover -> {
                 val sm = rememberScreenModel { NovelCoverScreenModel(successState.novel.id) }
                 val novelState by sm.state.collectAsState()
                 val novelObj = novelState
@@ -407,12 +562,13 @@ class NovelScreen(
                     }
                     eu.kanade.presentation.entries.novel.components.NovelCoverDialog(
                         novel = novelObj,
+                        coverData = dialog.coverData,
                         snackbarHostState = sm.snackbarHostState,
                         isCustomCover = remember(novelObj) {
                             novelObj.hasCustomCover()
                         },
-                        onShareClick = { sm.shareCover(context) },
-                        onSaveClick = { sm.saveCover(context) },
+                        onShareClick = { sm.shareCover(context, dialog.coverData) },
+                        onSaveClick = { sm.saveCover(context, dialog.coverData) },
                         onEditClick = if (novelObj.favorite) {
                             {
                                 when (it) {
@@ -445,7 +601,9 @@ class NovelScreen(
                     screen = CommentsSheetScreen(
                         carrier = Carrier.BOOKS,
                         entryId = successState.novel.id,
+                        expectedComments = successState.commentsCount,
                     ),
+                    containerColor = carrierSheetContainerColor(successState.accentColor),
                     onDismissRequest = onDismissRequest,
                 )
             }
@@ -466,6 +624,34 @@ class NovelScreen(
                         onDismissRequest = onDismissRequest,
                     )
                 }
+            }
+            is NovelScreenModel.Dialog.CarrierPicker -> {
+                val pickedChapter = dialog.chapter
+                eu.kanade.presentation.entries.manga.CarrierPickerDialog(
+                    matrix = successState.carrierMatrix,
+                    preferred = pickedChapter?.let { screenModel.chapterCarrierFor(it) }
+                        ?: successState.preferredCarrier,
+                    chapterName = pickedChapter?.name,
+                    accentColor = successState.accentColor,
+                    // Chapter-scoped picks stay purely a routing choice —
+                    // the work-level sheet offers provider discovery.
+                    onFindMoreProviders = if (pickedChapter == null) {
+                        { screenModel.showFindProviderDialog() }
+                    } else {
+                        null
+                    },
+                    onVote = screenModel::voteCarrier,
+                    onReport = screenModel::reportCarrier,
+                    onRemove = screenModel::removeCarrier,
+                    onSelect = { pkg ->
+                        if (pickedChapter != null) {
+                            screenModel.setChapterCarrier(pickedChapter, pkg)
+                        } else {
+                            screenModel.setPreferredCarrier(pkg)
+                        }
+                    },
+                    onDismissRequest = onDismissRequest,
+                )
             }
         }
 

@@ -14,7 +14,10 @@ import androidx.media3.common.Timeline
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
+import eu.kanade.domain.items.chapter.interactor.SetNovelReadingPosition
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
+import eu.kanade.tachiyomi.ui.reader.novel.NovelScrollPositionCodec
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.Mp4AtomReader
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.decodeManifest
@@ -62,6 +65,13 @@ data class AudiobookPlayerState(
     /** Whether the full player overlay is expanded (D-01; driven by 06-02 UI). */
     val overlayVisible: Boolean = false,
     /**
+     * Play is mid-load: the overlay is already up but the playlist isn't
+     * bound yet — UI shows the loading branch instead of transport.
+     */
+    val loading: Boolean = false,
+    /** Chapter name to display while [loading] (no [AudiobookTrack] yet). */
+    val pendingChapterName: String? = null,
+    /**
      * Paragraph texts + start offsets (ms) from the loaded track's embedded
      * `MikoTTS` manifest — the sync source for the overlay's lyrics-style
      * text modes. Empty when the file has no manifest or hasn't loaded yet.
@@ -92,9 +102,13 @@ data class AudiobookPlayerState(
 class AudiobookPlayerController(
     private val context: Context,
     private val downloadProvider: NovelDownloadProvider = Injekt.get(),
+    private val downloadManager: eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager = Injekt.get(),
     private val ttsPreferences: NovelTtsPreferences = Injekt.get(),
     private val getNovelChaptersByNovelId: GetNovelChaptersByNovelId = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
+    private val workCarriers: eu.kanade.tachiyomi.data.mikodb.WorkCarriers = Injekt.get(),
+    private val setNovelReadStatus: SetNovelReadStatus = Injekt.get(),
+    private val setNovelReadingPosition: SetNovelReadingPosition = Injekt.get(),
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -104,6 +118,18 @@ class AudiobookPlayerController(
     private var mediaController: MediaController? = null
 
     private var playlist: List<AudiobookTrack> = emptyList()
+
+    /**
+     * chapterId → NovelChapter for the loaded playlist — feeds the
+     * listened-progress writes (read flag on completion, `lastCharRead`
+     * on mid-chapter pause/tick) so listening counts as reading progress
+     * and survives process death.
+     */
+    private var playlistChapters: Map<Long, NovelChapter> = emptyMap()
+
+    /** Session peak of the listened char offset per chapter — never write
+     * a `lastCharRead` below this or the chapter's recorded position. */
+    private val listenedCharPeak = mutableMapOf<Long, Long>()
     private var tickerJob: Job? = null
     private var lastResumeWriteMs = 0L
 
@@ -185,25 +211,102 @@ class AudiobookPlayerController(
             return true
         }
 
-        val source = awaitSource(novel.source) ?: return false
+        // Instant nav: the overlay goes up NOW — before the source await,
+        // chapter DB read, rendered-dir scan and controller bind — so the
+        // tap's feedback is the player UI itself; the pipeline runs behind
+        // it (PB spec: navigation must not wait on load).
+        _state.update {
+            it.copy(
+                novelId = novel.id,
+                novelTitle = novel.title,
+                cover = novel.asNovelCover(),
+                overlayVisible = true,
+                loading = true,
+                pendingChapterName = chapter.name,
+            )
+        }
+        fun fail(): Boolean {
+            _state.update {
+                it.copy(
+                    overlayVisible = false,
+                    loading = false,
+                    pendingChapterName = null,
+                )
+            }
+            return false
+        }
+
+        val source = awaitSource(novel.source) ?: return fail()
+        val chapters = withContext(Dispatchers.IO) {
+            getNovelChaptersByNovelId.await(novel.id)
+        }
+        playlistChapters = chapters.associateBy { it.id }
         val tracks = withContext(Dispatchers.IO) {
-            val rendered = downloadProvider.renderedAudioFileNames(novel.title, source)
-            AudiobookPlaylist.build(
-                chapters = getNovelChaptersByNovelId.await(novel.id),
+            // Same union the chapter list's render-state seed uses:
+            // the entry's source (often a canon stub with no dir) +
+            // every bound carrier + each row's own url tag. A chapter's
+            // .m4a counts when its name shows in ANY of those dirs.
+            val audioDirs = run {
+                val boundCarrierIds = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                    .workIdFromNovelUrl(novel.url)
+                    ?.let { workId ->
+                        // peek() — the detail screen's render-state seed
+                        // already warmed this cache; a cold read would
+                        // hit the worker API + extension scan mid-tap.
+                        workCarriers.peek(workId)?.carriers
+                    }
+                    ?.flatMap { it.sourceIds }
+                    .orEmpty()
+                (listOf(source) +
+                    chapters.mapNotNull { downloadManager.carrierDownloadSource(it.url) } +
+                    boundCarrierIds.mapNotNull { sourceManager.get(it) })
+                    .distinctBy { it.id }
+            }
+            val rendered = audioDirs
+                .flatMapTo(mutableSetOf()) {
+                    downloadProvider.renderedAudioFileNames(novel.title, it)
+                }
+            val local = AudiobookPlaylist.build(
+                chapters = chapters,
                 renderedFileNames = rendered,
                 audioFileName = { downloadProvider.getAudioFileName(it.name, it.scanlator) },
-                uriFor = {
-                    downloadProvider.findAudioFile(it.name, it.scanlator, novel.title, source)
-                        ?.uri?.toString()
+                uriFor = { chapter ->
+                    audioDirs.firstNotNullOfOrNull { dir ->
+                        downloadProvider.findAudioFile(
+                            chapter.name,
+                            chapter.scanlator,
+                            novel.title,
+                            dir,
+                        )?.uri?.toString()
+                    }
                 },
             )
+            if (novel.isAudiobook) {
+                // SD-3: audio-scheme chapters resolve to stream URIs
+                // (header-clean; the service injects Bearer host-scoped)
+                // and merge over the local union — a user-mixed entry
+                // with rendered .m4a files keeps them, remote wins on
+                // a chapterId collision.
+                val absSource = source as? eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
+                    ?: sourceManager.get(eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource.ABS_SOURCE_ID)
+                        as? eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
+                AudiobookPlaylist.mergeRemote(
+                    AudiobookPlaylist.buildRemote(chapters) { url ->
+                        eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+                            .streamUriFor(url, absSource)
+                    },
+                    local,
+                )
+            } else {
+                local
+            }
         }
         val startIndex = tracks.indexOfFirst { it.chapterId == chapter.id }
         if (startIndex < 0) {
             logcat(LogPriority.WARN) { "Audiobook: no rendered audio for chapter '${chapter.name}'" }
-            return false
+            return fail()
         }
-        val controller = awaitController() ?: return false
+        val controller = awaitController() ?: return fail()
 
         playlist = tracks
         pruneResumeMap(tracks)
@@ -228,7 +331,11 @@ class AudiobookPlayerController(
                 chapterIndex = startIndex,
                 chapterCount = tracks.size,
                 positionMs = resumePosition,
-                overlayVisible = true,
+                loading = false,
+                pendingChapterName = null,
+                // overlayVisible intentionally untouched: it went true
+                // optimistically at tap-time, and a user who swiped the
+                // overlay away mid-load must not have it pop back up.
             )
         }
         loadManifestFor(tracks[startIndex])
@@ -256,10 +363,30 @@ class AudiobookPlayerController(
         if (chapters.isEmpty()) return false
         val source = awaitSource(novel.source) ?: return false
         val rendered = withContext(Dispatchers.IO) {
-            downloadProvider.renderedAudioFileNames(novel.title, source)
+            // Same carrier union as play() — bound carriers cover rows
+            // whose url carries no `carrier:{id}` tag.
+            val boundCarrierIds = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                .workIdFromNovelUrl(novel.url)
+                ?.let { workId -> workCarriers.peek(workId)?.carriers }
+                ?.flatMap { it.sourceIds }
+                .orEmpty()
+            (listOf(source) +
+                chapters.mapNotNull { downloadManager.carrierDownloadSource(it.url) } +
+                boundCarrierIds.mapNotNull { sourceManager.get(it) })
+                .distinctBy { it.id }
+                .flatMapTo(mutableSetOf()) {
+                    downloadProvider.renderedAudioFileNames(novel.title, it)
+                }
         }
         fun fileName(chapter: NovelChapter) =
             downloadProvider.getAudioFileName(chapter.name, chapter.scanlator)
+
+        // Audio entries stream instead of rendering — a remote-scheme
+        // chapter is as playable as an on-disk .m4a (22-02).
+        fun isPlayable(chapter: NovelChapter) =
+            fileName(chapter) in rendered ||
+                (novel.isAudiobook &&
+                    eu.kanade.tachiyomi.source.novel.AudioChapterSchemes.isAudioChapterUrl(chapter.url))
 
         val target = when {
             // Same novel already loaded — resume that track (fast path inside play()).
@@ -279,11 +406,11 @@ class AudiobookPlayerController(
                         val idx = chapters.indexOfFirst { it.id == lastId }
                         chapters.asSequence()
                             .drop((idx + 1).coerceAtLeast(0))
-                            .firstOrNull { fileName(it) in rendered }
-                            ?: chapters.firstOrNull { it.id == lastId && fileName(it) in rendered }
+                            .firstOrNull { isPlayable(it) }
+                            ?: chapters.firstOrNull { it.id == lastId && isPlayable(it) }
                     }
                     // Never listened — the first rendered chapter.
-                    else -> chapters.firstOrNull { fileName(it) in rendered }
+                    else -> chapters.firstOrNull { isPlayable(it) }
                 }
             }
         } ?: return false
@@ -453,14 +580,28 @@ class AudiobookPlayerController(
         // isInitialized flips when EITHER the APK-extension or JS-plugin flow
         // first emits — it does not mean every source is loaded. Poll get()
         // for this specific id instead (bounded).
+        // Canon entries point at the stub id (0L) — it never enters the
+        // catalogue, so the wait is a guaranteed stall; materialize the
+        // stub immediately (playback lives under carrier dirs anyway).
+        if (sourceId == eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.CANONICAL_SOURCE_ID) {
+            return sourceManager.getOrStub(sourceId)
+        }
         var waited = 0L
         var source = sourceManager.get(sourceId)
         while (source == null && waited < SOURCE_INIT_TIMEOUT_MS) {
+            // Once the catalogue has emitted, an id it still doesn't
+            // hold is a stale/uninstalled source — either way getOrStub
+            // is the answer, so stop waiting.
+            if (sourceManager.isInitialized.value && waited > 0) break
             delay(500)
             waited += 500
             source = sourceManager.get(sourceId)
         }
-        return source
+        // Canon entries point at a stub id that never enters the
+        // catalogue — getOrStub materializes the stub instead of
+        // returning null (which used to bounce every play() to the
+        // reader's live-TTS fallback).
+        return source ?: sourceManager.getOrStub(sourceId)
     }
 
     private suspend fun awaitController(): MediaController? {
@@ -497,11 +638,12 @@ class AudiobookPlayerController(
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
-                // The previous chapter played to completion — drop its resume
-                // entry so a later replay starts from the beginning.
+                // The previous chapter played to completion — mark it read
+                // and drop its resume entry so a later replay starts at 0.
                 playlist.getOrNull(state.value.chapterIndex)?.let { prev ->
                     resumeMap.remove(prev.chapterId)
                     persistResumeMap()
+                    markChapterListened(prev.chapterId)
                 }
                 if (state.value.sleepTimer.pauseOnChapterEnd()) {
                     mediaController?.pause()
@@ -516,6 +658,7 @@ class AudiobookPlayerController(
                 playlist.getOrNull(state.value.chapterIndex)?.let { track ->
                     resumeMap.remove(track.chapterId)
                     persistResumeMap()
+                    markChapterListened(track.chapterId)
                 }
                 disarmSleepTimer()
             }
@@ -573,6 +716,10 @@ class AudiobookPlayerController(
         manifestForChapterId = track?.chapterId
         _state.update { it.copy(paragraphs = emptyList(), paragraphOffsetsMs = emptyList()) }
         if (track == null) return
+        // SD-5: remote stream URIs have no openable fd — skip the SAF
+        // read entirely (a foreign .m4a with an embedded Miko atom may
+        // get a byte-range manifest fetch in a later plan).
+        if (track.uri.startsWith("http")) return
         scope.launch {
             val manifest = withContext(Dispatchers.IO) {
                 runCatching {
@@ -647,13 +794,62 @@ class AudiobookPlayerController(
         val position = mediaController?.currentPosition?.coerceAtLeast(0) ?: return
         val duration = state.value.durationMs
         if (duration > 0 && position >= duration - END_OF_TRACK_MS) {
-            // Finished (or effectively finished) — replay starts at 0.
+            // Finished (or effectively finished) — replay starts at 0 and
+            // the chapter counts as read.
             resumeMap.remove(track.chapterId)
+            markChapterListened(track.chapterId)
         } else {
             resumeMap[track.chapterId] = position
+            persistListenedCharPos(track.chapterId, position)
         }
         lastResumeWriteMs = System.currentTimeMillis()
         persistResumeMap()
+    }
+
+    /**
+     * A chapter whose audio played to the end counts as read — listening
+     * is consuming the chapter, and the read flag is what the chapter
+     * list, history, and "continue reading" anchor actually surface.
+     */
+    private fun markChapterListened(chapterId: Long) {
+        val chapter = playlistChapters[chapterId] ?: return
+        if (chapter.read) return
+        scope.launch(Dispatchers.IO) {
+            runCatching { setNovelReadStatus.await(true, chapter) }
+                .onFailure {
+                    logcat(LogPriority.WARN) { "Audiobook: mark-read failed for ch$chapterId: ${it.message}" }
+                }
+        }
+    }
+
+    /**
+     * Whispersync-style mid-chapter progress: map the audio position to a
+     * character offset via the track's synced-paragraph manifest (same
+     * segmentation the reader uses — cumulative paragraph lengths give the
+     * active paragraph's startCharIndex) and write `lastCharRead` so the
+     * reader resumes where the listener left off. Only ever advances —
+     * a re-listen to an earlier point must not regress recorded progress.
+     */
+    private fun persistListenedCharPos(chapterId: Long, positionMs: Long) {
+        val offsets = state.value.paragraphOffsetsMs
+        val paragraphs = state.value.paragraphs
+        if (offsets.isEmpty() || paragraphs.isEmpty()) return
+        val activeIndex = offsets.indexOfLast { it <= positionMs }.coerceAtLeast(0)
+        val charPos = paragraphs.take(activeIndex).sumOf { it.length }.toLong()
+        if (charPos <= 0) return
+        val chapter = playlistChapters[chapterId] ?: return
+        val floor = maxOf(
+            NovelScrollPositionCodec.decodeCharacterPosition(chapter.lastCharRead),
+            listenedCharPeak[chapterId] ?: 0L,
+        )
+        if (charPos <= floor) return
+        listenedCharPeak[chapterId] = charPos
+        scope.launch(Dispatchers.IO) {
+            runCatching { setNovelReadingPosition.await(chapterId, charPos) }
+                .onFailure {
+                    logcat(LogPriority.WARN) { "Audiobook: char-pos write failed for ch$chapterId: ${it.message}" }
+                }
+        }
     }
 
     /** Drop resume entries for chapters that are no longer rendered. */

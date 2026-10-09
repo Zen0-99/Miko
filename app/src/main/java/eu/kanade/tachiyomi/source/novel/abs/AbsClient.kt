@@ -78,6 +78,35 @@ class AbsClient(
 
     fun isConfigured(): Boolean = baseUrl().isNotBlank() && token().isNotBlank()
 
+    // ---- streaming (22-02) ---------------------------------------------------
+
+    /**
+     * `abs://track/{itemId}/{ino}` → the header-clean stream URI against
+     * this client's configured base URL (`/api/items/{id}/file/{ino}`).
+     * Null when the chapter url is malformed or the server is unconfigured.
+     * `?token=` is never appended — the Bearer header is injected
+     * host-scoped by the playback service (T-22-02-01).
+     */
+    fun streamUriForChapter(chapterUrl: String): String? {
+        if (!isConfigured()) return null
+        val itemId = AbsUrls.itemIdFrom(chapterUrl) ?: return null
+        val ino = AbsUrls.inoFrom(chapterUrl) ?: return null
+        return AbsUrls.streamUrl(baseUrl(), itemId, ino)
+    }
+
+    /** The Bearer header pair for stream requests to this server. */
+    fun authHeaders(): Map<String, String> =
+        mapOf("Authorization" to "Bearer ${token()}")
+
+    /**
+     * `host:port` of the configured base URL with the port normalized
+     * (`HttpUrl.port` resolves the scheme default), or "" when the base
+     * URL is unset/malformed — the playback service compares a request's
+     * `dataSpec.uri` against this key before attaching [authHeaders].
+     */
+    fun hostKey(): String =
+        baseUrl().toHttpUrlOrNull()?.let { "${it.host}:${it.port}" }.orEmpty()
+
     // ---- API ---------------------------------------------------------------
 
     suspend fun me(): AbsUser =

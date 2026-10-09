@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.source.novel
 
+import eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
 import eu.kanade.tachiyomi.source.novel.abs.AbsUrls
 
 /**
@@ -18,4 +19,28 @@ object AudioChapterSchemes {
 
     /** `abs://track/…` (and later `lv://…`, `ia://…`) chapter urls. */
     fun isAudioChapterUrl(url: String): Boolean = AbsUrls.isAbsChapterUrl(url)
+
+    /**
+     * Audio-scheme chapter url → the playable stream URI, or null when the
+     * scheme is unknown, the url is malformed, or the owning source isn't
+     * configured. This is the single dispatch point — 22-03 adds the
+     * `lv://`/`ia://` arms.
+     *
+     * The returned URI carries NO credentials — `?token=` is never
+     * appended; auth rides the `Authorization` header injected by
+     * [eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlaybackService]'s
+     * host-scoped data source (T-22-02-01).
+     */
+    fun streamUriFor(chapterUrl: String, absSource: AbsNovelSource?): String? = when {
+        AbsUrls.isAbsChapterUrl(chapterUrl) -> absSource
+            ?.takeIf { it.client.isConfigured() }
+            ?.let {
+                AbsUrls.streamUrl(
+                    it.client.baseUrl(),
+                    AbsUrls.itemIdFrom(chapterUrl) ?: return null,
+                    AbsUrls.inoFrom(chapterUrl) ?: return null,
+                )
+            }
+        else -> null
+    }
 }
