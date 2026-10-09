@@ -64,6 +64,5 @@ class Spike012Test {
 
         assertTrue(json.contains("\"title\""), "source returned no entries: $json")
         println("TRACK-B RESULT: $json")
-        println("NATIVE-BLOCK-BRIDGE: ${rt.probeNativeBlockBridging()}")
     }
 }

@@ -13,11 +13,13 @@ class JsEvalFailure(message: String?) : Exception(message)
 /**
  * Track B: JavaScriptCore-evaluated source runtime.
  *
- * JS calls `fetch(url)`; the shim throws `{__fetch: url}` when the response
+ * JS calls `fetch(url)`; the shim throws `"__fetch::<url>"` when the response
  * isn't cached — Kotlin catches, fetches over ktor-darwin, stores the body in
- * `__cache`, and re-evaluates the entry point. Synchronous continuation
- * without needing ObjC-block bridging (probeNativeBlockBridging tests whether
- * the direct lambda bridge also works — diagnostic only).
+ * `__cache`, and re-evaluates the entry point. Synchronous continuation that
+ * needs no ObjC-block bridging: K/N's platform.JavaScriptCore bindings omit
+ * JSValue.valueForProperty/setObject-forKeyedSubscript (JSSubscriptSupport
+ * category), so exceptions are string-based and globals are written via
+ * evaluateScript.
  */
 @OptIn(ExperimentalForeignApi::class)
 class IosJsRuntime {
@@ -29,7 +31,7 @@ class IosJsRuntime {
             """
             var __cache = {};
             function fetch(u) {
-                if (__cache[u] === undefined) throw { __fetch: u };
+                if (__cache[u] === undefined) throw "__fetch::" + u;
                 return __cache[u];
             }
             """.trimIndent(),
@@ -41,12 +43,12 @@ class IosJsRuntime {
         val value = context.evaluateScript(script)
         context.exception?.let { ex ->
             context.exception = null
-            val url = ex.valueForProperty("__fetch")?.toString()
-            if (url != null) {
-                lastFetchUrl = url
-                throw FetchNeeded(url)
+            val text = ex.toString()
+            if (text != null && text.startsWith("__fetch::")) {
+                lastFetchUrl = text.removePrefix("__fetch::")
+                throw FetchNeeded(lastFetchUrl!!)
             }
-            throw JsEvalFailure(ex.toString())
+            throw JsEvalFailure(text)
         }
         return value?.toString() ?: ""
     }
@@ -57,15 +59,5 @@ class IosJsRuntime {
         val key = Json.encodeToString(url)
         val value = Json.encodeToString(body)
         evalOrThrow("__cache[$key] = $value")
-    }
-
-    /** Diagnostic: does passing a Kotlin lambda to setObject give JS a callable? */
-    fun probeNativeBlockBridging(): Boolean {
-        context.globalObject.setValue({ s: String -> "pong:$s" }, forProperty = "ping")
-        return try {
-            evalOrThrow("typeof ping") == "function" && evalOrThrow("ping('x')") == "pong:x"
-        } catch (e: Exception) {
-            false
-        }
     }
 }
