@@ -20,6 +20,10 @@ Requires the DEBUG build (xyz.jmir.miko.dev) on the phone — it provides the
 download trigger receiver. Interrupt-safe: an unfinished queue is saved to
 miko-render-cache\\queue.txt and offered for resume on the next run.
 
+NOTE (phase 22-05): the primary transport for PC renders is now the ABS
+watched-folder pipeline (scripts/miko_chatterbox_render.py --abs-library);
+this .bat remains the direct-ADB fallback path.
+
 Env overrides:
   MIKO_VOICE_ID     voice index (default 4 = F5)
   MIKO_RENDER_STEPS diffusion steps (default 8)

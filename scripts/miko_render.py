@@ -21,20 +21,11 @@ import unicodedata
 import os
 import numpy as np
 
-# pip-installed cuDNN/cuBLAS for ORT CUDA on Windows — no-op without them
-_SP = os.path.join(os.path.dirname(sys.executable), "Lib", "site-packages")
-_dll_dirs = [os.path.join(_SP, d) for d in
-             (r"nvidia\cudnn\bin", r"nvidia\cublas\bin", r"nvidia\cuda_runtime\bin",
-              r"nvidia\cufft\bin", r"nvidia\cuda_nvrtc\bin", r"torch\lib")]
-_dll_dirs = [d for d in _dll_dirs if os.path.isdir(d)]
-os.environ["PATH"] = ";".join(_dll_dirs) + ";" + os.environ.get("PATH", "")
-for _d in _dll_dirs:
-    try:
-        os.add_dll_directory(_d)
-    except OSError:
-        pass
-
-import onnxruntime as ort
+# onnxruntime is imported lazily inside _load_engine() — keeps
+# `import miko_render` usable on machines without it (e.g. a PC that only
+# runs the Chatterbox pipeline). The cuDNN/cuBLAS DLL dir setup below moves
+# with it; it exists only for ORT CUDA on Windows.
+ort = None
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUNDLE = os.path.join(
@@ -385,9 +376,23 @@ _engine = None
 
 
 def _load_engine():
-    global _engine, indexer, style_ttl, style_dp, dp, te, ve, voc
+    global _engine, indexer, style_ttl, style_dp, dp, te, ve, voc, ort
     if _engine:
         return
+    # pip-installed cuDNN/cuBLAS for ORT CUDA on Windows — no-op without them
+    _SP = os.path.join(os.path.dirname(sys.executable), "Lib", "site-packages")
+    _dll_dirs = [os.path.join(_SP, d) for d in
+                 (r"nvidia\cudnn\bin", r"nvidia\cublas\bin", r"nvidia\cuda_runtime\bin",
+                  r"nvidia\cufft\bin", r"nvidia\cuda_nvrtc\bin", r"torch\lib")]
+    _dll_dirs = [d for d in _dll_dirs if os.path.isdir(d)]
+    os.environ["PATH"] = ";".join(_dll_dirs) + ";" + os.environ.get("PATH", "")
+    for _d in _dll_dirs:
+        try:
+            os.add_dll_directory(_d)
+        except OSError:
+            pass
+    import onnxruntime as ort_mod
+    ort = ort_mod
     indexer = load_indexer()
     style_ttl, style_dp = load_voice(SID)
     dp, te, ve, voc = (sess(n) for n in
@@ -435,24 +440,43 @@ def infer(text, speed=1.0):
 
 # ---------- render ----------
 
-def render(txt_path, m4a_path, title):
-    _load_engine()
+def render(txt_path, m4a_path, title, infer_fn=None,
+           engine_label="supertonic-3-int8", voice_label=None,
+           sample_rate=SR, source_sample_rate=None):
+    """Render a chapter .txt -> AAC .m4a + appended uuid manifest atom.
+
+    Engine-agnostic seam: `infer_fn(text_chunk) -> float32 PCM` is called per
+    text chunk; None selects the bundled supertonic int8 path (identical output
+    to before the seam existed — same chunks, writer, and manifest values).
+
+    PCM math runs at `source_sample_rate` (the synthesizer's native rate —
+    defaults to `sample_rate`); ffmpeg resamples to `sample_rate` in the AAC
+    container. The manifest records `sampleRate` (what the player sees in the
+    container) and, when different, `sourceSampleRate` as an informational
+    field (app readers ignore unknown keys).
+
+    Returns the manifest dict that was embedded.
+    """
+    src_sr = int(source_sample_rate or sample_rate)
+    if infer_fn is None:
+        _load_engine()
+        infer_fn = infer
     raw = open(txt_path, encoding="utf-8").read()
     paras = paragraph_texts(raw)
     print(f"{len(paras)} paragraphs")
-    silence = np.zeros(int(SILENCE_S * SR), np.int16)
+    silence = np.zeros(int(SILENCE_S * src_sr), np.int16)
     all_pcm = []
     offsets_ms = []
     cum = 0
     for i, para in enumerate(paras):
-        offsets_ms.append(round(cum * 1000 / SR))
+        offsets_ms.append(round(cum * 1000 / src_sr))
         engine_text = prepare(para)
         if engine_text is None:
             continue
         first = True
         para_samples = 0
         for chunk in chunk_text(engine_text):
-            wav = infer(chunk)
+            wav = infer_fn(chunk)
             pcm = (np.clip(wav, -1, 1) * 32767).astype(np.int16)
             if not first:
                 pcm = np.concatenate([silence, pcm])
@@ -461,32 +485,36 @@ def render(txt_path, m4a_path, title):
             para_samples += len(pcm)
         cum += para_samples
         if i % 10 == 0:
-            print(f"  para {i}/{len(paras)}  {cum/SR:.0f}s", flush=True)
+            print(f"  para {i}/{len(paras)}  {cum/src_sr:.0f}s", flush=True)
     pcm = np.concatenate(all_pcm)
-    duration_ms = round(len(pcm) * 1000 / SR)
+    duration_ms = round(len(pcm) * 1000 / src_sr)
 
     wav_tmp = m4a_path + ".wav"
     import wave
     with wave.open(wav_tmp, "wb") as w:
-        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(src_sr)
         w.writeframes(pcm.tobytes())
     subprocess.run(["ffmpeg", "-y", "-i", wav_tmp, "-c:a", "aac", "-b:a", "96k",
-                    "-ac", "1", "-ar", str(SR), m4a_path],
+                    "-ac", "1", "-ar", str(sample_rate), m4a_path],
                    check=True, capture_output=True)
 
     manifest = {
-        "version": 1, "voice": "supertonic:F5", "engine": "supertonic-3-int8",
-        "chapterTitle": title, "sampleRate": SR, "speechRate": 1.0, "pitch": 1.0,
+        "version": 1, "voice": voice_label or "supertonic:F5",
+        "engine": engine_label,
+        "chapterTitle": title, "sampleRate": sample_rate, "speechRate": 1.0,
+        "pitch": 1.0,
         "durationMs": duration_ms, "paragraphOffsetsMs": offsets_ms,
         "paragraphTexts": paras, "text": "\n\n".join(paras),
     }
+    if source_sample_rate:
+        manifest["sourceSampleRate"] = int(source_sample_rate)
     payload = json.dumps(manifest, ensure_ascii=False).encode("utf-8")
     atom = struct.pack(">I", 24 + len(payload)) + b"uuid" + MIKO_UUID + payload
     with open(m4a_path, "ab") as f:
         f.write(atom)
-    import os
     os.remove(wav_tmp)
     print(f"done: {m4a_path}  {duration_ms/60000:.1f} min audio")
+    return manifest
 
 if __name__ == "__main__":
     import time
