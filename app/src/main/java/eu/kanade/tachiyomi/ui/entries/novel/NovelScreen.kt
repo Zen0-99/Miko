@@ -456,6 +456,35 @@ class NovelScreen(
                 .takeIf { successState.isBookSource },
             onDeleteBook = { screenModel.deleteBook() }
                 .takeIf { successState.isBookSource },
+            // 22-06 (B): Editions ▸ Audiobook rows — materialize the
+            // provider entry via its built-in source, then open it like
+            // a source result (fromSource=true, same as suggestions).
+            onAudioEditionClicked = { edition ->
+                scope.launch {
+                    val novel = screenModel.openAudioEdition(edition) ?: return@launch
+                    navigator.push(
+                        NovelScreen(
+                            novel.id,
+                            fromSource = true,
+                            previewCover = novel.thumbnailUrl,
+                            previewTitle = novel.title,
+                        ),
+                    )
+                }
+            },
+            onAudioPartOfClicked = { parent ->
+                scope.launch {
+                    val novel = screenModel.openAudioParentWork(parent) ?: return@launch
+                    navigator.push(
+                        NovelScreen(
+                            novel.id,
+                            fromSource = false,
+                            previewCover = novel.thumbnailUrl,
+                            previewTitle = novel.title,
+                        ),
+                    )
+                }
+            },
             )
 
             // Post-landing swap dissolves the held skeleton over the real
@@ -563,12 +592,21 @@ class NovelScreen(
                     eu.kanade.presentation.entries.novel.components.NovelCoverDialog(
                         novel = novelObj,
                         coverData = dialog.coverData,
+                        coverOptions = successState.coverOptions,
+                        pinnedCoverKey = successState.coverPinKey,
                         snackbarHostState = sm.snackbarHostState,
                         isCustomCover = remember(novelObj) {
                             novelObj.hasCustomCover()
                         },
                         onShareClick = { sm.shareCover(context, dialog.coverData) },
                         onSaveClick = { sm.saveCover(context, dialog.coverData) },
+                        onSelectCover = { option ->
+                            if (option != null) {
+                                sm.pinCover(context, option)
+                            } else {
+                                sm.unpinCover(context)
+                            }
+                        },
                         onEditClick = if (novelObj.favorite) {
                             {
                                 when (it) {
@@ -579,7 +617,10 @@ class NovelScreen(
                         } else {
                             null
                         },
-                        onDismissRequest = onDismissRequest,
+                        onDismissRequest = {
+                            sm.flushCoverToast(context)
+                            onDismissRequest()
+                        },
                     )
                 } else {
                     LoadingScreen(Modifier.systemBarsPadding())

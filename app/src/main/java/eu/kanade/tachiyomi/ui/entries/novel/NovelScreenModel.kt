@@ -154,6 +154,10 @@ class NovelScreenModel(
     private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
     private val novelExtensionManager: eu.kanade.tachiyomi.extension.novel.NovelExtensionManager = Injekt.get(),
     private val bridge: eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge = Injekt.get(),
+    private val workIdResolver: eu.kanade.tachiyomi.data.mikodb.WorkIdResolver = Injekt.get(),
+    private val canonicalCatalog: eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog = Injekt.get(),
+    private val networkToLocalNovel: tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel = Injekt.get(),
+    private val preferenceStore: tachiyomi.core.common.preference.PreferenceStore = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<NovelScreenModel.State>(State.Loading) {
 
@@ -579,6 +583,10 @@ class NovelScreenModel(
                     chapterCarriers = p?.chapterCarriers ?: emptyMap(),
                     isBookWork = p?.isBookWork ?: false,
                     bookCarrier = p?.bookCarrier,
+                    // Same keep-alive as carrierMatrix — the editions
+                    // block must not flash off and back mid-transition.
+                    audioEditions = p?.audioEditions ?: emptyList(),
+                    audioPartOf = p?.audioPartOf,
                 )
             }
 
@@ -625,14 +633,30 @@ class NovelScreenModel(
                         canonicalPipelineRunner.launchNovel(workId, novel)
                         loadCarriers(workId)
                         loadVolumes(workId)
+                        val workRow = bridge.byWorkId(workId)
                         // Books (kind=book) carry no chapter feed — they
                         // resolve to an Anna's Archive entry that owns
                         // the EPUB download + split path.
-                        if (bridge.byWorkId(workId)?.type == "book") {
+                        if (workRow?.type == "book") {
                             updateSuccessState { it.copy(isBookWork = true) }
                             resolveBookCarrier(workId)
                         }
+                        // 22-06 (B): kind='audiobook' neighbor works of
+                        // this canonical work → Editions ▸ Audiobook rows;
+                        // when THIS work is the audio edition the inverse
+                        // "Part of" row binds to the text-side neighbor.
+                        loadAudioEditions(workId)
+                        if (workRow?.type ==
+                            eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.KIND_AUDIOBOOK
+                        ) {
+                            loadAudioParentOf(workRow)
+                        }
                     }
+            } else if (novel.isAudiobook) {
+                // The shown entry IS an audio edition — surface its
+                // text-side canonical neighbor ("Part of: …") when one
+                // is already known to works_cache.
+                loadAudioParent(novel)
             }
 
             // Fetch suggestions asynchronously
@@ -1835,6 +1859,153 @@ class NovelScreenModel(
         screenModelScope.launchIO { resolveBookCarrierNow(workId) }
     }
 
+    // ---- Editions ▸ Audiobook (22-06, decision B) -------------------
+
+    /**
+     * Same-title works whose kind is `audiobook` are this canonical
+     * work's audio editions — one row per provider external id stamped
+     * on the neighbor work. Reads `works_cache` only; absent rows just
+     * mean no audio entry has resolved yet.
+     */
+    private fun loadAudioEditions(workId: String) {
+        screenModelScope.launchIO {
+            val work = bridge.byWorkId(workId) ?: return@launchIO
+            val norm = eu.kanade.tachiyomi.data.mikodb.TitleNormalizer.normalize(work.title)
+                ?.takeIf { it.isNotBlank() }
+                ?: return@launchIO
+            val editions = bridge
+                .byNormalizedTitle(
+                    norm,
+                    type = eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.KIND_AUDIOBOOK,
+                )
+                .filter { it.mikoWorkId != workId }
+                .flatMap { audioWork ->
+                    audioWork.externalIds.mapNotNull { (provider, externalId) ->
+                        eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+                            .novelUrlForProviderId(provider, externalId)
+                            ?.let { (sourceId, entryUrl) ->
+                                // A local row (browsed/favorited) carries
+                                // the real display title + narrator
+                                // (artist); the work row is the fallback.
+                                val local = novelRepository
+                                    .getNovelByUrlAndSourceId(entryUrl, sourceId)
+                                AudioEdition(
+                                    workId = audioWork.mikoWorkId,
+                                    provider = provider,
+                                    externalId = externalId,
+                                    title = local?.title ?: audioWork.title,
+                                    narrator = local?.artist?.takeIf { it.isNotBlank() },
+                                    sourceLabel = audioSourceLabel(provider, sourceId),
+                                    sourceId = sourceId,
+                                    entryUrl = entryUrl,
+                                )
+                            }
+                    }
+                }
+            updateSuccessState { it.copy(audioEditions = editions) }
+        }
+    }
+
+    /**
+     * Inverse surface for audio entries: the shown entry resolves to a
+     * kind='audiobook' work — find the same-titled text work it neighbors
+     * and surface it as "Part of: {title}". No new audio stamps here —
+     * `resolve` is the full pipeline (it's what stamps the audio row the
+     * neighbor lookup reads).
+     */
+    private fun loadAudioParent(novel: Novel) {
+        screenModelScope.launchIO {
+            val resolved = runCatching {
+                workIdResolver.resolve(
+                    eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.Candidate(
+                        medium = eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+                        title = novel.title,
+                        url = novel.url,
+                        author = novel.author,
+                        isAudiobook = true,
+                    ),
+                )
+            }.getOrNull()?.takeUnless { it.ambiguous } ?: return@launchIO
+            bridge.byWorkId(resolved.value)
+                ?.takeIf {
+                    it.type == eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.KIND_AUDIOBOOK
+                }
+                ?.let { loadAudioParentOf(it) }
+        }
+    }
+
+    /** Shared tail — [audioWork]'s same-titled text neighbor, if one is
+     *  already known to works_cache (richest external-id row wins). */
+    private suspend fun loadAudioParentOf(
+        audioWork: eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge.WorkRow,
+    ) {
+        val norm = eu.kanade.tachiyomi.data.mikodb.TitleNormalizer.normalize(audioWork.title)
+            ?: return
+        val parent = bridge.byNormalizedTitle(norm)
+            .filter {
+                it.mikoWorkId != audioWork.mikoWorkId &&
+                    it.type in TEXT_BOOK_KINDS
+            }
+            .maxByOrNull { it.externalIds.size }
+            ?: return
+        updateSuccessState {
+            it.copy(
+                audioPartOf = AudioParentWork(
+                    workId = parent.mikoWorkId,
+                    title = eu.kanade.tachiyomi.data.mikodb.TitleNormalizer
+                        .displayTitle(parent.title),
+                ),
+            )
+        }
+    }
+
+    /**
+     * Edition tap — resolve the provider entry to a local novel row
+     * (materializing it through its built-in source's `getNovelDetails`
+     * on first sight) and return the entry id to open.
+     */
+    suspend fun openAudioEdition(edition: AudioEdition): Novel? {
+        novelRepository.getNovelByUrlAndSourceId(edition.entryUrl, edition.sourceId)
+            ?.let { return it }
+        val source = sourceManager.get(edition.sourceId) as? NovelCatalogueSource
+            ?: return null
+        val stub = eu.kanade.tachiyomi.novelsource.model.SNovel.create().apply {
+            url = edition.entryUrl
+            title = edition.title
+        }
+        val details = runCatching { source.getNovelDetails(stub) }.getOrNull()
+            ?: stub
+        val novel = Novel.create().copy(
+            url = edition.entryUrl,
+            source = edition.sourceId,
+            title = details.title.takeIf { it.isNotBlank() } ?: edition.title,
+            author = details.author,
+            artist = details.artist,
+            description = details.description,
+            genre = details.getGenres(),
+            thumbnailUrl = details.thumbnail_url,
+            status = details.status.toLong(),
+            initialized = details !== stub,
+        )
+        return runCatching { networkToLocalNovel.await(novel) }.getOrNull()
+    }
+
+    /** "Part of" tap — materialize the text-side canonical row. */
+    suspend fun openAudioParentWork(parent: AudioParentWork): Novel? {
+        val work = bridge.byWorkId(parent.workId) ?: return null
+        return runCatching { canonicalCatalog.materializeNovelId(work) }
+            .getOrNull()
+            ?.let { novelRepository.getNovelById(it) }
+    }
+
+    private fun audioSourceLabel(provider: String, sourceId: Long): String =
+        sourceManager.get(sourceId)?.name ?: when (provider) {
+            eu.kanade.tachiyomi.source.novel.AudioChapterSchemes.PROVIDER_ABS -> "Audiobookshelf"
+            eu.kanade.tachiyomi.source.novel.AudioChapterSchemes.PROVIDER_LIBRIVOX -> "LibriVox"
+            eu.kanade.tachiyomi.source.novel.AudioChapterSchemes.PROVIDER_IA -> "Internet Archive"
+            else -> provider
+        }
+
     /**
      * Suspends until the carrier resolves (or provably can't) and returns
      * it — the download path's honest version of [resolveBookCarrier].
@@ -2643,6 +2814,77 @@ class NovelScreenModel(
 
     fun showFullCoverDialog(coverData: Any? = null) {
         updateSuccessState { it.copy(dialog = Dialog.FullCover(coverData)) }
+        loadCoverOptions()
+    }
+
+    /**
+     * Assemble the cover-picker strip: volume-pill art, each bound
+     * carrier's own cover, and the canonical identity's artwork (all
+     * identity-verified), plus the pinned marker from prefs. Runs per
+     * dialog open so late-bound carriers show up.
+     */
+    private fun loadCoverOptions() {
+        val state = successState ?: return
+        val novel = state.novel
+        screenModelScope.launchIO {
+            val options = mutableListOf<eu.kanade.presentation.entries.components.CoverOption>()
+            val pinPref = preferenceStore.getString(
+                eu.kanade.presentation.entries.components.coverPinPrefKey(
+                    eu.kanade.presentation.entries.components.COVER_PIN_KIND_NOVEL,
+                    novel.id,
+                ),
+                "",
+            )
+            // Push after each batch so the strip fills in as data lands
+            // instead of waiting on every carrier fetch to finish.
+            fun push() {
+                updateSuccessState {
+                    it.copy(
+                        coverOptions = options.distinctBy { o -> o.data },
+                        coverPinKey = pinPref.get().takeIf(String::isNotBlank),
+                    )
+                }
+            }
+            state.volumes?.covers?.toSortedMap()?.forEach { (no, meta) ->
+                (meta.coverUrl ?: meta.coverThumbUrl)?.let { url ->
+                    options += eu.kanade.presentation.entries.components.CoverOption(
+                        key = "vol:$no",
+                        label = "V. ${eu.kanade.presentation.entries.components.coverOrdinal(no)}",
+                        data = url,
+                    )
+                }
+            }
+            val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.workIdFromNovelUrl(novel.url)
+            if (workId == null) {
+                novel.thumbnailUrl?.let { url ->
+                    options += eu.kanade.presentation.entries.components.CoverOption(
+                        key = "source", label = state.source.name, data = url,
+                    )
+                }
+                push()
+                return@launchIO
+            }
+            bridge.byWorkId(workId)?.coverUrl?.let { url ->
+                options += eu.kanade.presentation.entries.components.CoverOption(
+                    key = "mikodb", label = "MikoDB", data = url,
+                )
+            }
+            push()
+            runCatching {
+                canonicalChapterRouter.forEachCarrierCover(
+                    workId,
+                    eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_BOOKS,
+                ) { pkg, url ->
+                    val name = state.carrierMatrix?.carriers
+                        ?.firstOrNull { it.pkgName == pkg }?.displayName
+                        ?: pkg.substringAfterLast('.')
+                    options += eu.kanade.presentation.entries.components.CoverOption(
+                        key = "carrier:$pkg", label = name, data = url,
+                    )
+                    push()
+                }
+            }
+        }
     }
 
     fun dismissDialog() {
@@ -2729,6 +2971,19 @@ class NovelScreenModel(
              *  when the cached data clears the confidence floor; the
              *  screen keeps the flat list otherwise. */
             val volumes: eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes.WorkVolumes? = null,
+            /** Cover-picker candidates + the pinned tile's key (null =
+             *  automatic cover resolution). Populated when the cover
+             *  dialog opens. */
+            val coverOptions: List<eu.kanade.presentation.entries.components.CoverOption> = emptyList(),
+            val coverPinKey: String? = null,
+            /** Audio editions of this canonical work — one row per
+             *  provider binding on kind='audiobook' neighbor works
+             *  (22-06, decision B). Empty = the Editions block hides. */
+            val audioEditions: List<AudioEdition> = emptyList(),
+            /** The shown entry is itself an audio edition — its
+             *  text-side canonical neighbor for the "Part of" row.
+             *  Null = standalone audio work or unresolved. */
+            val audioPartOf: AudioParentWork? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(novel).toList()
@@ -2774,6 +3029,10 @@ class NovelScreenModel(
     }
 
     private companion object {
+        /** Text-side books kinds — the "Part of" neighbor search never
+         *  adopts another audiobook (or a manga) as the parent work. */
+        val TEXT_BOOK_KINDS = setOf("book", "novel")
+
         /** Warm-start cache — the last [State.Success] emitted per novel,
          *  so reopening a detail screen renders instantly instead of
          *  flashing the spinner. Tiny LRU: heroes/recents only ever touch
@@ -2789,6 +3048,30 @@ class NovelScreenModel(
 /** A resolved carrier entry for a canonical book — the extension's
  *  source id + its internal entry url (drives the AA EPUB path). */
 data class BookCarrier(val sourceId: Long, val url: String)
+
+/**
+ * One provider edition of an audio work — a row in the
+ * "Editions ▸ Audiobook" block (22-06, decision B). [entryUrl]+[sourceId]
+ * address the provider entry (`abs://item/…`, `lv://book/…`,
+ * `ia://item/…`) so a tap can materialize/open it in its source.
+ */
+@Immutable
+data class AudioEdition(
+    val workId: String,
+    val provider: String,
+    val externalId: String,
+    val title: String,
+    /** Narrator when known — ABS maps `narratorName`, LibriVox maps
+     *  readers, both onto `Novel.artist`. Null on unmaterialized rows. */
+    val narrator: String?,
+    val sourceLabel: String,
+    val sourceId: Long,
+    val entryUrl: String,
+)
+
+/** The text-side canonical work an audio entry neighbors (22-06 B). */
+@Immutable
+data class AudioParentWork(val workId: String, val title: String)
 
 @Immutable
 sealed class NovelChapterList {

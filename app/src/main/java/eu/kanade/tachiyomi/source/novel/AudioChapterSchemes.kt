@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.source.novel
 
 import eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
 import eu.kanade.tachiyomi.source.novel.abs.AbsUrls
+import eu.kanade.tachiyomi.source.novel.ia.InternetArchiveSource
+import eu.kanade.tachiyomi.source.novel.librivox.LibriVoxSource
 import java.net.URLDecoder
 
 /**
@@ -34,6 +36,66 @@ object AudioChapterSchemes {
             url.startsWith(LV_TRACK_PREFIX) ||
             url.startsWith(LV_FILE_PREFIX) ||
             url.startsWith(IA_TRACK_PREFIX)
+
+    /** Provider names stamped into `works_cache_external_ids` (22-06). */
+    const val PROVIDER_ABS = "abs"
+    const val PROVIDER_LIBRIVOX = "librivox"
+    const val PROVIDER_IA = "ia"
+
+    /**
+     * Audio-scheme novel url → `(provider, external_id)` work-level
+     * identity pair (22-06, decision B). Pure parse over the persisted
+     * scheme url — no network, never upstream metadata:
+     *  - `abs://item/{itemId}` → `"abs"` to `"{serverKey}:{itemId}"`,
+     *    serverKey = [AbsUrls.serverKeyFor] of the configured base url
+     *    (an unconfigured/null source yields null — the fingerprint
+     *    would otherwise hash an empty base)
+     *  - `lv://book/{id}`      → `"librivox"` to `{id}`
+     *  - `ia://item/{id}`      → `"ia"` to `{identifier}`
+     *
+     * Only item/book-level urls produce pairs — `abs://track/…`-style
+     * chapter urls are never work identity (plan prohibition), and any
+     * non-audio url returns null.
+     */
+    fun providerIdForNovelUrl(url: String, absSource: AbsNovelSource? = null): Pair<String, String>? =
+        when {
+            AbsUrls.isAbsNovelUrl(url) -> absSource
+                ?.takeIf { it.client.isConfigured() }
+                ?.let { src ->
+                    AbsUrls.itemIdFrom(url)?.let { item ->
+                        PROVIDER_ABS to "${src.client.serverKey()}:$item"
+                    }
+                }
+            url.startsWith(LV_BOOK_PREFIX) ->
+                firstSegment(url.removePrefix(LV_BOOK_PREFIX))?.let { PROVIDER_LIBRIVOX to it }
+            url.startsWith(IA_ITEM_PREFIX) ->
+                firstSegment(url.removePrefix(IA_ITEM_PREFIX))?.let { PROVIDER_IA to it }
+            else -> null
+        }
+
+    /**
+     * Inverse of [providerIdForNovelUrl] — `(provider, external_id)` →
+     * `(sourceId, scheme url)` for the Editions ▸ Audiobook block's
+     * materialize-on-tap. `abs:` ids carry `{serverKey}:{itemId}`; only
+     * the item half addresses an entry (the server is the configured
+     * one, the key just namespaces the id).
+     */
+    fun novelUrlForProviderId(provider: String, externalId: String): Pair<Long, String>? =
+        when (provider) {
+            PROVIDER_ABS -> externalId.substringAfter(':', "")
+                .takeIf { it.isNotBlank() }
+                ?.let { AbsNovelSource.ABS_SOURCE_ID to AbsUrls.itemUrl(it) }
+            PROVIDER_LIBRIVOX -> externalId.takeIf { it.isNotBlank() }
+                ?.let { LibriVoxSource.LIBRIVOX_SOURCE_ID to LibriVoxSource.bookUrl(it) }
+            PROVIDER_IA -> externalId.takeIf { it.isNotBlank() }
+                ?.let { InternetArchiveSource.IA_SOURCE_ID to InternetArchiveSource.itemUrl(it) }
+            else -> null
+        }
+
+    /** First non-blank path segment — ids tolerate trailing segments
+     *  the same way the per-source `…From` helpers do. */
+    private fun firstSegment(rest: String): String? =
+        rest.split('/').firstOrNull()?.takeIf { it.isNotBlank() }
 
     /**
      * Audio-scheme chapter url → the playable stream URI, or null when the

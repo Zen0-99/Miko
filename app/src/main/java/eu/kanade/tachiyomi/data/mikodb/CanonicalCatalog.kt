@@ -32,13 +32,27 @@ class CanonicalCatalog {
     private val mangaRepository: MangaRepository by injectLazy()
     private val novelRepository: NovelRepository by injectLazy()
 
-    /** Ranked catalog hits for [medium] ("manga" | "books"). */
+    /**
+     * Ranked catalog hits for [medium] ("manga" | "books"). [kindsCsv]
+     * narrows to a sub-type pill's kinds ("manhwa,manhua,webtoon,…"),
+     * intersected with the medium's allowed types — a pill can only
+     * scope inside its own carrier.
+     */
     suspend fun search(
         query: String,
         medium: String,
+        kindsCsv: String? = null,
         limit: Int = 60,
-    ): List<MangaNovelIdBridge.WorkRow> =
-        bridge.searchWorks(query, WorkIdResolver.allowedTypes(medium), limit)
+    ): List<MangaNovelIdBridge.WorkRow> {
+        val allowed = WorkIdResolver.allowedTypes(medium)
+        val scoped = kindsCsv?.split(',')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.toSet()
+            ?.intersect(allowed)
+            ?.takeIf { it.isNotEmpty() }
+        return bridge.searchWorks(query, scoped ?: allowed, limit)
+    }
 
     /**
      * Insert (or reuse) the canonical manga row for [work] and return its
@@ -150,6 +164,11 @@ class CanonicalCatalog {
                         url = row.url,
                         author = row.author,
                         isBook = isBooks,
+                        // 22-06 (B): BoundRow carries no viewer flags —
+                        // the persisted scheme url is the audio signal.
+                        isAudiobook = isBooks &&
+                            eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+                                .isAudioNovelUrl(row.url),
                     ),
                 )?.takeUnless { it.ambiguous }?.value ?: continue
                 if (workId in workIds && workId !in bound) bound[workId] = BoundEntry(row.id, row.coverUrl)
@@ -173,6 +192,34 @@ class CanonicalCatalog {
             bound[work.mikoWorkId] = BoundEntry(hit.id, hit.coverUrl)
         }
         return bound
+    }
+
+    /**
+     * Covers held by materialized canonical entry rows (`miko:` url,
+     * [CANONICAL_SOURCE_ID]) for [workIds] — favorited or not. A detail
+     * visit can heal the row's thumbnail (`CanonicalPipelineRunner`
+     * backfills dead/blank covers from the carrier) after the feed
+     * snapshot was taken; discovery surfaces re-read these on resume so
+     * the grid picks the healed art up.
+     */
+    suspend fun canonicalEntryCovers(
+        workIds: Collection<String>,
+        medium: String,
+    ): Map<String, String> {
+        if (workIds.isEmpty()) return emptyMap()
+        val isBooks = medium == WorkIdResolver.MEDIUM_BOOKS
+        val prefix = if (isBooks) NOVEL_URL_PREFIX else MANGA_URL_PREFIX
+        val covers = HashMap<String, String>(workIds.size)
+        for (workId in workIds) {
+            val url = prefix + workId
+            val cover = if (isBooks) {
+                novelRepository.getNovelByUrlAndSourceId(url, CANONICAL_SOURCE_ID)?.thumbnailUrl
+            } else {
+                mangaRepository.getMangaByUrlAndSourceId(url, CANONICAL_SOURCE_ID)?.thumbnailUrl
+            }
+            if (!cover.isNullOrBlank()) covers[workId] = cover
+        }
+        return covers
     }
 
     /** A library entry bound to a discovery work — row id + its cover so

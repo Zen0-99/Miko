@@ -130,6 +130,19 @@ class LibraryCanonizer(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val inFlight = ConcurrentHashMap.newKeySet<Long>()
 
+    /** Entry id → last mint-outcome signature already surfaced to the
+     *  progress bus. Repeat heavy passes over the same unchanged set
+     *  stay silent — the "MikoDB" overlay reports news, not repeats. */
+    private val reportedOutcomes = ConcurrentHashMap<Long, String>()
+
+    private fun recordOutcome(id: Long, outcome: MintOutcome<*>) {
+        reportedOutcomes[id] = when (outcome) {
+            is MintOutcome.Migrated -> "migrated"
+            is MintOutcome.Deferred -> "deferred:${outcome.reason}"
+            is MintOutcome.Failed -> "failed:${outcome.reason}"
+        }
+    }
+
     /**
      * Why a migrate bailed — the library-update batch surfaces it in the
      * failure list instead of a bare "could not mint". [Deferred] is not
@@ -289,6 +302,15 @@ class LibraryCanonizer(
         ) {
             return MintOutcome.Failed("not a migration candidate")
         }
+        // 22-06 (B): audio entries ARE the edition — canonizing would
+        // rebuild them as text-sequence canon rows and strand the
+        // abs://lv://ia:// audio chapters (audio is never a canonical
+        // sequence member). Their works_cache identity still resolves +
+        // stamps via the prefetch/unifier paths; only the favorite
+        // transfer is skipped.
+        if (novel.isAudiobook) {
+            return MintOutcome.Failed("audiobook entry stays on its source row")
+        }
         if (!inFlight.add(novel.id)) {
             logcat { "canonize skip '${novel.title}': already in-flight" }
             return MintOutcome.Failed("already minting")
@@ -308,7 +330,12 @@ class LibraryCanonizer(
                 MangaNovelIdBridge.WorkRow(
                     mikoWorkId = workId,
                     type = resolved.kind
-                        ?: WorkIdResolver.mediumToType(WorkIdResolver.MEDIUM_BOOKS, false, null),
+                        ?: WorkIdResolver.mediumToType(
+                            WorkIdResolver.MEDIUM_BOOKS,
+                            false,
+                            null,
+                            isAudiobook = novel.isAudiobook,
+                        ),
                     title = novel.title,
                     author = novel.author,
                     genres = novel.genre,
@@ -475,6 +502,7 @@ class LibraryCanonizer(
                     title = novel.title,
                     author = novel.author,
                     isbn = WorkIdResolver.isbnFromGenre(novel.genre),
+                    isAudiobook = novel.isAudiobook,
                 ),
                 excludeWorkId = oldId,
             )
@@ -544,23 +572,30 @@ class LibraryCanonizer(
             it.source != CanonicalCatalog.CANONICAL_SOURCE_ID && !CanonicalCatalog.isCanonicalUrl(it.url)
         }
         val total = extManga.size + extNovels.size
-        // Same bus the library-update overlay reads — minting becomes a
-        // visible "MikoDB" section instead of a silent tail. Only the
-        // heavy pass reports: the app-start pass (heavy=false) defers
-        // dead-source entries by design — those aren't failures.
-        val reportProgress = networkHeavy && total > 0
-        if (reportProgress) {
-            LibraryUpdateProgressBus.startRun(total, PROGRESS_SOURCE)
-        }
         var processed = 0
         val failed = mutableListOf<FailedEntry>()
         val extMangaIds = extManga.mapTo(HashSet()) { it.id }
         val extNovelIds = extNovels.mapTo(HashSet()) { it.id }
+        // Same bus the library-update overlay reads — minting becomes a
+        // visible "MikoDB" section instead of a silent tail. Only the
+        // heavy pass reports: the app-start pass (heavy=false) defers
+        // dead-source entries by design — those aren't failures.
+        //
+        // Noise gate: an entry already reported with the same outcome
+        // (deferred/failed) stays silent on later passes — deferred
+        // entries otherwise re-pop the overlay on every refresh forever.
+        val extIds = extMangaIds + extNovelIds
+        val reportProgress = networkHeavy && total > 0 &&
+            extIds.any { !reportedOutcomes.containsKey(it) }
+        if (reportProgress) {
+            LibraryUpdateProgressBus.startRun(total, PROGRESS_SOURCE)
+        }
         try {
             for (m in manga) {
                 val outcome = migrateMangaOutcome(m, heavy = networkHeavy)
                 if (m.id in extMangaIds) {
                     processed++
+                    recordOutcome(m.id, outcome)
                     if (reportProgress) {
                         when (outcome) {
                             is MintOutcome.Migrated -> Unit
@@ -590,6 +625,7 @@ class LibraryCanonizer(
                 val outcome = migrateNovelOutcome(n, heavy = networkHeavy)
                 if (n.id in extNovelIds) {
                     processed++
+                    recordOutcome(n.id, outcome)
                     if (reportProgress) {
                         when (outcome) {
                             is MintOutcome.Migrated -> Unit
@@ -1293,6 +1329,9 @@ class LibraryCanonizer(
             title = manga.title,
             url = manga.url,
             author = manga.author,
+            // Feeds the ambiguous-hit chapter-count sieve (BLAME!-style
+            // one-shot vs series collisions).
+            chapterCount = getChaptersByMangaId.await(manga.id).size,
         )
         val resolved = try {
             if (heavy) resolver.resolve(candidate) else resolver.resolveLocal(candidate)
@@ -1320,6 +1359,8 @@ class LibraryCanonizer(
             url = novel.url,
             author = novel.author,
             isbn = WorkIdResolver.isbnFromGenre(novel.genre),
+            isAudiobook = novel.isAudiobook,
+            chapterCount = getChaptersByNovelId.await(novel.id).size,
         )
         val resolved = try {
             if (heavy) resolver.resolve(candidate) else resolver.resolveLocal(candidate)
@@ -1387,10 +1428,10 @@ class LibraryCanonizer(
         canonChapters: List<Chapter>,
     ): Boolean {
         val prevChapters = getChaptersByMangaId.await(old.id)
-        val canonParsed = canonChapters.associate { it.id to ChapterNumberParser.parse(it.name) }
+        val canonParsed = canonChapters.associate { it.id to parseOrColumn(it) }
         val bound = bindCanonChapters(
             canonChapters.map { it to canonParsed.getValue(it.id) },
-            prevChapters.map { it to ChapterNumberParser.parse(it.name) },
+            prevChapters.map { it to parseOrColumn(it) },
         )
         // Waterline in canon space: the furthest canon chapter bound
         // to a read extension chapter. Canon rows at or below it are
@@ -1507,6 +1548,34 @@ class LibraryCanonizer(
     }
 
     /**
+     * Name-parse with the row's stored number column as last resort.
+     * Canonical rows carry the worker's own `number` even when the name
+     * holds no chapter keyword ("Punch 12", "Official Scans 218"), and
+     * extension rows carry their source's numbering — an UNKNOWN parse
+     * on either side otherwise leaves every row unbindable and the
+     * transfer defers forever (One-Punch Man: 247 canon rows, zero name
+     * matches). A column number turns an UNKNOWN into a bindable
+     * CHAPTER coordinate; rows whose name asserts a non-chapter kind or
+     * that genuinely lack a number still skip.
+     */
+    private fun parseOrColumn(chapter: Chapter): ChapterNumberParser.Parsed =
+        parseOrColumn(ChapterNumberParser.parse(chapter.name), chapter.chapterNumber, chapter.isRecognizedNumber)
+
+    private fun parseOrColumn(chapter: NovelChapter): ChapterNumberParser.Parsed =
+        parseOrColumn(ChapterNumberParser.parse(chapter.name), chapter.chapterNumber, chapter.isRecognizedNumber)
+
+    private fun parseOrColumn(
+        parsed: ChapterNumberParser.Parsed,
+        columnNumber: Double,
+        recognized: Boolean,
+    ): ChapterNumberParser.Parsed =
+        if (parsed.number == null && parsed.kind == ChapterNumberParser.Kind.UNKNOWN && recognized) {
+            parsed.copy(number = columnNumber, kind = ChapterNumberParser.Kind.CHAPTER)
+        } else {
+            parsed
+        }
+
+    /**
      * Binds canon rows to extension rows by parsed name — the same
      * ladder [CanonicalChapterMap.bind] uses: kind+number+part, then
      * number+part, then a part-less number-only pair. Each canon row
@@ -1537,10 +1606,10 @@ class LibraryCanonizer(
         canonChapters: List<NovelChapter>,
     ): Boolean {
         val prevChapters = getChaptersByNovelId.await(old.id)
-        val canonParsed = canonChapters.associate { it.id to ChapterNumberParser.parse(it.name) }
+        val canonParsed = canonChapters.associate { it.id to parseOrColumn(it) }
         val bound = bindCanonChapters(
             canonChapters.map { it to canonParsed.getValue(it.id) },
-            prevChapters.map { it to ChapterNumberParser.parse(it.name) },
+            prevChapters.map { it to parseOrColumn(it) },
         )
         val maxCanonRead = bound.entries
             .filter { (canon, prev) -> prev.read && canon.isRecognizedNumber }

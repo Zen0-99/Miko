@@ -145,6 +145,7 @@ class CanonicalEntryUnifier(
                 url = novel.url,
                 author = novel.author,
                 isbn = WorkIdResolver.isbnFromGenre(novel.genre),
+                isAudiobook = novel.isAudiobook,
             ),
         )?.let { workId ->
             novelRepository.getNovelByUrlAndSourceId(
@@ -177,6 +178,7 @@ class CanonicalEntryUnifier(
                     url = novel.url,
                     author = novel.author,
                     isbn = WorkIdResolver.isbnFromGenre(novel.genre),
+                    isAudiobook = novel.isAudiobook,
                 ),
             )?.let { workId ->
                 novelRepository.getNovelByUrlAndSourceId(

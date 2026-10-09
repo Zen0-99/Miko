@@ -821,8 +821,6 @@
 
     <!-- Manga chapters -->
     <string name="display_mode_chapter">Chapter %1$s</string>
-    <string name="volume_group_chapter_range">Ch. %1$s–%2$s</string>
-    <string name="volume_group_pages">%1$d pages</string>
     <string name="manga_display_interval_title">Estimate every</string>
     <string name="manga_display_modified_interval_title">Set to update every</string>
     <!-- "... around 2 days" -->
@@ -1176,6 +1174,7 @@
     <string name="miko_carrier_report_title">Report %1$s</string>
     <string name="miko_carrier_reason_wrong_work">Wrong work — this isn\'t the right title</string>
     <string name="miko_carrier_reason_dead_feed">No chapters or empty feed</string>
+    <string name="miko_carrier_reason_missing_chapter">Missing chapters — incomplete feed</string>
     <string name="miko_carrier_reason_low_quality">Broken or low-quality content</string>
     <string name="miko_carrier_reason_other">Something else</string>
     <string name="miko_carrier_removed_snack">%1$s removed from this entry</string>

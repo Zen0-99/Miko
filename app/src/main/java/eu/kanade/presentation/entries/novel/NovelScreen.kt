@@ -72,6 +72,7 @@ import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadActio
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioIndicator
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioState
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadIndicator
+import eu.kanade.presentation.entries.novel.components.NovelAudioEditions
 import eu.kanade.presentation.entries.novel.components.NovelChapterHeader
 import eu.kanade.presentation.entries.novel.components.NovelEditDialog
 import androidx.compose.material.icons.Icons
@@ -86,6 +87,8 @@ import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
 import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.source.novel.isLocalOrStub
+import eu.kanade.tachiyomi.ui.entries.novel.AudioEdition
+import eu.kanade.tachiyomi.ui.entries.novel.AudioParentWork
 import eu.kanade.tachiyomi.ui.entries.novel.NovelChapterList
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreenModel
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
@@ -93,6 +96,7 @@ import eu.kanade.tachiyomi.util.EntryDescriptionParser
 import eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.domain.entries.novel.interactor.UpdateNovel
+import eu.kanade.domain.entries.novel.model.hasCustomCover
 import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.items.chapter.model.NovelChapter
@@ -168,6 +172,11 @@ fun NovelScreen(
     onDeleteBook: (() -> Unit)? = null,
     onHideChapter: ((NovelChapter) -> Unit)? = null,
     onUnhideChapters: (() -> Unit)? = null,
+    /** Editions ▸ Audiobook (22-06 B): tap opens/materializes the
+     *  provider audio entry in its built-in source. */
+    onAudioEditionClicked: (AudioEdition) -> Unit = {},
+    /** "Part of" row tap — opens the text-side canonical neighbor. */
+    onAudioPartOfClicked: (AudioParentWork) -> Unit = {},
     /** Artwork the caller already shows for this entry (home hero) —
      *  underlays the shared hero image so the morph never draws empty. */
     previewCover: Any? = null,
@@ -232,6 +241,8 @@ fun NovelScreen(
             onCarrierPickerClicked = onCarrierPickerClicked,
             chapterCarrierLabel = chapterCarrierLabel,
             onChapterCarrierClicked = onChapterCarrierClicked,
+            onAudioEditionClicked = onAudioEditionClicked,
+            onAudioPartOfClicked = onAudioPartOfClicked,
             previewCover = previewCover,
         )
     } else {
@@ -288,6 +299,8 @@ fun NovelScreen(
             onCarrierPickerClicked = onCarrierPickerClicked,
             chapterCarrierLabel = chapterCarrierLabel,
             onChapterCarrierClicked = onChapterCarrierClicked,
+            onAudioEditionClicked = onAudioEditionClicked,
+            onAudioPartOfClicked = onAudioPartOfClicked,
             previewCover = previewCover,
             seedHeightsPx = seedHeightsPx,
         )
@@ -386,6 +399,8 @@ private fun NovelScreenSmallImpl(
     onCarrierPickerClicked: (() -> Unit)? = null,
     chapterCarrierLabel: (suspend (NovelChapter) -> String?)? = null,
     onChapterCarrierClicked: ((NovelChapter) -> Unit)? = null,
+    onAudioEditionClicked: (AudioEdition) -> Unit = {},
+    onAudioPartOfClicked: (AudioParentWork) -> Unit = {},
     previewCover: Any? = null,
     seedHeightsPx: Map<Any, Int> = emptyMap(),
 ) {
@@ -518,9 +533,17 @@ private fun NovelScreenSmallImpl(
     // Volume-cover override — the hero artwork + accent follow the volume
     // the user is looking at, same swap as the shows screen's per-season
     // posters. The persisted library cover is untouched: browsing a volume
-    // is session state, not progress.
-    val volumeCoverOverride = volumeGrouping?.meta?.get(selectedChapterGroup)
-        ?.let { it.coverUrl ?: it.coverThumbUrl }
+    // is session state, not progress. A pinned/custom cover beats the
+    // swap — the user chose that art explicitly.
+    val hasCustomCover = remember(state.novel.coverLastModified) {
+        state.novel.hasCustomCover()
+    }
+    val volumeCoverOverride = if (hasCustomCover) {
+        null
+    } else {
+        volumeGrouping?.meta?.get(selectedChapterGroup)
+            ?.let { it.coverUrl ?: it.coverThumbUrl }
+    }
     val displayedAccent = rememberEntryAccentColor(
         entryId = state.novel.id,
         cover = volumeCoverOverride ?: state.novel.asNovelCover(),
@@ -539,9 +562,11 @@ private fun NovelScreenSmallImpl(
         )
         ?.let { volumeGrouping?.meta?.get(it) }
         ?.let { it.coverUrl ?: it.coverThumbUrl }
-    LaunchedEffect(progressVolumeCover, state.novel.thumbnailUrl) {
+    LaunchedEffect(progressVolumeCover, state.novel.thumbnailUrl, hasCustomCover) {
         val cover = progressVolumeCover
-        if (cover != null && cover != state.novel.thumbnailUrl) {
+        // A pinned/custom cover owns the artwork — don't churn
+        // thumbnailUrl underneath it.
+        if (!hasCustomCover && cover != null && cover != state.novel.thumbnailUrl) {
             try {
                 updateNovel.await(
                     NovelUpdate(
@@ -869,6 +894,26 @@ private fun NovelScreenSmallImpl(
                     )
                 }
 
+                // 22-06 (B): Editions ▸ Audiobook — provider rows for
+                // kind='audiobook' neighbor works (or "Part of" when the
+                // shown entry is the audio edition). Absent entirely when
+                // no audio work is bound — never an empty stub.
+                if (state.audioEditions.isNotEmpty() || state.audioPartOf != null) {
+                    item(
+                        key = "audio-editions",
+                        contentType = EntryScreenItem.ITEM,
+                    ) {
+                        NovelAudioEditions(
+                            editions = state.audioEditions,
+                            partOf = state.audioPartOf,
+                            onEditionClick = onAudioEditionClicked,
+                            onPartOfClick = onAudioPartOfClicked,
+                            accentColor = displayedAccent,
+                            modifier = Modifier.settleIn("audio-editions"),
+                        )
+                    }
+                }
+
                 // Similar titles — temporarily disabled
 //                item(key = "SUGGESTIONS", contentType = "SUGGESTIONS") {
 //                    AuroraSuggestionsRow(
@@ -990,18 +1035,24 @@ private fun NovelScreenSmallImpl(
                         val centeredOffsetPx = with(LocalDensity.current) {
                             (16.dp - LocalConfiguration.current.screenWidthDp.dp * 0.125f).roundToPx()
                         }
+                        val sortDescending = state.novel.sortDescending()
+                        // Descending puts the latest chapter at the list
+                        // head — anchor there, not on ch1 at the far end,
+                        // so rightward scroll descends through numbers
+                        // rather than forcing a leftward read.
+                        val anchorIndex = if (sortDescending) 0 else nextIndex
+                        val anchorOffset = if (sortDescending) 0 else centeredOffsetPx
                         val rowState = rememberLazyListState(
-                            initialFirstVisibleItemIndex = nextIndex,
-                            initialFirstVisibleItemScrollOffset = centeredOffsetPx,
+                            initialFirstVisibleItemIndex = anchorIndex,
+                            initialFirstVisibleItemScrollOffset = anchorOffset,
                         )
                         // Re-anchor when the sort direction flips or the
                         // group pill swaps the list — LazyRow otherwise
                         // keeps the stale scroll index and strands the
                         // user at the wrong end, needing a backwards scroll.
-                        val sortDescending = state.novel.sortDescending()
                         val listHeadId = filteredChapters.firstOrNull()?.chapter?.id
                         LaunchedEffect(listHeadId, sortDescending) {
-                            rowState.scrollToItem(nextIndex, centeredOffsetPx)
+                            rowState.scrollToItem(anchorIndex, anchorOffset)
                         }
                         LazyRow(
                             state = rowState,
@@ -1256,6 +1307,8 @@ private fun NovelScreenLargeImpl(
     onCarrierPickerClicked: (() -> Unit)? = null,
     chapterCarrierLabel: (suspend (NovelChapter) -> String?)? = null,
     onChapterCarrierClicked: ((NovelChapter) -> Unit)? = null,
+    onAudioEditionClicked: (AudioEdition) -> Unit = {},
+    onAudioPartOfClicked: (AudioParentWork) -> Unit = {},
     previewCover: Any? = null,
 ) {
     NovelScreenSmallImpl(
@@ -1311,6 +1364,8 @@ private fun NovelScreenLargeImpl(
         onCarrierPickerClicked = onCarrierPickerClicked,
         chapterCarrierLabel = chapterCarrierLabel,
         onChapterCarrierClicked = onChapterCarrierClicked,
+        onAudioEditionClicked = onAudioEditionClicked,
+        onAudioPartOfClicked = onAudioPartOfClicked,
         previewCover = previewCover,
     )
 }

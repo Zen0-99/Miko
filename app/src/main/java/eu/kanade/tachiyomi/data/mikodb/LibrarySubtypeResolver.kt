@@ -163,6 +163,9 @@ class LibrarySubtypeResolver(
                 url = novel.url,
                 author = novel.author,
                 isbn = WorkIdResolver.isbnFromGenre(novel.genre),
+                // 22-06 (B): resolve the audio work so its kind can't
+                // cross-bind to the same-titled text work.
+                isAudiobook = novel.isAudiobook,
             ),
         )?.kind
     }

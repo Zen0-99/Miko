@@ -41,35 +41,37 @@ class LibraryWorkPrefetcher {
     /** Upgrades a running resolve-only pass to include canonization. */
     private val canonizeRequested = AtomicBoolean(false)
 
-    /** Re-run after the current pass — set when canonize arrives mid-run
-     *  (entries added during the pass would otherwise be missed). */
-    private val rerunRequested = AtomicBoolean(false)
-
     /** Process-lifetime dedup — each resolved id is reported once. */
     private val reportedIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /** Idempotent background pass over both favorite lists. */
     fun start(canonize: Boolean = false) {
         if (canonize) canonizeRequested.set(true)
-        if (job?.isActive == true) {
-            if (canonize) rerunRequested.set(true)
-            return
-        }
+        if (job?.isActive == true) return
         job = scope.launch {
             try {
-                do {
-                    rerunRequested.set(false)
-                    prefetchManga()
-                    prefetchNovels()
-                    prefetchShows()
-                } while (rerunRequested.get())
+                prefetchManga()
+                prefetchNovels()
+                prefetchShows()
                 // Pass tail: move favorites onto canonical rows. On a
                 // canonize pass (library refresh) the full enrich +
                 // canonize + sync chain runs per entry; on plain passes
                 // only works with an existing canon sequence migrate —
                 // no extension traffic for a speculative batch.
                 try {
-                    canonizer.migrateAllFavorites(networkHeavy = canonizeRequested.get())
+                    // `start(canonize = true)` landing mid-tail can only
+                    // set the flag — a light pass already running cannot
+                    // upgrade itself. The tail re-reads the favorites
+                    // list per pass anyway, so re-running it heavy covers
+                    // anything queued while a light tail was in flight —
+                    // without the recheck the request was dropped (the
+                    // finally clears the flag) and a library refresh
+                    // minted nothing.
+                    var tailHeavy = false
+                    do {
+                        tailHeavy = canonizeRequested.get()
+                        canonizer.migrateAllFavorites(networkHeavy = tailHeavy)
+                    } while (canonizeRequested.get() && !tailHeavy)
                 } catch (e: Exception) {
                     logcat { "canonize pass failed: ${e.message}" }
                 }
@@ -114,6 +116,12 @@ class LibraryWorkPrefetcher {
                     author = novel.author,
                     isbn = WorkIdResolver.isbnFromGenre(novel.genre),
                     isBook = novel.source == ANNAS_ARCHIVE_SOURCE_ID,
+                    // 22-06 (B): audio favorites resolve/stamp their own
+                    // kind='audiobook' works here — the Editions block
+                    // reads those rows. Novels rows carry viewer flags
+                    // but the persisted scheme url is the same signal.
+                    isAudiobook = eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+                        .isAudioNovelUrl(novel.url),
                 ),
             )
         }

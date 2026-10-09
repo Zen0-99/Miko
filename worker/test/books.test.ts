@@ -183,6 +183,108 @@ describe('resolve — books (OpenLibrary)', () => {
     });
 });
 
+// 22-06 decision B — provider-keyed `mk:audio:` mints (kind='audiobook')
+// for ABS/LibriVox/IA requests, with kind parity against text works.
+describe('resolve — audiobooks (22-06 B)', () => {
+    it('mints a kind=audiobook mk:audio: work from a provider id', async () => {
+        const res = await resolve({
+            title: 'Audio Dune', medium: 'books', kind_hint: 'audiobook',
+            provider: 'librivox', external_id: '15147',
+        });
+        expect(res.status).toBe(200);
+        const body = await res.json<{
+            work: {
+                miko_work_id: string; kind: string; medium: string;
+                external_ids: Record<string, string>;
+            };
+        }>();
+        expect(body.work.miko_work_id).toBe('mk:audio:librivox:15147');
+        expect(body.work.kind).toBe('audiobook');
+        expect(body.work.medium).toBe('books');
+        expect(body.work.external_ids.librivox).toBe('15147');
+    });
+
+    it('re-resolution is idempotent — one work, one provider row', async () => {
+        const req = {
+            title: 'Audio Messiah', medium: 'books', kind_hint: 'audiobook',
+            provider: 'ia', external_id: 'dune_messiah_ia',
+        };
+        const wa = (await (await resolve(req)).json<{ work: { miko_work_id: string } }>()).work;
+        const wb = (await (await resolve(req)).json<{ work: { miko_work_id: string } }>()).work;
+        expect(wa.miko_work_id).toBe('mk:audio:ia:dune_messiah_ia');
+        expect(wb.miko_work_id).toBe(wa.miko_work_id);
+        const row = await env.COMMENTS_DB.prepare(
+            `SELECT COUNT(*) AS n FROM external_ids
+             WHERE provider = 'ia' AND external_id = 'dune_messiah_ia'`,
+        ).first<{ n: number }>();
+        expect(row?.n).toBe(1);
+    });
+
+    it('ABS ids carry the server-keyed shape verbatim', async () => {
+        const res = await resolve({
+            title: 'Audio Children', medium: 'books',
+            provider: 'abs', external_id: 'a1b2c3d4e5f6:it-99',
+        });
+        const body = await res.json<{ work: { miko_work_id: string } }>();
+        expect(body.work.miko_work_id).toBe('mk:audio:abs:a1b2c3d4e5f6:it-99');
+    });
+
+    it('audio requests never adopt a same-titled text work', async () => {
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_cache
+             (miko_work_id, type, title, normalized_title, provider_links, medium, fetched_at)
+             VALUES ('mk:ol:OLTX1', 'novel', 'Split Kind Book', 'split kind book', '[]', 'books', 0)`,
+        ).run();
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_titles (miko_work_id, title, normalized)
+             VALUES ('mk:ol:OLTX1', 'Split Kind Book', 'split kind book')`,
+        ).run();
+        const res = await resolve({
+            title: 'Split Kind Book', medium: 'books', kind_hint: 'audiobook',
+            provider: 'librivox', external_id: '777',
+        });
+        const body = await res.json<{ work: { miko_work_id: string; kind: string } }>();
+        // Parity excludes the 'novel' row → the audio arm mints its own.
+        expect(body.work.miko_work_id).toBe('mk:audio:librivox:777');
+        expect(body.work.kind).toBe('audiobook');
+    });
+
+    it('text requests never adopt an audiobook-kind row', async () => {
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_cache
+             (miko_work_id, type, title, normalized_title, provider_links, medium, fetched_at)
+             VALUES ('mk:audio:librivox:555', 'audiobook', 'Audio Only Book', 'audio only book', '[]', 'books', 0)`,
+        ).run();
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_titles (miko_work_id, title, normalized)
+             VALUES ('mk:audio:librivox:555', 'Audio Only Book', 'audio only book')`,
+        ).run();
+        const res = await resolve({ title: 'Audio Only Book', medium: 'books' });
+        const body = await res.json<{ work: unknown }>();
+        expect(body.work).toBeNull();
+    });
+
+    it('audio requests without a provider pair mint nothing', async () => {
+        const res = await resolve({
+            title: 'Identityless Audio', medium: 'books', kind_hint: 'audiobook',
+        });
+        const body = await res.json<{ work: unknown }>();
+        expect(body.work).toBeNull();
+    });
+
+    it('audio resolves never reach OpenLibrary even with an isbn field', async () => {
+        // An audio request carrying isbn must not fall into resolveBook —
+        // the audio arm returns before the OL gates.
+        const res = await resolve({
+            title: 'Isbn Audio', medium: 'books', kind_hint: 'audiobook',
+            provider: 'ia', external_id: 'isbn_audio_1', isbn: '9780441172719',
+        });
+        const body = await res.json<{ work: { miko_work_id: string; kind: string } }>();
+        expect(body.work.miko_work_id).toBe('mk:audio:ia:isbn_audio_1');
+        expect(body.work.kind).toBe('audiobook');
+    });
+});
+
 describe('book comment threads', () => {
     async function postAuth(path: string, body: unknown, token: string) {
         return SELF.fetch(`http://test${path}`, {

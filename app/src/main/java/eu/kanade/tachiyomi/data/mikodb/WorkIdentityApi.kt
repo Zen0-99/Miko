@@ -37,9 +37,11 @@ class WorkIdentityApi {
         val author: String? = null,
         val year: Int? = null,
         /** Fetch disambiguator — never the resolved kind ("book" gates
-         *  OpenLibrary; "movie"/"series" order the Cinemeta meta fetch).
-         *  Renamed from `kind` in Phase 15 (the response owns that word);
-         *  the Worker accepts the legacy field for one deploy cycle. */
+         *  OpenLibrary; "movie"/"series" order the Cinemeta meta fetch;
+         *  "audiobook" — 22-06 B — routes books requests to the worker's
+         *  `mk:audio:` mint). Renamed from `kind` in Phase 15 (the
+         *  response owns that word); the Worker accepts the legacy field
+         *  for one deploy cycle. */
         @SerialName("kind_hint")
         val kindHint: String? = null,
         /** Strong book identity — ISBN-10/13, edition → work rollup. */
@@ -551,7 +553,7 @@ class WorkIdentityApi {
         val provider: String,
         val provider_ref: String,
         /** The report reason taxonomy — 'wrong_work' | 'dead_feed' |
-         *  'low_quality' | 'other'; omit for a bare report. */
+         *  'missing_chapter' | 'low_quality' | 'other'; omit for a bare report. */
         val kind: String? = null,
     )
 
@@ -621,6 +623,11 @@ class WorkIdentityApi {
         val tier_cap: String? = null,
         val minted_count: Int = 0,
         val solidified_count: Int = 0,
+        /** Total binding_confirms rows (upvotes) this provider has earned
+         *  across every work — the sheet's "N pts" reputation number.
+         *  Nullable so a pre-20-08 worker (field absent) hides the
+         *  label instead of lying "0 pts". */
+        val confirm_count: Int? = null,
     )
 
     @Serializable

@@ -2,11 +2,14 @@ package eu.kanade.tachiyomi.data.mikodb
 
 import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge.WorkRow
+import eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+import eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.injectLazy
 
 /**
@@ -36,9 +39,17 @@ class WorkIdResolver {
         val isbn: String? = null,
         /** Marks published-book sources; gates the Worker's OpenLibrary path. */
         val isBook: Boolean = false,
+        /** Remote-audio entry (ABS/LibriVox/IA scheme url or the entry's
+         *  VIEWER_FLAG_AUDIOBOOK). 22-06 decision B: kind='audiobook'
+         *  participates in the mk:m: mint hash, so audio editions mint
+         *  their own works instead of stitching onto the text work —
+         *  text candidates must therefore leave this false or their
+         *  identity forks. */
+        val isAudiobook: Boolean = false,
         /** Fetch disambiguator + mk:m: mint-kind seed — never asserted as
-         *  the resolved kind (vocab {book, movie, series}; 15-01 contract).
-         *  Shows call sites pass the Cinemeta url type when known. */
+         *  the resolved kind (vocab {book, movie, series, audiobook};
+         *  15-01 contract + 22-06). Shows call sites pass the Cinemeta
+         *  url type when known. */
         val kindHint: String? = null,
         /** The entry's fetched chapter count — the only signal that
          *  separates same-author same-title works (a one-shot vs the
@@ -64,6 +75,7 @@ class WorkIdResolver {
     private val bridge: MangaNovelIdBridge by injectLazy()
     private val api: WorkIdentityApi by injectLazy()
     private val json: Json by injectLazy()
+    private val novelSourceManager: NovelSourceManager by injectLazy()
 
     /**
      * [excludeWorkId] drops that row from the local title hits — mint
@@ -71,15 +83,34 @@ class WorkIdResolver {
      *  short-circuit the Worker lookup that would upgrade it.
      */
     suspend fun resolve(candidate: Candidate, excludeWorkId: String? = null): CanonicalWorkId? {
+        val resolved = resolvePipeline(candidate, excludeWorkId)
+        // 22-06 (B): audio entries resolve onto their own kind='audiobook'
+        // works — the resolve stamps the works_cache row (the LOCAL_MINT
+        // path creates none) and upserts the url-derived provider binding
+        // so re-resolution is idempotent and the Editions block can find
+        // the edition by work.
+        if (resolved != null && !resolved.ambiguous && candidate.isAudioCandidate()) {
+            stampAudioWork(candidate, resolved.value)
+        }
+        return resolved
+    }
+
+    private suspend fun resolvePipeline(
+        candidate: Candidate,
+        excludeWorkId: String? = null,
+    ): CanonicalWorkId? {
         val allowedTypes = allowedTypes(candidate.medium)
         val norm = TitleNormalizer.normalize(candidate.title) ?: return null
+        val isAudio = candidate.isAudioCandidate()
 
         // 1. URL-carried provider IDs + ISBN against local cache.
         val ids = urlCandidates(candidate) +
             listOfNotNull(candidate.isbn?.let { normalizeIsbn(it)?.let { n -> "isbn" to n } })
         for ((provider, id) in ids) {
             val row = bridge.byExternalId(provider, id)
-            if (row != null && row.mikoWorkId != excludeWorkId && row.type in allowedTypes) {
+            if (row != null && row.mikoWorkId != excludeWorkId && row.type in allowedTypes &&
+                kindCompatible(row.type, isAudio)
+            ) {
                 return CanonicalWorkId(
                     row.mikoWorkId,
                     candidate.medium,
@@ -94,6 +125,7 @@ class WorkIdResolver {
         val titleHits = bridge.byNormalizedTitle(norm)
             .filter { it.mikoWorkId != excludeWorkId }
             .filter { it.type in allowedTypes }
+            .filter { kindCompatible(it.type, isAudio) }
         if (titleHits.size == 1) {
             return CanonicalWorkId(
                 titleHits.single().mikoWorkId,
@@ -113,7 +145,7 @@ class WorkIdResolver {
         // the same series 3×). Collapse provable same-work dupes to
         // the richest row; genuinely distinct works stay ambiguous.
         if (titleHits.size > 1) {
-            disambiguateTitleHits(norm, candidate.medium, allowedTypes, candidate)
+            disambiguateTitleHits(norm, candidate.medium, allowedTypes, candidate, isAudio)
                 ?.let { return it }
             return CanonicalWorkId(
                 titleHits.first().mikoWorkId,
@@ -129,13 +161,80 @@ class WorkIdResolver {
         return CanonicalWorkId(
             WorkIdMint.mint(
                 candidate.title,
-                mediumToType(candidate.medium, candidate.isBook, candidate.kindHint),
+                mediumToType(
+                    candidate.medium,
+                    candidate.isBook,
+                    candidate.kindHint,
+                    isAudiobook = isAudio,
+                ),
                 candidate.author,
             ),
             candidate.medium,
             Confidence.LOCAL_MINT,
         )
     }
+
+    /**
+     * 22-06 (B): an audio entry is audio when the flag is set OR its
+     *  persisted url carries an audio scheme — the url check covers any
+     *  call site that hasn't threaded the flag yet.
+     */
+    private fun Candidate.isAudioCandidate(): Boolean =
+        medium == MEDIUM_BOOKS &&
+            (isAudiobook || url?.let(AudioChapterSchemes::isAudioNovelUrl) == true)
+
+    /**
+     * Kind parity under decision B: audio and text works sharing a title
+     * are distinct works — a resolve must never land on the other side's
+     * kind (a same-titled 'novel' row can't satisfy an audiobook
+     * candidate and vice versa).
+     */
+    private fun kindCompatible(type: String, isAudio: Boolean): Boolean =
+        (type == KIND_AUDIOBOOK) == isAudio
+
+    /**
+     * 22-06 (B): upsert the audio work row (LOCAL_MINT resolutions cache
+     *  nothing on their own) and merge the url-derived provider binding
+     *  onto the resolved work. `upsertExternalId` keys on
+     *  (provider, external_id), so repeat resolves stay single-row.
+     */
+    private suspend fun stampAudioWork(candidate: Candidate, workId: String) {
+        val providerIds = listOfNotNull(candidate.url)
+            .mapNotNull { audioProviderId(it) }
+            .toMap()
+        val existing = bridge.byWorkId(workId)
+        if (existing == null) {
+            bridge.upsert(
+                WorkRow(
+                    mikoWorkId = workId,
+                    type = KIND_AUDIOBOOK,
+                    title = candidate.title,
+                    author = candidate.author,
+                    resolutionSource = "audio_mint",
+                    externalIds = providerIds,
+                ),
+            )
+            return
+        }
+        if (existing.type != KIND_AUDIOBOOK) {
+            logcat {
+                "audio stamp skip '${candidate.title}': $workId is kind=${existing.type}"
+            }
+            return
+        }
+        val missing = providerIds.filter { existing.externalIds[it.key] != it.value }
+        if (missing.isNotEmpty()) {
+            bridge.upsert(existing.copy(externalIds = existing.externalIds + missing))
+        }
+    }
+
+    /** Audio-scheme novel url → (provider, external_id); the ABS arm
+     *  needs the configured source for its server fingerprint. */
+    private fun audioProviderId(url: String): Pair<String, String>? =
+        AudioChapterSchemes.providerIdForNovelUrl(
+            url,
+            novelSourceManager.get(AbsNovelSource.ABS_SOURCE_ID) as? AbsNovelSource,
+        )
 
     /**
      * [resolve] steps 1-2 only — local `works_cache` hits (URL-carried
@@ -148,12 +247,13 @@ class WorkIdResolver {
     suspend fun resolveLocal(candidate: Candidate): CanonicalWorkId? {
         val allowedTypes = allowedTypes(candidate.medium)
         val norm = TitleNormalizer.normalize(candidate.title) ?: return null
+        val isAudio = candidate.isAudioCandidate()
 
         val ids = urlCandidates(candidate) +
             listOfNotNull(candidate.isbn?.let { normalizeIsbn(it)?.let { n -> "isbn" to n } })
         for ((provider, id) in ids) {
             val row = bridge.byExternalId(provider, id)
-            if (row != null && row.type in allowedTypes) {
+            if (row != null && row.type in allowedTypes && kindCompatible(row.type, isAudio)) {
                 return CanonicalWorkId(
                     row.mikoWorkId,
                     candidate.medium,
@@ -166,6 +266,7 @@ class WorkIdResolver {
 
         val titleHits = bridge.byNormalizedTitle(norm)
             .filter { it.type in allowedTypes }
+            .filter { kindCompatible(it.type, isAudio) }
         if (titleHits.size == 1) {
             return CanonicalWorkId(
                 titleHits.single().mikoWorkId,
@@ -178,7 +279,7 @@ class WorkIdResolver {
         if (titleHits.size > 1) {
             // Same local dupe-collapse as resolve() — no worker call,
             // still stays ambiguous on genuinely distinct works.
-            return disambiguateTitleHits(norm, candidate.medium, allowedTypes, candidate)
+            return disambiguateTitleHits(norm, candidate.medium, allowedTypes, candidate, isAudio)
         }
         return null
     }
@@ -201,9 +302,11 @@ class WorkIdResolver {
         medium: String,
         allowedTypes: Set<String>,
         candidate: Candidate,
+        isAudio: Boolean = candidate.isAudioCandidate(),
     ): CanonicalWorkId? {
         val hits = bridge.byNormalizedTitleDetailed(norm)
             .filter { it.row.type in allowedTypes }
+            .filter { kindCompatible(it.row.type, isAudio) }
         val primary = hits.filter { it.isPrimary }.map { it.row }
         if (primary.isEmpty()) {
             logcat { "disambiguate '$norm': ${hits.size} hits, none primary — stays ambiguous" }
@@ -309,8 +412,14 @@ class WorkIdResolver {
         // One attempt per URL candidate, then a plain title lookup.
         // kind_hint rides every request — advisory only (Worker is the
         // kind authority): 'book' gates OpenLibrary, 'movie'/'series'
-        // order the Cinemeta meta fetch.
-        val kind = candidate.kindHint ?: (if (candidate.isBook) "book" else null)
+        // order the Cinemeta meta fetch, 'audiobook' (22-06 B) routes to
+        // the worker's audio mint and never reaches MangaBaka/OL.
+        val isAudio = candidate.isAudioCandidate()
+        val kind = if (isAudio) {
+            KIND_AUDIOBOOK
+        } else {
+            candidate.kindHint ?: (if (candidate.isBook) "book" else null)
+        }
         val isbn = candidate.isbn?.let { normalizeIsbn(it) }
         val attempts = urlCandidates(candidate).map { (provider, id) ->
             WorkIdentityApi.ResolveRequest(
@@ -335,7 +444,8 @@ class WorkIdResolver {
             // mirror. Honest-null rows (upstream-degraded mints) resolve
             // only when the Worker vouches the carrier via `medium`.
             val dtoKind = dto.kind ?: dto.type
-            val kindOk = dtoKind != null && dtoKind in allowedTypes
+            val kindOk = dtoKind != null && dtoKind in allowedTypes &&
+                kindCompatible(dtoKind, isAudio)
             val carrierOk = dtoKind == null && dto.medium != null && dto.medium == candidate.medium
             if (!kindOk && !carrierOk) return null
             // kind-null rows skip the local upsert — works_cache.type is
@@ -419,16 +529,25 @@ class WorkIdResolver {
         emptyMap()
     }
 
-    /** (provider, external_id) pairs mined from known URL shapes. */
+    /** (provider, external_id) pairs mined from known URL shapes —
+     *  web providers via [extractExternalIds] plus the work-level audio
+     *  pairs (`abs:`/`librivox:`/`ia:`) from scheme urls (22-06). */
     private fun urlCandidates(candidate: Candidate): List<Pair<String, String>> {
         val urls = listOfNotNull(candidate.url) + candidate.webviewUrls
-        return urls.flatMap { extractExternalIds(it) }
+        return urls.flatMap { url ->
+            extractExternalIds(url) + listOfNotNull(audioProviderId(url))
+        }
     }
 
     companion object {
         const val MEDIUM_MANGA = "manga"
         const val MEDIUM_BOOKS = "books"
         const val MEDIUM_SHOWS = "shows"
+
+        /** Work kind for remote-audio editions (22-06, decision B) —
+         *  participates in `mk:m:` mint hashes, so audio and text
+         *  editions of the same title mint distinct works. */
+        const val KIND_AUDIOBOOK = "audiobook"
 
         /** Regional-spelling pairs tried as title variants when the
          *  literal title misses upstream. Deliberately small — every
@@ -450,10 +569,9 @@ class WorkIdResolver {
 
         /** Kinds accepted for each carrier — mirrors the worker's
          *  MEDIUM_TYPES. 'oel' is a manga kind (original-English-language
-         *  comics), never books. 'audiobook' is accepted under books so a
-         *  worker-authored audiobook kind row is never dropped — no local
-         *  mint stamps it yet (the stamp side is an identity-model
-         *  decision gated in 22-06, since kind feeds the mk:m: hash). */
+         *  comics), never books. 'audiobook' is a real books kind under
+         *  22-06 decision B — stamped by audio mints ([KIND_AUDIOBOOK]
+         *  in the mk:m: hash) and by the worker's `mk:audio:` mints. */
         internal fun allowedTypes(medium: String) =
             when (Carrier.fromMedium(medium)) {
                 Carrier.SHOWS -> setOf("anime", "movie", "series")
@@ -464,11 +582,20 @@ class WorkIdResolver {
         /** Kind stamped into local `mk:m:` fallback mints. Shows mints
          *  carry a shows kind (kindHint ?: "series") and books mints
          *  keep 'novel' so mk:m: hashes stay carrier-disjoint AND stable
-         *  across the rename (mk:m: hashes `title|type|…`). */
-        internal fun mediumToType(medium: String, isBook: Boolean, kindHint: String?): String {
+         *  across the rename (mk:m: hashes `title|type|…`). 22-06 (B):
+         *  [isAudiobook] emits 'audiobook' — audio editions mint their
+         *  own works, so the flag must only be true for audio candidates
+         *  (never on a text resolve or the fork splits the work). */
+        internal fun mediumToType(
+            medium: String,
+            isBook: Boolean,
+            kindHint: String?,
+            isAudiobook: Boolean = false,
+        ): String {
             val carrier = Carrier.fromMedium(medium)
             return when {
                 carrier == Carrier.SHOWS -> kindHint ?: "series"
+                isAudiobook && carrier == Carrier.BOOKS -> KIND_AUDIOBOOK
                 isBook -> "book"
                 carrier == Carrier.BOOKS -> "novel"
                 else -> "manga"

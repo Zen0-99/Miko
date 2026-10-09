@@ -53,6 +53,9 @@ class ThreadIdResolver(
                 author = novel.author,
                 isbn = WorkIdResolver.isbnFromGenre(novel.genre),
                 isBook = novel.source == ANNAS_ARCHIVE_SOURCE_ID,
+                // 22-06 (B): audio entries get their own kind='audiobook'
+                // work — comment threads fork per audio/text edition.
+                isAudiobook = novel.isAudiobook,
             ),
         )?.let { "books:${it.value}" }
     }

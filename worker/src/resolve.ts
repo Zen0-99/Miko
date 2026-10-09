@@ -24,14 +24,20 @@ import { err, now, ok } from './util';
 // Phase 15 taxonomy: medium ∈ {shows, manga, books} is the carrier; the
 // sets are the worker-assigned KINDS that satisfy each carrier ('oel'
 // is a manga kind — original-English-language comics — never books).
-// 'audiobook' joins books acceptance-side only (Phase 22) — a
-// worker-authored audiobook kind row is never filtered, but no mint
-// stamps it yet (the stamp side is the 22-06 identity-model decision).
+// 'audiobook' is a real books kind under 22-06 decision B — stamped by
+// resolveAudio's `mk:audio:` mints and by the app's kind='audiobook'
+// mk:m: mints.
 const MEDIUM_TYPES: Record<string, Set<string>> = {
     shows: new Set(['anime', 'movie', 'series']),
     manga: new Set(['manga', 'manhwa', 'manhua', 'comic', 'webtoon', 'oel', 'other']),
     books: new Set(['book', 'novel', 'audiobook']),
 };
+
+// 22-06 (B): audio-edition providers. A books request carrying one of
+// these provider ids (or kind_hint='audiobook') resolves on the audio
+// arm — MangaBaka and OpenLibrary carry no audiobook catalog, and the
+// kind-parity sieve keeps same-titled text works from answering them.
+const AUDIO_PROVIDERS = new Set(['abs', 'librivox', 'ia']);
 
 // Tie-break kind per carrier — the kind matching the request's original
 // intent. Books requests historically asked for web novels, so 'novel'
@@ -51,9 +57,11 @@ interface ResolveRequest {
     year?: number;
     /** Fetch disambiguator — advisory only, never stamped as the
      *  resolved kind (worker stays kind authority). 'book' gates the
-     *  OpenLibrary fallthrough; 'movie'/'series' are inert until 15-02's
-     *  Cinemeta path. Out-of-vocab values are ignored, not rejected. */
-    kind_hint?: 'book' | 'movie' | 'series';
+     *  OpenLibrary fallthrough; 'movie'/'series' order the Cinemeta
+     *  fetch; 'audiobook' (22-06 B) routes books requests to the
+     *  provider-keyed audio arm. Out-of-vocab values are ignored, not
+     *  rejected. */
+    kind_hint?: 'book' | 'movie' | 'series' | 'audiobook';
     /** Strong external-ID signal for books (ISBN-10/13). */
     isbn?: string;
     /** Bundled mint telemetry (Phase 20) — observational provider_stats
@@ -254,6 +262,11 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
     // resolved kind.
     const kindHint = body.kind_hint;
     const normTitle = normalize(body.title);
+    // 22-06 (B): audio-edition requests — provider-keyed (abs/librivox/
+    // ia) or kind_hint='audiobook'. They keep kind parity with text
+    // works (same title, different work) and never touch MangaBaka/OL.
+    const isAudio = medium === 'books' &&
+        (kindHint === 'audiobook' || AUDIO_PROVIDERS.has(body.provider ?? ''));
     if (!normTitle) return err(400, 'missing_title');
     // Optional Bearer — provisional bindings resolve for their minter
     // only; everyone else falls through to title matching (SD-8).
@@ -272,8 +285,11 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
         ).bind(body.provider, body.external_id, viewer).first<WorkRow>();
         // Carrier check first — the medium column vouches null-kind
         // rows (honest-null mints); the kind set is the fallback for
-        // legacy rows whose medium was backfilled by guesswork.
-        if (row && (row.medium === medium || (row.type != null && allowed.has(row.type)))) {
+        // legacy rows whose medium was backfilled by guesswork. Kind
+        // parity (22-06 B): audio requests only adopt 'audiobook' rows,
+        // text requests never adopt one.
+        if (row && (row.medium === medium || (row.type != null && allowed.has(row.type))) &&
+            (isAudio ? row.type === 'audiobook' : row.type !== 'audiobook')) {
             // A bound provider can point at a dead (merged) work —
             // substitute the live row when the catalog deduped.
             const liveId = await liveWorkId(env, row.miko_work_id);
@@ -294,7 +310,8 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
          WHERE t.normalized = ? GROUP BY w.miko_work_id`,
     ).bind(normTitle).all<WorkRow>();
     const typed = titleHits.filter(
-        (r) => r.medium === medium || (r.type != null && allowed.has(r.type)),
+        (r) => (r.medium === medium || (r.type != null && allowed.has(r.type))) &&
+            (isAudio ? r.type === 'audiobook' : r.type !== 'audiobook'),
     );
     // Collapse through work_merges first — dead ids are aliases of one
     // work, not separate candidates (OPM's catalog triplet).
@@ -315,6 +332,13 @@ export async function handleResolve(req: Request, env: Env): Promise<Response> {
             await review(env, 'divergence', { normTitle, medium, hits: [...liveIds] });
             return ok({ work: null });
         }
+    }
+
+    // 3a. Audio arm (22-06, decision B) — provider-keyed audio works
+    //     (`mk:audio:` mints). Upstream catalogs carry no audiobooks, so
+    //     audio requests never reach MangaBaka/OpenLibrary.
+    if (isAudio) {
+        return resolveAudio(body, normTitle, env, viewer);
     }
 
     // 3. Shows path — Cinemeta (imdb) / hentaistream (hs). Shows never
@@ -635,4 +659,79 @@ async function resolveBook(
         olCoverUrl(best.d.cover_i),
     );
     return ok({ work: toDto(row, await externalIdsFor(env, row.miko_work_id, viewer)) });
+}
+
+// ---------- audiobooks (ABS / LibriVox / Internet Archive) — 22-06 (B) ----------
+
+/** Charset guard for the `mk:audio:` mint — provider ids are
+ *  app-stamped strings; only well-formed ids may key a work id. The
+ *  colon admits ABS's `{serverKey}:{itemId}` shape. */
+const AUDIO_ID_SHAPE = /^[\w.:-]{1,128}$/;
+
+/**
+ * Audio-edition resolve — identity is provider-keyed: the same ABS
+ * item, LibriVox book id, or IA identifier is always the same work, so
+ * the mint is `mk:audio:{provider}:{external_id}` — deterministic
+ * across devices with no upstream fetch. Requests without a valid
+ * provider pair can't mint (a bare audio title has no stable identity)
+ * — the app then falls back to its local kind='audiobook' mk:m: mint.
+ * The request's provider id binds ONLY the work it mints — a
+ * title-adopted row never gains it (T-22-06-01).
+ */
+async function resolveAudio(
+    body: ResolveRequest,
+    normTitle: string,
+    env: Env,
+    viewer: string,
+): Promise<Response> {
+    const provider = body.provider ?? '';
+    const externalId = body.external_id ?? '';
+    if (!AUDIO_PROVIDERS.has(provider) || !AUDIO_ID_SHAPE.test(externalId)) {
+        return ok({ work: null });
+    }
+    const workId = `mk:audio:${provider}:${externalId}`;
+    const row = await persistAudioWork(env, workId, body, normTitle, provider, externalId);
+    return ok({ work: toDto(row, await externalIdsFor(env, workId, viewer)) });
+}
+
+/** Persist a `mk:audio:` row + title + provider binding. Re-resolve is
+ *  idempotent: ON CONFLICT refreshes fetched_at; INSERT OR IGNORE keeps
+ *  the binding single-row. */
+async function persistAudioWork(
+    env: Env,
+    workId: string,
+    body: ResolveRequest,
+    normTitle: string,
+    provider: string,
+    externalId: string,
+): Promise<WorkRow> {
+    await env.COMMENTS_DB.prepare(
+        `INSERT INTO works_cache
+         (miko_work_id, type, title, romanized_title, native_title,
+          normalized_title, year, total_chapters, author, provider_links,
+          medium, nsfw, content_rating, fetched_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(miko_work_id) DO UPDATE SET
+           fetched_at = excluded.fetched_at`,
+    ).bind(
+        workId, 'audiobook', body.title, null, null, normTitle,
+        body.year ?? null, null, body.author ?? null, '[]',
+        'books', 0, null, now(),
+    ).run();
+
+    await env.COMMENTS_DB.prepare(
+        'INSERT OR IGNORE INTO works_titles (miko_work_id, title, lang, normalized) VALUES (?,?,?,?)',
+    ).bind(workId, body.title, null, normTitle).run();
+
+    await env.COMMENTS_DB.prepare(
+        'INSERT OR IGNORE INTO external_ids (provider, external_id, miko_work_id) VALUES (?,?,?)',
+    ).bind(provider, externalId, workId).run();
+
+    return {
+        miko_work_id: workId, type: 'audiobook', title: body.title,
+        romanized_title: null, native_title: null,
+        year: body.year ?? null, total_chapters: null,
+        author: body.author ?? null, provider_links: '[]',
+        medium: 'books', nsfw: 0, content_rating: null, cover_url: null,
+    };
 }

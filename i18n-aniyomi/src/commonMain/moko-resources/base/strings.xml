@@ -1526,6 +1526,9 @@
     <string name="audiobook_auto_root">Audiobooks</string>
     <string name="audiobook_auto_not_rendered">Not rendered</string>
     <string name="audiobook_no_stream">No streamable audio for this track</string>
+    <!-- 22-06: Editions ▸ Audiobook block on book detail -->
+    <string name="audiobook_editions_title">Editions ▸ Audiobook</string>
+    <string name="audiobook_part_of">Part of: %1$s</string>
 
     <!-- Library update progress overlay + Fetching tab -->
     <string name="pref_show_update_progress_overlay">Show update progress overlay</string>

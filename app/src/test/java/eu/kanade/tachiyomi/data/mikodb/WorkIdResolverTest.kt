@@ -1,5 +1,10 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import android.content.SharedPreferences
+import eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
+import eu.kanade.tachiyomi.source.novel.abs.AbsClient
+import eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
+import eu.kanade.tachiyomi.source.novel.abs.AbsUrls
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -9,6 +14,37 @@ import org.junit.jupiter.api.Test
 class WorkIdResolverTest {
 
     private fun extract(url: String) = WorkIdResolver.extractExternalIds(url)
+
+    /** SharedPreferences stub — AbsClient only reads getString
+     *  (same shape as AbsNovelSourceTest's FakePrefs). */
+    private class FakePrefs(private val values: Map<String, String>) : SharedPreferences {
+        override fun getString(key: String?, defValue: String?): String? = values[key] ?: defValue
+        override fun contains(key: String?): Boolean = values.containsKey(key)
+        override fun getAll(): MutableMap<String, *> = values.toMutableMap()
+        override fun getStringSet(key: String?, defValues: MutableSet<String>?) = defValues
+        override fun getInt(key: String?, defValue: Int) = defValue
+        override fun getLong(key: String?, defValue: Long) = defValue
+        override fun getFloat(key: String?, defValue: Float) = defValue
+        override fun getBoolean(key: String?, defValue: Boolean) = defValue
+        override fun edit(): SharedPreferences.Editor = throw UnsupportedOperationException()
+        override fun registerOnSharedPreferenceChangeListener(
+            listener: SharedPreferences.OnSharedPreferenceChangeListener?,
+        ) = Unit
+        override fun unregisterOnSharedPreferenceChangeListener(
+            listener: SharedPreferences.OnSharedPreferenceChangeListener?,
+        ) = Unit
+    }
+
+    private fun absSourceAt(baseUrl: String): AbsNovelSource = AbsNovelSource(
+        AbsClient(
+            FakePrefs(
+                mapOf(
+                    "abs_base_url" to baseUrl,
+                    "__PRIVATE_abs_api_key" to "tok-test",
+                ),
+            ),
+        ),
+    )
 
     @Test
     fun `extracts mangadex uuid`() {
@@ -164,6 +200,156 @@ class WorkIdResolverTest {
         assertTrue(
             WorkIdMint.mint("Same Title", "series") != WorkIdMint.mint("Same Title", "manga"),
         )
+    }
+
+    // ---- 22-06 (decision B): audiobook provider ids + kind -----------
+
+    @Test
+    fun `providerIdForNovelUrl emits librivox and ia pairs`() {
+        assertEquals(
+            "librivox" to "15147",
+            AudioChapterSchemes.providerIdForNovelUrl("lv://book/15147"),
+        )
+        assertEquals(
+            "ia" to "sherlock_001",
+            AudioChapterSchemes.providerIdForNovelUrl("ia://item/sherlock_001"),
+        )
+        // Trailing segments tolerated like the per-source helpers.
+        assertEquals(
+            "librivox" to "15147",
+            AudioChapterSchemes.providerIdForNovelUrl("lv://book/15147/extra"),
+        )
+    }
+
+    @Test
+    fun `providerIdForNovelUrl scopes abs ids to the configured server`() {
+        val source = absSourceAt("http://abs.test:13378")
+        val key = AbsUrls.serverKeyFor("http://abs.test:13378")
+        assertEquals(
+            "abs" to "$key:it-1",
+            AudioChapterSchemes.providerIdForNovelUrl("abs://item/it-1", source),
+        )
+        // Base-url normalization: case + trailing slash don't fork the key.
+        assertEquals(
+            "abs" to "$key:it-1",
+            AudioChapterSchemes.providerIdForNovelUrl(
+                "abs://item/it-1",
+                absSourceAt("HTTP://ABS.TEST:13378/"),
+            ),
+        )
+        // A different server mints a different external id.
+        val other = AudioChapterSchemes.providerIdForNovelUrl(
+            "abs://item/it-1",
+            absSourceAt("http://other.test:13378"),
+        )
+        assertTrue(other != null && other.second != "$key:it-1")
+        // Unconfigured/no source → no pair (the fingerprint would hash
+        // an empty base url and collide across unconfigured devices).
+        assertEquals(null, AudioChapterSchemes.providerIdForNovelUrl("abs://item/it-1"))
+    }
+
+    @Test
+    fun `providerIdForNovelUrl rejects chapter urls and non-audio urls`() {
+        // Track/file urls are chapter-level identity — never external ids.
+        assertEquals(null, AudioChapterSchemes.providerIdForNovelUrl("abs://track/it-1/1001"))
+        assertEquals(null, AudioChapterSchemes.providerIdForNovelUrl("lv://track/iaid/01.mp3"))
+        assertEquals(null, AudioChapterSchemes.providerIdForNovelUrl("lv://file/http%3A%2F%2Fx"))
+        assertEquals(null, AudioChapterSchemes.providerIdForNovelUrl("ia://track/id/f.mp3"))
+        // Non-audio urls emit nothing.
+        assertEquals(null, AudioChapterSchemes.providerIdForNovelUrl("https://example.com/x"))
+        assertEquals(null, AudioChapterSchemes.providerIdForNovelUrl(""))
+        assertEquals(null, AudioChapterSchemes.providerIdForNovelUrl("miko:novel:mk:m:abc"))
+    }
+
+    @Test
+    fun `novelUrlForProviderId maps pairs back to source entries`() {
+        assertEquals(
+            -2L to "lv://book/15147",
+            AudioChapterSchemes.novelUrlForProviderId("librivox", "15147"),
+        )
+        assertEquals(
+            -3L to "ia://item/sherlock_001",
+            AudioChapterSchemes.novelUrlForProviderId("ia", "sherlock_001"),
+        )
+        assertEquals(
+            -1L to "abs://item/it-1",
+            AudioChapterSchemes.novelUrlForProviderId("abs", "a1b2c3d4e5f6:it-1"),
+        )
+        assertEquals(null, AudioChapterSchemes.novelUrlForProviderId("mangadex", "x"))
+    }
+
+    @Test
+    fun `mediumToType emits audiobook for audio candidates only`() {
+        assertEquals(
+            "audiobook",
+            WorkIdResolver.mediumToType("books", isBook = false, kindHint = null, isAudiobook = true),
+        )
+        // The flag beats isBook — an audio entry is never a published-book
+        // work even if the source flags both.
+        assertEquals(
+            "audiobook",
+            WorkIdResolver.mediumToType("books", isBook = true, kindHint = null, isAudiobook = true),
+        )
+        // Ordinary text candidates are unchanged (regression).
+        assertEquals(
+            "novel",
+            WorkIdResolver.mediumToType("books", isBook = false, kindHint = null, isAudiobook = false),
+        )
+        assertEquals(
+            "book",
+            WorkIdResolver.mediumToType("books", isBook = true, kindHint = null, isAudiobook = false),
+        )
+        // The flag is books-scoped — it can't leak the kind onto manga.
+        assertEquals(
+            "manga",
+            WorkIdResolver.mediumToType("manga", isBook = false, kindHint = null, isAudiobook = true),
+        )
+    }
+
+    @Test
+    fun `audiobook kind participates in the mk m mint hash`() {
+        // Decision B: same title+author, different kind → different work.
+        assertTrue(
+            WorkIdMint.mint("Dune", "audiobook", "Frank Herbert") !=
+                WorkIdMint.mint("Dune", "novel", "Frank Herbert"),
+        )
+        // Deterministic: identical inputs mint identical ids (re-mint
+        // after the 22-06 flag flip converges onto this id).
+        assertEquals(
+            WorkIdMint.mint("Dune", "audiobook", "Frank Herbert"),
+            WorkIdMint.mint("Dune", "audiobook", "Frank Herbert"),
+        )
+    }
+
+    @Test
+    fun `resolve request emits audio provider and external_id on the wire`() {
+        val body = Json.encodeToString(
+            WorkIdentityApi.ResolveRequest.serializer(),
+            WorkIdentityApi.ResolveRequest(
+                provider = "librivox",
+                externalId = "15147",
+                title = "Dune",
+                medium = "books",
+                kindHint = "audiobook",
+            ),
+        )
+        assertTrue("\"provider\":\"librivox\"" in body)
+        assertTrue("\"external_id\":\"15147\"" in body)
+        assertTrue("\"kind_hint\":\"audiobook\"" in body)
+        assertTrue("\"medium\":\"books\"" in body)
+    }
+
+    @Test
+    fun `work dto parses audiobook kind and audio external ids`() {
+        val dto = Json.decodeFromString(
+            WorkIdentityApi.WorkDto.serializer(),
+            """{"miko_work_id":"mk:audio:librivox:15147","title":"Dune",""" +
+                """"kind":"audiobook","medium":"books",""" +
+                """"external_ids":{"librivox":"15147"}}""",
+        )
+        assertEquals("audiobook", dto.kind)
+        assertEquals("books", dto.medium)
+        assertEquals("15147", dto.external_ids["librivox"])
     }
 
     @Test
