@@ -23,7 +23,7 @@ jobs:
         with:
           gradle-version: "8.13"
 
-      - name: Host network sanity (isolation: is TLS broken only inside the sim?)
+      - name: Host network sanity - is TLS broken only inside the sim
         run: |
           echo "== host curl to api.github.com =="
           curl -sS -o /dev/null -w "%{http_code}\n" https://api.github.com/repos/Zen0-99/Miko || true
