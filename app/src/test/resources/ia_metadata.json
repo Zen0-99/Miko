@@ -1,0 +1,63 @@
+{
+  "metadata": {
+    "identifier": "sherlock_holmes_001",
+    "title": "The Adventures of Sherlock Holmes",
+    "creator": "Arthur Conan Doyle",
+    "description": "<p>Twelve stories narrated by volunteers.</p>",
+    "subject": ["audiobook", "detective fiction"],
+    "language": "English"
+  },
+  "files": [
+    {
+      "name": "holmes_10_doyle.mp3",
+      "source": "original",
+      "format": "MP3",
+      "length": "980.2",
+      "size": "11000000",
+      "bitrate": "128",
+      "title": "The Final Problem",
+      "track": "10"
+    },
+    {
+      "name": "holmes_01_doyle.mp3",
+      "source": "derivative",
+      "format": "VBR MP3",
+      "length": "1620.5",
+      "size": "12000000",
+      "bitrate": "128",
+      "title": "A Scandal in Bohemia",
+      "track": "1"
+    },
+    {
+      "name": "holmes_02_doyle.mp3",
+      "source": "derivative",
+      "format": "128Kbps MP3",
+      "title": "The Red-Headed League",
+      "track": "2"
+    },
+    {
+      "name": "holmes_03_doyle.ogg",
+      "source": "derivative",
+      "format": "Ogg Vorbis",
+      "title": "A Case of Identity",
+      "track": "3"
+    },
+    {
+      "name": "holmes_04_doyle.m4b",
+      "source": "derivative",
+      "format": "MPEG4",
+      "title": "The Boscombe Valley Mystery",
+      "track": "4/10"
+    },
+    {
+      "name": "holmes_appendix.mp3",
+      "source": "derivative",
+      "format": "VBR MP3",
+      "title": "Appendix Reading"
+    },
+    { "name": "sherlock_holmes_001_item_image.jpg", "format": "Item Image" },
+    { "name": "sherlock_holmes_001_meta.sqlite", "format": "Metadata" },
+    { "name": "sherlock_holmes_001_archive.torrent", "format": "Archive BitTorrent" },
+    { "name": "holmes_text.pdf", "format": "Text PDF", "title": "Companion text" }
+  ]
+}

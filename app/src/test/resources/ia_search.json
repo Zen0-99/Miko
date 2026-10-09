@@ -1,0 +1,37 @@
+{
+  "responseHeader": { "status": 0, "QTime": 12 },
+  "response": {
+    "numFound": 3,
+    "start": 0,
+    "docs": [
+      {
+        "identifier": "sherlock_holmes_001",
+        "title": "The Adventures of Sherlock Holmes",
+        "creator": "Arthur Conan Doyle",
+        "date": "2010-01-01T00:00:00Z",
+        "year": "2010",
+        "description": "Twelve stories narrated by volunteers.",
+        "subject": ["audiobook", "detective fiction"],
+        "language": "English",
+        "downloads": 15432,
+        "avg_rating": 4.5
+      },
+      {
+        "identifier": "librivox_mirror_x",
+        "title": "Pride and Prejudice (LibriVox)",
+        "creator": ["Jane Austen"],
+        "external-identifier": "https://librivox.org/api/feed/audiobooks/id/15147",
+        "subject": "audiobook",
+        "downloads": 9001
+      },
+      {
+        "identifier": "oral_history_mix",
+        "title": "Oral History Collection",
+        "creator": ["Smith, John", "Doe, Jane"],
+        "subject": ["Audiobooks"],
+        "language": ["English"],
+        "downloads": 12
+      }
+    ]
+  }
+}

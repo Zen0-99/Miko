@@ -531,6 +531,7 @@ class AppModule(val app: Application) : InjektModule {
                 builtInSources = listOf<eu.kanade.tachiyomi.novelsource.NovelSource>(
                     eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource(),
                     eu.kanade.tachiyomi.source.novel.librivox.LibriVoxSource(),
+                    eu.kanade.tachiyomi.source.novel.ia.InternetArchiveSource(),
                 ),
             )
         }
