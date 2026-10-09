@@ -3,6 +3,7 @@ package miko.spike
 import androidx.compose.ui.window.ComposeUIViewController
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
+import io.ktor.client.engine.darwin.DarwinHttpRequestException
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.runBlocking
@@ -63,7 +64,16 @@ class Spike012Test {
                 break
             } catch (e: FetchNeeded) {
                 val url = rt.consumeFetchRequest() ?: fail("fetch marker lost")
-                rt.supplyFetchResult(url, client.get(url).bodyAsText())
+                val body = try {
+                    client.get(url).bodyAsText()
+                } catch (http: DarwinHttpRequestException) {
+                    val o = http.origin
+                    fail(
+                        "darwin fetch failed for $url: " +
+                            "domain=${o.domain} code=${o.code} desc=${o.localizedDescription}",
+                    )
+                }
+                rt.supplyFetchResult(url, body)
                 if (++guard > 8) fail("fetch continuation loop exceeded 8 rounds")
             }
         }
