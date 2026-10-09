@@ -8,6 +8,7 @@ import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.set
 import kotlinx.cinterop.sizeOf
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.usePinned
@@ -53,7 +54,7 @@ fun rawHttpGet(host: String, path: String): String = memScoped {
 
     val request = "GET $path HTTP/1.0\r\nHost: $host\r\nConnection: close\r\n\r\n"
     request.encodeToByteArray().usePinned { pinned ->
-        send(sock, pinned.addressOf(0), request.length.convert(), 0)
+        send(sock, pinned.addressOf(0), request.length.toULong(), 0)
     }
 
     val buf = allocArray<ByteVar>(4096)
