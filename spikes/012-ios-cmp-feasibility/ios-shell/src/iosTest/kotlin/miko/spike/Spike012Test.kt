@@ -16,9 +16,15 @@ class Spike012Test {
 
     // Track A gate: Compose screen instantiates as a real UIViewController
     // on the iOS simulator — commonMain Compose → iOS rendering stack.
+    // enforceStrictPlistSanityCheck=false: the test bundle's Info.plist lacks
+    // the app keys the check wants; without this it throws asynchronously on
+    // the main workloop and kills the test process.
     @Test
     fun trackA_composeUIViewControllerInstantiates() {
-        val vc = ComposeUIViewController(content = { SpikeScreen() })
+        val vc = ComposeUIViewController(
+            configure = { enforceStrictPlistSanityCheck = false },
+            content = { SpikeScreen() },
+        )
         assertNotNull(vc.view, "Compose view failed to load headlessly")
         assertEquals("ios", platformName())
     }
