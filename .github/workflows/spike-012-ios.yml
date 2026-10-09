@@ -30,3 +30,11 @@ jobs:
       - name: Track B — simulator test binary (ComposeUIViewController, JSCore, fetch bridge)
         working-directory: spikes/012-ios-cmp-feasibility/ios-shell
         run: gradle iosSimulatorArm64Test --stacktrace
+
+      - name: Upload test reports (failure messages don't reach console on K/N)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449bcf92b47fbde1c6bc1 # v4.6.2
+        with:
+          name: spike-012-test-results
+          path: spikes/012-ios-cmp-feasibility/ios-shell/build/test-results/
+          if-no-files-found: ignore
