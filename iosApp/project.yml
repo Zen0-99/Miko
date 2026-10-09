@@ -1,0 +1,57 @@
+# xcodegen spec — generates iosApp.xcodeproj (not checked in).
+# CI: `brew install xcodegen && cd iosApp && xcodegen`
+name: iosApp
+options:
+  bundleIdPrefix: dev.miko
+targets:
+  iosApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: iosApp
+    info:
+      path: iosApp/Info.plist
+      properties:
+        CFBundleName: Miko
+        CFBundleDisplayName: Miko
+        UILaunchScreen_Generation: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/../ios-app/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
+        OTHER_LDFLAGS: -framework MikoKit
+        ENABLE_USER_SCRIPT_SANDBOXING: false
+    preBuildScripts:
+      - name: Build MikoKit framework
+        script: |
+          cd "$SRCROOT/.."
+          ./gradlew :ios-app:embedAndSignAppleFrameworkForXcode
+        basedOnDependencyAnalysis: false
+    dependencies:
+      - framework: MikoKit.framework
+        embed: false
+  iosAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: iosAppTests
+    settings:
+      base:
+        FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/../ios-app/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
+        OTHER_LDFLAGS: -framework MikoKit
+    dependencies:
+      - target: iosApp
+schemes:
+  iosApp:
+    build:
+      targets:
+        iosApp: all
+        iosAppTests: [test]
+    test:
+      targets:
+        - iosAppTests
