@@ -41,7 +41,7 @@ class IosJsRuntime {
         val value = context.evaluateScript(script)
         context.exception?.let { ex ->
             context.exception = null
-            val url = ex.objectForKeyedSubscript("__fetch")?.toString()
+            val url = ex.valueForProperty("__fetch")?.toString()
             if (url != null) {
                 lastFetchUrl = url
                 throw FetchNeeded(url)
@@ -61,7 +61,7 @@ class IosJsRuntime {
 
     /** Diagnostic: does passing a Kotlin lambda to setObject give JS a callable? */
     fun probeNativeBlockBridging(): Boolean {
-        context.setObject({ s: String -> "pong:$s" }, forKeyedSubscript = "ping")
+        context.globalObject.setValue({ s: String -> "pong:$s" }, forProperty = "ping")
         return try {
             evalOrThrow("typeof ping") == "function" && evalOrThrow("ping('x')") == "pong:x"
         } catch (e: Exception) {
