@@ -1,0 +1,67 @@
+{
+  "results": [
+    {
+      "id": "it-1",
+      "ino": "1001",
+      "libraryId": "lib-1",
+      "folderId": "fol-1",
+      "path": "/audiobooks/Frank Herbert/Dune",
+      "relPath": "Frank Herbert/Dune",
+      "mediaType": "book",
+      "media": {
+        "metadata": {
+          "title": "Dune",
+          "authorName": "Frank Herbert",
+          "narratorName": "Ray Porter"
+        },
+        "numTracks": 3,
+        "numChapters": 3
+      },
+      "numFiles": 3,
+      "addedAt": 1759000000
+    },
+    {
+      "id": "it-2",
+      "ino": "1002",
+      "libraryId": "lib-1",
+      "folderId": "fol-1",
+      "path": "/audiobooks/Andy Weir/Project Hail Mary",
+      "relPath": "Andy Weir/Project Hail Mary",
+      "mediaType": "book",
+      "media": {
+        "metadata": {
+          "title": "Project Hail Mary",
+          "authorName": "Andy Weir",
+          "narratorName": "Ray Porter"
+        },
+        "numTracks": 1,
+        "numChapters": 1
+      },
+      "numFiles": 1,
+      "addedAt": 1759100000
+    },
+    {
+      "id": "it-3",
+      "ino": "1003",
+      "libraryId": "lib-1",
+      "folderId": "fol-1",
+      "path": "/audiobooks/Becky Chambers/A Psalm for the Wild-Built",
+      "relPath": "Becky Chambers/A Psalm for the Wild-Built",
+      "mediaType": "book",
+      "media": {
+        "metadata": {
+          "title": "A Psalm for the Wild-Built",
+          "authorName": "Becky Chambers",
+          "narratorName": "Em Grosland"
+        },
+        "numTracks": 1,
+        "numChapters": 1
+      },
+      "numFiles": 1,
+      "addedAt": 1759200000
+    }
+  ],
+  "total": 3,
+  "limit": 50,
+  "page": 0
+}

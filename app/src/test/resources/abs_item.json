@@ -1,0 +1,76 @@
+{
+  "id": "it-1",
+  "ino": "1001",
+  "libraryId": "lib-1",
+  "folderId": "fol-1",
+  "path": "/audiobooks/Frank Herbert/Dune",
+  "relPath": "Frank Herbert/Dune",
+  "mediaType": "book",
+  "media": {
+    "metadata": {
+      "title": "Dune",
+      "subtitle": null,
+      "authorName": "Frank Herbert",
+      "narratorName": "Ray Porter",
+      "seriesName": "Dune #1",
+      "publishedYear": "1965",
+      "description": "Set on the desert planet Arrakis, Dune is the story of Paul Atreides.",
+      "genres": ["Sci-Fi", "Classic"],
+      "isbn": "9780441172719",
+      "asin": "B00B1A6Q70"
+    },
+    "tracks": [
+      {
+        "index": 1,
+        "ino": "f1",
+        "startOffset": 0.0,
+        "duration": 540.0,
+        "title": "Part 1",
+        "filename": "01.m4b",
+        "relPath": "01.m4b",
+        "contentUrl": "/api/items/it-1/file/f1",
+        "mimeType": "audio/mp4"
+      },
+      {
+        "index": 2,
+        "ino": "f2",
+        "startOffset": 540.0,
+        "duration": 620.0,
+        "title": "Part 2",
+        "filename": "02.m4b",
+        "relPath": "02.m4b",
+        "contentUrl": "/api/items/it-1/file/f2",
+        "mimeType": "audio/mp4"
+      },
+      {
+        "index": 3,
+        "ino": "f3",
+        "startOffset": 1160.0,
+        "duration": 510.0,
+        "title": "Part 3",
+        "filename": "03.m4b",
+        "relPath": "03.m4b",
+        "contentUrl": "/api/items/it-1/file/f3",
+        "mimeType": "audio/mp4"
+      }
+    ],
+    "audioFiles": [
+      { "ino": "f1", "index": 1, "duration": 540.0, "filename": "01.m4b" },
+      { "ino": "f2", "index": 2, "duration": 620.0, "filename": "02.m4b" },
+      { "ino": "f3", "index": 3, "duration": 510.0, "filename": "03.m4b" }
+    ],
+    "chapters": [
+      { "id": 0, "start": 0.0, "end": 300.0, "title": "Chapter 1" },
+      { "id": 1, "start": 300.0, "end": 540.0, "title": "Chapter 2" },
+      { "id": 2, "start": 540.0, "end": 900.0, "title": "Chapter 3" },
+      { "id": 3, "start": 900.0, "end": 1160.0, "title": "Chapter 4" },
+      { "id": 4, "start": 1160.0, "end": 1670.0, "title": "Chapter 5" }
+    ],
+    "duration": 1670.0,
+    "numTracks": 3,
+    "numChapters": 5
+  },
+  "numFiles": 3,
+  "size": 80400128,
+  "addedAt": 1759000000
+}

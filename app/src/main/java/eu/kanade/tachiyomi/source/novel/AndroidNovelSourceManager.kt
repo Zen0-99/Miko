@@ -14,7 +14,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -36,6 +38,14 @@ class AndroidNovelSourceManager(
      * before. JS sources are simply added to the same map.
      */
     private val jsSourcesFlow: Flow<List<NovelSource>> = emptyFlow(),
+    /**
+     * Built-in, always-present sources (Audiobookshelf; LibriVox/IA join
+     * in 22-03) — fixed negative ids that can't collide with extension
+     * id-hashes. Seeded into the sources map on every extension emission
+     * so they land before [_isInitialized] flips and never hit the
+     * awaitSource polling window.
+     */
+    private val builtInSources: List<NovelSource> = emptyList(),
 ) : NovelSourceManager {
 
     private val _isInitialized = MutableStateFlow(false)
@@ -53,14 +63,31 @@ class AndroidNovelSourceManager(
 
     init {
         scope.launch {
-            extensionManager.installedExtensionsFlow
-                .collectLatest { extensions ->
+            // installedExtensionsFlow replays its initial empty list at
+            // collection start — that emission is NOT "extensions
+            // loaded", it's the StateFlow seed. isInitialized tracks the
+            // extension manager's own flag so callers waiting on it
+            // don't resolve an empty map; the map itself still populates
+            // on every emission.
+            combine(
+                extensionManager.installedExtensionsFlow,
+                extensionManager.isInitialized,
+            ) { extensions, extInit -> extensions to extInit }
+                .collectLatest { (extensions, extInit) ->
                     val mutableMap = ConcurrentHashMap<Long, NovelSource>()
                     extensions.forEach { extension ->
                         extension.sources.forEach {
                             mutableMap[it.id] = it
                             registerStubSource(StubNovelSource.from(it))
                         }
+                    }
+                    // Built-in sources are re-added on every emission so a
+                    // re-scan can never drop them.
+                    builtInSources.forEach { source ->
+                        mutableMap[source.id] = source
+                        registerStubSource(
+                            StubNovelSource(id = source.id, lang = source.lang, name = source.name),
+                        )
                     }
                     // Merge JS plugin sources alongside APK extension sources
                     val existingIds = mutableMap.keys.toSet()
@@ -70,11 +97,14 @@ class AndroidNovelSourceManager(
                         }
                     }
                     sourcesMapFlow.value = mutableMap
-                    _isInitialized.value = true
+                    if (extInit) _isInitialized.value = true
                 }
         }
 
         scope.launch {
+            // Same gate — a JS-plugin emission must not flip
+            // isInitialized before the extension scan completes.
+            extensionManager.isInitialized.first { it }
             jsSourcesFlow
                 .collectLatest { jsSources ->
                     val mutableMap = ConcurrentHashMap(sourcesMapFlow.value)

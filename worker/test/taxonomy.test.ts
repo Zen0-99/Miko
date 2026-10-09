@@ -176,3 +176,48 @@ describe('resolve — kind_hint', () => {
         expect(await res.json()).toMatchObject({ work: null });
     });
 });
+
+describe('resolve — audiobook kind (Phase 22 acceptance-side)', () => {
+    it("a books-carrier work with kind 'audiobook' resolves and reports the kind", async () => {
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_cache
+             (miko_work_id, type, medium, title, normalized_title, provider_links, fetched_at)
+             VALUES ('mk:abs:a1b2c3d4e5f6:it-1', 'audiobook', 'books', 'Dune Audio', 'dune audio', '[]', 0)`,
+        ).run();
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO external_ids (provider, external_id, miko_work_id)
+             VALUES ('abs', 'a1b2c3d4e5f6:it-1', 'mk:abs:a1b2c3d4e5f6:it-1')`,
+        ).run();
+        const res = await resolve({
+            title: 'anything', medium: 'books',
+            provider: 'abs', external_id: 'a1b2c3d4e5f6:it-1',
+        });
+        expect(res.status).toBe(200);
+        const body = await res.json<{ work: WorkDto }>();
+        expect(body.work.miko_work_id).toBe('mk:abs:a1b2c3d4e5f6:it-1');
+        expect(body.work.kind).toBe('audiobook');
+        expect(body.work.medium).toBe('books');
+    });
+
+    it("a legacy medium-less row is admitted by the 'audiobook' kind alone", async () => {
+        // medium NULL (rows predating the medium column) — admission rides
+        // entirely on allowed.has('audiobook'); without the vocabulary the
+        // row is filtered out and the hit returns work:null.
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO works_cache
+             (miko_work_id, type, medium, title, normalized_title, provider_links, fetched_at)
+             VALUES ('mk:abs:feedbeefcafe:it-9', 'audiobook', NULL, 'Legacy Audio', 'legacy audio', '[]', 0)`,
+        ).run();
+        await env.COMMENTS_DB.prepare(
+            `INSERT INTO external_ids (provider, external_id, miko_work_id)
+             VALUES ('abs', 'feedbeefcafe:it-9', 'mk:abs:feedbeefcafe:it-9')`,
+        ).run();
+        const res = await resolve({
+            title: 'anything', medium: 'books',
+            provider: 'abs', external_id: 'feedbeefcafe:it-9',
+        });
+        expect(res.status).toBe(200);
+        const body = await res.json<{ work: WorkDto | null }>();
+        expect(body.work?.kind).toBe('audiobook');
+    });
+});

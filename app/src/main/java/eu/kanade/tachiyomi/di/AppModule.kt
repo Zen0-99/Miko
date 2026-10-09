@@ -344,6 +344,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.ProviderTiers() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorksBrowseApi() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.WorkIdResolver() }
+        addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.LibrarySubtypeResolver() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog() }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.CanonicalEntryUnifier(get(), get(), get(), get(), get()) }
         addSingletonFactory { eu.kanade.tachiyomi.data.mikodb.MangaBakaEnrich() }
@@ -375,6 +376,7 @@ class AppModule(val app: Application) : InjektModule {
                 get(),
             )
         }
+        addSingletonFactory { eu.kanade.tachiyomi.data.cover.CoverUpdateBus() }
         addSingletonFactory { eu.kanade.tachiyomi.data.catalogrows.DiscoveryFeeds() }
         addSingletonFactory {
             eu.kanade.tachiyomi.data.catalogrows.CatalogRowResolver(
@@ -524,7 +526,12 @@ class AppModule(val app: Application) : InjektModule {
             val jsSourcesFlow = jsPluginManager.installedPluginsFlow.map { plugins ->
                 plugins.mapNotNull { plugin -> sourceFactory.create(plugin) }
             }
-            AndroidNovelSourceManager(app, get(), get(), kotlinx.coroutines.Dispatchers.IO, jsSourcesFlow)
+            AndroidNovelSourceManager(
+                app, get(), get(), kotlinx.coroutines.Dispatchers.IO, jsSourcesFlow,
+                builtInSources = listOf<eu.kanade.tachiyomi.novelsource.NovelSource>(
+                    eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource(),
+                ),
+            )
         }
 
         addSingletonFactory { MangaExtensionManager(app) }

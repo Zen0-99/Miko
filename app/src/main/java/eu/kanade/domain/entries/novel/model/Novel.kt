@@ -3,6 +3,7 @@ package eu.kanade.domain.entries.novel.model
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.data.cache.NovelCoverCache
 import eu.kanade.tachiyomi.novelsource.model.SNovel
+import eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.entries.novel.model.Novel
 import uy.kohesive.injekt.Injekt
@@ -21,6 +22,13 @@ fun SNovel.toDomainNovel(sourceId: Long): Novel {
         updateStrategy = update_strategy,
         initialized = initialized,
         source = sourceId,
+        // Audio-scheme entries (abs:// today) carry the audiobook flag —
+        // drives LibrarySubtype.AUDIOBOOK without a works_cache wait.
+        viewerFlags = if (AudioChapterSchemes.isAudioNovelUrl(url)) {
+            Novel.VIEWER_FLAG_AUDIOBOOK
+        } else {
+            0L
+        },
     )
 }
 
@@ -55,6 +63,12 @@ fun Novel.copyFrom(other: SNovel): Novel {
         status = other.status.toLong(),
         updateStrategy = other.update_strategy,
         initialized = true,
+        // ORs the audiobook flag in — refreshes never clear it.
+        viewerFlags = viewerFlags or if (AudioChapterSchemes.isAudioNovelUrl(other.url)) {
+            Novel.VIEWER_FLAG_AUDIOBOOK
+        } else {
+            0L
+        },
     )
 }
 

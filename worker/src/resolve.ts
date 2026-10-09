@@ -24,10 +24,13 @@ import { err, now, ok } from './util';
 // Phase 15 taxonomy: medium ∈ {shows, manga, books} is the carrier; the
 // sets are the worker-assigned KINDS that satisfy each carrier ('oel'
 // is a manga kind — original-English-language comics — never books).
+// 'audiobook' joins books acceptance-side only (Phase 22) — a
+// worker-authored audiobook kind row is never filtered, but no mint
+// stamps it yet (the stamp side is the 22-06 identity-model decision).
 const MEDIUM_TYPES: Record<string, Set<string>> = {
     shows: new Set(['anime', 'movie', 'series']),
     manga: new Set(['manga', 'manhwa', 'manhua', 'comic', 'webtoon', 'oel', 'other']),
-    books: new Set(['book', 'novel']),
+    books: new Set(['book', 'novel', 'audiobook']),
 };
 
 // Tie-break kind per carrier — the kind matching the request's original

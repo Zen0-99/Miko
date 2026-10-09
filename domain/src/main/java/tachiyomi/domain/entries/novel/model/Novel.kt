@@ -39,6 +39,14 @@ data class Novel(
             .takeIf { status != SNovel.COMPLETED.toLong() }
             ?.let { Instant.ofEpochMilli(it) }
 
+    /** Whether this entry is a remote/local audiobook — `abs://` (and
+     *  later `lv://`/`ia://`) carrier rows, stamped from
+     *  AudioChapterSchemes.isAudioNovelUrl at insert/refresh. Local flag,
+     *  no works_cache wait — drives LibrarySubtype.AUDIOBOOK and the
+     *  chapter-tap → player route. */
+    val isAudiobook: Boolean
+        get() = viewerFlags and VIEWER_FLAG_AUDIOBOOK != 0L
+
     val sorting: Long
         get() = chapterFlags and CHAPTER_SORTING_MASK
 
@@ -100,6 +108,9 @@ data class Novel(
         const val CHAPTER_DISPLAY_NAME = 0x00000000L
         const val CHAPTER_DISPLAY_NUMBER = 0x00100000L
         const val CHAPTER_DISPLAY_MASK = 0x00100000L
+
+        // viewerFlags namespace (separate field from chapterFlags above).
+        const val VIEWER_FLAG_AUDIOBOOK = 0x00000001L
 
         fun create() = Novel(
             id = -1L,

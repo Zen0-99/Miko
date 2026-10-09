@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.library.novel
 
 import androidx.activity.compose.BackHandler
+import tachiyomi.domain.entries.novel.model.asNovelCover
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.graphics.ExperimentalAnimationGraphicsApi
 import androidx.compose.animation.graphics.res.animatedVectorResource
@@ -67,6 +68,7 @@ import eu.kanade.presentation.entries.components.ReadingOrderBottomBar
 import eu.kanade.presentation.entries.components.ReadingOrderMoveDepthDialog
 import eu.kanade.presentation.entries.components.ReadingOrderPickerDialog
 import eu.kanade.presentation.entries.components.ReadingOrderRemoveConfirmDialog
+import eu.kanade.presentation.entries.components.continueRowLabel
 import eu.kanade.presentation.library.DeleteLibraryEntryDialog
 import eu.kanade.presentation.library.components.SortBottomSheet
 import eu.kanade.presentation.library.components.SortModeOption
@@ -496,7 +498,11 @@ data object NovelLibraryTab : Tab {
 
         val onClickRefresh: (Collection?) -> Boolean = { collection ->
             eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus.refreshRequested()
-            eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob.startNow(context, collection)
+            eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob.startNow(
+                context,
+                collection,
+                state.subtypeFilter,
+            )
         }
 
         val navigateUp: (() -> Unit)? = null
@@ -670,13 +676,37 @@ data object NovelLibraryTab : Tab {
                             hasActiveFilters = state.hasActiveFilters,
                             showPageTabs = state.showCollectionTabs || !state.searchQuery.isNullOrEmpty(),
                             onChangeCurrentPage = { screenModel.activeCollectionIndex = it },
-                            onNovelClicked = { novelId ->
+                            onNovelClicked = { libraryNovel ->
                                 scope.launch {
-                                    val lockedOrders = getLockedReadingOrders.await(novelId)
+                                    val novel = libraryNovel.novel
+                                    val lockedOrders = getLockedReadingOrders.await(novel.id)
                                     if (lockedOrders.isNotEmpty()) {
-                                        lockDialog = novelId to lockedOrders
+                                        lockDialog = novel.id to lockedOrders
                                     } else {
-                                        navigator.push(eu.kanade.tachiyomi.ui.entries.novel.NovelScreen(novelId))
+                                        val next = screenModel.getNextUnreadChapter(novel)
+                                        navigator.push(
+                                            eu.kanade.tachiyomi.ui.entries.novel.NovelScreen(
+                                                novel.id,
+                                                previewCover = novel.asNovelCover(),
+                                                previewTitle = novel.title,
+                                                previewResumeLabel = continueRowLabel(
+                                                    context = context,
+                                                    allRead = libraryNovel.unreadCount == 0L &&
+                                                        libraryNovel.totalChapters > 0,
+                                                    hasStarted = libraryNovel.hasStarted ||
+                                                        (next?.lastCharRead ?: 0) > 0,
+                                                    progress = next?.let {
+                                                        eu.kanade.presentation.entries.components
+                                                            .qualifiedChapterLabel(it.name)
+                                                    },
+                                                ),
+                                                previewResumeEnabled =
+                                                    next != null ||
+                                                        !libraryNovel.hasStarted ||
+                                                        libraryNovel.unreadCount > 0,
+                                                previewHasGenres = !novel.genre.isNullOrEmpty(),
+                                            ),
+                                        )
                                     }
                                 }
                             },
@@ -738,6 +768,19 @@ data object NovelLibraryTab : Tab {
                             sortKey = state.collections.getOrNull(screenModel.activeCollectionIndex)?.let {
                                 "${it.sort.type}:${it.sort.direction}"
                             } ?: "",
+                            subtypeLabel = eu.kanade.presentation.library.components
+                                .subtypeLabelFor(state.subtypeFilter),
+                            subtypeOptions = eu.kanade.presentation.library.components
+                                .subtypeOptionsFor(
+                                    choices = listOf(
+                                        tachiyomi.domain.library.model.LibrarySubtype.ALL,
+                                        tachiyomi.domain.library.model.LibrarySubtype.BOOK,
+                                        tachiyomi.domain.library.model.LibrarySubtype.NOVEL,
+                                        tachiyomi.domain.library.model.LibrarySubtype.AUDIOBOOK,
+                                    ),
+                                    current = state.subtypeFilter,
+                                    onSelect = screenModel::setSubtypeFilter,
+                                ),
                         )
                     }
                 }

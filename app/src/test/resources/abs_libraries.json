@@ -1,0 +1,24 @@
+{
+  "libraries": [
+    {
+      "id": "lib-1",
+      "name": "Audiobooks",
+      "mediaType": "book",
+      "folders": [
+        { "id": "fol-1", "fullPath": "/audiobooks" }
+      ],
+      "icon": "audiobook",
+      "displayOrder": 1
+    },
+    {
+      "id": "lib-2",
+      "name": "Podcasts",
+      "mediaType": "podcast",
+      "folders": [
+        { "id": "fol-2", "fullPath": "/podcasts" }
+      ],
+      "icon": "podcast",
+      "displayOrder": 2
+    }
+  ]
+}

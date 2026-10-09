@@ -109,7 +109,7 @@ class WorkIdResolverTest {
 
     @Test
     fun `books allowedTypes accepts the books kind vocab`() {
-        assertEquals(setOf("book", "novel"), WorkIdResolver.allowedTypes("books"))
+        assertEquals(setOf("book", "novel", "audiobook"), WorkIdResolver.allowedTypes("books"))
         // Alias window closed (15-06): legacy 'novel' key falls to the
         // manga fallback like any unknown key.
         assertEquals(
