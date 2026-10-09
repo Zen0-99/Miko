@@ -47,11 +47,9 @@ class Spike012Test {
         rt.evalOrThrow(
             """
             function __getPopularJson() {
-                var body = fetch("https://jsonplaceholder.typicode.com/posts");
-                var posts = JSON.parse(body).slice(0, 5);
-                return JSON.stringify(posts.map(function(p) {
-                    return { title: p.title, url: "/post/" + p.id };
-                }));
+                var body = fetch("https://api.github.com/repos/Zen0-99/Miko");
+                var r = JSON.parse(body);
+                return JSON.stringify([{ title: r.full_name, url: r.html_url, id: r.id }]);
             }
             """.trimIndent(),
         )
@@ -78,7 +76,7 @@ class Spike012Test {
             }
         }
 
-        assertTrue(json.contains("\"title\""), "source returned no entries: $json")
+        assertTrue(json.contains("Zen0-99/Miko"), "source returned no entries: $json")
         println("TRACK-B RESULT: $json")
     }
 }
