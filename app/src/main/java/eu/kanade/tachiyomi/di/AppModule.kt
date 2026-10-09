@@ -530,6 +530,7 @@ class AppModule(val app: Application) : InjektModule {
                 app, get(), get(), kotlinx.coroutines.Dispatchers.IO, jsSourcesFlow,
                 builtInSources = listOf<eu.kanade.tachiyomi.novelsource.NovelSource>(
                     eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource(),
+                    eu.kanade.tachiyomi.source.novel.librivox.LibriVoxSource(),
                 ),
             )
         }

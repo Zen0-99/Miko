@@ -5,7 +5,9 @@ import eu.kanade.tachiyomi.source.novel.abs.AbsClient
 import eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
 import eu.kanade.tachiyomi.source.novel.abs.AbsUrls
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -121,6 +123,83 @@ class AudioChapterSchemesTest {
         assertNull(client.streamUriForChapter("abs://item/it-9"))
         assertEquals(mapOf("Authorization" to "Bearer tok-test"), client.authHeaders())
         assertEquals("abs.test:13378", client.hostKey())
+    }
+
+    // ---- lv:// + ia:// arms (22-03) --------------------------------------------
+
+    @Test
+    fun `lv and ia url grammar joins the audio predicates`() {
+        // Novel urls.
+        assertTrue(AudioChapterSchemes.isAudioNovelUrl("abs://item/it-1"))
+        assertTrue(AudioChapterSchemes.isAudioNovelUrl("lv://book/15147"))
+        assertTrue(AudioChapterSchemes.isAudioNovelUrl("ia://item/some_item"))
+        assertFalse(AudioChapterSchemes.isAudioNovelUrl("lv://track/ia_id/f.mp3"))
+        assertFalse(AudioChapterSchemes.isAudioNovelUrl("ia://track/ia_id/f.mp3"))
+
+        // Chapter urls.
+        assertTrue(AudioChapterSchemes.isAudioChapterUrl("abs://track/it-1/f1"))
+        assertTrue(AudioChapterSchemes.isAudioChapterUrl("lv://track/ia_id/f.mp3"))
+        assertTrue(AudioChapterSchemes.isAudioChapterUrl("lv://file/https%3A%2F%2Fx.org%2Ff.mp3"))
+        assertTrue(AudioChapterSchemes.isAudioChapterUrl("ia://track/ia_id/f.mp3"))
+        assertFalse(AudioChapterSchemes.isAudioChapterUrl("lv://book/15147"))
+        assertFalse(AudioChapterSchemes.isAudioChapterUrl("ia://item/some_item"))
+    }
+
+    @Test
+    fun `lv track urls resolve to archive org downloads without abs`() {
+        val expected = "https://archive.org/download/ia_id/chapter_01.mp3"
+        assertEquals(
+            expected,
+            AudioChapterSchemes.streamUriFor("lv://track/ia_id/chapter_01.mp3", null),
+        )
+        // The public arm ignores absSource — configured or not.
+        assertEquals(
+            expected,
+            AudioChapterSchemes.streamUriFor("lv://track/ia_id/chapter_01.mp3", configured),
+        )
+    }
+
+    @Test
+    fun `ia track urls resolve to archive org downloads`() {
+        assertEquals(
+            "https://archive.org/download/some_item/track%201.mp3",
+            AudioChapterSchemes.streamUriFor("ia://track/some_item/track%201.mp3", null),
+        )
+        // File names carrying subdirectories keep their slashes.
+        assertEquals(
+            "https://archive.org/download/some_item/dir/f.mp3",
+            AudioChapterSchemes.streamUriFor("ia://track/some_item/dir/f.mp3", null),
+        )
+    }
+
+    @Test
+    fun `lv file urls resolve to the decoded url`() {
+        val raw = "https://ia801402.us.archive.org/13/items/x/f 02.mp3"
+        val encoded = java.net.URLEncoder.encode(raw, "UTF-8")
+        assertEquals(raw, AudioChapterSchemes.streamUriFor("lv://file/$encoded", null))
+    }
+
+    @Test
+    fun `public arms fail closed on malformed or hostile urls`() {
+        for (url in listOf(
+            // Path traversal must never reach archive.org (T-22-03-02).
+            "ia://track/../../x",
+            "ia://track/../evil/f.mp3",
+            "lv://track/../f.mp3",
+            // Missing identifier or file segment.
+            "ia://track/onlyid",
+            "ia://track/onlyid/",
+            "ia://track//f.mp3",
+            "lv://track/",
+            // Decodes to a non-http(s) scheme — no file:// minting.
+            "lv://file/${java.net.URLEncoder.encode("file:///etc/passwd", "UTF-8")}",
+            // The novel-shaped urls are not chapter urls.
+            "lv://book/15147",
+            "ia://item/some_item",
+        )) {
+            assertNull(AudioChapterSchemes.streamUriFor(url, configured), url)
+            assertNull(AudioChapterSchemes.streamUriFor(url, null), url)
+        }
     }
 
     @Test
