@@ -2,10 +2,12 @@ package miko.spike
 
 import androidx.compose.ui.window.ComposeUIViewController
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.curl.Curl
 import io.ktor.client.engine.darwin.Darwin
 import io.ktor.client.engine.darwin.DarwinHttpRequestException
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import miko.spike.diag.rawHttpGet
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -66,10 +68,21 @@ class Spike012Test {
                     client.get(url).bodyAsText()
                 } catch (http: DarwinHttpRequestException) {
                     val o = http.origin
-                    fail(
+                    val diag = StringBuilder(
                         "darwin fetch failed for $url: " +
-                            "domain=${o.domain} code=${o.code} desc=${o.localizedDescription}",
+                            "domain=${o.domain} code=${o.code} desc=${o.localizedDescription}\n",
                     )
+                    diag.append("ktor-curl: ").append(
+                        runCatching {
+                            HttpClient(Curl).get("https://api.github.com/zen").bodyAsText()
+                        }.getOrElse { "FAILED: $it" },
+                    ).append('\n')
+                    diag.append("raw-socket-http: ").append(
+                        runCatching { rawHttpGet("neverssl.com", "/") }
+                            .getOrElse { "FAILED: $it" }
+                            .take(140),
+                    )
+                    fail(diag.toString())
                 }
                 rt.supplyFetchResult(url, body)
                 if (++guard > 8) fail("fetch continuation loop exceeded 8 rounds")

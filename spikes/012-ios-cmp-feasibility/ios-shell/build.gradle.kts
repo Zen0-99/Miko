@@ -35,6 +35,7 @@ kotlin {
         }
         iosMain.dependencies {
             implementation("io.ktor:ktor-client-darwin:3.1.3")
+            implementation("io.ktor:ktor-client-curl:3.1.3")
         }
         iosTest.dependencies {
             implementation(kotlin("test"))
