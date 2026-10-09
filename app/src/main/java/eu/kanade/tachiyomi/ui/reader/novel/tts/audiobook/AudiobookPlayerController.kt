@@ -17,14 +17,21 @@ import com.google.common.util.concurrent.ListenableFuture
 import eu.kanade.domain.items.chapter.interactor.SetNovelReadStatus
 import eu.kanade.domain.items.chapter.interactor.SetNovelReadingPosition
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadProvider
+import eu.kanade.tachiyomi.data.track.abs.AbsProgressSyncer
+import eu.kanade.tachiyomi.source.novel.abs.AbsClient
+import eu.kanade.tachiyomi.source.novel.abs.AbsItem
+import eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
+import eu.kanade.tachiyomi.source.novel.abs.AbsUrls
 import eu.kanade.tachiyomi.ui.reader.novel.NovelScrollPositionCodec
 import eu.kanade.tachiyomi.ui.reader.novel.NovelTtsPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.Mp4AtomReader
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.decodeManifest
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +42,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
@@ -132,6 +140,162 @@ class AudiobookPlayerController(
     private val listenedCharPeak = mutableMapOf<Long, Long>()
     private var tickerJob: Job? = null
     private var lastResumeWriteMs = 0L
+
+    // ------------------------------------------------------------------
+    // ABS progress sync (22-04) — the §7.2 merge over the item-level row.
+    // All calls run on [scope]/session coroutines; nothing here can block
+    // or fail playback (unconfigured → every call no-ops).
+    // ------------------------------------------------------------------
+
+    private val absSyncer = AbsProgressSyncer(
+        clientProvider = { absClient() },
+        pref = ttsPreferences.absProgress(),
+    )
+
+    /** Item id of the ABS entry under play, null for local/lv/ia sessions. */
+    private var absItemId: String? = null
+
+    /** ino → track geometry from the session's one `client.item` fetch (SD-2). */
+    @Volatile
+    private var absTrackCtx: List<AbsProgressSyncer.TrackCtx> = emptyList()
+
+    /** chapterId → ino for the loaded playlist's `abs://track/` rows. */
+    private var absChapterToIno: Map<Long, String> = emptyMap()
+
+    /** One-item session cache — the item is fetched once per play/entry-open. */
+    @Volatile
+    private var absItemCache: AbsItem? = null
+
+    private var lastAbsFlushMs = 0L
+
+    private fun absClient(): AbsClient? =
+        (sourceManager.get(AbsNovelSource.ABS_SOURCE_ID) as? AbsNovelSource)
+            ?.client?.takeIf { it.isConfigured() }
+
+    private suspend fun cachedAbsItem(client: AbsClient, itemId: String): AbsItem? =
+        absItemCache?.takeIf { it.id == itemId }
+            ?: runCatching { client.item(itemId) }.getOrNull()?.also { absItemCache = it }
+
+    private fun AbsItem.toTrackCtx(): List<AbsProgressSyncer.TrackCtx> =
+        media?.tracks.orEmpty()
+            .map {
+                AbsProgressSyncer.TrackCtx(
+                    ino = it.ino,
+                    startOffsetMs = (it.startOffset * 1000).toLong(),
+                    durationMs = (it.duration * 1000).toLong(),
+                )
+            }
+            .sortedBy { it.startOffsetMs }
+
+    /**
+     * Arm the sync context for a play session: `chapterId → ino` parses out
+     * of the chapter urls (no fetch); the track-offset ctx rides the
+     * concurrent pull in [playOnMain]. Called on a non-ABS or unconfigured
+     * play too — resets so a stale item can't leak into another session.
+     */
+    private fun armAbsSync(
+        novel: Novel,
+        chapters: List<NovelChapter>,
+        absSource: AbsNovelSource?,
+    ) {
+        absItemId = null
+        absTrackCtx = emptyList()
+        absChapterToIno = emptyMap()
+        if (!AbsUrls.isAbsNovelUrl(novel.url) || absSource?.client?.isConfigured() != true) return
+        val itemId = AbsUrls.itemIdFrom(novel.url) ?: return
+        absItemId = itemId
+        absChapterToIno = chapters.mapNotNull { ch ->
+            if (AbsUrls.itemIdFrom(ch.url) != itemId) return@mapNotNull null
+            AbsUrls.inoFrom(ch.url)?.let { ch.id to it }
+        }.toMap()
+    }
+
+    /**
+     * Heartbeat record — item-global position = `track.startOffsetMs +
+     * positionInTrackMs` (SD-2). Only fires while the loaded track is an
+     * ABS row of the armed item.
+     */
+    private fun recordAbsPosition() {
+        val itemId = absItemId ?: return
+        val ino = absChapterToIno[state.value.track?.chapterId] ?: return
+        val ctx = absTrackCtx.firstOrNull { it.ino == ino } ?: return
+        val position = mediaController?.currentPosition?.takeIf { it >= 0 }
+            ?: state.value.durationMs.takeIf { it > 0 }
+            ?: return
+        absSyncer.onPosition(itemId, ctx.startOffsetMs + position)
+    }
+
+    /**
+     * Fires a serialized dirty-flush on the session scope — heartbeat,
+     * pause, track boundary, release, and service-destroy all funnel here.
+     */
+    private fun flushAbs() {
+        val itemId = absItemId ?: return
+        scope.launch { absSyncer.flush(itemId, absTrackCtx) }
+    }
+
+    /**
+     * Called by [AudiobookPlaybackService.onDestroy] — the service dies
+     * while the singleton controller's scope lives on, so the final dirty
+     * push still lands. Idempotent: the syncer's mutex serializes it with
+     * any in-flight heartbeat flush.
+     */
+    fun flushProgressOnDestroy() {
+        flushAbs()
+    }
+
+    /**
+     * Pull-on-open for ABS-sourced audiobook entries (SD-5b): fetch the
+     * item's server progress, and when the merge adopts a newer remote
+     * position seed the local resume chain (resumeMap + lastPlayed) so the
+     * first tap continues from it. Bounded by [timeoutMs] — the entry
+     * screen never stalls on sync; unconfigured/unreachable → false.
+     */
+    suspend fun pullAbsProgress(
+        novel: Novel,
+        chapters: List<NovelChapter>,
+        timeoutMs: Long = ABS_PULL_TIMEOUT_MS,
+    ): Boolean {
+        if (!novel.isAudiobook) return false
+        val itemId = AbsUrls.itemIdFrom(novel.url) ?: return false
+        val client = absClient() ?: return false
+        return runCatching {
+            withContext(Dispatchers.IO) {
+                withTimeoutOrNull(timeoutMs) {
+                    val item = cachedAbsItem(client, itemId) ?: return@withTimeoutOrNull false
+                    val ctx = item.toTrackCtx()
+                    if (ctx.isEmpty()) return@withTimeoutOrNull false
+                    absTrackCtx = ctx
+                    val seed = absSyncer.pull(itemId, ctx) ?: return@withTimeoutOrNull false
+                    val (track, offsetMs) = AbsProgressSyncer.trackIndexFor(seed, ctx)
+                        ?: return@withTimeoutOrNull false
+                    val chapter = chapters.firstOrNull {
+                        AbsUrls.itemIdFrom(it.url) == itemId && AbsUrls.inoFrom(it.url) == track.ino
+                    } ?: return@withTimeoutOrNull false
+                    // resumeMap/lastPlayedMap are plain maps shared with the
+                    // Main-confined play path — seed them there.
+                    withContext(Dispatchers.Main) {
+                        seedAbsResume(novel.id, chapter.id, offsetMs)
+                    }
+                    true
+                } ?: false
+            }
+        }.getOrElse {
+            logcat(LogPriority.WARN) { "ABS pull-on-open failed for ${novel.url}: ${it.message}" }
+            false
+        }
+    }
+
+    /**
+     * Seed the resume chain from a pulled ABS item-global position — the
+     * same entries [playOnMain] reads (resumeMap + lastPlayedMap).
+     */
+    private fun seedAbsResume(novelId: Long, chapterId: Long, positionMs: Long) {
+        resumeMap[chapterId] = positionMs
+        lastPlayedMap[novelId] = chapterId
+        persistResumeMap()
+        ttsPreferences.audiobookLastPlayed().set(json.encodeToString(lastPlayedMap))
+    }
 
     private val resumeMap: MutableMap<Long, Long> by lazy {
         runCatching {
@@ -242,6 +406,11 @@ class AudiobookPlayerController(
         }
         playlistChapters = chapters.associateBy { it.id }
         val tracks = withContext(Dispatchers.IO) {
+            // 22-04: reset per-item sync state up front — a non-ABS or
+            // unconfigured play must not inherit the last session's row.
+            absItemId = null
+            absTrackCtx = emptyList()
+            absChapterToIno = emptyMap()
             // Same union the chapter list's render-state seed uses:
             // the entry's source (often a canon stub with no dir) +
             // every bound carrier + each row's own url tag. A chapter's
@@ -287,9 +456,9 @@ class AudiobookPlayerController(
                 // and merge over the local union — a user-mixed entry
                 // with rendered .m4a files keeps them, remote wins on
                 // a chapterId collision.
-                val absSource = source as? eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
-                    ?: sourceManager.get(eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource.ABS_SOURCE_ID)
-                        as? eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource
+                val absSource = source as? AbsNovelSource
+                    ?: sourceManager.get(AbsNovelSource.ABS_SOURCE_ID) as? AbsNovelSource
+                armAbsSync(novel, chapters, absSource)
                 AudiobookPlaylist.mergeRemote(
                     AudiobookPlaylist.buildRemote(chapters) { url ->
                         eu.kanade.tachiyomi.source.novel.AudioChapterSchemes
@@ -301,16 +470,54 @@ class AudiobookPlayerController(
                 local
             }
         }
-        val startIndex = tracks.indexOfFirst { it.chapterId == chapter.id }
-        if (startIndex < 0) {
+        val tappedIndex = tracks.indexOfFirst { it.chapterId == chapter.id }
+        if (tappedIndex < 0) {
             logcat(LogPriority.WARN) { "Audiobook: no rendered audio for chapter '${chapter.name}'" }
             return fail()
         }
+
+        // 22-04 pull (SD-5a): concurrent with the controller bind — if the
+        // pull lands before setMediaItems its adopted seed becomes the
+        // resume; a slower pull still lands the merge in the pref for the
+        // next session. Never awaited — playback must not block on sync.
+        val absPull: Deferred<Long?>? = absItemId?.let { itemId ->
+            scope.async {
+                runCatching {
+                    val client = absClient() ?: return@runCatching null
+                    val item = cachedAbsItem(client, itemId) ?: return@runCatching null
+                    val ctx = item.toTrackCtx()
+                    if (ctx.isEmpty()) return@runCatching null
+                    absTrackCtx = ctx
+                    absSyncer.pull(itemId, ctx)
+                }.getOrElse {
+                    logcat(LogPriority.WARN) { "ABS progress pull failed for $itemId: ${it.message}" }
+                    null
+                }
+            }
+        }
+
         val controller = awaitController() ?: return fail()
 
         playlist = tracks
         pruneResumeMap(tracks)
-        val resumePosition = resumeMap[chapter.id] ?: 0L
+        var startIndex = tappedIndex
+        var resumePosition = resumeMap[chapter.id] ?: 0L
+
+        // Apply the remote seed only when the pull already landed — the
+        // adopted item-global position maps back to (track, offset) via
+        // the armed ctx (§7.2 "mark track via startOffset math").
+        absPull?.takeIf { it.isCompleted }
+            ?.let { runCatching { it.getCompleted() }.getOrNull() }
+            ?.let { seedMs ->
+                AbsProgressSyncer.trackIndexFor(seedMs, absTrackCtx)?.let { (ctx, offsetMs) ->
+                    tracks.indexOfFirst { absChapterToIno[it.chapterId] == ctx.ino }
+                        .takeIf { it >= 0 }
+                        ?.let {
+                            startIndex = it
+                            resumePosition = offsetMs
+                        }
+                }
+            }
 
         controller.setMediaItems(
             tracks.map { it.toMediaItem(novel) },
@@ -633,6 +840,7 @@ class AudiobookPlayerController(
             } else {
                 stopTicker()
                 saveCurrentPosition()
+                flushAbs() // 22-04: pause boundary push (SD-5)
             }
         }
 
@@ -649,6 +857,7 @@ class AudiobookPlayerController(
                     mediaController?.pause()
                     disarmSleepTimer()
                 }
+                flushAbs() // 22-04: track-boundary push (SD-5)
             }
             pushPlayerState()
         }
@@ -660,6 +869,11 @@ class AudiobookPlayerController(
                     persistResumeMap()
                     markChapterListened(track.chapterId)
                 }
+                // 22-04: item tail reached — the recorded position lands
+                // inside the 2 s finished rule, so this flush pushes
+                // isFinished/progress=1.0 (SD-7).
+                recordAbsPosition()
+                flushAbs()
                 disarmSleepTimer()
             }
             pushPlayerState()
@@ -782,6 +996,13 @@ class AudiobookPlayerController(
         }
         if (now - lastResumeWriteMs >= RESUME_WRITE_MS) {
             saveCurrentPosition()
+            // 22-04: ABS heartbeat — the 30 s push cadence rides the same
+            // 5 s persist beat (onPosition lands inside saveCurrentPosition);
+            // the syncer's dirty flag + push guard decide whether to PATCH.
+            if (now - lastAbsFlushMs >= ABS_FLUSH_MS) {
+                lastAbsFlushMs = now
+                flushAbs()
+            }
         }
     }
 
@@ -804,6 +1025,7 @@ class AudiobookPlayerController(
         }
         lastResumeWriteMs = System.currentTimeMillis()
         persistResumeMap()
+        recordAbsPosition() // 22-04: every persist beat also dirties the ABS item row
     }
 
     /**
@@ -888,6 +1110,10 @@ class AudiobookPlayerController(
     fun release() {
         stopTicker()
         saveCurrentPosition()
+        flushAbs() // 22-04: close boundary push (SD-5) — idempotent via the syncer mutex
+        absItemId = null
+        absTrackCtx = emptyList()
+        absChapterToIno = emptyMap()
         mediaController?.stop()
         mediaController?.clearMediaItems()
         mediaController?.release()
@@ -924,5 +1150,11 @@ class AudiobookPlayerController(
 
         /** Positions within this of the end count as "finished". */
         const val END_OF_TRACK_MS = 2_000L
+
+        /** ABS progress push cadence while playing (22-04 SD-5). */
+        const val ABS_FLUSH_MS = 30_000L
+
+        /** Pull-on-open network bound for the entry screen (22-04 SD-5b). */
+        const val ABS_PULL_TIMEOUT_MS = 3_000L
     }
 }

@@ -1,12 +1,14 @@
 package eu.kanade.tachiyomi.source.novel.abs
 
 import android.content.SharedPreferences
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.jsonMime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -154,6 +156,60 @@ class AbsClient(
             // Some ABS versions answer a bare array — tolerate both shapes.
             absJson.decodeFromString(body)
         }
+    }
+
+    // ---- progress sync (22-04) ----------------------------------------------
+
+    /**
+     * `GET /api/me/progress/{itemId}` → the item's server-side progress row,
+     * or null when absent (404, empty/`null` body, or an undecodable
+     * payload — a malformed row must never merge, T-22-04-02).
+     */
+    suspend fun getProgress(itemId: String): AbsProgress? {
+        val body = try {
+            api("GET", "/api/me/progress/$itemId")
+        } catch (e: HttpException) {
+            if (e.code == 404) return null
+            throw e
+        }
+        if (body.isBlank() || body.trim() == "null") return null
+        return runCatching { absJson.decodeFromString<AbsProgress>(body) }.getOrNull()
+    }
+
+    /**
+     * `PATCH /api/me/progress/{itemId}` — full-form progress write (SD-4).
+     * Returns the server's stamped row when the response echoes one (its
+     * `lastUpdate` becomes the shared merge clock — RESEARCH §7.2); null on
+     * an empty/undecodable body. Propagates `HttpException(404)` so the
+     * caller can fall back to [patchProgressBatch].
+     */
+    suspend fun patchProgress(itemId: String, patch: AbsProgressPatch): AbsProgress? {
+        val body = api(
+            "PATCH",
+            "/api/me/progress/$itemId",
+            body = absJson.encodeToString(patch),
+        )
+        return runCatching { absJson.decodeFromString<AbsProgress>(body) }.getOrNull()
+    }
+
+    /**
+     * `PATCH /api/me/progress/batch/update` — the §3.1 alternate body shape,
+     * exercised only when the single-item PATCH 404s on older servers.
+     */
+    suspend fun patchProgressBatch(itemId: String, patch: AbsProgressPatch) {
+        val payload = AbsProgressBatchUpdate(
+            progresses = listOf(
+                AbsProgressBatchItem(
+                    libraryItemId = itemId,
+                    currentTime = patch.currentTime,
+                    duration = patch.duration,
+                    progress = patch.progress,
+                    isFinished = patch.isFinished,
+                    hideFromContinueListening = patch.hideFromContinueListening,
+                ),
+            ),
+        )
+        api("PATCH", "/api/me/progress/batch/update", body = absJson.encodeToString(payload))
     }
 
     // ---- plumbing ----------------------------------------------------------

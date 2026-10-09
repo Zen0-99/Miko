@@ -123,6 +123,11 @@ class AudiobookPlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        // 22-04: last-chance ABS progress flush — the singleton
+        // [AudiobookPlayerController]'s scope outlives this service, so the
+        // final dirty push still lands after teardown. Serialized by the
+        // syncer's mutex against any in-flight heartbeat flush.
+        runCatching { Injekt.get<AudiobookPlayerController>().flushProgressOnDestroy() }
         serviceScope.cancel()
         mediaSession?.run {
             player.release()

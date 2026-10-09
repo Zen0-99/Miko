@@ -127,6 +127,18 @@ class NovelTtsPreferences(
     fun audiobookLastPlayed() = preferenceStore.getString("pref_novel_audiobook_last_played", "{}")
 
     /**
+     * Item-level ABS progress rows (22-04 SD-1) — JSON
+     * `Map<"{serverKey}|{itemId}", ItemProgress{itemGlobalMs, lastUpdateMs,
+     * dirty}>` written by
+     * [eu.kanade.tachiyomi.data.track.abs.AbsProgressSyncer]. Positions and
+     * timestamps only — the API token never lands here (T-22-04-03); it
+     * stays in the source's `__PRIVATE_abs_api_key` pref. The chapter-level
+     * [audiobookPositions] map is untouched — it stays the UI resume source
+     * for local and remote entries alike.
+     */
+    fun absProgress() = preferenceStore.getString("pref_novel_audiobook_abs_progress", "{}")
+
+    /**
      * Full-overlay now-playing theme (Retro Music Player port). Stored as the
      * [AudiobookPlayerTheme] name.
      */

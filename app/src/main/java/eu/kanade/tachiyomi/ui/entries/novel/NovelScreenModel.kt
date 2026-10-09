@@ -582,6 +582,17 @@ class NovelScreenModel(
                 )
             }
 
+            // 22-04 SD-5b: ABS pull-on-open — a newer server-side item
+            // position seeds the local resume chain (audiobookPositions +
+            // lastPlayed) so the first tap continues from it. Bounded by a
+            // 3 s timeout inside pullAbsProgress; unconfigured/unreachable
+            // → silent skip, the entry screen never waits on sync.
+            if (novel.isAudiobook) {
+                screenModelScope.launchIO {
+                    audiobookPlayer.pullAbsProgress(novel, chapters.map { it.chapter })
+                }
+            }
+
             // Everything below is secondary — holds until the nav
             // transition lands (see transitionSettled).
             transitionSettled.await()

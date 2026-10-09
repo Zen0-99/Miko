@@ -122,3 +122,56 @@ data class AbsChapter(
     val end: Double = 0.0,
     val title: String? = null,
 )
+
+// ---- progress sync (22-04) ---------------------------------------------------
+
+/**
+ * `GET /api/me/progress/{itemId}` — the item's server-side progress row.
+ * `lastUpdate` is the merge clock (RESEARCH §7.2): server-stamped epoch ms,
+ * never compared against device wallclock on its own. Fields default so a
+ * partial row still decodes; a hostile `currentTime` is clamped by the
+ * syncer before it can seek playback anywhere (T-22-04-02).
+ */
+@Serializable
+data class AbsProgress(
+    val currentTime: Double = 0.0,
+    val duration: Double = 0.0,
+    val progress: Double = 0.0,
+    val isFinished: Boolean = false,
+    val lastUpdate: Long = 0L,
+    val libraryItemId: String? = null,
+    val mediaItemId: String? = null,
+)
+
+/**
+ * `PATCH /api/me/progress/{itemId}` body — the full-form write Lissen uses
+ * (SD-4), not the legacy sync/local endpoint. The Bearer token rides the
+ * transport's headers only — it is never a field here (T-22-04-03).
+ */
+@Serializable
+data class AbsProgressPatch(
+    val currentTime: Double,
+    val duration: Double,
+    val progress: Double,
+    val isFinished: Boolean,
+    val hideFromContinueListening: Boolean = false,
+)
+
+/**
+ * `PATCH /api/me/progress/batch/update` row — the §3.1 fallback shape for
+ * servers where the single-item PATCH 404s.
+ */
+@Serializable
+data class AbsProgressBatchItem(
+    val libraryItemId: String,
+    val currentTime: Double,
+    val duration: Double,
+    val progress: Double,
+    val isFinished: Boolean,
+    val hideFromContinueListening: Boolean = false,
+)
+
+@Serializable
+data class AbsProgressBatchUpdate(
+    val progresses: List<AbsProgressBatchItem>,
+)
