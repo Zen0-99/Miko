@@ -4,14 +4,14 @@ package eu.kanade.tachiyomi.util
  * iOS stand-in for `android.net.Uri` — opaque marker in the source
  * contract; nothing constructs it on iOS.
  */
-actual abstract class Uri private constructor() {
+actual abstract class Uri private actual constructor() {
     actual abstract override fun toString(): String
 }
 
 /**
  * iOS stand-in for `okhttp3.Headers` — a flat ordered pair list.
  */
-actual class Headers actual constructor(
+actual class Headers internal constructor(
     private val entries: List<Pair<String, String>>,
 ) {
     actual val size: Int

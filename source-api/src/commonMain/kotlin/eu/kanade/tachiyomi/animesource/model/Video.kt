@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.util.Uri
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.concurrent.Volatile
+import kotlin.jvm.Transient
 
 @Serializable
 data class Track(val url: String, val lang: String)

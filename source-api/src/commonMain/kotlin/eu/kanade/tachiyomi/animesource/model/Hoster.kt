@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.animesource.model.SerializableVideo.Companion.toVideo
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.concurrent.Volatile
+import kotlin.jvm.Transient
 
 open class Hoster(
     val hosterUrl: String = "",
