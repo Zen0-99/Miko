@@ -89,9 +89,16 @@ data class MangaDownload(
                     .workIdFromMangaUrl(manga.url) ?: return null
                 val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
                     .seqFromCanonUrl(workId, chapter.url) ?: return null
-                val (carrier, candidate) = Injekt.get<eu.kanade.tachiyomi.data.mikodb
-                    .CanonicalChapterRouter>()
-                    .downloadTarget(workId, seq) ?: return null
+                val (carrier, candidate) = Injekt.get<
+                    eu.kanade.tachiyomi.data.mikodb
+                        .CanonicalChapterRouter,
+                    >()
+                    .downloadTarget(
+                        workId,
+                        seq,
+                        numberHint = chapter.chapterNumber
+                            .takeIf { it >= 0.0 },
+                    ) ?: return null
                 return MangaDownload(carrier, manga, chapter.copy(url = candidate.chapterUrl))
             }
 

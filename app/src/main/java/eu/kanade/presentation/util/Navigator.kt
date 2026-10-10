@@ -10,12 +10,12 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.getValue
@@ -197,6 +197,13 @@ fun ScreenTransition(
     navigator: Navigator,
     transition: AnimatedContentTransitionScope<Screen>.() -> ContentTransform,
     modifier: Modifier = Modifier,
+    /**
+     * True on the root navigator — the opaque canvas takes the full
+     * frame. False inside bottom sheets: the canvas then just backs
+     * the current content (matchParentSize) so the sheet can wrap to
+     * the screen's actual height instead of always filling.
+     */
+    fillScreen: Boolean = true,
     content: ScreenTransitionContent = { it.Content() },
 ) {
     // SharedTransitionLayout lets screens fly keyed elements (hero artwork)
@@ -210,12 +217,16 @@ fun ScreenTransition(
             // total alpha below 1 mid-transit, and without a backing layer
             // the window's black decor shows through as a dark-then-bright
             // pulse. Fading over the app's own background keeps luminance
-            // constant.
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.material3.MaterialTheme.colorScheme.background),
-            )
+            // constant. Sheet-hosted nav skips it — a fillMaxSize sibling
+            // would stretch the sheet to full height, and sheet screens
+            // already paint their own opaque backgrounds.
+            if (fillScreen) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(androidx.compose.material3.MaterialTheme.colorScheme.background),
+                )
+            }
             AnimatedContent(
                 targetState = navigator.lastItem,
                 transitionSpec = transition,

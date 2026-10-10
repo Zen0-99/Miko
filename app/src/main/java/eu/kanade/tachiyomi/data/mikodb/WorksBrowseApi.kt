@@ -76,6 +76,11 @@ class WorksBrowseApi(
         page: Int = 1,
         limit: Int = PAGE_LIMIT,
         includeNsfw: Boolean = false,
+        genres: List<String> = emptyList(),
+        excludeGenres: List<String> = emptyList(),
+        yearFrom: Int? = null,
+        yearTo: Int? = null,
+        minRating: Double? = null,
     ): Page? = try {
         val url = "${identityApi.baseUrl()}$BROWSE_PATH".toHttpUrl().newBuilder()
             .addQueryParameter("medium", medium)
@@ -84,6 +89,15 @@ class WorksBrowseApi(
             .addQueryParameter("limit", limit.toString())
             .apply { if (kinds.isNotEmpty()) addQueryParameter("kind", kinds.joinToString(",")) }
             .apply { if (includeNsfw) addQueryParameter("nsfw", "1") }
+            .apply { if (genres.isNotEmpty()) addQueryParameter("genre", genres.joinToString(",")) }
+            .apply {
+                if (excludeGenres.isNotEmpty()) {
+                    addQueryParameter("exclude_genre", excludeGenres.joinToString(","))
+                }
+            }
+            .apply { yearFrom?.let { addQueryParameter("year_from", it.toString()) } }
+            .apply { yearTo?.let { addQueryParameter("year_to", it.toString()) } }
+            .apply { minRating?.let { addQueryParameter("min_rating", it.toString()) } }
             .build()
         val response = networkHelper.client.newCall(
             GET(url, headers = Headers.headersOf("User-Agent", WorkIdentityApi.USER_AGENT)),
@@ -95,12 +109,38 @@ class WorksBrowseApi(
         null
     }
 
+    @Serializable
+    internal data class GenresResponse(
+        val genres: List<String> = emptyList(),
+    )
+
+    /**
+     * The medium's real genre vocabulary (`GET /v1/genres`) — drives
+     * the filter sheet's chip set so it always reflects what the
+     * catalog actually tags. Empty on failure; [kinds] narrows to a
+     * pill's slice the same way `kind=` does on browse.
+     */
+    suspend fun genres(medium: String, kinds: List<String> = emptyList()): List<String> = try {
+        val url = "${identityApi.baseUrl()}$GENRES_PATH".toHttpUrl().newBuilder()
+            .addQueryParameter("medium", medium)
+            .apply { if (kinds.isNotEmpty()) addQueryParameter("kind", kinds.joinToString(",")) }
+            .build()
+        val response = networkHelper.client.newCall(
+            GET(url, headers = Headers.headersOf("User-Agent", WorkIdentityApi.USER_AGENT)),
+        ).awaitSuccess()
+        with(json) { response.parseAs<GenresResponse>() }.genres
+    } catch (e: Exception) {
+        logcat(LogPriority.WARN) { "WorksBrowseApi: genres failed: ${e.message}" }
+        emptyList()
+    }
+
     companion object {
         const val SORT_POPULARITY = "popularity"
         const val SORT_RATING = "rating"
         const val SORT_NEWEST = "newest"
 
         private const val BROWSE_PATH = "/v1/works/browse"
+        private const val GENRES_PATH = "/v1/genres"
         private const val PAGE_LIMIT = 40
     }
 }

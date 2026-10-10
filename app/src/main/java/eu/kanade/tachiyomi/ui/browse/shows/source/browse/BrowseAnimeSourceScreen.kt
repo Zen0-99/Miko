@@ -50,9 +50,9 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.ui.browse.shows.extension.details.AnimeSourcePreferencesScreen
-import eu.kanade.tachiyomi.ui.browse.shows.migration.shows.season.MigrateSeasonSelectScreen
 import eu.kanade.tachiyomi.ui.browse.shows.migration.search.MigrateShowsDialog
 import eu.kanade.tachiyomi.ui.browse.shows.migration.search.MigrateShowsDialogScreenModel
+import eu.kanade.tachiyomi.ui.browse.shows.migration.shows.season.MigrateSeasonSelectScreen
 import eu.kanade.tachiyomi.ui.browse.shows.source.browse.BrowseAnimeSourceScreenModel.Listing
 import eu.kanade.tachiyomi.ui.collection.CollectionsTab
 import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen

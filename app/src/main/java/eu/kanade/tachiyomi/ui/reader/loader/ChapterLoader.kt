@@ -89,13 +89,14 @@ class ChapterLoader(
         } else {
             null
         }
-        val isDownloaded = canonSource != null || downloadManager.isChapterDownloaded(
-            dbChapter.name,
-            dbChapter.scanlator,
-            manga.title,
-            manga.source,
-            skipCache = true,
-        )
+        val isDownloaded = canonSource != null ||
+            downloadManager.isChapterDownloaded(
+                dbChapter.name,
+                dbChapter.scanlator,
+                manga.title,
+                manga.source,
+                skipCache = true,
+            )
         return when {
             isDownloaded -> DownloadPageLoader(
                 chapter,

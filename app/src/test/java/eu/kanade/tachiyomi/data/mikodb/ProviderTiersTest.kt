@@ -126,7 +126,9 @@ class ProviderTiersTest {
         val seeded = InMemoryPreferenceStore(
             sequenceOf(
                 InMemoryPreferenceStore.InMemoryPreference(
-                    "miko_provider_tiers", json.encodeToString(stale), "",
+                    "miko_provider_tiers",
+                    json.encodeToString(stale),
+                    "",
                 ),
             ),
         )

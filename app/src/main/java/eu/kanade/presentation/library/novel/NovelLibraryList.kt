@@ -68,6 +68,7 @@ internal fun NovelLibraryList(
                     url = novel.thumbnailUrl,
                     lastModified = novel.coverLastModified,
                 ),
+                sharedCoverTransition = true,
                 badge = {
                     DownloadsBadge(count = libraryItem.downloadCount)
                     UnviewedBadge(count = libraryItem.unreadCount)

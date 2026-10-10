@@ -35,6 +35,20 @@ object ChapterNameGroup {
     }
 
     /**
+     * The name minus its leading group marker — "Vol.4 Ch.30: Title" →
+     * "Ch.30: Title", "CH.Book 6 14: Audience" → "14: Audience". Null
+     * when the name carries no marker.
+     */
+    fun stripMarker(chapterName: String): String? =
+        groupRegex.find(chapterName)
+            ?.let {
+                chapterName.substring(it.range.last + 1)
+                    .trim()
+                    .trimStart('-', '–', '—', ':', '#')
+                    .trim()
+            }
+
+    /**
      * Ordered distinct group labels for a chapter list, ascending by number
      * (matching the anime season-pill ordering). All-or-nothing: grouping
      * only engages when EVERY chapter name carries a marker — a source that

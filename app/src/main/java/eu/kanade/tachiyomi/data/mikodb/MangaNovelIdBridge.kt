@@ -169,6 +169,48 @@ class MangaNovelIdBridge(
         }.orEmpty()
     }
 
+    /** A [byNormalizedTitle] hit annotated with whether the matching
+     *  title is primary for its work — ambiguity callers weigh exact
+     *  primary-title works above alt-title bleed (19-canonize dupe
+     *  collapse). Richness = `row.externalIds` (source_ids +
+     *  provider_links), already populated by [Cursor.toWorkRow]. */
+    data class TitleHit(
+        val row: WorkRow,
+        val isPrimary: Boolean,
+    )
+
+    /**
+     * Same normalized-title lookup as [byNormalizedTitle], preserving
+     * the `titles.is_primary` flag on each hit. Cache rows carry their
+     * own title so they always count as primary.
+     */
+    suspend fun byNormalizedTitleDetailed(normalizedTitle: String): List<TitleHit> {
+        val cached = handler.awaitList { works_cacheQueries.selectByNormalizedTitle(normalizedTitle, null) }
+        if (cached.isNotEmpty()) {
+            return cached.map { TitleHit(it.toWorkRow(externalIdsFor(it.miko_work_id)), isPrimary = true) }
+        }
+        return fullDb()?.let { db ->
+            db.rawQuery(
+                "SELECT w.*, MAX(t.is_primary) AS hit_primary " +
+                    "FROM works w JOIN titles t ON t.miko_work_id = w.miko_work_id " +
+                    "WHERE t.normalized = ? GROUP BY w.miko_work_id",
+                arrayOf(normalizedTitle),
+            ).use { c ->
+                buildList {
+                    val primaryIdx = c.getColumnIndex("hit_primary")
+                    while (c.moveToNext()) {
+                        add(
+                            TitleHit(
+                                c.toWorkRow(db),
+                                isPrimary = primaryIdx >= 0 && c.getLong(primaryIdx) == 1L,
+                            ),
+                        )
+                    }
+                }
+            }
+        }.orEmpty()
+    }
+
     /**
      * Catalog search over normalized titles (NCM-007 / Phase 12-01).
      *
@@ -362,6 +404,13 @@ class MangaNovelIdBridge(
                 works_cacheQueries.upsertExternalId(provider, id, row.mikoWorkId)
             }
         }
+    }
+
+    /** Drop a delta row — mint promotion removes the superseded
+     *  `mk:m:` row so search stops surfacing it. Orphaned external-id
+     *  rows for the id are harmless (lookup-by-id just misses). */
+    suspend fun deleteWork(workId: String) {
+        handler.await(true) { works_cacheQueries.deleteWork(workId) }
     }
 
     suspend fun count(): Long = handler.awaitOne { works_cacheQueries.count() }

@@ -52,7 +52,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.File
-import java.util.Date
+import kotlin.time.Clock
 
 class ExternalIntents {
 
@@ -426,7 +426,7 @@ class ExternalIntents {
     private suspend fun saveEpisodeHistory(currentEpisode: Episode) {
         if (basePreferences.incognitoMode().get()) return
         upsertHistory.await(
-            AnimeHistoryUpdate(currentEpisode.id, Date()),
+            AnimeHistoryUpdate(currentEpisode.id, Clock.System.now()),
         )
     }
 

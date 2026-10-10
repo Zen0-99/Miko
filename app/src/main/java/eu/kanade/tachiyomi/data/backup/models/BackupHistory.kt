@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.data.backup.models
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import tachiyomi.domain.history.manga.model.MangaHistory
-import java.util.Date
+import kotlin.time.Instant
 
 @Serializable
 data class BackupHistory(
@@ -13,7 +13,7 @@ data class BackupHistory(
 ) {
     fun getHistoryImpl(): MangaHistory {
         return MangaHistory.create().copy(
-            readAt = Date(lastRead),
+            readAt = Instant.fromEpochMilliseconds(lastRead),
             readDuration = readDuration,
         )
     }

@@ -101,7 +101,7 @@ object ChapterNumberParser {
 
     private val RE_KIND = listOf(
         Regex("""\b(prologue|foreword|preface)\b""") to Kind.PROLOGUE,
-        Regex("""\bepilogue\b""") to Kind.EPILOGUE,
+        Regex("""\b(epilogue|epl)\b""") to Kind.EPILOGUE,
         Regex("""\bafterword\b""") to Kind.AFTERWORD,
         Regex(
             """\b(omake|extra|extras|bonus|special|oneshot|one[ -]shot|side[ -]stor(?:y|ies)|interlude|intermission|appendix|gaiden|omitted|spin[ -]off)\b""",
@@ -114,6 +114,18 @@ object ChapterNumberParser {
     private val RE_CHAPTER =
         Regex("""\b(?:chapter|chap|ch|episode|ep|no)\.?\s*([0-9]+(?:\.[0-9]+)?[a-z]?|[a-z]+(?:[ -][a-z]+)*)""")
     private val RE_CHAPTER_HASH = Regex("""#\s*(\d+(?:\.\d+)?)""")
+
+    // Web-novel compound coordinate: "CH.Book 7 14" / "Book 2 ex5" —
+    // the book ordinal is a high-order component, folded into `number`
+    // as N*BOOK_SCALE + sub so a single Double keeps per-book identity
+    // and cross-book ordering (a bare `chapter_number` column has no
+    // volume dimension). `exN` is the book's own extra/interlude index.
+    private val RE_BOOK = Regex("""\bbook\s*([0-9]+)(?:\s+ex\s*([0-9]+))?""")
+    private const val BOOK_SCALE = 10000.0
+    private const val SUB_EXTRAS = 5000.0
+    private const val SUB_NOTICE = 9995.0
+    private const val SUB_AFTERWORD = 9997.0
+    private const val SUB_EPILOGUE = 9999.0
     private val RE_COMPACT = Regex("""\bv(\d+)\s*c(\d+(?:\.\d+)?)\b""")
     private val RE_NUMERIC_TOKEN = Regex("""^([0-9]+)(?:\.([0-9]+))?([a-z])?$""")
     private val RE_BARE = Regex("""^\s*\d+(?:\.\d+)?\s*$""")
@@ -135,8 +147,23 @@ object ChapterNumberParser {
             }
         }
 
-        val compact = RE_COMPACT.find(text)
-        val vol = RE_VOLUME.find(text) ?: if (compact == null) RE_VOLUME_V.find(text) else null
+        // "Book N" is consumed up-front and blanked so the chapter token
+        // regexes only see the sub-chapter coordinate ("CH.Book 7 14" →
+        // book 7 + chapter 14). Without this, RE_CHAPTER captures the
+        // literal word "book" and the name collapses to number=null.
+        var bookCoord: Double? = null
+        var bookExtraIdx: Double? = null
+        val bm = RE_BOOK.find(text)
+        val coordText = if (bm != null) {
+            bookCoord = bm.groupValues[1].toDouble()
+            bookExtraIdx = bm.groupValues[2].toDoubleOrNull()
+            text.replaceRange(bm.range, " ".repeat(bm.range.last - bm.range.first + 1))
+        } else {
+            text
+        }
+
+        val compact = RE_COMPACT.find(coordText)
+        val vol = RE_VOLUME.find(coordText) ?: if (compact == null) RE_VOLUME_V.find(coordText) else null
         if (vol != null) volume = vol.groupValues[1].toDouble()
         if (compact != null) {
             volume = compact.groupValues[1].toDouble()
@@ -144,7 +171,7 @@ object ChapterNumberParser {
         }
 
         if (number == null) {
-            val m = RE_CHAPTER.find(text) ?: RE_CHAPTER_HASH.find(text)
+            val m = RE_CHAPTER.find(coordText) ?: RE_CHAPTER_HASH.find(coordText)
             if (m != null) {
                 val tok = m.groupValues[1]
                 val num = RE_NUMERIC_TOKEN.find(tok)
@@ -158,7 +185,7 @@ object ChapterNumberParser {
             }
         }
 
-        val pm = RE_PART.find(text)
+        val pm = RE_PART.find(coordText)
         if (pm != null) {
             part = pm.groupValues[1].toIntOrNull() ?: pm.groupValues[2].let { romanToInt(it) }
         }
@@ -175,11 +202,137 @@ object ChapterNumberParser {
         }
 
         if (number == null && kind != Kind.CHAPTER && kind != Kind.NOTICE) {
-            RE_LOOSE_INT.find(text)?.let { number = it.groupValues[1].toDouble() }
+            RE_LOOSE_INT.find(coordText)?.let { number = it.groupValues[1].toDouble() }
+        }
+
+        if (bookCoord != null) {
+            // Sub-coordinate spaces inside a book: mains [0,4999],
+            // extras [5000,9899] — `CH.Book 7 ex5` must not share
+            // `chapter_number` with `CH.Book 7 5` (threshold marks and
+            // next-unread picks would ambiguate) — and end-matter pins
+            // to the tail so it sorts after every chapter of its book.
+            number = bookCoord * BOOK_SCALE + when (kind) {
+                Kind.EPILOGUE -> SUB_EPILOGUE + (number ?: 0.0)
+                Kind.AFTERWORD -> SUB_AFTERWORD + (number ?: 0.0)
+                Kind.NOTICE -> SUB_NOTICE + (number ?: 0.0)
+                else -> {
+                    val extra = bookExtraIdx != null || kind == Kind.EXTRA
+                    val idx = bookExtraIdx ?: number ?: 0.0
+                    if (extra) SUB_EXTRAS + idx else idx
+                }
+            }
+            if (bookExtraIdx != null && kind == Kind.CHAPTER) kind = Kind.EXTRA
+            if (volume == null) volume = bookCoord
         }
 
         if (number == null && kind == Kind.CHAPTER) kind = Kind.UNKNOWN
 
         return Parsed(number, volume, part, kind)
     }
+
+    /**
+     * Human-facing name for a book-coordinate chapter — "CH.Book 6 14:
+     * Audience" renders "Chapter 14: Audience". The stored name stays
+     * untouched (it keys download dirs and audio manifests); this is a
+     * display transform only. Returns null when the name isn't a
+     * book-coordinate chapter or has no resolvable sub-title — callers
+     * fall back to the raw name.
+     */
+    fun displayName(raw: String): String? {
+        val text = raw.trim()
+        val padded = " ${text.lowercase()} "
+        val bm = RE_BOOK.find(padded) ?: return null
+        val p = parse(raw)
+        if (p.number == null || p.volume == null) return null
+        val sub = p.number - p.volume * BOOK_SCALE
+        val title = text.substringAfter(':', "").trim().takeIf {
+            it.isNotEmpty() && it != text
+        }
+        // "Book 7" alone carries no sub-coordinate and no title — the
+        // raw name is already the right label, rewriting it to
+        // "Chapter 0" would be nonsense.
+        if (sub <= 0.0 && p.kind == Kind.CHAPTER && title == null) return null
+        val base = when (p.kind) {
+            Kind.EPILOGUE -> "Epilogue"
+            Kind.AFTERWORD -> "Afterword"
+            Kind.NOTICE -> "Notice"
+            Kind.PROLOGUE -> "Prologue"
+            Kind.EXTRA -> "Extra ${formatLocal(sub - SUB_EXTRAS)}"
+            else -> "Chapter ${formatLocal(sub)}"
+        }
+        return when {
+            title == null -> base
+            // "CH.Book 7 epl: Epilogue I" — the title already carries
+            // the kind word; "Epilogue: Epilogue I" would stutter.
+            title.lowercase().startsWith(base.lowercase()) -> title
+            else -> "$base: $title"
+        }
+    }
+
+    /**
+     * [displayName] plus the leading book/volume/season-style group
+     * marker — "CH.Book 6 14: Audience" → "Book 6 Chapter 14: Audience",
+     * "Vol.2 Ch.30: Title" → "Volume 2 Chapter 30: Title". For
+     * continue/resume labels where the stripped name alone loses which
+     * book the chapter belongs to. Null when the name carries no group
+     * marker — callers fall back to [displayName] or the raw name.
+     */
+    fun qualifiedDisplayName(raw: String): String? {
+        val group = eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
+            .parse(raw) ?: return null
+        val stripped = eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
+            .stripMarker(raw).orEmpty()
+        val inner = displayName(raw)
+            ?: stripped.takeIf { it.isNotBlank() }
+                ?.let { simpleDisplayName(it) ?: it }
+        return if (inner.isNullOrBlank() || inner == group) {
+            group
+        } else {
+            "$group $inner"
+        }
+    }
+
+    /**
+     * Bare-numbering chapters — "#3/3#/3", "003", "3.5" — carry no words
+     * worth showing; the number IS the name. Renders "Chapter 3". Null
+     * when the name carries any letters (a real title/label) or resolves
+     * no usable number — callers fall back to the raw name.
+     */
+    fun bareNumberDisplayName(raw: String): String? {
+        if (raw.any { it.isLetter() }) return null
+        val p = parse(raw)
+        if (p.number == null || p.volume != null) return null
+        return "Chapter ${formatLocal(p.number)}"
+    }
+
+    /**
+     * Number/kind formatter without [displayName]'s book-coordinate
+     * requirement — "Ch.30: Title" → "Chapter 30: Title". Feeds the
+     * inner label of [qualifiedDisplayName] once the group marker is
+     * stripped; null when the name has no usable chapter number or still
+     * carries a volume coordinate of its own.
+     */
+    private fun simpleDisplayName(raw: String): String? {
+        val p = parse(raw)
+        if (p.number == null || p.volume != null) return null
+        val title = raw.substringAfter(':', "").trim().takeIf {
+            it.isNotEmpty() && it != raw
+        }
+        val base = when (p.kind) {
+            Kind.EPILOGUE -> "Epilogue"
+            Kind.AFTERWORD -> "Afterword"
+            Kind.NOTICE -> "Notice"
+            Kind.PROLOGUE -> "Prologue"
+            Kind.EXTRA -> "Extra ${formatLocal(p.number)}"
+            else -> "Chapter ${formatLocal(p.number)}"
+        }
+        return when {
+            title == null -> base
+            title.lowercase().startsWith(base.lowercase()) -> title
+            else -> "$base: $title"
+        }
+    }
+
+    private fun formatLocal(v: Double): String =
+        if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
 }

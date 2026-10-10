@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test
  * shifted row. `realignUpdates` re-points existing rows to their new
  * seq in place — keeping the row id (and its `lastPageRead`, history,
  * bookmark links) — instead of letting `SyncChaptersWithSource` delete
- * and re-add them.
+ * and re-add them. Rows that lose a seq claim are reported as orphans
+ * so the caller can merge their state into the winner and delete them —
+ * two rows may never hold the same `canon:` url.
  */
 class CanonicalChapterSyncTest {
 
@@ -43,10 +45,9 @@ class CanonicalChapterSyncTest {
         // Carrier insert pushed "Chapter 2" from seq 5 to seq 1.
         val canon = listOf(canon(seq = 0, number = 1.0), canon(seq = 1, number = 2.0))
         val rows = listOf(Triple(7L, "canon:$workId:5", "Chapter 2"))
-        assertEquals(
-            listOf(7L to "canon:$workId:1"),
-            CanonicalChapterSync.realignUpdates(canon, rows, workId, ::bindByNumber),
-        )
+        val plan = CanonicalChapterSync.realignUpdates(canon, rows, workId, ::bindByNumber)
+        assertEquals(listOf(7L to "canon:$workId:1"), plan.updates)
+        assertTrue(plan.orphans.isEmpty())
     }
 
     @Test
@@ -73,10 +74,38 @@ class CanonicalChapterSyncTest {
             Triple(4L, "canon:$workId:5", "Chapter 2"),
             Triple(5L, "canon:$workId:8", "Chapter 2"),
         )
-        assertEquals(
-            listOf(4L to "canon:$workId:1"),
-            CanonicalChapterSync.realignUpdates(canon, rows, workId, ::bindByNumber),
+        val plan = CanonicalChapterSync.realignUpdates(canon, rows, workId, ::bindByNumber)
+        // First bound row wins the url; the loser orphans into it.
+        assertEquals(listOf(4L to "canon:$workId:1"), plan.updates)
+        assertEquals(listOf(5L to 4L), plan.orphans)
+    }
+
+    @Test
+    fun `stale row cannot take a url an already-correct row holds`() {
+        // Regression: the seated row used to return before claiming its
+        // url, letting a stale sibling realign onto it — two rows bound
+        // to one seq, then repair normalizes both into identical rows.
+        val canon = listOf(canon(seq = 0, number = 1.0), canon(seq = 1, number = 2.0))
+        val rows = listOf(
+            Triple(4L, "canon:$workId:9", "Chapter 1"),
+            Triple(1L, "canon:$workId:0", "Chapter 1"),
         )
+        val plan = CanonicalChapterSync.realignUpdates(canon, rows, workId, ::bindByNumber)
+        // Seated row wins regardless of iteration order; stale row orphans.
+        assertTrue(plan.updates.isEmpty())
+        assertEquals(listOf(4L to 1L), plan.orphans)
+    }
+
+    @Test
+    fun `unbindable row sitting on a claimed url orphans into the winner`() {
+        val canon = listOf(canon(seq = 0, number = 1.0))
+        val rows = listOf(
+            Triple(2L, "canon:$workId:0", "Unparseable leftover"),
+            Triple(3L, "canon:$workId:7", "Chapter 1"),
+        )
+        val plan = CanonicalChapterSync.realignUpdates(canon, rows, workId, ::bindByNumber)
+        assertEquals(listOf(3L to "canon:$workId:0"), plan.updates)
+        assertEquals(listOf(2L to 3L), plan.orphans)
     }
 
     @Test

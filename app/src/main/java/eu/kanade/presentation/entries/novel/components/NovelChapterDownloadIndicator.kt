@@ -1,8 +1,10 @@
 package eu.kanade.presentation.entries.novel.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -19,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -231,9 +234,9 @@ private fun DownloadedIndicator(
     tint: Color,
 ) {
     var isMenuExpanded by remember { mutableStateOf(false) }
-    // The same circled-arrow icon — its circle filled with the accent —
-    // with the glyph drawn in a contrast-aware black/white on top.
-    val glyphTint = rememberOnAccentColor(tint)
+    // Downloaded = the idle glyph inverted: a filled disc in the card's
+    // contrast tint with the ring still on top in the same tint and the
+    // arrow punched through in the on-tint color.
     Box(
         modifier = modifier
             .size(IconButtonTokens.StateLayerSize)
@@ -242,20 +245,29 @@ private fun DownloadedIndicator(
                 hapticFeedback = LocalHapticFeedback.current,
                 onLongClick = { isMenuExpanded = true },
                 onClick = { isMenuExpanded = true },
-            ),
+            )
+            // Same off-white as NOT_DOWNLOADED — the state reads from the
+            // filled disc + punched arrow, not from a brighter tint.
+            .secondaryItemAlpha(),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_item_circle_filled_24dp),
-            contentDescription = null,
-            modifier = Modifier.size(IndicatorSize),
-            tint = tint,
+        Box(
+            modifier = Modifier
+                .size(IndicatorSize - 4.dp)
+                .clip(CircleShape)
+                .background(tint),
         )
         Icon(
             painter = painterResource(R.drawable.ic_download_item_24dp),
             contentDescription = null,
             modifier = Modifier.size(IndicatorSize),
-            tint = glyphTint,
+            tint = tint,
+        )
+        Icon(
+            imageVector = Icons.Outlined.ArrowDownward,
+            contentDescription = null,
+            modifier = ArrowModifier,
+            tint = rememberOnAccentColor(tint),
         )
         DropdownMenu(expanded = isMenuExpanded, onDismissRequest = { isMenuExpanded = false }) {
             DropdownMenuItem(

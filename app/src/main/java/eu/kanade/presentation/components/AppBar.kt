@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -56,6 +57,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -63,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -150,6 +154,11 @@ fun AppBar(
     // responsible for positioning the bar below the status bar (e.g. the
     // floating glass top bar adds its own top padding before the glass surface).
     skipStatusBarPadding: Boolean = false,
+    // Bar height override — entry toolbars pass 60dp so their icon slots
+    // land exactly where the home top bar's do (icon center = +30 from
+    // the bar top, same as home's 6+24). Everywhere else keeps the M3
+    // default 64.
+    expandedHeight: Dp = TopAppBarDefaults.TopAppBarExpandedHeight,
 ) {
     // Use a fixed status-bar height so the app bar height does not change
     // when system bars are hidden/shown (e.g. leaving fullscreen reader).
@@ -179,6 +188,7 @@ fun AppBar(
         Box {
             TopAppBar(
                 modifier = Modifier.graphicsLayer { alpha = navFade },
+                expandedHeight = expandedHeight,
                 navigationIcon = {
                     if (isActionMode) {
                         IconButton(onClick = onCancelActionMode) {
@@ -212,6 +222,10 @@ fun AppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     scrolledContainerColor = Color.Transparent,
+                    // M3 dims action icons to onSurfaceVariant; the home
+                    // top bar paints them onSurface — the shared overflow
+                    // glyph would otherwise arrive a shade dimmer.
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface,
                 ),
                 scrollBehavior = scrollBehavior,
                 windowInsets = WindowInsets(0, 0, 0, 0),
@@ -297,6 +311,11 @@ internal const val NAV_PILL_SHARED_KEY = "nav-pill"
 @Composable
 fun AppBarActions(
     actions: ImmutableList<AppBar.AppBarAction>,
+    /** Keeps the overflow icon composed even when [actions] momentarily
+     *  carries no overflow items — the shared home bar uses this so a
+     *  transient empty write during a tab swap can't dispose the icon's
+     *  animated-vector painter and replay its enter animation. */
+    alwaysShowOverflow: Boolean = false,
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -332,7 +351,7 @@ fun AppBarActions(
                 it is AppBar.NestedOverflowAction ||
                 it is AppBar.CheckableOverflowAction
         }
-    if (overflowActions.isNotEmpty()) {
+    if (overflowActions.isNotEmpty() || alwaysShowOverflow) {
         TooltipBox(
             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
             tooltip = {
@@ -344,17 +363,31 @@ fun AppBarActions(
         ) {
             val moreImage = AnimatedImageVector.animatedVectorResource(R.drawable.anim_more_enter)
             IconButton(
-                onClick = { showMenu = !showMenu },
+                onClick = { if (overflowActions.isNotEmpty()) showMenu = !showMenu },
                 // The overflow icon exists on both the home top bar and
                 // the detail toolbar — one shared element makes it glide
                 // between positions on navigation instead of rebuilding.
                 // NavIcon (sharedElement) rather than a bounds morph: all
                 // endpoints draw the same glyph, so skipping the content
                 // crossfade removes the mid-flight alpha dip.
-                modifier = heroSharedBoundsModifier(
-                    NAV_OVERFLOW_SHARED_KEY,
-                    HeroSharedKind.NavIcon,
-                ),
+                // requiredSize: home's icon row is 44dp, which squeezed
+                // this node to 48×44 there vs 48×48 on the detail bar —
+                // sharedElement places target content by the bounds' top,
+                // so mismatched endpoint sizes shift the glyph at handoff.
+                modifier = Modifier
+                    .requiredSize(48.dp)
+                    .onGloballyPositioned {
+                        android.util.Log.d(
+                            "NavIconPos",
+                            "overflow pos=${it.positionInRoot()} size=${it.size}",
+                        )
+                    }
+                    .then(
+                        heroSharedBoundsModifier(
+                            NAV_OVERFLOW_SHARED_KEY,
+                            HeroSharedKind.NavIcon,
+                        ),
+                    ),
             ) {
                 Icon(
                     rememberAnimatedVectorPainter(moreImage, showMenu),

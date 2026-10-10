@@ -252,7 +252,8 @@ private fun NovelHistoryItem(
             item.readAt?.let { readAt ->
                 Text(
                     text = "Read at ${dateFormatter.format(
-                        readAt.toInstant().atZone(java.time.ZoneId.systemDefault()),
+                        java.time.Instant.ofEpochMilli(readAt.toEpochMilliseconds())
+                            .atZone(java.time.ZoneId.systemDefault()),
                     )}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -58,7 +58,13 @@ fun rememberEntryAccentColor(
     // metadata refresh that rewrites description/genre doesn't flash the accent.
     val coverKey = cover?.let(::coverKeyOf)
     val colorState = remember(entryId) {
-        val cachedBase = entryId?.let { EntryCoverMetadata.getBaseColor(type, it, coverKey) }
+        // Strict cover-key match first, then the lenient read: a cover swap
+        // means the previous accent still beats the theme gray while the new
+        // extraction runs (the effect below re-extracts and fades over).
+        val cachedBase = entryId?.let {
+            EntryCoverMetadata.getBaseColor(type, it, coverKey)
+                ?: EntryCoverMetadata.getBaseColor(type, it)
+        }
         mutableStateOf<Color?>(
             cachedBase?.let { Color(adjustForTheme(it, isDark(context))) },
         )
@@ -187,6 +193,26 @@ internal fun coverKeyOf(cover: Any): String {
         else -> cover.toString()
     }
     return "v2|$base"
+}
+
+/**
+ * Synchronous lenient read of the cached accent for [entryId] — whatever cover
+ * produced it. Unlike [rememberEntryAccentColor] this never extracts: it is for
+ * transient loading surfaces (skeleton, loading preview) that exist only until
+ * the real screen takes over. Returns null when no color was ever cached.
+ */
+@Composable
+fun rememberCachedAccentColor(
+    entryId: Long?,
+    type: EntryCoverMetadata.EntryType,
+): Color? {
+    val context = LocalContext.current
+    return remember(entryId) {
+        entryId?.let {
+            EntryCoverMetadata.getBaseColor(type, it)
+                ?.let { base -> Color(adjustForTheme(base, isDark(context))) }
+        }
+    }
 }
 
 /**

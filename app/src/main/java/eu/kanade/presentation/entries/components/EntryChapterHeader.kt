@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -60,104 +61,111 @@ fun EntryChapterHeader(
 ) {
     val iconTint = accentColor ?: MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA)
 
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Chapter/episode count + interval badge (left)
         Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Column {
+            // Chapter/episode count + interval badge (left)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Text(
                     text = itemCountText,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
-                if (entryCountText != null) {
-                    Text(
-                        text = entryCountText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
-                    )
+                // Show the interval badge only when showInterval is true.
+                // Hidden when the series is completed or the last update is
+                // older than 2 months (stale schedule).
+                if (showInterval) {
+                    val label = if (intervalDays == null || intervalDays == 0) "N/A" else intervalDays.toString()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = "·",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = iconTint,
+                        )
+                        Icon(
+                            imageVector = Icons.Outlined.HourglassEmpty,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
-            // Show the interval badge only when showInterval is true.
-            // Hidden when the series is completed or the last update is
-            // older than 2 months (stale schedule).
-            if (showInterval) {
-                val label = if (intervalDays == null || intervalDays == 0) "N/A" else intervalDays.toString()
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+
+            // Filter icon (rightmost, aligned with download icons in list items)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (carrierLabel != null && onCarrierClick != null) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onCarrierClick)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Extension,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = carrierLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onClick),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = "·",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = iconTint,
-                    )
                     Icon(
-                        imageVector = Icons.Outlined.HourglassEmpty,
+                        imageVector = Icons.Filled.FilterList,
                         contentDescription = null,
                         tint = iconTint,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                        ),
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1,
+                        modifier = Modifier.size(24.dp),
                     )
                 }
             }
         }
 
-        // Filter icon (rightmost, aligned with download icons in list items)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (carrierLabel != null && onCarrierClick != null) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onCarrierClick)
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Extension,
-                        contentDescription = null,
-                        tint = iconTint,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = carrierLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1,
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onClick),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.FilterList,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
+        // Raw-row count — on its own line under the header row. The row
+        // above is stretched to the filter icon's 40dp touch target, so
+        // the line pulls up a few dp to close the visual gap.
+        if (entryCountText != null) {
+            Text(
+                text = entryCountText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
+                modifier = Modifier.offset(y = (-6).dp),
+            )
         }
     }
 }

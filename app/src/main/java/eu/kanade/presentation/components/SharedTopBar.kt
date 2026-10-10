@@ -55,6 +55,17 @@ class SharedTopBarState {
 val LocalSharedTopBar = compositionLocalOf<SharedTopBarState?> { null }
 
 /**
+ * Write gate for the shared top bar. HomeScreen's AnimatedContent keeps the
+ * outgoing tab composed during its fade-out — without this, the exiting tab
+ * rewrites title/search fields after the incoming tab (and the tab-change
+ * reset) already ran, leaking e.g. Discovery's search bar onto Home. Only
+ * the composition whose tab key matches the navigator's current tab may
+ * write; everywhere else defaults to writable so non-tab call sites are
+ * unaffected.
+ */
+val LocalSharedTopBarWritable = compositionLocalOf { true }
+
+/**
  * Convenience helper for tabs to update the shared top bar.
  * Call inside a Composable to set the title and actions for the current tab.
  */
@@ -65,7 +76,8 @@ fun useSharedTopBar(
     navigateUp: (() -> Unit)? = null,
 ) {
     val state = LocalSharedTopBar.current
-    state?.let {
+    if (state == null || !LocalSharedTopBarWritable.current) return
+    state.let {
         it.title = title
         it.subtitle = null
         it.numberOfEntries = null
@@ -107,7 +119,8 @@ fun useSharedTopBarWithSearch(
     numberOfEntries: Int? = null,
 ) {
     val state = LocalSharedTopBar.current
-    state?.let {
+    if (state == null || !LocalSharedTopBarWritable.current) return
+    state.let {
         it.title = title
         it.subtitle = subtitle
         it.numberOfEntries = numberOfEntries

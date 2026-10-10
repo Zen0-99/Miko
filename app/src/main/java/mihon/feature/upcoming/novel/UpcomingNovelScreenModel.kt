@@ -47,8 +47,8 @@ class UpcomingNovelScreenModel(
             .insertSeparatorsReversed { before, after ->
                 if (after != null) novelCount++
 
-                val beforeDate = before?.novel?.expectedNextUpdate?.toLocalDate()
-                val afterDate = after?.novel?.expectedNextUpdate?.toLocalDate()
+                val beforeDate = before?.novel?.expectedNextUpdate?.toEpochMilliseconds()?.toLocalDate()
+                val afterDate = after?.novel?.expectedNextUpdate?.toEpochMilliseconds()?.toLocalDate()
 
                 if (beforeDate != afterDate && afterDate != null) {
                     UpcomingNovelUIModel.Header(afterDate, novelCount).also { novelCount = 0 }

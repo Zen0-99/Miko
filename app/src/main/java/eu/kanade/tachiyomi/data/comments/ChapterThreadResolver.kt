@@ -66,7 +66,12 @@ class ChapterThreadResolver(
             ?.let { list -> bindCanonEpisode(list, season, episodeNumber) }
             ?.let {
                 ChapterBinder.bindEpisodeCanon(
-                    workId, it.kind, it.abs, it.season, it.epInSeason, it.number,
+                    workId,
+                    it.kind,
+                    it.abs,
+                    it.season,
+                    it.epInSeason,
+                    it.number,
                 )
             }
             ?: ChapterBinder.bindEpisode(workId, episodeNumber)
@@ -75,7 +80,10 @@ class ChapterThreadResolver(
             val fingerprint = ChapterFingerprint.of(episodes)
             if (fingerprint.count > 0) {
                 maybeCheckAlignment(
-                    Carrier.SHOWS, workId, sourceKey, title,
+                    Carrier.SHOWS,
+                    workId,
+                    sourceKey,
+                    title,
                     canonicalizeForShowsAlign(workId, fingerprint),
                 )
             }

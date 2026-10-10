@@ -71,9 +71,12 @@ internal class MangaExtensionApi {
             // keep them out of the manga list.
             .filterNot {
                 val pkg = it.pkgName.lowercase()
-                pkg.contains("animeextension") || pkg.contains("aniyomi") ||
-                    pkg.contains(".anime.") || pkg.contains("yokai.extension.novel") ||
-                    pkg.contains("tachiyomi.novel") || pkg.contains(".novel.")
+                pkg.contains("animeextension") ||
+                    pkg.contains("aniyomi") ||
+                    pkg.contains(".anime.") ||
+                    pkg.contains("yokai.extension.novel") ||
+                    pkg.contains("tachiyomi.novel") ||
+                    pkg.contains(".novel.")
             }
             .filter {
                 it.libVersion >= MangaExtensionLoader.LIB_VERSION_MIN &&

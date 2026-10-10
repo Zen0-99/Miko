@@ -19,9 +19,9 @@ import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.updates.fetching.FetchingScreen
-import eu.kanade.tachiyomi.ui.browse.shows.migration.search.MigrateShowsSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.migration.search.MigrateMangaSearchScreen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelSearchScreen
+import eu.kanade.tachiyomi.ui.browse.shows.migration.search.MigrateShowsSearchScreen
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.library.model.EntryKind
 import tachiyomi.i18n.MR

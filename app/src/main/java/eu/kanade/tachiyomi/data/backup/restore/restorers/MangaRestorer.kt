@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupCollection
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupTracking
+import kotlinx.datetime.TimeZone
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
@@ -19,9 +20,9 @@ import tachiyomi.domain.track.manga.interactor.InsertMangaTrack
 import tachiyomi.domain.track.manga.model.MangaTrack
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.ZonedDateTime
-import java.util.Date
 import kotlin.math.max
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class MangaRestorer(
     private val handler: MangaDatabaseHandler = Injekt.get(),
@@ -42,12 +43,14 @@ class MangaRestorer(
 
     private fun remapSourceId(sourceId: Long): Long = sourceIdMap[sourceId] ?: sourceId
 
-    private var now = ZonedDateTime.now()
-    private var currentFetchWindow = fetchInterval.getWindow(now)
+    private var now = Clock.System.now()
+    private var timeZone = TimeZone.currentSystemDefault()
+    private var currentFetchWindow = fetchInterval.getWindow(now, timeZone)
 
     init {
-        now = ZonedDateTime.now()
-        currentFetchWindow = fetchInterval.getWindow(now)
+        now = Clock.System.now()
+        timeZone = TimeZone.currentSystemDefault()
+        currentFetchWindow = fetchInterval.getWindow(now, timeZone)
     }
 
     suspend fun sortByNew(backupMangas: List<BackupManga>): List<BackupManga> {
@@ -290,7 +293,7 @@ class MangaRestorer(
         restoreTracking(manga, tracks)
         restoreHistory(history)
         restoreExcludedScanlators(manga, excludedScanlators)
-        updateManga.awaitUpdateFetchInterval(manga, now, currentFetchWindow)
+        updateManga.awaitUpdateFetchInterval(manga, now, timeZone, currentFetchWindow)
         return manga
     }
 
@@ -348,9 +351,12 @@ class MangaRestorer(
             item.copy(
                 id = dbHistory._id,
                 chapterId = dbHistory.chapter_id,
-                readAt = max(item.readAt?.time ?: 0L, dbHistory.last_read?.time ?: 0L)
+                readAt = max(
+                    item.readAt?.toEpochMilliseconds() ?: 0L,
+                    dbHistory.last_read?.toEpochMilliseconds() ?: 0L,
+                )
                     .takeIf { it > 0L }
-                    ?.let { Date(it) },
+                    ?.let { Instant.fromEpochMilliseconds(it) },
                 readDuration = max(item.readDuration, dbHistory.time_read) - dbHistory.time_read,
             )
         }

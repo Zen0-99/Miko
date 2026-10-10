@@ -69,7 +69,10 @@ class AbsProgressSyncer(
         val durationMs: Long,
     )
 
-    private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
 
     /**
      * Serializes the push path — a pause-flush racing the 30 s heartbeat or

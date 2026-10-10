@@ -163,17 +163,37 @@ class AbsNovelSource(
         val itemId = AbsUrls.itemIdFrom(novel.url) ?: return emptyList()
         val item = client.item(itemId)
         val narrator = item.media?.metadata?.narratorName
-        return item.media?.tracks.orEmpty().map { track ->
-            SNovelChapter.create().apply {
-                url = AbsUrls.trackUrl(item.id, track.ino)
-                name = track.title?.takeIf { it.isNotBlank() }
-                    ?: track.filename?.takeIf { it.isNotBlank() }
-                    ?: "Track ${track.index}"
-                chapter_number = track.index.toFloat()
-                date_upload = item.addedAt
-                scanlator = narrator
+        val tracks = item.media?.tracks.orEmpty()
+        if (tracks.isNotEmpty()) {
+            return tracks.map { track ->
+                SNovelChapter.create().apply {
+                    url = AbsUrls.trackUrl(item.id, track.ino)
+                    name = track.title?.takeIf { it.isNotBlank() }
+                        ?: track.filename?.takeIf { it.isNotBlank() }
+                        ?: "Track ${track.index}"
+                    chapter_number = track.index.toFloat()
+                    date_upload = item.addedAt
+                    scanlator = narrator
+                }
             }
         }
+        // Freshly scanned items (ABS ≥2.37) often omit media.tracks — the
+        // playable set still lives in audioFiles, ordered by the
+        // filename-derived track number (index is the fallback).
+        return item.media?.audioFiles.orEmpty()
+            .filter { !it.exclude }
+            .sortedBy { it.trackNumFromFilename ?: it.index }
+            .map { file ->
+                SNovelChapter.create().apply {
+                    url = AbsUrls.trackUrl(item.id, file.ino)
+                    name = file.metadata?.filename?.substringBeforeLast('.')
+                        ?: file.filename
+                        ?: "Track ${file.index}"
+                    chapter_number = (file.trackNumFromFilename ?: file.index).toFloat()
+                    date_upload = item.addedAt
+                    scanlator = narrator
+                }
+            }
     }
 
     /**

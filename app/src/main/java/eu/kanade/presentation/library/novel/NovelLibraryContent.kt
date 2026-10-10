@@ -38,7 +38,7 @@ fun NovelLibraryContent(
     hasActiveFilters: Boolean,
     showPageTabs: Boolean,
     onChangeCurrentPage: (Int) -> Unit,
-    onNovelClicked: (Long) -> Unit,
+    onNovelClicked: (LibraryNovel) -> Unit,
     onContinueReadingClicked: ((LibraryNovel) -> Unit)?,
     onToggleSelection: (LibraryNovel) -> Unit,
     onToggleRangeSelection: (LibraryNovel) -> Unit,
@@ -57,6 +57,8 @@ fun NovelLibraryContent(
     getPreviousLayerNovelIds: (() -> Set<Long>)? = null,
     isEntryLocked: ((Long) -> Boolean)? = null,
     sortKey: String = "",
+    subtypeLabel: String? = null,
+    subtypeOptions: List<eu.kanade.presentation.library.components.SubtypeMenuOption> = emptyList(),
 ) {
     Column(
         modifier = Modifier.padding(
@@ -85,6 +87,8 @@ fun NovelLibraryContent(
                 sortLabel = sortLabel,
                 sortDescending = sortDescending,
                 onSortClick = onSortClick,
+                subtypeLabel = subtypeLabel,
+                subtypeOptions = subtypeOptions,
             )
         } else {
             val currentCollection = collections.getOrNull(pagerState.currentPage)
@@ -96,6 +100,8 @@ fun NovelLibraryContent(
                     sortDescending = sortDescending,
                     onSortClick = onSortClick,
                     showTitle = showLibraryTitle,
+                    subtypeLabel = subtypeLabel,
+                    subtypeOptions = subtypeOptions,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -104,7 +110,7 @@ fun NovelLibraryContent(
         val notSelectionMode = selection.isEmpty() && !readingOrderMode
         val onClickNovel = { novel: LibraryNovel ->
             if (notSelectionMode) {
-                onNovelClicked(novel.novel.id)
+                onNovelClicked(novel)
             } else {
                 onToggleSelection(novel)
             }

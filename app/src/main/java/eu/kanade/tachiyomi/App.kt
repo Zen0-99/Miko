@@ -19,7 +19,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.allowRgb565
-import coil3.request.crossfade
+import coil3.request.transitionFactory
 import coil3.util.DebugLogger
 import dev.mihon.injekt.patchInjekt
 import eu.kanade.domain.DomainModule
@@ -337,7 +337,11 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
                 add(NovelCoverKeyer())
             }
 
-            crossfade((300 * this@App.animatorDurationScale).toInt())
+            transitionFactory(
+                eu.kanade.tachiyomi.data.coil.NetworkOnlyCrossfade(
+                    (300 * this@App.animatorDurationScale).toInt().coerceAtLeast(1),
+                ),
+            )
             allowRgb565(DeviceUtil.isLowRamDevice(this@App))
             memoryCache {
                 coil3.memory.MemoryCache.Builder()

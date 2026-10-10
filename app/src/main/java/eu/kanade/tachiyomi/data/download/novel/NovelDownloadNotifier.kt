@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.data.download.novel
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
 import eu.kanade.tachiyomi.data.notification.NotificationHandler
@@ -10,6 +13,7 @@ import eu.kanade.tachiyomi.util.lang.chop
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
+import eu.kanade.tachiyomi.util.system.toast
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 
@@ -128,6 +132,12 @@ internal class NovelDownloadNotifier(private val context: Context) {
             setProgress(0, 0, false)
 
             show(Notifications.ID_DOWNLOAD_CHAPTER_ERROR)
+        }
+
+        // Notifications can be muted — surface the failure as a toast too
+        val toastText = error ?: context.stringResource(MR.strings.download_notifier_unknown_error)
+        Handler(Looper.getMainLooper()).post {
+            context.toast(toastText, Toast.LENGTH_LONG)
         }
 
         isDownloading = false

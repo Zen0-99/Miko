@@ -17,6 +17,7 @@ import tachiyomi.domain.items.episode.repository.EpisodeRepository
 class LoadCanonicalEpisodesTest {
 
     private val episodeRepository = mockk<EpisodeRepository>()
+
     // Real CanonicalEpisodeMap — bind/bindAbs never touch the API.
     private val episodeMap = CanonicalEpisodeMap(mockk())
     private val loader = LoadCanonicalEpisodes(episodeRepository, episodeMap)
@@ -108,8 +109,11 @@ class LoadCanonicalEpisodesTest {
                 // Stray whitespace in the stored tag triggers the
                 // rewrite; the `|★` rating suffix must survive verbatim.
                 local(
-                    id = 10, number = 14.0, scanlator = "Season 5 |★9.5",
-                    name = "Episode 14", dateUpload = 1L,
+                    id = 10,
+                    number = 14.0,
+                    scanlator = "Season 5 |★9.5",
+                    name = "Episode 14",
+                    dateUpload = 1L,
                 ),
             ),
             listOf(
@@ -142,15 +146,25 @@ class LoadCanonicalEpisodesTest {
             anime,
             listOf(
                 local(
-                    id = 11, number = 1.0, scanlator = "Season 1",
-                    seen = true, bookmark = true, fillermark = true,
-                    lastSecondSeen = 120, totalSeconds = 1400,
+                    id = 11,
+                    number = 1.0,
+                    scanlator = "Season 1",
+                    seen = true,
+                    bookmark = true,
+                    fillermark = true,
+                    lastSecondSeen = 120,
+                    totalSeconds = 1400,
                 ),
             ),
             listOf(
                 canon(
-                    seq = 1, kind = "episode", abs = 1, season = 1, epInSeason = 1,
-                    label = "Pilot", filler = true,
+                    seq = 1,
+                    kind = "episode",
+                    abs = 1,
+                    season = 1,
+                    epInSeason = 1,
+                    label = "Pilot",
+                    filler = true,
                 ),
             ),
         )

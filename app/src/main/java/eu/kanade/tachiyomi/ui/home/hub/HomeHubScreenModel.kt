@@ -28,49 +28,62 @@ import eu.kanade.tachiyomi.metadata.cinemeta.CinemetaCatalogFeed
 import eu.kanade.tachiyomi.metadata.miko.dto.MikoMetaShort
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbDiscover
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbGenres.MediaType
-import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import eu.kanade.tachiyomi.ui.reader.novel.ChapterHideManager
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.toLocalDateTime
 import logcat.LogPriority
 import logcat.logcat
+import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.entries.manga.model.MangaCover
-import tachiyomi.domain.entries.manga.model.asMangaCover
-import tachiyomi.domain.entries.novel.model.NovelCover
-import tachiyomi.domain.entries.novel.model.asNovelCover
-import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.achievement.model.DayActivity
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
-import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
+import tachiyomi.domain.entries.manga.model.Manga
+import tachiyomi.domain.entries.manga.model.MangaCover
+import tachiyomi.domain.entries.manga.model.asMangaCover
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
-import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
-import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
-import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
+import tachiyomi.domain.entries.novel.interactor.GetNovelWithChapters
+import tachiyomi.domain.entries.novel.model.NovelCover
+import tachiyomi.domain.entries.novel.model.asNovelCover
+import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
+import tachiyomi.domain.entries.shows.model.AnimeCover
+import tachiyomi.domain.entries.shows.model.asAnimeCover
 import tachiyomi.domain.history.manga.interactor.GetMangaHistory
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
 import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
 import tachiyomi.domain.history.novel.interactor.GetNovelHistory
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
 import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
-import tachiyomi.domain.library.shows.LibraryAnime
+import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
+import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
+import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
+import tachiyomi.domain.items.chapter.interactor.GetChaptersByMangaId
+import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.domain.library.novel.LibraryNovel
+import tachiyomi.domain.library.shows.LibraryAnime
+import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.LocalDate
+import kotlin.time.Clock
 
 /**
  * Home Hub ScreenModel — combines history and recently added library items
@@ -121,15 +134,23 @@ class HomeHubScreenModel(
     private val animeExtensionManager: eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager = Injekt.get(),
     private val novelExtensionManager: eu.kanade.tachiyomi.extension.novel.NovelExtensionManager = Injekt.get(),
     private val sourcePreferences: eu.kanade.domain.source.service.SourcePreferences = Injekt.get(),
+    private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
+    private val getNovelWithChapters: GetNovelWithChapters = Injekt.get(),
+    private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
 ) : StateScreenModel<HomeHubState>(HomeHubState()) {
 
     private val fastCache = HomeHubFastCache(context)
-    private var lastCombinedData: HomeHubCombinedData? = null
+
+    /** Latest history+library combine emission. A StateFlow, not a plain
+     *  var, so catalog rows that compose before the first DB emission
+     *  can suspend on it instead of bailing into a permanent shimmer. */
+    private val lastCombinedData = MutableStateFlow<HomeHubCombinedData?>(null)
 
     // --- Catalog-row fetch bookkeeping (Phase 18) ---
     /** spec id → content key already fetched/fetching. */
     private val catalogFetchKeys = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val catalogFetchPermits = Semaphore(CATALOG_FETCH_CONCURRENCY)
+
     /** Minted/reported row items this session — [RowItem.mintKey] values. */
     private val mintedRowKeys: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     private val catalogMintPermits = Semaphore(CATALOG_MINT_CONCURRENCY)
@@ -140,24 +161,31 @@ class HomeHubScreenModel(
         val hadCache = !cached.isEmpty || cached.isInitialized
         val currentMode = uiPreferences.contentMode().get()
         if (hadCache) {
-            // Only use cached hero if its media type matches the current mode
-            val modeAwareHero = cached.hero?.toHomeHubHero()?.takeIf {
-                it.mediaType == when (currentMode) {
-                    ContentMode.SHOWS -> HomeHubMediaType.SHOWS
-                    ContentMode.MANGA -> HomeHubMediaType.MANGA
-                    ContentMode.NOVEL -> HomeHubMediaType.NOVEL
-                }
-            }
+            // Restore every cached page for the boot mode — the fresh
+            // resolve later patches their resume labels in place and
+            // appends newly-read entries after them.
+            val modeKey = when (currentMode) {
+                ContentMode.SHOWS -> HomeHubMediaType.SHOWS
+                ContentMode.MANGA -> HomeHubMediaType.MANGA
+                ContentMode.NOVEL -> HomeHubMediaType.NOVEL
+            }.key
+            val cachedHeroes = cached.heroesFor(modeKey).map { it.toHomeHubHero() }
             mutableState.update {
                 it.copy(
                     isLoading = false,
                     userName = cached.userName.ifEmpty { uiPreferences.userName().get() },
                     greeting = resolveGreeting(),
                     greetingReady = true,
-                    hero = modeAwareHero,
-                    heroes = listOfNotNull(modeAwareHero),
+                    hero = cachedHeroes.firstOrNull(),
+                    heroes = cachedHeroes,
                     currentMode = currentMode,
                     recommendations = emptyList(),
+                    // History rows wait on the full DB combine (~2s cold);
+                    // the snapshot paints them on the first frame and the
+                    // live rows replace them in place.
+                    catalogRows = cached.historyRows.mapValues { (_, items) ->
+                        CatalogRowState(items = items.map { row -> row.toRowItem() })
+                    },
                 )
             }
         } else {
@@ -226,8 +254,12 @@ class HomeHubScreenModel(
                     achievementUnlocked = unlockedCount,
                 )
             }.collectLatest { data ->
-                lastCombinedData = data
-                val heroes = resolveHeroes(data)
+                lastCombinedData.value = data
+                // Merge against what's on screen: a card that survives
+                // keeps its artwork/title and only its resume label moves
+                // (cached "Continue: Ch. 15" → fresh "Continue: Ch. 18");
+                // entries the cache didn't know append after it.
+                val heroes = mergeHeroes(mutableState.value.heroes, resolveHeroes(data))
                 val monthStats = runCatching { activityDataRepository.getCurrentMonthStats() }.getOrNull()
                 val totalLibrarySize = data.animeLib.size + data.mangaLib.size + data.novelLib.size
                 val streak = calculateCurrentStreak(data.activityData)
@@ -239,9 +271,23 @@ class HomeHubScreenModel(
                     }
                     // Dedupe before take() — otherwise a binge on one show
                     // split across extension entries fills all 10 slots.
+                    // historyView emits one row per chapter read, so a
+                    // binge on a single work floods the feed; distinctBy
+                    // must run before take() or the recents row collapses
+                    // to that one work.
                     val recentAnime = data.animeHistory.distinctBy { h -> h.showKey }.take(10)
-                    val recentManga = data.mangaHistory.take(10)
-                    val recentNovels = filteredNovelHistory.take(10)
+                    val recentManga = data.mangaHistory.distinctBy { it.mangaId }.take(10)
+                    val recentNovels = filteredNovelHistory.distinctBy { it.novelId }.take(10)
+                    // The row builder dedupes on the CANONICAL id — a work
+                    // read through several extension entries collapses there,
+                    // so the take(10) above would starve it. Feed it a wider
+                    // candidate window; the loop itself stops at the row cap.
+                    val rowAnime = data.animeHistory.distinctBy { h -> h.showKey }
+                        .take(HISTORY_ROW_CANDIDATES)
+                    val rowManga = data.mangaHistory.distinctBy { it.mangaId }
+                        .take(HISTORY_ROW_CANDIDATES)
+                    val rowNovels = filteredNovelHistory.distinctBy { it.novelId }
+                        .take(HISTORY_ROW_CANDIDATES)
                     // History-backed catalog rows mirror the recents —
                     // refresh any row already materialized on screen.
                     val catalogRows = it.catalogRows.toMutableMap()
@@ -249,7 +295,11 @@ class HomeHubScreenModel(
                         if (spec.feed is Feed.History && spec.id in catalogRows) {
                             catalogRows[spec.id] = CatalogRowState(
                                 items = historyRowItems(
-                                    spec.medium, recentAnime, recentManga, recentNovels,
+                                    spec.medium,
+                                    rowAnime,
+                                    rowManga,
+                                    rowNovels,
+                                    data,
                                 ),
                             )
                         }
@@ -273,8 +323,9 @@ class HomeHubScreenModel(
                     )
                 }
 
-                // Save to fast cache for next cold start
-                saveCache(heroes.firstOrNull(), data)
+                // Save the merged list for the next cold start — same
+                // cards the user is looking at now, resume fields included.
+                saveCache(heroes, data)
             }
         }
 
@@ -288,7 +339,19 @@ class HomeHubScreenModel(
         // --- Observe contentMode for mode-aware filtering ---
         screenModelScope.launchIO {
             uiPreferences.contentMode().changes().collect { mode ->
-                val heroes = lastCombinedData?.let { data -> resolveHeroes(data) }.orEmpty()
+                // changes() emits the current value on subscribe — that
+                // ignition is the boot mode init already rendered from the
+                // fast cache. Re-resolving it here with no DB data yet
+                // blanked the cached heroes for ~0.6s on every cold start.
+                if (mode == mutableState.value.currentMode) return@collect
+                val heroes = lastCombinedData.value?.let { data -> resolveHeroes(data) }
+                    ?: fastCache.load().heroesFor(
+                        when (mode) {
+                            ContentMode.SHOWS -> HomeHubMediaType.SHOWS
+                            ContentMode.MANGA -> HomeHubMediaType.MANGA
+                            ContentMode.NOVEL -> HomeHubMediaType.NOVEL
+                        }.key,
+                    ).map { it.toHomeHubHero() }
                 mutableState.update {
                     it.copy(
                         currentMode = mode,
@@ -349,7 +412,7 @@ class HomeHubScreenModel(
                 .filter { it.animeId in selectedIds }
                 .map { it.showKey }
                 .toSet()
-            val animeIdsToDelete = (lastCombinedData?.animeHistory ?: currentState.recentAnime)
+            val animeIdsToDelete = (lastCombinedData.value?.animeHistory ?: currentState.recentAnime)
                 .filter { it.showKey in selectedShowKeys }
                 .map { it.animeId }
                 .toSet()
@@ -383,17 +446,46 @@ class HomeHubScreenModel(
         val spec = mutableState.value.catalogSpecs.firstOrNull { it.id == specId } ?: return
         // History rows are served live from state — no fetch, no cache.
         if (spec.feed is Feed.History) {
-            mutableState.update { s ->
-                s.copy(
-                    catalogRows = s.catalogRows +
-                        (
-                            specId to CatalogRowState(
-                                items = historyRowItems(
-                                    spec.medium, s.recentAnime, s.recentManga, s.recentNovels,
-                                ),
-                            )
-                            ),
-                )
+            screenModelScope.launchIO {
+                // A row can compose before the DB combine has emitted —
+                // suspend for the first emission instead of bailing,
+                // which used to leave the row shimmered forever. The
+                // timeout keeps ANY wait failure from re-creating that
+                // bug: an empty row hides itself (history feeds render
+                // nothing on empty) and the combine refresh still
+                // back-fills it when data finally lands.
+                val data = kotlinx.coroutines.withTimeoutOrNull(5_000) {
+                    lastCombinedData.filterNotNull().first()
+                }
+                if (data == null) {
+                    mutableState.update { s ->
+                        s.copy(
+                            catalogRows = s.catalogRows +
+                                (specId to CatalogRowState(items = emptyList())),
+                        )
+                    }
+                    return@launchIO
+                }
+                // Canonical-dedupe happens inside historyRowItems — feed it
+                // the wider candidate window, not the take(10) recents slice.
+                val recentAnime = data.animeHistory.distinctBy { it.showKey }
+                    .take(HISTORY_ROW_CANDIDATES)
+                val recentManga = data.mangaHistory.distinctBy { it.mangaId }
+                    .take(HISTORY_ROW_CANDIDATES)
+                val recentNovels = data.novelHistory
+                    .filter { h ->
+                        h.chapterId !in ChapterHideManager.getHiddenChapterIds(context, h.novelId)
+                    }
+                    .distinctBy { it.novelId }
+                    .take(HISTORY_ROW_CANDIDATES)
+                val items = historyRowItems(spec.medium, recentAnime, recentManga, recentNovels, data)
+                mutableState.update { s ->
+                    s.copy(
+                        catalogRows = s.catalogRows +
+                            (specId to CatalogRowState(items = items)),
+                    )
+                }
+                fastCache.save(fastCache.load().copy(historyRows = historyRowsSnapshot()))
             }
             return
         }
@@ -448,8 +540,10 @@ class HomeHubScreenModel(
         val work = item.target as? RowTarget.CanonicalWork
         // Pre-minted canonical rows (mk:mb:/mk:hs:/browse ids) carry no
         // resolve work — report-only, and only when reportable.
-        if (item.mintCandidate == null && item.target !is RowTarget.CanonicalShows &&
-            work != null && !seenReporter.isReportable(mintKey)
+        if (item.mintCandidate == null &&
+            item.target !is RowTarget.CanonicalShows &&
+            work != null &&
+            !seenReporter.isReportable(mintKey)
         ) {
             return
         }
@@ -497,10 +591,17 @@ class HomeHubScreenModel(
     }
 
     /**
-     * Resolve a card tap to the Voyager screen to push, or null when the
-     * item can't route (e.g. a TMDB result with no IMDB link).
+     * Resolve a card tap to the Voyager screen to push plus the resolved
+     * entry id, or null when the item can't route (e.g. a TMDB result
+     * with no IMDB link). [previewCover] is the cover model the card
+     * rendered — the detail skeleton/hero paints its already-decoded
+     * bitmap via the cell memory key and pairs the shared element on
+     * `cover-image-{entryId}`.
      */
-    suspend fun openRowItem(item: RowItem): Screen? = when (val t = item.target) {
+    suspend fun openRowItem(
+        item: RowItem,
+        previewCover: Any? = null,
+    ): Pair<Screen, Long>? = when (val t = item.target) {
         is RowTarget.CanonicalShows -> {
             // TMDB → IMDB → rebuild the Cinemeta meta → materialize the
             // canonical entry — the same path the discovery grid takes.
@@ -513,18 +614,23 @@ class HomeHubScreenModel(
                 releaseInfo = item.releaseInfo,
                 imdbRating = item.imdbRating,
             )
-            ShowsScreen(cinemetaCatalogFeed.getOrCreateAnimeId(meta), true)
+            val animeId = cinemetaCatalogFeed.getOrCreateAnimeId(meta)
+            ShowsScreen(animeId, true, previewCover = previewCover, previewTitle = item.title) to animeId
         }
-        is RowTarget.CinemetaEntry ->
-            ShowsScreen(cinemetaCatalogFeed.getOrCreateAnimeId(t.meta), true)
+        is RowTarget.CinemetaEntry -> {
+            val animeId = cinemetaCatalogFeed.getOrCreateAnimeId(t.meta)
+            ShowsScreen(animeId, true, previewCover = previewCover, previewTitle = item.title) to animeId
+        }
         is RowTarget.CanonicalWork -> {
             // Feed the WorkRow straight to materialization — the browse
             // response already carried it and byWorkId dead-ends on
             // mk:ol: works not yet in works_cache.
             if (t.medium == WorkIdResolver.MEDIUM_BOOKS) {
-                NovelScreen(canonicalCatalog.materializeNovelId(t.work))
+                val id = canonicalCatalog.materializeNovelId(t.work)
+                NovelScreen(id, previewCover = previewCover, previewTitle = item.title) to id
             } else {
-                MangaScreen(canonicalCatalog.materializeMangaId(t.work))
+                val id = canonicalCatalog.materializeMangaId(t.work)
+                MangaScreen(id, previewCover = previewCover, previewTitle = item.title) to id
             }
         }
         is RowTarget.ExtensionEntry -> {
@@ -538,43 +644,46 @@ class HomeHubScreenModel(
                 else -> c as? String
             }
             when (t.medium) {
-                WorkIdResolver.MEDIUM_MANGA -> MangaScreen(
-                    networkToLocalManga.await(
+                WorkIdResolver.MEDIUM_MANGA -> {
+                    val id = networkToLocalManga.await(
                         eu.kanade.tachiyomi.source.model.SManga.create().apply {
                             url = t.url
                             title = item.title
                             thumbnail_url = thumb
                         }.toDomainManga(t.sourceId),
-                    ).id,
-                    true,
-                )
-                WorkIdResolver.MEDIUM_SHOWS -> ShowsScreen(
-                    networkToLocalAnime.await(
+                    ).id
+                    MangaScreen(id, true, previewCover = previewCover, previewTitle = item.title) to id
+                }
+                WorkIdResolver.MEDIUM_SHOWS -> {
+                    val id = networkToLocalAnime.await(
                         eu.kanade.tachiyomi.animesource.model.SAnime.create().apply {
                             url = t.url
                             title = item.title
                             thumbnail_url = thumb
                         }.toDomainAnime(t.sourceId),
-                    ).id,
-                    true,
-                )
-                else -> NovelScreen(
-                    networkToLocalNovel.await(
+                    ).id
+                    ShowsScreen(id, true, previewCover = previewCover, previewTitle = item.title) to id
+                }
+                else -> {
+                    val id = networkToLocalNovel.await(
                         eu.kanade.tachiyomi.novelsource.model.SNovel.create().apply {
                             url = t.url
                             title = item.title
                             thumbnail_url = thumb
                         }.toDomainNovel(t.sourceId),
-                    ).id,
-                    true,
-                )
+                    ).id
+                    NovelScreen(id, true, previewCover = previewCover, previewTitle = item.title) to id
+                }
             }
         }
         // Library rows are initialized local entries — plain detail nav.
         is RowTarget.LibraryEntry -> when (t.medium) {
-            WorkIdResolver.MEDIUM_SHOWS -> ShowsScreen(t.entryId)
-            WorkIdResolver.MEDIUM_MANGA -> MangaScreen(t.entryId)
-            else -> NovelScreen(t.entryId)
+            WorkIdResolver.MEDIUM_SHOWS ->
+                ShowsScreen(t.entryId, previewCover = previewCover, previewTitle = item.title) to t.entryId
+            WorkIdResolver.MEDIUM_MANGA ->
+                MangaScreen(t.entryId, previewCover = previewCover, previewTitle = item.title) to t.entryId
+            else ->
+                NovelScreen(t.entryId, previewCover = previewCover, previewTitle = item.title) to t.entryId
         }
     }
 
@@ -668,8 +777,13 @@ class HomeHubScreenModel(
     private suspend fun extensionSourceOptions(medium: String): List<CatalogSourceOption> {
         // id/name/lang/pkg/supportsLatest flattened per medium — the three
         // catalogue-source hierarchies are parallel, not a shared type.
-        data class Raw(val id: Long, val name: String, val lang: String,
-                       val pkg: String, val supportsLatest: Boolean)
+        data class Raw(
+            val id: Long,
+            val name: String,
+            val lang: String,
+            val pkg: String,
+            val supportsLatest: Boolean,
+        )
 
         val enabledLangs = sourcePreferences.enabledLanguages().get()
         val showNsfw = sourcePreferences.showNsfwSource().get()
@@ -680,9 +794,13 @@ class HomeHubScreenModel(
                     mangaSourceManager.isInitialized.first { it }
                 }
                 mangaSourceManager.getCatalogueSources().map { s ->
-                    Raw(s.id, s.name, s.lang,
+                    Raw(
+                        s.id,
+                        s.name,
+                        s.lang,
                         mangaExtensionManager.getExtensionPackage(s.id).orEmpty(),
-                        s.supportsLatest)
+                        s.supportsLatest,
+                    )
                 } to sourcePreferences.disabledMangaSources().get()
             }
             WorkIdResolver.MEDIUM_SHOWS -> {
@@ -690,9 +808,13 @@ class HomeHubScreenModel(
                     animeSourceManager.isInitialized.first { it }
                 }
                 animeSourceManager.getCatalogueSources().map { s ->
-                    Raw(s.id, s.name, s.lang,
+                    Raw(
+                        s.id,
+                        s.name,
+                        s.lang,
                         animeExtensionManager.getExtensionPackage(s.id).orEmpty(),
-                        s.supportsLatest)
+                        s.supportsLatest,
+                    )
                 } to sourcePreferences.disabledAnimeSources().get()
             }
             else -> {
@@ -700,9 +822,13 @@ class HomeHubScreenModel(
                     novelSourceManager.isInitialized.first { it }
                 }
                 novelSourceManager.getCatalogueSources().map { s ->
-                    Raw(s.id, s.name, s.lang,
+                    Raw(
+                        s.id,
+                        s.name,
+                        s.lang,
                         novelExtensionManager.getExtensionPackage(s.id).orEmpty(),
-                        s.supportsLatest)
+                        s.supportsLatest,
+                    )
                 } to sourcePreferences.disabledNovelSources().get()
             }
         }
@@ -736,46 +862,294 @@ class HomeHubScreenModel(
         libraryCatalogFeed.genreOptions(medium)
 
     /**
-     * History-feed row items — the recents lists already flowing through
-     * state, mapped onto RowItems (progress number as the card sub-text,
-     * plain detail-screen taps). Local-only; never cached by
+     * Detail-parity resume target — the next unread/unseen item on the
+     * entry the detail screen actually opens (canonical preferred), plus
+     * real progress state. The history row's stored chapter number/name
+     * can go stale (view-only opens, carrier rebinds that renumber the
+     * chapter list), so heroes and continue rows derive their label from
+     * this instead. [itemsLoaded] distinguishes "list is empty" from
+     * "nothing unread" — callers fall back to lib/history signals only
+     * when the entry's own list can't prove anything.
+     */
+    private data class ResumeInfo(
+        val nextItemId: Long?,
+        val nextNumber: Double?,
+        val nextName: String?,
+        val nextScanlator: String?,
+        val hasProgress: Boolean,
+        val itemsLoaded: Boolean,
+        val allDone: Boolean,
+    )
+
+    private suspend fun mangaResumeInfo(manga: Manga): ResumeInfo {
+        val chapters = runCatching {
+            getChaptersByMangaId.await(manga.id, applyScanlatorFilter = true)
+        }.getOrDefault(emptyList())
+        // Lowest-numbered unread — the detail screen's continue pick.
+        val next = chapters.filter { !it.read }.minByOrNull { it.chapterNumber }
+        return ResumeInfo(
+            nextItemId = next?.id,
+            nextNumber = next?.chapterNumber,
+            nextName = next?.name,
+            nextScanlator = null,
+            hasProgress = chapters.any { it.read || it.lastPageRead > 0 },
+            itemsLoaded = chapters.isNotEmpty(),
+            allDone = chapters.isNotEmpty() && chapters.all { it.read },
+        )
+    }
+
+    private suspend fun novelResumeInfo(novelId: Long): ResumeInfo {
+        val chapters = runCatching { getNovelWithChapters.awaitChapters(novelId) }
+            .getOrDefault(emptyList())
+        val hiddenIds = ChapterHideManager.getHiddenChapterIds(context, novelId)
+        val next = chapters
+            .filter { !it.read && it.id !in hiddenIds }
+            .minByOrNull { it.chapterNumber }
+        return ResumeInfo(
+            nextItemId = next?.id,
+            nextNumber = next?.chapterNumber,
+            nextName = next?.name?.let {
+                eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
+                    .qualifiedDisplayName(it)
+                    ?: eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
+                        .displayName(it)
+                    ?: it
+            },
+            nextScanlator = null,
+            hasProgress = chapters.any { it.read || it.lastCharRead > 0 },
+            itemsLoaded = chapters.isNotEmpty(),
+            allDone = chapters.isNotEmpty() && chapters.all { it.read },
+        )
+    }
+
+    private suspend fun showsResumeInfo(animeId: Long): ResumeInfo {
+        val episodes = runCatching { getEpisodesByAnimeId.await(animeId) }
+            .getOrDefault(emptyList())
+        val next = episodes.filter { !it.seen }.minByOrNull { it.episodeNumber }
+        return ResumeInfo(
+            nextItemId = next?.id,
+            nextNumber = next?.episodeNumber,
+            nextName = next?.name,
+            nextScanlator = next?.scanlator,
+            hasProgress = episodes.any { it.seen || it.lastSecondSeen > 0 },
+            itemsLoaded = episodes.isNotEmpty(),
+            allDone = episodes.isNotEmpty() && episodes.all { it.seen },
+        )
+    }
+
+    /** "Season N|★R.R" scanlator encoding → season, Cinemeta entries only. */
+    private fun scanlatorSeason(scanlator: String?, cinemeta: Boolean): Int? =
+        scanlator?.substringBefore("|")
+            ?.removePrefix("Season ")?.trim()?.toIntOrNull()
+            ?.takeIf { it > 0 && cinemeta }
+
+    /** The progress fragment the detail continue row renders — chapter or
+     *  episode name; "Chapter N" for number-display manga. */
+    private fun resumeContinueText(
+        mediaType: HomeHubMediaType,
+        nextName: String?,
+        nextNumber: Double?,
+        displayNumber: Boolean,
+    ): String? = when (mediaType) {
+        HomeHubMediaType.MANGA -> {
+            val group = nextName?.let {
+                eu.kanade.tachiyomi.util.chapter.ChapterNameGroup.parse(it)
+            }
+            when {
+                displayNumber && nextNumber != null -> {
+                    val base = context.stringResource(
+                        MR.strings.display_mode_chapter,
+                        eu.kanade.presentation.util.formatChapterNumber(nextNumber),
+                    )
+                    if (group != null) "$group $base" else base
+                }
+                group != null -> nextName?.let {
+                    eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
+                        .qualifiedDisplayName(it)
+                } ?: nextName
+                else -> nextName?.let { bareNumberOrRaw(it) }
+            }
+        }
+        HomeHubMediaType.NOVEL -> nextName?.let { bareNumberOrRaw(it) }
+        else -> nextName
+    }
+
+    /** Bare-number chapter names ("#3", "003") render "Chapter 3"; names
+     *  carrying real words pass through unchanged. */
+    private fun bareNumberOrRaw(name: String): String =
+        eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser.bareNumberDisplayName(name) ?: name
+
+    /**
+     * Cheap pre-check before the chapter/episode query — a library entry
+     * with no finished items and no recorded session can't have real
+     * progress, so skip its query entirely. Non-library entries pass
+     * through to verification (their list may still show progress).
+     */
+    private fun cheapStartedGate(hasStarted: Boolean?, readDuration: Long): Boolean =
+        hasStarted == null || hasStarted || readDuration > 0
+
+    /**
+     * Continue rows — the recents lists already flowing through state,
+     * mapped onto RowItems (progress number as the card sub-text, plain
+     * detail-screen taps). Entries that are fully caught up (no unseen
+     * episodes, no unread chapters) are actively excluded — this row is
+     * for resuming, and a caught-up entry has nothing to resume into.
+     * Entries with no library row survive: an unmeasurable entry can't
+     * be proven caught up. Local-only; never cached by
      * [catalogFetchKeys] so a recents update rewrites the row.
      */
-    private fun historyRowItems(
+    private suspend fun historyRowItems(
         medium: String,
         recentAnime: List<tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations>,
         recentManga: List<MangaHistoryWithRelations>,
         recentNovels: List<NovelHistoryWithRelations>,
+        data: HomeHubCombinedData,
     ): List<RowItem> {
         return when (medium) {
-            WorkIdResolver.MEDIUM_SHOWS -> recentAnime.map {
-                RowItem(
-                    title = it.title,
-                    coverUrl = it.coverData,
-                    subtitle = animeProgressLabel(it),
-                    target = RowTarget.LibraryEntry(it.animeId, medium),
-                    // Id-keyed — same-title entries (canonical + extension
-                    // copies) must not collide on the row's lazy key.
-                    mintKey = "lib:$medium:${it.animeId}",
-                )
+            WorkIdResolver.MEDIUM_SHOWS -> {
+                val seenEntries = HashSet<Long>()
+                buildList {
+                    for (it in recentAnime) {
+                        if (size >= eu.kanade.tachiyomi.data.catalogrows.LibraryCatalogFeed
+                                .ROW_ITEM_LIMIT
+                        ) {
+                            break
+                        }
+                        if (!seenEntries.add(it.showKey)) continue
+                        val lib = data.animeLib
+                            .find { l -> l.anime.id == it.animeId || l.anime.id == it.showKey }
+                        if (lib != null && lib.unseenCount <= 0L) continue
+                        // Unwatched entries can't resume into anything.
+                        if (!cheapStartedGate(lib?.hasStarted, 1L)) continue
+                        // Episodes live on the canonical entry — its list
+                        // decides the resume point and proves progress.
+                        val info = showsResumeInfo(it.showKey)
+                        if (info.itemsLoaded && !info.hasProgress) continue
+                        if (!info.itemsLoaded && lib?.hasStarted != true) continue
+                        val season = scanlatorSeason(info.nextScanlator, it.isCinemetaMovie.not())
+                        add(
+                            RowItem(
+                                title = it.title,
+                                coverUrl = it.coverData,
+                                subtitle = when {
+                                    it.isCinemetaMovie -> animeProgressLabel(it)
+                                    info.nextNumber != null -> buildString {
+                                        season?.let { s -> append("S$s · ") }
+                                        append("Ep. ")
+                                        append(
+                                            eu.kanade.presentation.util
+                                                .formatEpisodeNumber(info.nextNumber),
+                                        )
+                                    }
+                                    else -> animeProgressLabel(it)
+                                },
+                                target = RowTarget.LibraryEntry(it.animeId, medium),
+                                // Id-keyed — same-title entries (canonical +
+                                // extension copies) must not collide on the
+                                // row's lazy key.
+                                mintKey = "lib:$medium:${it.animeId}",
+                            ),
+                        )
+                    }
+                }
             }
-            WorkIdResolver.MEDIUM_MANGA -> recentManga.distinctBy { it.mangaId }.map {
-                RowItem(
-                    title = it.title,
-                    coverUrl = it.coverData,
-                    subtitle = "Ch. ${eu.kanade.presentation.util.formatChapterNumber(it.chapterNumber)}",
-                    target = RowTarget.LibraryEntry(it.mangaId, medium),
-                    mintKey = "lib:$medium:${it.mangaId}",
-                )
+            // Manga/novel rows mirror the hero: collapse extension rows
+            // onto their canonical entry so the row and the carousel
+            // describe the same set of works.
+            WorkIdResolver.MEDIUM_MANGA -> {
+                val seenEntries = HashSet<Long>()
+                buildList {
+                    for (it in recentManga) {
+                        if (size >= eu.kanade.tachiyomi.data.catalogrows.LibraryCatalogFeed
+                                .ROW_ITEM_LIMIT
+                        ) {
+                            break
+                        }
+                        val entry = runCatching { mangaRepository.getMangaById(it.mangaId) }
+                            .getOrNull()
+                        val canonical = entry?.let { e ->
+                            runCatching { canonicalEntryUnifier.resolveLocal(e) }.getOrNull()
+                        }
+                        if (!seenEntries.add(canonical?.id ?: it.mangaId)) continue
+                        val lib = data.mangaLib
+                            .find { l -> l.manga.id == it.mangaId || l.manga.id == canonical?.id }
+                        if (lib != null && lib.unreadCount <= 0L) continue
+                        if (!cheapStartedGate(lib?.hasStarted, it.readDuration)) continue
+                        val target = canonical ?: entry ?: continue
+                        val info = mangaResumeInfo(target)
+                        if (info.itemsLoaded && !info.hasProgress) continue
+                        if (!info.itemsLoaded &&
+                            lib?.hasStarted != true &&
+                            it.readDuration <= 0
+                        ) {
+                            continue
+                        }
+                        add(
+                            RowItem(
+                                title = canonical?.title ?: it.title,
+                                coverUrl = canonical?.asMangaCover() ?: it.coverData,
+                                subtitle = "Ch. ${
+                                    eu.kanade.presentation.util.formatChapterNumber(
+                                        info.nextNumber ?: it.chapterNumber,
+                                    )
+                                }",
+                                target = RowTarget.LibraryEntry(
+                                    canonical?.id ?: it.mangaId,
+                                    medium,
+                                ),
+                                mintKey = "lib:$medium:${it.mangaId}",
+                            ),
+                        )
+                    }
+                }
             }
-            else -> recentNovels.distinctBy { it.novelId }.map {
-                RowItem(
-                    title = it.title,
-                    coverUrl = it.coverData,
-                    subtitle = "Ch. ${eu.kanade.presentation.util.formatChapterNumber(it.chapterNumber)}",
-                    target = RowTarget.LibraryEntry(it.novelId, medium),
-                    mintKey = "lib:$medium:${it.novelId}",
-                )
+            else -> {
+                val seenEntries = HashSet<Long>()
+                buildList {
+                    for (it in recentNovels) {
+                        if (size >= eu.kanade.tachiyomi.data.catalogrows.LibraryCatalogFeed
+                                .ROW_ITEM_LIMIT
+                        ) {
+                            break
+                        }
+                        val entry = runCatching { novelRepository.getNovelById(it.novelId) }
+                            .getOrNull()
+                        val canonical = entry?.let { e ->
+                            runCatching { canonicalEntryUnifier.resolveLocal(e) }.getOrNull()
+                        }
+                        if (!seenEntries.add(canonical?.id ?: it.novelId)) continue
+                        val lib = data.novelLib
+                            .find { l -> l.novel.id == it.novelId || l.novel.id == canonical?.id }
+                        if (lib != null && lib.unreadCount <= 0L) continue
+                        if (!cheapStartedGate(lib?.hasStarted, it.readDuration)) continue
+                        val target = canonical ?: entry ?: continue
+                        val info = novelResumeInfo(target.id)
+                        if (info.itemsLoaded && !info.hasProgress) continue
+                        if (!info.itemsLoaded &&
+                            lib?.hasStarted != true &&
+                            it.readDuration <= 0
+                        ) {
+                            continue
+                        }
+                        add(
+                            RowItem(
+                                title = canonical?.title ?: it.title,
+                                coverUrl = canonical?.asNovelCover() ?: it.coverData,
+                                subtitle = info.nextName?.let { n -> bareNumberOrRaw(n) }
+                                    ?: "Ch. ${
+                                        eu.kanade.presentation.util.formatChapterNumber(
+                                            it.chapterNumber,
+                                        )
+                                    }",
+                                target = RowTarget.LibraryEntry(
+                                    canonical?.id ?: it.novelId,
+                                    medium,
+                                ),
+                                mintKey = "lib:$medium:${it.novelId}",
+                            ),
+                        )
+                    }
+                }
             }
         }
     }
@@ -795,42 +1169,45 @@ class HomeHubScreenModel(
     // --- Hero card(s) ---
 
     /**
-     * The hero carousel pages — the most recently consumed entries in the
-     * current mode, one page per entry, newest first. If there is no
-     * history for the current mode, returns empty so the placeholder is
-     * shown instead of heroes from a different mode.
+     * The hero carousel pages — one page per entry, newest-first within
+     * each priority tier:
+     *
+     *  1. New content since last read (`latestUpload > lastRead`) —
+     *     fresh chapters/episodes outrank everything else.
+     *  2. Outstanding content (`unread > 0`) — entries with chapters or
+     *     episodes still to consume.
+     *  3. Caught-up entries — only surface when the first two tiers
+     *     can't fill the carousel.
+     *
+     * If there is no history for the current mode, returns empty so the
+     * placeholder is shown instead of heroes from a different mode.
      */
     private suspend fun resolveHeroes(data: HomeHubCombinedData): List<HomeHubHero> {
         val currentMode = uiPreferences.contentMode().get()
-        return when (currentMode) {
-            ContentMode.SHOWS -> data.animeHistory
-                // One hero page per show — episodes watched through different
-                // extension entries share the unifier's canonical id.
-                .distinctBy { it.showKey }
-                .take(HERO_PAGE_COUNT)
-                .map {
-                    val allRead = data.animeLib.find { lib -> lib.anime.id == it.animeId }
-                        ?.let { lib -> lib.unseenCount == 0L && lib.totalCount > 0 } ?: false
-                    // The canonical entry carries the rich metadata (Cinemeta
-                    // genres, landscape backdrop, logo pref key).
-                    val entry = runCatching { animeRepository.getAnimeById(it.showKey) }.getOrNull()
-                    HomeHubHero(
-                        entryId = it.animeId,
-                        title = it.title,
-                        progressNumber = it.episodeNumber,
-                        coverData = it.coverData,
-                        subId = it.episodeId,
-                        mediaType = HomeHubMediaType.SHOWS,
-                        allRead = allRead,
-                        season = it.cinemetaSeason,
-                        runtime = it.runtime,
-                        isCinemetaMovie = it.isCinemetaMovie,
-                        genres = sortGenresByPrevalence(entry?.genre.orEmpty()).take(3),
-                        backdrop = entry?.backgroundUrl,
-                        canonicalId = it.showKey,
-                    )
+        // Two passes: cheap candidates (dedupe, lib lookups, cheap-started
+        // gate, rank) first; chapter/episode queries only for ranked
+        // candidates until HERO_PAGE_COUNT heroes are produced.
+        val candidates = mutableListOf<Pair<Int, suspend () -> HomeHubHero?>>()
+        when (currentMode) {
+            ContentMode.SHOWS -> {
+                val seenShows = HashSet<Long>()
+                for (h in data.animeHistory) {
+                    // One hero page per show — episodes watched through
+                    // different extension entries share the unifier's
+                    // canonical id.
+                    if (!seenShows.add(h.showKey)) continue
+                    val lib = data.animeLib
+                        .find { l -> l.anime.id == h.animeId || l.anime.id == h.showKey }
+                    if (!cheapStartedGate(lib?.hasStarted, 0L)) continue
+                    candidates += heroRank(
+                        hasOutstanding = lib?.let { l -> l.unseenCount > 0L } == true,
+                        hasNewSinceLastRead = lib?.let { l ->
+                            l.unseenCount > 0L && l.latestUpload > l.lastSeen
+                        } == true,
+                    ) to { showsHero(h, lib) }
                 }
-            ContentMode.MANGA -> buildList {
+            }
+            ContentMode.MANGA -> {
                 // Dedupe per canonical entry, not per history row — two
                 // extension duplicates of one `miko:` work would emit the
                 // same shared-element key and fight in the transition
@@ -851,25 +1228,18 @@ class HomeHubScreenModel(
                     }
                     val canonicalId = canonical?.id
                     if (!seenEntries.add(canonicalId ?: h.mangaId)) continue
-                    val allRead = data.mangaLib.find { lib -> lib.manga.id == h.mangaId }
-                        ?.let { lib -> lib.unreadCount == 0L && lib.totalChapters > 0 } ?: false
-                    add(
-                        HomeHubHero(
-                            entryId = h.mangaId,
-                            title = canonical?.title ?: h.title,
-                            progressNumber = h.chapterNumber,
-                            coverData = canonical?.asMangaCover() ?: h.coverData,
-                            subId = h.chapterId,
-                            mediaType = HomeHubMediaType.MANGA,
-                            allRead = allRead,
-                            genres = sortGenresByPrevalence(entry?.genre.orEmpty()).take(3),
-                            canonicalId = canonicalId,
-                        ),
-                    )
-                    if (size >= HERO_PAGE_COUNT) break
+                    val lib = data.mangaLib
+                        .find { l -> l.manga.id == h.mangaId || l.manga.id == canonicalId }
+                    if (!cheapStartedGate(lib?.hasStarted, h.readDuration)) continue
+                    candidates += heroRank(
+                        hasOutstanding = lib?.unreadCount?.let { it > 0 } == true,
+                        hasNewSinceLastRead = lib?.let { l ->
+                            l.unreadCount > 0 && l.latestUpload > l.lastRead
+                        } == true,
+                    ) to { mangaHero(h, entry, canonical, lib) }
                 }
             }
-            ContentMode.NOVEL -> buildList {
+            ContentMode.NOVEL -> {
                 val seenRows = HashSet<Long>()
                 val seenEntries = HashSet<Long>()
                 for (h in data.novelHistory) {
@@ -883,26 +1253,360 @@ class HomeHubScreenModel(
                     }
                     val canonicalId = canonical?.id
                     if (!seenEntries.add(canonicalId ?: h.novelId)) continue
-                    val allRead = data.novelLib.find { lib -> lib.novel.id == h.novelId }
-                        ?.let { lib -> lib.unreadCount == 0L && lib.totalChapters > 0 } ?: false
-                    add(
-                        HomeHubHero(
-                            entryId = h.novelId,
-                            title = canonical?.title ?: h.title,
-                            progressNumber = h.chapterNumber,
-                            chapterTitle = h.chapterName,
-                            coverData = canonical?.asNovelCover() ?: h.coverData,
-                            subId = h.chapterId,
-                            mediaType = HomeHubMediaType.NOVEL,
-                            allRead = allRead,
-                            genres = sortGenresByPrevalence(entry?.genre.orEmpty()).take(3),
-                            canonicalId = canonicalId,
-                        ),
-                    )
-                    if (size >= HERO_PAGE_COUNT) break
+                    val lib = data.novelLib
+                        .find { l -> l.novel.id == h.novelId || l.novel.id == canonicalId }
+                    if (!cheapStartedGate(lib?.hasStarted, h.readDuration)) continue
+                    candidates += heroRank(
+                        hasOutstanding = lib?.unreadCount?.let { it > 0 } == true,
+                        hasNewSinceLastRead = lib?.let { l ->
+                            l.unreadCount > 0 && l.latestUpload > l.lastRead
+                        } == true,
+                    ) to { novelHero(h, entry, canonical, lib) }
                 }
             }
         }
+        // Stable sort — history order (most recent first) survives inside
+        // each tier — then produce heroes until the carousel is full.
+        candidates.sortBy { it.first }
+        val heroes = buildList {
+            for ((_, produce) in candidates) {
+                if (size >= HERO_PAGE_COUNT) break
+                produce()?.let(::add)
+            }
+        }
+        // The hero should never be an empty frame: continue entries
+        // first, then unstarted library entries ("Start" instead of
+        // "Continue"), then the mode's top discovery items when the
+        // library itself is empty.
+        if (heroes.size < HERO_PAGE_COUNT) {
+            return heroes + fallbackHeroes(data, currentMode, heroes)
+        }
+        return heroes
+    }
+
+    /**
+     * Backfill heroes when history can't fill the carousel.
+     *
+     * Tier 1 — library entries the user hasn't started yet, newest-added
+     * first; they render the "Start" label ([hasStarted]=false) and their
+     * resume target is the first item.
+     *
+     * Tier 2 — the mode's top discovery items (the same feed resolver the
+     * discovery rows use: works-browse for manga/books, Cinemeta top for
+     * shows). Materializing mints a local entry so the hero's detail and
+     * "Start" both work; the row itself has no chapters yet, so `subId`
+     * stays -1 and the CTA routes to the detail screen.
+     */
+    private suspend fun fallbackHeroes(
+        data: HomeHubCombinedData,
+        mode: ContentMode,
+        existing: List<HomeHubHero>,
+    ): List<HomeHubHero> {
+        val claimed = existing
+            .flatMapTo(HashSet()) { setOfNotNull(it.canonicalId, it.entryId) }
+        val heroes = mutableListOf<HomeHubHero>()
+        fun room() = HERO_PAGE_COUNT - existing.size - heroes.size
+
+        // --- Tier 1: unstarted library entries (newest additions first) ---
+        when (mode) {
+            ContentMode.SHOWS ->
+                data.animeLib
+                    .filter { !it.hasStarted && it.anime.id !in claimed }
+                    .sortedByDescending { it.anime.dateAdded }
+                    .forEach { lib ->
+                        if (heroes.size >= room()) return@forEach
+                        val info = showsResumeInfo(lib.anime.id)
+                        val subId = info.nextItemId ?: return@forEach
+                        heroes += HomeHubHero(
+                            entryId = lib.anime.id,
+                            title = lib.anime.title,
+                            progressNumber = info.nextNumber ?: 0.0,
+                            chapterTitle = info.nextName,
+                            coverData = lib.anime.asAnimeCover(),
+                            subId = subId,
+                            mediaType = HomeHubMediaType.SHOWS,
+                            hasStarted = false,
+                            genres = sortGenresByPrevalence(lib.anime.genre.orEmpty()).take(3),
+                            backdrop = lib.anime.backgroundUrl,
+                        )
+                    }
+            ContentMode.MANGA ->
+                data.mangaLib
+                    .filter { !it.hasStarted && it.manga.id !in claimed }
+                    .sortedByDescending { it.manga.dateAdded }
+                    .forEach { lib ->
+                        if (heroes.size >= room()) return@forEach
+                        val info = mangaResumeInfo(lib.manga)
+                        val subId = info.nextItemId ?: return@forEach
+                        heroes += HomeHubHero(
+                            entryId = lib.manga.id,
+                            title = lib.manga.title,
+                            progressNumber = info.nextNumber ?: 0.0,
+                            chapterTitle = info.nextName,
+                            coverData = lib.manga.asMangaCover(),
+                            subId = subId,
+                            mediaType = HomeHubMediaType.MANGA,
+                            hasStarted = false,
+                            continueText = resumeContinueText(
+                                HomeHubMediaType.MANGA,
+                                info.nextName,
+                                info.nextNumber,
+                                displayNumber = lib.manga.displayMode == Manga.CHAPTER_DISPLAY_NUMBER,
+                            ),
+                            genres = sortGenresByPrevalence(lib.manga.genre.orEmpty()).take(3),
+                        )
+                    }
+            ContentMode.NOVEL ->
+                data.novelLib
+                    .filter { !it.hasStarted && it.novel.id !in claimed }
+                    .sortedByDescending { it.novel.dateAdded }
+                    .forEach { lib ->
+                        if (heroes.size >= room()) return@forEach
+                        val info = novelResumeInfo(lib.novel.id)
+                        val subId = info.nextItemId ?: return@forEach
+                        heroes += HomeHubHero(
+                            entryId = lib.novel.id,
+                            title = lib.novel.title,
+                            progressNumber = info.nextNumber ?: 0.0,
+                            chapterTitle = info.nextName,
+                            coverData = lib.novel.asNovelCover(),
+                            subId = subId,
+                            mediaType = HomeHubMediaType.NOVEL,
+                            hasStarted = false,
+                            continueText = info.nextName,
+                            genres = sortGenresByPrevalence(lib.novel.genre.orEmpty()).take(3),
+                        )
+                    }
+        }
+        if (room() <= 0) return heroes
+
+        // --- Tier 2: the mode's discovery tops, materialized on use ---
+        val spec = when (mode) {
+            ContentMode.SHOWS -> CatalogRowSpec(
+                id = "hero-fallback",
+                medium = WorkIdResolver.MEDIUM_SHOWS,
+                feed = Feed.Cinemeta(cinemetaType = "series", catalogId = "top"),
+                order = 0,
+            )
+            ContentMode.MANGA -> CatalogRowSpec(
+                id = "hero-fallback",
+                medium = WorkIdResolver.MEDIUM_MANGA,
+                feed = Feed.Canonical(kindsCsv = "manga,comic"),
+                order = 0,
+            )
+            ContentMode.NOVEL -> CatalogRowSpec(
+                id = "hero-fallback",
+                medium = WorkIdResolver.MEDIUM_BOOKS,
+                feed = Feed.Canonical(kindsCsv = "novel"),
+                order = 0,
+            )
+        }
+        val items = runCatching { catalogRowResolver.resolve(spec) }
+            .onFailure { logcat(LogPriority.DEBUG) { "hero discovery fallback failed: ${it.message}" } }
+            .getOrDefault(emptyList())
+        for (item in items) {
+            if (room() <= 0) break
+            val hero = runCatching { discoveryHero(item, mode) }.getOrNull() ?: continue
+            if (hero.entryId in claimed || hero.entryId in heroes.map { it.entryId }) continue
+            heroes += hero
+        }
+        return heroes
+    }
+
+    /**
+     * Materialize a discovery [RowItem] into a hero. `subId` stays -1 —
+     * a freshly minted canonical row carries no chapters/episodes, so
+     * the CTA falls back to opening the detail screen.
+     */
+    private suspend fun discoveryHero(item: RowItem, mode: ContentMode): HomeHubHero? {
+        return when (val t = item.target) {
+            is RowTarget.CanonicalShows -> {
+                val imdb = tmdbDiscover.imdbId(t.mediaType, t.tmdbId) ?: return null
+                val meta = MikoMetaShort(
+                    id = imdb,
+                    name = item.title,
+                    type = TmdbDiscover.cinemetaType(t.mediaType),
+                    poster = item.coverUrl as? String,
+                    releaseInfo = item.releaseInfo,
+                    imdbRating = item.imdbRating,
+                )
+                val animeId = cinemetaCatalogFeed.getOrCreateAnimeId(meta)
+                val anime = runCatching { animeRepository.getAnimeById(animeId) }.getOrNull()
+                HomeHubHero(
+                    entryId = animeId, title = item.title,
+                    progressNumber = 0.0, coverData = anime?.asAnimeCover() ?: item.coverUrl,
+                    subId = -1, mediaType = HomeHubMediaType.SHOWS, hasStarted = false,
+                    genres = anime?.genre.orEmpty().take(3), backdrop = anime?.backgroundUrl,
+                )
+            }
+            is RowTarget.CinemetaEntry -> {
+                val animeId = cinemetaCatalogFeed.getOrCreateAnimeId(t.meta)
+                val anime = runCatching { animeRepository.getAnimeById(animeId) }.getOrNull()
+                HomeHubHero(
+                    entryId = animeId, title = item.title,
+                    progressNumber = 0.0, coverData = anime?.asAnimeCover() ?: item.coverUrl,
+                    subId = -1, mediaType = HomeHubMediaType.SHOWS, hasStarted = false,
+                    genres = anime?.genre.orEmpty().take(3), backdrop = anime?.backgroundUrl,
+                )
+            }
+            is RowTarget.CanonicalWork -> {
+                if (t.medium == WorkIdResolver.MEDIUM_BOOKS) {
+                    val id = canonicalCatalog.materializeNovelId(t.work)
+                    val novel = runCatching { novelRepository.getNovelById(id) }.getOrNull()
+                    HomeHubHero(
+                        entryId = id,
+                        title = item.title,
+                        progressNumber = 0.0,
+                        coverData = novel?.asNovelCover() ?: item.coverUrl,
+                        subId = -1,
+                        mediaType = HomeHubMediaType.NOVEL,
+                        hasStarted = false,
+                        genres = novel?.genre.orEmpty().take(3),
+                    )
+                } else {
+                    val id = canonicalCatalog.materializeMangaId(t.work)
+                    val manga = runCatching { mangaRepository.getMangaById(id) }.getOrNull()
+                    HomeHubHero(
+                        entryId = id,
+                        title = item.title,
+                        progressNumber = 0.0,
+                        coverData = manga?.asMangaCover() ?: item.coverUrl,
+                        subId = -1,
+                        mediaType = HomeHubMediaType.MANGA,
+                        hasStarted = false,
+                        genres = manga?.genre.orEmpty().take(3),
+                    )
+                }
+            }
+            else -> null
+        }
+    }
+
+    /**
+     * Builds a shows hero — or null when the canonical episode list proves
+     * the entry has no real progress (view-only history rows).
+     */
+    private suspend fun showsHero(
+        h: AnimeHistoryWithRelations,
+        lib: LibraryAnime?,
+    ): HomeHubHero? {
+        val info = showsResumeInfo(h.showKey)
+        val started = info.hasProgress || (!info.itemsLoaded && lib?.hasStarted == true)
+        if (!started) return null
+        val allRead = if (info.itemsLoaded) {
+            info.allDone
+        } else {
+            lib?.let { l -> l.unseenCount == 0L && l.totalCount > 0 } ?: false
+        }
+        // The canonical entry carries the rich metadata (Cinemeta genres,
+        // landscape backdrop, logo pref key).
+        val entry = runCatching { animeRepository.getAnimeById(h.showKey) }.getOrNull()
+        val cinemeta = entry?.url?.startsWith("cinemeta:")
+            ?: h.animeUrl.startsWith("cinemeta:")
+        return HomeHubHero(
+            entryId = h.showKey,
+            title = h.title,
+            progressNumber = info.nextNumber ?: h.episodeNumber,
+            coverData = h.coverData,
+            subId = info.nextItemId ?: h.episodeId,
+            mediaType = HomeHubMediaType.SHOWS,
+            allRead = allRead,
+            hasStarted = true,
+            continueText = info.nextName?.let { name ->
+                eu.kanade.presentation.entries.components.qualifiedEpisodeLabel(
+                    name,
+                    info.nextNumber ?: 0.0,
+                    info.nextScanlator.takeIf { cinemeta },
+                )
+            },
+            season = if (info.nextNumber != null) {
+                scanlatorSeason(info.nextScanlator, cinemeta)
+            } else {
+                h.cinemetaSeason
+            },
+            runtime = h.runtime,
+            isCinemetaMovie = h.isCinemetaMovie,
+            genres = sortGenresByPrevalence(entry?.genre.orEmpty()).take(3),
+            backdrop = entry?.backgroundUrl,
+            canonicalId = h.showKey,
+        )
+    }
+
+    private suspend fun mangaHero(
+        h: MangaHistoryWithRelations,
+        entry: Manga?,
+        canonical: Manga?,
+        lib: LibraryManga?,
+    ): HomeHubHero? {
+        val target = canonical ?: entry ?: return null
+        val info = mangaResumeInfo(target)
+        val started = info.hasProgress ||
+            (!info.itemsLoaded && (lib?.hasStarted == true || h.readDuration > 0))
+        if (!started) return null
+        val allRead = if (info.itemsLoaded) {
+            info.allDone
+        } else {
+            lib?.let { l -> l.unreadCount == 0L && l.totalChapters > 0 } ?: false
+        }
+        return HomeHubHero(
+            entryId = target.id,
+            title = canonical?.title ?: h.title,
+            progressNumber = info.nextNumber ?: h.chapterNumber,
+            chapterTitle = info.nextName,
+            coverData = canonical?.asMangaCover() ?: h.coverData,
+            subId = info.nextItemId ?: h.chapterId,
+            mediaType = HomeHubMediaType.MANGA,
+            allRead = allRead,
+            hasStarted = true,
+            continueText = resumeContinueText(
+                HomeHubMediaType.MANGA,
+                info.nextName,
+                info.nextNumber,
+                displayNumber = target.displayMode == Manga.CHAPTER_DISPLAY_NUMBER,
+            ),
+            genres = sortGenresByPrevalence(entry?.genre.orEmpty()).take(3),
+            canonicalId = canonical?.id,
+        )
+    }
+
+    private suspend fun novelHero(
+        h: NovelHistoryWithRelations,
+        entry: tachiyomi.domain.entries.novel.model.Novel?,
+        canonical: tachiyomi.domain.entries.novel.model.Novel?,
+        lib: LibraryNovel?,
+    ): HomeHubHero? {
+        val target = canonical ?: entry ?: return null
+        val info = novelResumeInfo(target.id)
+        val started = info.hasProgress ||
+            (!info.itemsLoaded && (lib?.hasStarted == true || h.readDuration > 0))
+        if (!started) return null
+        val allRead = if (info.itemsLoaded) {
+            info.allDone
+        } else {
+            lib?.let { l -> l.unreadCount == 0L && l.totalChapters > 0 } ?: false
+        }
+        return HomeHubHero(
+            entryId = target.id,
+            title = canonical?.title ?: h.title,
+            progressNumber = info.nextNumber ?: h.chapterNumber,
+            chapterTitle = info.nextName ?: h.chapterName,
+            coverData = canonical?.asNovelCover() ?: h.coverData,
+            subId = info.nextItemId ?: h.chapterId,
+            mediaType = HomeHubMediaType.NOVEL,
+            allRead = allRead,
+            hasStarted = true,
+            continueText = info.nextName,
+            genres = sortGenresByPrevalence(entry?.genre.orEmpty()).take(3),
+            canonicalId = canonical?.id,
+        )
+    }
+
+    /** 0 = fresh uploads since last read · 1 = chapters/episodes still
+     *  to consume · 2 = caught up (or not measurable — absent lib row). */
+    private fun heroRank(hasOutstanding: Boolean, hasNewSinceLastRead: Boolean): Int = when {
+        hasNewSinceLastRead -> 0
+        hasOutstanding -> 1
+        else -> 2
     }
 
     // --- Streak calculation ---
@@ -911,43 +1615,104 @@ class HomeHubScreenModel(
         if (activities.isEmpty()) return 0
 
         val activityByDate = activities.associateBy { it.date }
-        val today = LocalDate.now()
+        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         val hasActivityToday = (activityByDate[today]?.level ?: 0) > 0
-        var checkDate = if (hasActivityToday) today else today.minusDays(1)
+        var checkDate = if (hasActivityToday) today else today.minus(1, DateTimeUnit.DAY)
         var streak = 0
 
         while (true) {
             val level = activityByDate[checkDate]?.level ?: 0
             if (level <= 0) break
             streak++
-            checkDate = checkDate.minusDays(1)
+            checkDate = checkDate.minus(1, DateTimeUnit.DAY)
         }
 
         return streak
     }
 
-    // --- Fast cache ---
-
-    private fun saveCache(hero: HomeHubHero?, data: HomeHubCombinedData) {
-        val cachedHero = hero?.let { h ->
-            val (coverUrl, coverLastModified) = extractCoverInfo(h.coverData)
-            CachedHeroItem(
-                entryId = h.entryId,
-                title = h.title,
-                progressNumber = h.progressNumber,
-                coverUrl = coverUrl,
-                coverLastModified = coverLastModified,
-                subId = h.subId,
-                mediaType = h.mediaType.key,
-                backdropUrl = h.backdrop as? String,
-                season = h.season,
-                runtime = h.runtime,
-                isCinemetaMovie = h.isCinemetaMovie,
-                genres = h.genres,
-                logoId = h.canonicalId,
-                chapterTitle = h.chapterTitle,
+    /**
+     * Fold freshly-resolved heroes into the currently-displayed list.
+     * A card that survives keeps its artwork, title and position — only
+     * the resume fields move — so a cached cold-start hero updates its
+     * "Continue: Ch. 15 → Ch. 18" label in place instead of rebuilding
+     * the whole page. Entries the display didn't know append after it.
+     * Dropped cards (finished, or history gone) fall out naturally.
+     */
+    private fun mergeHeroes(displayed: List<HomeHubHero>, fresh: List<HomeHubHero>): List<HomeHubHero> {
+        if (displayed.isEmpty()) return fresh.take(HERO_MERGE_CAP)
+        fun keys(h: HomeHubHero) = setOfNotNull(h.canonicalId, h.entryId)
+        val freshByKey = fresh.flatMap { f -> keys(f).map { it to f } }.toMap()
+        val used = HashSet<Long>()
+        val merged = displayed.mapNotNull { d ->
+            val f = keys(d).firstNotNullOfOrNull { freshByKey[it] } ?: return@mapNotNull null
+            used.addAll(keys(f))
+            d.copy(
+                progressNumber = f.progressNumber,
+                chapterTitle = f.chapterTitle,
+                subId = f.subId,
+                allRead = f.allRead,
+                hasStarted = f.hasStarted,
+                continueText = f.continueText,
+                season = f.season,
+                runtime = f.runtime,
             )
         }
+        // New content slots right after the first cached page — buried
+        // at position 6 behind five cached cards it'd never be seen.
+        return (
+            listOfNotNull(merged.firstOrNull()) +
+                fresh.filter { f -> keys(f).none(used::contains) } +
+                merged.drop(1)
+            ).take(HERO_MERGE_CAP)
+    }
+
+    // --- Fast cache ---
+
+    private fun HomeHubHero.toCached(): CachedHeroItem {
+        val (coverUrl, coverLastModified) = extractCoverInfo(coverData)
+        return CachedHeroItem(
+            entryId = entryId,
+            title = title,
+            progressNumber = progressNumber,
+            coverUrl = coverUrl,
+            coverLastModified = coverLastModified,
+            subId = subId,
+            mediaType = mediaType.key,
+            backdropUrl = backdrop as? String,
+            season = season,
+            runtime = runtime,
+            isCinemetaMovie = isCinemetaMovie,
+            genres = genres,
+            logoId = canonicalId,
+            chapterTitle = chapterTitle,
+            hasStarted = hasStarted,
+            continueText = continueText,
+        )
+    }
+
+    private fun saveCache(heroes: List<HomeHubHero>, data: HomeHubCombinedData) {
+        val modeKey = heroes.firstOrNull()?.mediaType?.key
+            ?: when (uiPreferences.contentMode().get()) {
+                ContentMode.SHOWS -> HomeHubMediaType.SHOWS.key
+                ContentMode.MANGA -> HomeHubMediaType.MANGA.key
+                ContentMode.NOVEL -> HomeHubMediaType.NOVEL.key
+            }
+        // An empty resolve while history rows exist is ambiguous — the
+        // chapter/episode queries may have dropped everything transiently.
+        // Don't clobber a good snapshot with nothing; only write empty
+        // when the mode has no history at all (authoritative-empty).
+        val modeHistoryEmpty = when (modeKey) {
+            HomeHubMediaType.SHOWS.key -> data.animeHistory.isEmpty()
+            HomeHubMediaType.MANGA.key -> data.mangaHistory.isEmpty()
+            else -> data.novelHistory.isEmpty()
+        }
+        val prev = fastCache.load()
+        val heroesMap = if (heroes.isEmpty() && !modeHistoryEmpty) {
+            prev.heroes
+        } else {
+            prev.heroes + (modeKey to heroes.map { it.toCached() })
+        }
+        val cachedHero = heroesMap[modeKey]?.firstOrNull()
 
         val cachedHistory = buildList {
             data.animeHistory.take(6).forEach { h ->
@@ -1001,13 +1766,83 @@ class HomeHubScreenModel(
         fastCache.save(
             CachedHomeHubState(
                 hero = cachedHero,
+                heroes = heroesMap,
                 history = cachedHistory,
                 recommendations = cachedRecs,
+                historyRows = historyRowsSnapshot(),
                 userName = uiPreferences.userName().get(),
                 isInitialized = true,
             ),
         )
     }
+
+    /**
+     * History rows as last computed from live data, merged over the
+     * previous snapshot (rows not yet scrolled into view keep theirs).
+     * Only called where DB data backs the state — a timed-out row never
+     * overwrites a good snapshot with empty.
+     */
+    private fun historyRowsSnapshot(): Map<String, List<CachedRowItem>> {
+        val s = mutableState.value
+        val historyIds = s.catalogSpecs.filter { it.feed is Feed.History }.mapTo(HashSet()) { it.id }
+        val live = s.catalogRows
+            .filterKeys { it in historyIds }
+            .mapValues { (_, row) -> row.items.mapNotNull { it.toCachedRow() } }
+        return fastCache.load().historyRows + live
+    }
+
+    private fun RowItem.toCachedRow(): CachedRowItem? {
+        val t = target as? RowTarget.LibraryEntry ?: return null
+        val base = CachedRowItem(
+            title = title,
+            subtitle = subtitle,
+            entryId = t.entryId,
+            medium = t.medium,
+            mintKey = mintKey,
+            coverKind = "url",
+        )
+        return when (val c = coverUrl) {
+            is MangaCover -> base.copy(
+                coverKind = "manga",
+                coverEntryId = c.mangaId,
+                coverSourceId = c.sourceId,
+                coverFavorite = c.isMangaFavorite,
+                coverUrl = c.url,
+                coverLastModified = c.lastModified,
+            )
+            is NovelCover -> base.copy(
+                coverKind = "novel",
+                coverEntryId = c.novelId,
+                coverSourceId = c.sourceId,
+                coverFavorite = c.isNovelFavorite,
+                coverUrl = c.url,
+                coverLastModified = c.lastModified,
+            )
+            is AnimeCover -> base.copy(
+                coverKind = "anime",
+                coverEntryId = c.animeId,
+                coverSourceId = c.sourceId,
+                coverFavorite = c.isAnimeFavorite,
+                coverUrl = c.url,
+                coverLastModified = c.lastModified,
+            )
+            is String -> base.copy(coverUrl = c)
+            else -> null
+        }
+    }
+
+    private fun CachedRowItem.toRowItem(): RowItem = RowItem(
+        title = title,
+        subtitle = subtitle,
+        mintKey = mintKey,
+        target = RowTarget.LibraryEntry(entryId, medium),
+        coverUrl = when (coverKind) {
+            "manga" -> MangaCover(coverEntryId, coverSourceId, coverFavorite, coverUrl, coverLastModified)
+            "novel" -> NovelCover(coverEntryId, coverSourceId, coverFavorite, coverUrl, coverLastModified)
+            "anime" -> AnimeCover(coverEntryId, coverSourceId, coverFavorite, coverUrl, coverLastModified)
+            else -> coverUrl
+        },
+    )
 
     private fun extractCoverInfo(coverData: Any?): Pair<String?, Long> {
         return when (coverData) {
@@ -1034,12 +1869,21 @@ class HomeHubScreenModel(
 /** Hero carousel page cap — most recently consumed entries, one page each. */
 private const val HERO_PAGE_COUNT = 5
 
+/** Merged-list bound — cached pages plus fresh entries can exceed the
+ *  page cap on a cold start; cap the union so the carousel stays sane. */
+private const val HERO_MERGE_CAP = HERO_PAGE_COUNT * 2
+
 /** Concurrent catalog-row fetches — below-the-fold rows shouldn't stampede. */
 private const val CATALOG_FETCH_CONCURRENCY = 3
 
 /** Concurrent catalog mint-on-browse resolves — a dedicated pool so rows
  *  can't starve the discovery surface's semaphore. */
 private const val CATALOG_MINT_CONCURRENCY = 2
+
+/** Candidate pool the history-backed ("Continue Reading") row scans —
+ *  canonical dedupe inside the builder collapses extension copies, so a
+ *  raw take(10) underfills the row; the loop still stops at the row cap. */
+private const val HISTORY_ROW_CANDIDATES = 120
 
 /** How long the catalog builder waits for a source manager's first
  *  extension emission before showing an empty source list — cold starts
@@ -1068,9 +1912,10 @@ private fun CachedHeroItem.toHomeHubHero(): HomeHubHero {
         genres = genres,
         canonicalId = logoId,
         chapterTitle = chapterTitle,
+        hasStarted = hasStarted,
+        continueText = continueText,
     )
 }
-
 
 /**
  * SQLDelight cursor-window transient: while the MikoDB sweep churns

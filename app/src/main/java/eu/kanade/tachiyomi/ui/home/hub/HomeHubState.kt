@@ -7,9 +7,9 @@ import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.tachiyomi.data.catalogrows.CatalogRowSpec
 import eu.kanade.tachiyomi.data.catalogrows.RowItem
 import tachiyomi.domain.achievement.model.MonthStats
-import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
+import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
 import tachiyomi.i18n.aniyomi.AYMR
 
 @Immutable
@@ -81,7 +81,10 @@ data class HomeHubState(
      * state here (the user can't see it anyway).
      */
     val isEmpty: Boolean
-        get() = !isLoading && !hasAnyRecent && hero == null && recommendations.isEmpty() &&
+        get() = !isLoading &&
+            !hasAnyRecent &&
+            hero == null &&
+            recommendations.isEmpty() &&
             catalogSpecs.none {
                 it.visible && it.medium == Carrier.fromContentMode(currentMode).medium
             }
@@ -158,6 +161,15 @@ data class HomeHubHero(
     val subId: Long,
     val mediaType: HomeHubMediaType,
     val allRead: Boolean = false,
+    /** Real progress exists on the entry (any item consumed or an
+     *  in-progress position) — mirrors the detail screen's hasStarted
+     *  so the pre-filled continue label picks "Continue:" over "Start". */
+    val hasStarted: Boolean = false,
+    /** The detail-parity progress fragment for the continue-row label
+     *  (chapter/episode name, or "Chapter N" for number-display manga).
+     *  The compact pill fragment stays in [progressNumber]/[chapterTitle]
+     *  /[season] — this is what the loaded bar will actually read. */
+    val continueText: String? = null,
     // Anime-only extras for the resume label (season prefix, movie runtime).
     val season: Int? = null,
     val runtime: String? = null,
@@ -192,6 +204,7 @@ data class CatalogRowState(
  */
 sealed interface HomeHubDialog {
     data object ManageCatalogs : HomeHubDialog
+
     /**
      * [lockedMedium] scopes the type step to one category — "New
      * catalog" from a manage-sheet medium pill opens the builder with
@@ -206,9 +219,11 @@ sealed interface HomeHubDialog {
 enum class CatalogRowError {
     /** No TMDB key resolves — row renders the BYOK notice. */
     NO_TMDB_KEY,
+
     /** Feed endpoint can't serve the spec (e.g. LATEST on a
      *  `supportsLatest=false` source). */
     UNSUPPORTED_FEED,
+
     /** The spec's extension is uninstalled or moved to another package. */
     EXTENSION_MISSING,
     FETCH_FAILED,

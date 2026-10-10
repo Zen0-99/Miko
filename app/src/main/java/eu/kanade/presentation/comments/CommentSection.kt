@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,6 +107,11 @@ fun CommentSection(
      * decisions here don't depend on that override staying in place.
      */
     accentColor: Color? = null,
+    /**
+     * Count the caller already knew before opening ("View comments (N)").
+     * 0 = known empty — skip the ghost rows entirely; null = unknown.
+     */
+    expectedCount: Long? = null,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
     var sort by rememberSaveable { mutableStateOf(CommentSort.NEWEST.name) }
@@ -150,7 +156,10 @@ fun CommentSection(
                 .weight(1f, fill = false),
         ) {
             when {
-                state.loading && state.comments.isEmpty() -> {
+                // Ghost rows only when a fetch could still produce
+                // comments — a caller-known 0 means the thread is
+                // empty; placeholders for it just flash padding.
+                state.loading && state.comments.isEmpty() && expectedCount != 0L -> {
                     items(4, key = { "skeleton_$it" }) {
                         CommentSkeleton(accent = accent)
                     }
@@ -757,13 +766,15 @@ private fun CommentOverflowMenu(
 /** Shimmer-ish placeholder shown while the thread loads. */
 @Composable
 private fun CommentSkeleton(accent: Color) {
-    // Ghost shapes carry the entry accent — same damped-hue recipe as the
-    // tinted sheet surface behind them, anchored off the neutral container
-    // tone so they stay readable as placeholders.
-    val ghost = accentTintedSurface(
-        accent = accent,
-        background = MaterialTheme.colorScheme.surfaceContainerHighest,
-        dimmed = false,
+    // Ghost shapes carry the entry accent — the damped-hue surface recipe
+    // from the sheet/chapter cards plus a direct low-alpha accent wash so
+    // the tint reads as the cover's color, not a neutral gray.
+    val ghost = accent.copy(alpha = 0.22f).compositeOver(
+        accentTintedSurface(
+            accent = accent,
+            background = MaterialTheme.colorScheme.surfaceContainerHighest,
+            dimmed = false,
+        ),
     )
     Row(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)) {
         Box(

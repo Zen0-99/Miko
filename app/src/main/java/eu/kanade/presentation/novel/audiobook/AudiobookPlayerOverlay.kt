@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
@@ -121,7 +122,7 @@ private const val ANCHOR_DISMISSED = 1
 
 // What occupies the overlay's middle band — keyed into one Crossfade so the
 // cover, card, synced text, and empty states all morph into each other.
-private enum class MiddleContent { Card, Text, Empty }
+private enum class MiddleContent { Card, Text, Empty, Loading }
 
 /**
  * Full-screen audiobook player overlay (REQ-008, D-08).
@@ -142,7 +143,10 @@ fun AudiobookPlayerOverlay(
     modifier: Modifier = Modifier,
 ) {
     val state by controller.state.collectAsState()
-    val visible = state.overlayVisible && state.track != null
+    // track != null OR loading: play() raises overlayVisible the instant
+    // it's tapped, so the player chrome is on screen while the playlist
+    // still builds behind it.
+    val visible = state.overlayVisible && (state.track != null || state.loading)
 
     BackHandler(enabled = visible) {
         controller.hideOverlay()
@@ -409,6 +413,7 @@ private fun PlayerSurface(
             // instead of snapping (~550ms). The art fills the band (Book's
             // 2:3 aspectRatio resolves against the padding).
             val middleContent = when {
+                state.loading -> MiddleContent.Loading
                 syncedActive -> MiddleContent.Text
                 coverVisible -> MiddleContent.Card
                 else -> MiddleContent.Empty
@@ -433,6 +438,14 @@ private fun PlayerSurface(
                     contentAlignment = Alignment.BottomCenter,
                 ) {
                     when (content) {
+                        MiddleContent.Loading -> Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                color = accent ?: Color.White,
+                            )
+                        }
                         MiddleContent.Text -> SyncedParagraphs(
                             paragraphs = state.paragraphs,
                             offsetsMs = state.paragraphOffsetsMs,
@@ -492,7 +505,8 @@ private fun PlayerSurface(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = state.track?.chapterName.orEmpty(),
+                    text = state.track?.chapterName
+                        ?: state.pendingChapterName.orEmpty(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.7f),
                     maxLines = 2,
@@ -502,20 +516,27 @@ private fun PlayerSurface(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                SeekRow(state = state, accent = accent, onSeekTo = controller::seekTo)
+                if (state.loading) {
+                    CircularProgressIndicator(
+                        color = accent ?: Color.White,
+                        modifier = Modifier.height(88.dp),
+                    )
+                } else {
+                    SeekRow(state = state, accent = accent, onSeekTo = controller::seekTo)
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                TransportRow(
-                    state = state,
-                    accent = accent,
-                    onAccent = onAccent,
-                    onTogglePause = controller::togglePause,
-                    onRewind = controller::rewind,
-                    onForward = controller::forward,
-                    onPrevious = controller::previousChapter,
-                    onNext = controller::nextChapter,
-                )
+                    TransportRow(
+                        state = state,
+                        accent = accent,
+                        onAccent = onAccent,
+                        onTogglePause = controller::togglePause,
+                        onRewind = controller::rewind,
+                        onForward = controller::forward,
+                        onPrevious = controller::previousChapter,
+                        onNext = controller::nextChapter,
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

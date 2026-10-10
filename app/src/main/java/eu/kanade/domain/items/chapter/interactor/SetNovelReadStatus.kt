@@ -10,7 +10,7 @@ import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
-import java.util.Date
+import kotlin.time.Clock
 
 class SetNovelReadStatus(
     private val novelChapterRepository: NovelChapterRepository,
@@ -50,7 +50,7 @@ class SetNovelReadStatus(
         if (read) {
             // Record history entries for manually-marked-as-read chapters
             if (upsertHistory != null) {
-                val now = Date()
+                val now = Clock.System.now()
                 chaptersToUpdate.forEach { chapter ->
                     upsertHistory.await(
                         NovelHistoryUpdate(

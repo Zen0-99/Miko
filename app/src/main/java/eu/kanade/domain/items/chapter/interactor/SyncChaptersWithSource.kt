@@ -23,8 +23,8 @@ import tachiyomi.domain.items.chapter.service.ChapterRecognition
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.source.local.entries.manga.isLocal
 import java.lang.Long.max
-import java.time.ZonedDateTime
 import java.util.TreeSet
+import kotlin.time.Clock
 
 class SyncChaptersWithSource(
     private val downloadManager: MangaDownloadManager,
@@ -57,8 +57,8 @@ class SyncChaptersWithSource(
             throw NoChaptersException()
         }
 
-        val now = ZonedDateTime.now()
-        val nowMillis = now.toInstant().toEpochMilli()
+        val now = Clock.System.now()
+        val nowMillis = now.toEpochMilliseconds()
 
         val sourceChapters = rawSourceChapters
             .distinctBy { it.url }
@@ -151,7 +151,7 @@ class SyncChaptersWithSource(
                 updateManga.awaitUpdateFetchInterval(
                     manga,
                     now,
-                    fetchWindow,
+                    window = fetchWindow,
                 )
             }
             return emptyList()
@@ -182,7 +182,9 @@ class SyncChaptersWithSource(
         removedChapters.forEach { chapter ->
             if (chapter.isRecognizedNumber && chapter.lastPageRead > 0) {
                 deletedLastPageReadMap.merge(
-                    chapter.chapterNumber, chapter.lastPageRead, ::maxOf,
+                    chapter.chapterNumber,
+                    chapter.lastPageRead,
+                    ::maxOf,
                 )
             }
         }
@@ -244,7 +246,7 @@ class SyncChaptersWithSource(
             val chapterUpdates = updatedChapters.map { it.toChapterUpdate() }
             updateChapter.awaitAll(chapterUpdates)
         }
-        updateManga.awaitUpdateFetchInterval(manga, now, fetchWindow)
+        updateManga.awaitUpdateFetchInterval(manga, now, window = fetchWindow)
 
         // Set this manga as updated since chapters were changed
         // Note that last_update actually represents last time the chapter list changed at all

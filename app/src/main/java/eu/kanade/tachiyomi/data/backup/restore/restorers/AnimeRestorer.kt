@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupAnimeHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupAnimeTracking
 import eu.kanade.tachiyomi.data.backup.models.BackupCollection
 import eu.kanade.tachiyomi.data.backup.models.BackupEpisode
+import kotlinx.datetime.TimeZone
 import tachiyomi.data.AnimeUpdateStrategyColumnAdapter
 import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
@@ -20,9 +21,9 @@ import tachiyomi.domain.track.anime.interactor.InsertAnimeTrack
 import tachiyomi.domain.track.anime.model.AnimeTrack
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.ZonedDateTime
-import java.util.Date
 import kotlin.math.max
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class AnimeRestorer(
     private val handler: AnimeDatabaseHandler = Injekt.get(),
@@ -43,12 +44,14 @@ class AnimeRestorer(
 
     private fun remapSourceId(sourceId: Long): Long = sourceIdMap[sourceId] ?: sourceId
 
-    private var now = ZonedDateTime.now()
-    private var currentFetchWindow = fetchInterval.getWindow(now)
+    private var now = Clock.System.now()
+    private var timeZone = TimeZone.currentSystemDefault()
+    private var currentFetchWindow = fetchInterval.getWindow(now, timeZone)
 
     init {
-        now = ZonedDateTime.now()
-        currentFetchWindow = fetchInterval.getWindow(now)
+        now = Clock.System.now()
+        timeZone = TimeZone.currentSystemDefault()
+        currentFetchWindow = fetchInterval.getWindow(now, timeZone)
     }
 
     suspend fun sortByNew(backupAnimes: List<BackupAnime>): List<BackupAnime> {
@@ -332,7 +335,7 @@ class AnimeRestorer(
         restoreEpisodes(anime, episodes)
         restoreTracking(anime, tracks)
         restoreHistory(history)
-        updateAnime.awaitUpdateFetchInterval(anime, now, currentFetchWindow)
+        updateAnime.awaitUpdateFetchInterval(anime, now, timeZone, currentFetchWindow)
         return anime
     }
 
@@ -390,9 +393,12 @@ class AnimeRestorer(
             item.copy(
                 id = dbHistory._id,
                 episodeId = dbHistory.episode_id,
-                seenAt = max(item.seenAt?.time ?: 0L, dbHistory.last_seen?.time ?: 0L)
+                seenAt = max(
+                    item.seenAt?.toEpochMilliseconds() ?: 0L,
+                    dbHistory.last_seen?.toEpochMilliseconds() ?: 0L,
+                )
                     .takeIf { it > 0L }
-                    ?.let { Date(it) },
+                    ?.let { Instant.fromEpochMilliseconds(it) },
             )
         }
 

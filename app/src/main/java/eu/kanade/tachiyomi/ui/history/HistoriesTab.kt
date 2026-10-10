@@ -19,14 +19,14 @@ import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.history.shows.ShowsHistoryScreenModel
-import eu.kanade.tachiyomi.ui.history.shows.animeHistoryTab
-import eu.kanade.tachiyomi.ui.history.shows.resumeLastEpisodeSeenEvent
 import eu.kanade.tachiyomi.ui.history.manga.MangaHistoryScreenModel
 import eu.kanade.tachiyomi.ui.history.manga.mangaHistoryTab
 import eu.kanade.tachiyomi.ui.history.novel.NovelHistoryScreenModel
 import eu.kanade.tachiyomi.ui.history.novel.novelHistoryTab
 import eu.kanade.tachiyomi.ui.history.novel.resumeLastNovelChapterReadEvent
+import eu.kanade.tachiyomi.ui.history.shows.ShowsHistoryScreenModel
+import eu.kanade.tachiyomi.ui.history.shows.animeHistoryTab
+import eu.kanade.tachiyomi.ui.history.shows.resumeLastEpisodeSeenEvent
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR

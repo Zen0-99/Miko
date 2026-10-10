@@ -10,6 +10,9 @@ import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.entries.novel.model.NovelCover
 import tachiyomi.domain.entries.shows.model.AnimeCover
@@ -84,7 +87,19 @@ class ExtensionCatalogFeed(
             else -> fetchNovels(spec, feed)
         }
 
+    /**
+     * A row can compose while extension classloading is still mid-flight —
+     * `get()` then misses a source that IS installed, and the screen model
+     * latches EXTENSION_MISSING for the session. Bounded wait: if init
+     * genuinely stalls, `get()` falls through to the honest stub path.
+     */
+    private suspend fun awaitInit(init: StateFlow<Boolean>) {
+        if (init.value) return
+        withTimeoutOrNull(INIT_TIMEOUT_MS) { init.first { it } }
+    }
+
     private suspend fun fetchManga(spec: CatalogRowSpec, feed: Feed.Extension): List<RowItem> {
+        awaitInit(mangaSourceManager.isInitialized)
         val source = mangaSourceManager.get(feed.sourceId) as? CatalogueSource
             ?: throw ExtensionUnavailableException(feed.sourceId)
         if (feed.kind == ExtKind.LATEST && !source.supportsLatest) {
@@ -100,7 +115,9 @@ class ExtensionCatalogFeed(
             throw FeedNotImplementedException(feed)
         }
         val genresApplied = applyMangaGenreFilters(
-            filters, spec.genreNames, spec.excludedGenreNames,
+            filters,
+            spec.genreNames,
+            spec.excludedGenreNames,
         )
         val page = if (kindApplied || genresApplied) {
             source.getSearchManga(1, "", filters)
@@ -111,6 +128,7 @@ class ExtensionCatalogFeed(
         }
         return page.mangas
             .filter { genresApplied || matchesGenreNames(spec.genreNames, it.genre) }
+            .take(LibraryCatalogFeed.ROW_ITEM_LIMIT)
             .map { sm ->
                 RowItem(
                     title = sm.title,
@@ -125,6 +143,7 @@ class ExtensionCatalogFeed(
     }
 
     private suspend fun fetchShows(spec: CatalogRowSpec, feed: Feed.Extension): List<RowItem> {
+        awaitInit(animeSourceManager.isInitialized)
         val source = animeSourceManager.get(feed.sourceId) as? AnimeCatalogueSource
             ?: throw ExtensionUnavailableException(feed.sourceId)
         if (feed.kind == ExtKind.LATEST && !source.supportsLatest) {
@@ -140,7 +159,9 @@ class ExtensionCatalogFeed(
             throw FeedNotImplementedException(feed)
         }
         val genresApplied = applyAnimeGenreFilters(
-            filters, spec.genreNames, spec.excludedGenreNames,
+            filters,
+            spec.genreNames,
+            spec.excludedGenreNames,
         )
         val page = if (kindApplied || genresApplied) {
             source.getSearchAnime(1, "", filters)
@@ -151,6 +172,7 @@ class ExtensionCatalogFeed(
         }
         return page.animes
             .filter { genresApplied || matchesGenreNames(spec.genreNames, it.genre) }
+            .take(LibraryCatalogFeed.ROW_ITEM_LIMIT)
             .map { sa ->
                 RowItem(
                     title = sa.title,
@@ -162,6 +184,7 @@ class ExtensionCatalogFeed(
     }
 
     private suspend fun fetchNovels(spec: CatalogRowSpec, feed: Feed.Extension): List<RowItem> {
+        awaitInit(novelSourceManager.isInitialized)
         val source = novelSourceManager.get(feed.sourceId) as? NovelCatalogueSource
             ?: throw ExtensionUnavailableException(feed.sourceId)
         if (feed.kind == ExtKind.LATEST && !source.supportsLatest) {
@@ -177,7 +200,9 @@ class ExtensionCatalogFeed(
             throw FeedNotImplementedException(feed)
         }
         val genresApplied = applyNovelGenreFilters(
-            filters, spec.genreNames, spec.excludedGenreNames,
+            filters,
+            spec.genreNames,
+            spec.excludedGenreNames,
         )
         val page = if (kindApplied || genresApplied) {
             // The novel API's filtered overloads keep the listing kind.
@@ -192,6 +217,7 @@ class ExtensionCatalogFeed(
         }
         return page.novels
             .filter { genresApplied || matchesGenreNames(spec.genreNames, it.genre) }
+            .take(LibraryCatalogFeed.ROW_ITEM_LIMIT)
             .map { sn ->
                 RowItem(
                     title = sn.title,
@@ -201,8 +227,11 @@ class ExtensionCatalogFeed(
                 )
             }
     }
-
 }
+
+/** Upper bound on waiting for the medium's source manager to finish
+ *  extension classloading before declaring a source missing. */
+private const val INIT_TIMEOUT_MS = 20_000L
 
 /** Filter names that describe what KIND of work an item is. */
 private val TYPE_FILTER_RE =
@@ -281,15 +310,24 @@ private fun applyMangaKindFilter(filters: FilterList, keywords: List<String>?): 
                 is Filter.Select<*> -> if (nameRe.containsMatchIn(filter.name)) {
                     filter.values.indexOfFirst { v -> matchesKeyword(v.toString(), keywords) }
                         .takeIf { it >= 0 }
-                        ?.let { filter.state = it; applied = true }
+                        ?.let {
+                            filter.state = it
+                            applied = true
+                        }
                 }
                 is Filter.Group<*> -> if (nameRe.containsMatchIn(filter.name)) {
                     filter.state.filterIsInstance<Filter.CheckBox>()
                         .filter { matchesKeyword(it.name, keywords) }
-                        .forEach { it.state = true; applied = true }
+                        .forEach {
+                            it.state = true
+                            applied = true
+                        }
                     filter.state.filterIsInstance<Filter.TriState>()
                         .filter { matchesKeyword(it.name, keywords) }
-                        .forEach { it.state = Filter.TriState.STATE_INCLUDE; applied = true }
+                        .forEach {
+                            it.state = Filter.TriState.STATE_INCLUDE
+                            applied = true
+                        }
                 }
                 else -> Unit
             }
@@ -312,14 +350,17 @@ private fun applyMangaGenreFilters(
                 filter.state.forEach { child ->
                     when (child) {
                         is Filter.CheckBox -> if (matchesName(child.name, include)) {
-                            child.state = true; applied = true
+                            child.state = true
+                            applied = true
                         }
                         is Filter.TriState -> when {
                             matchesName(child.name, include) -> {
-                                child.state = Filter.TriState.STATE_INCLUDE; applied = true
+                                child.state = Filter.TriState.STATE_INCLUDE
+                                applied = true
                             }
                             matchesName(child.name, exclude) -> {
-                                child.state = Filter.TriState.STATE_EXCLUDE; applied = true
+                                child.state = Filter.TriState.STATE_EXCLUDE
+                                applied = true
                             }
                         }
                         else -> Unit
@@ -329,7 +370,10 @@ private fun applyMangaGenreFilters(
             is Filter.Select<*> -> if (GENRE_FILTER_RE.containsMatchIn(filter.name)) {
                 filter.values.indexOfFirst { v -> matchesName(v.toString(), include) }
                     .takeIf { it >= 0 }
-                    ?.let { filter.state = it; applied = true }
+                    ?.let {
+                        filter.state = it
+                        applied = true
+                    }
             }
             else -> Unit
         }
@@ -349,15 +393,24 @@ private fun applyAnimeKindFilter(filters: AnimeFilterList, keywords: List<String
                 is AnimeFilter.Select<*> -> if (nameRe.containsMatchIn(filter.name)) {
                     filter.values.indexOfFirst { v -> matchesKeyword(v.toString(), keywords) }
                         .takeIf { it >= 0 }
-                        ?.let { filter.state = it; applied = true }
+                        ?.let {
+                            filter.state = it
+                            applied = true
+                        }
                 }
                 is AnimeFilter.Group<*> -> if (nameRe.containsMatchIn(filter.name)) {
                     filter.state.filterIsInstance<AnimeFilter.CheckBox>()
                         .filter { matchesKeyword(it.name, keywords) }
-                        .forEach { it.state = true; applied = true }
+                        .forEach {
+                            it.state = true
+                            applied = true
+                        }
                     filter.state.filterIsInstance<AnimeFilter.TriState>()
                         .filter { matchesKeyword(it.name, keywords) }
-                        .forEach { it.state = AnimeFilter.TriState.STATE_INCLUDE; applied = true }
+                        .forEach {
+                            it.state = AnimeFilter.TriState.STATE_INCLUDE
+                            applied = true
+                        }
                 }
                 else -> Unit
             }
@@ -378,14 +431,17 @@ private fun applyAnimeGenreFilters(
                 filter.state.forEach { child ->
                     when (child) {
                         is AnimeFilter.CheckBox -> if (matchesName(child.name, include)) {
-                            child.state = true; applied = true
+                            child.state = true
+                            applied = true
                         }
                         is AnimeFilter.TriState -> when {
                             matchesName(child.name, include) -> {
-                                child.state = AnimeFilter.TriState.STATE_INCLUDE; applied = true
+                                child.state = AnimeFilter.TriState.STATE_INCLUDE
+                                applied = true
                             }
                             matchesName(child.name, exclude) -> {
-                                child.state = AnimeFilter.TriState.STATE_EXCLUDE; applied = true
+                                child.state = AnimeFilter.TriState.STATE_EXCLUDE
+                                applied = true
                             }
                         }
                         else -> Unit
@@ -395,7 +451,10 @@ private fun applyAnimeGenreFilters(
             is AnimeFilter.Select<*> -> if (GENRE_FILTER_RE.containsMatchIn(filter.name)) {
                 filter.values.indexOfFirst { v -> matchesName(v.toString(), include) }
                     .takeIf { it >= 0 }
-                    ?.let { filter.state = it; applied = true }
+                    ?.let {
+                        filter.state = it
+                        applied = true
+                    }
             }
             else -> Unit
         }
@@ -415,15 +474,24 @@ private fun applyNovelKindFilter(filters: NovelFilterList, keywords: List<String
                 is NovelFilter.Select<*> -> if (nameRe.containsMatchIn(filter.name)) {
                     filter.values.indexOfFirst { v -> matchesKeyword(v.toString(), keywords) }
                         .takeIf { it >= 0 }
-                        ?.let { filter.state = it; applied = true }
+                        ?.let {
+                            filter.state = it
+                            applied = true
+                        }
                 }
                 is NovelFilter.Group<*> -> if (nameRe.containsMatchIn(filter.name)) {
                     filter.state.filterIsInstance<NovelFilter.CheckBox>()
                         .filter { matchesKeyword(it.name, keywords) }
-                        .forEach { it.state = true; applied = true }
+                        .forEach {
+                            it.state = true
+                            applied = true
+                        }
                     filter.state.filterIsInstance<NovelFilter.TriState>()
                         .filter { matchesKeyword(it.name, keywords) }
-                        .forEach { it.state = NovelFilter.TriState.STATE_INCLUDE; applied = true }
+                        .forEach {
+                            it.state = NovelFilter.TriState.STATE_INCLUDE
+                            applied = true
+                        }
                 }
                 else -> Unit
             }
@@ -444,14 +512,17 @@ private fun applyNovelGenreFilters(
                 filter.state.forEach { child ->
                     when (child) {
                         is NovelFilter.CheckBox -> if (matchesName(child.name, include)) {
-                            child.state = true; applied = true
+                            child.state = true
+                            applied = true
                         }
                         is NovelFilter.TriState -> when {
                             matchesName(child.name, include) -> {
-                                child.state = NovelFilter.TriState.STATE_INCLUDE; applied = true
+                                child.state = NovelFilter.TriState.STATE_INCLUDE
+                                applied = true
                             }
                             matchesName(child.name, exclude) -> {
-                                child.state = NovelFilter.TriState.STATE_EXCLUDE; applied = true
+                                child.state = NovelFilter.TriState.STATE_EXCLUDE
+                                applied = true
                             }
                         }
                         else -> Unit
@@ -461,7 +532,10 @@ private fun applyNovelGenreFilters(
             is NovelFilter.Select<*> -> if (GENRE_FILTER_RE.containsMatchIn(filter.name)) {
                 filter.values.indexOfFirst { v -> matchesName(v.toString(), include) }
                     .takeIf { it >= 0 }
-                    ?.let { filter.state = it; applied = true }
+                    ?.let {
+                        filter.state = it
+                        applied = true
+                    }
             }
             else -> Unit
         }

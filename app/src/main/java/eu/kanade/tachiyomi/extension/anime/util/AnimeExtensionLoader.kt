@@ -56,6 +56,14 @@ internal object AnimeExtensionLoader {
         PackageManager.GET_SIGNATURES or
         (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else 0)
 
+    // Bulk-scan flags: only GET_CONFIGURATIONS (reqFeatures) is needed to
+    // detect extensions. Requesting signatures/meta-data for every installed
+    // package overflows the binder parcel on devices with many packages
+    // (BadParcelableException/DeadObjectException crash); the fat fields are
+    // re-fetched per extension package instead.
+    @Suppress("DEPRECATION")
+    private val SCAN_FLAGS = PackageManager.GET_CONFIGURATIONS
+
     private const val PRIVATE_EXTENSION_EXTENSION = "ext"
 
     private fun getPrivateExtensionDir(context: Context) = File(context.filesDir, "exts")
@@ -123,17 +131,10 @@ internal object AnimeExtensionLoader {
     fun loadExtensions(context: Context): List<AnimeLoadResult> {
         val pkgManager = context.packageManager
 
-        val installedPkgs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            pkgManager.getInstalledPackages(
-                PackageManager.PackageInfoFlags.of(PACKAGE_FLAGS.toLong()),
-            )
-        } else {
-            pkgManager.getInstalledPackages(PACKAGE_FLAGS)
-        }
-
-        val sharedExtPkgs = installedPkgs
+        val sharedExtPkgs = scanInstalledPackages(pkgManager)
             .asSequence()
             .filter { isPackageAnExtension(it) }
+            .mapNotNull { getFullPackageInfo(pkgManager, it.packageName) }
             .map { AnimeExtensionInfo(packageInfo = it, isShared = true) }
 
         val privateExtPkgs = getPrivateExtensionDir(context)
@@ -215,20 +216,58 @@ internal object AnimeExtensionLoader {
             null
         }
 
-        val sharedPkg = try {
-            context.packageManager.getPackageInfo(pkgName, PACKAGE_FLAGS)
-                .takeIf { isPackageAnExtension(it) }
-                ?.let {
-                    AnimeExtensionInfo(
-                        packageInfo = it,
-                        isShared = true,
-                    )
-                }
-        } catch (error: PackageManager.NameNotFoundException) {
-            null
-        }
+        val sharedPkg = getFullPackageInfo(context.packageManager, pkgName)
+            ?.takeIf { isPackageAnExtension(it) }
+            ?.let {
+                AnimeExtensionInfo(
+                    packageInfo = it,
+                    isShared = true,
+                )
+            }
 
         return selectExtensionPackage(sharedPkg, privatePkg)
+    }
+
+    /**
+     * Bulk installed-package scan. The binder-backed ParceledListSlice can die
+     * mid-transfer on devices with many packages — retry once, then give up
+     * rather than crashing extension init.
+     */
+    private fun scanInstalledPackages(pkgManager: PackageManager): List<PackageInfo> {
+        repeat(2) { attempt ->
+            try {
+                return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    pkgManager.getInstalledPackages(
+                        PackageManager.PackageInfoFlags.of(SCAN_FLAGS.toLong()),
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    pkgManager.getInstalledPackages(SCAN_FLAGS)
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Installed-package scan failed (attempt ${attempt + 1})" }
+            }
+        }
+        return emptyList()
+    }
+
+    private fun getFullPackageInfo(pkgManager: PackageManager, pkgName: String): PackageInfo? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pkgManager.getPackageInfo(
+                    pkgName,
+                    PackageManager.PackageInfoFlags.of(PACKAGE_FLAGS.toLong()),
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                pkgManager.getPackageInfo(pkgName, PACKAGE_FLAGS)
+            }
+        } catch (e: PackageManager.NameNotFoundException) {
+            null
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "getPackageInfo failed for $pkgName" }
+            null
+        }
     }
 
     /**

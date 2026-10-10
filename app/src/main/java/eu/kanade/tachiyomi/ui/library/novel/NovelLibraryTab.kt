@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.ui.library.novel
 
 import androidx.activity.compose.BackHandler
-import tachiyomi.domain.entries.novel.model.asNovelCover
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.graphics.ExperimentalAnimationGraphicsApi
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -105,6 +105,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.library.novel.model.NovelLibrarySort
 import tachiyomi.domain.library.novel.model.sort
@@ -654,17 +655,43 @@ data object NovelLibraryTab : Tab {
                     state.isLoading -> LoadingScreen(Modifier.padding(resolvedContentPadding))
                     state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
                         val handler = LocalUriHandler.current
-                        EmptyScreen(
-                            stringRes = MR.strings.information_empty_library,
-                            modifier = Modifier.padding(resolvedContentPadding),
-                            actions = persistentListOf(
-                                EmptyScreenAction(
-                                    stringRes = MR.strings.getting_started_guide,
-                                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                                    onClick = { handler.openUri(GETTING_STARTED_URL) },
+                        if (state.subtypeFilter == tachiyomi.domain.library.model.LibrarySubtype.ALL) {
+                            EmptyScreen(
+                                stringRes = MR.strings.information_empty_library,
+                                modifier = Modifier.padding(resolvedContentPadding),
+                                actions = persistentListOf(
+                                    EmptyScreenAction(
+                                        stringRes = MR.strings.getting_started_guide,
+                                        icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                                        onClick = { handler.openUri(GETTING_STARTED_URL) },
+                                    ),
                                 ),
-                            ),
-                        )
+                            )
+                        } else {
+                            // Subtype filter emptied the view — keep its
+                            // selector on screen or there's no way back.
+                            Column(Modifier.padding(resolvedContentPadding)) {
+                                eu.kanade.presentation.library.components.SubtypeSelectorRow(
+                                    label = eu.kanade.presentation.library.components
+                                        .subtypeLabelFor(state.subtypeFilter),
+                                    options = eu.kanade.presentation.library.components
+                                        .subtypeOptionsFor(
+                                            choices = listOf(
+                                                tachiyomi.domain.library.model.LibrarySubtype.ALL,
+                                                tachiyomi.domain.library.model.LibrarySubtype.BOOK,
+                                                tachiyomi.domain.library.model.LibrarySubtype.NOVEL,
+                                                tachiyomi.domain.library.model.LibrarySubtype.AUDIOBOOK,
+                                            ),
+                                            current = state.subtypeFilter,
+                                            onSelect = screenModel::setSubtypeFilter,
+                                        ),
+                                )
+                                EmptyScreen(
+                                    stringRes = MR.strings.no_results_found,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
                     }
                     else -> {
                         NovelLibraryContent(
@@ -701,9 +728,9 @@ data object NovelLibraryTab : Tab {
                                                     },
                                                 ),
                                                 previewResumeEnabled =
-                                                    next != null ||
-                                                        !libraryNovel.hasStarted ||
-                                                        libraryNovel.unreadCount > 0,
+                                                next != null ||
+                                                    !libraryNovel.hasStarted ||
+                                                    libraryNovel.unreadCount > 0,
                                                 previewHasGenres = !novel.genre.isNullOrEmpty(),
                                             ),
                                         )

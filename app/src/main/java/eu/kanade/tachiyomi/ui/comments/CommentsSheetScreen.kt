@@ -28,9 +28,9 @@ import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.tachiyomi.data.comments.ChapterThreadResolver
 import eu.kanade.tachiyomi.data.comments.ThreadIdResolver
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
-import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.novel.interactor.GetNovel
+import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.i18n.stringResource
@@ -52,6 +52,14 @@ class CommentsSheetScreen(
      * bottom of the full-height panel.
      */
     private val fillHeight: Boolean = false,
+    /**
+     * The work-level count the caller already knows (the "View comments
+     * (N)" badge). 0 means "known empty" — the sheet skips the ghost
+     * placeholders entirely and renders the empty state while the fetch
+     * runs; null = unknown (ghosts show as usual). Only meaningful for
+     * work-level threads.
+     */
+    private val expectedComments: Long? = null,
 ) : Screen {
 
     /**
@@ -113,13 +121,19 @@ class CommentsSheetScreen(
                     threadId = resolved?.threadId,
                     fillHeight = fillHeight,
                     accentColor = accent,
+                    expectedComments = expectedComments,
                 )
             }
         }
     }
 
     @Composable
-    private fun CommentsContent(threadId: String?, fillHeight: Boolean, accentColor: androidx.compose.ui.graphics.Color?) {
+    private fun CommentsContent(
+        threadId: String?,
+        fillHeight: Boolean,
+        accentColor: androidx.compose.ui.graphics.Color?,
+        expectedComments: Long?,
+    ) {
         when {
             threadId == null -> Box(
                 modifier = if (fillHeight) {
@@ -174,6 +188,7 @@ class CommentsSheetScreen(
                         onLoadMore = screenModel::loadMore,
                         modifier = contentModifier,
                         accentColor = accentColor,
+                        expectedCount = expectedComments,
                     )
                 }
             }

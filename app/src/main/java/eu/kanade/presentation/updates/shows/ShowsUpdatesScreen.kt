@@ -15,8 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
-import eu.kanade.presentation.entries.shows.components.EpisodeDownloadAction
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
+import eu.kanade.presentation.entries.shows.components.EpisodeDownloadAction
 import eu.kanade.tachiyomi.data.download.shows.model.ShowsDownload
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.updates.shows.AnimeUpdatesItem

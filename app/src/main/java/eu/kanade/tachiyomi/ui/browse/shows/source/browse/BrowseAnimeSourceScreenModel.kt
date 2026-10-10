@@ -13,10 +13,10 @@ import androidx.paging.filter
 import androidx.paging.map
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.eu.kanade.domain.savedsearches.shows.AnimeFilterSerializer
 import eu.kanade.core.preference.asState
 import eu.kanade.domain.entries.shows.interactor.UpdateAnime
 import eu.kanade.domain.entries.shows.model.toDomainAnime
-import eu.eu.kanade.domain.savedsearches.shows.AnimeFilterSerializer
 import eu.kanade.domain.source.anime.interactor.GetAnimeIncognitoState
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.track.anime.interactor.AddAnimeTracks
@@ -44,9 +44,9 @@ import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
 import tachiyomi.domain.collection.shows.interactor.SetAnimeCollections
-import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.GetDuplicateLibraryAnime
 import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
@@ -54,10 +54,10 @@ import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.shows.model.toAnimeUpdate
 import tachiyomi.domain.items.episode.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.savedsearches.model.SavedSearch
 import tachiyomi.domain.savedsearches.shows.interactor.DeleteAnimeSavedSearch
 import tachiyomi.domain.savedsearches.shows.interactor.GetAnimeSavedSearches
 import tachiyomi.domain.savedsearches.shows.interactor.InsertAnimeSavedSearch
-import tachiyomi.domain.savedsearches.model.SavedSearch
 import tachiyomi.domain.source.anime.interactor.GetRemoteAnime
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import uy.kohesive.injekt.Injekt

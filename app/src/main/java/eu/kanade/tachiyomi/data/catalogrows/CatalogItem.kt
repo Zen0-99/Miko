@@ -79,4 +79,3 @@ internal fun OpenLibraryTrending.Item.toCatalogItem(): CatalogItem {
         ),
     )
 }
-

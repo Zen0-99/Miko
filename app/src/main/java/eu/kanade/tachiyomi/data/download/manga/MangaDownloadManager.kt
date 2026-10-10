@@ -3,9 +3,10 @@ package eu.kanade.tachiyomi.data.download.manga
 import android.content.Context
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
 import eu.kanade.tachiyomi.source.MangaSource
-import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.size
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.drop
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.storage.extension
@@ -296,11 +298,23 @@ class MangaDownloadManager(
      * @param manga the manga of the chapters.
      * @param source the source of the chapters.
      */
-    fun deleteChapters(chapters: List<Chapter>, manga: Manga, source: MangaSource) {
-        launchIO {
+    /**
+     * Deletes the directories of a list of downloaded chapters.
+     * Suspending so callers can refresh row state the moment the files
+     * are actually gone — `statusFlow` only tracks queued downloads, so
+     * deletions emit nothing on their own.
+     *
+     * @param chapters the list of chapters to delete.
+     * @param manga the manga of the chapters.
+     * @param source the source of the chapters.
+     * @return the chapters that were actually deleted (bookmark and
+     *   collection filters apply).
+     */
+    suspend fun deleteChapters(chapters: List<Chapter>, manga: Manga, source: MangaSource): List<Chapter> =
+        withContext(Dispatchers.IO) {
             val filteredChapters = getChaptersToDelete(chapters, manga)
             if (filteredChapters.isEmpty()) {
-                return@launchIO
+                return@withContext emptyList()
             }
 
             removeFromDownloadQueue(filteredChapters)
@@ -325,8 +339,8 @@ class MangaDownloadManager(
                 }
             }
             cache.removeChapters(filteredChapters, manga)
+            filteredChapters
         }
-    }
 
     /** Installed sources behind this work's bound carriers — where canon
      *  chapter downloads physically live. */
@@ -395,10 +409,12 @@ class MangaDownloadManager(
      * Triggers the execution of the deletion of pending chapters.
      */
     fun deletePendingChapters() {
-        val pendingChapters = pendingDeleter.getPendingChapters()
-        for ((manga, chapters) in pendingChapters) {
-            val source = sourceManager.get(manga.source) ?: continue
-            deleteChapters(chapters, manga, source)
+        launchIO {
+            val pendingChapters = pendingDeleter.getPendingChapters()
+            for ((manga, chapters) in pendingChapters) {
+                val source = sourceManager.get(manga.source) ?: continue
+                deleteChapters(chapters, manga, source)
+            }
         }
     }
 

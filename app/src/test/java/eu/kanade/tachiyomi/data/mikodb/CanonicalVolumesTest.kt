@@ -30,8 +30,10 @@ class CanonicalVolumesTest {
         val wv = volumes(
             1.0,
             mapOf(
-                1.0 to 1.0, 9.0 to 1.0,
-                10.0 to 2.0, 18.0 to 2.0,
+                1.0 to 1.0,
+                9.0 to 1.0,
+                10.0 to 2.0,
+                18.0 to 2.0,
                 19.0 to 3.0,
             ),
         )
@@ -42,11 +44,37 @@ class CanonicalVolumesTest {
     }
 
     @Test
-    fun `unmapped chapters land in an ungrouped tail`() {
+    fun `unmapped chapters fold into the nearest volume below`() {
         val wv = volumes(1.0, mapOf(1.0 to 1.0, 2.0 to 1.0, 3.0 to 2.0))
         val g = wv.grouping(listOf(1.0, 2.0, 3.0, 99.0), "Chapters")!!
+        // 99 folds into the last boundary's volume — no straggler pill.
+        assertEquals(listOf("Volume 1", "Volume 2"), g.groups)
+        assertEquals("Volume 2", g.chapterToGroup[99.0])
+    }
+
+    @Test
+    fun `fractional stragglers fold into the chapter just below`() {
+        // Naruto: 700.5 sits next to ch 700 in vol 72, not a tail pill.
+        val wv = volumes(1.0, mapOf(699.0 to 71.0, 700.0 to 72.0))
+        val g = wv.grouping(listOf(699.0, 700.0, 700.5), "Chapters")!!
+        assertEquals(listOf("Volume 71", "Volume 72"), g.groups)
+        assertEquals("Volume 72", g.chapterToGroup[700.5])
+    }
+
+    @Test
+    fun `chapters below the map floor fold into the first volume`() {
+        val wv = volumes(1.0, mapOf(10.0 to 2.0, 20.0 to 3.0))
+        val g = wv.grouping(listOf(0.5, 10.0, 20.0), "Chapters")!!
+        assertEquals("Volume 2", g.chapterToGroup[0.5])
+        assertEquals(listOf("Volume 2", "Volume 3"), g.groups)
+    }
+
+    @Test
+    fun `only NaN chapter numbers still land in the ungrouped tail`() {
+        val wv = volumes(1.0, mapOf(1.0 to 1.0, 2.0 to 2.0))
+        val g = wv.grouping(listOf(1.0, 2.0, Double.NaN), "Chapters")!!
         assertEquals(listOf("Volume 1", "Volume 2", "Chapters"), g.groups)
-        assertNull(g.chapterToGroup[99.0])
+        assertNull(g.chapterToGroup[Double.NaN])
     }
 
     @Test
@@ -54,8 +82,6 @@ class CanonicalVolumesTest {
         assertNull(volumes(0.4, mapOf(1.0 to 1.0)).grouping(listOf(1.0), "Chapters"))
         assertNull(volumes(null, mapOf(1.0 to 1.0)).grouping(listOf(1.0), "Chapters"))
         assertNull(volumes(1.0, emptyMap()).grouping(listOf(1.0), "Chapters"))
-        // Map exists but covers none of the visible chapters.
-        assertNull(volumes(1.0, mapOf(500.0 to 50.0)).grouping(listOf(1.0), "Chapters"))
     }
 
     @Test

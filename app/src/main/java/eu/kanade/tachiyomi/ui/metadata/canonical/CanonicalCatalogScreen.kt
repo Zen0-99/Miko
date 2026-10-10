@@ -16,17 +16,23 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.presentation.browse.DominoRevealItem
 import eu.kanade.presentation.browse.InLibraryBadge
+import eu.kanade.presentation.browse.rememberDominoReveal
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.EntryCompactGridItem
+import eu.kanade.presentation.library.components.armSharedCover
 import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.mikodb.WorkIdResolver
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
@@ -60,6 +66,16 @@ fun CanonicalCatalogContent(
     val scope = rememberCoroutineScope()
 
     val gridState = rememberLazyGridState()
+    // The top indicator answers manual pulls only — PullRefresh latches
+    // its spinner on the pull gesture itself, so search reloads and
+    // first-load still load silently.
+
+    // Shared-element latch — the tapped card flies to the detail hero
+    // under the library cell's `cover-image-{entryId}`; unbound rows only
+    // get an entry id once the tap resolves it, so the card re-keys
+    // before the push (armSharedCover).
+    var navSharedEntry by rememberSaveable { mutableStateOf<Pair<String, Long>?>(null) }
+
     val displayMode by libraryPreferences.displayMode().collectAsState()
 
     val configuration = LocalConfiguration.current
@@ -134,6 +150,9 @@ fun CanonicalCatalogContent(
 
                 else -> {
                     val gridColumns = if (columns > 0) columns else 3
+                    val domino = rememberDominoReveal<String>(
+                        scope = "canonicalCatalog:$isNovel",
+                    )
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(gridColumns),
                         state = gridState,
@@ -147,34 +166,64 @@ fun CanonicalCatalogContent(
                         verticalArrangement = Arrangement.spacedBy(CommonEntryItemDefaults.GridVerticalSpacer),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(state.results.size) { index ->
+                        items(
+                            count = state.results.size,
+                            key = { state.results[it].mikoWorkId },
+                        ) { index ->
                             val work = state.results[index]
-                            val bound = work.mikoWorkId in state.boundEntryIds
+                            val boundEntry = state.boundEntryIds[work.mikoWorkId]
+                            val bound = boundEntry != null
+                            // A bound card shows the library row's cover —
+                            // same contract as the idle feed grid.
+                            val coverUrl = boundEntry?.coverUrl ?: work.coverUrl
+                            // Bound rows carry the real entry id — cover keys
+                            // (shared element + bitmap memory key) match the
+                            // detail hero's exactly, like a library cell.
+                            val coverEntryId = boundEntry?.entryId
+                                ?: work.mikoWorkId.hashCode().toLong()
                             val coverData = if (isNovel) {
                                 NovelCover(
-                                    novelId = work.mikoWorkId.hashCode().toLong(),
+                                    novelId = coverEntryId,
                                     sourceId = CanonicalCatalog.CANONICAL_SOURCE_ID,
                                     isNovelFavorite = bound,
-                                    url = null,
+                                    url = coverUrl,
                                     lastModified = 0L,
                                 )
                             } else {
                                 MangaCover(
-                                    mangaId = work.mikoWorkId.hashCode().toLong(),
+                                    mangaId = coverEntryId,
                                     sourceId = CanonicalCatalog.CANONICAL_SOURCE_ID,
                                     isMangaFavorite = bound,
-                                    url = null,
+                                    url = coverUrl,
                                     lastModified = 0L,
                                 )
                             }
+                            val heroEntryId = boundEntry?.entryId ?: navSharedEntry
+                                ?.takeIf { it.first == work.mikoWorkId }
+                                ?.second
                             val onClick: () -> Unit = {
                                 scope.launch {
                                     val entryId = screenModel.getOrCreateEntryId(work)
-                                    if (isNovel) {
-                                        navigator.push(NovelScreen(entryId, true))
-                                    } else {
-                                        navigator.push(MangaScreen(entryId, true))
+                                    armSharedCover(coverData, entryId) {
+                                        navSharedEntry = work.mikoWorkId to entryId
                                     }
+                                    navigator.push(
+                                        if (isNovel) {
+                                            NovelScreen(
+                                                entryId,
+                                                true,
+                                                previewCover = coverData,
+                                                previewTitle = work.title,
+                                            )
+                                        } else {
+                                            MangaScreen(
+                                                entryId,
+                                                true,
+                                                previewCover = coverData,
+                                                previewTitle = work.title,
+                                            )
+                                        },
+                                    )
                                 }
                             }
                             val onLongClick: () -> Unit = {}
@@ -183,39 +232,43 @@ fun CanonicalCatalogContent(
                                 work.year?.let { append("\n$it") }
                             }
 
-                            when (displayMode) {
-                                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
-                                    EntryCompactGridItem(
-                                        coverData = coverData,
-                                        onClick = onClick,
-                                        onLongClick = onLongClick,
-                                        title = if (displayMode is LibraryDisplayMode.CompactGrid) {
-                                            label
-                                        } else {
-                                            null
-                                        },
-                                        coverAlpha = if (bound) {
-                                            CommonEntryItemDefaults.BrowseFavoriteCoverAlpha
-                                        } else {
-                                            1f
-                                        },
-                                        coverBadgeStart = { InLibraryBadge(enabled = bound) },
-                                    )
-                                }
+                            DominoRevealItem(visible = domino.isVisible(work.mikoWorkId)) {
+                                when (displayMode) {
+                                    LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+                                        EntryCompactGridItem(
+                                            coverData = coverData,
+                                            onClick = onClick,
+                                            onLongClick = onLongClick,
+                                            title = if (displayMode is LibraryDisplayMode.CompactGrid) {
+                                                label
+                                            } else {
+                                                null
+                                            },
+                                            coverAlpha = if (bound) {
+                                                CommonEntryItemDefaults.BrowseFavoriteCoverAlpha
+                                            } else {
+                                                1f
+                                            },
+                                            coverBadgeStart = { InLibraryBadge(enabled = bound) },
+                                            sharedCoverEntryId = heroEntryId,
+                                        )
+                                    }
 
-                                else -> {
-                                    EntryComfortableGridItem(
-                                        title = label,
-                                        onClick = onClick,
-                                        onLongClick = onLongClick,
-                                        coverData = coverData,
-                                        coverAlpha = if (bound) {
-                                            CommonEntryItemDefaults.BrowseFavoriteCoverAlpha
-                                        } else {
-                                            1f
-                                        },
-                                        coverBadgeStart = { InLibraryBadge(enabled = bound) },
-                                    )
+                                    else -> {
+                                        EntryComfortableGridItem(
+                                            title = label,
+                                            onClick = onClick,
+                                            onLongClick = onLongClick,
+                                            coverData = coverData,
+                                            coverAlpha = if (bound) {
+                                                CommonEntryItemDefaults.BrowseFavoriteCoverAlpha
+                                            } else {
+                                                1f
+                                            },
+                                            coverBadgeStart = { InLibraryBadge(enabled = bound) },
+                                            sharedCoverEntryId = heroEntryId,
+                                        )
+                                    }
                                 }
                             }
                         }

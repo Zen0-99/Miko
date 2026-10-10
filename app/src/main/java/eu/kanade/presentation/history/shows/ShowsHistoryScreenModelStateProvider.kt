@@ -7,8 +7,8 @@ import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import java.util.Date
 import kotlin.random.Random
+import kotlin.time.Clock
 
 class ShowsHistoryScreenModelStateProvider : PreviewParameterProvider<ShowsHistoryScreenModel.State> {
 
@@ -94,7 +94,7 @@ class ShowsHistoryScreenModelStateProvider : PreviewParameterProvider<ShowsHisto
                         animeId = Random.nextLong(),
                         title = "Test Title",
                         episodeNumber = Random.nextDouble(),
-                        seenAt = Date.from(Instant.now()),
+                        seenAt = Clock.System.now(),
                         coverData = AnimeCover(
                             animeId = Random.nextLong(),
                             sourceId = Random.nextLong(),

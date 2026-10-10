@@ -75,6 +75,7 @@ class HiResCoverResolver(
 
         private val HIRES_HOSTS = listOf(
             "uploads.mangadex.org",
+            "images.mangabaka.dev",
             "s4.anilist.co",
             "cdn.myanimelist.net",
             "metron.cloud",
@@ -85,6 +86,22 @@ class HiResCoverResolver(
         /** True when the URL points at a recognized hi-res provider host. */
         fun isPreferredCoverUrl(url: String?): Boolean =
             url != null && HIRES_HOSTS.any { url.contains(it) }
+
+        /**
+         * Cover precedence shared by discovery feeds and cells: [current]
+         * wins when it already holds recognized hi-res art and [incoming]
+         * doesn't — automatic cover writes (feed seeds, refresh's
+         * transient `thumbnail_url` rewrites) may upgrade but never
+         * downgrade. A human's pick passes `manual = true` to always
+         * apply. Blank/equal [incoming] is a no-op either way.
+         */
+        fun preferCover(current: String?, incoming: String?, manual: Boolean = false): String? {
+            if (incoming.isNullOrBlank() || incoming == current) return current
+            if (!manual && isPreferredCoverUrl(current) && !isPreferredCoverUrl(incoming)) {
+                return current
+            }
+            return incoming
+        }
     }
 
     private val client: OkHttpClient get() = networkHelper.client
@@ -104,12 +121,13 @@ class HiResCoverResolver(
 
     /**
      * Cheap local check — no DB reads, no network. False when the manga
-     * already has a cover from a preferred provider, a custom cover, or was
-     * resolved recently enough that retrying is pointless. Refresh jobs use
-     * this to skip entries before paying for an upgrade pass.
+     * already has ANY cover: established art (extension-provided or a
+     * previously fetched provider cover) is sticky and never restomped —
+     * cover choice will be a user feature, so the resolver only fills
+     * entries that have no art at all. Custom covers are always kept.
      */
     fun shouldUpgradeCover(manga: Manga): Boolean {
-        if (manga.hasCustomCover() || isHiRes(manga.thumbnailUrl)) return false
+        if (manga.hasCustomCover() || !manga.thumbnailUrl.isNullOrBlank()) return false
         val checked = checkedAt("manga", manga.id).get()
         return checked == 0L || Instant.now().toEpochMilli() - checked >= RETRY_INTERVAL_MS
     }
@@ -130,7 +148,14 @@ class HiResCoverResolver(
         }
 
         val marker = checkedAt("manga", manga.id)
-        if (isHiRes(manga.thumbnailUrl) || (marker.get() > 0L && now - marker.get() < RETRY_INTERVAL_MS)) return
+        // Established art is sticky — a resolved provider cover or the
+        // extension's own thumbnail is never overwritten by a later
+        // resolution pass. Only coverless entries resolve below.
+        if (!manga.thumbnailUrl.isNullOrBlank() ||
+            (marker.get() > 0L && now - marker.get() < RETRY_INTERVAL_MS)
+        ) {
+            return
+        }
         if (manga.hasCustomCover()) return
 
         val anilistId = getMangaTracks.await(manga.id)
@@ -181,11 +206,11 @@ class HiResCoverResolver(
     suspend fun reverifyMangaDexCovers() = withIOContext {
         val marker = preferenceStore.getBoolean("hires_cover_match_v3", false)
         if (marker.get()) return@withIOContext
+        // Established covers are sticky — only entries with no art at
+        // all get resolved. A stored MangaDex/provider cover must not be
+        // replaced by a later fuzzy match.
         val candidates = mangaRepository.getMangaFavorites()
-            .filter {
-                !it.hasCustomCover() &&
-                    (it.thumbnailUrl?.contains("mangadex") == true || !isHiRes(it.thumbnailUrl))
-            }
+            .filter { !it.hasCustomCover() && it.thumbnailUrl.isNullOrBlank() }
         var updated = 0
         var consecutiveProviderOutages = 0
         for (manga in candidates) {

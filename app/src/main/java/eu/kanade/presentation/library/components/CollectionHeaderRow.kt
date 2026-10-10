@@ -200,6 +200,33 @@ internal fun SubtypeSelectorLabel(label: String) {
     }
 }
 
+/**
+ * Standalone subtype selector for surfaces with no collection header —
+ * the empty-library branch uses it so a subtype pick that filters to
+ * zero entries doesn't strand the only way back (in the normal path the
+ * selector lives on the header, which vanishes with the collection).
+ */
+@Composable
+fun SubtypeSelectorRow(
+    label: String,
+    options: List<SubtypeMenuOption>,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(
+        modifier = modifier
+            .clickable { expanded = true }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        SubtypeSelectorLabel(label = label)
+        SubtypeDropdownMenu(
+            expanded = expanded,
+            onDismiss = { expanded = false },
+            options = options,
+        )
+    }
+}
+
 /** The subtype context menu — expansion state is owned by the caller so
  *  any part of the header (title, count, sub-line) can open it. */
 @Composable

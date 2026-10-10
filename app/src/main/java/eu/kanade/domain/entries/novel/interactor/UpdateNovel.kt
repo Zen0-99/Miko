@@ -12,10 +12,21 @@ import java.time.Instant
 class UpdateNovel(
     private val novelRepository: NovelRepository,
     private val coverCache: NovelCoverCache = Injekt.get(),
+    private val coverUpdates: eu.kanade.tachiyomi.data.cover.CoverUpdateBus = Injekt.get(),
 ) {
 
     suspend fun await(novelUpdate: NovelUpdate): Boolean {
-        return novelRepository.updateNovel(novelUpdate)
+        val prev = if (novelUpdate.thumbnailUrl != null) {
+            runCatching { novelRepository.getNovelById(novelUpdate.id) }.getOrNull()
+        } else {
+            null
+        }
+        return novelRepository.updateNovel(novelUpdate).also { ok ->
+            val url = novelUpdate.thumbnailUrl
+            if (ok && url != null && prev != null && prev.thumbnailUrl != url) {
+                coverUpdates.emit(prev.id, prev.url, url)
+            }
+        }
     }
 
     suspend fun awaitAll(novelUpdates: List<NovelUpdate>): Boolean {
@@ -75,8 +86,10 @@ class UpdateNovel(
             eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(
                 localNovel.thumbnailUrl,
             ) &&
-                (remoteThumbnailUrl.isNullOrEmpty() ||
-                    localNovel.thumbnailUrl == remoteThumbnailUrl) -> null
+                (
+                    remoteThumbnailUrl.isNullOrEmpty() ||
+                        localNovel.thumbnailUrl == remoteThumbnailUrl
+                    ) -> null
             // Cover exists and URL hasn't changed — no need to refresh
             !manualFetch && localNovel.thumbnailUrl == remoteThumbnailUrl -> null
             // User has a custom cover — don't overwrite
@@ -119,7 +132,11 @@ class UpdateNovel(
                 updateStrategy = remoteUpdateStrategy,
                 initialized = true,
             ),
-        )
+        ).also { ok ->
+            if (ok && thumbnailUrl != null && thumbnailUrl != localNovel.thumbnailUrl) {
+                coverUpdates.emit(localNovel.id, localNovel.url, thumbnailUrl)
+            }
+        }
     }
 
     suspend fun awaitUpdateLastUpdate(novelId: Long): Boolean {

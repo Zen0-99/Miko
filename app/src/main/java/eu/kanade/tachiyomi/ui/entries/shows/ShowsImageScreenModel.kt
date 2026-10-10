@@ -30,10 +30,12 @@ import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.model.Anime
+import tachiyomi.domain.entries.shows.model.AnimeUpdate
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.time.Instant
 
 class ShowsImageScreenModel(
     private val animeId: Long,
@@ -42,12 +44,18 @@ class ShowsImageScreenModel(
     private val coverCache: AnimeCoverCache = Injekt.get(),
     private val backgroundCache: AnimeBackgroundCache = Injekt.get(),
     private val updateAnime: UpdateAnime = Injekt.get(),
+    private val preferenceStore: tachiyomi.core.common.preference.PreferenceStore = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
     val pagerState: PagerState = PagerState(pageCount = { 2 }),
 ) : StateScreenModel<Anime?>(null) {
 
     private val isCover: Boolean
         get() = pagerState.currentPage != 1
+
+    /** An image mutation landed while the dialog is open — the snackbar
+     *  is deferred to [flushImageToast] so picking stays silent. */
+    @Volatile
+    private var pendingImageToast = false
 
     init {
         screenModelScope.launchIO {
@@ -150,7 +158,7 @@ class ShowsImageScreenModel(
                     } else {
                         anime.editBackground(Injekt.get(), it, updateAnime, backgroundCache)
                     }
-                    notifyImageUpdated(context)
+                    pendingImageToast = true
                 } catch (e: Exception) {
                     notifyFailedImageUpdate(context, e)
                 }
@@ -169,10 +177,99 @@ class ShowsImageScreenModel(
                     backgroundCache.deleteCustomBackground(animeId)
                     updateAnime.awaitUpdateBackgroundLastModified(animeId)
                 }
+                pendingImageToast = true
+            } catch (e: Exception) {
+                notifyFailedImageUpdate(context, e)
+            }
+        }
+    }
+
+    /**
+     * Pin a strip-picked artwork entry-wide: the bytes land in the
+     * custom-cover cache (which already outranks season/provider art on
+     * every surface) and the option key persists so the strip can mark
+     * the pinned tile. Always the COVER file — the strip only exists on
+     * the cover page.
+     */
+    fun pinCover(context: Context, option: eu.kanade.presentation.entries.components.CoverOption) {
+        val anime = state.value ?: return
+        screenModelScope.launchIO {
+            try {
+                val req = ImageRequest.Builder(context)
+                    .data(option.data)
+                    .size(Size.ORIGINAL)
+                    .build()
+                val bitmap = context.imageLoader.execute(req).image
+                    ?.asDrawable(context.resources)
+                    ?.getBitmapOrNull()
+                    ?: throw IllegalStateException("cover decode failed")
+                val bytes = java.io.ByteArrayOutputStream().also { out ->
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                }.toByteArray()
+                // Direct cache write — editCover() gates on `favorite`,
+                // which would silently drop the pin on a browsed entry.
+                bytes.inputStream().use {
+                    coverCache.setCustomCoverToCache(anime, it)
+                }
+                // Persist the pick as the row's thumbnail too — surfaces
+                // that re-read thumbnail_url on reload would otherwise
+                // fall back to the auto art and drop the pin.
+                updateAnime.await(
+                    AnimeUpdate(
+                        id = anime.id,
+                        thumbnailUrl = (option.data as? String)
+                            ?: "file://${coverCache.getCustomCoverFile(anime.id).absolutePath}",
+                        coverLastModified = Instant.now().toEpochMilli(),
+                    ),
+                )
+                preferenceStore.getString(
+                    eu.kanade.presentation.entries.components.coverPinPrefKey(
+                        eu.kanade.presentation.entries.components.COVER_PIN_KIND_ANIME,
+                        anime.id,
+                    ),
+                    "",
+                ).set(option.key)
+                // The commit path dismisses the dialog immediately —
+                // the dismiss-flush would race this coroutine and
+                // swallow the toast, so pin/unpin toast on success
+                // themselves. In-dialog edits still batch.
                 notifyImageUpdated(context)
             } catch (e: Exception) {
                 notifyFailedImageUpdate(context, e)
             }
+        }
+    }
+
+    /** Clear the cover pin — deletes the custom cover + marker pref. */
+    fun unpinCover(context: Context) {
+        val animeId = state.value?.id ?: return
+        screenModelScope.launchIO {
+            try {
+                coverCache.deleteCustomCover(animeId)
+                updateAnime.awaitUpdateCoverLastModified(animeId)
+                preferenceStore.getString(
+                    eu.kanade.presentation.entries.components.coverPinPrefKey(
+                        eu.kanade.presentation.entries.components.COVER_PIN_KIND_ANIME,
+                        animeId,
+                    ),
+                    "",
+                ).delete()
+                notifyImageUpdated(context)
+            } catch (e: Exception) {
+                notifyFailedImageUpdate(context, e)
+            }
+        }
+    }
+
+    /**
+     * Image mutations inside the dialog stay silent while the user is
+     * still picking — this fires the single "updated" snackbar when the
+     * dialog dismisses with changes pending.
+     */
+    fun flushImageToast(context: Context) {
+        if (pendingImageToast) {
+            pendingImageToast = false
+            notifyImageUpdated(context)
         }
     }
 

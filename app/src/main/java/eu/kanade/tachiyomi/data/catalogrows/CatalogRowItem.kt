@@ -48,6 +48,7 @@ data class RowItem(
 sealed interface RowTarget {
     data class CanonicalShows(val tmdbId: Long, val mediaType: MediaType) : RowTarget
     data class CinemetaEntry(val meta: MikoMetaShort) : RowTarget
+
     /** Carries the spec's medium — tap materializes via
      *  `materializeMangaId`/`materializeNovelId` on it. */
     data class CanonicalWork(val work: MangaNovelIdBridge.WorkRow, val medium: String) : RowTarget

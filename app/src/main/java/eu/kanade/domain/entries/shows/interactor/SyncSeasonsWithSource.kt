@@ -12,7 +12,7 @@ import tachiyomi.domain.items.season.interactor.GetAnimeSeasonsByParentId
 import tachiyomi.domain.items.season.interactor.ShouldUpdateDbSeason
 import tachiyomi.domain.items.season.service.SeasonRecognition
 import tachiyomi.source.local.entries.anime.isLocal
-import java.time.ZonedDateTime
+import kotlin.time.Clock
 
 class SyncSeasonsWithSource(
     private val updateAnime: UpdateAnime,
@@ -32,7 +32,7 @@ class SyncSeasonsWithSource(
             throw NoSeasonsException()
         }
 
-        val now = ZonedDateTime.now()
+        val now = Clock.System.now()
 
         val sourceSeasons = rawSourceSeasons
             .distinctBy { it.url }
@@ -83,7 +83,7 @@ class SyncSeasonsWithSource(
                 updateAnime.awaitUpdateFetchInterval(
                     anime,
                     now,
-                    fetchWindow,
+                    window = fetchWindow,
                 )
             }
             return sourceSeasons

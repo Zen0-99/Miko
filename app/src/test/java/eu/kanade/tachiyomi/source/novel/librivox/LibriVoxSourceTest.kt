@@ -245,7 +245,10 @@ class LibriVoxSourceTest {
         var now = 1_000_000L
         val waits = mutableListOf<Long>()
         PoliteFetch.nowMs = { now }
-        PoliteFetch.delayMs = { ms -> waits += ms; now += ms }
+        PoliteFetch.delayMs = { ms ->
+            waits += ms
+            now += ms
+        }
 
         PoliteFetch.throttle()
         PoliteFetch.throttle()
@@ -263,7 +266,10 @@ class LibriVoxSourceTest {
         var now = 1_000_000L
         val waits = mutableListOf<Long>()
         PoliteFetch.nowMs = { now }
-        PoliteFetch.delayMs = { ms -> waits += ms; now += ms }
+        PoliteFetch.delayMs = { ms ->
+            waits += ms
+            now += ms
+        }
 
         var attempts = 0
         val result = PoliteFetch.fetch {
@@ -283,7 +289,10 @@ class LibriVoxSourceTest {
         var now = 1_000_000L
         val waits = mutableListOf<Long>()
         PoliteFetch.nowMs = { now }
-        PoliteFetch.delayMs = { ms -> waits += ms; now += ms }
+        PoliteFetch.delayMs = { ms ->
+            waits += ms
+            now += ms
+        }
 
         var attempts = 0
         assertThrows(HttpException::class.java) {

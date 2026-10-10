@@ -101,6 +101,7 @@ internal fun MangaLibraryList(
                     url = manga.thumbnailUrl,
                     lastModified = manga.coverLastModified,
                 ),
+                sharedCoverTransition = true,
                 badge = {
                     DownloadsBadge(count = libraryItem.downloadCount)
                     UnviewedBadge(count = libraryItem.unreadCount)
@@ -207,6 +208,7 @@ private fun ReorderableMangaLibraryList(
                         url = manga.thumbnailUrl,
                         lastModified = manga.coverLastModified,
                     ),
+                    sharedCoverTransition = true,
                     badge = {
                         DownloadsBadge(count = libraryItem.downloadCount)
                         UnviewedBadge(count = libraryItem.unreadCount)

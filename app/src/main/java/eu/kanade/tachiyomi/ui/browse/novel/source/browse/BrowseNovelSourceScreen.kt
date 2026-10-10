@@ -49,6 +49,7 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
+import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelSourcePreferencesScreen
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialog
 import eu.kanade.tachiyomi.ui.browse.novel.migration.search.MigrateNovelDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreenModel.Listing
@@ -149,7 +150,7 @@ data class BrowseNovelSourceScreen(
                         navigateUp = navigateUp,
                         onWebViewClick = onWebViewClick,
                         onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                        onSettingsClick = { },
+                        onSettingsClick = { navigator.push(NovelSourcePreferencesScreen(sourceId)) },
                         onSearch = screenModel::search,
                     )
 

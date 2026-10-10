@@ -380,7 +380,13 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { eu.kanade.tachiyomi.data.catalogrows.DiscoveryFeeds() }
         addSingletonFactory {
             eu.kanade.tachiyomi.data.catalogrows.CatalogRowResolver(
-                get(), get(), get(), get(), get(), get(), get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
             )
         }
         addSingletonFactory {
@@ -527,7 +533,11 @@ class AppModule(val app: Application) : InjektModule {
                 plugins.mapNotNull { plugin -> sourceFactory.create(plugin) }
             }
             AndroidNovelSourceManager(
-                app, get(), get(), kotlinx.coroutines.Dispatchers.IO, jsSourcesFlow,
+                app,
+                get(),
+                get(),
+                kotlinx.coroutines.Dispatchers.IO,
+                jsSourcesFlow,
                 builtInSources = listOf<eu.kanade.tachiyomi.novelsource.NovelSource>(
                     eu.kanade.tachiyomi.source.novel.abs.AbsNovelSource(),
                     eu.kanade.tachiyomi.source.novel.librivox.LibriVoxSource(),

@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.data.suggestions
 
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
-import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.entries.novel.model.NovelCover
+import tachiyomi.domain.entries.shows.model.AnimeCover
 
 /**
  * Builds a cover model for a [SuggestionItem] suitable for Coil's AsyncImage.

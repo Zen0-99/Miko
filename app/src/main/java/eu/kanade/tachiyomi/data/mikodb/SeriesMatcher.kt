@@ -89,8 +89,10 @@ class SeriesMatcher {
     ) {
         companion object {
             fun of(row: MangaNovelIdBridge.WorkRow) = Query(
-                titles = (listOfNotNull(row.title, row.romanizedTitle, row.nativeTitle) +
-                    row.altTitles).distinct(),
+                titles = (
+                    listOfNotNull(row.title, row.romanizedTitle, row.nativeTitle) +
+                        row.altTitles
+                    ).distinct(),
                 author = row.author,
                 year = row.year,
                 totalChapters = row.totalChapters?.toDoubleOrNull(),
@@ -348,10 +350,12 @@ class SeriesMatcher {
                 // bare-digit sequel reject unchanged.
                 val n = candSequel.toIntOrNull() ?: ROMAN_VALUES[candSequel]
                 val explainsSeason =
-                    candidate.season != null && candidate.season == n &&
+                    candidate.season != null &&
+                        candidate.season == n &&
                         (query.expectedSeasons.isEmpty() || n in query.expectedSeasons)
                 val explainsPart =
-                    candidate.part != null && candidate.part == n &&
+                    candidate.part != null &&
+                        candidate.part == n &&
                         (query.expectedParts.isEmpty() || n in query.expectedParts)
                 if (!explainsSeason && !explainsPart) {
                     return true to "sequel-marker:$candSequel"
@@ -364,8 +368,21 @@ class SeriesMatcher {
 
             // Long generic tails ("renge to naruto" → extra "renge to")
             // downgrade rather than reject — could be a subtitle of the
-            // same work ("Naruto: Shinden").
-            if (qNorm in candNorm && extra.size >= 2) return false to "subtitle-tail"
+            // same work ("Naruto: Shinden"). A strict-prefix extension
+            // whose tail starts with the lone 's' a stripped 's leaves
+            // behind ("Omniscient Reader" → "Omniscient Reader's
+            // Viewpoint", "JoJo" → "JoJo's Bizarre Adventure") is a
+            // possessive continuation — the same work's localized full
+            // title, not a subtitle.
+            if (qNorm in candNorm && extra.size >= 2) {
+                val tail = if (candNorm.startsWith("$qNorm ")) {
+                    candNorm.removePrefix("$qNorm ")
+                } else {
+                    null
+                }
+                val possessive = tail == "s" || tail?.startsWith("s ") == true
+                if (!possessive) return false to "subtitle-tail"
+            }
         }
         return false to null
     }

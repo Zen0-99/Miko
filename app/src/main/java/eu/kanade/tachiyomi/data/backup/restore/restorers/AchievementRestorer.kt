@@ -175,7 +175,7 @@ class AchievementRestorer(
 
                     // Use upsertActivityData which handles merging/accumulation
                     activityDataRepository.upsertActivityData(
-                        date = java.time.LocalDate.parse(params.date),
+                        date = kotlinx.datetime.LocalDate.parse(params.date),
                         chaptersRead = params.chaptersRead,
                         episodesWatched = params.episodesWatched,
                         appOpens = params.appOpens,

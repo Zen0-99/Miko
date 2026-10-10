@@ -11,9 +11,9 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
-import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.track.anime.interactor.GetAnimeTracks
 import tachiyomi.domain.track.anime.model.AnimeTrack
 

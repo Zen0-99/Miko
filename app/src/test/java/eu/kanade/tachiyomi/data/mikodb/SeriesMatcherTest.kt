@@ -153,6 +153,48 @@ class SeriesMatcherTest {
     }
 
     @Test
+    fun `possessive extension is not a subtitle tail`() {
+        // mk:mb:2060 canonical title is "Omniscient Reader"; every
+        // provider lists it as "Omniscient Reader's Viewpoint". The
+        // stripped 's leaves a lone "s" tail token — that's a
+        // possessive continuation of the same work's full name, not
+        // a "Title: Subtitle" tail, so it must not be downgraded
+        // below the floor.
+        val orv = SeriesMatcher.Query(
+            titles = listOf("Omniscient Reader"),
+            author = "Singsyong, UMI",
+            year = 2020,
+            type = "manhwa",
+        )
+        val v = matcher.verify(
+            orv,
+            SeriesMatcher.Candidate(title = "Omniscient Reader's Viewpoint"),
+        )
+        assertTrue(v.decision != Decision.REJECT)
+    }
+
+    @Test
+    fun `curly apostrophe possessive also accepted`() {
+        val orv = SeriesMatcher.Query(
+            titles = listOf("Omniscient Reader"),
+            type = "manhwa",
+        )
+        val v = matcher.verify(
+            orv,
+            SeriesMatcher.Candidate(title = "Omniscient Reader’s Viewpoint"),
+        )
+        assertTrue(v.decision != Decision.REJECT)
+    }
+
+    @Test
+    fun `non-possessive prefix extension still downgraded`() {
+        // "Renge to Naruto"-shape guard: prefix extras that aren't a
+        // possessive must still fall under the tail rule.
+        val v = matcher.verify(naruto, SeriesMatcher.Candidate(title = "Naruto Shippuden Chronicle"))
+        assertTrue(v.decision == Decision.REJECT || v.score < SeriesMatcher.FLOOR)
+    }
+
+    @Test
     fun `legit subtitle does not reject`() {
         // "Naruto: Shinden" — query title is a prefix; generic tail is
         // downgraded, not hard-rejected (spin-off rules need markers).
@@ -278,7 +320,9 @@ class SeriesMatcherTest {
     @Test
     fun `dominantReason precedence veto beats reject`() {
         val v = SeriesMatcher.Verdict(
-            Decision.REJECT, 0.0, null,
+            Decision.REJECT,
+            0.0,
+            null,
             listOf("veto:season", "reject:spinoff:ragnarok"),
         )
         assertEquals("season_veto", v.dominantReason())
@@ -297,7 +341,9 @@ class SeriesMatcherTest {
     @Test
     fun `dominantReason identifier`() {
         val v = SeriesMatcher.Verdict(
-            Decision.ACCEPT, 1.0, null,
+            Decision.ACCEPT,
+            1.0,
+            null,
             listOf("identifier:mangadex"),
         )
         assertEquals("identifier", v.dominantReason())

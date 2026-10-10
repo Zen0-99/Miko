@@ -22,6 +22,8 @@ fun NovelChapterHeader(
     onFetchAllChapters: (() -> Unit)? = null,
     intervalDays: Int? = null,
     showInterval: Boolean = true,
+    carrierLabel: String? = null,
+    onCarrierClick: (() -> Unit)? = null,
 ) {
     EntryChapterHeader(
         itemCountText = pluralStringResource(MR.plurals.manga_num_chapters, count = itemCount, itemCount),
@@ -33,5 +35,7 @@ fun NovelChapterHeader(
         onFetchAll = onFetchAllChapters,
         intervalDays = intervalDays,
         showInterval = showInterval,
+        carrierLabel = carrierLabel,
+        onCarrierClick = onCarrierClick,
     )
 }

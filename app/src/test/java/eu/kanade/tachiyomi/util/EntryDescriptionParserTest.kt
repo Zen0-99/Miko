@@ -63,7 +63,8 @@ class EntryDescriptionParserTest {
 
     @Test
     fun `alternative titles are captured and removed`() {
-        val raw = "A hunter climbs.\n\nAlternative titles: SSS-Class Revival Hunter; SSS-Class Hunter Who Dies to Live; SSS급 죽어야 사는 헌터"
+        val raw = "A hunter climbs.\n\nAlternative titles: SSS-Class Revival Hunter; " +
+            "SSS-Class Hunter Who Dies to Live; SSS급 죽어야 사는 헌터"
         val p = EntryDescriptionParser.parse(raw)
         assertEquals("A hunter climbs.", p.description)
         assertEquals(

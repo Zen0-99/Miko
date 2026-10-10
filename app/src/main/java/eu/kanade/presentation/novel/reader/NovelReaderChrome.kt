@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -72,18 +71,12 @@ fun NovelReaderTopBar(
         modifier = modifier,
         backgroundColor = backgroundColor,
         titleContent = {
-            Column {
-                AppBarTitle(title, subtitle = subtitle.takeIf { it.isNotBlank() })
-                sourceLabel?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = onColor.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    )
-                }
-            }
+            // Provider and chapter share the subtitle line — manga reader
+            // parity; a third line clips inside the fixed bar height.
+            val subtitleLine = listOfNotNull(sourceLabel, subtitle.takeIf { it.isNotBlank() })
+                .joinToString(" · ")
+                .ifBlank { null }
+            AppBarTitle(title, subtitle = subtitleLine)
         },
         navigateUp = onBackClick,
         actions = {

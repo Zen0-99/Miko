@@ -4,9 +4,9 @@ import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.tachiyomi.data.mikodb.MikoDbManager
 import eu.kanade.tachiyomi.data.mikodb.WorkIdResolver
 import eu.kanade.tachiyomi.data.track.TrackerManager
-import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.track.anime.interactor.GetAnimeTracks
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

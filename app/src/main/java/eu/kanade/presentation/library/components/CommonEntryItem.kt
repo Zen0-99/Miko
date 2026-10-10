@@ -23,6 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -31,14 +33,18 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.request.ImageRequest
+import eu.kanade.presentation.entries.components.HeroSharedKind
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.entries.components.PreExtractEntryCoverColor
+import eu.kanade.presentation.entries.components.heroSharedBoundsModifier
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.entries.novel.model.NovelCover
@@ -67,6 +73,97 @@ private val ContinueViewingButtonGridPadding = 6.dp
 private val ContinueViewingButtonListSpacing = 8.dp
 
 private const val GRID_SELECTED_COVER_ALPHA = 0.76f
+
+/** Cover-to-hero shared element: the library cover flies to the detail
+ *  hero artwork, keyed by the entry's domain id (the same id detail uses
+ *  for "hero-image-…"). Only for surfaces where an entry's cover appears
+ *  at most once — duplicate keys inside one screen break pairing. */
+private fun coverSharedKey(coverData: EntryCoverModel): String? =
+    coverEntryIdOf(coverData)?.let { "cover-image-$it" }
+
+private fun coverEntryIdOf(coverData: EntryCoverModel?): Long? = when (coverData) {
+    is MangaCover -> coverData.mangaId
+    is NovelCover -> coverData.novelId
+    is AnimeCover -> coverData.animeId
+    else -> null
+}
+
+private fun coverEntryTypeOf(coverData: EntryCoverModel?): EntryCoverMetadata.EntryType? = when (coverData) {
+    is MangaCover -> EntryCoverMetadata.EntryType.MANGA
+    is NovelCover -> EntryCoverMetadata.EntryType.NOVEL
+    is AnimeCover -> EntryCoverMetadata.EntryType.SHOWS
+    else -> null
+}
+
+/**
+ * The library cell's cover-to-hero modifier ("cover-image-{id}" sharedBounds,
+ * [HeroSharedKind.Cover]). [entryId] overrides the cover model's id for
+ * catalog/discovery cells whose cover is keyed by a placeholder until the
+ * tap resolves the real entry; null with [enabled] keys off the model.
+ */
+@Composable
+internal fun sharedCoverModifier(
+    coverData: EntryCoverModel,
+    enabled: Boolean,
+    entryId: Long? = null,
+): Modifier = when {
+    entryId != null -> heroSharedBoundsModifier("cover-image-$entryId", HeroSharedKind.Cover)
+    enabled -> heroSharedBoundsModifier(coverSharedKey(coverData), HeroSharedKind.Cover)
+    else -> Modifier
+}
+
+/**
+ * Tap-time arming for cells whose shared cover key is only known after
+ * resolution: carries the placeholder-keyed accent over to [entryId] (the
+ * detail skeleton reads it by real id), runs [arm] to re-key the cell, then
+ * waits for the re-keyed cell to be laid out — a key that first appears in
+ * the push frame has no source bounds and the morph silently doesn't run.
+ * Hold the latch [arm] sets in `rememberSaveable`: the source screen leaves
+ * composition while covered, and a plain `remember` latch comes back null
+ * on pop — the cell has no key to fly home to, so the pop only fades.
+ */
+suspend fun armSharedCover(coverData: EntryCoverModel, entryId: Long, arm: () -> Unit) {
+    val type = coverEntryTypeOf(coverData)
+    val placeholderId = coverEntryIdOf(coverData)
+    if (type != null &&
+        placeholderId != null &&
+        placeholderId != entryId &&
+        EntryCoverMetadata.getBaseColor(type, entryId) == null
+    ) {
+        EntryCoverMetadata.getBaseColor(type, placeholderId)
+            ?.let { EntryCoverMetadata.setBaseColor(type, entryId, it) }
+    }
+    arm()
+    repeat(2) { withFrameNanos { } }
+}
+
+/** Deterministic memory-cache key for a cell's cover bitmap, shared with
+ *  the detail hero's `placeholderMemoryCacheKey`: the hero request paints
+ *  this exact bitmap from frame 0 (a placeholder lookup skips Coil's size
+ *  validation — the ~400px cell bitmap would never satisfy a ~1344px hero
+ *  request) instead of decoding the same file at hero size mid-flight.
+ *  url+lastModified invalidate on cover changes, same as the cover keyers. */
+internal fun coverCellMemoryKey(coverData: EntryCoverModel?): String? = when (coverData) {
+    is MangaCover -> "covercell;manga;${coverData.mangaId};${coverData.url};${coverData.lastModified}"
+    is NovelCover -> "covercell;novel;${coverData.novelId};${coverData.url};${coverData.lastModified}"
+    is AnimeCover -> "covercell;anime;${coverData.animeId};${coverData.url};${coverData.lastModified}"
+    else -> null
+}
+
+/** The cover model wrapped in a request carrying [coverCellMemoryKey], so
+ *  the decoded bitmap is stored under the key the detail hero looks up. */
+@Composable
+private fun keyedCoverData(coverData: EntryCoverModel): Any {
+    val context = LocalContext.current
+    return remember(coverData) {
+        coverCellMemoryKey(coverData)?.let { key ->
+            ImageRequest.Builder(context)
+                .data(coverData)
+                .memoryCacheKey(key)
+                .build()
+        } ?: coverData
+    }
+}
 
 /** Pre-extracts the cover accent for any medium — detail screens seed
  *  from [EntryCoverMetadata] so the accent lands with no flash. */
@@ -98,6 +195,11 @@ fun EntryCompactGridItem(
     coverBadgeEnd: @Composable (RowScope.() -> Unit)? = null,
     topEndBadge: (@Composable BoxScope.() -> Unit)? = null,
     bottomStartBadge: (@Composable BoxScope.() -> Unit)? = null,
+    sharedCoverTransition: Boolean = false,
+    /** Library cover-to-hero transition keyed by an explicit entry id —
+     *  for cells whose cover model carries a placeholder id until a tap
+     *  resolves the real entry (see [armSharedCover]). */
+    sharedCoverEntryId: Long? = null,
 ) {
     GridItemSelectable(
         isSelected = isSelected,
@@ -105,6 +207,7 @@ fun EntryCompactGridItem(
         onLongClick = onLongClick,
     ) {
         EntryGridCover(
+            modifier = sharedCoverModifier(coverData, sharedCoverTransition, sharedCoverEntryId),
             cover = {
                 if (customCover != null) {
                     customCover()
@@ -113,7 +216,7 @@ fun EntryCompactGridItem(
                         modifier = Modifier
                             .fillMaxWidth()
                             .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
-                        data = coverData,
+                        data = keyedCoverData(coverData),
                     )
                     PreExtractItemCoverColor(coverData)
                 }
@@ -215,6 +318,9 @@ fun EntryComfortableGridItem(
     bottomStartBadge: (@Composable BoxScope.() -> Unit)? = null,
     onClickContinueViewing: (() -> Unit)? = null,
     subtitle: String? = null,
+    sharedCoverTransition: Boolean = false,
+    /** See [EntryCompactGridItem]. */
+    sharedCoverEntryId: Long? = null,
 ) {
     GridItemSelectable(
         isSelected = isSelected,
@@ -223,6 +329,7 @@ fun EntryComfortableGridItem(
     ) {
         Column {
             EntryGridCover(
+                modifier = sharedCoverModifier(coverData, sharedCoverTransition, sharedCoverEntryId),
                 cover = {
                     if (customCover != null) {
                         customCover()
@@ -231,7 +338,7 @@ fun EntryComfortableGridItem(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .alpha(if (isSelected) GRID_SELECTED_COVER_ALPHA else coverAlpha),
-                            data = coverData,
+                            data = keyedCoverData(coverData),
                         )
                         PreExtractItemCoverColor(coverData)
                     }
@@ -422,6 +529,9 @@ fun EntryListItem(
     entries: Int = 0,
     containerHeight: Int = 0,
     subtitle: String? = null,
+    sharedCoverTransition: Boolean = false,
+    /** See [EntryCompactGridItem]. */
+    sharedCoverEntryId: Long? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -446,6 +556,7 @@ fun EntryListItem(
     ) {
         Box(
             modifier = Modifier
+                .then(sharedCoverModifier(coverData, sharedCoverTransition, sharedCoverEntryId))
                 .fillMaxHeight()
                 .aspectRatio(ItemCover.Book.ratio),
         ) {
@@ -456,7 +567,7 @@ fun EntryListItem(
                     modifier = Modifier
                         .fillMaxHeight()
                         .alpha(coverAlpha),
-                    data = coverData,
+                    data = keyedCoverData(coverData),
                 )
                 PreExtractItemCoverColor(coverData)
             }

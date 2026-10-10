@@ -11,10 +11,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import cafe.adriel.voyager.core.annotation.InternalVoyagerApi
@@ -31,6 +31,9 @@ import tachiyomi.presentation.core.components.AdaptiveSheet as AdaptiveSheetImpl
 fun NavigatorAdaptiveSheet(
     screen: Screen,
     enableSwipeDismiss: (Navigator) -> Boolean = { true },
+    /** Optional container override — forwarded to [AdaptiveSheet] so the
+     *  insets strip (nav bar) matches the screen's tinted surface. */
+    containerColor: Color = Color.Unspecified,
     onDismissRequest: () -> Unit,
 ) {
     Navigator(
@@ -38,6 +41,7 @@ fun NavigatorAdaptiveSheet(
         content = { sheetNavigator ->
             AdaptiveSheet(
                 enableSwipeDismiss = enableSwipeDismiss(sheetNavigator),
+                containerColor = containerColor,
                 onDismissRequest = onDismissRequest,
             ) {
                 ScreenTransition(
@@ -46,6 +50,9 @@ fun NavigatorAdaptiveSheet(
                         fadeIn(animationSpec = tween(220, delayMillis = 90)) togetherWith
                             fadeOut(animationSpec = tween(90))
                     },
+                    // Sheets wrap their content — the opaque canvas must
+                    // not stretch the sheet to full height.
+                    fillScreen = false,
                 )
 
                 BackHandler(

@@ -29,6 +29,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.woowla.compose.icon.collections.tabler.Tabler
+import com.woowla.compose.icon.collections.tabler.tabler.Outline
+import com.woowla.compose.icon.collections.tabler.tabler.outline.CloudDownload
 import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.components.IndicatorModifier
 import eu.kanade.presentation.components.IndicatorSize
@@ -36,9 +39,6 @@ import eu.kanade.presentation.components.IndicatorStrokeWidth
 import eu.kanade.presentation.components.commonClickable
 import eu.kanade.presentation.entries.components.rememberOnAccentColor
 import eu.kanade.tachiyomi.R
-import com.woowla.compose.icon.collections.tabler.Tabler
-import com.woowla.compose.icon.collections.tabler.tabler.Outline
-import com.woowla.compose.icon.collections.tabler.tabler.outline.CloudDownload
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.IconButtonTokens

@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.TimeZone
 import logcat.LogPriority
 import mihon.domain.items.episode.interactor.FilterEpisodesForDownload
 import tachiyomi.core.common.i18n.stringResource
@@ -59,7 +60,7 @@ import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.NoEpisodesException
 import tachiyomi.domain.items.season.interactor.GetAnimeSeasonsByParentId
-import tachiyomi.domain.library.shows.LibraryAnime
+import tachiyomi.domain.library.model.LibrarySubtype
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_CHARGING
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_NETWORK_NOT_METERED
@@ -68,6 +69,7 @@ import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_HAS_U
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_NON_COMPLETED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_NON_VIEWED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_OUTSIDE_RELEASE_PERIOD
+import tachiyomi.domain.library.shows.LibraryAnime
 import tachiyomi.domain.source.anime.model.AnimeSourceNotInstalledException
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.i18n.MR
@@ -76,11 +78,11 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
 import java.time.Instant
-import java.time.ZonedDateTime
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerParameters) :
@@ -98,6 +100,7 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private val animeFetchInterval: AnimeFetchInterval = Injekt.get()
     private val filterEpisodesForDownload: FilterEpisodesForDownload = Injekt.get()
     private val getAnimeSeasonsByParentId: GetAnimeSeasonsByParentId = Injekt.get()
+    private val subtypeResolver: eu.kanade.tachiyomi.data.mikodb.LibrarySubtypeResolver = Injekt.get()
 
     private val notifier = ShowsLibraryUpdateNotifier(context)
 
@@ -137,7 +140,10 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
 
         val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
-        addAnimeToQueue(collectionId)
+        val subtype = inputData.getString(KEY_SUBTYPE)
+            ?.let { runCatching { LibrarySubtype.valueOf(it) }.getOrNull() }
+            ?: LibrarySubtype.ALL
+        addAnimeToQueue(collectionId, subtype)
 
         return withIOContext {
             try {
@@ -175,8 +181,14 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      * Adds list of anime to be updated.
      *
      * @param collectionId the ID of the collection to update, or -1 if no collection specified.
+     * @param subtype manual refresh carries the active library subtype —
+     *  refreshing from "Movies" touches only movies; ALL and scheduled
+     *  passes update everything.
      */
-    private suspend fun addAnimeToQueue(collectionId: Long) {
+    private suspend fun addAnimeToQueue(
+        collectionId: Long,
+        subtype: LibrarySubtype = LibrarySubtype.ALL,
+    ) {
         val libraryAnime = getLibraryAnime.await()
 
         val listToUpdate = if (collectionId != -1L) {
@@ -199,6 +211,12 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             includedAnime
                 .filterNot { it.anime.id in excludedAnimeIds }
                 .distinctBy { it.anime.id }
+        }.let { list ->
+            if (subtype == LibrarySubtype.ALL) {
+                list
+            } else {
+                list.filter { subtypeResolver.subtype(it.anime) == subtype }
+            }
         }
 
         val includeSeasons = libraryPreferences.updateSeasonOnLibraryUpdate().get()
@@ -222,7 +240,10 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
         val restrictions = libraryPreferences.autoUpdateItemRestrictions().get()
         val skippedUpdates = mutableListOf<Pair<Anime, String?>>()
-        val (_, fetchWindowUpperBound) = animeFetchInterval.getWindow(ZonedDateTime.now())
+        val (_, fetchWindowUpperBound) = animeFetchInterval.getWindow(
+            Clock.System.now(),
+            TimeZone.currentSystemDefault(),
+        )
 
         animeToUpdate = lastToUpdateWithSeasons
             .filter {
@@ -294,7 +315,10 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         val newUpdates = CopyOnWriteArrayList<Pair<Anime, Array<Episode>>>()
         val failedUpdates = CopyOnWriteArrayList<Pair<Anime, String?>>()
         val hasDownloads = AtomicBoolean(false)
-        val fetchWindow = animeFetchInterval.getWindow(ZonedDateTime.now())
+        val fetchWindow = animeFetchInterval.getWindow(
+            Clock.System.now(),
+            TimeZone.currentSystemDefault(),
+        )
 
         // Publish initial running state to the in-app progress bus
         LibraryUpdateProgressBus.startRun(total = animeToUpdate.size, source = "Anime")
@@ -586,6 +610,7 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
          * Key for collection to update.
          */
         private const val KEY_COLLECTION = "animeCollection"
+        private const val KEY_SUBTYPE = "subtype"
 
         fun cancelAllWorks(context: Context) {
             context.workManager.cancelAllWorkByTag(TAG)
@@ -642,6 +667,7 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         fun startNow(
             context: Context,
             collection: Collection? = null,
+            subtype: LibrarySubtype = LibrarySubtype.ALL,
         ): Boolean {
             val wm = context.workManager
             if (wm.isRunning(TAG)) {
@@ -651,6 +677,7 @@ class ShowsLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
 
             val inputData = workDataOf(
                 KEY_COLLECTION to collection?.id,
+                KEY_SUBTYPE to subtype.name,
             )
             val request = OneTimeWorkRequestBuilder<ShowsLibraryUpdateJob>()
                 .addTag(TAG)

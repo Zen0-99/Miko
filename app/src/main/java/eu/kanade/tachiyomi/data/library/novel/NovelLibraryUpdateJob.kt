@@ -53,6 +53,7 @@ import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
+import tachiyomi.domain.library.model.LibrarySubtype
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_HAS_UNVIEWED
@@ -81,6 +82,9 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private val novelFetchInterval: NovelFetchInterval = Injekt.get()
     private val basePreferences: eu.kanade.domain.base.BasePreferences = Injekt.get()
     private val workPrefetcher: eu.kanade.tachiyomi.data.mikodb.LibraryWorkPrefetcher = Injekt.get()
+    private val canonizeWork: eu.kanade.tachiyomi.data.mikodb.CanonizeWork = Injekt.get()
+    private val canonicalChapterSync: eu.kanade.tachiyomi.data.mikodb.CanonicalChapterSync = Injekt.get()
+    private val subtypeResolver: eu.kanade.tachiyomi.data.mikodb.LibrarySubtypeResolver = Injekt.get()
 
     private var novelsToUpdate: List<LibraryNovel> = mutableListOf()
 
@@ -115,7 +119,10 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
 
         val collectionId = inputData.getLong(KEY_COLLECTION, -1L)
-        addNovelsToQueue(collectionId)
+        val subtype = inputData.getString(KEY_SUBTYPE)
+            ?.let { runCatching { LibrarySubtype.valueOf(it) }.getOrNull() }
+            ?: LibrarySubtype.ALL
+        addNovelsToQueue(collectionId, subtype)
 
         return withIOContext {
             try {
@@ -149,8 +156,14 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      * Adds list of novels to be updated.
      *
      * @param collectionId the ID of the collection to update, or -1 if no collection specified.
+     * @param subtype manual refresh carries the active library subtype —
+     *  a refresh from the "Novels" view touches only novels; ALL and
+     *  scheduled passes update everything.
      */
-    private suspend fun addNovelsToQueue(collectionId: Long) {
+    private suspend fun addNovelsToQueue(
+        collectionId: Long,
+        subtype: LibrarySubtype = LibrarySubtype.ALL,
+    ) {
         val libraryNovels = getLibraryNovels.await()
         android.util.Log.i(
             "NovelUpdateJob",
@@ -184,6 +197,13 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             includedNovels
                 .filterNot { it.novel.id in excludedNovelIds }
                 .distinctBy { it.novel.id }
+        }.let { list ->
+            if (subtype == LibrarySubtype.ALL) {
+                list
+            } else {
+                val subtypes = subtypeResolver.classifyNovels(list.map { it.novel })
+                list.filter { subtypes[it.novel.id] == subtype }
+            }
         }
 
         val restrictions = libraryPreferences.autoUpdateItemRestrictions().get()
@@ -375,6 +395,12 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     .awaitAll()
             }
         } finally {
+            // Phase 14-02: a completed refresh mints + canonizes the whole
+            // library in the background (resolve → markSeen → canonize).
+            // Fires first — a throw in the failure-persist/notify path
+            // below must not drop the canonize request silently.
+            workPrefetcher.start(canonize = true)
+
             // Ensure completeRun is ALWAYS called, even if the coroutineScope
             // throws (e.g., due to cancellation or an uncaught exception).
             // Without this, the overlay would stay stuck at "X/Y" forever.
@@ -405,10 +431,6 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                     "Failed updates: ${failedUpdates.joinToString { "${it.first.title}: ${it.second}" }}"
                 }
             }
-
-            // Phase 14-02: a completed refresh mints + canonizes the whole
-            // library in the background (resolve → markSeen → canonize).
-            workPrefetcher.start(canonize = true)
         }
     }
 
@@ -419,6 +441,29 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
      * @return a list of newly added chapters.
      */
     private suspend fun updateNovel(novel: Novel): List<NovelChapter> {
+        // Canonical entries have no backing extension — the stub's
+        // chapter list is always empty, so a library refresh used to be
+        // a no-op for them (chapters only ever materialized on detail
+        // open). Route them through the canonize pipeline instead: the
+        // recency-gated collect posts fresh feeds, then the canon rows
+        // materialize locally.
+        val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+            .workIdFromNovelUrl(novel.url)
+        if (workId != null) {
+            if (LibraryUpdateProgressBus.isCancelRequested("Novel")) {
+                throw CancellationException("User cancelled library update")
+            }
+            return try {
+                canonizeWork.run(workId, eu.kanade.domain.ui.model.Carrier.BOOKS)
+                canonicalChapterSync.syncNovel(novel, workId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Canonical refresh failed for novel ${novel.id}" }
+                emptyList()
+            }
+        }
+
         val source = sourceManager.getOrStub(novel.source) as? NovelCatalogueSource
             ?: return emptyList()
 
@@ -688,6 +733,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val WORK_NAME_MANUAL = "NovelLibraryUpdate-$TAG-manual"
         private const val WORK_NAME_AUTO = "NovelLibraryUpdate-$TAG-auto"
         private const val KEY_COLLECTION = "collection"
+        private const val KEY_SUBTYPE = "subtype"
 
         // 1-minute hard timeout per novel fetch
         private const val PER_NOVEL_TIMEOUT_MS = 60_000L
@@ -717,6 +763,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         fun startNow(
             context: Context,
             collection: Collection? = null,
+            subtype: LibrarySubtype = LibrarySubtype.ALL,
         ): Boolean {
             val wm = androidx.work.WorkManager.getInstance(context)
             val workQuery = androidx.work.WorkQuery.Builder
@@ -733,6 +780,7 @@ class NovelLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 .setInputData(
                     workDataOf(
                         KEY_COLLECTION to (collection?.id ?: -1L),
+                        KEY_SUBTYPE to subtype.name,
                     ),
                 )
                 .build()

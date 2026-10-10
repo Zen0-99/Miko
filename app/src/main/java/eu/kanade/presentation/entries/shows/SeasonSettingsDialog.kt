@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.entries.shows.model.seasonDownloadedFilter
 import eu.kanade.presentation.components.TabbedDialog
@@ -66,6 +67,8 @@ fun SeasonSettingsDialog(
 
     // Overflow action
     onSetAsDefault: (applyToExistingAnime: Boolean) -> Unit,
+    /** Detail-theme accent — tints the sheet + every control inside. */
+    accentColor: Color? = null,
 ) {
     var showSetAsDefaultDialog by rememberSaveable { mutableStateOf(false) }
     if (showSetAsDefaultDialog) {
@@ -80,6 +83,7 @@ fun SeasonSettingsDialog(
 
     TabbedDialog(
         onDismissRequest = onDismissRequest,
+        accentColor = accentColor,
         tabTitles = persistentListOf(
             stringResource(MR.strings.action_filter),
             stringResource(MR.strings.action_sort),

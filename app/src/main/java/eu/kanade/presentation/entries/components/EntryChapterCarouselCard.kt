@@ -2,7 +2,6 @@ package eu.kanade.presentation.entries.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.components.fullDateText
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
+import tachiyomi.presentation.core.util.clickableNoIndication
 
 /**
  * Horizontal chapter card for manga/novel detail views — the chapter-list
@@ -71,7 +72,10 @@ fun EntryChapterCarouselCard(
     /** Non-null on multi-carrier canonical rows — tapping the note opens
      *  the chapter-scoped carrier picker ("read this chapter with…"). */
     onCarrierNoteClick: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
+    /** Indicator slot (top-right). Receives the card's contrast tint —
+     *  black-on-light / white-on-dark like the episode card's download
+     *  icon — so callers' icons stay legible on the tinted surface. */
+    trailing: (@Composable (tint: Color) -> Unit)? = null,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
     val cardWidth = LocalConfiguration.current.screenWidthDp.dp * 0.75f
@@ -84,6 +88,13 @@ fun EntryChapterCarouselCard(
         dimmed = read,
     )
     val readCheckTint = rememberOnAccentColor(cardColor)
+    // Same contrast rule the episode card applies to its still corner —
+    // black/white by surface luminance, never the raw accent.
+    val indicatorTint = if (cardColor.luminance() > 0.4f) {
+        Color.Black.copy(alpha = 0.75f)
+    } else {
+        Color.White.copy(alpha = 0.9f)
+    }
 
     Box(
         modifier = modifier
@@ -174,7 +185,7 @@ fun EntryChapterCarouselCard(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            trailing?.invoke()
+            trailing?.invoke(indicatorTint)
         }
 
         // Bottom content — title, then a meta row with the date pinned
@@ -234,7 +245,12 @@ fun EntryChapterCarouselCard(
                             .weight(1f)
                             .let { m ->
                                 if (onCarrierNoteClick != null && scanlator.isNullOrBlank()) {
-                                    m.clickable(onClick = onCarrierNoteClick)
+                                    // No ripple box — it's a text affordance,
+                                    // not a button. Padding lands inside the
+                                    // clickable so the tap target grows past
+                                    // the glyphs.
+                                    m.clickableNoIndication(onClick = onCarrierNoteClick)
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
                                 } else {
                                     m
                                 }
@@ -247,4 +263,3 @@ fun EntryChapterCarouselCard(
         }
     }
 }
-

@@ -77,7 +77,8 @@ class CanonicalChapterRouterTest {
 
     @Test
     fun `candidates are refs intersect installed ordered by tier`() = runBlocking {
-        val s1 = http(1, null); val s2 = http(2, null)
+        val s1 = http(1, null)
+        val s2 = http(2, null)
         setup(
             mapOf("en.bsrc" to "/b/30", "en.ssrc" to "/s/30", "en.gone" to "/g/30"),
             listOf(golden("en.bsrc", "B", 1), golden("en.ssrc", "S", 2)),
@@ -150,11 +151,16 @@ class CanonicalChapterRouterTest {
     )
 
     private fun verdict(decision: SeriesMatcher.Decision) = SeriesMatcher.Verdict(
-        decision = decision, score = 1.0, margin = null, reasons = emptyList(),
+        decision = decision,
+        score = 1.0,
+        margin = null,
+        reasons = emptyList(),
     )
 
     private fun workRow() = MangaNovelIdBridge.WorkRow(
-        mikoWorkId = "mk:mb:1", type = "manga", title = "Solo Leveling",
+        mikoWorkId = "mk:mb:1",
+        type = "manga",
+        title = "Solo Leveling",
     )
 
     private fun expandedHttp(id: Long, title: String, chapters: List<SChapter>) = mockk<HttpSource> {

@@ -5,16 +5,17 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,9 +26,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
@@ -35,7 +38,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -52,37 +54,34 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
+import eu.kanade.domain.entries.novel.interactor.UpdateNovel
+import eu.kanade.domain.entries.novel.model.hasCustomCover
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
-import eu.kanade.presentation.components.fullDateText
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.components.ChapterGroupPillRow
 import eu.kanade.presentation.entries.components.EnhancedEntryInfoBox
-import eu.kanade.presentation.entries.components.EntryChapterCarouselCard
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
+import eu.kanade.presentation.entries.components.EntryChapterCarouselCard
+import eu.kanade.presentation.entries.components.EntryContinueRow
+import eu.kanade.presentation.entries.components.EntryFindProviderButton
 import eu.kanade.presentation.entries.components.EntryGenreRow
+import eu.kanade.presentation.entries.components.EntryNextUpAction
 import eu.kanade.presentation.entries.components.EntryToolbar
+import eu.kanade.presentation.entries.components.EntryViewCommentsButton
 import eu.kanade.presentation.entries.components.RatingMark
-import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.presentation.entries.components.chapterCountPair
 import eu.kanade.presentation.entries.components.enhancedEntryStatusText
+import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.presentation.entries.novel.components.ExpandableNovelDescription
+import eu.kanade.presentation.entries.novel.components.NovelAudioEditions
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
-import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadAction
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioIndicator
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioState
+import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadAction
 import eu.kanade.presentation.entries.novel.components.NovelChapterDownloadIndicator
-import eu.kanade.presentation.entries.novel.components.NovelAudioEditions
 import eu.kanade.presentation.entries.novel.components.NovelChapterHeader
 import eu.kanade.presentation.entries.novel.components.NovelEditDialog
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.CheckCircle
-import eu.kanade.presentation.entries.components.EntryContinueRow
-import eu.kanade.presentation.entries.components.EntryNextUpAction
-import eu.kanade.presentation.entries.components.EntryFindProviderButton
-import eu.kanade.presentation.entries.components.EntryViewCommentsButton
-import tachiyomi.i18n.aniyomi.AYMR
 import eu.kanade.tachiyomi.data.download.novel.model.NovelDownload
 import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
@@ -94,14 +93,12 @@ import eu.kanade.tachiyomi.ui.entries.novel.NovelScreenModel
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.tachiyomi.util.EntryDescriptionParser
 import eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
-import eu.kanade.presentation.util.formatChapterNumber
-import eu.kanade.domain.entries.novel.interactor.UpdateNovel
-import eu.kanade.domain.entries.novel.model.hasCustomCover
 import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
@@ -189,122 +186,122 @@ fun NovelScreen(
     Box {
         if (isTabletUi) {
             NovelScreenLargeImpl(
-            state = state,
-            snackbarHostState = snackbarHostState,
-            chapterSwipeStartAction = chapterSwipeStartAction,
-            chapterSwipeEndAction = chapterSwipeEndAction,
-            navigateUp = navigateUp,
-            onChapterClicked = onChapterClicked,
-            onDownloadChapter = onDownloadChapter,
-            onAudioChapter = onAudioChapter,
-            onAddToLibraryClicked = onAddToLibraryClicked,
-            onCoverClick = onCoverClick,
-            onWebViewClicked = onWebViewClicked,
-            onTagSearch = onTagSearch,
-            onFilterButtonClicked = onFilterButtonClicked,
-            onBookmarkFilterClicked = onBookmarkFilterClicked,
-            onHighlightsClicked = onHighlightsClicked,
-            onTrackingClicked = onTrackingClicked,
-            onCommentsClicked = onCommentsClicked,
-            onFindProviderClicked = onFindProviderClicked,
-            onRefresh = onRefresh,
-            onContinueReading = onContinueReading,
-            onContinueListening = onContinueListening,
-            onSearch = onSearch,
-            onShareClicked = onShareClicked,
-            onDownloadActionClicked = onDownloadActionClicked,
-            onEditCollectionClicked = onEditCollectionClicked,
-            onEditNovel = onEditNovel,
-            onMigrateClicked = onMigrateClicked,
-            onMarkAllReadClicked = onMarkAllReadClicked,
-            onMarkAllUnreadClicked = onMarkAllUnreadClicked,
-            onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
-            onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
-            onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
-            onMultiBookmarkClicked = onMultiBookmarkClicked,
-            onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
-            onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
-            onMultiDeleteClicked = onMultiDeleteClicked,
-            onChapterSwipe = onChapterSwipe,
-            onChapterSelected = onChapterSelected,
-            onAllChapterSelected = onAllChapterSelected,
-            onInvertSelection = onInvertSelection,
-            onFetchNewChapters = onFetchNewChapters,
-            onFetchAllChapters = onFetchAllChapters,
-            onSuggestionClick = onSuggestionClick,
-            onOpenSuggestions = onOpenSuggestions,
-            onRetrySuggestions = onRetrySuggestions,
-            onDownloadBook = onDownloadBook,
-            onDeleteBook = onDeleteBook,
-            onHideChapter = onHideChapter,
-            onUnhideChapters = onUnhideChapters,
-            onCarrierPickerClicked = onCarrierPickerClicked,
-            chapterCarrierLabel = chapterCarrierLabel,
-            onChapterCarrierClicked = onChapterCarrierClicked,
-            onAudioEditionClicked = onAudioEditionClicked,
-            onAudioPartOfClicked = onAudioPartOfClicked,
-            previewCover = previewCover,
-        )
-    } else {
-        NovelScreenSmallImpl(
-            state = state,
-            snackbarHostState = snackbarHostState,
-            chapterSwipeStartAction = chapterSwipeStartAction,
-            chapterSwipeEndAction = chapterSwipeEndAction,
-            navigateUp = navigateUp,
-            onChapterClicked = onChapterClicked,
-            onDownloadChapter = onDownloadChapter,
-            onAudioChapter = onAudioChapter,
-            onAddToLibraryClicked = onAddToLibraryClicked,
-            onCoverClick = onCoverClick,
-            onWebViewClicked = onWebViewClicked,
-            onTagSearch = onTagSearch,
-            onFilterButtonClicked = onFilterButtonClicked,
-            onBookmarkFilterClicked = onBookmarkFilterClicked,
-            onHighlightsClicked = onHighlightsClicked,
-            onTrackingClicked = onTrackingClicked,
-            onCommentsClicked = onCommentsClicked,
-            onFindProviderClicked = onFindProviderClicked,
-            onRefresh = onRefresh,
-            onContinueReading = onContinueReading,
-            onContinueListening = onContinueListening,
-            onSearch = onSearch,
-            onShareClicked = onShareClicked,
-            onDownloadActionClicked = onDownloadActionClicked,
-            onEditCollectionClicked = onEditCollectionClicked,
-            onEditNovel = onEditNovel,
-            onMigrateClicked = onMigrateClicked,
-            onMarkAllReadClicked = onMarkAllReadClicked,
-            onMarkAllUnreadClicked = onMarkAllUnreadClicked,
-            onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
-            onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
-            onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
-            onMultiBookmarkClicked = onMultiBookmarkClicked,
-            onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
-            onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
-            onMultiDeleteClicked = onMultiDeleteClicked,
-            onChapterSwipe = onChapterSwipe,
-            onChapterSelected = onChapterSelected,
-            onAllChapterSelected = onAllChapterSelected,
-            onInvertSelection = onInvertSelection,
-            onFetchNewChapters = onFetchNewChapters,
-            onFetchAllChapters = onFetchAllChapters,
-            onSuggestionClick = onSuggestionClick,
-            onOpenSuggestions = onOpenSuggestions,
-            onRetrySuggestions = onRetrySuggestions,
-            onDownloadBook = onDownloadBook,
-            onDeleteBook = onDeleteBook,
-            onHideChapter = onHideChapter,
-            onUnhideChapters = onUnhideChapters,
-            onCarrierPickerClicked = onCarrierPickerClicked,
-            chapterCarrierLabel = chapterCarrierLabel,
-            onChapterCarrierClicked = onChapterCarrierClicked,
-            onAudioEditionClicked = onAudioEditionClicked,
-            onAudioPartOfClicked = onAudioPartOfClicked,
-            previewCover = previewCover,
-            seedHeightsPx = seedHeightsPx,
-        )
-    }
+                state = state,
+                snackbarHostState = snackbarHostState,
+                chapterSwipeStartAction = chapterSwipeStartAction,
+                chapterSwipeEndAction = chapterSwipeEndAction,
+                navigateUp = navigateUp,
+                onChapterClicked = onChapterClicked,
+                onDownloadChapter = onDownloadChapter,
+                onAudioChapter = onAudioChapter,
+                onAddToLibraryClicked = onAddToLibraryClicked,
+                onCoverClick = onCoverClick,
+                onWebViewClicked = onWebViewClicked,
+                onTagSearch = onTagSearch,
+                onFilterButtonClicked = onFilterButtonClicked,
+                onBookmarkFilterClicked = onBookmarkFilterClicked,
+                onHighlightsClicked = onHighlightsClicked,
+                onTrackingClicked = onTrackingClicked,
+                onCommentsClicked = onCommentsClicked,
+                onFindProviderClicked = onFindProviderClicked,
+                onRefresh = onRefresh,
+                onContinueReading = onContinueReading,
+                onContinueListening = onContinueListening,
+                onSearch = onSearch,
+                onShareClicked = onShareClicked,
+                onDownloadActionClicked = onDownloadActionClicked,
+                onEditCollectionClicked = onEditCollectionClicked,
+                onEditNovel = onEditNovel,
+                onMigrateClicked = onMigrateClicked,
+                onMarkAllReadClicked = onMarkAllReadClicked,
+                onMarkAllUnreadClicked = onMarkAllUnreadClicked,
+                onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+                onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+                onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+                onMultiBookmarkClicked = onMultiBookmarkClicked,
+                onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
+                onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
+                onMultiDeleteClicked = onMultiDeleteClicked,
+                onChapterSwipe = onChapterSwipe,
+                onChapterSelected = onChapterSelected,
+                onAllChapterSelected = onAllChapterSelected,
+                onInvertSelection = onInvertSelection,
+                onFetchNewChapters = onFetchNewChapters,
+                onFetchAllChapters = onFetchAllChapters,
+                onSuggestionClick = onSuggestionClick,
+                onOpenSuggestions = onOpenSuggestions,
+                onRetrySuggestions = onRetrySuggestions,
+                onDownloadBook = onDownloadBook,
+                onDeleteBook = onDeleteBook,
+                onHideChapter = onHideChapter,
+                onUnhideChapters = onUnhideChapters,
+                onCarrierPickerClicked = onCarrierPickerClicked,
+                chapterCarrierLabel = chapterCarrierLabel,
+                onChapterCarrierClicked = onChapterCarrierClicked,
+                onAudioEditionClicked = onAudioEditionClicked,
+                onAudioPartOfClicked = onAudioPartOfClicked,
+                previewCover = previewCover,
+            )
+        } else {
+            NovelScreenSmallImpl(
+                state = state,
+                snackbarHostState = snackbarHostState,
+                chapterSwipeStartAction = chapterSwipeStartAction,
+                chapterSwipeEndAction = chapterSwipeEndAction,
+                navigateUp = navigateUp,
+                onChapterClicked = onChapterClicked,
+                onDownloadChapter = onDownloadChapter,
+                onAudioChapter = onAudioChapter,
+                onAddToLibraryClicked = onAddToLibraryClicked,
+                onCoverClick = onCoverClick,
+                onWebViewClicked = onWebViewClicked,
+                onTagSearch = onTagSearch,
+                onFilterButtonClicked = onFilterButtonClicked,
+                onBookmarkFilterClicked = onBookmarkFilterClicked,
+                onHighlightsClicked = onHighlightsClicked,
+                onTrackingClicked = onTrackingClicked,
+                onCommentsClicked = onCommentsClicked,
+                onFindProviderClicked = onFindProviderClicked,
+                onRefresh = onRefresh,
+                onContinueReading = onContinueReading,
+                onContinueListening = onContinueListening,
+                onSearch = onSearch,
+                onShareClicked = onShareClicked,
+                onDownloadActionClicked = onDownloadActionClicked,
+                onEditCollectionClicked = onEditCollectionClicked,
+                onEditNovel = onEditNovel,
+                onMigrateClicked = onMigrateClicked,
+                onMarkAllReadClicked = onMarkAllReadClicked,
+                onMarkAllUnreadClicked = onMarkAllUnreadClicked,
+                onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+                onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+                onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+                onMultiBookmarkClicked = onMultiBookmarkClicked,
+                onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
+                onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
+                onMultiDeleteClicked = onMultiDeleteClicked,
+                onChapterSwipe = onChapterSwipe,
+                onChapterSelected = onChapterSelected,
+                onAllChapterSelected = onAllChapterSelected,
+                onInvertSelection = onInvertSelection,
+                onFetchNewChapters = onFetchNewChapters,
+                onFetchAllChapters = onFetchAllChapters,
+                onSuggestionClick = onSuggestionClick,
+                onOpenSuggestions = onOpenSuggestions,
+                onRetrySuggestions = onRetrySuggestions,
+                onDownloadBook = onDownloadBook,
+                onDeleteBook = onDeleteBook,
+                onHideChapter = onHideChapter,
+                onUnhideChapters = onUnhideChapters,
+                onCarrierPickerClicked = onCarrierPickerClicked,
+                chapterCarrierLabel = chapterCarrierLabel,
+                onChapterCarrierClicked = onChapterCarrierClicked,
+                onAudioEditionClicked = onAudioEditionClicked,
+                onAudioPartOfClicked = onAudioPartOfClicked,
+                previewCover = previewCover,
+                seedHeightsPx = seedHeightsPx,
+            )
+        }
 
         // Mint veil — a canonical mint is running on-device; the entry
         // redirects to its `miko:` row when it lands. A dim scrim +
@@ -514,7 +511,13 @@ private fun NovelScreenSmallImpl(
             progressGroupSeen = true
             lastProgressGroup = p
         } else if (p != lastProgressGroup) {
-            if (pinnedChapterGroup == null && chapterGroupBrowseOverride == null) {
+            // Progress only legitimately moves forward — the pin exists
+            // for "finished group A, moved to B". A backward jump means
+            // the earlier value was computed on partial data (chapters
+            // still arriving); pinning it would trap the view on a
+            // group that never was the reading position.
+            val movedForward = chapterGroups.indexOf(p) > chapterGroups.indexOf(lastProgressGroup)
+            if (movedForward && pinnedChapterGroup == null && chapterGroupBrowseOverride == null) {
                 pinnedChapterGroup = lastProgressGroup
             }
             lastProgressGroup = p
@@ -544,9 +547,19 @@ private fun NovelScreenSmallImpl(
         volumeGrouping?.meta?.get(selectedChapterGroup)
             ?.let { it.coverUrl ?: it.coverThumbUrl }
     }
+    // The accent belongs to the entry's identity art, not whichever
+    // volume cover the hero is currently showing: a pinned/custom cover
+    // wins (the fetcher serves the file for the entry request); else
+    // the canonical work art — the accent discovery precomputed; else
+    // the row thumbnail (non-canonical entries, unchanged).
+    val accentArt: Any? = when {
+        hasCustomCover -> state.novel.asNovelCover()
+        else -> state.coverOptions.firstOrNull { it.key == "mikodb" }?.data
+            ?: state.novel.asNovelCover()
+    }
     val displayedAccent = rememberEntryAccentColor(
         entryId = state.novel.id,
-        cover = volumeCoverOverride ?: state.novel.asNovelCover(),
+        cover = accentArt,
         type = EntryCoverMetadata.EntryType.NOVEL,
     ) ?: state.accentColor
 
@@ -1106,7 +1119,7 @@ private fun NovelScreenSmallImpl(
                                     title = eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
                                         .displayName(chapterItem.chapter.name)
                                         ?: eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
-                                        .bareNumberDisplayName(chapterItem.chapter.name)
+                                            .bareNumberDisplayName(chapterItem.chapter.name)
                                         ?: chapterItem.chapter.name,
                                     dateUpload = chapterItem.chapter.dateUpload,
                                     scanlator = chapterItem.chapter.scanlator?.takeIf { it.isNotBlank() },

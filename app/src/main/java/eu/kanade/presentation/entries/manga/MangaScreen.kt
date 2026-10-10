@@ -1,6 +1,12 @@
 package eu.kanade.presentation.entries.manga
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,22 +16,19 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -40,13 +43,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,42 +66,45 @@ import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastMap
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.entries.manga.interactor.UpdateManga
+import eu.kanade.domain.entries.manga.model.hasCustomCover
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
-import eu.kanade.presentation.components.fullDateText
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
 import eu.kanade.presentation.entries.components.ChapterGroupPillRow
-import eu.kanade.presentation.entries.components.EntryChapterCarouselCard
-import eu.kanade.presentation.entries.components.EntryContinueRow
-import eu.kanade.presentation.entries.components.EntryFindProviderButton
-import eu.kanade.presentation.entries.components.EntryViewCommentsButton
-import eu.kanade.presentation.entries.components.EntryNextUpAction
 import eu.kanade.presentation.entries.components.EnhancedEntryInfoBox
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
+import eu.kanade.presentation.entries.components.EntryChapterCarouselCard
 import eu.kanade.presentation.entries.components.EntryChapterHeader
-import eu.kanade.presentation.entries.components.chapterCountPair
-import eu.kanade.presentation.entries.components.RatingMark
+import eu.kanade.presentation.entries.components.EntryContinueRow
+import eu.kanade.presentation.entries.components.EntryFindProviderButton
 import eu.kanade.presentation.entries.components.EntryGenreRow
+import eu.kanade.presentation.entries.components.EntryNextUpAction
 import eu.kanade.presentation.entries.components.EntryToolbar
+import eu.kanade.presentation.entries.components.EntryViewCommentsButton
 import eu.kanade.presentation.entries.components.MissingItemCountListItem
-import eu.kanade.presentation.entries.components.VolumeSectionHeader
+import eu.kanade.presentation.entries.components.RatingMark
+import eu.kanade.presentation.entries.components.chapterCountPair
 import eu.kanade.presentation.entries.components.enhancedEntryStatusText
+import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
-import eu.kanade.presentation.entries.manga.components.ExpandableMangaDescription
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadIndicator
+import eu.kanade.presentation.entries.manga.components.ExpandableMangaDescription
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
+import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.source.manga.getNameForMangaInfo
 import eu.kanade.tachiyomi.ui.browse.manga.extension.details.MangaSourcePreferencesScreen
 import eu.kanade.tachiyomi.ui.entries.manga.ChapterList
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreenModel
+import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.tachiyomi.util.EntryDescriptionParser
 import eu.kanade.tachiyomi.util.chapter.ChapterNameGroup
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.entries.manga.model.Manga
+import tachiyomi.domain.entries.manga.model.MangaUpdate
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
@@ -110,8 +116,10 @@ import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.source.local.entries.manga.isLocal
+import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @Composable
 fun MangaScreen(
@@ -141,7 +149,7 @@ fun MangaScreen(
     onSearch: (query: String, global: Boolean) -> Unit,
 
     // For cover dialog
-    onCoverClicked: () -> Unit,
+    onCoverClicked: (Any?) -> Unit,
 
     // For top action menu
     onShareClicked: (() -> Unit)?,
@@ -183,6 +191,11 @@ fun MangaScreen(
     /** Artwork the caller already shows for this entry (home hero) —
      *  underlays the shared hero image so the morph never draws empty. */
     previewCover: Any? = null,
+    /** Skeleton item heights measured during Loading, keyed by
+     *  [EntryScreenItem] — real items mount constrained to the ghost's
+     *  height for one frame, then animateContentSize glides every
+     *  boundary the ghosts got wrong so nothing snaps on swap. */
+    seedHeightsPx: Map<Any, Int> = emptyMap(),
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -199,103 +212,104 @@ fun MangaScreen(
     Box {
         if (!isTabletUi) {
             MangaScreenSmallImpl(
-            state = state,
-            snackbarHostState = snackbarHostState,
-            nextUpdate = nextUpdate,
-            chapterSwipeStartAction = chapterSwipeStartAction,
-            chapterSwipeEndAction = chapterSwipeEndAction,
-            navigateUp = navigateUp,
-            onChapterClicked = onChapterClicked,
-            onDownloadChapter = onDownloadChapter,
-            onAddToLibraryClicked = onAddToLibraryClicked,
-            onWebViewClicked = onWebViewClicked,
-            onTrackingClicked = onTrackingClicked,
-            onCommentsClicked = onCommentsClicked,
-            onFindProviderClicked = onFindProviderClicked,
-            onTagSearch = onTagSearch,
-            onCopyTagToClipboard = onCopyTagToClipboard,
-            onFilterClicked = onFilterButtonClicked,
-            onRefresh = onRefresh,
-            onContinueReading = onContinueReading,
-            onSearch = onSearch,
-            onCoverClicked = onCoverClicked,
-            onShareClicked = onShareClicked,
-            onDownloadActionClicked = onDownloadActionClicked,
-            onEditCollectionClicked = onEditCollectionClicked,
-            onEditIntervalClicked = onEditFetchIntervalClicked,
-            onMigrateClicked = onMigrateClicked,
-            onMultiBookmarkClicked = onMultiBookmarkClicked,
-            onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
-            onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
-            onMultiDeleteClicked = onMultiDeleteClicked,
-            onChapterSwipe = onChapterSwipe,
-            onChapterSelected = onChapterSelected,
-            onAllChapterSelected = onAllChapterSelected,
-            onInvertSelection = onInvertSelection,
-            onSettingsClicked = onSettingsClicked,
-            onMarkAllReadClicked = onMarkAllReadClicked,
-            onMarkAllUnreadClicked = onMarkAllUnreadClicked,
-            onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
-            onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
-            onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
-            onSuggestionClick = onSuggestionClick,
-            onOpenSuggestions = onOpenSuggestions,
-            onRetrySuggestions = onRetrySuggestions,
-            onCarrierPickerClicked = onCarrierPickerClicked,
-            chapterCarrierLabel = chapterCarrierLabel,
-            onChapterCarrierClicked = onChapterCarrierClicked,
-            previewCover = previewCover,
-        )
-    } else {
-        MangaScreenLargeImpl(
-            state = state,
-            snackbarHostState = snackbarHostState,
-            chapterSwipeStartAction = chapterSwipeStartAction,
-            chapterSwipeEndAction = chapterSwipeEndAction,
-            nextUpdate = nextUpdate,
-            navigateUp = navigateUp,
-            onChapterClicked = onChapterClicked,
-            onDownloadChapter = onDownloadChapter,
-            onAddToLibraryClicked = onAddToLibraryClicked,
-            onWebViewClicked = onWebViewClicked,
-            onTrackingClicked = onTrackingClicked,
-            onCommentsClicked = onCommentsClicked,
-            onFindProviderClicked = onFindProviderClicked,
-            onTagSearch = onTagSearch,
-            onCopyTagToClipboard = onCopyTagToClipboard,
-            onFilterButtonClicked = onFilterButtonClicked,
-            onRefresh = onRefresh,
-            onContinueReading = onContinueReading,
-            onSearch = onSearch,
-            onCoverClicked = onCoverClicked,
-            onShareClicked = onShareClicked,
-            onDownloadActionClicked = onDownloadActionClicked,
-            onEditCollectionClicked = onEditCollectionClicked,
-            onEditIntervalClicked = onEditFetchIntervalClicked,
-            onMigrateClicked = onMigrateClicked,
-            onMultiBookmarkClicked = onMultiBookmarkClicked,
-            onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
-            onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
-            onMultiDeleteClicked = onMultiDeleteClicked,
-            onChapterSwipe = onChapterSwipe,
-            onChapterSelected = onChapterSelected,
-            onAllChapterSelected = onAllChapterSelected,
-            onInvertSelection = onInvertSelection,
-            onSettingsClicked = onSettingsClicked,
-            onMarkAllReadClicked = onMarkAllReadClicked,
-            onMarkAllUnreadClicked = onMarkAllUnreadClicked,
-            onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
-            onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
-            onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
-            onSuggestionClick = onSuggestionClick,
-            onOpenSuggestions = onOpenSuggestions,
-            onRetrySuggestions = onRetrySuggestions,
-            onCarrierPickerClicked = onCarrierPickerClicked,
-            chapterCarrierLabel = chapterCarrierLabel,
-            onChapterCarrierClicked = onChapterCarrierClicked,
-            previewCover = previewCover,
-        )
-    }
+                state = state,
+                snackbarHostState = snackbarHostState,
+                nextUpdate = nextUpdate,
+                chapterSwipeStartAction = chapterSwipeStartAction,
+                chapterSwipeEndAction = chapterSwipeEndAction,
+                navigateUp = navigateUp,
+                onChapterClicked = onChapterClicked,
+                onDownloadChapter = onDownloadChapter,
+                onAddToLibraryClicked = onAddToLibraryClicked,
+                onWebViewClicked = onWebViewClicked,
+                onTrackingClicked = onTrackingClicked,
+                onCommentsClicked = onCommentsClicked,
+                onFindProviderClicked = onFindProviderClicked,
+                onTagSearch = onTagSearch,
+                onCopyTagToClipboard = onCopyTagToClipboard,
+                onFilterClicked = onFilterButtonClicked,
+                onRefresh = onRefresh,
+                onContinueReading = onContinueReading,
+                onSearch = onSearch,
+                onCoverClicked = onCoverClicked,
+                onShareClicked = onShareClicked,
+                onDownloadActionClicked = onDownloadActionClicked,
+                onEditCollectionClicked = onEditCollectionClicked,
+                onEditIntervalClicked = onEditFetchIntervalClicked,
+                onMigrateClicked = onMigrateClicked,
+                onMultiBookmarkClicked = onMultiBookmarkClicked,
+                onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
+                onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
+                onMultiDeleteClicked = onMultiDeleteClicked,
+                onChapterSwipe = onChapterSwipe,
+                onChapterSelected = onChapterSelected,
+                onAllChapterSelected = onAllChapterSelected,
+                onInvertSelection = onInvertSelection,
+                onSettingsClicked = onSettingsClicked,
+                onMarkAllReadClicked = onMarkAllReadClicked,
+                onMarkAllUnreadClicked = onMarkAllUnreadClicked,
+                onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+                onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+                onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+                onSuggestionClick = onSuggestionClick,
+                onOpenSuggestions = onOpenSuggestions,
+                onRetrySuggestions = onRetrySuggestions,
+                onCarrierPickerClicked = onCarrierPickerClicked,
+                chapterCarrierLabel = chapterCarrierLabel,
+                onChapterCarrierClicked = onChapterCarrierClicked,
+                previewCover = previewCover,
+                seedHeightsPx = seedHeightsPx,
+            )
+        } else {
+            MangaScreenLargeImpl(
+                state = state,
+                snackbarHostState = snackbarHostState,
+                chapterSwipeStartAction = chapterSwipeStartAction,
+                chapterSwipeEndAction = chapterSwipeEndAction,
+                nextUpdate = nextUpdate,
+                navigateUp = navigateUp,
+                onChapterClicked = onChapterClicked,
+                onDownloadChapter = onDownloadChapter,
+                onAddToLibraryClicked = onAddToLibraryClicked,
+                onWebViewClicked = onWebViewClicked,
+                onTrackingClicked = onTrackingClicked,
+                onCommentsClicked = onCommentsClicked,
+                onFindProviderClicked = onFindProviderClicked,
+                onTagSearch = onTagSearch,
+                onCopyTagToClipboard = onCopyTagToClipboard,
+                onFilterButtonClicked = onFilterButtonClicked,
+                onRefresh = onRefresh,
+                onContinueReading = onContinueReading,
+                onSearch = onSearch,
+                onCoverClicked = onCoverClicked,
+                onShareClicked = onShareClicked,
+                onDownloadActionClicked = onDownloadActionClicked,
+                onEditCollectionClicked = onEditCollectionClicked,
+                onEditIntervalClicked = onEditFetchIntervalClicked,
+                onMigrateClicked = onMigrateClicked,
+                onMultiBookmarkClicked = onMultiBookmarkClicked,
+                onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
+                onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
+                onMultiDeleteClicked = onMultiDeleteClicked,
+                onChapterSwipe = onChapterSwipe,
+                onChapterSelected = onChapterSelected,
+                onAllChapterSelected = onAllChapterSelected,
+                onInvertSelection = onInvertSelection,
+                onSettingsClicked = onSettingsClicked,
+                onMarkAllReadClicked = onMarkAllReadClicked,
+                onMarkAllUnreadClicked = onMarkAllUnreadClicked,
+                onRemoveAllDownloadsClicked = onRemoveAllDownloadsClicked,
+                onRemoveNonBookmarkedDownloadsClicked = onRemoveNonBookmarkedDownloadsClicked,
+                onRemoveReadDownloadsClicked = onRemoveReadDownloadsClicked,
+                onSuggestionClick = onSuggestionClick,
+                onOpenSuggestions = onOpenSuggestions,
+                onRetrySuggestions = onRetrySuggestions,
+                onCarrierPickerClicked = onCarrierPickerClicked,
+                chapterCarrierLabel = chapterCarrierLabel,
+                onChapterCarrierClicked = onChapterCarrierClicked,
+                previewCover = previewCover,
+            )
+        }
 
         // Mint veil — a canonical mint is running on-device; the entry
         // redirects to its `miko:` row when it lands. A dim scrim +
@@ -325,6 +339,7 @@ fun MangaScreen(
                         CircularProgressIndicator(
                             modifier = Modifier.size(36.dp),
                             strokeWidth = 3.dp,
+                            color = state.accentColor ?: MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -361,7 +376,7 @@ private fun MangaScreenSmallImpl(
     onSearch: (query: String, global: Boolean) -> Unit,
 
     // For cover dialog
-    onCoverClicked: () -> Unit,
+    onCoverClicked: (Any?) -> Unit,
 
     // For top action menu
     onShareClicked: (() -> Unit)?,
@@ -402,8 +417,33 @@ private fun MangaScreenSmallImpl(
     chapterCarrierLabel: (suspend (Chapter) -> String?)? = null,
     onChapterCarrierClicked: ((Chapter) -> Unit)? = null,
     previewCover: Any? = null,
+    seedHeightsPx: Map<Any, Int> = emptyMap(),
 ) {
     val chapterListState = rememberLazyListState()
+
+    // Settle pass after a skeleton→real swap: each item mounts at the
+    // ghost's measured height, then all release on the same frame so
+    // every boundary the skeleton got slightly wrong (genre pills,
+    // description lines, header sub-line, group pills appearing from
+    // nothing) glides instead of snapping.
+    var settling by remember(seedHeightsPx) { mutableStateOf(seedHeightsPx.isNotEmpty()) }
+    LaunchedEffect(seedHeightsPx) {
+        if (settling) {
+            withFrameNanos { }
+            withFrameNanos { }
+            settling = false
+        }
+    }
+    val settleDensity = LocalDensity.current
+    fun Modifier.settleIn(key: Any): Modifier = animateContentSize(
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 350f),
+    ).then(
+        if (settling) {
+            Modifier.height(with(settleDensity) { (seedHeightsPx[key] ?: 0).toDp() })
+        } else {
+            Modifier
+        },
+    )
 
     // Logical vs raw counts — sub-part numbering (1.1/1.2, "Part N")
     // collapses to whole chapters while the entry list counts rows.
@@ -462,14 +502,16 @@ private fun MangaScreenSmallImpl(
             ChapterNameGroup.parse(chapter.name)
         }
     }
-    // Reading position is progress-derived — the group holding the newest
+    // Reading position is progress-derived — the group holding the lowest
     // unread chapter; falls back to the newest group. Pill taps are
     // browse-only session state: they must not persist as "current" or
     // re-entering the entry would land on the wrong group.
     val progressChapterGroup = remember(listItem, chapterGroups) {
         listItem
-            .firstOrNull { it is ChapterList.Item && !it.chapter.read }
-            ?.let { chapterGroupLabel((it as ChapterList.Item).chapter) }
+            .mapNotNull { (it as? ChapterList.Item)?.chapter }
+            .filter { !it.read }
+            .minByOrNull { it.chapterNumber }
+            ?.let { chapterGroupLabel(it) }
             ?.takeIf { it in chapterGroups }
     }
 
@@ -508,7 +550,13 @@ private fun MangaScreenSmallImpl(
             progressGroupSeen = true
             lastProgressGroup = p
         } else if (p != lastProgressGroup) {
-            if (pinnedChapterGroup == null && chapterGroupBrowseOverride == null) {
+            // Progress only legitimately moves forward — the pin exists
+            // for "finished group A, moved to B". A backward jump means
+            // the earlier value was computed on partial data (chapters
+            // still arriving); pinning it would trap the view on a
+            // group that never was the reading position.
+            val movedForward = chapterGroups.indexOf(p) > chapterGroups.indexOf(lastProgressGroup)
+            if (movedForward && pinnedChapterGroup == null && chapterGroupBrowseOverride == null) {
                 pinnedChapterGroup = lastProgressGroup
             }
             lastProgressGroup = p
@@ -521,6 +569,67 @@ private fun MangaScreenSmallImpl(
             listItem.filter { item ->
                 item !is ChapterList.Item ||
                     (chapterGroupLabel(item.chapter) ?: ungroupedChaptersLabel) == selectedChapterGroup
+            }
+        }
+    }
+
+    // Volume-cover override — the hero artwork + accent follow the volume
+    // the user is looking at, same swap as the shows screen's per-season
+    // posters. The persisted library cover is untouched: browsing a volume
+    // is session state, not progress. A pinned/custom cover beats the
+    // swap — the user chose that art explicitly.
+    val hasCustomCover = remember(state.manga.coverLastModified) {
+        state.manga.hasCustomCover()
+    }
+    val volumeCoverOverride = if (hasCustomCover) {
+        null
+    } else {
+        volumeGrouping?.meta?.get(selectedChapterGroup)
+            ?.let { it.coverUrl ?: it.coverThumbUrl }
+    }
+    // The accent belongs to the entry's identity art, not whichever
+    // volume cover the hero is currently showing: a pinned/custom cover
+    // wins (the fetcher serves the file for a `manga` request); else the
+    // canonical work art — the accent discovery precomputed; else the
+    // row thumbnail (non-canonical entries, unchanged).
+    val accentArt: Any? = when {
+        hasCustomCover -> state.manga
+        else -> state.coverOptions.firstOrNull { it.key == "mikodb" }?.data
+            ?: state.manga
+    }
+    val displayedAccent = rememberEntryAccentColor(
+        entryId = state.manga.id,
+        cover = accentArt,
+        type = EntryCoverMetadata.EntryType.MANGA,
+    ) ?: state.accentColor
+
+    // The progress volume's cover becomes the entry's cover everywhere —
+    // library grid, home rail, history, and the discovery overlay that
+    // re-reads bound rows all pull thumbnailUrl. Same write-back as
+    // shows' libraryPoster; browse overrides and tap-throughs never
+    // reach this, only the reading position does (all-read → last vol).
+    val updateManga = remember { Injekt.get<UpdateManga>() }
+    val progressVolumeCover = (
+        progressChapterGroup
+            ?: chapterGroups.lastOrNull { it != ungroupedChaptersLabel }
+        )
+        ?.let { volumeGrouping?.meta?.get(it) }
+        ?.let { it.coverUrl ?: it.coverThumbUrl }
+    LaunchedEffect(progressVolumeCover, state.manga.thumbnailUrl, hasCustomCover) {
+        val cover = progressVolumeCover
+        // A pinned/custom cover owns the artwork — don't churn
+        // thumbnailUrl underneath it.
+        if (!hasCustomCover && cover != null && cover != state.manga.thumbnailUrl) {
+            try {
+                updateManga.await(
+                    MangaUpdate(
+                        id = state.manga.id,
+                        thumbnailUrl = cover,
+                        coverLastModified = Clock.System.now().toEpochMilliseconds(),
+                    ),
+                )
+            } catch (e: Exception) {
+                // Non-fatal — the hero still shows the override.
             }
         }
     }
@@ -563,6 +672,15 @@ private fun MangaScreenSmallImpl(
     // can't expand — that's the Find Provider state, not loading.
     val chaptersLoading = carrierMatrix?.let { it.fetched && it.readable.isNotEmpty() } == true &&
         listItem.none { it is ChapterList.Item }
+
+    // First-mount budget: the hero + chrome compose on frame one (they carry
+    // the shared elements); the chapter list streams in next frame so a
+    // Success landing mid-push can't stall the flight.
+    var listContentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        listContentReady = true
+    }
 
     BackHandler(onBack = {
         if (isAnySelected) {
@@ -667,7 +785,7 @@ private fun MangaScreenSmallImpl(
                         EnhancedEntryInfoBox(
                             appBarPadding = maxOf(topPadding, statusBarTop),
                             title = state.manga.title,
-                            backdrop = state.manga,
+                            backdrop = volumeCoverOverride ?: state.manga,
                             sharedKey = "hero-image-${state.manga.id}",
                             logoUrl = null,
                             metaItems = listOfNotNull(
@@ -683,13 +801,14 @@ private fun MangaScreenSmallImpl(
                             ),
                             rating = parsedDescription.rating,
                             ratingMark = RatingMark.STAR,
-                            onCoverClick = onCoverClicked,
+                            onCoverClick = { onCoverClicked(volumeCoverOverride ?: state.manga) },
                             // Portrait covers — taller hero, no horizontal pan.
                             heroContentPadding = 440.dp,
                             overscrollPullPx = heroOverscrollPx,
                             parallaxOffsetPx = heroParallaxPx,
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
                             previewCover = previewCover,
+                            liveCover = volumeCoverOverride,
                         )
                     }
 
@@ -697,7 +816,7 @@ private fun MangaScreenSmallImpl(
                         key = EntryScreenItem.ACTION_ROW,
                         contentType = EntryScreenItem.ACTION_ROW,
                     ) {
-                        Column {
+                        Column(modifier = Modifier.settleIn(EntryScreenItem.ACTION_ROW)) {
                             val nextChapter = remember(chapters) {
                                 // Lowest-numbered unread — the "next in
                                 // line" chapter regardless of the display
@@ -735,14 +854,19 @@ private fun MangaScreenSmallImpl(
                                                     if (state.manga.displayMode ==
                                                         Manga.CHAPTER_DISPLAY_NUMBER
                                                     ) {
-                                                        stringResource(
+                                                        val group = eu.kanade.tachiyomi.util
+                                                            .chapter.ChapterNameGroup
+                                                            .parse(nextChapter.name)
+                                                        val base = stringResource(
                                                             MR.strings.display_mode_chapter,
                                                             formatChapterNumber(
                                                                 nextChapter.chapterNumber,
                                                             ),
                                                         )
+                                                        if (group != null) "$group $base" else base
                                                     } else {
-                                                        nextChapter.name
+                                                        eu.kanade.presentation.entries.components
+                                                            .qualifiedChapterLabel(nextChapter.name)
                                                     },
                                                 )
                                             else -> stringResource(MR.strings.action_start)
@@ -752,7 +876,7 @@ private fun MangaScreenSmallImpl(
                                     ),
                                 ),
                                 actionsEnabled = !allRead,
-                                accentColor = state.accentColor,
+                                accentColor = displayedAccent,
                                 favorite = state.manga.favorite,
                                 allDone = allRead,
                                 favoriteContentDescription = stringResource(
@@ -781,7 +905,7 @@ private fun MangaScreenSmallImpl(
                             EntryGenreRow(
                                 pills = state.manga.genre.orEmpty(),
                                 onPillClick = { onSearch(it, true) },
-                                accentColor = state.accentColor,
+                                accentColor = displayedAccent,
                                 modifier = Modifier.padding(vertical = 4.dp),
                             )
                         }
@@ -799,7 +923,8 @@ private fun MangaScreenSmallImpl(
                             tagsProvider = { null },
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
+                            modifier = Modifier.settleIn(EntryScreenItem.DESCRIPTION_WITH_TAG),
                         )
                     }
 
@@ -811,7 +936,7 @@ private fun MangaScreenSmallImpl(
 //                            onOpenSuggestions = onOpenSuggestions,
 //                            onRetryClick = onRetrySuggestions,
 //                            modifier = Modifier.fillMaxWidth(),
-//                            accentColor = state.accentColor,
+//                            accentColor = displayedAccent,
 //                        )
 //                    }
 
@@ -819,11 +944,41 @@ private fun MangaScreenSmallImpl(
                         key = EntryScreenItem.ITEM_HEADER,
                         contentType = EntryScreenItem.ITEM_HEADER,
                     ) {
+                        // Volume/book-scoped view: the pills always pin one
+                        // group, so the headline count is that group's and
+                        // the secondary line carries the work-wide total.
+                        val grouped = chapterGroups.size > 1
+                        val scopedCountText = if (grouped) {
+                            val scopedLogical = chapterCountPair(
+                                filteredChapterListItem.mapNotNull {
+                                    (it as? ChapterList.Item)?.chapter?.chapterNumber
+                                },
+                            ).first
+                            pluralStringResource(
+                                MR.plurals.manga_num_chapters,
+                                count = scopedLogical,
+                                scopedLogical,
+                            )
+                        } else {
+                            chapterCountText
+                        }
                         EntryChapterHeader(
-                            itemCountText = chapterCountText,
-                            entryCountText = entryCountText,
+                            itemCountText = scopedCountText,
+                            entryCountText = if (grouped) {
+                                val total = chapterCountPair(
+                                    state.processedChapters.map { it.chapter.chapterNumber },
+                                ).first
+                                pluralStringResource(
+                                    MR.plurals.num_chapters_in_total,
+                                    count = total,
+                                    total,
+                                )
+                            } else {
+                                entryCountText
+                            },
+                            modifier = Modifier.settleIn(EntryScreenItem.ITEM_HEADER),
                             onClick = onFilterClicked,
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
                             intervalDays = state.intervalDays,
                             showInterval = state.showInterval,
                             carrierLabel = carrierLabel,
@@ -840,50 +995,49 @@ private fun MangaScreenSmallImpl(
                                 groups = chapterGroups,
                                 selectedGroup = selectedChapterGroup,
                                 completedGroups = completedChapterGroups,
+                                modifier = Modifier.settleIn("chapter-group-pills"),
                                 onGroupSelected = { chapterGroupBrowseOverride = it },
-                                accentColor = state.accentColor,
+                                onGroupLongPressed = { group ->
+                                    // Hold = read/unread the whole group —
+                                    // read unless every chapter is already read.
+                                    val groupChapters = listItem
+                                        .mapNotNull { (it as? ChapterList.Item)?.chapter }
+                                        .filter { chapterGroupLabel(it) == group }
+                                    if (groupChapters.isNotEmpty()) {
+                                        onMultiMarkAsReadClicked(
+                                            groupChapters,
+                                            !groupChapters.all { it.read },
+                                        )
+                                    }
+                                },
+                                accentColor = displayedAccent,
                             )
                         }
                     }
 
-                    if (volumeGrouping != null && selectedChapterGroup != ungroupedChaptersLabel) {
-                        item(
-                            key = "volume-section-header",
-                            contentType = EntryScreenItem.ITEM,
-                        ) {
-                            val range = filteredChapterListItem.mapNotNull {
-                                (it as? ChapterList.Item)?.chapter?.chapterNumber
-                            }
-                            VolumeSectionHeader(
-                                label = selectedChapterGroup,
-                                meta = volumeGrouping.meta[selectedChapterGroup],
-                                firstChapter = range.minOrNull(),
-                                lastChapter = range.maxOrNull(),
-                            )
-                        }
+                    if (listContentReady) {
+                        sharedChapterItems(
+                            manga = state.manga,
+                            chapters = filteredChapterListItem,
+                            isAnyChapterSelected = chapters.fastAny { it.selected },
+                            onChapterClicked = onChapterClicked,
+                            onDownloadChapter = onDownloadChapter,
+                            onChapterSelected = onChapterSelected,
+                            accentColor = displayedAccent,
+                            commentsCount = state.commentsCount,
+                            onCommentsClicked = onCommentsClicked,
+                            hasNoCarriers = hasNoCarriers,
+                            onFindProviderClicked = onFindProviderClicked,
+                            chaptersLoading = chaptersLoading,
+                            carrierNote = carrierNote,
+                            carrierNoteWarning = true,
+                            carrierLabelProvider = rowCarrierProvider,
+                            carrierLabelVersion = state.chapterCarriers to state.preferredCarrier,
+                            onCarrierLabelClick = rowCarrierClick,
+                            downloadCarriers = carrierMatrix?.readable
+                                ?.map { it.pkgName to it.displayName },
+                        )
                     }
-
-                    sharedChapterItems(
-                        manga = state.manga,
-                        chapters = filteredChapterListItem,
-                        isAnyChapterSelected = chapters.fastAny { it.selected },
-                        onChapterClicked = onChapterClicked,
-                        onDownloadChapter = onDownloadChapter,
-                        onChapterSelected = onChapterSelected,
-                        accentColor = state.accentColor,
-                        commentsCount = state.commentsCount,
-                        onCommentsClicked = onCommentsClicked,
-                        hasNoCarriers = hasNoCarriers,
-                        onFindProviderClicked = onFindProviderClicked,
-                        chaptersLoading = chaptersLoading,
-                        carrierNote = carrierNote,
-                        carrierNoteWarning = true,
-                        carrierLabelProvider = rowCarrierProvider,
-                        carrierLabelVersion = state.chapterCarriers to state.preferredCarrier,
-                        onCarrierLabelClick = rowCarrierClick,
-                        downloadCarriers = carrierMatrix?.readable
-                            ?.map { it.pkgName to it.displayName },
-                    )
                 }
             }
         }
@@ -918,7 +1072,7 @@ fun MangaScreenLargeImpl(
     onSearch: (query: String, global: Boolean) -> Unit,
 
     // For cover dialog
-    onCoverClicked: () -> Unit,
+    onCoverClicked: (Any?) -> Unit,
 
     // For top action menu
     onShareClicked: (() -> Unit)?,
@@ -1020,14 +1174,16 @@ fun MangaScreenLargeImpl(
             ChapterNameGroup.parse(chapter.name)
         }
     }
-    // Reading position is progress-derived — the group holding the newest
+    // Reading position is progress-derived — the group holding the lowest
     // unread chapter; falls back to the newest group. Pill taps are
     // browse-only session state: they must not persist as "current" or
     // re-entering the entry would land on the wrong group.
     val progressChapterGroup = remember(listItem, chapterGroups) {
         listItem
-            .firstOrNull { it is ChapterList.Item && !it.chapter.read }
-            ?.let { chapterGroupLabel((it as ChapterList.Item).chapter) }
+            .mapNotNull { (it as? ChapterList.Item)?.chapter }
+            .filter { !it.read }
+            .minByOrNull { it.chapterNumber }
+            ?.let { chapterGroupLabel(it) }
             ?.takeIf { it in chapterGroups }
     }
 
@@ -1066,7 +1222,13 @@ fun MangaScreenLargeImpl(
             progressGroupSeen = true
             lastProgressGroup = p
         } else if (p != lastProgressGroup) {
-            if (pinnedChapterGroup == null && chapterGroupBrowseOverride == null) {
+            // Progress only legitimately moves forward — the pin exists
+            // for "finished group A, moved to B". A backward jump means
+            // the earlier value was computed on partial data (chapters
+            // still arriving); pinning it would trap the view on a
+            // group that never was the reading position.
+            val movedForward = chapterGroups.indexOf(p) > chapterGroups.indexOf(lastProgressGroup)
+            if (movedForward && pinnedChapterGroup == null && chapterGroupBrowseOverride == null) {
                 pinnedChapterGroup = lastProgressGroup
             }
             lastProgressGroup = p
@@ -1079,6 +1241,67 @@ fun MangaScreenLargeImpl(
             listItem.filter { item ->
                 item !is ChapterList.Item ||
                     (chapterGroupLabel(item.chapter) ?: ungroupedChaptersLabel) == selectedChapterGroup
+            }
+        }
+    }
+
+    // Volume-cover override — the hero artwork + accent follow the volume
+    // the user is looking at, same swap as the shows screen's per-season
+    // posters. The persisted library cover is untouched: browsing a volume
+    // is session state, not progress. A pinned/custom cover beats the
+    // swap — the user chose that art explicitly.
+    val hasCustomCover = remember(state.manga.coverLastModified) {
+        state.manga.hasCustomCover()
+    }
+    val volumeCoverOverride = if (hasCustomCover) {
+        null
+    } else {
+        volumeGrouping?.meta?.get(selectedChapterGroup)
+            ?.let { it.coverUrl ?: it.coverThumbUrl }
+    }
+    // The accent belongs to the entry's identity art, not whichever
+    // volume cover the hero is currently showing: a pinned/custom cover
+    // wins (the fetcher serves the file for a `manga` request); else the
+    // canonical work art — the accent discovery precomputed; else the
+    // row thumbnail (non-canonical entries, unchanged).
+    val accentArt: Any? = when {
+        hasCustomCover -> state.manga
+        else -> state.coverOptions.firstOrNull { it.key == "mikodb" }?.data
+            ?: state.manga
+    }
+    val displayedAccent = rememberEntryAccentColor(
+        entryId = state.manga.id,
+        cover = accentArt,
+        type = EntryCoverMetadata.EntryType.MANGA,
+    ) ?: state.accentColor
+
+    // The progress volume's cover becomes the entry's cover everywhere —
+    // library grid, home rail, history, and the discovery overlay that
+    // re-reads bound rows all pull thumbnailUrl. Same write-back as
+    // shows' libraryPoster; browse overrides and tap-throughs never
+    // reach this, only the reading position does (all-read → last vol).
+    val updateManga = remember { Injekt.get<UpdateManga>() }
+    val progressVolumeCover = (
+        progressChapterGroup
+            ?: chapterGroups.lastOrNull { it != ungroupedChaptersLabel }
+        )
+        ?.let { volumeGrouping?.meta?.get(it) }
+        ?.let { it.coverUrl ?: it.coverThumbUrl }
+    LaunchedEffect(progressVolumeCover, state.manga.thumbnailUrl, hasCustomCover) {
+        val cover = progressVolumeCover
+        // A pinned/custom cover owns the artwork — don't churn
+        // thumbnailUrl underneath it.
+        if (!hasCustomCover && cover != null && cover != state.manga.thumbnailUrl) {
+            try {
+                updateManga.await(
+                    MangaUpdate(
+                        id = state.manga.id,
+                        thumbnailUrl = cover,
+                        coverLastModified = Clock.System.now().toEpochMilliseconds(),
+                    ),
+                )
+            } catch (e: Exception) {
+                // Non-fatal — the hero still shows the override.
             }
         }
     }
@@ -1121,6 +1344,14 @@ fun MangaScreenLargeImpl(
     // can't expand — that's the Find Provider state, not loading.
     val chaptersLoading = carrierMatrix?.let { it.fetched && it.readable.isNotEmpty() } == true &&
         listItem.none { it is ChapterList.Item }
+
+    // Same first-mount budget as the phone layout — hero composes on frame
+    // one, the chapter list streams in on the next.
+    var listContentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        listContentReady = true
+    }
 
     val insetPadding = WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).asPaddingValues()
     var topBarHeight by remember { mutableIntStateOf(0) }
@@ -1216,7 +1447,7 @@ fun MangaScreenLargeImpl(
                         EnhancedEntryInfoBox(
                             appBarPadding = contentPadding.calculateTopPadding(),
                             title = state.manga.title,
-                            backdrop = state.manga,
+                            backdrop = volumeCoverOverride ?: state.manga,
                             sharedKey = "hero-image-${state.manga.id}",
                             logoUrl = null,
                             metaItems = listOfNotNull(
@@ -1232,12 +1463,13 @@ fun MangaScreenLargeImpl(
                             ),
                             rating = parsedDescription.rating,
                             ratingMark = RatingMark.STAR,
-                            onCoverClick = onCoverClicked,
+                            onCoverClick = { onCoverClicked(volumeCoverOverride ?: state.manga) },
                             heroContentPadding = 440.dp,
                             overscrollPullPx = heroOverscrollPx,
                             parallaxOffsetPx = heroScrollState.value.toFloat(),
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
                             previewCover = previewCover,
+                            liveCover = volumeCoverOverride,
                         )
                         run {
                             val nextChapter = remember(chapters) {
@@ -1277,14 +1509,19 @@ fun MangaScreenLargeImpl(
                                                     if (state.manga.displayMode ==
                                                         Manga.CHAPTER_DISPLAY_NUMBER
                                                     ) {
-                                                        stringResource(
+                                                        val group = eu.kanade.tachiyomi.util
+                                                            .chapter.ChapterNameGroup
+                                                            .parse(nextChapter.name)
+                                                        val base = stringResource(
                                                             MR.strings.display_mode_chapter,
                                                             formatChapterNumber(
                                                                 nextChapter.chapterNumber,
                                                             ),
                                                         )
+                                                        if (group != null) "$group $base" else base
                                                     } else {
-                                                        nextChapter.name
+                                                        eu.kanade.presentation.entries.components
+                                                            .qualifiedChapterLabel(nextChapter.name)
                                                     },
                                                 )
                                             else -> stringResource(MR.strings.action_start)
@@ -1294,7 +1531,7 @@ fun MangaScreenLargeImpl(
                                     ),
                                 ),
                                 actionsEnabled = !allRead,
-                                accentColor = state.accentColor,
+                                accentColor = displayedAccent,
                                 favorite = state.manga.favorite,
                                 allDone = allRead,
                                 favoriteContentDescription = stringResource(
@@ -1323,7 +1560,7 @@ fun MangaScreenLargeImpl(
                             EntryGenreRow(
                                 pills = state.manga.genre.orEmpty(),
                                 onPillClick = { onSearch(it, true) },
-                                accentColor = state.accentColor,
+                                accentColor = displayedAccent,
                                 modifier = Modifier.padding(vertical = 4.dp),
                             )
                         }
@@ -1333,7 +1570,7 @@ fun MangaScreenLargeImpl(
                             tagsProvider = { null },
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
-                            accentColor = state.accentColor,
+                            accentColor = displayedAccent,
                         )
                         // Similar titles — temporarily disabled
 //                        AuroraSuggestionsRow(
@@ -1342,7 +1579,7 @@ fun MangaScreenLargeImpl(
 //                            onOpenSuggestions = onOpenSuggestions,
 //                            onRetryClick = onRetrySuggestions,
 //                            modifier = Modifier.fillMaxWidth(),
-//                            accentColor = state.accentColor,
+//                            accentColor = displayedAccent,
 //                        )
                     }
                 },
@@ -1364,11 +1601,41 @@ fun MangaScreenLargeImpl(
                                 key = EntryScreenItem.ITEM_HEADER,
                                 contentType = EntryScreenItem.ITEM_HEADER,
                             ) {
+                                // Volume/book-scoped view: the pills always
+                                // pin one group, so the headline count is
+                                // that group's and the secondary line carries
+                                // the work-wide total.
+                                val grouped = chapterGroups.size > 1
+                                val scopedCountText = if (grouped) {
+                                    val scopedLogical = chapterCountPair(
+                                        filteredChapterListItem.mapNotNull {
+                                            (it as? ChapterList.Item)?.chapter?.chapterNumber
+                                        },
+                                    ).first
+                                    pluralStringResource(
+                                        MR.plurals.manga_num_chapters,
+                                        count = scopedLogical,
+                                        scopedLogical,
+                                    )
+                                } else {
+                                    chapterCountText
+                                }
                                 EntryChapterHeader(
-                                    itemCountText = chapterCountText,
-                                    entryCountText = entryCountText,
+                                    itemCountText = scopedCountText,
+                                    entryCountText = if (grouped) {
+                                        val total = chapterCountPair(
+                                            state.processedChapters.map { it.chapter.chapterNumber },
+                                        ).first
+                                        pluralStringResource(
+                                            MR.plurals.num_chapters_in_total,
+                                            count = total,
+                                            total,
+                                        )
+                                    } else {
+                                        entryCountText
+                                    },
                                     onClick = onFilterButtonClicked,
-                                    accentColor = state.accentColor,
+                                    accentColor = displayedAccent,
                                     intervalDays = state.intervalDays,
                                     showInterval = state.showInterval,
                                     carrierLabel = carrierLabel,
@@ -1386,49 +1653,45 @@ fun MangaScreenLargeImpl(
                                         selectedGroup = selectedChapterGroup,
                                         completedGroups = completedChapterGroups,
                                         onGroupSelected = { chapterGroupBrowseOverride = it },
-                                        accentColor = state.accentColor,
+                                        onGroupLongPressed = { group ->
+                                            val groupChapters = listItem
+                                                .mapNotNull { (it as? ChapterList.Item)?.chapter }
+                                                .filter { chapterGroupLabel(it) == group }
+                                            if (groupChapters.isNotEmpty()) {
+                                                onMultiMarkAsReadClicked(
+                                                    groupChapters,
+                                                    !groupChapters.all { it.read },
+                                                )
+                                            }
+                                        },
+                                        accentColor = displayedAccent,
                                     )
                                 }
                             }
 
-                            if (volumeGrouping != null && selectedChapterGroup != ungroupedChaptersLabel) {
-                                item(
-                                    key = "volume-section-header",
-                                    contentType = EntryScreenItem.ITEM,
-                                ) {
-                                    val range = filteredChapterListItem.mapNotNull {
-                                        (it as? ChapterList.Item)?.chapter?.chapterNumber
-                                    }
-                                    VolumeSectionHeader(
-                                        label = selectedChapterGroup,
-                                        meta = volumeGrouping.meta[selectedChapterGroup],
-                                        firstChapter = range.minOrNull(),
-                                        lastChapter = range.maxOrNull(),
-                                    )
-                                }
+                            if (listContentReady) {
+                                sharedChapterItems(
+                                    manga = state.manga,
+                                    chapters = filteredChapterListItem,
+                                    isAnyChapterSelected = chapters.fastAny { it.selected },
+                                    onChapterClicked = onChapterClicked,
+                                    onDownloadChapter = onDownloadChapter,
+                                    onChapterSelected = onChapterSelected,
+                                    accentColor = displayedAccent,
+                                    commentsCount = state.commentsCount,
+                                    onCommentsClicked = onCommentsClicked,
+                                    hasNoCarriers = hasNoCarriers,
+                                    onFindProviderClicked = onFindProviderClicked,
+                                    chaptersLoading = chaptersLoading,
+                                    carrierNote = carrierNote,
+                                    carrierNoteWarning = true,
+                                    carrierLabelProvider = rowCarrierProvider,
+                                    carrierLabelVersion = state.chapterCarriers to state.preferredCarrier,
+                                    onCarrierLabelClick = rowCarrierClick,
+                                    downloadCarriers = carrierMatrix?.readable
+                                        ?.map { it.pkgName to it.displayName },
+                                )
                             }
-
-                            sharedChapterItems(
-                                manga = state.manga,
-                                chapters = filteredChapterListItem,
-                                isAnyChapterSelected = chapters.fastAny { it.selected },
-                                onChapterClicked = onChapterClicked,
-                                onDownloadChapter = onDownloadChapter,
-                                onChapterSelected = onChapterSelected,
-                                accentColor = state.accentColor,
-                                commentsCount = state.commentsCount,
-                                onCommentsClicked = onCommentsClicked,
-                                hasNoCarriers = hasNoCarriers,
-                                onFindProviderClicked = onFindProviderClicked,
-                                chaptersLoading = chaptersLoading,
-                                carrierNote = carrierNote,
-                                carrierNoteWarning = true,
-                                carrierLabelProvider = rowCarrierProvider,
-                                carrierLabelVersion = state.chapterCarriers to state.preferredCarrier,
-                                onCarrierLabelClick = rowCarrierClick,
-                                downloadCarriers = carrierMatrix?.readable
-                                    ?.map { it.pkgName to it.displayName },
-                            )
                         }
                     }
                 },
@@ -1517,137 +1780,161 @@ private fun LazyListScope.sharedChapterItems(
     // Horizontal chapter carousel — Nuvio episode-card styling without a
     // still. Opens snapped to the next unread chapter; long-press drives
     // selection, swipe actions are gone (they collide with the row scroll).
-    if (chapters.isNotEmpty()) item(
-        key = "chapter-carousel",
-        contentType = EntryScreenItem.ITEM,
-    ) {
-        // Land on the lowest-numbered unread chapter — "next up" regardless
-        // of the user's sort direction (indexOfFirst finds the newest
-        // unread in descending lists, which is the wrong end).
-        val nextIndex = chapters.mapIndexedNotNull { index, item ->
-            (item as? ChapterList.Item)
-                ?.takeIf { !it.chapter.read }
-                ?.let { index to it.chapter.chapterNumber }
-        }.minByOrNull { it.second }?.first ?: 0
-        // The same chapter carries a thin accent outline on its card.
-        val nextChapterId = chapters.filterIsInstance<ChapterList.Item>()
-            .filter { !it.chapter.read }
-            .minByOrNull { it.chapter.chapterNumber }
-            ?.chapter?.id
-        // Cards are 75% of screen width — a negative initial offset lands
-        // the next-up card centered instead of pinned to the start edge.
-        val centeredOffsetPx = with(LocalDensity.current) {
-            (16.dp - LocalConfiguration.current.screenWidthDp.dp * 0.125f).roundToPx()
-        }
-        val rowState = rememberLazyListState(
-            initialFirstVisibleItemIndex = nextIndex,
-            initialFirstVisibleItemScrollOffset = centeredOffsetPx,
-        )
-        LazyRow(
-            state = rowState,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            flingBehavior = rememberSnapFlingBehavior(lazyListState = rowState),
+    if (chapters.isNotEmpty()) {
+        item(
+            key = "chapter-carousel",
+            contentType = EntryScreenItem.ITEM,
         ) {
-            items(
-                items = chapters,
-                key = { item ->
-                    when (item) {
-                        is ChapterList.MissingCount -> "missing-count-${item.id}"
-                        is ChapterList.Item -> "chapter-${item.id}"
-                    }
-                },
-                contentType = { EntryScreenItem.ITEM },
-            ) { item ->
-                val haptic = LocalHapticFeedback.current
-
-                when (item) {
-                    is ChapterList.MissingCount -> {
-                        MissingItemCountListItem(
-                            count = item.count,
-                            modifier = Modifier.padding(vertical = 8.dp),
-                        )
-                    }
-                    is ChapterList.Item -> {
-                        val rowLabel = if (carrierLabelProvider != null) {
-                            produceState<String?>(
-                                null,
-                                item.chapter.id,
-                                carrierLabelVersion,
-                            ) {
-                                value = carrierLabelProvider(item.chapter)
-                            }.value
-                        } else {
-                            null
+            // Land on the continue chapter — the lowest-numbered unread —
+            // wherever the sort puts it. Ascending finds it near the row's
+            // head; descending near its tail. Sort direction only flips which
+            // way the NEXT chapter sits, never the anchor.
+            val nextChapterId = chapters.filterIsInstance<ChapterList.Item>()
+                .filter { !it.chapter.read }
+                .minByOrNull { it.chapter.chapterNumber }
+                ?.chapter?.id
+            val nextIndex = chapters.indexOfFirst {
+                it is ChapterList.Item && it.chapter.id == nextChapterId
+            }.takeIf { it >= 0 } ?: 0
+            // Cards are 75% of screen width — a negative initial offset lands
+            // the next-up card centered instead of pinned to the start edge.
+            val centeredOffsetPx = with(LocalDensity.current) {
+                (16.dp - LocalConfiguration.current.screenWidthDp.dp * 0.125f).roundToPx()
+            }
+            val sortDescending = manga.sortDescending()
+            // Descending puts the latest chapter at the list head — anchor
+            // there, not on ch1 at the far end, so rightward scroll descends
+            // through numbers rather than forcing a leftward read.
+            val anchorIndex = if (sortDescending) 0 else nextIndex
+            val anchorOffset = if (sortDescending) 0 else centeredOffsetPx
+            val rowState = rememberLazyListState(
+                initialFirstVisibleItemIndex = anchorIndex,
+                initialFirstVisibleItemScrollOffset = anchorOffset,
+            )
+            // LazyRow keeps its scroll index across content swaps — a sort
+            // flip reverses the list under the same position and a volume
+            // pill switch shrinks it, either way stranding the user mid-list
+            // needing a backwards scroll. Re-anchor whenever the list head
+            // or direction changes (read-marks don't touch either key, so
+            // plain progress never yanks the row).
+            val listHeadId = chapters.firstOrNull()?.let {
+                when (it) {
+                    is ChapterList.Item -> "chapter-${it.id}"
+                    is ChapterList.MissingCount -> it.id
+                }
+            }
+            LaunchedEffect(listHeadId, sortDescending) {
+                rowState.scrollToItem(anchorIndex, anchorOffset)
+            }
+            LazyRow(
+                state = rowState,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                flingBehavior = rememberSnapFlingBehavior(lazyListState = rowState),
+            ) {
+                items(
+                    items = chapters,
+                    key = { item ->
+                        when (item) {
+                            is ChapterList.MissingCount -> "missing-count-${item.id}"
+                            is ChapterList.Item -> "chapter-${item.id}"
                         }
-                        EntryChapterCarouselCard(
-                            title = if (manga.displayMode == Manga.CHAPTER_DISPLAY_NUMBER) {
-                                stringResource(
-                                    MR.strings.display_mode_chapter,
-                                    formatChapterNumber(item.chapter.chapterNumber),
-                                )
+                    },
+                    contentType = { EntryScreenItem.ITEM },
+                ) { item ->
+                    val haptic = LocalHapticFeedback.current
+
+                    when (item) {
+                        is ChapterList.MissingCount -> {
+                            MissingItemCountListItem(
+                                count = item.count,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            )
+                        }
+                        is ChapterList.Item -> {
+                            val rowLabel = if (carrierLabelProvider != null) {
+                                produceState<String?>(
+                                    null,
+                                    item.chapter.id,
+                                    carrierLabelVersion,
+                                ) {
+                                    value = carrierLabelProvider(item.chapter)
+                                }.value
                             } else {
-                                item.chapter.name
-                            },
-                            dateUpload = item.chapter.dateUpload,
-                            scanlator = item.chapter.scanlator.takeIf { !it.isNullOrBlank() },
-                            progress = item.chapter.lastPageRead
-                                .takeIf { !item.chapter.read && it > 0L }
-                                ?.let {
-                                    stringResource(MR.strings.chapter_progress, it + 1)
-                                },
-                            read = item.chapter.read,
-                            bookmark = item.chapter.bookmark,
-                            selected = item.selected,
-                            isNext = item.chapter.id == nextChapterId,
-                            carrierNote = rowLabel ?: carrierNote,
-                            carrierNoteWarning = carrierNoteWarning && rowLabel == null,
-                            onCarrierNoteClick = onCarrierLabelClick
-                                ?.let { cb -> { cb(item.chapter) } },
-                            onLongClick = {
-                                onChapterSelected(item, !item.selected, true, true)
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            },
-                            onClick = {
-                                onChapterItemClick(
-                                    chapterItem = item,
-                                    isAnyChapterSelected = isAnyChapterSelected,
-                                    onToggleSelection = {
-                                        onChapterSelected(item, !item.selected, true, false)
-                                    },
-                                    onChapterClicked = onChapterClicked,
-                                )
-                            },
-                            accentColor = accentColor,
-                            trailing = {
-                                if (!manga.isLocal()) {
-                                    ChapterDownloadIndicator(
-                                        enabled = true,
-                                        downloadStateProvider = { item.downloadState },
-                                        downloadProgressProvider = { item.downloadProgress },
-                                        onClick = {
-                                            onDownloadChapter?.invoke(listOf(item), it, null)
-                                        },
-                                        downloadCarriers = if (
-                                            eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
-                                                .isCanonUrl(item.chapter.url)
-                                        ) {
-                                            downloadCarriers
-                                        } else {
-                                            null
-                                        },
-                                        onCarrierPick = { pkg ->
-                                            onDownloadChapter?.invoke(
-                                                listOf(item),
-                                                ChapterDownloadAction.START,
-                                                pkg,
-                                            )
-                                        },
+                                null
+                            }
+                            EntryChapterCarouselCard(
+                                title = if (manga.displayMode == Manga.CHAPTER_DISPLAY_NUMBER) {
+                                    stringResource(
+                                        MR.strings.display_mode_chapter,
+                                        formatChapterNumber(item.chapter.chapterNumber),
                                     )
-                                }
-                            },
-                        )
+                                } else {
+                                    eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
+                                        .bareNumberDisplayName(item.chapter.name)
+                                        ?: item.chapter.name
+                                },
+                                dateUpload = item.chapter.dateUpload,
+                                scanlator = item.chapter.scanlator.takeIf { !it.isNullOrBlank() },
+                                progress = item.chapter.lastPageRead
+                                    .takeIf { !item.chapter.read && it > 0L }
+                                    ?.let {
+                                        stringResource(MR.strings.chapter_progress, it + 1)
+                                    },
+                                read = item.chapter.read,
+                                bookmark = item.chapter.bookmark,
+                                selected = item.selected,
+                                isNext = item.chapter.id == nextChapterId,
+                                carrierNote = rowLabel ?: carrierNote,
+                                carrierNoteWarning = carrierNoteWarning && rowLabel == null,
+                                onCarrierNoteClick = onCarrierLabelClick
+                                    ?.let { cb -> { cb(item.chapter) } },
+                                onLongClick = {
+                                    onChapterSelected(item, !item.selected, true, true)
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                },
+                                onClick = {
+                                    onChapterItemClick(
+                                        chapterItem = item,
+                                        isAnyChapterSelected = isAnyChapterSelected,
+                                        onToggleSelection = {
+                                            onChapterSelected(item, !item.selected, true, false)
+                                        },
+                                        onChapterClicked = onChapterClicked,
+                                    )
+                                },
+                                accentColor = accentColor,
+                                trailing = { indicatorTint ->
+                                    if (!manga.isLocal()) {
+                                        ChapterDownloadIndicator(
+                                            enabled = true,
+                                            accentColor = indicatorTint,
+                                            downloadStateProvider = { item.downloadState },
+                                            downloadProgressProvider = { item.downloadProgress },
+                                            onClick = {
+                                                onDownloadChapter?.invoke(listOf(item), it, null)
+                                            },
+                                            downloadCarriers = if (
+                                                eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                                                    .isCanonUrl(item.chapter.url)
+                                            ) {
+                                                downloadCarriers
+                                            } else {
+                                                null
+                                            },
+                                            onCarrierPick = { pkg ->
+                                                onDownloadChapter?.invoke(
+                                                    listOf(item),
+                                                    ChapterDownloadAction.START,
+                                                    pkg,
+                                                )
+                                            },
+                                        )
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }

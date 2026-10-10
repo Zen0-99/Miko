@@ -135,6 +135,11 @@ class WorkCarriers(
         return matrix
     }
 
+    /** Cache-only read — no network/build path. For hot paths (playback)
+     *  where a missing entry just means "unknown", not "fetch now". */
+    fun peek(workId: String): Matrix? =
+        cache[workId]?.takeIf { System.currentTimeMillis() - it.fetchedAt < TTL_MS }?.matrix
+
     fun invalidate(workId: String) {
         cache.remove(workId)
     }

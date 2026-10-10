@@ -51,7 +51,11 @@ class NovelBackupCreator(
             if (historyByNovelId.isNotEmpty()) {
                 val history = historyByNovelId.map { history ->
                     val chapter = handler.awaitOne { novelchaptersQueries.getChapterById(history.chapterId) }
-                    BackupNovelHistory(chapter.url, history.readAt?.time ?: 0L, history.readDuration)
+                    BackupNovelHistory(
+                        chapter.url,
+                        history.readAt?.toEpochMilliseconds() ?: 0L,
+                        history.readDuration,
+                    )
                 }
                 if (history.isNotEmpty()) {
                     novelObject.history = history

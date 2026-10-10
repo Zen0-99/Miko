@@ -48,9 +48,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import tachiyomi.domain.achievement.model.MonthStats
+import tachiyomi.domain.achievement.model.YearMonth
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
-import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -516,7 +516,7 @@ private val MonthStats.totalActivity: Int
     get() = chaptersRead + episodesWatched
 
 internal fun formatMonthShortLabel(month: YearMonth, locale: Locale): String {
-    return month.month.getDisplayName(TextStyle.SHORT, locale)
+    return java.time.Month.of(month.month).getDisplayName(TextStyle.SHORT, locale)
         .replace(".", "")
         .lowercase(locale)
         .take(3)
@@ -524,7 +524,7 @@ internal fun formatMonthShortLabel(month: YearMonth, locale: Locale): String {
 
 internal fun formatMonthYearLabel(month: YearMonth, locale: Locale): String {
     val formatter = DateTimeFormatter.ofPattern("LLLL yyyy", locale)
-    return month.format(formatter)
+    return java.time.YearMonth.of(month.year, month.month).format(formatter)
         .replaceFirstChar { char ->
             if (char.isLowerCase()) {
                 char.titlecase(locale)

@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.entries.manga.model.downloadedFilter
@@ -58,6 +59,8 @@ fun ChapterSettingsDialog(
     onDisplayModeChanged: (Long) -> Unit,
     onSetAsDefault: (applyToExistingManga: Boolean) -> Unit,
     onResetToDefault: () -> Unit,
+    /** Detail-theme accent — tints the sheet + every control inside. */
+    accentColor: Color? = null,
 ) {
     var showSetAsDefaultDialog by rememberSaveable { mutableStateOf(false) }
     if (showSetAsDefaultDialog) {
@@ -71,6 +74,7 @@ fun ChapterSettingsDialog(
 
     TabbedDialog(
         onDismissRequest = onDismissRequest,
+        accentColor = accentColor,
         tabTitles = persistentListOf(
             stringResource(MR.strings.action_filter),
             stringResource(MR.strings.action_sort),

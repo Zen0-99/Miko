@@ -43,10 +43,10 @@ class CanonicalChapterSync(
 ) {
 
     /** Sync a canonical entry's chapter rows from the canon sequence.
-     * Returns rows synced (0 when no canon sequence exists yet). */
-    suspend fun sync(manga: Manga, workId: String, medium: String = "manga"): Int {
+     * Returns the added rows (empty when no canon sequence exists yet). */
+    suspend fun sync(manga: Manga, workId: String, medium: String = "manga"): List<Chapter> {
         val canon = chapterMap.forWork(workId)
-        if (canon.isEmpty()) return 0
+        if (canon.isEmpty()) return emptyList()
         realignCanonRows(manga.id, workId, canon)
         val sChapters = toSChapters(canon, workId)
         val source = sourceManager.getOrStub(manga.source)
@@ -54,7 +54,7 @@ class CanonicalChapterSync(
             syncChaptersWithSource.await(sChapters, manga, source)
         }.onFailure { e ->
             logcat { "canonChapterSync $workId: ${e.message}" }
-        }.getOrElse { return -1 }
+        }.getOrElse { return emptyList() }
         repairCanonRows(manga.id, canon)
         // This stub is now serviceable — entries that cached "no
         // canonical" while it was chapter-less must re-evaluate.
@@ -62,7 +62,7 @@ class CanonicalChapterSync(
             inheritReadBuckets(manga.id, added)
             Injekt.get<CanonicalEntryUnifier>().invalidate()
         }
-        return added.size
+        return added
     }
 
     /**
@@ -151,7 +151,7 @@ class CanonicalChapterSync(
         canon: List<CanonicalChapterMap.CanonChapter>,
     ) {
         val rows = chapterRepository.getChapterByMangaId(mangaId)
-        val realigns = realignUpdates(
+        val plan = realignUpdates(
             canon,
             rows.mapNotNull { row ->
                 if (!row.url.startsWith("canon:")) return@mapNotNull null
@@ -160,10 +160,38 @@ class CanonicalChapterSync(
             workId,
             chapterMap::bind,
         )
-        if (realigns.isEmpty()) return
+        if (plan.updates.isNotEmpty()) {
+            runCatching {
+                chapterRepository.updateAllChapters(plan.updates.map { ChapterUpdate(id = it.first, url = it.second) })
+            }.onFailure { logcat { "canonChapterSync realign: ${it.message}" } }
+        }
+        if (plan.orphans.isEmpty()) return
+        val byId = rows.associateBy { it.id }
+        val merges = plan.orphans.mapNotNull { (loserId, winnerId) ->
+            val loser = byId[loserId] ?: return@mapNotNull null
+            val winner = byId[winnerId] ?: return@mapNotNull null
+            val read = winner.read || loser.read
+            val bookmark = winner.bookmark || loser.bookmark
+            val lastPage = maxOf(winner.lastPageRead, loser.lastPageRead)
+            val dateFetch = minOf(winner.dateFetch, loser.dateFetch)
+            if (read == winner.read && bookmark == winner.bookmark &&
+                lastPage == winner.lastPageRead && dateFetch == winner.dateFetch
+            ) {
+                null
+            } else {
+                ChapterUpdate(
+                    id = winnerId,
+                    read = read,
+                    bookmark = bookmark,
+                    lastPageRead = lastPage,
+                    dateFetch = dateFetch,
+                )
+            }
+        }
         runCatching {
-            chapterRepository.updateAllChapters(realigns.map { ChapterUpdate(id = it.first, url = it.second) })
-        }.onFailure { logcat { "canonChapterSync realign: ${it.message}" } }
+            if (merges.isNotEmpty()) chapterRepository.updateAllChapters(merges)
+            chapterRepository.removeChaptersWithIds(plan.orphans.map { it.first })
+        }.onFailure { logcat { "canonChapterSync orphan cleanup: ${it.message}" } }
     }
 
     private suspend fun realignNovelRows(
@@ -172,7 +200,7 @@ class CanonicalChapterSync(
         canon: List<CanonicalChapterMap.CanonChapter>,
     ) {
         val rows = novelChapterRepository.getNovelChaptersByNovelId(novelId)
-        val realigns = realignUpdates(
+        val plan = realignUpdates(
             canon,
             rows.mapNotNull { row ->
                 if (!row.url.startsWith("canon:")) return@mapNotNull null
@@ -181,12 +209,40 @@ class CanonicalChapterSync(
             workId,
             chapterMap::bind,
         )
-        if (realigns.isEmpty()) return
+        if (plan.updates.isNotEmpty()) {
+            runCatching {
+                novelChapterRepository.updateAllNovelChapters(
+                    plan.updates.map { NovelChapterUpdate(id = it.first, url = it.second) },
+                )
+            }.onFailure { logcat { "canonChapterSync novel realign: ${it.message}" } }
+        }
+        if (plan.orphans.isEmpty()) return
+        val byId = rows.associateBy { it.id }
+        val merges = plan.orphans.mapNotNull { (loserId, winnerId) ->
+            val loser = byId[loserId] ?: return@mapNotNull null
+            val winner = byId[winnerId] ?: return@mapNotNull null
+            val read = winner.read || loser.read
+            val bookmark = winner.bookmark || loser.bookmark
+            val lastChar = maxOf(winner.lastCharRead, loser.lastCharRead)
+            val dateFetch = minOf(winner.dateFetch, loser.dateFetch)
+            if (read == winner.read && bookmark == winner.bookmark &&
+                lastChar == winner.lastCharRead && dateFetch == winner.dateFetch
+            ) {
+                null
+            } else {
+                NovelChapterUpdate(
+                    id = winnerId,
+                    read = read,
+                    bookmark = bookmark,
+                    lastCharRead = lastChar,
+                    dateFetch = dateFetch,
+                )
+            }
+        }
         runCatching {
-            novelChapterRepository.updateAllNovelChapters(
-                realigns.map { NovelChapterUpdate(id = it.first, url = it.second) },
-            )
-        }.onFailure { logcat { "canonChapterSync novel realign: ${it.message}" } }
+            if (merges.isNotEmpty()) novelChapterRepository.updateAllNovelChapters(merges)
+            novelChapterRepository.removeChaptersWithIds(plan.orphans.map { it.first })
+        }.onFailure { logcat { "canonChapterSync novel orphan cleanup: ${it.message}" } }
     }
 
     /**
@@ -197,9 +253,9 @@ class CanonicalChapterSync(
      * rows (canon or extension-fed) are left alone. `scanlator` stays
      * null — carrier provenance lives in the canon refs.
      */
-    suspend fun syncNovel(novel: Novel, workId: String): Int {
+    suspend fun syncNovel(novel: Novel, workId: String): List<NovelChapter> {
         val canon = chapterMap.forWork(workId)
-        if (canon.isEmpty()) return 0
+        if (canon.isEmpty()) return emptyList()
         realignNovelRows(novel.id, workId, canon)
         val existing = novelChapterRepository.getNovelChaptersByNovelId(novel.id)
         val existingUrls = existing.mapTo(HashSet()) { it.url }
@@ -262,11 +318,11 @@ class CanonicalChapterSync(
             runCatching { novelChapterRepository.addAllNovelChapters(newChapters) }
                 .onFailure { e ->
                     logcat { "canonChapterSync novel $workId: ${e.message}" }
-                    return 0
+                    return emptyList()
                 }
             Injekt.get<CanonicalEntryUnifier>().invalidate()
         }
-        return newChapters.size
+        return newChapters
     }
 
     /**
@@ -375,6 +431,151 @@ class CanonicalChapterSync(
         return newRows.size
     }
 
+    /**
+     * Repair pass for local canon rows materialized by a stale parser:
+     * rows re-parse their stored name against the donor feed — a row
+     * whose number moved gets the donor's state re-copied (that
+     * generation's read flags were painted by broken numbering, and the
+     * donor copy is the only trustworthy state), while rows already
+     * correct keep post-mint progress. Donor rows absent from canon
+     * entirely (e.g. collapsed `exN` extras) are inserted under a
+     * `canon:{wid}:r{seq}` url so they never collide with existing seq
+     * slots; realign still re-binds them by name on promotion.
+     */
+    suspend fun reconcileLocal(manga: Manga, workId: String, donorChapters: List<Chapter>): Int {
+        if (donorChapters.isEmpty()) return 0
+        val seeds = localCanonSeeds(donorChapters, { it.name }, { it.sourceOrder })
+        if (seeds.isEmpty()) return 0
+        val existing = chapterRepository.getChapterByMangaId(manga.id)
+            .filter { it.url.startsWith("canon:") }
+        if (existing.isEmpty()) return 0
+        val orderPos = HashMap<String, Long>(seeds.size)
+        val seedByName = HashMap<String, CanonSeed<Chapter>>(seeds.size)
+        seeds.forEachIndexed { seq, s ->
+            orderPos[s.name] = (seeds.size - 1 - seq).toLong()
+            seedByName.putIfAbsent(s.name, s)
+        }
+        val updates = existing.mapNotNull { row ->
+            val s = seedByName[row.name] ?: return@mapNotNull null
+            val stale = s.number != row.chapterNumber
+            val so = orderPos.getValue(row.name)
+            if (!stale && row.sourceOrder == so) return@mapNotNull null
+            ChapterUpdate(
+                id = row.id,
+                chapterNumber = s.number.takeIf { stale },
+                sourceOrder = so,
+                read = s.src.read.takeIf { stale },
+                bookmark = s.src.bookmark.takeIf { stale },
+                lastPageRead = s.src.lastPageRead.takeIf { stale },
+            )
+        }
+        if (updates.isNotEmpty()) {
+            runCatching { chapterRepository.updateAllChapters(updates) }
+                .onFailure { logcat { "localCanon reconcile $workId: ${it.message}" } }
+        }
+        val missing = insertMissingSeeds(seeds, existing.mapTo(HashSet()) { it.name }, orderPos, workId) { s, url, so ->
+            Chapter.create().copy(
+                mangaId = manga.id,
+                url = url,
+                name = s.name,
+                chapterNumber = s.number,
+                sourceOrder = so,
+                dateFetch = s.src.dateFetch.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                dateUpload = s.src.dateUpload,
+                read = s.src.read,
+                bookmark = s.src.bookmark,
+                lastPageRead = s.src.lastPageRead,
+                scanlator = null,
+            )
+        }
+        if (missing.isNotEmpty()) {
+            runCatching { chapterRepository.addAllChapters(missing) }
+                .onFailure { e ->
+                    logcat { "localCanon reconcile insert $workId: ${e.message}" }
+                    return updates.size
+                }
+        }
+        if (updates.isNotEmpty() || missing.isNotEmpty()) {
+            Injekt.get<CanonicalEntryUnifier>().invalidate()
+            logcat { "localCanon reconcile $workId: ${updates.size} fixed, ${missing.size} restored" }
+        }
+        return updates.size + missing.size
+    }
+
+    /** Same as [reconcileLocal] for novels/books — `lastCharRead` carries position. */
+    suspend fun reconcileLocalNovel(novel: Novel, workId: String, donorChapters: List<NovelChapter>): Int {
+        if (donorChapters.isEmpty()) return 0
+        val seeds = localCanonSeeds(donorChapters, { it.name }, { it.sourceOrder })
+        if (seeds.isEmpty()) return 0
+        val existing = novelChapterRepository.getNovelChaptersByNovelId(novel.id)
+            .filter { it.url.startsWith("canon:") }
+        if (existing.isEmpty()) return 0
+        val orderPos = HashMap<String, Long>(seeds.size)
+        val seedByName = HashMap<String, CanonSeed<NovelChapter>>(seeds.size)
+        seeds.forEachIndexed { seq, s ->
+            orderPos[s.name] = (seeds.size - 1 - seq).toLong()
+            seedByName.putIfAbsent(s.name, s)
+        }
+        val updates = existing.mapNotNull { row ->
+            val s = seedByName[row.name] ?: return@mapNotNull null
+            val stale = s.number != row.chapterNumber
+            val so = orderPos.getValue(row.name)
+            if (!stale && row.sourceOrder == so) return@mapNotNull null
+            NovelChapterUpdate(
+                id = row.id,
+                chapterNumber = s.number.takeIf { stale },
+                sourceOrder = so,
+                read = s.src.read.takeIf { stale },
+                bookmark = s.src.bookmark.takeIf { stale },
+                lastCharRead = s.src.lastCharRead.takeIf { stale },
+            )
+        }
+        if (updates.isNotEmpty()) {
+            runCatching { novelChapterRepository.updateAllNovelChapters(updates) }
+                .onFailure { logcat { "localCanon reconcile novel $workId: ${it.message}" } }
+        }
+        val missing = insertMissingSeeds(seeds, existing.mapTo(HashSet()) { it.name }, orderPos, workId) { s, url, so ->
+            NovelChapter.create().copy(
+                novelId = novel.id,
+                url = url,
+                name = s.name,
+                chapterNumber = s.number,
+                sourceOrder = so,
+                dateFetch = s.src.dateFetch.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                dateUpload = s.src.dateUpload,
+                read = s.src.read,
+                bookmark = s.src.bookmark,
+                lastCharRead = s.src.lastCharRead,
+                scanlator = null,
+            )
+        }
+        if (missing.isNotEmpty()) {
+            runCatching { novelChapterRepository.addAllNovelChapters(missing) }
+                .onFailure { e ->
+                    logcat { "localCanon reconcile novel insert $workId: ${e.message}" }
+                    return updates.size
+                }
+        }
+        if (updates.isNotEmpty() || missing.isNotEmpty()) {
+            Injekt.get<CanonicalEntryUnifier>().invalidate()
+            logcat { "localCanon reconcile novel $workId: ${updates.size} fixed, ${missing.size} restored" }
+        }
+        return updates.size + missing.size
+    }
+
+    /** Seeds whose name has no existing canon row → insert rows under
+     *  the `:r{seq}` url namespace, at the seed's own list position. */
+    private fun <T, R> insertMissingSeeds(
+        seeds: List<CanonSeed<T>>,
+        existingNames: HashSet<String>,
+        orderPos: HashMap<String, Long>,
+        workId: String,
+        build: (CanonSeed<T>, String, Long) -> R,
+    ): List<R> = seeds.mapNotNull { s ->
+        if (s.name in existingNames) return@mapNotNull null
+        build(s, "canon:$workId:r${s.seq}", orderPos.getValue(s.name))
+    }
+
     /** A canon row seeding from one donor chapter — identity + label. */
     private class CanonSeed<T>(
         val src: T,
@@ -422,25 +623,60 @@ class CanonicalChapterSync(
         /** Stable per-row key — never a source URL. */
         fun canonUrl(workId: String, seq: Int) = "canon:$workId:$seq"
 
+        /** Result of a realign pass — url moves plus the rows that lost
+         *  a seq claim and must be merged away by the caller. */
+        internal data class RealignPlan(
+            /** (rowId, newUrl) — winner rows whose url moves to their
+             *  bound seq. */
+            val updates: List<Pair<Long, String>>,
+            /** (loserId, winnerId) — rows that bound to (or already sat
+             *  on) a seq url another row claims; losers are true
+             *  duplicates — caller merges their read/bookmark/position
+             *  state into the winner, then deletes them. */
+            val orphans: List<Pair<Long, Long>>,
+        ) {
+            fun isEmpty() = updates.isEmpty() && orphans.isEmpty()
+        }
+
         /**
          * Bind each existing `canon:` row to its canon counterpart by
-         * parsed name; when the counterpart's seq differs from the url's,
-         * emit `(rowId, newUrl)`. One canon row per row — first bind wins
-         * so two stale rows can't claim the same url.
+         * parsed name and resolve claims per target url — one row per
+         * seq, guaranteed. A row already sitting on the target url wins
+         * the claim; the first bound row wins otherwise. Every other
+         * row pointing at the same seq — including rows whose url
+         * already equals the target (the old early-return skipped them
+         * without claiming, so a stale sibling could take the url and
+         * leave two rows bound to one seq forever) — becomes an orphan.
+         * Rows that fail to bind but physically sit on a claimed url
+         * collide on materialization, so they orphan too.
          */
         internal fun realignUpdates(
             canon: List<CanonicalChapterMap.CanonChapter>,
             rows: List<Triple<Long, String, String>>,
             workId: String,
             bind: (String, List<CanonicalChapterMap.CanonChapter>) -> CanonicalChapterMap.CanonChapter?,
-        ): List<Pair<Long, String>> {
-            val claimedUrls = HashSet<String>()
-            return rows.mapNotNull { (id, url, name) ->
+        ): RealignPlan {
+            val bound = rows.mapNotNull { (id, url, name) ->
                 val c = bind(name, canon) ?: return@mapNotNull null
-                val newUrl = canonUrl(workId, c.seq)
-                if (newUrl == url || !claimedUrls.add(newUrl)) return@mapNotNull null
-                id to newUrl
+                Triple(id, url, canonUrl(workId, c.seq))
             }
+            val updates = ArrayList<Pair<Long, String>>(bound.size)
+            val orphans = ArrayList<Pair<Long, Long>>()
+            val claimed = HashMap<String, Long>()
+            bound.groupBy { it.third }.forEach { (target, group) ->
+                val winner = group.firstOrNull { it.second == target } ?: group.first()
+                claimed[target] = winner.first
+                if (winner.second != target) updates += winner.first to target
+                group.forEach {
+                    if (it.first != winner.first) orphans += it.first to winner.first
+                }
+            }
+            val boundIds = bound.mapTo(HashSet()) { it.first }
+            rows.forEach { (id, url, _) ->
+                if (id in boundIds) return@forEach
+                claimed[url]?.let { winner -> orphans += id to winner }
+            }
+            return RealignPlan(updates, orphans)
         }
 
         /**

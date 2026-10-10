@@ -14,7 +14,7 @@ import tachiyomi.domain.history.shows.model.AnimeHistoryUpdate
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.repository.EpisodeRepository
-import java.util.Date
+import kotlin.time.Clock
 
 class SetSeenStatus(
     private val downloadPreferences: DownloadPreferences,
@@ -57,7 +57,7 @@ class SetSeenStatus(
         if (seen) {
             // Record history entries for manually-marked-as-watched episodes
             if (upsertHistory != null) {
-                val now = Date()
+                val now = Clock.System.now()
                 episodesToUpdate.forEach { episode ->
                     upsertHistory.await(
                         AnimeHistoryUpdate(

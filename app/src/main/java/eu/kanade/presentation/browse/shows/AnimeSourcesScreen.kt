@@ -51,9 +51,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import eu.kanade.presentation.browse.components.ExtensionCard
 import eu.kanade.presentation.browse.shows.components.AnimeExtensionIcon
 import eu.kanade.presentation.browse.shows.components.BaseAnimeSourceItem
-import eu.kanade.presentation.browse.components.ExtensionCard
 import eu.kanade.tachiyomi.extension.InstallStep
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.ui.browse.shows.source.AnimeSourcesScreenModel

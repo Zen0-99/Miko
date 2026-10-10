@@ -47,8 +47,8 @@ class UpcomingAnimeScreenModel(
             .insertSeparatorsReversed { before, after ->
                 if (after != null) animeCount++
 
-                val beforeDate = before?.anime?.expectedNextUpdate?.toLocalDate()
-                val afterDate = after?.anime?.expectedNextUpdate?.toLocalDate()
+                val beforeDate = before?.anime?.expectedNextUpdate?.toEpochMilliseconds()?.toLocalDate()
+                val afterDate = after?.anime?.expectedNextUpdate?.toEpochMilliseconds()?.toLocalDate()
 
                 if (beforeDate != afterDate && afterDate != null) {
                     UpcomingAnimeUIModel.Header(afterDate, animeCount).also { animeCount = 0 }

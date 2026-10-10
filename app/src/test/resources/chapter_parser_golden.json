@@ -43,5 +43,12 @@
   {"in": "Chapter 0", "number": 0, "volume": null, "part": null, "kind": "chapter"},
   {"in": "Chapter 7.5: Special", "number": 7.5, "volume": null, "part": null, "kind": "extra"},
   {"in": "Chapter 12 Pt. 3", "number": 12, "volume": null, "part": 3, "kind": "chapter"},
-  {"in": "Ch.142.5", "number": 142.5, "volume": null, "part": null, "kind": "chapter"}
+  {"in": "Ch.142.5", "number": 142.5, "volume": null, "part": null, "kind": "chapter"},
+  {"in": "CH.Book 7 14: Nock", "number": 70014, "volume": 7, "part": null, "kind": "chapter"},
+  {"in": "CH.Book 7 0: Prologue", "number": 70000, "volume": 7, "part": null, "kind": "prologue"},
+  {"in": "CH.Book 2 ex1: Heroic Interlude", "number": 25001, "volume": 2, "part": null, "kind": "extra"},
+  {"in": "CH.Book 7 ex11: Interlude", "number": 75011, "volume": 7, "part": null, "kind": "extra"},
+  {"in": "CH.Book 7 epl: Epilogue I", "number": 79999, "volume": 7, "part": null, "kind": "epilogue"},
+  {"in": "Book 3 Chapter 5", "number": 30005, "volume": 3, "part": null, "kind": "chapter"},
+  {"in": "Book 7", "number": 70000, "volume": 7, "part": null, "kind": "chapter"}
 ]

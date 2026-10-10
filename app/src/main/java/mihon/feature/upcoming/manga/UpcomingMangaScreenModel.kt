@@ -47,8 +47,8 @@ class UpcomingMangaScreenModel(
             .insertSeparatorsReversed { before, after ->
                 if (after != null) mangaCount++
 
-                val beforeDate = before?.manga?.expectedNextUpdate?.toLocalDate()
-                val afterDate = after?.manga?.expectedNextUpdate?.toLocalDate()
+                val beforeDate = before?.manga?.expectedNextUpdate?.toEpochMilliseconds()?.toLocalDate()
+                val afterDate = after?.manga?.expectedNextUpdate?.toEpochMilliseconds()?.toLocalDate()
 
                 if (beforeDate != afterDate && afterDate != null) {
                     UpcomingMangaUIModel.Header(afterDate, mangaCount).also { mangaCount = 0 }

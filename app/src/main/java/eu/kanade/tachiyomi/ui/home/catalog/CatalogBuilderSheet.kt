@@ -52,11 +52,11 @@ import eu.kanade.tachiyomi.metadata.tmdb.TmdbGenres.MediaType
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbSubGenreKeywords
 import eu.kanade.tachiyomi.ui.discovery.DiscoverySort
 import eu.kanade.tachiyomi.ui.home.hub.HomeHubScreenModel
-import java.util.UUID
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
+import java.util.UUID
 
 /**
  * Stepped catalog builder (Phase 18-3) — Type → Feed → Facets → Name.
@@ -191,7 +191,10 @@ fun CatalogBuilderSheet(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(
-                    start = 24.dp, top = 24.dp, end = 24.dp, bottom = 4.dp,
+                    start = 24.dp,
+                    top = 24.dp,
+                    end = 24.dp,
+                    bottom = 4.dp,
                 ),
             )
 
@@ -497,8 +500,11 @@ fun CatalogBuilderSheet(
                 ) {
                     Text(
                         stringResource(
-                            if (step == STEP_TITLE) MR.strings.action_save
-                            else MR.strings.onboarding_action_next,
+                            if (step == STEP_TITLE) {
+                                MR.strings.action_save
+                            } else {
+                                MR.strings.onboarding_action_next
+                            },
                         ),
                     )
                 }
@@ -536,15 +542,18 @@ private enum class BuilderCategory(
     val subTypes: List<BuilderSubType>,
 ) {
     SHOWS(
-        AYMR.strings.carrier_shows, WorkIdResolver.MEDIUM_SHOWS,
+        AYMR.strings.carrier_shows,
+        WorkIdResolver.MEDIUM_SHOWS,
         listOf(BuilderSubType.SERIES, BuilderSubType.MOVIES),
     ),
     MANGA(
-        AYMR.strings.carrier_manga, WorkIdResolver.MEDIUM_MANGA,
+        AYMR.strings.carrier_manga,
+        WorkIdResolver.MEDIUM_MANGA,
         listOf(BuilderSubType.MANGA, BuilderSubType.WEBTOONS),
     ),
     BOOKS(
-        AYMR.strings.carrier_books, WorkIdResolver.MEDIUM_BOOKS,
+        AYMR.strings.carrier_books,
+        WorkIdResolver.MEDIUM_BOOKS,
         listOf(BuilderSubType.NOVELS, BuilderSubType.BOOKS),
     ),
 }
@@ -571,7 +580,8 @@ private enum class BuilderSubType(
     MOVIES(AYMR.strings.catalog_type_movie, MediaType.MOVIE, null, "movie,film", true),
     MANGA(AYMR.strings.carrier_manga, null, "manga,comic", "manga", false),
     WEBTOONS(
-        AYMR.strings.discovery_pill_webtoons, null,
+        AYMR.strings.discovery_pill_webtoons,
+        null,
         "manhwa,manhua,webtoon,oel,other",
         // Origin vocab (Weeb Central "Series Type": Manhwa/Manhua/OEL)
         // PLUS format vocab — MangaDex's Format group tags "Long Strip"/
@@ -610,11 +620,12 @@ private fun CatalogRowSpec.toCategorySubType(): Pair<BuilderCategory, BuilderSub
             BuilderSubType.WEBTOONS
         else -> BuilderSubType.MANGA
     }
-    else -> BuilderCategory.BOOKS to
-        when ((feed as? Feed.Canonical)?.kindsCsv) {
-            "ol" -> BuilderSubType.BOOKS
-            else -> BuilderSubType.NOVELS
-        }
+    else ->
+        BuilderCategory.BOOKS to
+            when ((feed as? Feed.Canonical)?.kindsCsv) {
+                "ol" -> BuilderSubType.BOOKS
+                else -> BuilderSubType.NOVELS
+            }
 }
 
 private fun CatalogRowSpec?.toTriStates(
@@ -692,7 +703,8 @@ private fun builderFeedSections(
                     }
             }
             BuilderSubType.MANGA, BuilderSubType.WEBTOONS,
-            BuilderSubType.NOVELS, BuilderSubType.BOOKS -> {
+            BuilderSubType.NOVELS, BuilderSubType.BOOKS,
+            -> {
                 subType.kindsCsv?.let { kinds ->
                     add(
                         BuilderFeedChoice(
@@ -722,7 +734,9 @@ private fun builderFeedSections(
                     BuilderFeedChoice(
                         src.name,
                         Feed.Extension(
-                            src.pkgName, src.sourceId, ExtKind.POPULAR,
+                            src.pkgName,
+                            src.sourceId,
+                            ExtKind.POPULAR,
                             kindsCsv = subType?.extKindsCsv,
                             kindStrict = subType?.extKindStrict ?: false,
                         ),

@@ -56,9 +56,9 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.util.Screen
-import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import kotlinx.coroutines.launch
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.model.ReadingOrder

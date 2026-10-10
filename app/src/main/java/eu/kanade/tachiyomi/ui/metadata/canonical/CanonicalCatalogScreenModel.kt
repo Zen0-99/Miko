@@ -3,19 +3,24 @@ package eu.kanade.tachiyomi.ui.metadata.canonical
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import coil3.imageLoader
 import eu.kanade.domain.entries.manga.model.toDomainManga
 import eu.kanade.domain.entries.novel.model.toDomainNovel
+import eu.kanade.tachiyomi.data.catalogrows.CatalogFilter
 import eu.kanade.tachiyomi.data.catalogrows.CatalogItem
 import eu.kanade.tachiyomi.data.catalogrows.EXT_ID_PREFIX
 import eu.kanade.tachiyomi.data.catalogrows.EXT_SOURCE_KEY
 import eu.kanade.tachiyomi.data.catalogrows.EXT_URL_KEY
 import eu.kanade.tachiyomi.data.catalogrows.WEBTOON_KINDS_CSV
+import eu.kanade.tachiyomi.data.cover.HiResCoverResolver
 import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge.WorkRow
 import eu.kanade.tachiyomi.data.mikodb.SeenReporter
 import eu.kanade.tachiyomi.data.mikodb.WorkIdResolver
+import eu.kanade.tachiyomi.data.mikodb.WorksBrowseApi
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -54,6 +59,8 @@ class CanonicalCatalogScreenModel(
     private val catalog: CanonicalCatalog = Injekt.get(),
 ) : StateScreenModel<CanonicalCatalogScreenModel.State>(State()) {
 
+    private val context: android.content.Context = Injekt.get<android.app.Application>()
+
     @Immutable
     data class State(
         val medium: String = WorkIdResolver.MEDIUM_MANGA,
@@ -61,6 +68,10 @@ class CanonicalCatalogScreenModel(
         val loading: Boolean = false,
         val error: String? = null,
         val searchQuery: String? = null,
+        /** Kind scope of the live search — the selected sub-type pill's
+         *  kindsCsv, null = whole medium. Survives re-scopes so a carrier
+         *  switch/retry re-runs under the same scope. */
+        val searchKindsCsv: String? = null,
         /**
          * Idle-catalog feed — `null` until [setCatalogFeed] selects one.
          * The key is `$medium|$kindsCsv` (`$medium|ol` for OpenLibrary).
@@ -103,8 +114,10 @@ class CanonicalCatalogScreenModel(
     )
 
     private val feedCache = mutableMapOf<String, FeedCache>()
+    private var lastSurfaceRefreshMs = 0L
     private val feeds: eu.kanade.tachiyomi.data.catalogrows.DiscoveryFeeds by injectLazy()
     private val feedStore: eu.kanade.tachiyomi.data.catalogrows.DiscoveryFeedStore by injectLazy()
+    private val coverUpdates: eu.kanade.tachiyomi.data.cover.CoverUpdateBus by injectLazy()
 
     private val networkToLocalManga: tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga by injectLazy()
     private val networkToLocalNovel: tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel by injectLazy()
@@ -112,21 +125,169 @@ class CanonicalCatalogScreenModel(
     init {
         // Disk-hydrate the feed cache — the app-start warmer already wrote
         // today's pages, so Discovery renders instantly on first visit.
+        // Covers healed since the snapshot was taken are overlaid from the
+        // materialized rows + live bindings before anything renders — a
+        // stale stored cover must never paint and then swap visibly.
         screenModelScope.launchIO {
             feedStore.load().forEach { (feed, stored) ->
+                val medium = feed.substringBefore(FEED_SEPARATOR)
+                val covers = catalog.canonicalEntryCovers(
+                    stored.items.map { it.work.mikoWorkId },
+                    medium,
+                )
+                val items = stored.items.map { item ->
+                    val cover = covers[item.work.mikoWorkId]
+                    val healed = HiResCoverResolver.preferCover(item.coverUrl, cover?.url, cover?.pinned == true)
+                    if (healed != item.coverUrl) {
+                        item.copy(coverUrl = healed, work = item.work.copy(coverUrl = healed))
+                    } else {
+                        item
+                    }
+                }
+                val bound = catalog.localLibraryEntryIds(items.map { it.work }, medium)
                 feedCache.putIfAbsent(
                     feed,
-                    FeedCache(
-                        stored.items,
-                        stored.page,
-                        stored.hasMore,
-                        stored.savedAt,
-                        stored.bound.mapValues { (workId, id) ->
-                            CanonicalCatalog.BoundEntry(id, stored.boundCovers[workId])
-                        },
-                    ),
+                    FeedCache(items, stored.page, stored.hasMore, stored.savedAt, bound),
                 )
             }
+        }
+
+        // A cover healed while a detail screen covers this surface lands
+        // here — patch the cache, the live state, and the disk snapshot
+        // now so the pop's first frame already shows the new art (no
+        // post-animation crossfade) and a cold start keeps it too.
+        screenModelScope.launchIO {
+            coverUpdates.updates.collect { upd -> applyCoverUpdate(upd) }
+        }
+    }
+
+    /** Swap each item's cover for the materialized canonical row's art
+     *  when a detail visit healed it — single source for every feed path
+     *  (hydration, surface-shown, fresh pages, startup warm). */
+    private suspend fun healFeedCovers(
+        items: List<CatalogItem>,
+        medium: String,
+    ): List<CatalogItem> {
+        if (items.isEmpty()) return items
+        val covers = catalog.canonicalEntryCovers(items.map { it.work.mikoWorkId }, medium)
+        if (covers.isEmpty()) return items
+        return items.map { item ->
+            val cover = covers[item.work.mikoWorkId]
+            val healed = HiResCoverResolver.preferCover(item.coverUrl, cover?.url, cover?.pinned == true)
+            if (healed != item.coverUrl) {
+                item.copy(coverUrl = healed, work = item.work.copy(coverUrl = healed))
+            } else {
+                item
+            }
+        }
+    }
+
+    private suspend fun applyCoverUpdate(upd: eu.kanade.tachiyomi.data.cover.CoverUpdateBus.Update) {
+        feedCache.keys.toList().forEach { feed ->
+            val cache = feedCache[feed] ?: return@forEach
+            var touched = false
+            val bound = if (cache.bound.values.any { it.entryId == upd.entryId }) {
+                cache.bound.mapValues { (_, b) ->
+                    if (b.entryId == upd.entryId) {
+                        val next = HiResCoverResolver.preferCover(b.coverUrl, upd.coverUrl, upd.manual)
+                        if (next != b.coverUrl) {
+                            touched = true
+                            b.copy(coverUrl = next)
+                        } else {
+                            b
+                        }
+                    } else {
+                        b
+                    }
+                }
+            } else {
+                cache.bound
+            }
+            val items = if (upd.workId != null) {
+                cache.items.map { item ->
+                    if (item.work.mikoWorkId == upd.workId) {
+                        val next = HiResCoverResolver.preferCover(item.coverUrl, upd.coverUrl, upd.manual)
+                        if (next != item.coverUrl) {
+                            touched = true
+                            item.copy(coverUrl = next, work = item.work.copy(coverUrl = next))
+                        } else {
+                            item
+                        }
+                    } else {
+                        item
+                    }
+                }
+            } else {
+                cache.items
+            }
+            if (!touched) return@forEach
+            feedCache[feed] = cache.copy(items = items, bound = bound)
+            screenModelScope.launchIO {
+                feedStore.save(
+                    feed,
+                    items,
+                    cache.page,
+                    cache.hasMore,
+                    bound.mapValues { it.value.entryId },
+                    bound.mapNotNull { (k, v) -> v.coverUrl?.let { k to it } }.toMap(),
+                )
+            }
+            mutableState.update { s ->
+                var next = s
+                if (s.browseFeed == feed) next = next.copy(browseItems = items)
+                if (s.boundEntryIds.values.any { it.entryId == upd.entryId }) {
+                    next = next.copy(
+                        boundEntryIds = s.boundEntryIds.mapValues { (_, b) ->
+                            if (b.entryId == upd.entryId) {
+                                b.copy(
+                                    coverUrl = HiResCoverResolver.preferCover(b.coverUrl, upd.coverUrl, upd.manual),
+                                )
+                            } else {
+                                b
+                            }
+                        },
+                    )
+                }
+                if (upd.workId != null && s.results.any { it.mikoWorkId == upd.workId }) {
+                    next = next.copy(
+                        results = s.results.map { w ->
+                            if (w.mikoWorkId == upd.workId) {
+                                w.copy(
+                                    coverUrl = HiResCoverResolver.preferCover(w.coverUrl, upd.coverUrl, upd.manual),
+                                )
+                            } else {
+                                w
+                            }
+                        },
+                    )
+                }
+                next
+            }
+            prefetchCoverUpdate(upd)
+        }
+    }
+
+    /**
+     * A patched coverUrl changes the cell's `covercell;…{url}…` memory
+     * key — without warming it the first frame after a pop misses
+     * memory and the placeholder→bitmap crossfade shows as a visible
+     * fade-out/fade-in. Pre-decode under both keys a card can use —
+     * bound (entry id) and unbound (work-id hash).
+     */
+    private fun prefetchCoverUpdate(upd: eu.kanade.tachiyomi.data.cover.CoverUpdateBus.Update) {
+        val url = upd.coverUrl.takeIf { it.isNotBlank() } ?: return
+        val kind = if (state.value.medium == WorkIdResolver.MEDIUM_BOOKS) "novel" else "manga"
+        val keys = buildList {
+            add("covercell;$kind;${upd.entryId};$url;0")
+            upd.workId?.let { add("covercell;$kind;${it.hashCode().toLong()};$url;0") }
+        }
+        keys.forEach { key ->
+            context.imageLoader.enqueue(
+                coil3.request.ImageRequest.Builder(context)
+                    .data(url)
+                    .memoryCacheKey(key)
+                    .build(),
+            )
         }
     }
 
@@ -138,6 +299,9 @@ class CanonicalCatalogScreenModel(
                 medium = medium,
                 results = emptyList(),
                 boundEntryIds = emptyMap(),
+                // The old carrier's pill scope must not bleed into the
+                // re-run — the visible surface's pill effect re-scopes.
+                searchKindsCsv = null,
                 // The feed is carrier-keyed — drop it; the composable
                 // selects the new carrier's feed right after.
                 browseFeed = null,
@@ -152,18 +316,37 @@ class CanonicalCatalogScreenModel(
         state.value.searchQuery?.let { search(it) }
     }
 
-    fun search(query: String) {
-        screenModelScope.launch {
+    /** Serializes searches — a re-scope cancels the in-flight call so a
+     *  slower unscoped response can't overwrite the scoped results. */
+    private var searchJob: kotlinx.coroutines.Job? = null
+
+    fun search(query: String, kindsCsv: String? = null) {
+        val current = state.value
+        if (current.searchQuery == query &&
+            current.searchKindsCsv == kindsCsv &&
+            (current.loading || (current.results.isNotEmpty() && current.error == null))
+        ) {
+            return
+        }
+        searchJob?.cancel()
+        searchJob = screenModelScope.launch {
             mutableState.update {
-                it.copy(results = emptyList(), searchQuery = query, loading = true, error = null)
+                it.copy(
+                    results = emptyList(),
+                    searchQuery = query,
+                    searchKindsCsv = kindsCsv,
+                    loading = true,
+                    error = null,
+                )
             }
             try {
-                val results = catalog.search(query, state.value.medium)
+                val results = catalog.search(query, state.value.medium, kindsCsv)
                 val bound = catalog.localLibraryEntryIds(results, state.value.medium)
                 mutableState.update {
                     it.copy(loading = false, results = results, boundEntryIds = bound)
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 logcat(LogPriority.ERROR, e) { "canonical catalog search failed" }
                 mutableState.update {
                     it.copy(
@@ -180,6 +363,7 @@ class CanonicalCatalogScreenModel(
             it.copy(
                 results = emptyList(),
                 searchQuery = null,
+                searchKindsCsv = null,
                 loading = false,
                 error = null,
                 boundEntryIds = emptyMap(),
@@ -188,7 +372,7 @@ class CanonicalCatalogScreenModel(
     }
 
     fun retry() {
-        state.value.searchQuery?.let { search(it) }
+        state.value.searchQuery?.let { search(it, state.value.searchKindsCsv) }
     }
 
     // ---------- idle-catalog feed ----------
@@ -200,9 +384,22 @@ class CanonicalCatalogScreenModel(
      * under [medium]. No-op while the feed is already live, but an
      * errored feed retries on re-selection.
      */
-    fun setCatalogFeed(medium: String, kindsCsv: String?) {
+    fun setCatalogFeed(
+        medium: String,
+        kindsCsv: String?,
+        sort: String = WorksBrowseApi.SORT_POPULARITY,
+        filter: CatalogFilter? = null,
+    ) {
         screenModelScope.launch {
-            val feed = feedFor(medium, kindsCsv)
+            val feed = feedFor(medium, kindsCsv, sort, filter)
+            // The filter object rides beside the key — the key's `f:`
+            // segment namespaces the cache, the object carries the
+            // actual params into fetch.
+            if (filter?.isActive == true) {
+                feedFilters[feed] = filter
+            } else {
+                feedFilters.remove(feed)
+            }
             if (state.value.browseFeed == feed && state.value.browseError == null) return@launch
             val cached = feedCache[feed]?.takeIf {
                 System.currentTimeMillis() - it.timestamp < CACHE_MS
@@ -227,7 +424,8 @@ class CanonicalCatalogScreenModel(
                 loadBrowsePage(feed, kindsCsv, page = 1, append = false)
             } else {
                 val bound = catalog.localLibraryEntryIds(
-                    cached.items.map { it.work }, feed.substringBefore(FEED_SEPARATOR),
+                    cached.items.map { it.work },
+                    feed.substringBefore(FEED_SEPARATOR),
                 )
                 mutableState.update { s ->
                     if (s.browseFeed == feed) s.copy(boundEntryIds = bound) else s
@@ -243,34 +441,92 @@ class CanonicalCatalogScreenModel(
         }
     }
 
-    /** Feed key for (medium, pill) — delegates the books reroute to
-     *  [DiscoveryFeeds.feedFor]. */
-    private fun feedFor(medium: String, kindsCsv: String?): String =
-        feeds.feedFor(medium, kindsCsv)
+    /** Feed key for (medium, pill, sort, filter) — delegates the books
+     *  reroute + filter namespacing to [DiscoveryFeeds.feedFor]. */
+    private fun feedFor(
+        medium: String,
+        kindsCsv: String?,
+        sort: String,
+        filter: CatalogFilter? = null,
+    ): String = feeds.feedFor(medium, kindsCsv, sort, filter)
+
+    /** Feed key → the facet set that minted its `f:` segment — fetch
+     *  reads the params from here, never re-parses the key. */
+    private val feedFilters = ConcurrentHashMap<String, CatalogFilter>()
 
     /**
-     * Snapshot of a feed's cached items without making it live — pager
-     * pages preview their own pill's feed during a swipe (the settled
-     * page owns [State.browseItems]). Empty when nothing is cached.
+     * Called when the discovery surface (re)appears — tab entry and
+     * pop-back from a detail screen both land here (the tab's
+     * composition is disposed while a detail screen is on top).
+     *
+     * Recomputes the live surface's library bindings — a favorite
+     * toggled inside the detail screen must be reflected the instant
+     * the grid returns — and re-reads canonical-row covers, since the
+     * pipeline may have healed `thumbnail_url` while the detail was
+     * open. Skips work if the previous refresh ran < [RESUME_MIN_MS]
+     * ago (the pills' pager composes two pages at once).
      */
-    fun peekCachedFeed(medium: String, kindsCsv: String?): List<CatalogItem> =
-        feedCache[peekFeedKey(medium, kindsCsv)]
-            ?.takeIf { System.currentTimeMillis() - it.timestamp < CACHE_MS }
-            ?.items
-            .orEmpty()
+    fun onSurfaceShown() {
+        val now = System.currentTimeMillis()
+        if (now - lastSurfaceRefreshMs < RESUME_MIN_MS) return
+        lastSurfaceRefreshMs = now
+        screenModelScope.launchIO {
+            val s = state.value
+            if (s.searchQuery != null) {
+                if (s.results.isEmpty()) return@launchIO
+                val bound = catalog.localLibraryEntryIds(s.results, s.medium)
+                val covers = catalog.canonicalEntryCovers(
+                    s.results.map { it.mikoWorkId },
+                    s.medium,
+                )
+                if (covers.isEmpty()) {
+                    mutableState.update { st ->
+                        if (st.searchQuery == s.searchQuery) st.copy(boundEntryIds = bound) else st
+                    }
+                    return@launchIO
+                }
+                val patched = s.results.map { w ->
+                    val cover = covers[w.mikoWorkId]
+                    w.copy(coverUrl = HiResCoverResolver.preferCover(w.coverUrl, cover?.url, cover?.pinned == true))
+                }
+                mutableState.update { st ->
+                    if (st.searchQuery == s.searchQuery) {
+                        st.copy(results = patched, boundEntryIds = bound)
+                    } else {
+                        st
+                    }
+                }
+                return@launchIO
+            }
 
-    /** Last-known bound set for a non-live feed — preview pages render
-     *  the in-library badge from their own cache entry instead of going
-     *  bare until their feed goes live again. */
-    fun peekCachedBound(medium: String, kindsCsv: String?): Map<String, CanonicalCatalog.BoundEntry> =
-        feedCache[peekFeedKey(medium, kindsCsv)]
-            ?.takeIf { System.currentTimeMillis() - it.timestamp < CACHE_MS }
-            ?.bound
-            .orEmpty()
-
-    /** Sync mirror of [feedFor] for preview lookups. */
-    private fun peekFeedKey(medium: String, kindsCsv: String?): String =
-        feeds.feedFor(medium, kindsCsv)
+            val feed = s.browseFeed ?: return@launchIO
+            val items = feedCache[feed]?.items.orEmpty()
+            if (items.isEmpty()) return@launchIO
+            val medium = feed.substringBefore(FEED_SEPARATOR)
+            val bound = catalog.localLibraryEntryIds(items.map { it.work }, medium)
+            val covers = catalog.canonicalEntryCovers(
+                items.map { it.work.mikoWorkId },
+                medium,
+            )
+            val patched = items.map { item ->
+                val cover = covers[item.work.mikoWorkId]
+                val healed = HiResCoverResolver.preferCover(item.coverUrl, cover?.url, cover?.pinned == true)
+                if (healed != item.coverUrl) {
+                    item.copy(coverUrl = healed, work = item.work.copy(coverUrl = healed))
+                } else {
+                    item
+                }
+            }
+            feedCache[feed]?.let { feedCache[feed] = it.copy(items = patched, bound = bound) }
+            mutableState.update { st ->
+                if (st.browseFeed == feed) {
+                    st.copy(browseItems = patched, boundEntryIds = bound)
+                } else {
+                    st
+                }
+            }
+        }
+    }
 
     /** Next page for the live feed — no-op while a load runs or the
      *  feed is single-page (OpenLibrary trending has no offset). */
@@ -309,7 +565,7 @@ class CanonicalCatalogScreenModel(
         mutableState.update { s -> if (s.browseFeed == feed) s.copy(browseLoading = true, browseError = null) else s }
         val isWebtoon = feed.substringBefore(FEED_SEPARATOR) == WorkIdResolver.MEDIUM_MANGA &&
             kindsCsv == WEBTOON_KINDS_CSV
-        val result = feeds.fetch(feed, page)
+        val result = feeds.fetch(feed, page, feedFilters[feed])
         if (result == null) {
             mutableState.update { s ->
                 if (s.browseFeed == feed) s.copy(browseLoading = false, browseError = FEED_ERROR) else s
@@ -357,13 +613,18 @@ class CanonicalCatalogScreenModel(
         } else {
             pageItems
         }.let { m -> cap?.let { m.take(it) } ?: m }
-        val effectiveHasMore = cap?.let { hasMore && merged.size < it } ?: hasMore
-        val bound = catalog.localLibraryEntryIds(merged.map { it.work }, medium)
-        feedCache[feed] = FeedCache(merged, page, effectiveHasMore, System.currentTimeMillis(), bound)
+        // Raw feed covers are worker seeds (low-res imgproxy art) — overlay
+        // covers healed by a detail visit before they reach the grid or the
+        // disk snapshot, or the seed wins and the healed art crossfades in
+        // on every surface.
+        val healed = healFeedCovers(merged, medium)
+        val effectiveHasMore = cap?.let { hasMore && healed.size < it } ?: hasMore
+        val bound = catalog.localLibraryEntryIds(healed.map { it.work }, medium)
+        feedCache[feed] = FeedCache(healed, page, effectiveHasMore, System.currentTimeMillis(), bound)
         screenModelScope.launchIO {
             feedStore.save(
                 feed,
-                merged,
+                healed,
                 page,
                 effectiveHasMore,
                 bound.mapValues { it.value.entryId },
@@ -375,7 +636,7 @@ class CanonicalCatalogScreenModel(
                 s
             } else {
                 s.copy(
-                    browseItems = merged,
+                    browseItems = healed,
                     browsePage = page,
                     browseHasMore = effectiveHasMore,
                     browseLoading = false,
@@ -598,9 +859,11 @@ class CanonicalCatalogScreenModel(
          *  infinite scroll. */
         private const val WEBTOON_TOP_CAP = 500
 
+        /** Dedupes [onSurfaceShown] — the pills' pager composes two
+         *  adjacent pages and each fires the resume hook. */
+        private const val RESUME_MIN_MS = 1_500L
+
         internal fun feedKey(medium: String, kindsCsv: String?): String =
             eu.kanade.tachiyomi.data.catalogrows.DiscoveryFeeds.feedKey(medium, kindsCsv)
     }
 }
-
-

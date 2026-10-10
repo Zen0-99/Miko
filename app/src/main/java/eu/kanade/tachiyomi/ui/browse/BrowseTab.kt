@@ -51,12 +51,6 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
-import eu.kanade.tachiyomi.ui.browse.shows.extension.AnimeExtensionsScreenModel
-import eu.kanade.tachiyomi.ui.browse.shows.extension.animeExtensionsTab
-import eu.kanade.tachiyomi.ui.browse.shows.source.AnimeSourcesScreenModel
-import eu.kanade.tachiyomi.ui.browse.shows.source.animeSourcesTab
-import eu.kanade.tachiyomi.ui.browse.shows.source.browse.BrowseAnimeSourceScreen
-import eu.kanade.tachiyomi.ui.browse.shows.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.extension.MangaExtensionsScreenModel
 import eu.kanade.tachiyomi.ui.browse.manga.extension.mangaExtensionsTab
 import eu.kanade.tachiyomi.ui.browse.manga.source.MangaSourcesScreenModel
@@ -69,6 +63,12 @@ import eu.kanade.tachiyomi.ui.browse.novel.source.NovelSourcesScreenModel
 import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.novelSourcesTab
+import eu.kanade.tachiyomi.ui.browse.shows.extension.AnimeExtensionsScreenModel
+import eu.kanade.tachiyomi.ui.browse.shows.extension.animeExtensionsTab
+import eu.kanade.tachiyomi.ui.browse.shows.source.AnimeSourcesScreenModel
+import eu.kanade.tachiyomi.ui.browse.shows.source.animeSourcesTab
+import eu.kanade.tachiyomi.ui.browse.shows.source.browse.BrowseAnimeSourceScreen
+import eu.kanade.tachiyomi.ui.browse.shows.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import kotlinx.collections.immutable.toImmutableList

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.shows.interactor.CreateAnimeCollectionWithName
 import tachiyomi.domain.collection.shows.interactor.DeleteAnimeCollection
 import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
@@ -18,7 +19,6 @@ import tachiyomi.domain.collection.shows.interactor.GetVisibleAnimeCollections
 import tachiyomi.domain.collection.shows.interactor.HideAnimeCollection
 import tachiyomi.domain.collection.shows.interactor.RenameAnimeCollection
 import tachiyomi.domain.collection.shows.interactor.ReorderAnimeCollection
-import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt

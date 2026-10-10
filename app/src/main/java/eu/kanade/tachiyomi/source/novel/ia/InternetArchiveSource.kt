@@ -216,7 +216,12 @@ class InternetArchiveSource : NovelCatalogueSource {
         )
 
         private val AUDIO_FORMATS = setOf(
-            "VBR MP3", "128Kbps MP3", "64Kbps MP3", "MP3", "MPEG4", "Ogg Vorbis",
+            "VBR MP3",
+            "128Kbps MP3",
+            "64Kbps MP3",
+            "MP3",
+            "MPEG4",
+            "Ogg Vorbis",
         )
 
         fun itemUrl(identifier: String): String = "$IA_ITEM_PREFIX$identifier"

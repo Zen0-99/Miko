@@ -33,6 +33,7 @@ import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
+import eu.kanade.tachiyomi.data.mikodb.WorkCarriers.ChapterCarrierState
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.model.MangaDownload
 import eu.kanade.tachiyomi.data.suggestions.SuggestionCache
@@ -59,14 +60,15 @@ import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -155,6 +157,8 @@ class MangaScreenModel(
     private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
     private val carrierExclusions: eu.kanade.tachiyomi.data.mikodb.CarrierExclusions = Injekt.get(),
     private val canonicalVolumes: eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes = Injekt.get(),
+    private val bridge: eu.kanade.tachiyomi.data.mikodb.MangaNovelIdBridge = Injekt.get(),
+    private val preferenceStore: tachiyomi.core.common.preference.PreferenceStore = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<MangaScreenModel.State>(State.Loading) {
 
@@ -203,6 +207,19 @@ class MangaScreenModel(
     /**
      * Helper function to update the UI state only if it's currently in success state
      */
+    /** Completed by the screen once the nav transition lands. Heavy
+     *  secondary work — canonical pipelines, carrier loads, source
+     *  fetches, suggestions, comment counts, hi-res cover upgrades —
+     *  awaits this so no DB merge or network write contends with the
+     *  shared-element flight (the Nuvio `shouldLoadSecondaryData`
+     *  pattern: secondary data doesn't start until interactions end).
+     *  Screens without a nav scope settle on their first frame, so
+     *  tabs/deep links are unaffected. */
+    private val transitionSettled = CompletableDeferred<Unit>()
+    fun onTransitionSettled() {
+        transitionSettled.complete(Unit)
+    }
+
     private inline fun updateSuccessState(func: (State.Success) -> State.Success) {
         mutableState.update {
             when (it) {
@@ -465,7 +482,8 @@ class MangaScreenModel(
             }
             if (canonical != null && canonical.id != mangaId) {
                 logcat(LogPriority.DEBUG) {
-                    "MangaScreenModel: redirecting '${manga.title}' (id=$mangaId, source=${manga.source}) to canonical entry id=${canonical.id}"
+                    "MangaScreenModel: redirecting '${manga.title}' (id=$mangaId, " +
+                        "source=${manga.source}) to canonical entry id=${canonical.id}"
                 }
                 redirectToEntryId.value = canonical.id
                 return@launchIO
@@ -485,8 +503,15 @@ class MangaScreenModel(
                 // the mint resolves.
                 screenModelScope.launchIO {
                     state.first { it is State.Success }
+                    transitionSettled.await()
                     updateSuccessState { it.copy(isMinting = true) }
-                    val c = runCatching { libraryCanonizer.migrateManga(manga, heavy = true) }.getOrNull()
+                    val c = runCatching { libraryCanonizer.migrateManga(manga, heavy = true) }
+                        .onFailure {
+                            logcat(LogPriority.WARN, it as? Exception ?: Exception(it)) {
+                                "init mint failed for '${manga.title}'"
+                            }
+                        }
+                        .getOrNull()
                     updateSuccessState { it.copy(isMinting = false) }
                     if (c != null) redirectToEntryId.value = c.id
                 }
@@ -499,7 +524,12 @@ class MangaScreenModel(
                     .toChapterListItems(manga)
             }
             val flagsDeferred = async {
-                if (!manga.favorite) setMangaDefaultChapterFlags.await(manga)
+                // Seed library defaults only on untouched rows — a
+                // non-favorite canonical entry keeps the user's sort/
+                // filter choices across visits.
+                if (!manga.favorite && manga.chapterFlags == 0L) {
+                    setMangaDefaultChapterFlags.await(manga)
+                }
             }
             val sourceDeferred = async { Injekt.get<MangaSourceManager>().getOrStub(manga.source) }
             val availableScanlatorsDeferred = async { getAvailableScanlators.await(mangaId) }
@@ -535,12 +565,13 @@ class MangaScreenModel(
             // Show what we have earlier
             val intervalDays = fetchInterval.calculateInterval(
                 chapters.map { it.chapter },
-                java.time.ZoneId.systemDefault(),
+                kotlinx.datetime.TimeZone.currentSystemDefault(),
             )
             // Hide interval badge if series is completed or last update is
             // older than 2 months (stale schedule).
             val showInterval = shouldShowInterval(manga.status, chapters.map { it.chapter })
             mutableState.update { prev ->
+                val p = prev as? State.Success
                 State.Success(
                     manga = manga,
                     source = sourceDeferred.await(),
@@ -550,12 +581,26 @@ class MangaScreenModel(
                     excludedScanlators = excludedScanlatorsDeferred.await(),
                     isRefreshingData = needRefreshInfo || needRefreshChapter,
                     dialog = null,
-                    accentColor = cachedAccentColor
-                        ?: (prev as? State.Success)?.accentColor,
+                    accentColor = cachedAccentColor ?: p?.accentColor,
                     intervalDays = intervalDays,
                     showInterval = showInterval,
+                    // Secondary overlays the warm-started snapshot already
+                    // carries — wiping them here makes their chrome vanish
+                    // mid-transition and pop back when the gated refetch
+                    // lands post-settle (carrier label, comment badge).
+                    trackingCount = p?.trackingCount ?: 0,
+                    hasLoggedInTrackers = p?.hasLoggedInTrackers ?: false,
+                    suggestions = p?.suggestions ?: SuggestionState.Idle,
+                    commentsCount = p?.commentsCount,
+                    carrierMatrix = p?.carrierMatrix,
+                    preferredCarrier = p?.preferredCarrier,
+                    chapterCarriers = p?.chapterCarriers ?: emptyMap(),
                 )
             }
+
+            // Everything below is secondary — holds until the nav
+            // transition lands (see transitionSettled).
+            transitionSettled.await()
 
             // Start observe tracking since it only needs mangaId
             observeTrackers()
@@ -564,6 +609,7 @@ class MangaScreenModel(
             // and counts its visible comments. Silent on failure.
             if (commentsEnabled) {
                 screenModelScope.launchIO {
+                    transitionSettled.await()
                     val threadId = threadIdResolver.forManga(manga) ?: return@launchIO
                     val result = commentsApi.threadCounts(listOf(threadId))
                     if (result is eu.kanade.tachiyomi.data.comments.CommentsApi.Result.Ok) {
@@ -623,7 +669,8 @@ class MangaScreenModel(
         // feed, offline, no carriers) and init only kicks it once.
         val mintCandidate = successState?.manga
             ?.takeIf {
-                manualFetch && it.favorite &&
+                manualFetch &&
+                    it.favorite &&
                     it.source != eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.CANONICAL_SOURCE_ID &&
                     !eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.isCanonicalUrl(it.url)
             }
@@ -632,6 +679,10 @@ class MangaScreenModel(
             screenModelScope.launchIO {
                 val canonical = runCatching {
                     libraryCanonizer.migrateManga(mintCandidate, heavy = true)
+                }.onFailure {
+                    logcat(LogPriority.WARN, it as? Exception ?: Exception(it)) {
+                        "refresh mint failed for '${mintCandidate.title}'"
+                    }
                 }.getOrNull()
                 updateSuccessState { it.copy(isMinting = false, isRefreshingData = false) }
                 if (canonical != null) {
@@ -657,7 +708,8 @@ class MangaScreenModel(
         // refresh is the explicit "retry now" action).
         val canonicalWorkId = successState?.manga?.url
             ?.let { eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.workIdFromMangaUrl(it) }
-        if (canonicalWorkId != null && successState?.manga?.source ==
+        if (canonicalWorkId != null &&
+            successState?.manga?.source ==
             eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.CANONICAL_SOURCE_ID
         ) {
             successState?.manga?.let { m ->
@@ -1274,7 +1326,8 @@ class MangaScreenModel(
         val chapters = state.chapters.filter { !it.chapter.bookmark }.map { it.chapter }
         if (chapters.isNotEmpty()) {
             screenModelScope.launchNonCancellable {
-                downloadManager.deleteChapters(chapters, state.manga, state.source)
+                val deleted = downloadManager.deleteChapters(chapters, state.manga, state.source)
+                markChaptersNotDownloaded(deleted.map { it.id }.toSet())
             }
         }
     }
@@ -1284,7 +1337,8 @@ class MangaScreenModel(
         val chapters = state.chapters.filter { it.chapter.read }.map { it.chapter }
         if (chapters.isNotEmpty()) {
             screenModelScope.launchNonCancellable {
-                downloadManager.deleteChapters(chapters, state.manga, state.source)
+                val deleted = downloadManager.deleteChapters(chapters, state.manga, state.source)
+                markChaptersNotDownloaded(deleted.map { it.id }.toSet())
             }
         }
     }
@@ -1349,15 +1403,40 @@ class MangaScreenModel(
         screenModelScope.launchNonCancellable {
             try {
                 successState?.let { state ->
-                    downloadManager.deleteChapters(
+                    val deleted = downloadManager.deleteChapters(
                         chapters,
                         state.manga,
                         state.source,
                     )
+                    markChaptersNotDownloaded(deleted.map { it.id }.toSet())
                 }
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e)
             }
+        }
+    }
+
+    /**
+     * Drops a deleted chapter's download state on its row — file
+     * deletions emit nothing on `downloadManager.statusFlow` (that flow
+     * only tracks queued items), so without this the icon stayed
+     * DOWNLOADED until the next full list rebuild.
+     */
+    private fun markChaptersNotDownloaded(deletedIds: Set<Long>) {
+        if (deletedIds.isEmpty()) return
+        updateSuccessState { state ->
+            state.copy(
+                chapters = state.chapters.map { item ->
+                    if (item.id in deletedIds) {
+                        item.copy(
+                            downloadState = MangaDownload.State.NOT_DOWNLOADED,
+                            downloadProgress = 0,
+                        )
+                    } else {
+                        item
+                    }
+                },
+            )
         }
     }
 
@@ -1604,14 +1683,21 @@ class MangaScreenModel(
         data object SettingsSheet : Dialog
         data object TrackSheet : Dialog
         data object Comments : Dialog
-        data object FullCover : Dialog
+
+        /** [coverData] = the artwork currently painted in the hero —
+         *  the selected volume's cover when grouped, else the entry's
+         *  own cover. The dialog views/shares what the user saw. */
+        data class FullCover(val coverData: Any? = null) : Dialog
+
         /** Chapter tapped on a canonical entry with no enabled carrier —
          *  the "install an extension" sheet (16-04). */
         data class CarrierInstall(val chapter: Chapter) : Dialog
+
         /** Preferred-carrier picker for a canonical entry. [chapter]
          *  non-null scopes the choice to that chapter ("read this
          *  chapter with…"); null sets the work-level default. */
         data class CarrierPicker(val chapter: Chapter? = null) : Dialog
+
         /** Find Content Provider — zero-bound canonical entry (17-02). */
         data object FindProvider : Dialog
     }
@@ -1639,8 +1725,115 @@ class MangaScreenModel(
     val commentsEnabled: Boolean
         get() = basePreferences.commentsEnabled().get()
 
-    fun showCoverDialog() {
-        updateSuccessState { it.copy(dialog = Dialog.FullCover) }
+    fun showCoverDialog(coverData: Any? = null) {
+        updateSuccessState { it.copy(dialog = Dialog.FullCover(coverData)) }
+        loadCoverOptions()
+    }
+
+    /**
+     * Assemble the cover-picker strip: volume-pill art, each bound
+     * carrier's own cover, and the canonical identity's artwork (all
+     * identity-verified), plus the pinned marker from prefs. Runs per
+     * dialog open so late-bound carriers show up.
+     */
+    private var coverOptionsLoadedAt = 0L
+
+    private fun loadCoverOptions() {
+        val state = successState ?: return
+        val manga = state.manga
+        screenModelScope.launchIO {
+            val options = mutableListOf<eu.kanade.presentation.entries.components.CoverOption>()
+            val pinPref = preferenceStore.getString(
+                eu.kanade.presentation.entries.components.coverPinPrefKey(
+                    eu.kanade.presentation.entries.components.COVER_PIN_KIND_MANGA,
+                    manga.id,
+                ),
+                "",
+            )
+            // Reopening inside the TTL replays the assembled strip —
+            // volume and carrier art doesn't re-request; the pin pref is
+            // still re-read so a V-committed selection ticks right.
+            if (state.coverOptions.isNotEmpty() &&
+                System.currentTimeMillis() - coverOptionsLoadedAt < COVER_OPTIONS_TTL_MS
+            ) {
+                updateSuccessState {
+                    it.copy(coverPinKey = pinPref.get().takeIf(String::isNotBlank))
+                }
+                return@launchIO
+            }
+            // Push after each batch so the strip fills in as data lands
+            // instead of waiting on every carrier fetch to finish.
+            fun push() {
+                updateSuccessState {
+                    it.copy(
+                        coverOptions = options.distinctBy { o -> o.data },
+                        coverPinKey = pinPref.get().takeIf(String::isNotBlank),
+                    )
+                }
+            }
+            state.volumes?.covers?.toSortedMap()?.forEach { (no, meta) ->
+                (meta.coverUrl ?: meta.coverThumbUrl)?.let { url ->
+                    options += eu.kanade.presentation.entries.components.CoverOption(
+                        key = "vol:$no",
+                        label = "V. ${eu.kanade.presentation.entries.components.coverOrdinal(no)}",
+                        data = url,
+                    )
+                }
+            }
+            val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.workIdFromMangaUrl(manga.url)
+            if (workId == null) {
+                manga.thumbnailUrl?.let { url ->
+                    options += eu.kanade.presentation.entries.components.CoverOption(
+                        key = "source",
+                        label = state.source.name,
+                        data = url,
+                    )
+                }
+                push()
+                coverOptionsLoadedAt = System.currentTimeMillis()
+                return@launchIO
+            }
+            bridge.byWorkId(workId)?.coverUrl?.let { url ->
+                options += eu.kanade.presentation.entries.components.CoverOption(
+                    key = "mikodb",
+                    label = "MikoDB",
+                    data = url,
+                )
+            }
+            // The art Auto currently resolves to (pipeline-picked provider
+            // art) — pickable on its own, first after Auto, unless another
+            // tile already carries it.
+            manga.thumbnailUrl?.takeIf { url -> url.isNotBlank() && options.none { it.data == url } }
+                ?.let { url ->
+                    options.add(
+                        0,
+                        eu.kanade.presentation.entries.components.CoverOption(
+                            key = "current",
+                            label = eu.kanade.presentation.entries.components.coverProviderLabel(url)
+                                ?: "Current",
+                            data = url,
+                        ),
+                    )
+                }
+            push()
+            runCatching {
+                canonicalChapterRouter.forEachCarrierCover(
+                    workId,
+                    eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_MANGA,
+                ) { pkg, url ->
+                    val name = state.carrierMatrix?.carriers
+                        ?.firstOrNull { it.pkgName == pkg }?.displayName
+                        ?: pkg.substringAfterLast('.')
+                    options += eu.kanade.presentation.entries.components.CoverOption(
+                        key = "carrier:$pkg",
+                        label = name,
+                        data = url,
+                    )
+                    push()
+                }
+            }
+            coverOptionsLoadedAt = System.currentTimeMillis()
+        }
     }
 
     fun showMigrateDialog(duplicate: Manga) {
@@ -1684,13 +1877,13 @@ class MangaScreenModel(
      *  enabled carrier can serve the work, INSTALL_REQUIRED when only
      *  uninstalled carriers exist, UNAVAILABLE when nothing is bound.
      *  Unfetched matrices stay READY — never block a read on a fetch miss. */
-    fun carrierStateFor(@Suppress("UNUSED_PARAMETER") chapter: Chapter): eu.kanade.tachiyomi.data.mikodb.WorkCarriers.ChapterCarrierState {
-        val matrix = successState?.carrierMatrix ?: return eu.kanade.tachiyomi.data.mikodb.WorkCarriers.ChapterCarrierState.READY
-        if (!matrix.fetched) return eu.kanade.tachiyomi.data.mikodb.WorkCarriers.ChapterCarrierState.READY
+    fun carrierStateFor(@Suppress("UNUSED_PARAMETER") chapter: Chapter): ChapterCarrierState {
+        val matrix = successState?.carrierMatrix ?: return ChapterCarrierState.READY
+        if (!matrix.fetched) return ChapterCarrierState.READY
         return when {
-            matrix.readable.isNotEmpty() -> eu.kanade.tachiyomi.data.mikodb.WorkCarriers.ChapterCarrierState.READY
-            matrix.installable.isNotEmpty() -> eu.kanade.tachiyomi.data.mikodb.WorkCarriers.ChapterCarrierState.INSTALL_REQUIRED
-            else -> eu.kanade.tachiyomi.data.mikodb.WorkCarriers.ChapterCarrierState.UNAVAILABLE
+            matrix.readable.isNotEmpty() -> ChapterCarrierState.READY
+            matrix.installable.isNotEmpty() -> ChapterCarrierState.INSTALL_REQUIRED
+            else -> ChapterCarrierState.UNAVAILABLE
         }
     }
 
@@ -1705,7 +1898,7 @@ class MangaScreenModel(
             return false
         }
         return when (carrierStateFor(chapter)) {
-            eu.kanade.tachiyomi.data.mikodb.WorkCarriers.ChapterCarrierState.READY -> false
+            ChapterCarrierState.READY -> false
             else -> {
                 updateSuccessState { it.copy(dialog = Dialog.CarrierInstall(chapter)) }
                 true
@@ -1899,7 +2092,10 @@ class MangaScreenModel(
             }
             carrierExclusions.exclude(workId, carrier.pkgName, carrier.providerRef)
             workIdentityApi.removeBindingSignal(
-                workId, carrier.pkgName, carrier.providerRef, removed = true,
+                workId,
+                carrier.pkgName,
+                carrier.providerRef,
+                removed = true,
             )
             workCarriers.invalidate(workId)
             loadCarriers(workId)
@@ -1909,6 +2105,10 @@ class MangaScreenModel(
                     carrier.displayName,
                 ),
                 actionLabel = context.stringResource(MR.strings.action_undo),
+                // M3 defaults an actionLabel snackbar to Indefinite — it
+                // would sit until the screen leaves. Undo is a courtesy,
+                // not a decision prompt: give it a bounded window.
+                duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) {
                 restoreCarrier(workId, carrier.pkgName)
@@ -1941,8 +2141,6 @@ class MangaScreenModel(
         restoreCarrier(workId, pkgName)
     }
 
-
-
     fun setExcludedScanlators(excludedScanlators: Set<String>) {
         screenModelScope.launchIO {
             setExcludedScanlators.await(mangaId, excludedScanlators)
@@ -1966,8 +2164,10 @@ class MangaScreenModel(
         updateSuccessState {
             it.copy(
                 dialog = Dialog.FindProvider,
-                providerSearch = (it.providerSearch
-                    ?: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search())
+                providerSearch = (
+                    it.providerSearch
+                        ?: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search()
+                    )
                     .copy(recommendations = providerRecommendations()),
             )
         }
@@ -2026,6 +2226,31 @@ class MangaScreenModel(
             .workIdFromMangaUrl(manga.url) ?: return
         screenModelScope.launchIO {
             providerFinder.mint(workId, feeds)
+            // Confirmed carriers carry the extension's own cover art —
+            // adopt the highest-scoring pick when the canonical entry's
+            // cover is blank or a non-preferred URL (same guard as the
+            // pipeline's cover pass; recognized hi-res never restomps).
+            feeds
+                .filter { !it.details?.thumbnailUrl.isNullOrBlank() }
+                .maxByOrNull { it.score }
+                ?.details?.thumbnailUrl
+                ?.let { cover ->
+                    val stored = manga.thumbnailUrl
+                    if (stored.isNullOrBlank() ||
+                        !eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(stored)
+                    ) {
+                        updateManga.await(
+                            tachiyomi.domain.entries.manga.model.MangaUpdate(
+                                id = manga.id,
+                                thumbnailUrl = cover,
+                                coverLastModified = System.currentTimeMillis(),
+                            ),
+                        )
+                        updateSuccessState {
+                            it.copy(manga = mangaRepository.getMangaById(manga.id))
+                        }
+                    }
+                }
             providerFinder.invalidate(
                 workId,
                 eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_MANGA,
@@ -2062,6 +2287,7 @@ class MangaScreenModel(
                     tier = providerTiers.effectiveTier(ext.pkgName),
                     iconUrl = ext.iconUrl,
                     lang = ext.lang,
+                    points = providerTiers.confirmCount(ext.pkgName),
                 )
             }
             .sortedWith(
@@ -2117,6 +2343,11 @@ class MangaScreenModel(
              *  when the cached data clears the confidence floor; the
              *  screen keeps the flat list otherwise. */
             val volumes: eu.kanade.tachiyomi.data.mikodb.CanonicalVolumes.WorkVolumes? = null,
+            /** Cover-picker candidates + the pinned tile's key (null =
+             *  automatic cover resolution). Populated when the cover
+             *  dialog opens. */
+            val coverOptions: List<eu.kanade.presentation.entries.components.CoverOption> = emptyList(),
+            val coverPinKey: String? = null,
         ) : State {
             val processedChapters by lazy {
                 chapters.applyFilters(manga).toList()
@@ -2163,6 +2394,11 @@ class MangaScreenModel(
     }
 
     private companion object {
+        /** How long an assembled cover-option strip stays fresh — a
+         *  reopen inside the window replays it instead of re-walking
+         *  volumes and carriers. */
+        const val COVER_OPTIONS_TTL_MS = 5 * 60 * 1000L
+
         /** Warm-start cache — the last [State.Success] emitted per manga,
          *  so reopening a detail screen renders instantly instead of
          *  flashing the spinner. Tiny LRU: heroes/recents only ever touch

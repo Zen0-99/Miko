@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.ui.discovery
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -18,11 +16,11 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.Carrier
-import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.LocalHostScaffoldContentPadding
 import eu.kanade.presentation.components.globalOverflowActions
 import eu.kanade.presentation.components.useSharedTopBarWithSearch
 import eu.kanade.presentation.util.Tab
+import eu.kanade.tachiyomi.metadata.tmdb.TmdbGenres.MediaType
 import eu.kanade.tachiyomi.ui.metadata.canonical.CanonicalCatalogScreenModel
 import eu.kanade.tachiyomi.ui.metadata.cinemeta.CinemetaBrowseScreenModel
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
@@ -31,7 +29,6 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.theme.active
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -62,6 +59,7 @@ data object DiscoveryTab : Tab {
         // can reach them and tab/content-mode switches keep their cached pages.
         val cinemetaBrowseSM = rememberScreenModel { CinemetaBrowseScreenModel() }
         val canonicalSM = rememberScreenModel { CanonicalCatalogScreenModel() }
+        val cinemetaState by cinemetaBrowseSM.state.collectAsState()
         val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
 
         // Keep the canonical catalog pointed at the active carrier's medium;
@@ -70,23 +68,48 @@ data object DiscoveryTab : Tab {
             if (carrier != Carrier.SHOWS) {
                 canonicalSM.setMedium(carrier.medium)
             }
+            // A submitted search follows the carrier — switching pills
+            // with a live query runs it on the newly-visible surface
+            // instead of silently dropping back to the idle catalog.
+            // Each surface keeps its own results; only surfaces whose
+            // query doesn't match re-run.
+            val discoveryState = screenModel.state.value
+            val query = discoveryState.searchQuery
+            if (query != null && discoveryState.searchSubmitted) {
+                when (carrier) {
+                    Carrier.SHOWS -> {
+                        if (cinemetaBrowseSM.state.value.searchQuery != query) {
+                            cinemetaBrowseSM.search(query)
+                        }
+                    }
+                    else -> {
+                        // Scoped to the carrier's committed pill — the
+                        // composable effect would otherwise re-scope a
+                        // moment later and double-fetch.
+                        val kinds = searchKindsCsvFor(
+                            carrier,
+                            discoveryState.subTypeSelections[carrier] ?: 0,
+                        )
+                        if (canonicalSM.state.value.searchQuery != query ||
+                            canonicalSM.state.value.searchKindsCsv != kinds
+                        ) {
+                            canonicalSM.search(query, kinds)
+                        }
+                    }
+                }
+            }
         }
 
-        // Shared top bar — the filter action follows the library-tab
-        // pattern (icon tints when facets are active) but only exists on
-        // the shows carrier; manga/books keep their per-source filters.
-        val showsFilter = state.filters[Carrier.SHOWS] ?: DiscoveryFilter()
+        // Detail screens dispose this tab's composition — on pop-back
+        // this refires and freshens bindings + covers changed in detail.
+        LaunchedEffect(Unit) {
+            canonicalSM.onSurfaceShown()
+        }
+
+        // Shared top bar — sub-type + filtering live in the Type/Filter
+        // sheet opened from the content's DiscoveryTypeRow; the bar only
+        // carries the global overflow.
         val actions = buildList {
-            if (carrier == Carrier.SHOWS) {
-                add(
-                    AppBar.Action(
-                        title = stringResource(MR.strings.action_filter),
-                        icon = Icons.Outlined.FilterList,
-                        iconTint = if (showsFilter.isActive) MaterialTheme.colorScheme.active else null,
-                        onClick = { screenModel.setFilterSheetVisible(true) },
-                    ),
-                )
-            }
             addAll(
                 globalOverflowActions(
                     onClickSettings = { navigator.push(SettingsScreen()) },
@@ -113,7 +136,13 @@ data object DiscoveryTab : Tab {
                 if (query.isBlank()) return@useSharedTopBarWithSearch
                 when (carrier) {
                     Carrier.SHOWS -> cinemetaBrowseSM.search(query)
-                    Carrier.MANGA, Carrier.BOOKS -> canonicalSM.search(query)
+                    Carrier.MANGA, Carrier.BOOKS -> canonicalSM.search(
+                        query,
+                        searchKindsCsvFor(
+                            carrier,
+                            screenModel.state.value.subTypeSelections[carrier] ?: 0,
+                        ),
+                    )
                 }
                 screenModel.setSearchSubmitted(true)
             },
@@ -135,9 +164,9 @@ data object DiscoveryTab : Tab {
             // restores the idle catalog (same semantics as the old Discover
             // overlay in BrowseTab).
             when (carrier) {
-                // 15-06: the facet bar + filter sheet wrap the shows
+                // 15-06: the type row + facet bar wrap the shows
                 // catalog; an active facet set swaps the grid to TMDB
-                // discover results. manga/books keep per-source filters.
+                // discover results.
                 Carrier.SHOWS -> ShowsDiscoveryContent(
                     discoveryScreenModel = screenModel,
                     cinemetaScreenModel = cinemetaBrowseSM,
@@ -145,8 +174,7 @@ data object DiscoveryTab : Tab {
                     libraryPreferences = libraryPreferences,
                 )
                 // 15-07: the manga/books carriers mount the ranked
-                // catalog surface — sub-type pills (Manga|Comics,
-                // Novels|Books) over the worker's /v1/works/browse feed
+                // catalog surface — the worker's /v1/works/browse feed
                 // or OpenLibrary trending; search swaps to the
                 // canonical map results inline.
                 Carrier.MANGA, Carrier.BOOKS -> CatalogBrowseContent(
@@ -155,6 +183,44 @@ data object DiscoveryTab : Tab {
                     screenModel = canonicalSM,
                     contentPadding = resolvedPadding,
                     libraryPreferences = libraryPreferences,
+                )
+            }
+
+            // The shared Type/Filter sheet — same component for every
+            // carrier; only the type options and filter sections vary.
+            if (state.showTypeFilterSheet) {
+                val typeOptions = discoveryTypeLabelsFor(carrier)
+                val selectedTypeIndex = when (carrier) {
+                    Carrier.SHOWS -> if (cinemetaState.type == "movie") 0 else 1
+                    else -> (state.subTypeSelections[carrier] ?: 0)
+                        .coerceIn(0, typeOptions.lastIndex)
+                }
+                DiscoveryTypeFilterSheet(
+                    carrier = carrier,
+                    typeOptions = typeOptions,
+                    selectedTypeIndex = selectedTypeIndex,
+                    onTypeSelected = { index ->
+                        when (carrier) {
+                            Carrier.SHOWS -> cinemetaBrowseSM.changeType(
+                                if (index == 0) "movie" else "series",
+                            )
+                            else -> screenModel.selectSubType(carrier, index)
+                        }
+                    },
+                    filter = state.filters[Carrier.SHOWS] ?: DiscoveryFilter(),
+                    mediaType = if (cinemetaState.type == "movie") {
+                        MediaType.MOVIE
+                    } else {
+                        MediaType.TV
+                    },
+                    onFilterChange = { screenModel.setFilter(Carrier.SHOWS, it) },
+                    catalogSort = screenModel.browseSortFor(carrier),
+                    onCatalogSortChange = { screenModel.setBrowseSort(carrier, it) },
+                    catalogFilter = screenModel.catalogFilterFor(carrier),
+                    onCatalogFilterChange = { screenModel.setCatalogFilter(carrier, it) },
+                    catalogGenres = state.catalogGenres[carrier.medium].orEmpty(),
+                    initialPage = state.typeFilterSheetPage,
+                    onDismiss = { screenModel.setTypeFilterSheetVisible(false) },
                 )
             }
         }

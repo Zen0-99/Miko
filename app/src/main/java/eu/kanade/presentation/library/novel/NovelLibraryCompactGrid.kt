@@ -58,6 +58,7 @@ internal fun NovelLibraryCompactGrid(
                     url = novel.thumbnailUrl,
                     lastModified = novel.coverLastModified,
                 ),
+                sharedCoverTransition = true,
                 coverBadgeStart = {
                     DownloadsBadge(count = libraryItem.downloadCount)
                     UnviewedBadge(count = libraryItem.unreadCount)

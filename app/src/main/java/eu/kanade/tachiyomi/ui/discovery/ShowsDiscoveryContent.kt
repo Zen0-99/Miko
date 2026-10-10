@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.ui.discovery
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -15,10 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,7 +25,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,9 +41,12 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.presentation.browse.DominoRevealItem
+import eu.kanade.presentation.browse.rememberDominoReveal
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.EntryCompactGridItem
+import eu.kanade.presentation.library.components.armSharedCover
 import eu.kanade.presentation.library.filter.FilterTagChip
 import eu.kanade.tachiyomi.metadata.miko.dto.MikoMetaShort
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbDiscover
@@ -65,11 +69,13 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 
 /**
- * Shows-mode content for DiscoveryTab (Phase 15-06): a facet filter bar
- * above the catalog grid; when any facet is active the grid swaps the
- * Cinemeta catalog for TMDB `discover` results (enrichment only). Media
- * type stays owned by [CinemetaBrowseScreenModel] — the Movies/Series
- * pills are rendered identically in both modes.
+ * Shows-mode content for DiscoveryTab (Phase 15-06): the shared
+ * Type/Filter sheet trigger row ([DiscoveryTypeRow]) above the catalog
+ * grid; when any facet is active the grid swaps the Cinemeta catalog
+ * for TMDB `discover` results (enrichment only) and the active-facet
+ * chip row appears under the type row. Media type stays owned by
+ * [CinemetaBrowseScreenModel] — the sheet's Type tab commits through
+ * `changeType`.
  */
 @Composable
 fun ShowsDiscoveryContent(
@@ -80,7 +86,6 @@ fun ShowsDiscoveryContent(
 ) {
     val state by discoveryScreenModel.state.collectAsState()
     val cinemetaState by cinemetaScreenModel.state.collectAsState()
-    val navigator = LocalNavigator.currentOrThrow
 
     val filter = state.filters[Carrier.SHOWS] ?: DiscoveryFilter()
     val mediaType = if (cinemetaState.type == "movie") MediaType.MOVIE else MediaType.TV
@@ -91,21 +96,31 @@ fun ShowsDiscoveryContent(
         discoveryScreenModel.onDiscoverInputsChanged(mediaType)
     }
 
-    // When the active-facet chip row is hidden it can't consume the top
-    // inset — hand it back to the catalog/discover content.
+    // The type row consumes the top inset; the facet bar and the
+    // catalog/discover content flow under it.
     val innerPadding = PaddingValues(
         start = contentPadding.calculateLeftPadding(LayoutDirection.Ltr),
         end = contentPadding.calculateRightPadding(LayoutDirection.Ltr),
-        top = if (filter.isActive) 0.dp else contentPadding.calculateTopPadding(),
+        top = 0.dp,
         bottom = contentPadding.calculateBottomPadding(),
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
+        DiscoveryTypeRow(
+            label = stringResource(
+                if (mediaType == MediaType.MOVIE) {
+                    AYMR.strings.catalog_type_movie
+                } else {
+                    AYMR.strings.catalog_type_series
+                },
+            ),
+            topPadding = contentPadding.calculateTopPadding(),
+            onTypeClick = { discoveryScreenModel.openTypeFilterSheet(0) },
+        )
         if (filter.isActive) {
             DiscoveryFilterBar(
                 filter = filter,
                 mediaType = mediaType,
-                topPadding = contentPadding.calculateTopPadding(),
                 onClear = { discoveryScreenModel.setFilter(Carrier.SHOWS, DiscoveryFilter()) },
                 onRemoveGenre = {
                     discoveryScreenModel.setFilter(Carrier.SHOWS, filter.withGenreState(it, TriState.DISABLED))
@@ -145,28 +160,18 @@ fun ShowsDiscoveryContent(
             }
         }
     }
-
-    if (state.showFilterSheet) {
-        DiscoveryFilterSheet(
-            filter = filter,
-            mediaType = mediaType,
-            onFilterChange = { discoveryScreenModel.setFilter(Carrier.SHOWS, it) },
-            onDismiss = { discoveryScreenModel.setFilterSheetVisible(false) },
-        )
-    }
 }
 
 /**
  * Active-facet row over the grid — the collapsed `PersistentFilterSheet`
- * idiom minus the icon (that moved to the shared top bar): the active
- * facets as removable chips plus an inline clear affordance. Only
- * composed while [DiscoveryFilter.isActive].
+ * idiom minus the icon (that moved to the Type/Filter sheet): the
+ * active facets as removable chips plus an inline clear affordance.
+ * Only composed while [DiscoveryFilter.isActive].
  */
 @Composable
 private fun DiscoveryFilterBar(
     filter: DiscoveryFilter,
     mediaType: MediaType,
-    topPadding: androidx.compose.ui.unit.Dp,
     onClear: () -> Unit,
     onRemoveGenre: (Int) -> Unit,
     onRemoveKeyword: (Int) -> Unit,
@@ -177,7 +182,6 @@ private fun DiscoveryFilterBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = topPadding)
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -257,9 +261,6 @@ private fun TmdbDiscoverContent(
     libraryPreferences: LibraryPreferences,
 ) {
     val state by discoveryScreenModel.state.collectAsState()
-    val cinemetaState by cinemetaScreenModel.state.collectAsState()
-    val navigator = LocalNavigator.currentOrThrow
-    val scope = rememberCoroutineScope()
 
     val displayMode by libraryPreferences.displayMode().collectAsState()
 
@@ -273,120 +274,39 @@ private fun TmdbDiscoverContent(
         }
         ).collectAsState()
 
-    // Same Movies | Series pill as CinemetaBrowseContent — bound to the
-    // same screen-model field so both surfaces stay in sync, but paged:
-    // each page keeps its own grid state (scroll positions never carry
-    // over) and the settled page commits via changeType.
-    val typeOptions = listOf("Movies" to MediaType.MOVIE, "Series" to MediaType.TV)
-    val selectedIndex = typeOptions.indexOfFirst { it.second == mediaType }
-        .coerceAtLeast(0)
-    val pagerState = rememberPagerState(initialPage = selectedIndex) { typeOptions.size }
-    LaunchedEffect(pagerState.settledPage) {
-        val settled = typeOptions[pagerState.settledPage].second
-        val type = if (settled == MediaType.MOVIE) "movie" else "series"
-        if (type != cinemetaState.type) cinemetaScreenModel.changeType(type)
-    }
-    LaunchedEffect(mediaType) {
-        if (typeOptions.getOrNull(pagerState.currentPage)?.second != mediaType) {
-            pagerState.animateScrollToPage(selectedIndex)
-        }
-    }
-    val filter = state.filters[Carrier.SHOWS] ?: DiscoveryFilter()
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .clip(MaterialTheme.shapes.extraLarge)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            typeOptions.forEachIndexed { index, option ->
-                val label = if (option.second == MediaType.MOVIE) "Movies" else "Series"
-                val isSelected = index == pagerState.currentPage
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(MaterialTheme.shapes.extraLarge)
-                        .then(
-                            if (isSelected) {
-                                Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .clickable { scope.launch { pagerState.animateScrollToPage(index) } }
-                        .padding(vertical = 7.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1,
-                    )
-                }
+    TmdbDiscoverGrid(
+        items = state.discoverItems,
+        loading = state.discoverLoading,
+        error = state.discoverError,
+        keyMissing = state.discoverKeyMissing,
+        hasMore = state.discoverHasMore,
+        mediaType = mediaType,
+        discoveryScreenModel = discoveryScreenModel,
+        resolveEntryId = { item ->
+            // TMDB → IMDB → existing cinemeta entry path; no
+            // IMDB link = dead end.
+            discoveryScreenModel.resolveImdbId(mediaType, item.id)?.let { imdb ->
+                cinemetaScreenModel.getOrCreateAnimeId(
+                    MikoMetaShort(
+                        id = imdb,
+                        name = item.title,
+                        type = TmdbDiscover.cinemetaType(mediaType),
+                        poster = item.posterUrl,
+                        releaseInfo = item.year?.toString(),
+                        imdbRating = item.voteAverage?.toString(),
+                    ),
+                )
             }
-        }
-
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.weight(1f),
-        ) { page ->
-            val pageType = typeOptions[page].second
-            val live = pageType == mediaType
-            TmdbDiscoverGrid(
-                items = if (live) {
-                    state.discoverItems
-                } else {
-                    discoveryScreenModel.peekDiscoverItems(pageType, filter)
-                },
-                loading = live && state.discoverLoading,
-                error = live && state.discoverError,
-                keyMissing = live && state.discoverKeyMissing,
-                hasMore = live && state.discoverHasMore,
-                pagingEnabled = live,
-                mediaType = pageType,
-                discoveryScreenModel = discoveryScreenModel,
-                onItemClick = { item ->
-                    scope.launch {
-                        // TMDB → IMDB → existing cinemeta entry path; no
-                        // IMDB link = dead end.
-                        val imdb = discoveryScreenModel.resolveImdbId(pageType, item.id)
-                            ?: return@launch
-                        val meta = MikoMetaShort(
-                            id = imdb,
-                            name = item.title,
-                            type = TmdbDiscover.cinemetaType(pageType),
-                            poster = item.posterUrl,
-                            releaseInfo = item.year?.toString(),
-                            imdbRating = item.voteAverage?.toString(),
-                        )
-                        val animeId = cinemetaScreenModel.getOrCreateAnimeId(meta)
-                        navigator.push(ShowsScreen(animeId, true))
-                    }
-                },
-                onRefresh = { discoveryScreenModel.onDiscoverInputsChanged(pageType) },
-                columns = columns,
-                displayMode = displayMode,
-                contentPadding = contentPadding,
-            )
-        }
-    }
+        },
+        onRefresh = { discoveryScreenModel.onDiscoverInputsChanged(mediaType) },
+        columns = columns,
+        displayMode = displayMode,
+        contentPadding = contentPadding,
+    )
 }
 
 /**
- * One discover-grid page — mirrors the catalog grid's chrome. Preview
- * pages ([pagingEnabled] false) show their own cached items; paging and
- * pull-refresh only run on the live page so one type's scroll can't
- * page the other's feed.
+ * The discover grid — mirrors the catalog grid's chrome.
  */
 @Composable
 private fun TmdbDiscoverGrid(
@@ -395,34 +315,64 @@ private fun TmdbDiscoverGrid(
     error: Boolean,
     keyMissing: Boolean,
     hasMore: Boolean,
-    pagingEnabled: Boolean,
     mediaType: MediaType,
     discoveryScreenModel: DiscoveryScreenModel,
-    onItemClick: (TmdbDiscover.Item) -> Unit,
+    /** Tap-time TMDB→anime id resolution — the grid re-keys the tapped
+     *  cell under `cover-image-{id}` and pushes with the preview cover
+     *  so the card morphs into the detail hero like a library cell. */
+    resolveEntryId: suspend (TmdbDiscover.Item) -> Long?,
     onRefresh: () -> Unit,
     columns: Int,
     displayMode: LibraryDisplayMode,
     contentPadding: PaddingValues,
 ) {
-    val gridState = rememberLazyGridState()
+    // Per-type scroll slot — the key plus the input restore each
+    // sub-type's own position on a Movies/Series switch (see
+    // CatalogBrowseGrid).
+    val gridState = rememberSaveable(
+        mediaType,
+        saver = LazyGridState.Saver,
+        key = "tmdb-grid:$mediaType",
+    ) { LazyGridState() }
+    val navigator = LocalNavigator.currentOrThrow
+    val scope = rememberCoroutineScope()
+
+    // The top indicator answers manual pulls only — PullRefresh latches
+    // its spinner on the pull gesture itself, so pagination and feed
+    // reloads still load silently (see CatalogBrowseGrid).
+
+    // Shared-element latch — the tapped card flies to the detail hero
+    // under the library cell's `cover-image-{animeId}`; the id only
+    // exists after the tap resolves it, so the card re-keys before the
+    // push (armSharedCover).
+    var navSharedEntry by rememberSaveable { mutableStateOf<Pair<Long, Long>?>(null) }
+
+    // Infinite scroll — gating reads go through rememberUpdatedState so
+    // snapshotFlow observes live values; a captured cold-start
+    // `loading=true` would freeze paging at the first page forever.
+    val currentHasMore by rememberUpdatedState(hasMore)
+    val currentLoading by rememberUpdatedState(loading)
+    val currentError by rememberUpdatedState(error)
+    val currentMediaType by rememberUpdatedState(mediaType)
 
     LaunchedEffect(gridState) {
         snapshotFlow {
             val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val totalItems = gridState.layoutInfo.totalItemsCount
-            lastVisible >= totalItems - 6
+            lastVisible >= totalItems - 6 &&
+                currentHasMore &&
+                !currentLoading &&
+                !currentError
         }
             .distinctUntilChanged()
             .collect { shouldLoad ->
-                if (shouldLoad && pagingEnabled && hasMore && !loading && !error) {
-                    discoveryScreenModel.loadNextDiscoverPage(mediaType)
-                }
+                if (shouldLoad) discoveryScreenModel.loadNextDiscoverPage(currentMediaType)
             }
     }
 
     PullRefresh(
         refreshing = loading && items.isNotEmpty(),
-        enabled = pagingEnabled && items.isNotEmpty(),
+        enabled = items.isNotEmpty(),
         onRefresh = onRefresh,
         indicatorPadding = contentPadding,
     ) {
@@ -477,18 +427,19 @@ private fun TmdbDiscoverGrid(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (pagingEnabled) {
-                        Text(
-                            text = stringResource(AYMR.strings.discovery_tmdb_empty),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        text = stringResource(AYMR.strings.discovery_tmdb_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
             else -> {
                 val gridColumns = if (columns > 0) columns else 3
+                val domino = rememberDominoReveal<Long>(
+                    scope = "showsDiscovery:$mediaType",
+                )
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(gridColumns),
                     state = gridState,
@@ -508,23 +459,40 @@ private fun TmdbDiscoverGrid(
                     ) { index ->
                         val item = items[index]
 
-                            // Mint-on-browse: TMDB discover rows aren't
-                            // canonical works — resolve once per item
-                            // (imdb → mk:imdb: mint) then markSeen. The
-                            // model dedupes and throttles off-thread.
-                            LaunchedEffect(item.id, mediaType) {
-                                discoveryScreenModel.onDiscoverItemRendered(item)
+                        // Mint-on-browse: TMDB discover rows aren't
+                        // canonical works — resolve once per item
+                        // (imdb → mk:imdb: mint) then markSeen. The
+                        // model dedupes and throttles off-thread.
+                        LaunchedEffect(item.id, mediaType) {
+                            discoveryScreenModel.onDiscoverItemRendered(item)
+                        }
+
+                        val coverData = AnimeCover(
+                            animeId = item.id,
+                            sourceId = CinemetaBrowseScreenModel.CINEMETA_SOURCE_ID,
+                            isAnimeFavorite = false,
+                            url = item.posterUrl,
+                            lastModified = 0L,
+                        )
+                        val heroEntryId = navSharedEntry
+                            ?.takeIf { it.first == item.id }
+                            ?.second
+                        val onClick: () -> Unit = {
+                            scope.launch {
+                                val animeId = resolveEntryId(item) ?: return@launch
+                                armSharedCover(coverData, animeId) { navSharedEntry = item.id to animeId }
+                                navigator.push(
+                                    ShowsScreen(
+                                        animeId,
+                                        true,
+                                        previewCover = coverData,
+                                        previewTitle = item.title,
+                                    ),
+                                )
                             }
+                        }
 
-                            val coverData = AnimeCover(
-                                animeId = item.id,
-                                sourceId = CinemetaBrowseScreenModel.CINEMETA_SOURCE_ID,
-                                isAnimeFavorite = false,
-                                url = item.posterUrl,
-                                lastModified = 0L,
-                            )
-                            val onClick: () -> Unit = { onItemClick(item) }
-
+                        DominoRevealItem(visible = domino.isVisible(item.id)) {
                             when (displayMode) {
                                 LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
                                     EntryCompactGridItem(
@@ -536,6 +504,7 @@ private fun TmdbDiscoverGrid(
                                         } else {
                                             null
                                         },
+                                        sharedCoverEntryId = heroEntryId,
                                     )
                                 }
 
@@ -545,20 +514,21 @@ private fun TmdbDiscoverGrid(
                                         onClick = onClick,
                                         onLongClick = {},
                                         coverData = coverData,
+                                        sharedCoverEntryId = heroEntryId,
                                     )
                                 }
                             }
                         }
-                        if (loading) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator()
-                                }
+                    }
+                    if (loading) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator()
                             }
                         }
                     }
@@ -566,3 +536,4 @@ private fun TmdbDiscoverGrid(
             }
         }
     }
+}

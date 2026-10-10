@@ -108,7 +108,9 @@ class WorkIdResolver {
             listOfNotNull(candidate.isbn?.let { normalizeIsbn(it)?.let { n -> "isbn" to n } })
         for ((provider, id) in ids) {
             val row = bridge.byExternalId(provider, id)
-            if (row != null && row.mikoWorkId != excludeWorkId && row.type in allowedTypes &&
+            if (row != null &&
+                row.mikoWorkId != excludeWorkId &&
+                row.type in allowedTypes &&
                 kindCompatible(row.type, isAudio)
             ) {
                 return CanonicalWorkId(
@@ -316,8 +318,11 @@ class WorkIdResolver {
             val row = primary.single()
             logcat { "disambiguate '$norm': single primary hit ${row.mikoWorkId}" }
             return CanonicalWorkId(
-                row.mikoWorkId, medium, Confidence.TITLE,
-                kind = row.type, nsfw = row.nsfw,
+                row.mikoWorkId,
+                medium,
+                Confidence.TITLE,
+                kind = row.type,
+                nsfw = row.nsfw,
             )
         }
         val best = primary.maxWithOrNull(
@@ -361,8 +366,11 @@ class WorkIdResolver {
                             "candidate=${candidate.chapterCount})"
                     }
                     return CanonicalWorkId(
-                        countBest.mikoWorkId, medium, Confidence.TITLE,
-                        kind = countBest.type, nsfw = countBest.nsfw,
+                        countBest.mikoWorkId,
+                        medium,
+                        Confidence.TITLE,
+                        kind = countBest.type,
+                        nsfw = countBest.nsfw,
                     )
                 }
             }
@@ -377,8 +385,11 @@ class WorkIdResolver {
                 "picked ${best.mikoWorkId} (ids=${best.externalIds.size})"
         }
         return CanonicalWorkId(
-            best.mikoWorkId, medium, Confidence.TITLE,
-            kind = best.type, nsfw = best.nsfw,
+            best.mikoWorkId,
+            medium,
+            Confidence.TITLE,
+            kind = best.type,
+            nsfw = best.nsfw,
         )
     }
 
@@ -444,7 +455,8 @@ class WorkIdResolver {
             // mirror. Honest-null rows (upstream-degraded mints) resolve
             // only when the Worker vouches the carrier via `medium`.
             val dtoKind = dto.kind ?: dto.type
-            val kindOk = dtoKind != null && dtoKind in allowedTypes &&
+            val kindOk = dtoKind != null &&
+                dtoKind in allowedTypes &&
                 kindCompatible(dtoKind, isAudio)
             val carrierOk = dtoKind == null && dto.medium != null && dto.medium == candidate.medium
             if (!kindOk && !carrierOk) return null

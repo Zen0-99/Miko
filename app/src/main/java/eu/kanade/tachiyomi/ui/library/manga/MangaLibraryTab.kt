@@ -7,6 +7,7 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -67,6 +68,7 @@ import eu.kanade.presentation.entries.components.ReadingOrderBottomBar
 import eu.kanade.presentation.entries.components.ReadingOrderMoveDepthDialog
 import eu.kanade.presentation.entries.components.ReadingOrderPickerDialog
 import eu.kanade.presentation.entries.components.ReadingOrderRemoveConfirmDialog
+import eu.kanade.presentation.entries.components.continueRowLabel
 import eu.kanade.presentation.library.DeleteLibraryEntryDialog
 import eu.kanade.presentation.library.components.SortBottomSheet
 import eu.kanade.presentation.library.components.SortModeOption
@@ -107,6 +109,7 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.manga.model.Manga
+import tachiyomi.domain.entries.manga.model.asMangaCover
 import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.manga.model.sort
@@ -499,7 +502,7 @@ data object MangaLibraryTab : Tab {
 
         val onClickRefresh: (Collection?) -> Boolean = { collection ->
             eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus.refreshRequested()
-            MangaLibraryUpdateJob.startNow(context, collection)
+            MangaLibraryUpdateJob.startNow(context, collection, state.subtypeFilter)
         }
 
         val navigateUp: (() -> Unit)? = null
@@ -649,17 +652,42 @@ data object MangaLibraryTab : Tab {
                     state.isLoading -> LoadingScreen(Modifier.padding(resolvedContentPadding))
                     state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
                         val handler = LocalUriHandler.current
-                        EmptyScreen(
-                            stringRes = MR.strings.information_empty_library,
-                            modifier = Modifier.padding(resolvedContentPadding),
-                            actions = persistentListOf(
-                                EmptyScreenAction(
-                                    stringRes = MR.strings.getting_started_guide,
-                                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                                    onClick = { handler.openUri(GETTING_STARTED_URL) },
+                        if (state.subtypeFilter == tachiyomi.domain.library.model.LibrarySubtype.ALL) {
+                            EmptyScreen(
+                                stringRes = MR.strings.information_empty_library,
+                                modifier = Modifier.padding(resolvedContentPadding),
+                                actions = persistentListOf(
+                                    EmptyScreenAction(
+                                        stringRes = MR.strings.getting_started_guide,
+                                        icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                                        onClick = { handler.openUri(GETTING_STARTED_URL) },
+                                    ),
                                 ),
-                            ),
-                        )
+                            )
+                        } else {
+                            // Subtype filter emptied the view — keep its
+                            // selector on screen or there's no way back.
+                            Column(Modifier.padding(resolvedContentPadding)) {
+                                eu.kanade.presentation.library.components.SubtypeSelectorRow(
+                                    label = eu.kanade.presentation.library.components
+                                        .subtypeLabelFor(state.subtypeFilter),
+                                    options = eu.kanade.presentation.library.components
+                                        .subtypeOptionsFor(
+                                            choices = listOf(
+                                                tachiyomi.domain.library.model.LibrarySubtype.ALL,
+                                                tachiyomi.domain.library.model.LibrarySubtype.MANGA,
+                                                tachiyomi.domain.library.model.LibrarySubtype.WEBTOON,
+                                            ),
+                                            current = state.subtypeFilter,
+                                            onSelect = screenModel::setSubtypeFilter,
+                                        ),
+                                )
+                                EmptyScreen(
+                                    stringRes = MR.strings.no_results_found,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
                     }
                     else -> {
                         // Precompute sort labels for all collections (for continuous mode)
@@ -677,13 +705,54 @@ data object MangaLibraryTab : Tab {
                             hasActiveFilters = state.hasActiveFilters,
                             showPageTabs = state.showCollectionTabs || !state.searchQuery.isNullOrEmpty(),
                             onChangeCurrentPage = { screenModel.activeCollectionIndex = it },
-                            onMangaClicked = { mangaId ->
+                            onMangaClicked = { libraryManga ->
                                 scope.launch {
-                                    val lockedOrders = getLockedReadingOrders.await(mangaId)
+                                    val manga = libraryManga.manga
+                                    val lockedOrders = getLockedReadingOrders.await(manga.id)
                                     if (lockedOrders.isNotEmpty()) {
-                                        lockDialog = mangaId to lockedOrders
+                                        lockDialog = manga.id to lockedOrders
                                     } else {
-                                        navigator.push(MangaScreen(mangaId))
+                                        // The unread pill already knows the
+                                        // resume point — fetch it so the
+                                        // shared pill lands with its label.
+                                        val next = screenModel.getNextUnreadChapter(manga)
+                                        val progress = next?.let {
+                                            val group = eu.kanade.tachiyomi.util.chapter
+                                                .ChapterNameGroup.parse(it.name)
+                                            if (manga.displayMode ==
+                                                tachiyomi.domain.entries.manga.model.Manga.CHAPTER_DISPLAY_NUMBER
+                                            ) {
+                                                val base = context.stringResource(
+                                                    MR.strings.display_mode_chapter,
+                                                    eu.kanade.presentation.util
+                                                        .formatChapterNumber(it.chapterNumber),
+                                                )
+                                                if (group != null) "$group $base" else base
+                                            } else {
+                                                eu.kanade.presentation.entries.components
+                                                    .qualifiedChapterLabel(it.name)
+                                            }
+                                        }
+                                        navigator.push(
+                                            MangaScreen(
+                                                manga.id,
+                                                previewCover = manga.asMangaCover(),
+                                                previewTitle = manga.title,
+                                                previewResumeLabel = continueRowLabel(
+                                                    context = context,
+                                                    allRead = libraryManga.unreadCount == 0L &&
+                                                        libraryManga.totalChapters > 0,
+                                                    hasStarted = libraryManga.hasStarted ||
+                                                        (next?.lastPageRead ?: 0) > 0,
+                                                    progress = progress,
+                                                ),
+                                                previewResumeEnabled =
+                                                next != null ||
+                                                    !libraryManga.hasStarted ||
+                                                    libraryManga.unreadCount > 0,
+                                                previewHasGenres = !manga.genre.isNullOrEmpty(),
+                                            ),
+                                        )
                                     }
                                 }
                             },
@@ -765,6 +834,18 @@ data object MangaLibraryTab : Tab {
                             sortKey = state.collections.getOrNull(screenModel.activeCollectionIndex)?.let {
                                 "${it.sort.type}:${it.sort.direction}"
                             } ?: "",
+                            subtypeLabel = eu.kanade.presentation.library.components
+                                .subtypeLabelFor(state.subtypeFilter),
+                            subtypeOptions = eu.kanade.presentation.library.components
+                                .subtypeOptionsFor(
+                                    choices = listOf(
+                                        tachiyomi.domain.library.model.LibrarySubtype.ALL,
+                                        tachiyomi.domain.library.model.LibrarySubtype.MANGA,
+                                        tachiyomi.domain.library.model.LibrarySubtype.WEBTOON,
+                                    ),
+                                    current = state.subtypeFilter,
+                                    onSelect = screenModel::setSubtypeFilter,
+                                ),
                             getSortLabelForCollection = { collection ->
                                 sortLabelCache[collection.id]
                             },

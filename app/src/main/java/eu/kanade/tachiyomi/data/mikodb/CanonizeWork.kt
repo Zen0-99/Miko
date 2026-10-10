@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.model.Carrier
 import logcat.logcat
 import uy.kohesive.injekt.Injekt
@@ -39,6 +40,7 @@ class CanonizeWork(
     private val mikoDbManager: MikoDbManager = Injekt.get(),
     private val mintTelemetry: MintTelemetry = Injekt.get(),
     private val workCarriers: WorkCarriers = Injekt.get(),
+    private val sourcePreferences: SourcePreferences = Injekt.get(),
 ) {
 
     sealed interface Outcome {
@@ -72,7 +74,11 @@ class CanonizeWork(
         carrier: Carrier,
         extraSources: List<GoldenSources.GoldenSource>,
     ): Outcome {
-        if (!chapterMap.isStale(workId)) return Outcome.Fresh
+        // Empty canon bypasses the recency gate — a wiped/never-built
+        // sequence must rebuild now, not wait out the interval.
+        if (chapterMap.forWork(workId).isNotEmpty() && !isCanonizeDue(workId)) {
+            return Outcome.Fresh
+        }
         val work = bridge.byWorkId(workId) ?: return Outcome.NoWork.also {
             logcat { "canonize $workId: no work row" }
         }
@@ -80,13 +86,13 @@ class CanonizeWork(
         // Extra candidates (a migrating favorite's own source, 17-03)
         // lead the list so their ext-internal URL survives the pkg dedupe
         // and lands in the canon refs as that source's carrier path.
-        val sources = if (extraSources.isEmpty()) {
-            null
-        } else {
-            (extraSources + goldenSources.forWorkRow(work, carrier.medium))
-                .distinctBy { it.pkgName }
-        }
-        val r = collector.collect(work, carrier.medium, sources = sources)
+        val sources = feedSources(work, carrier.medium, extraSources)
+        val r = collector.collect(
+            work,
+            carrier.medium,
+            maxFeeds = sources?.size?.coerceAtMost(MAX_FEEDS) ?: MAX_FEEDS_DEFAULT,
+            sources = sources,
+        )
         if (r.feeds.isEmpty() && r.failed.size > MAX_FAILURES) {
             return Outcome.TooManyFailures.also {
                 logcat { "canonize $workId: ${r.failed.size} source failures (${r.failed.keys})" }
@@ -123,10 +129,15 @@ class CanonizeWork(
         if (resp.solidified.isNotEmpty() || feeds.any { it.provider_ref != null }) {
             workCarriers.invalidate(workId)
         }
+        sourcePreferences.markCanonizeRan(workId)
         chapterMap.invalidate(workId)
         val bestDetails = r.feeds.filter { it.details != null && !it.details.isEmpty }
             .maxByOrNull { it.score }?.details
-        logcat { "canonize $workId: ${resp.count} chapters (${r.tentative.size} tentative, feeds=${r.feeds.map { it.pkgName }})" }
+        logcat {
+            "canonize $workId: ${resp.count} chapters (${r.tentative.size} tentative, feeds=${r.feeds.map {
+                it.pkgName
+            }})"
+        }
         return Outcome.Canonized(resp.count, r.tentative.size, bestDetails)
     }
 
@@ -143,18 +154,20 @@ class CanonizeWork(
         carrier: Carrier,
         extraSources: List<GoldenSources.GoldenSource>,
     ): Outcome {
-        if (!episodeMap.isStale(workId)) return Outcome.Fresh
+        if (episodeMap.forWork(workId).isNotEmpty() && !isCanonizeDue(workId)) {
+            return Outcome.Fresh
+        }
         val work = bridge.byWorkId(workId) ?: return Outcome.NoWork.also {
             logcat { "canonize(episodes) $workId: no work row" }
         }
 
-        val sources = if (extraSources.isEmpty()) {
-            null
-        } else {
-            (extraSources + goldenSources.forWorkRow(work, carrier.medium))
-                .distinctBy { it.pkgName }
-        }
-        val r = collector.collect(work, carrier.medium, sources = sources)
+        val sources = feedSources(work, carrier.medium, extraSources)
+        val r = collector.collect(
+            work,
+            carrier.medium,
+            maxFeeds = sources?.size?.coerceAtMost(MAX_FEEDS) ?: MAX_FEEDS_DEFAULT,
+            sources = sources,
+        )
         if (r.feeds.isEmpty() && r.failed.size > MAX_FAILURES) {
             return Outcome.TooManyFailures.also {
                 logcat { "canonize(episodes) $workId: ${r.failed.size} source failures (${r.failed.keys})" }
@@ -188,6 +201,7 @@ class CanonizeWork(
         }
         episodeMap.invalidate(workId)
         episodeMap.prime(workId)
+        sourcePreferences.markCanonizeRan(workId)
         val bestDetails = r.feeds.filter { it.details != null && !it.details.isEmpty }
             .maxByOrNull { it.score }?.details
         logcat {
@@ -275,8 +289,79 @@ class CanonizeWork(
         episodes = episodes,
     )
 
+    /**
+     * Feed-source selection honoring the entry's carrier pin (16-04):
+     *
+     *  - Pinned work → only the pinned extension's list is collected.
+     *    The pin is the user's statement of which carrier to trust —
+     *    other carriers' feeds don't gate freshness — and the pinned
+     *    feed still merges into shared canon, so chapters it posts
+     *    first materialize as canon rows routed to it. A pin that no
+     *    longer resolves (extension uninstalled) falls back to the
+     *    default golden set; a resolved pin whose feed rejects keeps
+     *    the pin exclusive (NoVerifiedFeeds rather than a silent
+     *    other-source refresh).
+     *  - Automatic → every readable bound carrier (the user's
+     *    connections in the carrier matrix) joins the golden set, so
+     *    each connected extension's newest chapters merge into one
+     *    canon list — "chapter 100 from NovelFull, chapter 101 from
+     *    WeebCentral". Bound feeds lead the pkg-dedupe so their
+     *    ext-internal URLs win the canon refs.
+     *
+     * Null = collector default (capped golden set).
+     */
+    private suspend fun feedSources(
+        work: MangaNovelIdBridge.WorkRow,
+        medium: String,
+        extraSources: List<GoldenSources.GoldenSource>,
+    ): List<GoldenSources.GoldenSource>? {
+        val pinned = sourcePreferences.preferredCarrierFor(work.mikoWorkId)
+        if (pinned != null) {
+            val pinnedSources = goldenSources.allForWorkRow(work, medium)
+                .filter { it.pkgName == pinned }
+            if (pinnedSources.isEmpty()) {
+                logcat { "canonize ${work.mikoWorkId}: pinned carrier $pinned unresolved — golden set" }
+                return null
+            }
+            return (extraSources + pinnedSources).distinctBy { it.pkgName }
+        }
+        val boundPkgs = runCatching { workCarriers.forWork(work.mikoWorkId, medium) }
+            .getOrNull()
+            ?.readable
+            ?.mapTo(HashSet()) { it.pkgName }
+            .orEmpty()
+        if (extraSources.isEmpty() && boundPkgs.isEmpty()) return null
+        val bound = if (boundPkgs.isEmpty()) {
+            emptyList()
+        } else {
+            goldenSources.allForWorkRow(work, medium).filter { it.pkgName in boundPkgs }
+        }
+        return (extraSources + bound + goldenSources.forWorkRow(work, medium))
+            .distinctBy { it.pkgName }
+    }
+
+    /**
+     * Rebuild gate: a work is due when this device hasn't POSTed feeds
+     * for it in [CANONIZE_INTERVAL_MS]. The chapter/episode read caches
+     * CANNOT gate this — their `fetchedAt` refreshes on every UI read
+     * (carrier-label lookups call `forWork` on detail open), which
+     * kept canonize permanently "fresh" and starved feed posts: the
+     * worker canon froze at whatever the last canonize produced while
+     * the app happily rendered it. Persisted per work so app restarts
+     * don't re-fan-out the collect.
+     */
+    private fun isCanonizeDue(workId: String): Boolean =
+        System.currentTimeMillis() - sourcePreferences.canonizeRanAtFor(workId) > CANONIZE_INTERVAL_MS
+
     companion object {
         const val MAX_FAILURES = 2
+        const val CANONIZE_INTERVAL_MS = 24L * 60 * 60 * 1000
+
+        /** Accepted-feed cap: Automatic bound-union sets pass their own
+         *  size (a bound carrier's feed should never truncate), still
+         *  bounded so the canonize POST stays reasonable. */
+        const val MAX_FEEDS = 15
+        const val MAX_FEEDS_DEFAULT = 5
 
         /** Reserved artifact `source_key` — the worker demotes any feed
          *  claiming it without artifact-shaped rows (forge guard). */

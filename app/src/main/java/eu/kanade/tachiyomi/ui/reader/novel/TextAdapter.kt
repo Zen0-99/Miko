@@ -164,7 +164,7 @@ class TextAdapter(
         private set
 
     @Volatile
-    var ttsHighlightColor: Int = 0
+    var ttsTextColor: Int = 0
         private set
 
     /**
@@ -175,7 +175,7 @@ class TextAdapter(
         if (position == ttsActivePosition &&
             rangeStart == ttsRangeStart &&
             rangeEnd == ttsRangeEnd &&
-            color == ttsHighlightColor
+            color == ttsTextColor
         ) {
             return
         }
@@ -183,7 +183,7 @@ class TextAdapter(
         ttsActivePosition = position
         ttsRangeStart = rangeStart
         ttsRangeEnd = rangeEnd
-        ttsHighlightColor = color
+        ttsTextColor = color
         if (previous >= 0 && previous != position) notifyItemChanged(previous)
         if (position >= 0) notifyItemChanged(position)
     }
@@ -280,9 +280,9 @@ class TextAdapter(
                     android.text.SpannableStringBuilder(displayText)
                 }
 
-                // TTS read-along highlight: tint the currently-spoken range
-                // (sentence when known, whole paragraph otherwise) with the
-                // accent-derived color — same machinery as user highlights.
+                // TTS read-along: recolor the currently-spoken range's
+                // glyphs (sentence when known, whole paragraph otherwise)
+                // to the accent color — a text color, not a highlight.
                 val ttsAdapter = getAdapter?.invoke()
                 if (ttsAdapter != null && bindingAdapterPosition == ttsAdapter.ttsActivePosition) {
                     val spanText = if (spannableText is Spannable) {
@@ -298,7 +298,7 @@ class TextAdapter(
                     }
                     if (end > start) {
                         spanText.setSpan(
-                            NovelTtsHighlightSpan(textView, start, end, ttsAdapter.ttsHighlightColor),
+                            android.text.style.ForegroundColorSpan(ttsAdapter.ttsTextColor),
                             start,
                             end,
                             Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,

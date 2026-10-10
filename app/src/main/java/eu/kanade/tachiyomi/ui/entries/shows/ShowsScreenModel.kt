@@ -64,6 +64,7 @@ import eu.kanade.tachiyomi.util.removeCovers
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -92,10 +93,11 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
 import tachiyomi.domain.collection.shows.interactor.SetAnimeCollections
-import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.download.service.DownloadPreferences
+import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.shows.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.shows.interactor.GetAnimeWithEpisodesAndSeasons
 import tachiyomi.domain.entries.shows.interactor.GetDuplicateLibraryAnime
@@ -104,7 +106,6 @@ import tachiyomi.domain.entries.shows.interactor.SetAnimeSeasonFlags
 import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.shows.model.NoSeasonsException
 import tachiyomi.domain.entries.shows.repository.AnimeRepository
-import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.episode.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.items.episode.interactor.UpdateEpisode
@@ -181,6 +182,7 @@ class ShowsScreenModel(
     private val episodeMap: eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap = Injekt.get(),
     private val canonicalPipelineRunner: eu.kanade.tachiyomi.data.mikodb.CanonicalPipelineRunner = Injekt.get(),
     private val providerTiers: eu.kanade.tachiyomi.data.mikodb.ProviderTiers = Injekt.get(),
+    private val preferenceStore: tachiyomi.core.common.preference.PreferenceStore = Injekt.get(),
     private val animeExtensionManager: eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager = Injekt.get(),
     private val threadIdResolver: eu.kanade.tachiyomi.data.comments.ThreadIdResolver = Injekt.get(),
     private val commentsApi: eu.kanade.tachiyomi.data.comments.CommentsApi = Injekt.get(),
@@ -231,6 +233,14 @@ class ShowsScreenModel(
     /**
      * Helper function to update the UI state only if it's currently in success state
      */
+    /** Completed by the screen once the nav transition lands — heavy
+     *  secondary work holds here so nothing contends with the
+     *  shared-element flight (see MangaScreenModel's note). */
+    private val transitionSettled = CompletableDeferred<Unit>()
+    fun onTransitionSettled() {
+        transitionSettled.complete(Unit)
+    }
+
     private inline fun updateSuccessState(func: (State.Success) -> State.Success) {
         mutableState.update {
             when (it) {
@@ -485,8 +495,13 @@ class ShowsScreenModel(
             }
 
             // Resolve + report the shows work id (ID-only telemetry,
-            // fire-and-forget — never blocks the screen).
-            screenModelScope.launchIO { resolveShowsWorkId(anime) }
+            // fire-and-forget — never blocks the screen). Internally it
+            // kicks carrier loads + the shows canonize pipeline, so it
+            // holds until the transition lands.
+            screenModelScope.launchIO {
+                transitionSettled.await()
+                resolveShowsWorkId(anime)
+            }
 
             // Independent reads run in parallel — first-open latency is
             // dominated by these round-trips back to back.
@@ -508,9 +523,11 @@ class ShowsScreenModel(
                 }
             }
             val flagsDeferred = async {
+                // Untouched rows only — non-favorite entries keep the
+                // user's sort/filter choices across visits.
                 if (!anime.favorite) {
-                    setAnimeDefaultEpisodeFlags.await(anime)
-                    setAnimeDefaultSeasonFlags.await(anime)
+                    if (anime.episodeFlags == 0L) setAnimeDefaultEpisodeFlags.await(anime)
+                    if (anime.seasonFlags == 0L) setAnimeDefaultSeasonFlags.await(anime)
                 }
             }
 
@@ -557,12 +574,13 @@ class ShowsScreenModel(
             // Show what we have earlier
             val intervalDays = fetchInterval.calculateInterval(
                 episodes.map { it.episode },
-                java.time.ZoneId.systemDefault(),
+                kotlinx.datetime.TimeZone.currentSystemDefault(),
             )
             // Hide interval badge if series is completed or last update is
             // older than 2 months (stale schedule).
             val showInterval = shouldShowInterval(anime.status, episodes.map { it.episode })
             mutableState.update { prev ->
+                val p = prev as? State.Success
                 State.Success(
                     anime = anime,
                     source = source,
@@ -571,12 +589,28 @@ class ShowsScreenModel(
                     seasons = seasons,
                     isRefreshingData = needRefreshInfo || needRefreshEpisode || needRefreshSeason,
                     dialog = null,
-                    accentColor = cachedAccentColor
-                        ?: (prev as? State.Success)?.accentColor,
+                    accentColor = cachedAccentColor ?: p?.accentColor,
                     intervalDays = intervalDays,
                     showInterval = showInterval,
+                    // Secondary overlays the warm-started snapshot already
+                    // carries — wiping them here makes their chrome vanish
+                    // mid-transition and pop back when the gated refetch
+                    // lands post-settle (carrier label, comment badge).
+                    trackingCount = p?.trackingCount ?: 0,
+                    hasLoggedInTrackers = p?.hasLoggedInTrackers ?: false,
+                    trackItems = p?.trackItems ?: emptyList(),
+                    suggestions = p?.suggestions ?: SuggestionState.Idle,
+                    commentsCount = p?.commentsCount,
+                    canonicalWorkId = p?.canonicalWorkId,
+                    canonicalKind = p?.canonicalKind,
+                    carrierMatrix = p?.carrierMatrix,
+                    canonicalEpisodes = p?.canonicalEpisodes ?: emptyList(),
                 )
             }
+
+            // Everything below is secondary — holds until the nav
+            // transition lands (see transitionSettled).
+            transitionSettled.await()
 
             // Cinemeta meta/episode sync in the background — the screen shows
             // what's already in the DB immediately; DB writes flow through
@@ -594,6 +628,7 @@ class ShowsScreenModel(
             // and counts its visible comments. ID-only, silent on failure.
             if (commentsEnabled) {
                 screenModelScope.launchIO {
+                    transitionSettled.await()
                     val threadId = threadIdResolver.forShows(anime) ?: return@launchIO
                     val result = commentsApi.threadCounts(listOf(threadId))
                     if (result is eu.kanade.tachiyomi.data.comments.CommentsApi.Result.Ok) {
@@ -2282,6 +2317,7 @@ class ShowsScreenModel(
         data object TrackSheet : Dialog
         data object Comments : Dialog
         data class FullImages(val coverData: Any? = null) : Dialog
+
         /** Find Content Provider — zero-bound canonical anime entry (17-02). */
         data object FindProvider : Dialog
     }
@@ -2346,8 +2382,10 @@ class ShowsScreenModel(
         updateSuccessState {
             it.copy(
                 dialog = Dialog.FindProvider,
-                providerSearch = (it.providerSearch
-                    ?: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search())
+                providerSearch = (
+                    it.providerSearch
+                        ?: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search()
+                    )
                     .copy(recommendations = providerRecommendations()),
             )
         }
@@ -2395,12 +2433,41 @@ class ShowsScreenModel(
         val feeds = search.rows.filter { it.pkgName in search.confirmed }
             .mapNotNull { it.feed }
         val workId = successState?.canonicalWorkId ?: return
+        val anime = successState?.anime
         screenModelScope.launchIO {
             providerFinder.mint(
                 workId,
                 feeds,
                 eu.kanade.tachiyomi.data.mikodb.WorkIdResolver.MEDIUM_SHOWS,
             )
+            // Confirmed carriers carry the extension's own cover art —
+            // adopt the highest-scoring pick when the entry's cover is
+            // blank or a non-preferred URL. Cinemeta art is preferred,
+            // so this only ever fills genuinely art-less entries.
+            if (anime != null) {
+                feeds
+                    .filter { !it.details?.thumbnailUrl.isNullOrBlank() }
+                    .maxByOrNull { it.score }
+                    ?.details?.thumbnailUrl
+                    ?.let { cover ->
+                        val stored = anime.thumbnailUrl
+                        if (stored.isNullOrBlank() ||
+                            !eu.kanade.tachiyomi.data.cover.HiResCoverResolver
+                                .isPreferredCoverUrl(stored)
+                        ) {
+                            updateAnime.await(
+                                tachiyomi.domain.entries.shows.model.AnimeUpdate(
+                                    id = anime.id,
+                                    thumbnailUrl = cover,
+                                    coverLastModified = System.currentTimeMillis(),
+                                ),
+                            )
+                            updateSuccessState {
+                                it.copy(anime = animeRepository.getAnimeById(anime.id))
+                            }
+                        }
+                    }
+            }
             workCarriers.invalidate(workId)
             dismissDialog()
             updateSuccessState { it.copy(providerSearch = null) }
@@ -2456,6 +2523,7 @@ class ShowsScreenModel(
                     tier = providerTiers.effectiveTier(ext.pkgName),
                     iconUrl = ext.iconUrl,
                     lang = ext.lang,
+                    points = providerTiers.confirmCount(ext.pkgName),
                 )
             }
             .sortedWith(
@@ -2470,6 +2538,67 @@ class ShowsScreenModel(
 
     fun showImagesDialog(coverData: Any? = null) {
         updateSuccessState { it.copy(dialog = Dialog.FullImages(coverData)) }
+        loadCoverOptions()
+    }
+
+    /**
+     * Assemble the cover-picker strip: per-season posters plus the
+     * series/provider artwork, and the pinned marker from prefs. Runs
+     * per dialog open.
+     */
+    private var coverOptionsLoadedAt = 0L
+
+    private fun loadCoverOptions() {
+        val state = successState ?: return
+        val anime = state.anime
+        screenModelScope.launchIO {
+            // Reopening inside the TTL replays the assembled strip —
+            // the pin pref is still re-read so a V-committed selection
+            // ticks right.
+            val pinPref = preferenceStore.getString(
+                eu.kanade.presentation.entries.components.coverPinPrefKey(
+                    eu.kanade.presentation.entries.components.COVER_PIN_KIND_ANIME,
+                    anime.id,
+                ),
+                "",
+            )
+            if (state.coverOptions.isNotEmpty() &&
+                System.currentTimeMillis() - coverOptionsLoadedAt < COVER_OPTIONS_TTL_MS
+            ) {
+                updateSuccessState {
+                    it.copy(coverPinKey = pinPref.get().takeIf(String::isNotBlank))
+                }
+                return@launchIO
+            }
+            val options = mutableListOf<eu.kanade.presentation.entries.components.CoverOption>()
+            state.processedSeasons.forEach { seasonItem ->
+                val seasonAnime = seasonItem.seasonAnime.anime
+                seasonAnime.thumbnailUrl?.takeIf(String::isNotBlank)?.let { url ->
+                    val n = seasonAnime.seasonNumber
+                    val label = "S. ${eu.kanade.presentation.entries.components.coverOrdinal(n)}"
+                    options += eu.kanade.presentation.entries.components.CoverOption(
+                        key = "season:$n",
+                        label = label,
+                        data = url,
+                    )
+                }
+            }
+            anime.thumbnailUrl?.takeIf(String::isNotBlank)?.let { url ->
+                options += eu.kanade.presentation.entries.components.CoverOption(
+                    key = "series",
+                    label = "Series",
+                    data = url,
+                )
+            }
+            val pinned = pinPref.get().takeIf(String::isNotBlank)
+            updateSuccessState {
+                it.copy(
+                    coverOptions = options.distinctBy { o -> o.data },
+                    coverPinKey = pinned,
+                )
+            }
+            coverOptionsLoadedAt = System.currentTimeMillis()
+        }
     }
 
     fun showMigrateDialog(duplicate: Anime) {
@@ -2526,6 +2655,11 @@ class ShowsScreenModel(
              *  nothing when canon is absent. */
             val canonicalEpisodes: List<eu.kanade.tachiyomi.data.mikodb.CanonicalEpisodeMap.CanonEpisode> =
                 emptyList(),
+            /** Cover-picker candidates + the pinned tile's key (null =
+             *  automatic cover resolution). Populated when the images
+             *  dialog opens. */
+            val coverOptions: List<eu.kanade.presentation.entries.components.CoverOption> = emptyList(),
+            val coverPinKey: String? = null,
         ) : State {
 
             val processedSeasons by lazy {
@@ -2709,6 +2843,11 @@ class ShowsScreenModel(
     }
 
     private companion object {
+        /** How long an assembled cover-option strip stays fresh — a
+         *  reopen inside the window replays it instead of re-walking
+         *  seasons. */
+        const val COVER_OPTIONS_TTL_MS = 5 * 60 * 1000L
+
         /**
          * Bind one library episode row to its canon row (19-05) — mirrors
          * `CanonicalEpisodeMap.bind`/`bindKind` semantics as a pure

@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.toLocalDateTime
 import tachiyomi.data.achievement.handler.PointsManager
 import tachiyomi.data.achievement.loader.AchievementLoader
 import tachiyomi.domain.achievement.model.Achievement
@@ -19,10 +23,12 @@ import tachiyomi.domain.achievement.model.AchievementProgress
 import tachiyomi.domain.achievement.model.DayActivity
 import tachiyomi.domain.achievement.model.MonthStats
 import tachiyomi.domain.achievement.model.UserPoints
+import tachiyomi.domain.achievement.model.YearMonth
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import kotlin.time.Clock
 
 class AchievementScreenModel(
     private val repository: AchievementRepository = Injekt.get(),
@@ -117,7 +123,7 @@ sealed interface AchievementScreenState {
         val selectedCategory: AchievementCategory = AchievementCategory.BOTH,
         val selectedAchievement: Achievement? = null,
         val activityData: List<DayActivity> = emptyList(),
-        val yearlyStats: List<Pair<java.time.YearMonth, MonthStats>> = emptyList(),
+        val yearlyStats: List<Pair<YearMonth, MonthStats>> = emptyList(),
         val currentMonthStats: MonthStats = MonthStats(0, 0, 0, 0),
         val previousMonthStats: MonthStats = MonthStats(0, 0, 0, 0),
     ) : AchievementScreenState {
@@ -186,10 +192,10 @@ sealed interface AchievementScreenState {
 
         private fun calculateCurrentStreak(activities: List<DayActivity>): Int {
             var streak = 0
-            val today = java.time.LocalDate.now()
+            val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
 
             for (i in 0 until activities.size) {
-                val date = today.minusDays(i.toLong())
+                val date = today.minus(i, DateTimeUnit.DAY)
                 val activity = activities.find { it.date == date }
 
                 if (activity != null && activity.level > 0) {

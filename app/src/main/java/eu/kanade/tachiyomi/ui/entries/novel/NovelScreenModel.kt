@@ -52,7 +52,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerControll
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterAudioRenderManager
 import eu.kanade.tachiyomi.ui.reader.novel.tts.render.ChapterRender
 import eu.kanade.tachiyomi.util.lang.chop
-import eu.kanade.tachiyomi.util.novel.NovelCoverMetadata
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.maybeShowDnsToast
 import eu.kanade.tachiyomi.util.system.notificationBuilder
@@ -476,7 +475,8 @@ class NovelScreenModel(
             }
             if (canonical != null && canonical.id != novelId) {
                 logcat(LogPriority.DEBUG) {
-                    "NovelScreenModel: redirecting '${novel.title}' (id=$novelId, source=${novel.source}) to canonical entry id=${canonical.id}"
+                    "NovelScreenModel: redirecting '${novel.title}' (id=$novelId, " +
+                        "source=${novel.source}) to canonical entry id=${canonical.id}"
                 }
                 redirectToEntryId.value = canonical.id
                 return@launchIO
@@ -513,7 +513,11 @@ class NovelScreenModel(
             val sourceDeferred = async { Injekt.get<NovelSourceManager>().getOrStub(novel.source) }
             val hiddenIdsDeferred = async { chapterHideManager.getHiddenChapterIds(novelId) }
             val flagsDeferred = async {
-                if (!novel.favorite) setNovelDefaultChapterFlags.await(novel)
+                // Untouched rows only — non-favorite entries keep the
+                // user's chapter settings across visits.
+                if (!novel.favorite && novel.chapterFlags == 0L) {
+                    setNovelDefaultChapterFlags.await(novel)
+                }
             }
 
             val chapters = chaptersDeferred.await()
@@ -682,7 +686,9 @@ class NovelScreenModel(
                 val networkNovel = source.getNovelDetails(state.novel.toSNovel())
                 android.util.Log.d(
                     "NovelScreenModel",
-                    "fetchNovelFromSource: novel=${state.novel.title} remoteThumbnailUrl=${networkNovel.thumbnail_url} localThumbnailUrl=${state.novel.thumbnailUrl}",
+                    "fetchNovelFromSource: novel=${state.novel.title} " +
+                        "remoteThumbnailUrl=${networkNovel.thumbnail_url} " +
+                        "localThumbnailUrl=${state.novel.thumbnailUrl}",
                 )
                 updateNovel.awaitUpdateFromSource(
                     localNovel = state.novel,
@@ -835,7 +841,8 @@ class NovelScreenModel(
         // feed, offline, no carriers) and init only kicks it once.
         val mintCandidate = successState?.novel
             ?.takeIf {
-                manualFetch && it.favorite &&
+                manualFetch &&
+                    it.favorite &&
                     it.source != eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.CANONICAL_SOURCE_ID &&
                     !eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog.isCanonicalUrl(it.url)
             }
@@ -1100,7 +1107,8 @@ class NovelScreenModel(
                         context.notify(Notifications.ID_NOVEL_CHAPTER_FETCH, notificationBuilder.build())
 
                         logcat(LogPriority.DEBUG) {
-                            "NovelScreenModel: page $page/$totalPages done, +${toAdd.size} new, +${toUpdate.size} updated"
+                            "NovelScreenModel: page $page/$totalPages done, " +
+                                "+${toAdd.size} new, +${toUpdate.size} updated"
                         }
 
                         if (page >= totalPages) break
@@ -1357,7 +1365,8 @@ class NovelScreenModel(
                         )
                         sourceManager.get(carrier.sourceId) !is NovelCatalogueSource ->
                             snackbarHostState.showSnackbar(
-                                message = "The book extension for this title isn't installed — install or enable it and retry",
+                                message = "The book extension for this title isn't installed — " +
+                                    "install or enable it and retry",
                             )
                         else -> fetchChaptersFromSource(manualFetch = true, bookCarrier = carrier)
                     }
@@ -1694,7 +1703,10 @@ class NovelScreenModel(
             }
             carrierExclusions.exclude(workId, carrier.pkgName, carrier.providerRef)
             workIdentityApi.removeBindingSignal(
-                workId, carrier.pkgName, carrier.providerRef, removed = true,
+                workId,
+                carrier.pkgName,
+                carrier.providerRef,
+                removed = true,
             )
             workCarriers.invalidate(workId)
             loadCarriers(workId)
@@ -1730,8 +1742,10 @@ class NovelScreenModel(
         updateSuccessState {
             it.copy(
                 dialog = Dialog.FindProvider,
-                providerSearch = (it.providerSearch
-                    ?: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search())
+                providerSearch = (
+                    it.providerSearch
+                        ?: eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Search()
+                    )
                     .copy(recommendations = providerRecommendations()),
             )
         }
@@ -2029,7 +2043,8 @@ class NovelScreenModel(
             flow.first { s ->
                 s.rows.any {
                     it.status == eu.kanade.tachiyomi.data.mikodb.ProviderFinder.Status.FOUND
-                } || !s.searching
+                } ||
+                    !s.searching
             }
         } ?: return null
         val feed = resolved.rows.firstOrNull {
@@ -2823,6 +2838,8 @@ class NovelScreenModel(
      * identity-verified), plus the pinned marker from prefs. Runs per
      * dialog open so late-bound carriers show up.
      */
+    private var coverOptionsLoadedAt = 0L
+
     private fun loadCoverOptions() {
         val state = successState ?: return
         val novel = state.novel
@@ -2835,6 +2852,17 @@ class NovelScreenModel(
                 ),
                 "",
             )
+            // Reopening inside the TTL replays the assembled strip —
+            // volume and carrier art doesn't re-request; the pin pref is
+            // still re-read so a V-committed selection ticks right.
+            if (state.coverOptions.isNotEmpty() &&
+                System.currentTimeMillis() - coverOptionsLoadedAt < COVER_OPTIONS_TTL_MS
+            ) {
+                updateSuccessState {
+                    it.copy(coverPinKey = pinPref.get().takeIf(String::isNotBlank))
+                }
+                return@launchIO
+            }
             // Push after each batch so the strip fills in as data lands
             // instead of waiting on every carrier fetch to finish.
             fun push() {
@@ -2858,17 +2886,37 @@ class NovelScreenModel(
             if (workId == null) {
                 novel.thumbnailUrl?.let { url ->
                     options += eu.kanade.presentation.entries.components.CoverOption(
-                        key = "source", label = state.source.name, data = url,
+                        key = "source",
+                        label = state.source.name,
+                        data = url,
                     )
                 }
                 push()
+                coverOptionsLoadedAt = System.currentTimeMillis()
                 return@launchIO
             }
             bridge.byWorkId(workId)?.coverUrl?.let { url ->
                 options += eu.kanade.presentation.entries.components.CoverOption(
-                    key = "mikodb", label = "MikoDB", data = url,
+                    key = "mikodb",
+                    label = "MikoDB",
+                    data = url,
                 )
             }
+            // The art Auto currently resolves to (pipeline-picked provider
+            // art) — pickable on its own, first after Auto, unless another
+            // tile already carries it.
+            novel.thumbnailUrl?.takeIf { url -> url.isNotBlank() && options.none { it.data == url } }
+                ?.let { url ->
+                    options.add(
+                        0,
+                        eu.kanade.presentation.entries.components.CoverOption(
+                            key = "current",
+                            label = eu.kanade.presentation.entries.components.coverProviderLabel(url)
+                                ?: "Current",
+                            data = url,
+                        ),
+                    )
+                }
             push()
             runCatching {
                 canonicalChapterRouter.forEachCarrierCover(
@@ -2879,11 +2927,14 @@ class NovelScreenModel(
                         ?.firstOrNull { it.pkgName == pkg }?.displayName
                         ?: pkg.substringAfterLast('.')
                     options += eu.kanade.presentation.entries.components.CoverOption(
-                        key = "carrier:$pkg", label = name, data = url,
+                        key = "carrier:$pkg",
+                        label = name,
+                        data = url,
                     )
                     push()
                 }
             }
+            coverOptionsLoadedAt = System.currentTimeMillis()
         }
     }
 
@@ -2905,12 +2956,14 @@ class NovelScreenModel(
         data class DuplicateNovel(val novel: Novel, val duplicate: Novel) : Dialog
         data class Migrate(val newNovel: Novel, val oldNovel: Novel) : Dialog
         data object SettingsSheet : Dialog
+
         /** [coverData] = the artwork currently painted in the hero —
          *  the selected volume's cover when grouped, else the entry's
          *  own cover. The dialog views/shares what the user saw. */
         data class FullCover(val coverData: Any? = null) : Dialog
         data object TrackSheet : Dialog
         data object Comments : Dialog
+
         /** Find Content Provider — zero-bound canonical entry (17-02). */
         data object FindProvider : Dialog
 
@@ -3029,6 +3082,11 @@ class NovelScreenModel(
     }
 
     private companion object {
+        /** How long an assembled cover-option strip stays fresh — a
+         *  reopen inside the window replays it instead of re-walking
+         *  volumes and carriers. */
+        const val COVER_OPTIONS_TTL_MS = 5 * 60 * 1000L
+
         /** Text-side books kinds — the "Part of" neighbor search never
          *  adopts another audiobook (or a manga) as the parent work. */
         val TEXT_BOOK_KINDS = setOf("book", "novel")

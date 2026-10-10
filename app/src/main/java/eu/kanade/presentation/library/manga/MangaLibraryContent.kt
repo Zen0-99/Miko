@@ -39,7 +39,7 @@ fun MangaLibraryContent(
     hasActiveFilters: Boolean,
     showPageTabs: Boolean,
     onChangeCurrentPage: (Int) -> Unit,
-    onMangaClicked: (Long) -> Unit,
+    onMangaClicked: (LibraryManga) -> Unit,
     onContinueReadingClicked: ((LibraryManga) -> Unit)?,
     onToggleSelection: (LibraryManga) -> Unit,
     onToggleRangeSelection: (LibraryManga) -> Unit,
@@ -67,6 +67,8 @@ fun MangaLibraryContent(
     getPreviousLayerMangaIds: (() -> Set<Long>)? = null,
     isEntryLocked: ((Long) -> Boolean)? = null,
     sortKey: String = "",
+    subtypeLabel: String? = null,
+    subtypeOptions: List<eu.kanade.presentation.library.components.SubtypeMenuOption> = emptyList(),
 ) {
     if (collectionDisplayMode == LibraryCollectionDisplay.CONTINUOUS && collections.size > 1) {
         MangaLibraryContinuousContent(
@@ -94,6 +96,8 @@ fun MangaLibraryContent(
             showListAuthor = showListAuthor,
             showListStatus = showListStatus,
             isEntryLocked = isEntryLocked,
+            subtypeLabel = subtypeLabel,
+            subtypeOptions = subtypeOptions,
         )
         return
     }
@@ -125,6 +129,8 @@ fun MangaLibraryContent(
                 sortLabel = sortLabel,
                 sortDescending = sortDescending,
                 onSortClick = onSortClick,
+                subtypeLabel = subtypeLabel,
+                subtypeOptions = subtypeOptions,
             )
         } else {
             // When tabs are off, show a collection header (like continuous mode)
@@ -138,6 +144,8 @@ fun MangaLibraryContent(
                     sortDescending = sortDescending,
                     onSortClick = onSortClick,
                     showTitle = showLibraryTitle,
+                    subtypeLabel = subtypeLabel,
+                    subtypeOptions = subtypeOptions,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -146,7 +154,7 @@ fun MangaLibraryContent(
         val notSelectionMode = selection.isEmpty() && !readingOrderMode
         val onClickManga = { manga: LibraryManga ->
             if (notSelectionMode) {
-                onMangaClicked(manga.manga.id)
+                onMangaClicked(manga)
             } else {
                 onToggleSelection(manga)
             }

@@ -299,15 +299,26 @@ class MangaDownloader(
         val wasEmpty = queueState.value.isEmpty()
         // (No asSequence — resolveDownload suspends, which Sequence
         //  lambdas can't.)
+        val unrouted = mutableListOf<Chapter>()
         val chaptersToQueue = chapters
             // Filter out those already enqueued.
             .filter { chapter -> queueState.value.none { it.chapter.id == chapter.id } }
             // Resolve each chapter to (source, chapter) — canon rows get
             // their carrier's source + chapter url; regular rows keep
             // the manga's own source.
-            .mapNotNull { ch -> resolveDownload(manga, ch, source, forcedCarrierPkg) }
+            .mapNotNull { ch -> resolveDownload(manga, ch, source, forcedCarrierPkg, unrouted) }
             // Add chapters to queue from the start.
             .sortedByDescending { it.chapter.sourceOrder }
+
+        // Canon chapters with no serving carrier would otherwise vanish
+        // silently — the tap must explain itself.
+        if (unrouted.isNotEmpty()) {
+            notifier.onError(
+                context.stringResource(MR.strings.download_notifier_no_carrier),
+                mangaTitle = manga.title,
+                mangaId = manga.id,
+            )
+        }
 
         if (chaptersToQueue.isNotEmpty()) {
             addAllToQueue(chaptersToQueue)
@@ -348,6 +359,7 @@ class MangaDownloader(
         chapter: Chapter,
         mangaSource: HttpSource?,
         forcedCarrierPkg: String?,
+        unrouted: MutableList<Chapter>? = null,
     ): MangaDownload? {
         if (eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCanonUrl(chapter.url)) {
             val workId = eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
@@ -355,7 +367,16 @@ class MangaDownloader(
             val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
                 .seqFromCanonUrl(workId, chapter.url) ?: return null
             val (carrier, candidate) = canonRouter
-                .downloadTarget(workId, seq, forcedCarrierPkg) ?: return null
+                .downloadTarget(
+                    workId,
+                    seq,
+                    forcedCarrierPkg,
+                    chapter.chapterNumber.takeIf { it >= 0.0 },
+                )
+                ?: run {
+                    unrouted?.add(chapter)
+                    return null
+                }
             if (provider.findChapterDir(chapter.name, chapter.scanlator, manga.title, carrier) != null) {
                 return null
             }

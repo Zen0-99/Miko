@@ -35,9 +35,9 @@ import tachiyomi.domain.library.manga.LibraryManga
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.library.shows.LibraryAnime
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
+import tachiyomi.domain.source.manga.model.StubMangaSource
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.service.NovelSourceManager
-import tachiyomi.domain.source.manga.model.StubMangaSource
 
 /**
  * Phase 18-02 — feed-arm coverage for the facets and dispatch the
@@ -80,7 +80,10 @@ class CatalogRowFeedsTest {
                         url = "/manga/alpha"
                         thumbnail_url = "https://x/a.jpg"
                     },
-                    SManga.create().apply { title = "Beta"; url = "/manga/beta" },
+                    SManga.create().apply {
+                        title = "Beta"
+                        url = "/manga/beta"
+                    },
                 ),
                 false,
             )
@@ -106,7 +109,15 @@ class CatalogRowFeedsTest {
             every { supportsLatest } returns true
             coEvery { getLatestUpdates(1) } answers {
                 latestCalled = true
-                MangasPage(listOf(SManga.create().apply { title = "New"; url = "/n" }), false)
+                MangasPage(
+                    listOf(
+                        SManga.create().apply {
+                            title = "New"
+                            url = "/n"
+                        },
+                    ),
+                    false,
+                )
             }
         }
         extensionFeed(source).fetch(mangaSpec(ExtKind.LATEST), Feed.Extension("pkg.test", SOURCE_ID, ExtKind.LATEST))
@@ -204,11 +215,21 @@ class CatalogRowFeedsTest {
             every { getFilterList() } returns filters
             coEvery { getSearchManga(1, "", any()) } answers {
                 searched = true
-                MangasPage(listOf(SManga.create().apply { title = "WT"; url = "/w" }), false)
+                MangasPage(
+                    listOf(
+                        SManga.create().apply {
+                            title = "WT"
+                            url = "/w"
+                        },
+                    ),
+                    false,
+                )
             }
         }
         val feed = Feed.Extension(
-            "pkg.test", SOURCE_ID, ExtKind.POPULAR,
+            "pkg.test",
+            SOURCE_ID,
+            ExtKind.POPULAR,
             kindsCsv = "manhwa,manhua,webtoon,oel,other",
         )
         val items = extensionFeed(source).fetch(mangaSpec(), feed)
@@ -225,7 +246,10 @@ class CatalogRowFeedsTest {
             every { getFilterList() } returns FilterList(emptyList())
         }
         val feed = Feed.Extension(
-            "pkg.test", SOURCE_ID, ExtKind.POPULAR, kindsCsv = "webtoon",
+            "pkg.test",
+            SOURCE_ID,
+            ExtKind.POPULAR,
+            kindsCsv = "webtoon",
         )
         assertThrows(FeedNotImplementedException::class.java) {
             runBlocking { extensionFeed(source).fetch(mangaSpec(), feed) }
@@ -245,7 +269,15 @@ class CatalogRowFeedsTest {
             every { getFilterList() } returns filters
             coEvery { getSearchManga(1, "", any()) } answers {
                 searched = true
-                MangasPage(listOf(SManga.create().apply { title = "A"; url = "/a" }), false)
+                MangasPage(
+                    listOf(
+                        SManga.create().apply {
+                            title = "A"
+                            url = "/a"
+                        },
+                    ),
+                    false,
+                )
             }
         }
         extensionFeed(source).fetch(
@@ -268,12 +300,23 @@ class CatalogRowFeedsTest {
                 listOf(TestSelect("Type", arrayOf("All", "Manga", "Webtoon"))),
             )
             coEvery { getSearchManga(1, "", any()) } answers {
-                MangasPage(listOf(SManga.create().apply { title = "M"; url = "/m" }), false)
+                MangasPage(
+                    listOf(
+                        SManga.create().apply {
+                            title = "M"
+                            url = "/m"
+                        },
+                    ),
+                    false,
+                )
             }
         }
         val feed = Feed.Extension(
-            "pkg.test", SOURCE_ID, ExtKind.POPULAR,
-            kindsCsv = "manga,comic", kindStrict = false,
+            "pkg.test",
+            SOURCE_ID,
+            ExtKind.POPULAR,
+            kindsCsv = "manga,comic",
+            kindStrict = false,
         )
         val items = extensionFeed(source).fetch(mangaSpec(), feed)
         val select = source.getFilterList()[0] as TestSelect
@@ -292,12 +335,23 @@ class CatalogRowFeedsTest {
             every { getFilterList() } returns FilterList(emptyList())
             coEvery { getPopularManga(1) } answers {
                 popularCalled = true
-                MangasPage(listOf(SManga.create().apply { title = "P"; url = "/p" }), false)
+                MangasPage(
+                    listOf(
+                        SManga.create().apply {
+                            title = "P"
+                            url = "/p"
+                        },
+                    ),
+                    false,
+                )
             }
         }
         val feed = Feed.Extension(
-            "pkg.test", SOURCE_ID, ExtKind.POPULAR,
-            kindsCsv = "manga,comic", kindStrict = false,
+            "pkg.test",
+            SOURCE_ID,
+            ExtKind.POPULAR,
+            kindsCsv = "manga,comic",
+            kindStrict = false,
         )
         val items = extensionFeed(source).fetch(mangaSpec(), feed)
         assertTrue(popularCalled)
@@ -318,7 +372,15 @@ class CatalogRowFeedsTest {
             every { supportsLatest } returns true
             coEvery { getPopularAnime(1) } answers {
                 animeCalled = true
-                AnimesPage(listOf(SAnime.create().apply { title = "Show"; url = "/s" }), false)
+                AnimesPage(
+                    listOf(
+                        SAnime.create().apply {
+                            title = "Show"
+                            url = "/s"
+                        },
+                    ),
+                    false,
+                )
             }
         }
         val feed = ExtensionCatalogFeed(
@@ -345,7 +407,12 @@ class CatalogRowFeedsTest {
             every { name } returns "NovelSrc"
             every { supportsLatest } returns true
             coEvery { getPopularNovels(1) } returns NovelsPage(
-                listOf(SNovel.create().apply { title = "Book"; url = "/b" }),
+                listOf(
+                    SNovel.create().apply {
+                        title = "Book"
+                        url = "/b"
+                    },
+                ),
                 false,
             )
         }

@@ -69,6 +69,7 @@ import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupMode
+import tachiyomi.domain.library.model.LibrarySubtype
 import tachiyomi.domain.library.novel.LibraryNovel
 import tachiyomi.domain.library.novel.model.NovelLibrarySort
 import tachiyomi.domain.library.novel.model.sort
@@ -125,6 +126,7 @@ class NovelLibraryScreenModel(
     private val updateReadingOrder: UpdateReadingOrder = Injekt.get(),
     private val getNovel: GetNovel = Injekt.get(),
     private val getNovelFavorites: GetNovelFavorites = Injekt.get(),
+    private val subtypeResolver: eu.kanade.tachiyomi.data.mikodb.LibrarySubtypeResolver = Injekt.get(),
 ) : StateScreenModel<NovelLibraryScreenModel.State>(State()) {
 
     var activeCollectionIndex: Int by libraryPreferences.lastUsedNovelCollection().asState(
@@ -139,7 +141,13 @@ class NovelLibraryScreenModel(
                 getTracksPerNovel.subscribe(),
                 getTrackingFilterFlow(),
                 downloadCache.changes,
-            ) { searchQuery, library, tracks, trackingFilter, _ ->
+                libraryPreferences.novelSubtypeFilter().changes(),
+            ) { values ->
+                val searchQuery = values[0] as String?
+                val library = values[1] as NovelLibraryMap
+                val tracks = values[2] as Map<Long, List<NovelTrack>>
+                val trackingFilter = values[3] as Map<Long, TriState>
+                val subtype = values[5] as LibrarySubtype
                 library
                     .applyFilters(tracks, trackingFilter)
                     .applySort(tracks, trackingFilter.keys)
@@ -150,6 +158,7 @@ class NovelLibraryScreenModel(
                             value
                         }
                     }
+                    .applySubtypeFilter(subtype)
             }
                 .collectLatest {
                     mutableState.update { state ->
@@ -175,6 +184,14 @@ class NovelLibraryScreenModel(
                         showNovelContinueButton = values[2] as Boolean,
                         showLibraryTitle = values[3] as Boolean,
                     )
+                }
+            }
+            .launchIn(screenModelScope)
+
+        libraryPreferences.novelSubtypeFilter().changes()
+            .onEach { subtype ->
+                mutableState.update { state ->
+                    state.copy(subtypeFilter = subtype)
                 }
             }
             .launchIn(screenModelScope)
@@ -269,6 +286,29 @@ class NovelLibraryScreenModel(
         }
 
         return mapValues { (_, value) -> value.fastFilter(filterFn) }
+    }
+
+    /**
+     * Sub-category filter (Book vs Novel) — applies across all
+     * collections in the mode; resolution is local-only via
+     * [LibrarySubtypeResolver] (memoized per entry id).
+     */
+    private suspend fun NovelLibraryMap.applySubtypeFilter(
+        subtype: LibrarySubtype,
+    ): NovelLibraryMap {
+        if (subtype == LibrarySubtype.ALL) return this
+        val subtypes = subtypeResolver.classifyNovels(
+            values.flatten().map { it.libraryNovel.novel },
+        )
+        return mapValues { (_, value) ->
+            value.filter { subtypes[it.libraryNovel.novel.id] == subtype }
+        }
+    }
+
+    /** Persisted mode-wide subtype selection — the header context menu
+     *  writes here; the library flow re-filters on the pref change. */
+    fun setSubtypeFilter(subtype: LibrarySubtype) {
+        libraryPreferences.novelSubtypeFilter().set(subtype)
     }
 
     private suspend fun NovelLibraryMap.applySort(
@@ -1358,6 +1398,7 @@ class NovelLibraryScreenModel(
         val savedReadingOrderLayers: Map<Long, Int> = emptyMap(),
         val lockedReadingOrderEntryIds: Set<Long> = emptySet(),
         val readingOrderSavedMessage: String? = null,
+        val subtypeFilter: LibrarySubtype = LibrarySubtype.ALL,
     ) {
         private val libraryCount by lazy {
             library.values

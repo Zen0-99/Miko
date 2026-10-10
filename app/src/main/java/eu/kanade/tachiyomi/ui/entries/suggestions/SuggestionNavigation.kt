@@ -1,23 +1,23 @@
 package eu.kanade.tachiyomi.ui.entries.suggestions
 
-import eu.kanade.domain.entries.shows.model.toDomainAnime
 import eu.kanade.domain.entries.manga.model.toDomainManga
 import eu.kanade.domain.entries.novel.model.toDomainNovel
+import eu.kanade.domain.entries.shows.model.toDomainAnime
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.ui.browse.shows.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.browse.manga.source.globalsearch.GlobalMangaSearchScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
-import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
+import eu.kanade.tachiyomi.ui.browse.shows.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
-import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
+import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
+import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

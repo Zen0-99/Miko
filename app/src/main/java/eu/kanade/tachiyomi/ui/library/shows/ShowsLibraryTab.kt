@@ -7,6 +7,7 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -68,9 +69,8 @@ import eu.kanade.presentation.entries.components.ReadingOrderBottomBar
 import eu.kanade.presentation.entries.components.ReadingOrderMoveDepthDialog
 import eu.kanade.presentation.entries.components.ReadingOrderPickerDialog
 import eu.kanade.presentation.entries.components.ReadingOrderRemoveConfirmDialog
+import eu.kanade.presentation.entries.components.continueRowLabel
 import eu.kanade.presentation.library.DeleteLibraryEntryDialog
-import eu.kanade.presentation.library.shows.ShowsLibraryContent
-import eu.kanade.presentation.library.shows.ShowsLibrarySettingsDialog
 import eu.kanade.presentation.library.components.SortBottomSheet
 import eu.kanade.presentation.library.components.SortModeOption
 import eu.kanade.presentation.library.displayoptions.DisplayOptionsSheet
@@ -83,6 +83,8 @@ import eu.kanade.presentation.library.filter.FullFilterSheet
 import eu.kanade.presentation.library.filter.GroupBySheet
 import eu.kanade.presentation.library.filter.LibraryFilterId
 import eu.kanade.presentation.library.filter.PersistentFilterSheet
+import eu.kanade.presentation.library.shows.ShowsLibraryContent
+import eu.kanade.presentation.library.shows.ShowsLibrarySettingsDialog
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
@@ -109,11 +111,12 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.shows.model.Anime
+import tachiyomi.domain.entries.shows.model.asAnimeCover
 import tachiyomi.domain.items.episode.model.Episode
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.shows.LibraryAnime
 import tachiyomi.domain.library.shows.model.AnimeLibrarySort
 import tachiyomi.domain.library.shows.model.sort
-import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.model.ReadingOrder
 import tachiyomi.i18n.MR
@@ -505,7 +508,7 @@ data object ShowsLibraryTab : Tab {
 
         val onClickRefresh: (Collection?) -> Boolean = { collection ->
             eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus.refreshRequested()
-            ShowsLibraryUpdateJob.startNow(context, collection)
+            ShowsLibraryUpdateJob.startNow(context, collection, state.subtypeFilter)
         }
 
         suspend fun openEpisode(episode: Episode) {
@@ -671,17 +674,42 @@ data object ShowsLibraryTab : Tab {
                     state.isLoading -> LoadingScreen(Modifier.padding(resolvedContentPadding))
                     state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
                         val handler = LocalUriHandler.current
-                        EmptyScreen(
-                            stringRes = MR.strings.information_empty_library,
-                            modifier = Modifier.padding(resolvedContentPadding),
-                            actions = persistentListOf(
-                                EmptyScreenAction(
-                                    stringRes = MR.strings.getting_started_guide,
-                                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                                    onClick = { handler.openUri(GETTING_STARTED_URL) },
+                        if (state.subtypeFilter == tachiyomi.domain.library.model.LibrarySubtype.ALL) {
+                            EmptyScreen(
+                                stringRes = MR.strings.information_empty_library,
+                                modifier = Modifier.padding(resolvedContentPadding),
+                                actions = persistentListOf(
+                                    EmptyScreenAction(
+                                        stringRes = MR.strings.getting_started_guide,
+                                        icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                                        onClick = { handler.openUri(GETTING_STARTED_URL) },
+                                    ),
                                 ),
-                            ),
-                        )
+                            )
+                        } else {
+                            // Subtype filter emptied the view — keep its
+                            // selector on screen or there's no way back.
+                            Column(Modifier.padding(resolvedContentPadding)) {
+                                eu.kanade.presentation.library.components.SubtypeSelectorRow(
+                                    label = eu.kanade.presentation.library.components
+                                        .subtypeLabelFor(state.subtypeFilter),
+                                    options = eu.kanade.presentation.library.components
+                                        .subtypeOptionsFor(
+                                            choices = listOf(
+                                                tachiyomi.domain.library.model.LibrarySubtype.ALL,
+                                                tachiyomi.domain.library.model.LibrarySubtype.SERIES,
+                                                tachiyomi.domain.library.model.LibrarySubtype.MOVIE,
+                                            ),
+                                            current = state.subtypeFilter,
+                                            onSelect = screenModel::setSubtypeFilter,
+                                        ),
+                                )
+                                EmptyScreen(
+                                    stringRes = MR.strings.no_results_found,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
                     }
                     else -> {
                         ShowsLibraryContent(
@@ -693,13 +721,41 @@ data object ShowsLibraryTab : Tab {
                             hasActiveFilters = state.hasActiveFilters,
                             showPageTabs = state.showCollectionTabs || !state.searchQuery.isNullOrEmpty(),
                             onChangeCurrentPage = { screenModel.activeCollectionIndex = it },
-                            onAnimeClicked = { animeId ->
+                            onAnimeClicked = { libraryAnime ->
                                 scope.launch {
-                                    val lockedOrders = getLockedReadingOrders.await(animeId)
+                                    val anime = libraryAnime.anime
+                                    val lockedOrders = getLockedReadingOrders.await(anime.id)
                                     if (lockedOrders.isNotEmpty()) {
-                                        lockDialog = animeId to lockedOrders
+                                        lockDialog = anime.id to lockedOrders
                                     } else {
-                                        navigator.push(ShowsScreen(animeId))
+                                        val next = screenModel.getNextUnseenEpisode(anime)
+                                        navigator.push(
+                                            ShowsScreen(
+                                                anime.id,
+                                                previewCover = anime.asAnimeCover(),
+                                                previewTitle = anime.title,
+                                                previewResumeLabel = continueRowLabel(
+                                                    context = context,
+                                                    allRead = libraryAnime.unseenCount == 0L &&
+                                                        libraryAnime.totalCount > 0,
+                                                    hasStarted = libraryAnime.hasStarted ||
+                                                        (next?.lastSecondSeen ?: 0) > 0,
+                                                    progress = next?.let {
+                                                        eu.kanade.presentation.entries.components
+                                                            .qualifiedEpisodeLabel(
+                                                                it.name,
+                                                                it.episodeNumber,
+                                                                it.scanlator,
+                                                            )
+                                                    },
+                                                ),
+                                                previewResumeEnabled =
+                                                next != null ||
+                                                    !libraryAnime.hasStarted ||
+                                                    libraryAnime.unseenCount > 0,
+                                                previewHasGenres = !anime.genre.isNullOrEmpty(),
+                                            ),
+                                        )
                                     }
                                 }
                             },
@@ -754,6 +810,18 @@ data object ShowsLibraryTab : Tab {
                             sortKey = state.collections.getOrNull(screenModel.activeCollectionIndex)?.let {
                                 "${it.sort.type}:${it.sort.direction}"
                             } ?: "",
+                            subtypeLabel = eu.kanade.presentation.library.components
+                                .subtypeLabelFor(state.subtypeFilter),
+                            subtypeOptions = eu.kanade.presentation.library.components
+                                .subtypeOptionsFor(
+                                    choices = listOf(
+                                        tachiyomi.domain.library.model.LibrarySubtype.ALL,
+                                        tachiyomi.domain.library.model.LibrarySubtype.SERIES,
+                                        tachiyomi.domain.library.model.LibrarySubtype.MOVIE,
+                                    ),
+                                    current = state.subtypeFilter,
+                                    onSelect = screenModel::setSubtypeFilter,
+                                ),
                         )
                     }
                 }

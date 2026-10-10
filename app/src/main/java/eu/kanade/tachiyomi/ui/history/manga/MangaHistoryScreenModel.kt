@@ -116,7 +116,7 @@ class MangaHistoryScreenModel(
         var currentMangaId: Long? = null
         var windowStart: Long = 0L
         for (entry in this) {
-            val t = entry.readAt?.time ?: 0L
+            val t = entry.readAt?.toEpochMilliseconds() ?: 0L
             if (current != null && entry.mangaId == currentMangaId && t - windowStart <= batchWindowMs) {
                 current!!.add(entry)
             } else {
@@ -137,7 +137,7 @@ class MangaHistoryScreenModel(
             val entries = group.entries
             val first = entries.first()
             val last = entries.last()
-            val firstDate = first.readAt?.time?.toLocalDate()
+            val firstDate = first.readAt?.toEpochMilliseconds()?.toLocalDate()
             if (firstDate != null && firstDate != lastDate) {
                 result.add(MangaHistoryUiModel.Header(firstDate))
                 lastDate = firstDate
@@ -149,8 +149,10 @@ class MangaHistoryScreenModel(
                         title = first.title,
                         firstChapter = first.chapterNumber,
                         lastChapter = last.chapterNumber,
-                        firstReadAt = first.readAt ?: java.util.Date(0),
-                        lastReadAt = last.readAt ?: java.util.Date(0),
+                        firstReadAt = first.readAt?.toEpochMilliseconds()
+                            ?.let { java.util.Date(it) } ?: java.util.Date(0),
+                        lastReadAt = last.readAt?.toEpochMilliseconds()
+                            ?.let { java.util.Date(it) } ?: java.util.Date(0),
                         coverData = first.coverData,
                         historyIds = entries.map { it.id },
                     ),

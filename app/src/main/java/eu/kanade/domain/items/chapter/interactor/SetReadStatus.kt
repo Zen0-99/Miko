@@ -14,7 +14,7 @@ import tachiyomi.domain.history.manga.model.MangaHistoryUpdate
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.items.chapter.model.ChapterUpdate
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
-import java.util.Date
+import kotlin.time.Clock
 
 class SetReadStatus(
     private val downloadPreferences: DownloadPreferences,
@@ -57,7 +57,7 @@ class SetReadStatus(
         if (read) {
             // Record history entries for manually-marked-as-read chapters
             if (upsertHistory != null) {
-                val now = Date()
+                val now = Clock.System.now()
                 chaptersToUpdate.forEach { chapter ->
                     upsertHistory.await(
                         MangaHistoryUpdate(

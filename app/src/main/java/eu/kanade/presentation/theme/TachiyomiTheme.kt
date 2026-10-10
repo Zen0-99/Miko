@@ -156,9 +156,33 @@ private fun animatedColorScheme(target: ColorScheme): ColorScheme {
     val fromScheme = remember { mutableStateOf(target) }
     val toScheme = remember { mutableStateOf(target) }
     val progress = remember { Animatable(1f) }
-    // Use the primary color value as the change-detection key. This is unique
-    // per theme+mode+amoled combination and changes on any theme switch.
-    val targetKey = target.primary.value to target.background.value
+    // ColorScheme has no structural equals (material3 1.3.x) — a new
+    // instance every composition means the scheme itself can't be the
+    // key (every recomposition would relaunch and freeze the lerp).
+    // A slot-value list IS structural: it restarts on any real change —
+    // including surface-only mode switches primary+background missed.
+    val targetKey = listOf(
+        target.primary.value, target.onPrimary.value,
+        target.primaryContainer.value, target.onPrimaryContainer.value,
+        target.inversePrimary.value,
+        target.secondary.value, target.onSecondary.value,
+        target.secondaryContainer.value, target.onSecondaryContainer.value,
+        target.tertiary.value, target.onTertiary.value,
+        target.tertiaryContainer.value, target.onTertiaryContainer.value,
+        target.background.value, target.onBackground.value,
+        target.surface.value, target.onSurface.value,
+        target.surfaceVariant.value, target.onSurfaceVariant.value,
+        target.surfaceTint.value,
+        target.inverseSurface.value, target.inverseOnSurface.value,
+        target.error.value, target.onError.value,
+        target.errorContainer.value, target.onErrorContainer.value,
+        target.outline.value, target.outlineVariant.value,
+        target.scrim.value,
+        target.surfaceBright.value, target.surfaceDim.value,
+        target.surfaceContainer.value, target.surfaceContainerHigh.value,
+        target.surfaceContainerHighest.value,
+        target.surfaceContainerLow.value, target.surfaceContainerLowest.value,
+    )
     val lastKey = remember { mutableStateOf(targetKey) }
 
     LaunchedEffect(targetKey) {
@@ -215,6 +239,13 @@ private fun lerpScheme(from: ColorScheme, to: ColorScheme, progress: Float): Col
         outline = lerp(from.outline, to.outline, progress),
         outlineVariant = lerp(from.outlineVariant, to.outlineVariant, progress),
         scrim = lerp(from.scrim, to.scrim, progress),
+        surfaceBright = lerp(from.surfaceBright, to.surfaceBright, progress),
+        surfaceDim = lerp(from.surfaceDim, to.surfaceDim, progress),
+        surfaceContainer = lerp(from.surfaceContainer, to.surfaceContainer, progress),
+        surfaceContainerHigh = lerp(from.surfaceContainerHigh, to.surfaceContainerHigh, progress),
+        surfaceContainerHighest = lerp(from.surfaceContainerHighest, to.surfaceContainerHighest, progress),
+        surfaceContainerLow = lerp(from.surfaceContainerLow, to.surfaceContainerLow, progress),
+        surfaceContainerLowest = lerp(from.surfaceContainerLowest, to.surfaceContainerLowest, progress),
     )
 }
 

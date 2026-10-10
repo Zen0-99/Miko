@@ -1,15 +1,15 @@
 package eu.kanade.presentation.entries.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import android.util.Log
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.graphics.ExperimentalAnimationGraphicsApi
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Icon
@@ -44,18 +45,27 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -73,10 +83,16 @@ import eu.kanade.presentation.components.NAV_DOWNLOAD_SHARED_KEY
 import eu.kanade.presentation.components.NAV_LEADING_ICON_SHARED_KEY
 import eu.kanade.presentation.components.NAV_OVERFLOW_SHARED_KEY
 import eu.kanade.presentation.components.NAV_PILL_SHARED_KEY
+import eu.kanade.presentation.library.components.coverCellMemoryKey
 import eu.kanade.presentation.util.LocalNavAnimatedVisibilityScope
 import eu.kanade.presentation.util.LocalSharedTransitionScope
+import eu.kanade.presentation.util.navTransitionProgress
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.coil.useBackground
+import tachiyomi.domain.entries.EntryCover
+import tachiyomi.domain.entries.manga.model.MangaCover
+import tachiyomi.domain.entries.novel.model.NovelCover
+import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.i18n.stringResource
@@ -85,6 +101,7 @@ import tachiyomi.presentation.core.util.clickableNoIndication
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import kotlin.math.roundToInt
 
 /**
  * Enhanced detail hero — cinematic full-bleed backdrop with a centered title
@@ -133,23 +150,24 @@ fun EnhancedEntryInfoBox(
      * over it once loaded.
      */
     previewCover: Any? = null,
+    /** The artwork the hero is actually targeting once settled (volume /
+     * season override). After the push lands the preview underlay swaps
+     * to it, so a later volume/season switch crossfades the hi-res layer
+     * over *its own* artwork instead of letting the low-res navigation
+     * bitmap peek through the semi-transparent midpoint. */
+    liveCover: Any? = null,
+    /** Skeleton use: hold the meta row's slot (and its shared key) empty
+     *  while data loads, so the title sits at its final Y and the home
+     *  genre line has a landing target. */
+    reserveMeta: Boolean = false,
+    /** Skeleton use: whether the reserved meta slot paints its ghost bar —
+     *  hidden while the caller's slow-load delay hasn't elapsed. */
+    metaGhostVisible: Boolean = true,
 ) {
     val panPrefEnabled by Injekt.get<UiPreferences>()
         .heroImagePanEnabled()
         .collectAsState()
     val panEnabled = panHorizontally && panPrefEnabled
-
-    // Same slow eased pan as the home hero — a single infinite float driving
-    // a graphicsLayer translationX on an oversized image so edges never show.
-    val panFraction by rememberInfiniteTransition(label = "hero_pan").animateFloat(
-        initialValue = -1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 14000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "hero_pan_offset",
-    )
 
     val navAnimScope = LocalNavAnimatedVisibilityScope.current
     val overshootDp = with(LocalDensity.current) { (overscrollPullPx * 0.5f).toDp() }
@@ -164,9 +182,13 @@ fun EnhancedEntryInfoBox(
             // and the artwork element (matchParentSize) morphs between
             // identical bounds on every first-open.
             .height(appBarPadding + heroContentPadding + overshootDp + HERO_DETAIL_HERO_TAIL.dp)
+            // Library covers fly here as "cover-image-$id". The key sits on
+            // the WHOLE hero box — not the bare image — so sharedBounds'
+            // content crossfade fades the cell into artwork + scrims +
+            // title/meta during the morph, not instantly at handback.
+            .then(heroSharedBoundsModifier(coverSharedKeyOf(sharedKey), HeroSharedKind.Cover))
             .clickableNoIndication(onClick = onCoverClick),
     ) {
-
         // Layer 2: full-bleed backdrop — sharp, not blurred; the scrim
         // gradient handles readability. Scale is uniform so the image is
         // never distorted: pan oversizes it 25% for travel room, then the
@@ -184,19 +206,9 @@ fun EnhancedEntryInfoBox(
             animationSpec = tween(900, easing = LinearOutSlowInEasing),
             label = "hero_pan_speed",
         )
-        val panX = remember { mutableFloatStateOf(0f) }
-        var lastPanFraction by remember { mutableStateOf<Float?>(null) }
         var heroWidthPx by remember { mutableIntStateOf(0) }
-        LaunchedEffect(panEnabled, panFraction, panSpeed, heroWidthPx) {
-            if (!panEnabled || heroWidthPx == 0) return@LaunchedEffect
-            val last = lastPanFraction
-            if (last == null) {
-                panX.floatValue = panFraction * heroWidthPx * 0.10f
-            } else {
-                panX.floatValue += (panFraction - last) * heroWidthPx * 0.10f * panSpeed
-            }
-            lastPanFraction = panFraction
-        }
+        // Shared clock with the home hero — see HeroPanClock.
+        HeroPanDriver(panEnabled) { panSpeed }
         // The shared element is the image PLUS its scrims — shared content
         // renders in an overlay above everything during the morph, so a
         // bare image would fly over the title bright and undimmed. Carrying
@@ -206,11 +218,67 @@ fun EnhancedEntryInfoBox(
         // layer; ramping the gradient separately leaves the image visible
         // ahead of its dimming mid-flight ("image on top of the gradient").
         val sharedBoundsModifier = heroSharedBoundsModifier(sharedKey)
-        val imageRequest = ImageRequest.Builder(LocalContext.current)
+        val poseKey = sharedKey as? String
+        val poseProgress = navTransitionProgress()
+        // With a preview (the caller's memory-cached artwork) underneath,
+        // the hi-res request stays hidden until the push lands — when it
+        // resolved mid-flight it swapped a different bitmap/crop into the
+        // morphing element. After the first landing it stays shown, so
+        // pops fly the hi-res image.
+        val navInTransit = navAnimScope.isNavInTransit()
+        var hiResReady by remember { mutableStateOf(previewCover == null) }
+        LaunchedEffect(navInTransit) { if (!navInTransit) hiResReady = true }
+        // Same artwork under a different model object (nav bitmap's
+        // MangaCover vs the live url string / volume override) must not
+        // re-decode the underlay — only a genuinely different url swaps.
+        fun coverUrlOf(model: Any?): String? = when (model) {
+            is MangaCover -> model.url
+            is NovelCover -> model.url
+            is AnimeCover -> model.url
+            is String -> model
+            else -> null
+        }
+        // The layer composes at landing but fades only once Coil has a
+        // decoded bitmap — a timed fade can outrun a slow decode and the
+        // hi-res pops in mid-fade instead of arriving with it.
+        var hiResDrawn by remember { mutableStateOf(false) }
+        val hiResAlpha by animateFloatAsState(
+            targetValue = if (hiResReady && hiResDrawn) 1f else 0f,
+            animationSpec = tween(250),
+            label = "hero_hires_alpha",
+        )
+        val imageContext = LocalContext.current
+        val imageRequest = ImageRequest.Builder(imageContext)
             .data(backdrop)
             .useBackground(true)
             .crossfade(true)
             .build()
+        // The library cell stores its decoded bitmap under coverCellMemoryKey
+        // — the placeholder lookup skips Coil's cached-size validation (a
+        // ~400px cell bitmap never satisfies a ~1344px hero request), so the
+        // morphing element's target paints that bitmap from frame 0 instead
+        // of decoding the same file at hero size mid-flight. Non-cover
+        // previews (home hero URL/model) get no key and behave as before.
+        // Mid-flight the underlay must stay the navigation bitmap (it's
+        // what the origin cell painted); once landed it follows the live
+        // artwork so volume/season swaps never expose it.
+        val underlayCover = if (navInTransit ||
+            liveCover == null ||
+            (previewCover != null && coverUrlOf(liveCover) == coverUrlOf(previewCover))
+        ) {
+            previewCover
+        } else {
+            liveCover
+        }
+        val previewModel = remember(underlayCover) {
+            coverCellMemoryKey(underlayCover as? EntryCover)?.let { key ->
+                ImageRequest.Builder(imageContext)
+                    .data(underlayCover)
+                    .placeholderMemoryCacheKey(key)
+                    .crossfade(true)
+                    .build()
+            } ?: underlayCover
+        }
         val backgroundColor = MaterialTheme.colorScheme.background
         // Fixed element footprint identical to the home hero's and the
         // loading preview's (statusBar + contentPadding + TAIL tail) —
@@ -231,7 +299,14 @@ fun EnhancedEntryInfoBox(
             modifier = Modifier
                 .matchParentSize()
                 .clipToBounds()
-                .then(sharedBoundsModifier),
+                .then(sharedBoundsModifier)
+                // Inner clip — the overlay skips the outer one, and the
+                // blended parallax pose would spill past the scrim.
+                .clipToBounds()
+                .heroBottomFeather()
+                // The pan width is measured here, not on the hi-res image —
+                // that layer isn't composed until the push lands.
+                .onSizeChanged { heroWidthPx = it.width },
         ) {
             // Missing/failed artwork: plain background, never a tint —
             // and it lives INSIDE the element so it rides the morph
@@ -241,57 +316,67 @@ fun EnhancedEntryInfoBox(
                     .matchParentSize()
                     .background(backgroundColor),
             )
-            if (previewCover != null) {
+            if (underlayCover != null) {
                 AsyncImage(
-                    model = previewCover,
+                    model = previewModel,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .matchParentSize()
                         .graphicsLayer {
-                            // Same freeze as the home hero — pan/parallax
-                            // ride inside the shared element's content, so
-                            // mid-flight they make the artwork slide around
-                            // instead of gliding as one element.
-                            val transit = navAnimScope?.transition?.isRunning == true
-                            val scale = if (transit) {
-                                baseScale
-                            } else {
-                                (baseScale + overscrollPullPx * 0.0005f + parallaxOffsetPx * 0.0001f)
-                                    .coerceAtMost(baseScale + 0.15f)
-                            }
-                            scaleX = scale
-                            scaleY = scale
-                            if (panEnabled && !transit) {
-                                translationX = panX.floatValue
-                            }
-                            translationY = if (transit) 0f else parallaxOffsetPx * 0.3f
+                            // Pose continuity with the home hero — see
+                            // applyHeroPose. Same pose as the real image
+                            // below so the preview underlay never shears.
+                            applyHeroPose(
+                                key = poseKey,
+                                side = HeroSide.Detail,
+                                transit = navAnimScope.isNavInTransit(),
+                                ownProgress = poseProgress,
+                                tx = if (panEnabled) HeroPanClock.fraction.floatValue * heroWidthPx * 0.10f else 0f,
+                                ty = parallaxOffsetPx * 0.3f,
+                                scale = (baseScale + overscrollPullPx * 0.0005f + parallaxOffsetPx * 0.0001f)
+                                    .coerceAtMost(baseScale + 0.15f),
+                                neutralScale = baseScale,
+                            )
                         },
                 )
             }
-            AsyncImage(
-                model = imageRequest,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .onSizeChanged { heroWidthPx = it.width }
-                    .graphicsLayer {
-                        val transit = navAnimScope?.transition?.isRunning == true
-                        val scale = if (transit) {
-                            baseScale
-                        } else {
-                            (baseScale + overscrollPullPx * 0.0005f + parallaxOffsetPx * 0.0001f)
-                                .coerceAtMost(baseScale + 0.15f)
-                        }
-                        scaleX = scale
-                        scaleY = scale
-                        if (panEnabled && !transit) {
-                            translationX = panX.floatValue
-                        }
-                        translationY = if (transit) 0f else parallaxOffsetPx * 0.3f
+            // Volume/season artwork swaps keep painting the last decoded
+            // frame as the new request's placeholder — without it a model
+            // change resets to empty and the low-res preview underlay
+            // flashes through while the replacement loads.
+            var previousPainter by remember { mutableStateOf<Painter?>(null) }
+            // Not composed at all until the push lands — a second decode of
+            // the same file mid-flight competes with the frames the morph
+            // needs, and it renders nothing while hidden anyway.
+            if (hiResReady) {
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    placeholder = previousPainter,
+                    onSuccess = { success ->
+                        previousPainter = success.painter
+                        hiResDrawn = true
                     },
-            )
+                    modifier = Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            applyHeroPose(
+                                key = poseKey,
+                                side = HeroSide.Detail,
+                                transit = navAnimScope.isNavInTransit(),
+                                ownProgress = poseProgress,
+                                tx = if (panEnabled) HeroPanClock.fraction.floatValue * heroWidthPx * 0.10f else 0f,
+                                ty = parallaxOffsetPx * 0.3f,
+                                scale = (baseScale + overscrollPullPx * 0.0005f + parallaxOffsetPx * 0.0001f)
+                                    .coerceAtMost(baseScale + 0.15f),
+                                neutralScale = baseScale,
+                            )
+                            alpha = hiResAlpha
+                        },
+                )
+            }
 
             // Scrim: transparent to background
             Box(
@@ -386,7 +471,31 @@ fun EnhancedEntryInfoBox(
                     }
                 }
 
-                if (metaItems.isNotEmpty() || rating != null) {
+                // The meta slot (author/source/genre line) keeps its height
+                // even when there's nothing to show — the skeleton reserves
+                // it, and an empty slot on the real screen would drop the
+                // bottom-anchored title ~28dp on swap for meta-less entries.
+                val metaGhostHeight = with(LocalDensity.current) {
+                    MaterialTheme.typography.bodyMedium.lineHeight.toDp()
+                }
+                if (reserveMeta && metaItems.isEmpty() && rating == null) {
+                    // Skeleton ghost bar — the slot reads as a placeholder
+                    // instead of dead space. The bar must match the real
+                    // bodyMedium row's line height — a shorter ghost grows
+                    // the bottom-anchored tail on swap and visibly pushes
+                    // the title upward.
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .size(width = 180.dp, height = metaGhostHeight)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(
+                                MaterialTheme.colorScheme.onBackground
+                                    .copy(alpha = if (metaGhostVisible) 0.12f else 0f),
+                            )
+                            .then(heroSharedBoundsModifier(metaSharedKey, HeroSharedKind.Text)),
+                    )
+                } else if (metaItems.isNotEmpty() || rating != null) {
                     Row(
                         modifier = Modifier
                             .padding(top = 8.dp)
@@ -418,6 +527,14 @@ fun EnhancedEntryInfoBox(
                             )
                         }
                     }
+                } else {
+                    // No meta at all — hold the slot invisible so the title
+                    // keeps the same Y it had during the skeleton.
+                    Spacer(
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .height(metaGhostHeight),
+                    )
                 }
             }
         }
@@ -433,7 +550,7 @@ fun EnhancedEntryInfoBox(
                 .align(Alignment.TopEnd)
                 .padding(
                     top = WindowInsets.statusBars.asPaddingValues()
-                        .calculateTopPadding() + 6.dp,
+                        .calculateTopPadding() + 4.dp,
                     end = 4.dp,
                 )
                 .size(48.dp)
@@ -475,7 +592,186 @@ fun enhancedEntryStatusText(status: Long): String? {
  * Container = the resume pill ↔ continue bar. Content kinds sit above
  * the artwork so nothing is covered mid-transition.
  */
-internal enum class HeroSharedKind { Image, Text, Container, NavIcon }
+internal enum class HeroSharedKind { Image, Text, Container, NavIcon, Cover }
+
+/**
+ * Bounds spec for every shared element here: the screen transition
+ * hands back to real content at ~300ms, but the default
+ * (SharedTransitionDefaults.BoundsTransform) is a StiffnessMediumLow
+ * spring that is still traveling at handback — every element then
+ * snaps its last few dp to target at the same instant (the
+ * simultaneous image+icon "jump" at the end of pop). A tween bound to
+ * the transition length converges exactly when the overlay drops.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+private val HERO_BOUNDS_TRANSFORM = BoundsTransform { _, _ ->
+    tween<Rect>(durationMillis = 300)
+}
+
+internal enum class HeroSide { Home, Detail }
+
+/** "hero-image-42" → "cover-image-42" — the key library covers fly under. */
+private fun coverSharedKeyOf(sharedKey: Any?): String? = (sharedKey as? String)
+    ?.takeIf { it.startsWith("hero-image-") }
+    ?.let { "cover-image-" + it.removePrefix("hero-image-") }
+
+/**
+ * One ambient pan clock shared by every hero (home, loading preview,
+ * detail). Each screen used to run its own infinite transition from phase
+ * 0, so opening a detail restarted the drift. With one clock the detail
+ * picks up exactly where home was, and the pan keeps moving through the
+ * transition. Speed scales the phase (pull-to-stop), so position never
+ * snaps. Several composed heroes may drive it; it advances once per frame.
+ */
+internal object HeroPanClock {
+    private const val SWEEP_MS = 14000.0
+    private var phaseMs = 0.0
+    private var lastFrameNanos = 0L
+
+    /** -1..1, eased back and forth — multiply by width * 0.10 for px. */
+    val fraction = mutableFloatStateOf(-1f)
+
+    fun advance(frameNanos: Long, speed: Float) {
+        if (frameNanos <= lastFrameNanos) return
+        // Clamp: no frames while backgrounded must not fast-forward.
+        val dtMs = if (lastFrameNanos == 0L) 0.0 else ((frameNanos - lastFrameNanos) / 1e6).coerceAtMost(100.0)
+        lastFrameNanos = frameNanos
+        phaseMs += dtMs * speed
+        val cycle = (phaseMs % (2 * SWEEP_MS)) / SWEEP_MS
+        val sweep = if (cycle <= 1.0) cycle else 2.0 - cycle
+        fraction.floatValue = -1f + 2f * FastOutSlowInEasing.transform(sweep.toFloat())
+    }
+}
+
+/** Drives [HeroPanClock] while this hero is composed and panning. */
+@Composable
+internal fun HeroPanDriver(enabled: Boolean, speed: () -> Float) {
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
+        while (true) withFrameNanos { HeroPanClock.advance(it, speed()) }
+    }
+}
+
+/**
+ * Feathers the bottom of a hero shared element. Mid-transit the overlay
+ * draws the element's opaque background-coloured tail straight over the
+ * cross-fading screens, and the hard bottom edge reads as a thin line
+ * travelling with the image. Fading the last stretch to transparent hides
+ * that edge. At rest the element sits over the same background colour, so
+ * nothing visibly changes.
+ */
+internal fun Modifier.heroBottomFeather(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val fade = 56.dp.toPx().coerceAtMost(size.height)
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Black, Color.Transparent),
+                startY = size.height - fade,
+                endY = size.height,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
+/**
+ * True for every frame of a nav transition, including the first. On that
+ * first frame the target state has already changed but `isRunning` is
+ * still false. Checking `isRunning` alone let the pose render one frame at
+ * its resting value (image jumped up on push, down on pop).
+ */
+internal fun AnimatedVisibilityScope?.isNavInTransit(): Boolean =
+    this?.transition?.let { it.isRunning || it.currentState != it.targetState } == true
+
+/**
+ * True only while this side is the ENTERING screen of a nav transition
+ * (targetState = Visible). The detail skeleton keys on this: a Success
+ * arriving mid-flight must not swap the composition under the morph —
+ * the mount is a ~140ms UI-thread stall plus a shared-element re-resolve.
+ * On pop (targetState != Visible) this stays false, so the loaded screen
+ * remains while it exits.
+ */
+internal fun AnimatedVisibilityScope?.isNavEntering(): Boolean =
+    isNavInTransit() && this?.transition?.targetState == EnterExitState.Visible
+
+/**
+ * Last at-rest in-element pose (pan X, parallax Y, zoom) of each hero
+ * image, per shared key and side. The scroll parallax/zoom/pan live
+ * INSIDE the shared element (graphicsLayer on the image), so the bounds
+ * morph never sees them — the old code zeroed them for the whole transit
+ * and restored them at handback, which teleported the artwork by the
+ * full scroll parallax whenever the user wasn't at scroll 0.
+ */
+internal object HeroPoseRegistry {
+    private val poses = HashMap<String, FloatArray>()
+    private val frozen = HashMap<String, FloatArray>()
+    fun record(key: String, side: HeroSide, tx: Float, ty: Float, scale: Float) {
+        poses["$side|$key"] = floatArrayOf(tx, ty, scale)
+    }
+
+    /** First transit frame freezes this side's pose — pan drift keeps
+     *  running on the destination, which made the blend target move and
+     *  the artwork visibly wobble left/right. */
+    fun freezeOwn(key: String, side: HeroSide, tx: Float, ty: Float, scale: Float) {
+        frozen.putIfAbsent("$side|$key", floatArrayOf(tx, ty, scale))
+    }
+    fun unfreeze(key: String, side: HeroSide) {
+        frozen.remove("$side|$key")
+    }
+    fun frozenOwn(key: String, side: HeroSide): FloatArray? = frozen["$side|$key"]
+    fun other(key: String, side: HeroSide): FloatArray? {
+        val other = if (side == HeroSide.Home) HeroSide.Detail else HeroSide.Home
+        return frozen["$other|$key"] ?: poses["$other|$key"]
+    }
+}
+
+/**
+ * Applies a hero image's in-element pose with continuity across the nav
+ * transition. At rest: the live pose, recorded for the opposite side.
+ * In transit (this side is the incoming/target content the overlay
+ * draws): blend from the opposite side's recorded pose to this side's
+ * live pose on the bounds' own clock (300ms FastOutSlowIn), so content
+ * and bounds land together — no snap at start or handback.
+ * [ownProgress] = [navTransitionProgress] (1 = this side settled).
+ */
+internal fun GraphicsLayerScope.applyHeroPose(
+    key: String?,
+    side: HeroSide,
+    transit: Boolean,
+    ownProgress: Float,
+    tx: Float,
+    ty: Float,
+    scale: Float,
+    neutralScale: Float,
+) {
+    var x = tx
+    var y = ty
+    var s = scale
+    if (!transit) {
+        if (key != null) {
+            HeroPoseRegistry.record(key, side, tx, ty, scale)
+            HeroPoseRegistry.unfreeze(key, side)
+        }
+    } else {
+        if (key != null) HeroPoseRegistry.freezeOwn(key, side, tx, ty, scale)
+        val from = key?.let { HeroPoseRegistry.other(it, side) }
+            ?: floatArrayOf(0f, 0f, neutralScale)
+        val to = key?.let { HeroPoseRegistry.frozenOwn(it, side) }
+            ?: floatArrayOf(tx, ty, scale)
+        val e = FastOutSlowInEasing.transform(ownProgress.coerceIn(0f, 1f))
+        // x stays live: every side reads the shared HeroPanClock, so both
+        // ends already agree and the pan keeps drifting through transit.
+        y = from[1] + (to[1] - from[1]) * e
+        s = from[2] + (to[2] - from[2]) * e
+    }
+    // Whole-pixel translations: a fractional pose draws the image edge a
+    // half-pixel off the scrim's end and reads as a hairline bright seam.
+    translationX = x.roundToInt().toFloat()
+    translationY = y.roundToInt().toFloat()
+    scaleX = s
+    scaleY = s
+}
 
 /**
  * Approximate height of the detail hero's bottom-aligned title/meta tail —
@@ -527,8 +823,9 @@ internal fun heroSharedBoundsModifier(
             // animate — the instant handoff is invisible on identical
             // content.
             Modifier.sharedElement(
-                state = rememberSharedContentState(key = sharedKey),
+                sharedContentState = rememberSharedContentState(key = sharedKey),
                 animatedVisibilityScope = animScope,
+                boundsTransform = HERO_BOUNDS_TRANSFORM,
                 // NavIcon must sit above every bounds-morph element —
                 // sharedBounds hardcodes 1f, so equal zIndex lets the
                 // pill's collapsing block cover the icon mid-flight.
@@ -538,11 +835,19 @@ internal fun heroSharedBoundsModifier(
             Modifier.sharedBounds(
                 sharedContentState = rememberSharedContentState(key = sharedKey),
                 animatedVisibilityScope = animScope,
+                boundsTransform = HERO_BOUNDS_TRANSFORM,
                 resizeMode = when (kind) {
                     HeroSharedKind.Container ->
                         SharedTransitionScope.ResizeMode.RemeasureToBounds
                     HeroSharedKind.Text ->
-                        SharedTransitionScope.ResizeMode.ScaleToBounds(ContentScale.Fit, Alignment.Center)
+                        SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Fit, Alignment.Center)
+                    // Library cover ↔ hero box: each side is laid out ONCE
+                    // at its own size and scaled with the bounds. Remeasure
+                    // re-Cropped the hero around its centre every frame —
+                    // the "grows from the middle" artifact — instead of the
+                    // whole picture slotting in along the flight path.
+                    HeroSharedKind.Cover ->
+                        SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.Crop, Alignment.Center)
                     else -> error("unreachable")
                 },
                 zIndexInOverlay = 1f,
@@ -586,11 +891,9 @@ fun EntryHeroLoadingPreview(
             val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             // The shared-element anchors must land exactly where the
             // loaded EntryToolbar's icon slots sit: AppBar pads by the
-            // fixed `status_bar_height` dimen (not the live inset),
-            // TopAppBar centers icons in its 64dp row (slot top = +8),
-            // and EntryToolbar offsets the bar -2dp to match home's icon
-            // center → slot top = dimen + 6. Any estimate drift shows up
-            // as an end-of-flight icon jump.
+            // fixed `status_bar_height` dimen (not the live inset) and
+            // EntryToolbar's TopAppBar is 56dp (icon slot top = +4,
+            // center = +28 — matching home's 44dp row + 6 padding).
             val anchorContext = LocalContext.current
             val anchorDensity = LocalDensity.current
             val toolbarIconTop = remember {
@@ -601,7 +904,7 @@ fun EntryHeroLoadingPreview(
                 } else {
                     0.dp
                 }
-                bar + 6.dp
+                bar + 4.dp
             }
             // Approximate the hero's eventual height — the real box is
             // appBar + contentPadding + the bottom-aligned title/meta
@@ -616,22 +919,45 @@ fun EntryHeroLoadingPreview(
             val panPrefEnabled by Injekt.get<UiPreferences>()
                 .heroImagePanEnabled()
                 .collectAsState()
+            val previewAnimScope = LocalNavAnimatedVisibilityScope.current
+            val previewProgress = navTransitionProgress()
+            var previewWidthPx by remember { mutableIntStateOf(0) }
+            HeroPanDriver(panOversize && panPrefEnabled) { 1f }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(statusBarTop + heroContentPadding + HERO_DETAIL_CONTENT_TAIL.dp)
+                    // Cover shared elements land on the whole preview box so
+                    // their content crossfade picks up the scrims, same as
+                    // the loaded hero box.
+                    .then(
+                        heroSharedBoundsModifier(
+                            heroKeyPrefix?.let { "cover-image-$it" },
+                            HeroSharedKind.Cover,
+                        ),
+                    )
                     .align(Alignment.TopCenter),
             ) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .then(heroSharedBoundsModifier(sharedKey)),
+                        .then(heroSharedBoundsModifier(sharedKey))
+                        // Clip inside the element: the pose blends in from
+                        // the home hero's parallax offset mid-flight.
+                        .clipToBounds()
+                        .heroBottomFeather()
+                        .onSizeChanged { previewWidthPx = it.width },
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(cover)
                             .useBackground(true)
                             .crossfade(true)
+                            // Paints the library cell's already-decoded
+                            // bitmap instantly — see EnhancedEntryInfoBox.
+                            .placeholderMemoryCacheKey(
+                                coverCellMemoryKey(cover as? EntryCover),
+                            )
                             .build(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
@@ -640,10 +966,27 @@ fun EntryHeroLoadingPreview(
                             .graphicsLayer {
                                 // Match the live heroes' pan oversize so
                                 // the shared element's crop is consistent
-                                // across the morph.
-                                val scale = if (panOversize && panPrefEnabled) 1.25f else 1f
-                                scaleX = scale
-                                scaleY = scale
+                                // across the morph; the pose blends in
+                                // from the home hero's scrolled/panned
+                                // pose instead of snapping to neutral.
+                                val previewPans = panOversize && panPrefEnabled
+                                val scale = if (previewPans) 1.25f else 1f
+                                applyHeroPose(
+                                    key = sharedKey as? String,
+                                    side = HeroSide.Detail,
+                                    transit = previewAnimScope.isNavInTransit(),
+                                    ownProgress = previewProgress,
+                                    // Same shared pan clock as home/detail
+                                    // so the drift never restarts mid-open.
+                                    tx = if (previewPans) {
+                                        HeroPanClock.fraction.floatValue * previewWidthPx * 0.10f
+                                    } else {
+                                        0f
+                                    },
+                                    ty = 0f,
+                                    scale = scale,
+                                    neutralScale = scale,
+                                )
                             },
                     )
                     Box(
@@ -767,6 +1110,12 @@ fun EntryHeroLoadingPreview(
                     .align(Alignment.TopEnd)
                     .padding(top = toolbarIconTop, end = 4.dp)
                     .size(48.dp)
+                    .onGloballyPositioned {
+                        android.util.Log.d(
+                            "NavIconPos",
+                            "preview pos=${it.positionInRoot()} size=${it.size}",
+                        )
+                    }
                     .then(
                         heroSharedBoundsModifier(
                             NAV_OVERFLOW_SHARED_KEY,

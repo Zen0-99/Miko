@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.metadata.tmdb
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbGenres.MediaType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class TmdbDiscoverTest {

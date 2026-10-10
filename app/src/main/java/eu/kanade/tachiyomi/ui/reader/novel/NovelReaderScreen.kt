@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.TextView
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -126,6 +127,30 @@ class NovelReaderScreen(
                 screenModel.unbindTtsService()
                 screenModel.shutdownTts()
             }
+        }
+
+        // Restore window state BEFORE the pop starts. The reader hides the
+        // system bars for fullscreen; the detail screen measures its hero
+        // against statusBarTop, so restoring at onDispose (mid-reveal)
+        // retargeted the hero after the pop transition had already picked
+        // its resting bounds — the visible drop. Restoring at back-intent
+        // lets the destination layout settle before it's revealed.
+        val restoreWindowForExit = remember(activity) {
+            {
+                activity?.window?.let { window ->
+                    val controller = WindowInsetsControllerCompat(window, window.decorView)
+                    WindowCompat.setDecorFitsSystemWindows(window, false)
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                    window.attributes = window.attributes.apply {
+                        layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+                    }
+                }
+            }
+        }
+        BackHandler {
+            restoreWindowForExit()
+            navigator.pop()
         }
 
         // D-19 navigation target for the chapter-row Play action (05-04):
@@ -473,13 +498,14 @@ class NovelReaderScreen(
                 ad.clearTtsPlayback()
                 return@LaunchedEffect
             }
-            val highlightColor = HighlightColorUtils
-                .computeColors(ttsAccentArgb, textConfig.backgroundColor)[0]
+            // The spoken range is glyph-recolored (ForegroundColorSpan in
+            // the adapter), not background-highlighted — feed it the accent
+            // itself rather than the dimmed highlight-fill blend.
             ad.setTtsPlayback(
                 position = adapterPos,
                 rangeStart = ttsPlaybackState.currentRangeStart,
                 rangeEnd = ttsPlaybackState.currentRangeEnd,
-                color = highlightColor,
+                color = ttsAccentArgb,
             )
             // Only follow the spoken position while the list is idle. A user
             // drag or fling must win — hijacking the scroller here kills the
@@ -700,8 +726,11 @@ class NovelReaderScreen(
 
             NovelReaderChrome(
                 isMenuVisible = isControlsVisible,
-                title = currentChapter?.name ?: "Loading...",
-                subtitle = novel?.title ?: "",
+                title = novel?.title ?: "",
+                subtitle = currentChapter?.let {
+                    eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser
+                        .displayName(it.name) ?: it.name
+                } ?: "Loading...",
                 sourceLabel = currentSourceName,
                 accentColor = accentColor,
                 progressPercent = if (screenModel.preferences.showScrollPercentage().get()) progressPercent else -1,
@@ -723,7 +752,10 @@ class NovelReaderScreen(
                 edgeFadeEnabled = textConfig.edgeFadeEnabled,
                 showCommentsButton = screenModel.commentsEnabled,
                 isTtsActive = screenModel.isTtsActive,
-                onBackClick = { navigator.pop() },
+                onBackClick = {
+                    restoreWindowForExit()
+                    navigator.pop()
+                },
                 onChaptersClick = { screenModel.showChapters() },
                 onWebviewClick = { screenModel.openChapterInWebView() },
                 onHighlightsClick = {
@@ -978,6 +1010,8 @@ class NovelReaderScreen(
                             allChapters = chapters.map { it.name to it.chapterNumber.toFloat() },
                         ),
                     ),
+                    containerColor = eu.kanade.presentation.entries.manga
+                        .carrierSheetContainerColor(accentColor),
                     onDismissRequest = { screenModel.dismissComments() },
                 )
             }
@@ -1024,7 +1058,12 @@ class NovelReaderScreen(
             val window = activity.window
             val controller = WindowInsetsControllerCompat(window, window.decorView)
 
-            WindowCompat.setDecorFitsSystemWindows(window, !fullscreen)
+            // The app is edge-to-edge everywhere (MainActivity.enableEdgeToEdge);
+            // fitting system windows here would consume the insets the detail
+            // screen measures against — its hero re-laid to inset=0 while the
+            // reader covered it, then visibly dropped when we restored on
+            // dispose. Keep fits=false; the reader chrome pads itself.
+            WindowCompat.setDecorFitsSystemWindows(window, false)
             if (fullscreen) {
                 controller.hide(WindowInsetsCompat.Type.systemBars())
                 controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE

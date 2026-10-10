@@ -23,8 +23,8 @@ import eu.kanade.tachiyomi.ui.library.shows.ShowsLibraryItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tachiyomi.domain.collection.model.Collection
-import tachiyomi.domain.library.shows.LibraryAnime
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.shows.LibraryAnime
 import tachiyomi.presentation.core.components.material.PullRefresh
 import kotlin.time.Duration.Companion.seconds
 
@@ -38,7 +38,7 @@ fun ShowsLibraryContent(
     hasActiveFilters: Boolean,
     showPageTabs: Boolean,
     onChangeCurrentPage: (Int) -> Unit,
-    onAnimeClicked: (Long) -> Unit,
+    onAnimeClicked: (LibraryAnime) -> Unit,
     onContinueWatchingClicked: ((LibraryAnime) -> Unit)?,
     onToggleSelection: (LibraryAnime) -> Unit,
     onToggleRangeSelection: (LibraryAnime) -> Unit,
@@ -57,6 +57,8 @@ fun ShowsLibraryContent(
     getPreviousLayerAnimeIds: (() -> Set<Long>)? = null,
     isEntryLocked: ((Long) -> Boolean)? = null,
     sortKey: String = "",
+    subtypeLabel: String? = null,
+    subtypeOptions: List<eu.kanade.presentation.library.components.SubtypeMenuOption> = emptyList(),
 ) {
     Column(
         modifier = Modifier.padding(
@@ -85,6 +87,8 @@ fun ShowsLibraryContent(
                 sortLabel = sortLabel,
                 sortDescending = sortDescending,
                 onSortClick = onSortClick,
+                subtypeLabel = subtypeLabel,
+                subtypeOptions = subtypeOptions,
             )
         } else {
             val currentCollection = collections.getOrNull(pagerState.currentPage)
@@ -96,6 +100,8 @@ fun ShowsLibraryContent(
                     sortDescending = sortDescending,
                     onSortClick = onSortClick,
                     showTitle = showLibraryTitle,
+                    subtypeLabel = subtypeLabel,
+                    subtypeOptions = subtypeOptions,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -104,7 +110,7 @@ fun ShowsLibraryContent(
         val notSelectionMode = selection.isEmpty() && !readingOrderMode
         val onClickAnime = { anime: LibraryAnime ->
             if (notSelectionMode) {
-                onAnimeClicked(anime.anime.id)
+                onAnimeClicked(anime)
             } else {
                 onToggleSelection(anime)
             }

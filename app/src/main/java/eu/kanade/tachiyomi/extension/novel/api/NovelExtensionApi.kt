@@ -90,8 +90,11 @@ internal class NovelExtensionApi {
             // them out of the novel list.
             .filterNot {
                 val pkg = it.pkgName.lowercase()
-                pkg.contains("animeextension") || pkg.contains("aniyomi") || pkg.contains(".anime.") ||
-                    pkg.contains("tachiyomi.extension.") || pkg.contains("tachiyomi.manga") ||
+                pkg.contains("animeextension") ||
+                    pkg.contains("aniyomi") ||
+                    pkg.contains(".anime.") ||
+                    pkg.contains("tachiyomi.extension.") ||
+                    pkg.contains("tachiyomi.manga") ||
                     pkg.contains("keiyoushi")
             }
             .filter {

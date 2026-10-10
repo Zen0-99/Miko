@@ -16,13 +16,9 @@ package eu.kanade.tachiyomi.ui.home.hub
  * hero fills the full screen height.
  */
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import android.content.Context
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,10 +36,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -61,7 +57,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -78,6 +73,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -91,18 +88,23 @@ import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import tachiyomi.presentation.core.util.clickableNoIndication
-import tachiyomi.presentation.core.util.collectAsState
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.entries.components.EnhancedTitleText
 import eu.kanade.presentation.entries.components.HERO_DETAIL_CONTENT_TAIL
+import eu.kanade.presentation.entries.components.HeroPanClock
+import eu.kanade.presentation.entries.components.HeroPanDriver
 import eu.kanade.presentation.entries.components.HeroSharedKind
+import eu.kanade.presentation.entries.components.HeroSide
 import eu.kanade.presentation.entries.components.PreExtractEntryCoverColor
+import eu.kanade.presentation.entries.components.applyHeroPose
+import eu.kanade.presentation.entries.components.continueRowLabel
+import eu.kanade.presentation.entries.components.heroBottomFeather
 import eu.kanade.presentation.entries.components.heroSharedBoundsModifier
+import eu.kanade.presentation.entries.components.isNavInTransit
 import eu.kanade.presentation.util.LocalNavAnimatedVisibilityScope
 import eu.kanade.presentation.util.navTransitionFadeAlpha
+import eu.kanade.presentation.util.navTransitionProgress
 import eu.kanade.tachiyomi.metadata.stream.StreamResolver
-import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
 import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreen
@@ -111,14 +113,17 @@ import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import eu.kanade.tachiyomi.ui.reader.novel.tts.audiobook.AudiobookPlayerController
+import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.entries.novel.interactor.GetNovel
-import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.clickableNoIndication
+import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -219,9 +224,68 @@ fun HomeHubHeroSection(
         pagerState.animateScrollToPage(pagerState.currentPage + 1)
     }
 
+    val openDetail: (HomeHubHero) -> Unit = { hero ->
+        // Heroes carry the canonical id the detail resolves to (showKey)
+        // — pushing it instead of the history row's animeId skips the
+        // extension→canonical navigator.replace, which would run a SECOND
+        // screen transition and pop every shared element mid-flight.
+        val detailId = hero.sharedEntryId
+        if (navAnimScope != null) pendingHeroId = detailId
+        // previewCover/previewTitle/previewLogo let the pushed screen host
+        // the shared hero elements during its Loading state — the artwork
+        // morph and title handoff land on first open, not just revisits.
+        val previewCover = hero.backdrop ?: hero.coverData
+        val previewLogo = hero.canonicalId?.let {
+            preferenceStore.getString("cinemeta_logo_$it", "").get().takeIf(String::isNotBlank)
+        }
+        // The hero's resume pill is a shared element into the detail
+        // continue row — pre-fill it with the label the loaded row will
+        // render rather than morphing an icon-only bar.
+        val resumeLabel = heroContinueLabel(context, hero)
+        when (hero.mediaType) {
+            HomeHubMediaType.SHOWS -> navigator.push(
+                ShowsScreen(
+                    detailId,
+                    previewCover = previewCover,
+                    previewTitle = hero.title,
+                    previewLogo = previewLogo,
+                    previewResumeLabel = resumeLabel,
+                    previewResumeEnabled = !hero.allRead,
+                    previewHasGenres = hero.genres.isNotEmpty(),
+                ),
+            )
+            HomeHubMediaType.MANGA -> navigator.push(
+                MangaScreen(
+                    detailId,
+                    previewCover = previewCover,
+                    previewTitle = hero.title,
+                    previewLogo = previewLogo,
+                    previewResumeEnabled = !hero.allRead,
+                    previewResumeLabel = resumeLabel,
+                    previewHasGenres = hero.genres.isNotEmpty(),
+                ),
+            )
+            HomeHubMediaType.NOVEL -> navigator.push(
+                NovelScreen(
+                    detailId,
+                    previewCover = previewCover,
+                    previewTitle = hero.title,
+                    previewLogo = previewLogo,
+                    previewResumeEnabled = !hero.allRead,
+                    previewResumeLabel = resumeLabel,
+                    previewHasGenres = hero.genres.isNotEmpty(),
+                ),
+            )
+        }
+    }
+
     // Resume the entry where the user left it — same logic the old hero
     // card used (Cinemeta entries resolve to a mapped episode first).
-    val resumeHero: (HomeHubHero) -> Unit = { hero ->
+    // Heroes with no resolvable item (subId <= 0 — e.g. a discovery
+    // fallback whose entry has no chapters/episodes yet) route to the
+    // detail screen instead of a dead reader/player.
+    val resumeHero: (HomeHubHero) -> Unit = resume@{ hero ->
+        if (hero.subId <= 0) return@resume openDetail(hero)
         when (hero.mediaType) {
             HomeHubMediaType.SHOWS -> {
                 val extPlayer = playerPreferences.alwaysUseExternalPlayer().get()
@@ -249,7 +313,8 @@ fun HomeHubHeroSection(
                 // listened to this novel before, the reader otherwise.
                 scope.launch {
                     val novel = getNovel.await(hero.entryId)
-                    if (novel != null && audiobookPlayer.hasListenedBefore(hero.entryId) &&
+                    if (novel != null &&
+                        audiobookPlayer.hasListenedBefore(hero.entryId) &&
                         audiobookPlayer.resumeListening(novel)
                     ) {
                         return@launch
@@ -257,47 +322,6 @@ fun HomeHubHeroSection(
                     navigator.push(NovelReaderScreen(hero.entryId, hero.subId))
                 }
             }
-        }
-    }
-    val openDetail: (HomeHubHero) -> Unit = { hero ->
-        // Heroes carry the canonical id the detail resolves to (showKey)
-        // — pushing it instead of the history row's animeId skips the
-        // extension→canonical navigator.replace, which would run a SECOND
-        // screen transition and pop every shared element mid-flight.
-        val detailId = hero.sharedEntryId
-        if (navAnimScope != null) pendingHeroId = detailId
-        // previewCover/previewTitle/previewLogo let the pushed screen host
-        // the shared hero elements during its Loading state — the artwork
-        // morph and title handoff land on first open, not just revisits.
-        val previewCover = hero.backdrop ?: hero.coverData
-        val previewLogo = hero.canonicalId?.let {
-            preferenceStore.getString("cinemeta_logo_$it", "").get().takeIf(String::isNotBlank)
-        }
-        when (hero.mediaType) {
-            HomeHubMediaType.SHOWS -> navigator.push(
-                ShowsScreen(
-                    detailId,
-                    previewCover = previewCover,
-                    previewTitle = hero.title,
-                    previewLogo = previewLogo,
-                ),
-            )
-            HomeHubMediaType.MANGA -> navigator.push(
-                MangaScreen(
-                    detailId,
-                    previewCover = previewCover,
-                    previewTitle = hero.title,
-                    previewLogo = previewLogo,
-                ),
-            )
-            HomeHubMediaType.NOVEL -> navigator.push(
-                NovelScreen(
-                    detailId,
-                    previewCover = previewCover,
-                    previewTitle = hero.title,
-                    previewLogo = previewLogo,
-                ),
-            )
         }
     }
 
@@ -350,33 +374,16 @@ fun HomeHubHeroSection(
         }.collectAsState()
         val panEnabled = panPrefEnabled &&
             items.any { it.mediaType == HomeHubMediaType.SHOWS }
-        val panFraction by rememberInfiniteTransition(label = "hero_pan").animateFloat(
-            initialValue = -1f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 14000, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "hero_pan_offset",
-        )
         val panSpeed by animateFloatAsState(
             targetValue = if (panEnabled && overscrollPx() <= 0f) 1f else 0f,
             animationSpec = tween(900, easing = LinearOutSlowInEasing),
             label = "hero_pan_speed",
         )
-        val panX = remember { mutableFloatStateOf(0f) }
-        var lastPanFraction by remember { mutableStateOf<Float?>(null) }
-        LaunchedEffect(panEnabled, panFraction, panSpeed, heroWidthPx) {
-            if (!panEnabled || heroWidthPx == 0f) return@LaunchedEffect
-            val last = lastPanFraction
-            if (last == null) {
-                panX.floatValue = panFraction * heroWidthPx * 0.10f
-            } else {
-                panX.floatValue += (panFraction - last) * heroWidthPx * 0.10f * panSpeed
-            }
-            lastPanFraction = panFraction
-        }
+        // Shared with the detail hero, so opening a show continues the
+        // drift instead of restarting it — see HeroPanClock.
+        HeroPanDriver(panEnabled) { panSpeed }
 
+        val poseProgress = navTransitionProgress()
         val scrollOffsetPx by remember(listState, heroHeightPx) {
             derivedStateOf {
                 when {
@@ -524,8 +531,30 @@ fun HomeHubHeroSection(
                             .height(heroImageHeight)
                             .align(Alignment.TopCenter)
                             .clipToBounds()
-                            .then(heroSharedBoundsModifier("hero-image-${hero.sharedEntryId}")),
+                            .onGloballyPositioned {
+                                android.util.Log.d(
+                                    "HeroBounds",
+                                    "home key=hero-image-${hero.sharedEntryId} pos=${it.positionInRoot()} size=${it.size} scroll=$scrollOffsetPx",
+                                )
+                            }
+                            .then(heroSharedBoundsModifier("hero-image-${hero.sharedEntryId}"))
+                            // Inner clip: the overlay renders from the
+                            // shared node inward, so the outer clip is gone
+                            // mid-flight — the parallax-shifted art would
+                            // spill past the scrim as an un-dimmed strip.
+                            .clipToBounds()
+                            .heroBottomFeather(),
                     ) {
+                        // Opaque base inside the element: when the
+                        // parallax-blended pose exposes a strip the image
+                        // doesn't cover, it paints background — seamless
+                        // with the scrim's opaque end — instead of the
+                        // sliding screens showing through as a torn line.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background),
+                        )
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -540,13 +569,14 @@ fun HomeHubHeroSection(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                    // Freeze pan/parallax/zoom while a nav
-                                    // transition runs — these transforms
-                                    // ride *inside* the shared element's
-                                    // content, so mid-flight they make the
-                                    // artwork appear to slide around
-                                    // instead of gliding as one element.
-                                        val transit = navAnimScope?.transition?.isRunning == true
+                                        // Pan/parallax/zoom ride *inside* the
+                                        // shared element's content, invisible to
+                                        // the bounds morph — applyHeroPose blends
+                                        // them to/from the detail's pose on the
+                                        // bounds' clock instead of zeroing them
+                                        // for the transit (which snapped the art
+                                        // by the full scroll parallax).
+                                        val transit = navAnimScope.isNavInTransit()
                                         val offset = scrollOffsetPx
                                         val stretchPx = overscrollPx()
                                         // Detail-view recipe: the pull adds a
@@ -558,18 +588,21 @@ fun HomeHubHeroSection(
                                         // layers oversize 25% so the ±10%
                                         // translation never exposes an edge.
                                         val baseScale = if (layerPans) 1.25f else 1f
-                                        val scale = if (transit) {
-                                            baseScale
-                                        } else {
-                                            (baseScale + stretchPx * 0.0005f + offset * 0.0001f)
-                                                .coerceAtMost(baseScale + 0.15f)
-                                        }
-                                        scaleX = scale
-                                        scaleY = scale
-                                        translationY = if (transit) 0f else offset * HERO_SCROLL_PARALLAX
-                                        if (layerPans && !transit) {
-                                            translationX = panX.floatValue
-                                        }
+                                        applyHeroPose(
+                                            key = "hero-image-${hero.sharedEntryId}",
+                                            side = HeroSide.Home,
+                                            transit = transit,
+                                            ownProgress = poseProgress,
+                                            tx = if (layerPans) {
+                                                HeroPanClock.fraction.floatValue * heroWidthPx * 0.10f
+                                            } else {
+                                                0f
+                                            },
+                                            ty = offset * HERO_SCROLL_PARALLAX,
+                                            scale = (baseScale + stretchPx * 0.0005f + offset * 0.0001f)
+                                                .coerceAtMost(baseScale + 0.15f),
+                                            neutralScale = baseScale,
+                                        )
                                     },
                                 alignment = Alignment.Center,
                                 contentScale = ContentScale.Crop,
@@ -842,7 +875,7 @@ private fun HeroTitleBlock(hero: HomeHubHero, onTitleClick: () -> Unit) {
                 modifier = Modifier
                     .heightIn(max = 110.dp)
                     .widthIn(max = 320.dp)
-                    .clickable(onClick = onTitleClick),
+                    .clickableNoIndication(onClick = onTitleClick),
                 error = {
                     HeroTitleText(hero, onTitleClick)
                 },
@@ -861,35 +894,63 @@ private fun HeroTitleText(hero: HomeHubHero, onTitleClick: () -> Unit) {
     EnhancedTitleText(
         title = hero.title,
         textAlign = TextAlign.Center,
-        modifier = Modifier.clickable(onClick = onTitleClick),
+        modifier = Modifier.clickableNoIndication(onClick = onTitleClick),
     )
 }
 
-/** Pill text: "Resume <S2 · Ep. 5 / Chapter 312 / chapter name>" — or the
- * all-done / not-started states. */
+/** The progress fragment — "S2 · Ep. 5" / "Chapter 312" / chapter name /
+ * movie runtime — shared by the hero pill and the detail-view pre-fill. */
+private fun heroProgressText(context: Context, hero: HomeHubHero): String = when {
+    hero.isCinemetaMovie -> eu.kanade.presentation.util.formatRuntime(hero.runtime).orEmpty()
+    hero.mediaType == HomeHubMediaType.SHOWS -> {
+        hero.season?.takeIf { it > 0 }
+            ?.let { "S$it · ${eu.kanade.presentation.util.formatEpisodeNumber(hero.progressNumber)}" }
+            ?: eu.kanade.presentation.util.formatEpisodeNumber(hero.progressNumber)
+    }
+    hero.mediaType == HomeHubMediaType.NOVEL && !hero.chapterTitle.isNullOrBlank() -> {
+        hero.chapterTitle
+    }
+    else -> context.stringResource(
+        AYMR.strings.home_hero_chapter_progress,
+        eu.kanade.presentation.util.formatChapterNumber(hero.progressNumber),
+    )
+}
+
+/** Pill text — the exact label the detail view's continue row renders
+ * ("Continue: Book 6 Chapter 14", "Start", "All up to date"), taken from
+ * the hero's detail-parity resume data. Cached heroes that predate
+ * [HomeHubHero.continueText] fall back to the compact progress fragment. */
 @Composable
 private fun heroResumeLabel(hero: HomeHubHero): String {
-    if (hero.allRead) return stringResource(AYMR.strings.fetching_overlay_all_up_to_date)
-    val progress = when {
-        hero.isCinemetaMovie -> eu.kanade.presentation.util.formatRuntime(hero.runtime) ?: ""
-        hero.mediaType == HomeHubMediaType.SHOWS -> {
-            hero.season?.takeIf { it > 0 }
-                ?.let { "S$it · ${eu.kanade.presentation.util.formatEpisodeNumber(hero.progressNumber)}" }
-                ?: eu.kanade.presentation.util.formatEpisodeNumber(hero.progressNumber)
-        }
-        hero.mediaType == HomeHubMediaType.NOVEL && !hero.chapterTitle.isNullOrBlank() -> {
-            hero.chapterTitle
-        }
-        else -> stringResource(
-            AYMR.strings.home_hero_chapter_progress,
-            eu.kanade.presentation.util.formatChapterNumber(hero.progressNumber),
-        )
+    if (hero.isCinemetaMovie && !hero.allRead) {
+        return stringResource(AYMR.strings.action_play)
     }
-    return if (progress.isNullOrBlank()) {
-        stringResource(MR.strings.action_start)
-    } else {
-        stringResource(AYMR.strings.home_hero_resume, progress)
+    val progress = hero.continueText?.takeIf { it.isNotBlank() }
+        ?: heroProgressText(LocalContext.current, hero)
+    return continueRowLabel(
+        LocalContext.current,
+        allRead = hero.allRead,
+        // A rendered progress fragment is proof of progress — covers
+        // cached heroes written before hasStarted existed.
+        hasStarted = hero.hasStarted || progress.isNotBlank(),
+        progress = progress,
+    )
+}
+
+/** The label the detail screen's continue row renders once loaded —
+ * "Continue: <progress>" in the same format `EntryContinueRow` uses —
+ * so the skeleton's shared resume pill already carries real text during
+ * the push instead of an icon-only bar. Cinemeta movies render "Play". */
+private fun heroContinueLabel(context: Context, hero: HomeHubHero): String {
+    if (hero.isCinemetaMovie && !hero.allRead) {
+        return context.stringResource(AYMR.strings.action_play)
     }
+    return continueRowLabel(
+        context,
+        allRead = hero.allRead,
+        hasStarted = hero.hasStarted,
+        progress = hero.continueText,
+    )
 }
 
 // --- Pager plumbing (ported from Nuvio's HomeHeroSection.kt) ---

@@ -13,8 +13,8 @@ import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.main.MainActivity
-import eu.kanade.tachiyomi.ui.storage.shows.animeStorageTab
 import eu.kanade.tachiyomi.ui.storage.manga.mangaStorageTab
+import eu.kanade.tachiyomi.ui.storage.shows.animeStorageTab
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource

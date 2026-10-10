@@ -22,6 +22,10 @@ import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -40,6 +44,8 @@ internal fun LibraryTabs(
     sortLabel: String? = null,
     sortDescending: Boolean? = null,
     onSortClick: () -> Unit = {},
+    subtypeLabel: String? = null,
+    subtypeOptions: List<SubtypeMenuOption> = emptyList(),
 ) {
     val currentPageIndex = pagerState.currentPage.coerceAtMost(collections.lastIndex)
     Column(
@@ -84,11 +90,37 @@ internal fun LibraryTabs(
                         selected = currentPageIndex == index,
                         onClick = { onTabItemClick(index) },
                         text = {
-                            TabText(
-                                text = collection.visualName,
-                                badgeCount = getNumberOfItemsForCollection(collection),
-                                fontSize = 16.sp,
-                            )
+                            var subtypeMenuExpanded by remember { mutableStateOf(false) }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                // Mode-wide subtype filter — same value under
+                                // every collection name; tapping the name OR the
+                                // sub-line opens it (the click target consumes the
+                                // event, so the tab doesn't switch on menu taps).
+                                Box {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.clickable(enabled = subtypeLabel != null) {
+                                            subtypeMenuExpanded = true
+                                        },
+                                    ) {
+                                        TabText(
+                                            text = collection.visualName,
+                                            badgeCount = getNumberOfItemsForCollection(collection),
+                                            fontSize = 16.sp,
+                                        )
+                                        if (subtypeLabel != null) {
+                                            SubtypeSelectorLabel(label = subtypeLabel)
+                                        }
+                                    }
+                                    if (subtypeLabel != null) {
+                                        SubtypeDropdownMenu(
+                                            expanded = subtypeMenuExpanded,
+                                            onDismiss = { subtypeMenuExpanded = false },
+                                            options = subtypeOptions,
+                                        )
+                                    }
+                                }
+                            }
                         },
                         unselectedContentColor = MaterialTheme.colorScheme.onSurface,
                     )

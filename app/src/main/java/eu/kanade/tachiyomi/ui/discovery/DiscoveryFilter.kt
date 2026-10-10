@@ -28,6 +28,11 @@ enum class DiscoverySort(
         MediaType.MOVIE -> movieParam
         MediaType.TV -> tvParam
     }
+
+    /** `/v1/works/browse` `sort` param for the canonical catalog feeds —
+     *  the enum names already match the worker's vocabulary. */
+    val catalogParam: String
+        get() = name.lowercase()
 }
 
 /**

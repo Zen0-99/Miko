@@ -2,7 +2,6 @@ package eu.kanade.presentation.entries.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -87,11 +86,13 @@ fun EntryToolbar(
                 AppBarTitle(title, modifier = Modifier.alpha(titleAlphaProvider()))
             }
         },
-        // Shifted up 2dp so the icon slots align with the home top bar's
-        // (home icon center = statusBar + 6 + 24 = +30; TopAppBar centers
-        // at +32 in its 64dp row). Equal heights kill the residual
-        // vertical travel on the shared icon elements.
-        modifier = modifier.offset(y = (-2).dp),
+        modifier = modifier,
+        // 56dp so the icon slots align with the home top bar's exactly:
+        // home's icon row is 44dp tall (the 48dp IconButton overflows
+        // centered) inside 6dp top padding → icon center = statusBar+28.
+        // A 56dp TopAppBar centers its 48dp slots at +28 too — the M3
+        // default 64 (+32) was the residual snap at every handback.
+        expandedHeight = 56.dp,
         backgroundColor = (
             toolbarBackgroundColor ?: MaterialTheme.colorScheme
                 .surfaceColorAtElevation(3.dp)

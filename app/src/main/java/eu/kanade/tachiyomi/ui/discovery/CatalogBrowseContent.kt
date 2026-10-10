@@ -20,10 +20,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,10 +37,11 @@ import eu.kanade.presentation.browse.DominoRevealItem
 import eu.kanade.presentation.browse.InLibraryBadge
 import eu.kanade.presentation.browse.rememberDominoReveal
 import eu.kanade.presentation.library.components.CommonEntryItemDefaults
-import eu.kanade.presentation.library.components.armSharedCover
 import eu.kanade.presentation.library.components.EntryComfortableGridItem
 import eu.kanade.presentation.library.components.EntryCompactGridItem
+import eu.kanade.presentation.library.components.armSharedCover
 import eu.kanade.tachiyomi.data.catalogrows.WEBTOON_KINDS_CSV
+import eu.kanade.tachiyomi.data.cover.HiResCoverResolver
 import eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreen
@@ -86,14 +86,15 @@ fun CatalogBrowseContent(
     val selectedIndex = (discoveryState.subTypeSelections[carrier] ?: 0)
         .coerceIn(0, pills.lastIndex)
     val browseSort = discoveryScreenModel.browseSortFor(carrier)
+    val catalogFilter = discoveryScreenModel.catalogFilterFor(carrier)
 
-    // The feed follows the committed selection + sort — the medium rides
-    // along so a carrier switch can never fire a stale-medium request.
-    // During a live search a type change re-scopes the results instead
-    // of swapping an invisible feed; the search-active key also refires
-    // when results close so the remounted grid reloads the committed
-    // sub-type's feed.
-    LaunchedEffect(carrier, selectedIndex, browseSort, state.searchQuery != null) {
+    // The feed follows the committed selection + sort + facets — the
+    // medium rides along so a carrier switch can never fire a
+    // stale-medium request. During a live search a type change
+    // re-scopes the results instead of swapping an invisible feed; the
+    // search-active key also refires when results close so the
+    // remounted grid reloads the committed sub-type's feed.
+    LaunchedEffect(carrier, selectedIndex, browseSort, catalogFilter, state.searchQuery != null) {
         val query = state.searchQuery
         if (query != null) {
             val kinds = pills[selectedIndex].searchKindsCsv
@@ -105,6 +106,7 @@ fun CatalogBrowseContent(
                 carrier.medium,
                 pills[selectedIndex].kindsCsv,
                 browseSort.catalogParam,
+                catalogFilter,
             )
         }
     }
@@ -113,7 +115,10 @@ fun CatalogBrowseContent(
         DiscoveryTypeRow(
             label = stringResource(pills[selectedIndex].labelRes),
             topPadding = contentPadding.calculateTopPadding(),
-            onTypeClick = { discoveryScreenModel.openTypeFilterSheet(0) },
+            onTypeClick = {
+                discoveryScreenModel.ensureCatalogGenres(carrier.medium)
+                discoveryScreenModel.openTypeFilterSheet(0)
+            },
         )
         // The type row consumed the top inset — the grid/search branches
         // get start/end/bottom only.
@@ -254,7 +259,16 @@ private fun CatalogBrowseGrid(
             val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val totalItems = gridState.layoutInfo.totalItemsCount
             val s = state
-            lastVisible >= totalItems - 6 &&
+            // Only page on user intent — a short/stale feed used to
+            // chain page fetches by itself (the footer spinner marched
+            // down the grid pulling in deep-ranked rows). An
+            // underfilled viewport still self-fills; anything scrollable
+            // waits for a real scroll.
+            val userScrolled = gridState.firstVisibleItemIndex > 0 ||
+                gridState.firstVisibleItemScrollOffset > 0
+            totalItems > 0 &&
+                lastVisible >= totalItems - 6 &&
+                (userScrolled || !gridState.canScrollForward) &&
                 s.browseFeed != null &&
                 s.browseHasMore &&
                 !s.browseLoading &&
@@ -349,9 +363,15 @@ private fun CatalogBrowseGrid(
                         val work = item.work
                         val boundEntry = boundEntryIds[work.mikoWorkId]
                         val bound = boundEntry != null
-                        // A bound card shows the library row's cover —
-                        // discovery and library agree on the same entry.
-                        val coverUrl = boundEntry?.coverUrl ?: item.coverUrl
+                        // The bound library row's cover wins — unless the
+                        // feed item already holds recognized hi-res art
+                        // and the row's thumbnail is seed/extension art:
+                        // a refresh transiently rewriting thumbnail_url
+                        // must never swap healed canonical art back.
+                        val coverUrl = HiResCoverResolver.preferCover(
+                            item.coverUrl,
+                            boundEntry?.coverUrl,
+                        )
 
                         // Mint-on-browse: once per work id per session;
                         // the model dedupes and throttles off-thread.

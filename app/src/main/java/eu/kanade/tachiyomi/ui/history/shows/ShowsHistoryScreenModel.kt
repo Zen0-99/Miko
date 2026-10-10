@@ -30,9 +30,9 @@ import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.shows.interactor.GetAnimeCollections
 import tachiyomi.domain.collection.shows.interactor.SetAnimeCollections
-import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.GetDuplicateLibraryAnime
 import tachiyomi.domain.entries.shows.model.Anime
@@ -116,7 +116,7 @@ class ShowsHistoryScreenModel(
         var currentAnimeId: Long? = null
         var windowStart: Long = 0L
         for (entry in this) {
-            val t = entry.seenAt?.time ?: 0L
+            val t = entry.seenAt?.toEpochMilliseconds() ?: 0L
             if (current != null && entry.animeId == currentAnimeId && t - windowStart <= batchWindowMs) {
                 current!!.add(entry)
             } else {
@@ -137,7 +137,7 @@ class ShowsHistoryScreenModel(
             val entries = group.entries
             val first = entries.first()
             val last = entries.last()
-            val firstDate = first.seenAt?.time?.toLocalDate()
+            val firstDate = first.seenAt?.toEpochMilliseconds()?.toLocalDate()
             if (firstDate != null && firstDate != lastDate) {
                 result.add(AnimeHistoryUiModel.Header(firstDate))
                 lastDate = firstDate
@@ -149,8 +149,10 @@ class ShowsHistoryScreenModel(
                         title = first.title,
                         firstEpisode = first.episodeNumber,
                         lastEpisode = last.episodeNumber,
-                        firstSeenAt = first.seenAt ?: java.util.Date(0),
-                        lastSeenAt = last.seenAt ?: java.util.Date(0),
+                        firstSeenAt = first.seenAt?.toEpochMilliseconds()
+                            ?.let { java.util.Date(it) } ?: java.util.Date(0),
+                        lastSeenAt = last.seenAt?.toEpochMilliseconds()
+                            ?.let { java.util.Date(it) } ?: java.util.Date(0),
                         coverData = first.coverData,
                         historyIds = entries.map { it.id },
                     ),

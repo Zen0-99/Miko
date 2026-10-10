@@ -2,14 +2,13 @@ package eu.kanade.tachiyomi.data.mikodb
 
 import android.app.Application
 import eu.kanade.domain.entries.manga.interactor.UpdateManga
-import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.domain.entries.manga.model.hasCustomCover
-import eu.kanade.domain.entries.novel.model.hasCustomCover as hasCustomNovelCover
+import eu.kanade.domain.entries.novel.interactor.UpdateNovel
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.tachiyomi.data.cache.MangaCoverCache
 import eu.kanade.tachiyomi.data.cache.NovelCoverCache
 import eu.kanade.tachiyomi.data.cover.HiResCoverResolver
-import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.library.EntryRef
 import eu.kanade.tachiyomi.data.library.FailedEntry
 import eu.kanade.tachiyomi.data.library.LibraryUpdateProgressBus
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.extension.novel.model.NovelExtension
+import eu.kanade.tachiyomi.util.system.isOnline
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +24,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.data.handlers.manga.MangaDatabaseHandler
+import tachiyomi.data.handlers.novel.NovelDatabaseHandler
 import tachiyomi.domain.collection.manga.interactor.GetMangaCollections
 import tachiyomi.domain.collection.manga.interactor.SetMangaCollections
 import tachiyomi.domain.collection.novel.interactor.GetNovelCollections
@@ -45,20 +48,17 @@ import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.model.toChapterUpdate
 import tachiyomi.domain.items.chapter.model.toNovelChapterUpdate
-import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.library.model.EntryKind
 import tachiyomi.domain.track.manga.interactor.GetMangaTracks
 import tachiyomi.domain.track.manga.interactor.InsertMangaTrack
-import tachiyomi.data.handlers.manga.MangaDatabaseHandler
-import tachiyomi.data.handlers.novel.NovelDatabaseHandler
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
-import eu.kanade.tachiyomi.util.system.isOnline
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.Instant
-import kotlin.math.floor
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.floor
+import eu.kanade.domain.entries.novel.model.hasCustomCover as hasCustomNovelCover
 
 /**
  * Decouples library favorites from their extension rows (the "old
@@ -243,10 +243,16 @@ class LibraryCanonizer(
             // visit) returns 0 additions and would otherwise strand
             // the migration forever.
             var canonChapters = getChaptersByMangaId.await(canonical.id)
-            if (canonChapters.isEmpty() && heavy &&
+            if (canonChapters.isEmpty() &&
+                heavy &&
                 postLocalChaptersFeed(
-                    title = manga.title, author = manga.author, url = manga.url,
-                    sourceId = manga.source, work = work, workId = workId, isBooks = false,
+                    title = manga.title,
+                    author = manga.author,
+                    url = manga.url,
+                    sourceId = manga.source,
+                    work = work,
+                    workId = workId,
+                    isBooks = false,
                     chapters = getChaptersByMangaId.await(manga.id)
                         .map { Triple(it.name, it.url, it.dateUpload) },
                 )
@@ -363,10 +369,16 @@ class LibraryCanonizer(
             }
             chapterSync.syncNovel(canonical, workId)
             var canonChapters = getChaptersByNovelId.await(canonical.id)
-            if (canonChapters.isEmpty() && heavy &&
+            if (canonChapters.isEmpty() &&
+                heavy &&
                 postLocalChaptersFeed(
-                    title = novel.title, author = novel.author, url = novel.url,
-                    sourceId = novel.source, work = work, workId = workId, isBooks = true,
+                    title = novel.title,
+                    author = novel.author,
+                    url = novel.url,
+                    sourceId = novel.source,
+                    work = work,
+                    workId = workId,
+                    isBooks = true,
                     chapters = getChaptersByNovelId.await(novel.id)
                         .map { Triple(it.name, it.url, it.dateUpload) },
                 )
@@ -446,7 +458,8 @@ class LibraryCanonizer(
         } catch (_: Exception) {
             null
         } ?: return null
-        if (resolved.ambiguous || resolved.confidence == WorkIdResolver.Confidence.LOCAL_MINT ||
+        if (resolved.ambiguous ||
+            resolved.confidence == WorkIdResolver.Confidence.LOCAL_MINT ||
             resolved.value == oldId
         ) {
             return null
@@ -509,7 +522,8 @@ class LibraryCanonizer(
         } catch (_: Exception) {
             null
         } ?: return null
-        if (resolved.ambiguous || resolved.confidence == WorkIdResolver.Confidence.LOCAL_MINT ||
+        if (resolved.ambiguous ||
+            resolved.confidence == WorkIdResolver.Confidence.LOCAL_MINT ||
             resolved.value == oldId
         ) {
             return null
@@ -585,7 +599,8 @@ class LibraryCanonizer(
         // (deferred/failed) stays silent on later passes — deferred
         // entries otherwise re-pop the overlay on every refresh forever.
         val extIds = extMangaIds + extNovelIds
-        val reportProgress = networkHeavy && total > 0 &&
+        val reportProgress = networkHeavy &&
+            total > 0 &&
             extIds.any { !reportedOutcomes.containsKey(it) }
         if (reportProgress) {
             LibraryUpdateProgressBus.startRun(total, PROGRESS_SOURCE)
@@ -683,7 +698,8 @@ class LibraryCanonizer(
         }) {
             val workId = CanonicalCatalog.workIdFromMangaUrl(m.url) ?: continue
             val donor = carrierBoundEntry(
-                workId, WorkIdResolver.MEDIUM_MANGA,
+                workId,
+                WorkIdResolver.MEDIUM_MANGA,
             ) { url, src ->
                 mangaRepository.getMangaByUrlAndSourceId(url, src)
                     ?.let { DonorEntry(it.title, it.thumbnailUrl) }
@@ -707,7 +723,8 @@ class LibraryCanonizer(
         }) {
             val workId = CanonicalCatalog.workIdFromNovelUrl(n.url) ?: continue
             val donor = carrierBoundEntry(
-                workId, WorkIdResolver.MEDIUM_BOOKS,
+                workId,
+                WorkIdResolver.MEDIUM_BOOKS,
             ) { url, src ->
                 novelRepository.getNovelByUrlAndSourceId(url, src)
                     ?.let { DonorEntry(it.title, it.thumbnailUrl) }
@@ -757,7 +774,8 @@ class LibraryCanonizer(
             if (m.thumbnailUrl?.isNotBlank() == true) continue
             val workId = CanonicalCatalog.workIdFromMangaUrl(m.url) ?: continue
             val donor = carrierBoundEntry(
-                workId, WorkIdResolver.MEDIUM_MANGA,
+                workId,
+                WorkIdResolver.MEDIUM_MANGA,
             ) { url, src ->
                 mangaRepository.getMangaByUrlAndSourceId(url, src)
                     ?.let { DonorEntry(it.title, it.thumbnailUrl) }
@@ -793,7 +811,8 @@ class LibraryCanonizer(
             if (n.thumbnailUrl?.isNotBlank() == true) continue
             val workId = CanonicalCatalog.workIdFromNovelUrl(n.url) ?: continue
             val donor = carrierBoundEntry(
-                workId, WorkIdResolver.MEDIUM_BOOKS,
+                workId,
+                WorkIdResolver.MEDIUM_BOOKS,
             ) { url, src ->
                 novelRepository.getNovelByUrlAndSourceId(url, src)
                     ?.let { DonorEntry(it.title, it.thumbnailUrl) }
@@ -1293,14 +1312,16 @@ class LibraryCanonizer(
             }
         }
         val found = when (medium) {
-            WorkIdResolver.MEDIUM_BOOKS -> novelExtensions.installedExtensionsFlow.value
-                .filterIsInstance<NovelExtension.Installed>()
-                .firstOrNull { e -> e.sources.any { it.id == sourceId } }
-                ?.let { Triple(it.pkgName, it.name, it.sources.map { s -> s.id }) }
-            else -> mangaExtensions.installedExtensionsFlow.value
-                .filterIsInstance<MangaExtension.Installed>()
-                .firstOrNull { e -> e.sources.any { it.id == sourceId } }
-                ?.let { Triple(it.pkgName, it.name, it.sources.map { s -> s.id }) }
+            WorkIdResolver.MEDIUM_BOOKS ->
+                novelExtensions.installedExtensionsFlow.value
+                    .filterIsInstance<NovelExtension.Installed>()
+                    .firstOrNull { e -> e.sources.any { it.id == sourceId } }
+                    ?.let { Triple(it.pkgName, it.name, it.sources.map { s -> s.id }) }
+            else ->
+                mangaExtensions.installedExtensionsFlow.value
+                    .filterIsInstance<MangaExtension.Installed>()
+                    .firstOrNull { e -> e.sources.any { it.id == sourceId } }
+                    ?.let { Triple(it.pkgName, it.name, it.sources.map { s -> s.id }) }
         }
         if (found == null) {
             val extCount = if (medium == WorkIdResolver.MEDIUM_BOOKS) {
@@ -1523,7 +1544,8 @@ class LibraryCanonizer(
         // catalog art (or a later resolver pass) stand.
         val extCoverTrusted = old.thumbnailUrl == null ||
             mangaRepository.getMangaFavorites().none {
-                it.id != old.id && it.id != canonical.id &&
+                it.id != old.id &&
+                    it.id != canonical.id &&
                     it.thumbnailUrl == old.thumbnailUrl &&
                     TitleNormalizer.normalize(it.title) != TitleNormalizer.normalize(old.title)
             }
@@ -1678,7 +1700,8 @@ class LibraryCanonizer(
 
         val extCoverTrusted = old.thumbnailUrl == null ||
             novelRepository.getNovelFavorites().none {
-                it.id != old.id && it.id != canonical.id &&
+                it.id != old.id &&
+                    it.id != canonical.id &&
                     it.thumbnailUrl == old.thumbnailUrl &&
                     TitleNormalizer.normalize(it.title) != TitleNormalizer.normalize(old.title)
             }

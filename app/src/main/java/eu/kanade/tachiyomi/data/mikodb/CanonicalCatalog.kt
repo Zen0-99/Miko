@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.domain.entries.manga.model.hasCustomCover
+import eu.kanade.domain.entries.novel.model.hasCustomCover
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.source.model.SManga
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
@@ -195,6 +197,14 @@ class CanonicalCatalog {
     }
 
     /**
+     * A canonical row's cover: [url] is the row's thumbnail; [pinned]
+     * marks user-picked art (a custom-cover file exists). Pinned art is
+     * a user choice — heal paths treat it as manual so refreshed feed
+     * art can never wash it back out.
+     */
+    data class CanonicalCover(val url: String, val pinned: Boolean)
+
+    /**
      * Covers held by materialized canonical entry rows (`miko:` url,
      * [CANONICAL_SOURCE_ID]) for [workIds] — favorited or not. A detail
      * visit can heal the row's thumbnail (`CanonicalPipelineRunner`
@@ -205,19 +215,28 @@ class CanonicalCatalog {
     suspend fun canonicalEntryCovers(
         workIds: Collection<String>,
         medium: String,
-    ): Map<String, String> {
+    ): Map<String, CanonicalCover> {
         if (workIds.isEmpty()) return emptyMap()
         val isBooks = medium == WorkIdResolver.MEDIUM_BOOKS
         val prefix = if (isBooks) NOVEL_URL_PREFIX else MANGA_URL_PREFIX
-        val covers = HashMap<String, String>(workIds.size)
+        val covers = HashMap<String, CanonicalCover>(workIds.size)
         for (workId in workIds) {
             val url = prefix + workId
-            val cover = if (isBooks) {
-                novelRepository.getNovelByUrlAndSourceId(url, CANONICAL_SOURCE_ID)?.thumbnailUrl
+            if (isBooks) {
+                novelRepository.getNovelByUrlAndSourceId(url, CANONICAL_SOURCE_ID)
+                    ?.let { row ->
+                        row.thumbnailUrl?.takeIf(String::isNotBlank)?.let {
+                            covers[workId] = CanonicalCover(it, row.hasCustomCover())
+                        }
+                    }
             } else {
-                mangaRepository.getMangaByUrlAndSourceId(url, CANONICAL_SOURCE_ID)?.thumbnailUrl
+                mangaRepository.getMangaByUrlAndSourceId(url, CANONICAL_SOURCE_ID)
+                    ?.let { row ->
+                        row.thumbnailUrl?.takeIf(String::isNotBlank)?.let {
+                            covers[workId] = CanonicalCover(it, row.hasCustomCover())
+                        }
+                    }
             }
-            if (!cover.isNullOrBlank()) covers[workId] = cover
         }
         return covers
     }
@@ -285,7 +304,8 @@ class CanonicalCatalog {
             }
             val entryTokens = entry.split(' ').filter(String::isNotBlank).toSet()
             val workTokens = workAuthor.split(' ').filter(String::isNotBlank).toSet()
-            return entryTokens.isNotEmpty() && workTokens.isNotEmpty() &&
+            return entryTokens.isNotEmpty() &&
+                workTokens.isNotEmpty() &&
                 (entryTokens.containsAll(workTokens) || workTokens.containsAll(entryTokens))
         }
     }

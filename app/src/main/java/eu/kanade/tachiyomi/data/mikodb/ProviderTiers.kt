@@ -57,7 +57,13 @@ class ProviderTiers(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cachePref by lazy { preferenceStore.getString(PREF_KEY, "") }
 
-    internal data class Overlay(val dynamicTier: String?, val tierCap: String?)
+    internal data class Overlay(
+        val dynamicTier: String?,
+        val tierCap: String?,
+        /** Global confirm/upvote count — null when the worker predates
+         *  the field (unknown beats a wrong zero). */
+        val confirmCount: Int?,
+    )
 
     /** Persisted last-good payload — pkg-keyed, carries its own stamp. */
     @Serializable
@@ -77,6 +83,15 @@ class ProviderTiers(
     fun tierCap(pkgName: String): String? {
         loadCache()
         return overlay[pkgName]?.tierCap
+    }
+
+    /** The provider's global upvote total ("N pts" in the Find
+     *  Provider sheet) — null when the overlay has no row for it or
+     *  the worker predates the field. */
+    fun confirmCount(pkgName: String): Int? {
+        loadCache()
+        requestRefresh()
+        return overlay[pkgName]?.confirmCount
     }
 
     /**
@@ -156,6 +171,7 @@ class ProviderTiers(
     private fun toOverlay(t: WorkIdentityApi.TierDto) = Overlay(
         t.dynamic_tier?.takeUnless { it.equals("S", ignoreCase = true) },
         t.tier_cap,
+        t.confirm_count,
     )
 
     private companion object {

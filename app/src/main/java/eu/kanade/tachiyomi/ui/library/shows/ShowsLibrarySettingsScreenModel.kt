@@ -10,12 +10,12 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.shows.interactor.SetAnimeDisplayMode
 import tachiyomi.domain.collection.shows.interactor.SetSortModeForAnimeCollection
-import tachiyomi.domain.collection.model.Collection
-import tachiyomi.domain.library.shows.model.AnimeLibrarySort
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.library.shows.model.AnimeLibrarySort
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.time.Duration.Companion.seconds

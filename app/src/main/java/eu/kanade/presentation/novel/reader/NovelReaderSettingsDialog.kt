@@ -29,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
@@ -134,6 +135,7 @@ fun NovelReaderSettingsDialog(
     // scrim click closes it, swiping down from anywhere closes it, and
     // content scrolls normally within the sheet.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val accent = accentColor ?: MaterialTheme.colorScheme.primary
 
     ModalBottomSheet(
         onDismissRequest = {
@@ -143,10 +145,12 @@ fun NovelReaderSettingsDialog(
             onShowMenus()
         },
         sheetState = sheetState,
+        containerColor = accent
+            .copy(alpha = 0.12f)
+            .compositeOver(MaterialTheme.colorScheme.surface),
         // No drag handle — sheet still drags but no visual handle bar.
         dragHandle = null,
     ) {
-        val accent = accentColor ?: MaterialTheme.colorScheme.primary
         val accentedScheme = MaterialTheme.colorScheme.copy(primary = accent)
         MaterialTheme(colorScheme = accentedScheme) {
             TabRow(

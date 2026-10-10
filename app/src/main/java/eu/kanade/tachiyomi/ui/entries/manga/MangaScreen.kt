@@ -4,16 +4,23 @@ import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -35,15 +42,22 @@ import eu.kanade.presentation.collection.components.ChangeCollectionDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
+import eu.kanade.presentation.entries.components.EntryDetailSkeleton
 import eu.kanade.presentation.entries.components.EntryHeroLoadingPreview
+import eu.kanade.presentation.entries.components.SKELETON_FADE_MS
+import eu.kanade.presentation.entries.components.SKELETON_LATE_ARRIVAL_MS
 import eu.kanade.presentation.entries.components.SetIntervalDialog
+import eu.kanade.presentation.entries.components.isNavEntering
+import eu.kanade.presentation.entries.components.rememberCachedAccentColor
 import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.presentation.entries.manga.ChapterSettingsDialog
 import eu.kanade.presentation.entries.manga.DuplicateMangaDialog
 import eu.kanade.presentation.entries.manga.MangaScreen
+import eu.kanade.presentation.entries.manga.carrierSheetContainerColor
 import eu.kanade.presentation.entries.manga.components.MangaCoverDialog
 import eu.kanade.presentation.entries.manga.components.ScanlatorFilterDialog
 import eu.kanade.presentation.util.AssistContentScreen
+import eu.kanade.presentation.util.LocalNavAnimatedVisibilityScope
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.source.MangaSource
@@ -67,9 +81,9 @@ import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
-import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
@@ -80,7 +94,6 @@ import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.screens.DelayedLoadingScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -98,6 +111,17 @@ class MangaScreen(
     private val previewTitle: String? = null,
     /** Clearlogo for the shared `hero-title-` element during Loading. */
     private val previewLogo: String? = null,
+    /** Continue-row label the caller already knows (home hero / library
+     *  position) — rendered inside the shared resume pill during Loading. */
+    private val previewResumeLabel: String? = null,
+    /** The pre-filled action is a real resume target — the skeleton's
+     *  continue bar renders the accent fill, not the "all up to date" tint. */
+    private val previewResumeEnabled: Boolean = false,
+    /** Callers that already display the entry's genres (home hero, library
+     *  rows) tell the skeleton whether the genre row will exist so a
+     *  genre-less entry doesn't get a ghost bar for content that never
+     *  loads. Defaults true — most entries have genres. */
+    private val previewHasGenres: Boolean = true,
 ) : Screen(), AssistContentScreen {
 
     private var assistUrl: String? = null
@@ -142,11 +166,81 @@ class MangaScreen(
                         previewCover = current?.thumbnailUrl ?: previewCover,
                         previewTitle = current?.title ?: previewTitle,
                         previewLogo = previewLogo,
+                        previewResumeLabel = previewResumeLabel,
+                        previewResumeEnabled = previewResumeEnabled,
+                        previewHasGenres = previewHasGenres,
                     ),
                 )
             }
         }
 
+        // Secondary work in the screen model (canonical pipelines,
+        // carriers, source fetches, suggestions, badges) waits for the
+        // push to land — mid-flight DB merges and network writes are
+        // what made cold opens adjust the hero mid-transition. Screens
+        // without a nav scope settle on their first frame.
+        val navScope = LocalNavAnimatedVisibilityScope.current
+        val entering = navScope.isNavEntering()
+        LaunchedEffect(entering) {
+            if (!entering) screenModel.onTransitionSettled()
+        }
+
+        // Ghost bars are for genuinely-slow loads only — a cached
+        // entry's Success lands inside a few frames, and painting the
+        // bars anyway reads as the skeleton hijacking every push.
+        var showGhosts by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            delay(220)
+            showGhosts = true
+        }
+        // A Success inside SKELETON_LATE_ARRIVAL_MS resolved from cache —
+        // the real screen mounts immediately so cached opens skip the
+        // skeleton entirely. Later arrivals hold the skeleton (identical
+        // geometry) to landing so its mount can't stall the flight; the
+        // skeleton then crossfades out over the real screen instead of
+        // the ghost bars popping off in a single frame.
+        val mountNanos = remember { System.nanoTime() }
+        var firstSuccessNanos by remember { mutableLongStateOf(-1L) }
+        LaunchedEffect(state is MangaScreenModel.State.Success) {
+            if (state is MangaScreenModel.State.Success && firstSuccessNanos < 0L) {
+                firstSuccessNanos = System.nanoTime()
+            }
+        }
+        val earlySuccess = state is MangaScreenModel.State.Success &&
+            (firstSuccessNanos.takeIf { it >= 0L } ?: System.nanoTime()) - mountNanos <
+            SKELETON_LATE_ARRIVAL_MS * 1_000_000L
+        val skeletonWanted = previewCover != null &&
+            !isTabletUi() &&
+            (state is MangaScreenModel.State.Loading || (entering && !earlySuccess))
+        val skeletonAlpha by animateFloatAsState(
+            targetValue = if (skeletonWanted) 1f else 0f,
+            animationSpec = tween(SKELETON_FADE_MS),
+            label = "detailSkeletonFade",
+        )
+        val seedHeightsPx = remember { mutableStateMapOf<Any, Int>() }
+        if (skeletonWanted) {
+            EntryDetailSkeleton(
+                cover = previewCover,
+                sharedKey = "hero-image-$mangaId",
+                heroContentPadding = 440.dp,
+                title = previewTitle,
+                logo = previewLogo,
+                navigateUp = navigator::pop,
+                isManga = true,
+                favorite = (previewCover as? tachiyomi.domain.entries.manga.model.MangaCover)
+                    ?.isMangaFavorite == true,
+                showGhosts = showGhosts,
+                accentColor = rememberCachedAccentColor(
+                    mangaId,
+                    EntryCoverMetadata.EntryType.MANGA,
+                ),
+                resumeLabel = previewResumeLabel,
+                resumeEnabled = previewResumeEnabled,
+                genreGhostVisible = previewHasGenres,
+                onItemHeight = { key, height -> seedHeightsPx[key] = height },
+            )
+            return
+        }
         if (state is MangaScreenModel.State.Loading) {
             EntryHeroLoadingPreview(
                 cover = previewCover,
@@ -184,110 +278,147 @@ class MangaScreen(
             }
         }
 
-        MangaScreen(
-            state = successState,
-            previewCover = previewCover,
-            snackbarHostState = screenModel.snackbarHostState,
-            nextUpdate = successState.manga.expectedNextUpdate,
-            isTabletUi = isTabletUi(),
-            chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
-            chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
-            navigateUp = navigator::pop,
-            onChapterClicked = {
-                if (!screenModel.interceptChapterTap(it)) {
-                    openChapterWithLockCheck(context, it, scope, getLockedReadingOrders) { lockedOrders ->
-                        lockDialog = lockedOrders
+        Box(Modifier.fillMaxSize()) {
+            MangaScreen(
+                state = successState,
+                previewCover = previewCover,
+                seedHeightsPx = seedHeightsPx,
+                snackbarHostState = screenModel.snackbarHostState,
+                nextUpdate = successState.manga.expectedNextUpdate,
+                isTabletUi = isTabletUi(),
+                chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
+                chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
+                navigateUp = navigator::pop,
+                onChapterClicked = {
+                    if (!screenModel.interceptChapterTap(it)) {
+                        openChapterWithLockCheck(context, it, scope, getLockedReadingOrders) { lockedOrders ->
+                            lockDialog = lockedOrders
+                        }
                     }
-                }
-            },
-            onDownloadChapter = screenModel::runChapterDownloadActions.takeIf {
-                // Canon entries ride a stub source but DO support
-                // downloads — the queue resolves each chapter to its
-                // carrier at enqueue time.
-                !successState.source.isLocalOrStub() ||
-                    eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
-                        .isCanonicalUrl(successState.manga.url)
-            },
-            onAddToLibraryClicked = {
-                screenModel.toggleFavorite()
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            },
-            onWebViewClicked = {
-                openMangaInWebView(
-                    navigator,
-                    screenModel.manga,
-                    screenModel.source,
-                )
-            }.takeIf { isHttpSource },
-            onTrackingClicked = {
-                if (!successState.hasLoggedInTrackers) {
-                    navigator.push(SettingsScreen(SettingsScreen.Destination.Tracking))
-                } else {
-                    screenModel.showTrackDialog()
-                }
-            },
-            onCommentsClicked = screenModel::showCommentsDialog
-                .takeIf { screenModel.commentsEnabled },
-            onFindProviderClicked = screenModel::showFindProviderDialog,
-            onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
-            onFilterButtonClicked = screenModel::showSettingsDialog,
-            onRefresh = screenModel::fetchAllFromSource,
-            onContinueReading = {
-                val next = screenModel.getNextUnreadChapter()
-                if (next == null || !screenModel.interceptChapterTap(next)) {
-                    continueReading(context, next)
-                }
-            },
-            onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
-            onCoverClicked = screenModel::showCoverDialog,
-            onShareClicked = { shareManga(context, screenModel.manga, screenModel.source) }.takeIf { isHttpSource },
-            onDownloadActionClicked = screenModel::runDownloadAction.takeIf { !successState.source.isLocalOrStub() },
-            onEditCollectionClicked = screenModel::showChangeCollectionDialog.takeIf { successState.manga.favorite },
-            onEditFetchIntervalClicked = screenModel::showSetMangaFetchIntervalDialog.takeIf {
-                successState.manga.favorite
-            },
-            onMigrateClicked = {
-                navigator.push(MigrateMangaAllScreen(listOf(successState.manga.id), successState.manga.title))
-            }.takeIf { successState.manga.favorite },
-            onMultiBookmarkClicked = screenModel::bookmarkChapters,
-            onMultiMarkAsReadClicked = screenModel::markChaptersRead,
-            onMarkPreviousAsReadClicked = screenModel::markPreviousChapterRead,
-            onMultiDeleteClicked = screenModel::showDeleteChapterDialog,
-            onChapterSwipe = screenModel::chapterSwipe,
-            onChapterSelected = screenModel::toggleSelection,
-            onAllChapterSelected = screenModel::toggleAllSelection,
-            onInvertSelection = screenModel::invertSelection,
-            onMarkAllReadClicked = { screenModel.markAllRead() },
-            onMarkAllUnreadClicked = { screenModel.markAllUnread() },
-            onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
-                .takeIf { !successState.source.isLocalOrStub() },
-            onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
-                .takeIf { !successState.source.isLocalOrStub() },
-            onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
-                .takeIf { !successState.source.isLocalOrStub() },
-            onSuggestionClick = { item ->
-                scope.launch {
-                    val screen = item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen()
-                    navigator.push(screen)
-                }
-            },
-            onOpenSuggestions = {
-                val seed = screenModel.getSuggestionSeed()
-                if (seed != null) {
-                    navigator.push(
-                        EntrySuggestionsScreen(
-                            seed = seed,
-                            sourceId = successState.source.id,
-                            entryUrl = successState.manga.url,
+                },
+                onDownloadChapter = screenModel::runChapterDownloadActions.takeIf {
+                    // Canon entries ride a stub source but DO support
+                    // downloads — the queue resolves each chapter to its
+                    // carrier at enqueue time.
+                    !successState.source.isLocalOrStub() ||
+                        eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                            .isCanonicalUrl(successState.manga.url)
+                },
+                onAddToLibraryClicked = {
+                    screenModel.toggleFavorite()
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                },
+                onWebViewClicked = {
+                    openMangaInWebView(
+                        navigator,
+                        screenModel.manga,
+                        screenModel.source,
+                    )
+                }.takeIf { isHttpSource },
+                onTrackingClicked = {
+                    if (!successState.hasLoggedInTrackers) {
+                        navigator.push(SettingsScreen(SettingsScreen.Destination.Tracking))
+                    } else {
+                        screenModel.showTrackDialog()
+                    }
+                },
+                onCommentsClicked = screenModel::showCommentsDialog
+                    .takeIf { screenModel.commentsEnabled },
+                onFindProviderClicked = screenModel::showFindProviderDialog,
+                onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
+                onFilterButtonClicked = screenModel::showSettingsDialog,
+                onRefresh = screenModel::fetchAllFromSource,
+                onContinueReading = {
+                    val next = screenModel.getNextUnreadChapter()
+                    if (next == null || !screenModel.interceptChapterTap(next)) {
+                        continueReading(context, next)
+                    }
+                },
+                onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
+                onCoverClicked = screenModel::showCoverDialog,
+                onShareClicked = { shareManga(context, screenModel.manga, screenModel.source) }.takeIf { isHttpSource },
+                onDownloadActionClicked = screenModel::runDownloadAction.takeIf {
+                    !successState.source.isLocalOrStub()
+                },
+                onEditCollectionClicked = screenModel::showChangeCollectionDialog.takeIf {
+                    successState.manga.favorite
+                },
+                onEditFetchIntervalClicked = screenModel::showSetMangaFetchIntervalDialog.takeIf {
+                    successState.manga.favorite
+                },
+                onMigrateClicked = {
+                    navigator.push(MigrateMangaAllScreen(listOf(successState.manga.id), successState.manga.title))
+                }.takeIf { successState.manga.favorite },
+                onMultiBookmarkClicked = screenModel::bookmarkChapters,
+                onMultiMarkAsReadClicked = screenModel::markChaptersRead,
+                onMarkPreviousAsReadClicked = screenModel::markPreviousChapterRead,
+                onMultiDeleteClicked = screenModel::showDeleteChapterDialog,
+                onChapterSwipe = screenModel::chapterSwipe,
+                onChapterSelected = screenModel::toggleSelection,
+                onAllChapterSelected = screenModel::toggleAllSelection,
+                onInvertSelection = screenModel::invertSelection,
+                onMarkAllReadClicked = { screenModel.markAllRead() },
+                onMarkAllUnreadClicked = { screenModel.markAllUnread() },
+                onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
+                    .takeIf { !successState.source.isLocalOrStub() },
+                onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
+                    .takeIf { !successState.source.isLocalOrStub() },
+                onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
+                    .takeIf { !successState.source.isLocalOrStub() },
+                onSuggestionClick = { item ->
+                    scope.launch {
+                        val screen = item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen()
+                        navigator.push(screen)
+                    }
+                },
+                onOpenSuggestions = {
+                    val seed = screenModel.getSuggestionSeed()
+                    if (seed != null) {
+                        navigator.push(
+                            EntrySuggestionsScreen(
+                                seed = seed,
+                                sourceId = successState.source.id,
+                                entryUrl = successState.manga.url,
+                            ),
+                        )
+                    }
+                },
+                onRetrySuggestions = { screenModel.retrySuggestions() },
+                onCarrierPickerClicked = screenModel::showCarrierPicker,
+                chapterCarrierLabel = screenModel::carrierLabelFor,
+                onChapterCarrierClicked = screenModel::showChapterCarrierPicker,
+            )
+
+            // Post-landing swap dissolves the held skeleton over the real
+            // screen instead of popping the ghost bars off in one frame.
+            // "settle-fade" keys keep its shared elements from colliding
+            // with the real screen's while both are composed; mid-flight
+            // swaps skip the overlay since the morph needs an instant
+            // target, not a fade.
+            if (skeletonAlpha > 0f && !entering) {
+                Box(Modifier.fillMaxSize().alpha(skeletonAlpha)) {
+                    EntryDetailSkeleton(
+                        cover = previewCover,
+                        sharedKey = "hero-image-settle-fade",
+                        heroContentPadding = 440.dp,
+                        title = previewTitle,
+                        logo = previewLogo,
+                        navigateUp = navigator::pop,
+                        isManga = true,
+                        favorite = (previewCover as? tachiyomi.domain.entries.manga.model.MangaCover)
+                            ?.isMangaFavorite == true,
+                        showGhosts = showGhosts,
+                        accentColor = rememberCachedAccentColor(
+                            mangaId,
+                            EntryCoverMetadata.EntryType.MANGA,
                         ),
+                        resumeLabel = previewResumeLabel,
+                        resumeEnabled = previewResumeEnabled,
+                        genreGhostVisible = previewHasGenres,
                     )
                 }
-            },
-            onRetrySuggestions = { screenModel.retrySuggestions() },
-            onCarrierPickerClicked = screenModel::showCarrierPicker,
-            chapterCarrierLabel = screenModel::carrierLabelFor,
-            onChapterCarrierClicked = screenModel::showChapterCarrierPicker,
-        )
+            }
+        }
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
 
@@ -358,6 +489,7 @@ class MangaScreen(
                 onResetToDefault = screenModel::resetToDefaultSettings,
                 scanlatorFilterActive = successState.scanlatorFilterActive,
                 onScanlatorFilterClicked = { showScanlatorsDialog = true },
+                accentColor = successState.accentColor,
             )
             MangaScreenModel.Dialog.TrackSheet -> {
                 NavigatorAdaptiveSheet(
@@ -375,11 +507,13 @@ class MangaScreen(
                     screen = CommentsSheetScreen(
                         carrier = Carrier.MANGA,
                         entryId = successState.manga.id,
+                        expectedComments = successState.commentsCount,
                     ),
+                    containerColor = carrierSheetContainerColor(successState.accentColor),
                     onDismissRequest = onDismissRequest,
                 )
             }
-            MangaScreenModel.Dialog.FullCover -> {
+            is MangaScreenModel.Dialog.FullCover -> {
                 val sm = rememberScreenModel { MangaCoverScreenModel(successState.manga.id) }
                 val manga by sm.state.collectAsState()
                 if (manga != null) {
@@ -391,17 +525,30 @@ class MangaScreen(
                     }
                     MangaCoverDialog(
                         manga = manga!!,
+                        coverData = dialog.coverData,
+                        coverOptions = successState.coverOptions,
+                        pinnedCoverKey = successState.coverPinKey,
                         snackbarHostState = sm.snackbarHostState,
                         isCustomCover = remember(manga) { manga!!.hasCustomCover() },
-                        onShareClick = { sm.shareCover(context) },
-                        onSaveClick = { sm.saveCover(context) },
+                        onShareClick = { sm.shareCover(context, dialog.coverData) },
+                        onSaveClick = { sm.saveCover(context, dialog.coverData) },
+                        onSelectCover = { option ->
+                            if (option != null) {
+                                sm.pinCover(context, option)
+                            } else {
+                                sm.unpinCover(context)
+                            }
+                        },
                         onEditClick = {
                             when (it) {
                                 EditCoverAction.EDIT -> getContent.launch("image/*")
                                 EditCoverAction.DELETE -> sm.deleteCustomCover(context)
                             }
                         },
-                        onDismissRequest = onDismissRequest,
+                        onDismissRequest = {
+                            sm.flushCoverToast(context)
+                            onDismissRequest()
+                        },
                     )
                 } else {
                     LoadingScreen(Modifier.systemBarsPadding())
@@ -432,7 +579,7 @@ class MangaScreen(
                     matrix = successState.carrierMatrix,
                     preferred = pickedChapter?.let { screenModel.chapterCarrierFor(it) }
                         ?: successState.preferredCarrier,
-                    chapter = pickedChapter,
+                    chapterName = pickedChapter?.name,
                     accentColor = successState.accentColor,
                     // Chapter-scoped picks stay purely a routing choice —
                     // the work-level sheet offers provider discovery.
@@ -446,15 +593,10 @@ class MangaScreen(
                     onRemove = screenModel::removeCarrier,
                     onSelect = { pkg ->
                         if (pickedChapter != null) {
-                            // Chapter scope: store the override and read
-                            // immediately — "read this chapter with…".
+                            // Chapter scope is purely a routing choice —
+                            // picking a carrier must not throw the user
+                            // into the reader.
                             screenModel.setChapterCarrier(pickedChapter, pkg)
-                            openChapterWithLockCheck(
-                                context,
-                                pickedChapter,
-                                scope,
-                                getLockedReadingOrders,
-                            ) { lockedOrders -> lockDialog = lockedOrders }
                         } else {
                             screenModel.setPreferredCarrier(pkg)
                         }
@@ -466,6 +608,7 @@ class MangaScreen(
                 val search = successState.providerSearch
                 if (search != null) {
                     eu.kanade.presentation.entries.components.FindProviderDialog(
+                        entryTitle = successState.manga.title,
                         searching = search.searching,
                         rows = search.rows,
                         confirmed = search.confirmed,

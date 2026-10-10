@@ -59,13 +59,14 @@ object AudioChapterSchemes {
      */
     fun providerIdForNovelUrl(url: String, absSource: AbsNovelSource? = null): Pair<String, String>? =
         when {
-            AbsUrls.isAbsNovelUrl(url) -> absSource
-                ?.takeIf { it.client.isConfigured() }
-                ?.let { src ->
-                    AbsUrls.itemIdFrom(url)?.let { item ->
-                        PROVIDER_ABS to "${src.client.serverKey()}:$item"
+            AbsUrls.isAbsNovelUrl(url) ->
+                absSource
+                    ?.takeIf { it.client.isConfigured() }
+                    ?.let { src ->
+                        AbsUrls.itemIdFrom(url)?.let { item ->
+                            PROVIDER_ABS to "${src.client.serverKey()}:$item"
+                        }
                     }
-                }
             url.startsWith(LV_BOOK_PREFIX) ->
                 firstSegment(url.removePrefix(LV_BOOK_PREFIX))?.let { PROVIDER_LIBRIVOX to it }
             url.startsWith(IA_ITEM_PREFIX) ->
@@ -114,15 +115,16 @@ object AudioChapterSchemes {
      * never touch credentials at all (T-22-03-03).
      */
     fun streamUriFor(chapterUrl: String, absSource: AbsNovelSource?): String? = when {
-        AbsUrls.isAbsChapterUrl(chapterUrl) -> absSource
-            ?.takeIf { it.client.isConfigured() }
-            ?.let {
-                AbsUrls.streamUrl(
-                    it.client.baseUrl(),
-                    AbsUrls.itemIdFrom(chapterUrl) ?: return null,
-                    AbsUrls.inoFrom(chapterUrl) ?: return null,
-                )
-            }
+        AbsUrls.isAbsChapterUrl(chapterUrl) ->
+            absSource
+                ?.takeIf { it.client.isConfigured() }
+                ?.let {
+                    AbsUrls.streamUrl(
+                        it.client.baseUrl(),
+                        AbsUrls.itemIdFrom(chapterUrl) ?: return null,
+                        AbsUrls.inoFrom(chapterUrl) ?: return null,
+                    )
+                }
         chapterUrl.startsWith(LV_TRACK_PREFIX) ->
             archiveDownloadUrl(chapterUrl.removePrefix(LV_TRACK_PREFIX))
         chapterUrl.startsWith(IA_TRACK_PREFIX) ->

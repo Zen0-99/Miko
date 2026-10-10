@@ -138,9 +138,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
 import java.io.InputStream
-import java.util.Date
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 class PlayerViewModelProviderFactory(
@@ -1956,7 +1956,7 @@ class PlayerViewModel @JvmOverloads constructor(
     private suspend fun saveEpisodeHistory(episode: Episode) {
         if (!incognitoMode) {
             val episodeId = episode.id!!
-            val seenAt = Date()
+            val seenAt = Clock.System.now()
             upsertHistory.await(
                 AnimeHistoryUpdate(episodeId, seenAt),
             )

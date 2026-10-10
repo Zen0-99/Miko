@@ -5,6 +5,7 @@ import eu.kanade.domain.entries.shows.model.hasCustomCover
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.data.cache.AnimeBackgroundCache
 import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
+import kotlinx.datetime.TimeZone
 import tachiyomi.domain.entries.shows.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate
@@ -12,8 +13,8 @@ import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.source.local.entries.anime.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.Instant
-import java.time.ZonedDateTime
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class UpdateAnime(
     private val animeRepository: AnimeRepository,
@@ -57,25 +58,27 @@ class UpdateAnime(
                 // Cover cache file is missing — force refresh
                 !coverFileExists -> {
                     coverCache.deleteFromCache(localAnime, false)
-                    Instant.now().toEpochMilli()
+                    Clock.System.now().toEpochMilliseconds()
                 }
                 // Hi-res provider covers (MangaDex/AniList/…) are immutable
                 // at their URL — a manual refresh must not bust the cache.
                 eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(
                     localAnime.thumbnailUrl,
                 ) &&
-                    (remoteAnime.thumbnail_url.isNullOrEmpty() ||
-                        localAnime.thumbnailUrl == remoteAnime.thumbnail_url) -> null
+                    (
+                        remoteAnime.thumbnail_url.isNullOrEmpty() ||
+                            localAnime.thumbnailUrl == remoteAnime.thumbnail_url
+                        ) -> null
                 // Cover exists and URL hasn't changed — no need to refresh
                 !manualFetch && localAnime.thumbnailUrl == remoteAnime.thumbnail_url -> null
-                localAnime.isLocal() -> Instant.now().toEpochMilli()
+                localAnime.isLocal() -> Clock.System.now().toEpochMilliseconds()
                 localAnime.hasCustomCover(coverCache) -> {
                     coverCache.deleteFromCache(localAnime, false)
                     null
                 }
                 else -> {
                     coverCache.deleteFromCache(localAnime, false)
-                    Instant.now().toEpochMilli()
+                    Clock.System.now().toEpochMilliseconds()
                 }
             }
 
@@ -84,14 +87,14 @@ class UpdateAnime(
                 // Never refresh backgrounds if the url is empty to avoid "losing" existing backgrounds
                 remoteAnime.background_url.isNullOrEmpty() -> null
                 !manualFetch && localAnime.backgroundUrl == remoteAnime.background_url -> null
-                localAnime.isLocal() -> Instant.now().toEpochMilli()
+                localAnime.isLocal() -> Clock.System.now().toEpochMilliseconds()
                 localAnime.hasCustomBackground(backgroundCache) -> {
                     backgroundCache.deleteFromCache(localAnime, false)
                     null
                 }
                 else -> {
                     backgroundCache.deleteFromCache(localAnime, false)
-                    Instant.now().toEpochMilli()
+                    Clock.System.now().toEpochMilliseconds()
                 }
             }
 
@@ -125,33 +128,36 @@ class UpdateAnime(
 
     suspend fun awaitUpdateFetchInterval(
         anime: Anime,
-        dateTime: ZonedDateTime = ZonedDateTime.now(),
-        window: Pair<Long, Long> = animeFetchInterval.getWindow(dateTime),
+        dateTime: Instant = Clock.System.now(),
+        timeZone: TimeZone = TimeZone.currentSystemDefault(),
+        window: Pair<Long, Long> = animeFetchInterval.getWindow(dateTime, timeZone),
     ): Boolean {
         return animeRepository.updateAnime(
-            animeFetchInterval.toAnimeUpdate(anime, dateTime, window),
+            animeFetchInterval.toAnimeUpdate(anime, dateTime, timeZone, window),
         )
     }
 
     suspend fun awaitUpdateLastUpdate(animeId: Long): Boolean {
-        return animeRepository.updateAnime(AnimeUpdate(id = animeId, lastUpdate = Instant.now().toEpochMilli()))
+        return animeRepository.updateAnime(
+            AnimeUpdate(id = animeId, lastUpdate = Clock.System.now().toEpochMilliseconds()),
+        )
     }
 
     suspend fun awaitUpdateCoverLastModified(animeId: Long): Boolean {
         return animeRepository.updateAnime(
-            AnimeUpdate(id = animeId, coverLastModified = Instant.now().toEpochMilli()),
+            AnimeUpdate(id = animeId, coverLastModified = Clock.System.now().toEpochMilliseconds()),
         )
     }
 
     suspend fun awaitUpdateBackgroundLastModified(animeId: Long): Boolean {
         return animeRepository.updateAnime(
-            AnimeUpdate(id = animeId, backgroundLastModified = Instant.now().toEpochMilli()),
+            AnimeUpdate(id = animeId, backgroundLastModified = Clock.System.now().toEpochMilliseconds()),
         )
     }
 
     suspend fun awaitUpdateFavorite(animeId: Long, favorite: Boolean): Boolean {
         val dateAdded = when (favorite) {
-            true -> Instant.now().toEpochMilli()
+            true -> Clock.System.now().toEpochMilliseconds()
             false -> 0
         }
         return animeRepository.updateAnime(

@@ -22,8 +22,8 @@ import tachiyomi.domain.items.episode.service.EpisodeRecognition
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.source.local.entries.anime.isLocal
 import java.lang.Long.max
-import java.time.ZonedDateTime
 import java.util.TreeSet
+import kotlin.time.Clock
 
 class SyncEpisodesWithSource(
     private val downloadManager: ShowsDownloadManager,
@@ -55,8 +55,8 @@ class SyncEpisodesWithSource(
             throw NoEpisodesException()
         }
 
-        val now = ZonedDateTime.now()
-        val nowMillis = now.toInstant().toEpochMilli()
+        val now = Clock.System.now()
+        val nowMillis = now.toEpochMilliseconds()
 
         val sourceEpisodes = rawSourceEpisodes
             .distinctBy { it.url }
@@ -159,7 +159,7 @@ class SyncEpisodesWithSource(
                 updateAnime.awaitUpdateFetchInterval(
                     anime,
                     now,
-                    fetchWindow,
+                    window = fetchWindow,
                 )
             }
             return emptyList()
@@ -230,7 +230,7 @@ class SyncEpisodesWithSource(
             val episodeUpdates = updatedEpisodes.map { it.toEpisodeUpdate() }
             updateEpisode.awaitAll(episodeUpdates)
         }
-        updateAnime.awaitUpdateFetchInterval(anime, now, fetchWindow)
+        updateAnime.awaitUpdateFetchInterval(anime, now, window = fetchWindow)
 
         // Set this anime as updated since episodes were changed
         // Note that last_update actually represents last time the episode list changed at all

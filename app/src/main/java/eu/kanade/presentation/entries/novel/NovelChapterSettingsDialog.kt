@@ -8,7 +8,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,66 +53,61 @@ fun NovelChapterSettingsDialog(
         )
     }
 
-    // Apply the novel's accent color as the primary color so the tab
-    // indicator, selected tab text, sort arrows, active tri-state
-    // checkboxes and selected radio buttons match the novel theme —
-    // same approach as NovelReaderSettingsDialog.
-    val accent = accentColor ?: MaterialTheme.colorScheme.primary
-    val accentedScheme = MaterialTheme.colorScheme.copy(primary = accent)
-    MaterialTheme(colorScheme = accentedScheme) {
-        TabbedDialog(
-            onDismissRequest = onDismissRequest,
-            tabTitles = persistentListOf(
-                stringResource(MR.strings.action_filter),
-                stringResource(MR.strings.action_sort),
-                stringResource(MR.strings.action_display),
-            ),
-            tabOverflowMenuContent = { closeMenu ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(MR.strings.set_chapter_settings_as_default)) },
-                    onClick = {
-                        showSetAsDefaultDialog = true
-                        closeMenu()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(MR.strings.action_reset)) },
-                    onClick = {
-                        onResetToDefault()
-                        closeMenu()
-                    },
-                )
-            },
-        ) { page ->
-            Column(
-                modifier = Modifier
-                    .padding(vertical = TabbedDialogPaddings.Vertical)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                when (page) {
-                    0 -> {
-                        FilterPage(
-                            downloadedFilter = novel.downloadedFilter,
-                            onDownloadedFilterChanged = onDownloadedFilterChanged,
-                            unreadFilter = novel.unreadFilter,
-                            onUnreadFilterChanged = onUnreadFilterChanged,
-                            bookmarkedFilter = novel.bookmarkedFilter,
-                            onBookmarkedFilterChanged = onBookmarkedFilterChanged,
-                        )
-                    }
-                    1 -> {
-                        SortPage(
-                            sortingMode = novel.sorting,
-                            sortDescending = novel.sortDescending(),
-                            onItemSelected = onSortModeChanged,
-                        )
-                    }
-                    2 -> {
-                        DisplayPage(
-                            displayMode = novel.displayMode,
-                            onItemSelected = onDisplayModeChanged,
-                        )
-                    }
+    // accentColor → tinted sheet + accent-bound primary inside
+    // (tab indicator, sort arrows, tri-state/radio selected states).
+    TabbedDialog(
+        onDismissRequest = onDismissRequest,
+        accentColor = accentColor,
+        tabTitles = persistentListOf(
+            stringResource(MR.strings.action_filter),
+            stringResource(MR.strings.action_sort),
+            stringResource(MR.strings.action_display),
+        ),
+        tabOverflowMenuContent = { closeMenu ->
+            DropdownMenuItem(
+                text = { Text(stringResource(MR.strings.set_chapter_settings_as_default)) },
+                onClick = {
+                    showSetAsDefaultDialog = true
+                    closeMenu()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(MR.strings.action_reset)) },
+                onClick = {
+                    onResetToDefault()
+                    closeMenu()
+                },
+            )
+        },
+    ) { page ->
+        Column(
+            modifier = Modifier
+                .padding(vertical = TabbedDialogPaddings.Vertical)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            when (page) {
+                0 -> {
+                    FilterPage(
+                        downloadedFilter = novel.downloadedFilter,
+                        onDownloadedFilterChanged = onDownloadedFilterChanged,
+                        unreadFilter = novel.unreadFilter,
+                        onUnreadFilterChanged = onUnreadFilterChanged,
+                        bookmarkedFilter = novel.bookmarkedFilter,
+                        onBookmarkedFilterChanged = onBookmarkedFilterChanged,
+                    )
+                }
+                1 -> {
+                    SortPage(
+                        sortingMode = novel.sorting,
+                        sortDescending = novel.sortDescending(),
+                        onItemSelected = onSortModeChanged,
+                    )
+                }
+                2 -> {
+                    DisplayPage(
+                        displayMode = novel.displayMode,
+                        onItemSelected = onDisplayModeChanged,
+                    )
                 }
             }
         }

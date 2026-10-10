@@ -33,9 +33,14 @@ class CanonicalPipelineRunner(
     private val canonizeWork: CanonizeWork = Injekt.get(),
     private val canonicalChapterSync: CanonicalChapterSync = Injekt.get(),
     private val canonizer: LibraryCanonizer = Injekt.get(),
+    private val chapterRouter: CanonicalChapterRouter = Injekt.get(),
+    private val bridge: MangaNovelIdBridge = Injekt.get(),
+    private val updateManga: eu.kanade.domain.entries.manga.interactor.UpdateManga = Injekt.get(),
+    private val updateNovel: eu.kanade.domain.entries.novel.interactor.UpdateNovel = Injekt.get(),
     private val episodeMap: CanonicalEpisodeMap = Injekt.get(),
     private val episodeRepository: EpisodeRepository = Injekt.get(),
     private val loadCanonicalEpisodes: LoadCanonicalEpisodes = Injekt.get(),
+    private val sourcePreferences: eu.kanade.domain.source.service.SourcePreferences = Injekt.get(),
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -73,8 +78,48 @@ class CanonicalPipelineRunner(
                 // Seeded rows arrive with empty provider_links — enrich
                 // first so golden-source selection has links to bind.
                 mangaBakaEnrich.run(id, row)
-                canonizeWork.run(id, Carrier.MANGA)
+                val outcome = canonizeWork.run(id, Carrier.MANGA)
                 canonicalChapterSync.sync(row, id)
+                // Covers: recognized hi-res art (mangadex/anilist/...)
+                // is sticky and never restomped. Everything else —
+                // blank covers, and stored provider URLs that may be
+                // dead (host drift, CDN shards dying) — takes the
+                // winning carrier's live `getMangaDetails` art, which
+                // is identity-gated unlike a fuzzy title search.
+                val storedCover = row.thumbnailUrl
+                if (storedCover.isNullOrBlank() ||
+                    !eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(storedCover)
+                ) {
+                    // A user-picked carrier donates art first — the cover
+                    // follows the provider the user reads through
+                    // (carrierCoverUrl already orders the pin first).
+                    // Otherwise the canonical catalog cover — stable across
+                    // carrier churn — beats the winning feed's art, so
+                    // binding a new provider never restomps the cover.
+                    val pinnedCover = if (sourcePreferences.preferredCarrierFor(id) != null) {
+                        runCatching {
+                            chapterRouter.carrierCoverUrl(id, WorkIdResolver.MEDIUM_MANGA)
+                        }.getOrNull()
+                    } else {
+                        null
+                    }
+                    val cover = pinnedCover
+                        ?: bridge.byWorkId(id)?.coverUrl?.takeUnless { it.isBlank() }
+                        ?: (outcome as? CanonizeWork.Outcome.Canonized)
+                            ?.bestDetails?.thumbnailUrl?.takeUnless { it.isBlank() }
+                        ?: runCatching {
+                            chapterRouter.carrierCoverUrl(id, WorkIdResolver.MEDIUM_MANGA)
+                        }.getOrNull()
+                    if (!cover.isNullOrBlank() && cover != storedCover) {
+                        updateManga.await(
+                            tachiyomi.domain.entries.manga.model.MangaUpdate(
+                                id = row.id,
+                                thumbnailUrl = cover,
+                                coverLastModified = System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -100,8 +145,39 @@ class CanonicalPipelineRunner(
                     }
                 }
                 mangaBakaEnrich.run(id, row)
-                canonizeWork.run(id, Carrier.BOOKS)
+                val outcome = canonizeWork.run(id, Carrier.BOOKS)
                 canonicalChapterSync.syncNovel(row, id)
+                val storedCover = row.thumbnailUrl
+                if (storedCover.isNullOrBlank() ||
+                    !eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(storedCover)
+                ) {
+                    // Same pin-first ladder as the manga leg — a carrier
+                    // the user picked owns the cover; canonical catalog
+                    // art beats feed art so carrier churn can't restomp.
+                    val pinnedCover = if (sourcePreferences.preferredCarrierFor(id) != null) {
+                        runCatching {
+                            chapterRouter.carrierCoverUrl(id, WorkIdResolver.MEDIUM_BOOKS)
+                        }.getOrNull()
+                    } else {
+                        null
+                    }
+                    val cover = pinnedCover
+                        ?: bridge.byWorkId(id)?.coverUrl?.takeUnless { it.isBlank() }
+                        ?: (outcome as? CanonizeWork.Outcome.Canonized)
+                            ?.bestDetails?.thumbnailUrl?.takeUnless { it.isBlank() }
+                        ?: runCatching {
+                            chapterRouter.carrierCoverUrl(id, WorkIdResolver.MEDIUM_BOOKS)
+                        }.getOrNull()
+                    if (!cover.isNullOrBlank() && cover != storedCover) {
+                        updateNovel.await(
+                            tachiyomi.domain.entries.novel.model.NovelUpdate(
+                                id = row.id,
+                                thumbnailUrl = cover,
+                                coverLastModified = System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

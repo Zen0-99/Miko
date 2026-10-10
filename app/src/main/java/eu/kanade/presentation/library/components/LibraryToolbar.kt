@@ -27,7 +27,6 @@ import kotlinx.collections.immutable.toPersistentList
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Pill
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.theme.active
 
 @Composable
 fun LibraryToolbar(
@@ -123,7 +122,7 @@ private fun LibraryRegularToolbar(
         searchQuery = searchQuery,
         onChangeSearchQuery = onSearchQueryChange,
         actions = {
-            val filterTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current
+            val filterTint = if (hasFilters) MaterialTheme.colorScheme.primary else LocalContentColor.current
             val globalActions = globalOverflowActions(onClickSettings = onClickSettings)
             AppBarActions(
                 buildList {

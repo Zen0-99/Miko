@@ -57,8 +57,10 @@ class CanonicalFeedCollector(
         val status: Int? = null,
     ) {
         val isEmpty: Boolean
-            get() = description.isNullOrBlank() && author.isNullOrBlank() &&
-                genre.isEmpty() && thumbnailUrl.isNullOrBlank()
+            get() = description.isNullOrBlank() &&
+                author.isNullOrBlank() &&
+                genre.isEmpty() &&
+                thumbnailUrl.isNullOrBlank()
     }
 
     data class Feed(
@@ -156,7 +158,10 @@ class CanonicalFeedCollector(
                                         collectNovelFrom(g, query, work.title ?: "", topCandidates)
                                     WorkIdResolver.MEDIUM_SHOWS ->
                                         collectAnimeFrom(
-                                            g, query, work.title ?: "", topCandidates,
+                                            g,
+                                            query,
+                                            work.title ?: "",
+                                            topCandidates,
                                             work.mikoWorkId,
                                         )
                                     else ->
@@ -227,7 +232,7 @@ class CanonicalFeedCollector(
         // NoSuchElementException leak we used to surface).
         val page = runCatching { source.getSearchManga(1, searchTitle, source.getFilterList()) }
             .getOrElse { e -> throw IllegalStateException("search failed: ${e.message}") }
-        logcat { "canonicalFeed ${g.pkgName} search '${searchTitle}': ${page.mangas.size} hits" }
+        logcat { "canonicalFeed ${g.pkgName} search '$searchTitle': ${page.mangas.size} hits" }
         return evalMangaFeed(source, g, query, page.mangas.take(topCandidates))
     }
 
@@ -272,10 +277,14 @@ class CanonicalFeedCollector(
             )
         }
 
+        // A failed/empty chapter list is a FAILURE, not an empty feed —
+        // posting [] would REPLACE the stored feed and strip this
+        // carrier's contribution to canon (the worker guards the write
+        // too, but the failure bucket reports it honestly here).
         val chapters = runCatching { source.getChapterList(sm) }
             .getOrElse { e ->
                 logcat { "canonicalFeed ${g.pkgName} chapterlist: ${e.message}" }
-                emptyList()
+                error("chapter list failed for ${g.pkgName}: ${e.message}")
             }
             .map {
                 WorkIdentityApi.FeedChapter(
@@ -284,6 +293,7 @@ class CanonicalFeedCollector(
                     date_upload = it.date_upload.takeIf { d -> d > 0L },
                 )
             }
+            .also { if (it.isEmpty()) error("chapter list empty for ${g.pkgName}") }
 
         return Feed(
             sourceId = source.id,
@@ -327,7 +337,7 @@ class CanonicalFeedCollector(
         val page = runCatching {
             source.getSearchNovels(1, searchTitle, source.getFilterList())
         }.getOrElse { e -> throw IllegalStateException("search failed: ${e.message}") }
-        logcat { "canonicalFeed(novel) ${g.pkgName} search '${searchTitle}': ${page.novels.size} hits" }
+        logcat { "canonicalFeed(novel) ${g.pkgName} search '$searchTitle': ${page.novels.size} hits" }
         return evalNovelFeed(source, g, query, page.novels.take(topCandidates))
     }
 
@@ -368,10 +378,12 @@ class CanonicalFeedCollector(
             )
         }
 
+        // Same guard as the manga path — an empty chapter list is a
+        // failed collect, not a postable feed.
         val chapters = runCatching { source.getChapterList(sn) }
             .getOrElse { e ->
                 logcat { "canonicalFeed(novel) ${g.pkgName} chapterlist: ${e.message}" }
-                emptyList()
+                error("chapter list failed for ${g.pkgName}: ${e.message}")
             }
             .map {
                 WorkIdentityApi.FeedChapter(
@@ -380,6 +392,7 @@ class CanonicalFeedCollector(
                     date_upload = it.date_upload.takeIf { d -> d > 0L },
                 )
             }
+            .also { if (it.isEmpty()) error("chapter list empty for ${g.pkgName}") }
 
         return Feed(
             sourceId = source.id,
@@ -429,7 +442,7 @@ class CanonicalFeedCollector(
         val page = runCatching {
             source.getSearchAnime(1, searchTitle, source.getFilterList())
         }.getOrElse { e -> throw IllegalStateException("search failed: ${e.message}") }
-        logcat { "canonicalFeed(anime) ${g.pkgName} search '${searchTitle}': ${page.animes.size} hits" }
+        logcat { "canonicalFeed(anime) ${g.pkgName} search '$searchTitle': ${page.animes.size} hits" }
         return evalAnimeFeed(source, g, query, page.animes.take(topCandidates), workId)
     }
 
@@ -555,7 +568,9 @@ class CanonicalFeedCollector(
         if (rows.isEmpty()) return episodes
 
         val entry = EpisodeCoverage.boundEntry(
-            rows, providerRef, mikoDbManager.sourceMeta(g.pkgName)?.idType,
+            rows,
+            providerRef,
+            mikoDbManager.sourceMeta(g.pkgName)?.idType,
         ) ?: EpisodeCoverage.boundEntry(rows, g.externalId, g.provider)
             ?: preferredBoundEntry(workId, rows)
             ?: return episodes

@@ -58,26 +58,27 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.shows.interactor.GetAnimeCustomOrder
 import tachiyomi.domain.collection.shows.interactor.GetVisibleAnimeCollections
 import tachiyomi.domain.collection.shows.interactor.SetAnimeCollections
 import tachiyomi.domain.collection.shows.interactor.SetAnimeCustomOrder
-import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.GetAnimeFavorites
 import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
 import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate
-import tachiyomi.domain.entries.applyFilter
 import tachiyomi.domain.history.shows.interactor.GetNextEpisodes
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.episode.model.Episode
+import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroupMode
+import tachiyomi.domain.library.model.LibrarySubtype
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.shows.LibraryAnime
 import tachiyomi.domain.library.shows.model.AnimeLibrarySort
 import tachiyomi.domain.library.shows.model.sort
-import tachiyomi.domain.library.model.LibraryDisplayMode
-import tachiyomi.domain.library.model.LibraryGroupMode
-import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
 import tachiyomi.domain.readingorder.interactor.AutoRemoveCompletedReadingOrderEntries
@@ -136,6 +137,7 @@ class ShowsLibraryScreenModel(
     private val updateReadingOrder: UpdateReadingOrder = Injekt.get(),
     private val getAnime: GetAnime = Injekt.get(),
     private val getAnimeFavorites: GetAnimeFavorites = Injekt.get(),
+    private val subtypeResolver: eu.kanade.tachiyomi.data.mikodb.LibrarySubtypeResolver = Injekt.get(),
 ) : StateScreenModel<ShowsLibraryScreenModel.State>(State()) {
 
     var activeCollectionIndex: Int by libraryPreferences.lastUsedShowsCollection().asState(
@@ -150,7 +152,13 @@ class ShowsLibraryScreenModel(
                 getTracksPerAnime.subscribe(),
                 getTrackingFilterFlow(),
                 downloadCache.changes,
-            ) { searchQuery, library, tracks, trackingFilter, _ ->
+                libraryPreferences.showsSubtypeFilter().changes(),
+            ) { values ->
+                val searchQuery = values[0] as String?
+                val library = values[1] as AnimeLibraryMap
+                val tracks = values[2] as Map<Long, List<AnimeTrack>>
+                val trackingFilter = values[3] as Map<Long, TriState>
+                val subtype = values[5] as LibrarySubtype
                 library
                     .applyFilters(tracks, trackingFilter)
                     .applySort(tracks, trackingFilter.keys)
@@ -161,6 +169,7 @@ class ShowsLibraryScreenModel(
                             value
                         }
                     }
+                    .applySubtypeFilter(subtype)
             }
                 .collectLatest {
                     mutableState.update { state ->
@@ -186,6 +195,14 @@ class ShowsLibraryScreenModel(
                         showAnimeContinueButton = values[2] as Boolean,
                         showLibraryTitle = values[3] as Boolean,
                     )
+                }
+            }
+            .launchIn(screenModelScope)
+
+        libraryPreferences.showsSubtypeFilter().changes()
+            .onEach { subtype ->
+                mutableState.update { state ->
+                    state.copy(subtypeFilter = subtype)
                 }
             }
             .launchIn(screenModelScope)
@@ -294,6 +311,26 @@ class ShowsLibraryScreenModel(
         }
 
         return mapValues { (_, value) -> value.fastFilter(filterFn) }
+    }
+
+    /**
+     * Sub-category filter (Series vs Movie) — applies across all
+     * collections in the mode; the cinemeta URL carries the type, so
+     * classification needs no lookup.
+     */
+    private fun AnimeLibraryMap.applySubtypeFilter(
+        subtype: LibrarySubtype,
+    ): AnimeLibraryMap {
+        if (subtype == LibrarySubtype.ALL) return this
+        return mapValues { (_, value) ->
+            value.filter { subtypeResolver.subtype(it.libraryAnime.anime) == subtype }
+        }
+    }
+
+    /** Persisted mode-wide subtype selection — the header context menu
+     *  writes here; the library flow re-filters on the pref change. */
+    fun setSubtypeFilter(subtype: LibrarySubtype) {
+        libraryPreferences.showsSubtypeFilter().set(subtype)
     }
 
     private suspend fun AnimeLibraryMap.applySort(
@@ -1476,6 +1513,7 @@ class ShowsLibraryScreenModel(
         val savedReadingOrderLayers: Map<Long, Int> = emptyMap(),
         val lockedReadingOrderEntryIds: Set<Long> = emptySet(),
         val readingOrderSavedMessage: String? = null,
+        val subtypeFilter: LibrarySubtype = LibrarySubtype.ALL,
     ) {
         private val libraryCount by lazy {
             library.values

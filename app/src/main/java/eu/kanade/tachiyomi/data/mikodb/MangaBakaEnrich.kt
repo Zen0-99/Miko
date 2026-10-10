@@ -187,8 +187,10 @@ class MangaBakaEnrich(
      */
     private suspend fun enrichBridgeRow(workId: String, detail: Detail) {
         val row = bridge.byWorkId(workId) ?: return
-        val mergedLinks = (goldenSources.providerLinksOf(row.providerLinks) +
-            detail.providerLinks)
+        val mergedLinks = (
+            goldenSources.providerLinksOf(row.providerLinks) +
+                detail.providerLinks
+            )
             .distinctBy { it.provider to it.url }
         val linksJson = mergedLinks.joinToString(",", "[", "]") { l ->
             buildString {
@@ -198,9 +200,23 @@ class MangaBakaEnrich(
                 append(",\"url\":\"").append(l.url.orEmpty().escapeJson()).append("\"}")
             }
         }
+        // The row's seed cover is the worker's low-res imgproxy art —
+        // upgrade it to the canonical detail art so bridge consumers
+        // (MikoDB strip tile, coverage reports) carry the full-res
+        // image. Preferred art already on the row (mangadex direct)
+        // must not downgrade.
+        val coverUrl = if (
+            eu.kanade.tachiyomi.data.cover.HiResCoverResolver
+                .isPreferredCoverUrl(row.coverUrl)
+        ) {
+            row.coverUrl
+        } else {
+            detail.coverUrl ?: row.coverUrl
+        }
         bridge.upsert(
             row.copy(
                 providerLinks = linksJson,
+                coverUrl = coverUrl,
                 resolutionSource = RESOLUTION_MB_DETAIL,
             ),
             externalIds = row.externalIds + detail.externalIds,
@@ -296,6 +312,7 @@ class MangaBakaEnrich(
     companion object {
         private const val BASE_URL = "https://api.mangabaka.org"
         private const val MB_PREFIX = "mk:mb:"
+
         /** Bridge-row marker: detail already fetched (success or miss).
          *  Bumped to v2 — rows enriched under v1 carried the x250 proxy
          *  cover and lowercase genres, so they re-fetch once. */
@@ -338,8 +355,10 @@ class MangaBakaEnrich(
         // ---------- provider slugs ----------
 
         internal fun hostProviderOf(url: String, name: String?): String {
-            val host = (name?.takeIf { it.isNotBlank() }
-                ?: runCatching { java.net.URI(url).host }.getOrNull())
+            val host = (
+                name?.takeIf { it.isNotBlank() }
+                    ?: runCatching { java.net.URI(url).host }.getOrNull()
+                )
                 ?.lowercase()
                 ?.removePrefix("www.")
                 ?: return name?.lowercase() ?: "unknown"
@@ -350,7 +369,6 @@ class MangaBakaEnrich(
             val labels = host.split('.')
             return if (labels.size >= 2) labels[labels.size - 2] else host
         }
-
 
         // Worker resolve.ts LINK_ID — same regexes, same provider names.
         private val LINK_ID: List<Pair<Regex, String>> = listOf(

@@ -33,10 +33,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.kanade.core.preference.asToggleableState
+import eu.kanade.presentation.collection.visualName
 import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.presentation.entries.components.accentTintedSurface
 import eu.kanade.presentation.entries.components.rememberOnAccentColor
-import eu.kanade.presentation.collection.visualName
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
@@ -243,7 +243,10 @@ fun ChangeCollectionDialog(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(
-                    start = 24.dp, top = 24.dp, end = 24.dp, bottom = 12.dp,
+                    start = 24.dp,
+                    top = 24.dp,
+                    end = 24.dp,
+                    bottom = 12.dp,
                 ),
             )
 
@@ -349,7 +352,9 @@ fun ChangeCollectionDialog(
                             onDismissRequest()
                             onConfirm(
                                 selection
-                                    .filter { it is CheckboxState.State.Checked || it is CheckboxState.TriState.Include }
+                                    .filter {
+                                        it is CheckboxState.State.Checked || it is CheckboxState.TriState.Include
+                                    }
                                     .map { it.value.id },
                                 selection
                                     .filter { it is CheckboxState.State.None || it is CheckboxState.TriState.None }

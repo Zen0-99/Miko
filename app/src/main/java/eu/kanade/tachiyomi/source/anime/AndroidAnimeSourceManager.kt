@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -49,8 +50,17 @@ class AndroidAnimeSourceManager(
 
     init {
         scope.launch {
-            extensionManager.installedExtensionsFlow
-                .collectLatest { extensions ->
+            // installedExtensionsFlow replays its initial empty list at
+            // collection start — that emission is NOT "extensions
+            // loaded", it's the StateFlow seed. isInitialized tracks the
+            // extension manager's own flag so callers waiting on it
+            // don't resolve a map holding only the local source; the
+            // map itself still populates on every emission.
+            combine(
+                extensionManager.installedExtensionsFlow,
+                extensionManager.isInitialized,
+            ) { extensions, extInit -> extensions to extInit }
+                .collectLatest { (extensions, extInit) ->
                     val mutableMap = ConcurrentHashMap<Long, AnimeSource>(
                         mapOf(
                             LocalAnimeSource.ID to LocalAnimeSource(
@@ -70,7 +80,7 @@ class AndroidAnimeSourceManager(
                         }
                     }
                     sourcesMapFlow.value = mutableMap
-                    _isInitialized.value = true
+                    if (extInit) _isInitialized.value = true
                 }
         }
 

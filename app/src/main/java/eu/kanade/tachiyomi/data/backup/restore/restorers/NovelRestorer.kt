@@ -19,8 +19,8 @@ import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
 import tachiyomi.domain.track.novel.model.NovelTrack
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.Date
 import kotlin.math.max
+import kotlin.time.Instant
 
 class NovelRestorer(
     private val handler: NovelDatabaseHandler = Injekt.get(),
@@ -325,9 +325,12 @@ class NovelRestorer(
             item.copy(
                 id = dbHistory._id,
                 chapterId = dbHistory.chapter_id,
-                readAt = max(item.readAt?.time ?: 0L, dbHistory.last_read?.time ?: 0L)
+                readAt = max(
+                    item.readAt?.toEpochMilliseconds() ?: 0L,
+                    dbHistory.last_read?.toEpochMilliseconds() ?: 0L,
+                )
                     .takeIf { it > 0L }
-                    ?.let { Date(it) },
+                    ?.let { Instant.fromEpochMilliseconds(it) },
                 readDuration = max(item.readDuration, dbHistory.time_read) - dbHistory.time_read,
             )
         }

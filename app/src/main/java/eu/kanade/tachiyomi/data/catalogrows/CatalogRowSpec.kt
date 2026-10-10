@@ -62,8 +62,8 @@ data class CatalogRowSpec(
             // English literals match this function's convention — the
             // row header itself localizes in the composable.
             Feed.History -> return when (medium) {
-                WorkIdResolver.MEDIUM_SHOWS -> "Recently Watched"
-                else -> "Recently Read"
+                WorkIdResolver.MEDIUM_SHOWS -> "Continue Watching"
+                else -> "Continue Reading"
             }
         }
         val facets = buildList {
@@ -173,7 +173,7 @@ sealed interface Feed {
     data object Library : Feed
 
     /**
-     * The "recently read/watched" feed — history-derived, served live
+     * The continue-reading/watching feed — history-derived, served live
      * from screen-model state rather than the resolver (the recents
      * flows already run there; re-deriving per-row would double the
      * DB subscriptions). Seeded as the default rows by

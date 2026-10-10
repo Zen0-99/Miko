@@ -1,9 +1,14 @@
 package eu.kanade.tachiyomi.data.library
 
+import android.app.Application
 import android.content.Context
 import android.util.Log
+import eu.kanade.tachiyomi.data.library.manga.MangaLibraryUpdateJob
+import eu.kanade.tachiyomi.data.library.novel.NovelLibraryUpdateJob
+import eu.kanade.tachiyomi.data.library.shows.ShowsLibraryUpdateJob
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.util.system.cancelNotification
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -159,9 +166,15 @@ object LibraryUpdateProgressBus {
         totalEntries: Int,
         source: String,
     ) {
+        // Snapshot caller lists: producers may pass live mutable collections
+        // (e.g. LibraryCanonizer's running `failed` accumulator) — publishing
+        // the reference lets consumers iterate it while the producer mutates
+        // (ConcurrentModificationException in FetchingScreenModel).
+        val updatingSnapshot = currentlyUpdating.toList()
+        val failedSnapshot = failedSoFar.toList()
         Log.d(
             "ProgressBus",
-            "updateProgress: source=$source processed=$processed total=$totalEntries titles=${currentlyUpdating.map {
+            "updateProgress: source=$source processed=$processed total=$totalEntries titles=${updatingSnapshot.map {
                 it.title
             }}",
         )
@@ -171,16 +184,16 @@ object LibraryUpdateProgressBus {
         if (current is LibraryUpdateProgress.Running && current.source == source) {
             _state.value = current.copy(
                 processedEntries = processed,
-                currentlyUpdating = currentlyUpdating,
-                failedSoFar = failedSoFar,
+                currentlyUpdating = updatingSnapshot,
+                failedSoFar = failedSnapshot,
                 totalEntries = totalEntries,
             )
         } else if (current !is LibraryUpdateProgress.Running) {
             _state.value = LibraryUpdateProgress.Running(
                 totalEntries = totalEntries,
                 processedEntries = processed,
-                currentlyUpdating = currentlyUpdating,
-                failedSoFar = failedSoFar,
+                currentlyUpdating = updatingSnapshot,
+                failedSoFar = failedSnapshot,
                 source = source,
             )
         }
@@ -197,16 +210,16 @@ object LibraryUpdateProgressBus {
             val updated = if (existing != null) {
                 existing.copy(
                     processedEntries = maxOf(processed, existing.processedEntries),
-                    currentlyUpdating = currentlyUpdating,
-                    failedSoFar = failedSoFar,
+                    currentlyUpdating = updatingSnapshot,
+                    failedSoFar = failedSnapshot,
                     totalEntries = maxOf(totalEntries, existing.totalEntries),
                 )
             } else {
                 LibraryUpdateProgress.Running(
                     totalEntries = totalEntries,
                     processedEntries = processed,
-                    currentlyUpdating = currentlyUpdating,
-                    failedSoFar = failedSoFar,
+                    currentlyUpdating = updatingSnapshot,
+                    failedSoFar = failedSnapshot,
                     source = source,
                 )
             }
@@ -220,7 +233,7 @@ object LibraryUpdateProgressBus {
         val runningProcessed = (_states.value[source] as? LibraryUpdateProgress.Running)?.processedEntries ?: 0
         val total = synchronized(currentRunTotals) { currentRunTotals[source] ?: 0 }
         val completed = LibraryUpdateProgress.Completed(
-            failed = failed,
+            failed = failed.toList(),
             totalProcessed = runningProcessed,
             totalEntries = total,
             source = source,
@@ -292,7 +305,20 @@ object LibraryUpdateProgressBus {
         Log.d("ProgressBus", "requestCancel (all)")
         cancelRequested.set(true)
         _commands.tryEmit(Command.Cancel)
-        context?.cancelNotification(Notifications.ID_LIBRARY_PROGRESS)
+        val ctx = context ?: appContext()
+        ctx?.cancelNotification(Notifications.ID_LIBRARY_PROGRESS)
+        // The flag is cooperative — checked between entries, so an
+        // in-flight fetch runs to completion. Also cancel the actual
+        // workers so the X really stops the update instead of just
+        // hiding the overlay. stop() blocks on a WorkManager future —
+        // keep it off the caller's thread.
+        if (ctx != null) {
+            GlobalScope.launch(Dispatchers.IO) {
+                runCatching { MangaLibraryUpdateJob.stop(ctx) }
+                runCatching { NovelLibraryUpdateJob.stop(ctx) }
+                runCatching { ShowsLibraryUpdateJob.stop(ctx) }
+            }
+        }
     }
 
     /**
@@ -307,14 +333,35 @@ object LibraryUpdateProgressBus {
             cancelRequestedBySource[source] = true
         }
         _commands.tryEmit(Command.CancelSource(source))
+        val ctx = context ?: appContext()
         // If no other sources are running, cancel the notification too
         val otherSourcesRunning = _states.value.any { (key, state) ->
             key != source && state is LibraryUpdateProgress.Running
         }
         if (!otherSourcesRunning) {
-            context?.cancelNotification(Notifications.ID_LIBRARY_PROGRESS)
+            ctx?.cancelNotification(Notifications.ID_LIBRARY_PROGRESS)
+        }
+        // Real WorkManager cancel for this source's job — the flag alone
+        // only bites between entries (see requestCancel).
+        if (ctx != null) {
+            GlobalScope.launch(Dispatchers.IO) {
+                runCatching {
+                    when (source) {
+                        "Manga" -> MangaLibraryUpdateJob.stop(ctx)
+                        "Novel" -> NovelLibraryUpdateJob.stop(ctx)
+                        "Anime" -> ShowsLibraryUpdateJob.stop(ctx)
+                    }
+                }
+            }
         }
     }
+
+    /** Application context for callers that don't carry one (overlay X,
+     *  Fetching tab button) — WorkManager cancellation needs a Context
+     *  and silently skipping it was how the X became cosmetic. */
+    private fun appContext(): Context? = runCatching {
+        Injekt.get<Application>().applicationContext
+    }.getOrNull()
 
     sealed interface Command {
         object Cancel : Command

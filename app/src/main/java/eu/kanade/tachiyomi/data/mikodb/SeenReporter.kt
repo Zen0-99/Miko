@@ -39,9 +39,11 @@ class SeenReporter {
      */
     suspend fun wasReported(workId: String): Boolean {
         if (workId in reported) return true
-        val persisted = (handler.awaitOneOrNull {
-            seen_reportedQueries.existsReported(workId)
-        } ?: 0L) != 0L
+        val persisted = (
+            handler.awaitOneOrNull {
+                seen_reportedQueries.existsReported(workId)
+            } ?: 0L
+            ) != 0L
         if (persisted) reported.add(workId)
         return persisted
     }
@@ -62,9 +64,11 @@ class SeenReporter {
     suspend fun report(workId: String, medium: String): Boolean {
         if (!isReportable(workId)) return false
         if (!reported.add(workId)) return false
-        val alreadyReported = (handler.awaitOneOrNull {
-            seen_reportedQueries.existsReported(workId)
-        } ?: 0L) != 0L
+        val alreadyReported = (
+            handler.awaitOneOrNull {
+                seen_reportedQueries.existsReported(workId)
+            } ?: 0L
+            ) != 0L
         if (alreadyReported) return false
         handler.await {
             seen_reportedQueries.insertReported(workId, medium, System.currentTimeMillis())

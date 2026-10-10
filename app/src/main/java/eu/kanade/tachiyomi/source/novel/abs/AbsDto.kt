@@ -113,6 +113,17 @@ data class AbsAudioFile(
     val index: Int = 0,
     val duration: Double = 0.0,
     val filename: String? = null,
+    /** File metadata (filename lives nested here on real payloads). */
+    val metadata: AbsAudioFileMetadata? = null,
+    /** Filename-derived track number ("01 - name.m4a" → 1). */
+    val trackNumFromFilename: Int? = null,
+    /** Marked exclude=true in the ABS UI — never a playable chapter. */
+    val exclude: Boolean = false,
+)
+
+@Serializable
+data class AbsAudioFileMetadata(
+    val filename: String? = null,
 )
 
 @Serializable

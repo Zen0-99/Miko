@@ -12,8 +12,8 @@ import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
-import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

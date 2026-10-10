@@ -17,11 +17,9 @@ import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.AppBar
@@ -103,18 +101,13 @@ fun ReaderAppBars(
                     .clickable(onClick = onClickTopAppBar),
                 backgroundColor = backgroundColor,
                 titleContent = {
-                    Column {
-                        AppBarTitle(mangaTitle, subtitle = chapterTitle)
-                        sourceLabel?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
+                    // Provider and chapter share the subtitle line —
+                    // a third line clips inside the fixed bar height.
+                    val subtitle = listOfNotNull(sourceLabel, chapterTitle)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · ")
+                        .ifBlank { null }
+                    AppBarTitle(mangaTitle, subtitle = subtitle)
                 },
                 navigateUp = navigateUp,
                 actions = {

@@ -2,7 +2,7 @@ package eu.kanade.presentation.history.shows.components
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
-import java.util.Date
+import kotlin.time.Instant
 
 internal class ShowsHistoryWithRelationsProvider : PreviewParameterProvider<AnimeHistoryWithRelations> {
 
@@ -12,7 +12,7 @@ internal class ShowsHistoryWithRelationsProvider : PreviewParameterProvider<Anim
         animeId = 3L,
         title = "Test Title",
         episodeNumber = 10.2,
-        seenAt = Date(1697247357L),
+        seenAt = Instant.fromEpochMilliseconds(1697247357L),
         coverData = tachiyomi.domain.entries.shows.model.AnimeCover(
             animeId = 3L,
             sourceId = 4L,
@@ -44,7 +44,7 @@ internal class ShowsHistoryWithRelationsProvider : PreviewParameterProvider<Anim
         animeId = 3L,
         title = "Test Title",
         episodeNumber = -2.0,
-        seenAt = Date(1697247357L),
+        seenAt = Instant.fromEpochMilliseconds(1697247357L),
         coverData = tachiyomi.domain.entries.shows.model.AnimeCover(
             animeId = 3L,
             sourceId = 4L,

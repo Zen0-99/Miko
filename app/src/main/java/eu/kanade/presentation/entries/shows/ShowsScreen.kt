@@ -1,23 +1,26 @@
 package eu.kanade.presentation.entries.shows
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -36,7 +39,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +50,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -68,30 +71,31 @@ import androidx.compose.ui.util.fastMap
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.entries.shows.model.episodesFiltered
+import eu.kanade.domain.entries.shows.model.hasCustomCover
 import eu.kanade.domain.entries.shows.model.seasonsFiltered
 import eu.kanade.presentation.components.AchievementStyledSnackbarHost
 import eu.kanade.presentation.components.fullDateText
 import eu.kanade.presentation.components.relativeDateTimeText
 import eu.kanade.presentation.entries.DownloadAction
 import eu.kanade.presentation.entries.EntryScreenItem
-import eu.kanade.presentation.entries.shows.components.ShowsSeasonListItem
+import eu.kanade.presentation.entries.components.EnhancedEntryInfoBox
+import eu.kanade.presentation.entries.components.EntryBottomActionMenu
+import eu.kanade.presentation.entries.components.EntryChapterHeader
+import eu.kanade.presentation.entries.components.EntryContinueRow
+import eu.kanade.presentation.entries.components.EntryFindProviderButton
+import eu.kanade.presentation.entries.components.EntryGenreRow
+import eu.kanade.presentation.entries.components.EntryNextUpAction
+import eu.kanade.presentation.entries.components.EntryToolbar
+import eu.kanade.presentation.entries.components.EntryViewCommentsButton
+import eu.kanade.presentation.entries.components.MissingItemCountListItem
+import eu.kanade.presentation.entries.components.enhancedEntryStatusText
+import eu.kanade.presentation.entries.components.rememberEntryAccentColor
 import eu.kanade.presentation.entries.shows.components.EpisodeDownloadAction
 import eu.kanade.presentation.entries.shows.components.ExpandableAnimeDescription
 import eu.kanade.presentation.entries.shows.components.NextEpisodeAiringListItem
 import eu.kanade.presentation.entries.shows.components.NuvioEpisodeCard
 import eu.kanade.presentation.entries.shows.components.SeasonPillRow
-import eu.kanade.presentation.entries.components.EnhancedEntryInfoBox
-import eu.kanade.presentation.entries.components.EntryContinueRow
-import eu.kanade.presentation.entries.components.EntryFindProviderButton
-import eu.kanade.presentation.entries.components.EntryViewCommentsButton
-import eu.kanade.presentation.entries.components.EntryNextUpAction
-import eu.kanade.presentation.entries.components.EntryBottomActionMenu
-import eu.kanade.presentation.entries.components.EntryChapterHeader
-import eu.kanade.presentation.entries.components.EntryGenreRow
-import eu.kanade.presentation.entries.components.EntryToolbar
-import eu.kanade.presentation.entries.components.MissingItemCountListItem
-import eu.kanade.presentation.entries.components.enhancedEntryStatusText
-import eu.kanade.presentation.entries.components.rememberEntryAccentColor
+import eu.kanade.presentation.entries.shows.components.ShowsSeasonListItem
 import eu.kanade.presentation.util.formatEpisodeNumber
 import eu.kanade.presentation.util.formatRuntime
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
@@ -100,9 +104,9 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.data.download.shows.model.ShowsDownload
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.ui.browse.shows.extension.details.AnimeSourcePreferencesScreen
+import eu.kanade.tachiyomi.ui.entries.shows.EpisodeList
 import eu.kanade.tachiyomi.ui.entries.shows.ShowsScreenModel
 import eu.kanade.tachiyomi.ui.entries.shows.ShowsSeasonItem
-import eu.kanade.tachiyomi.ui.entries.shows.EpisodeList
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import kotlinx.coroutines.delay
@@ -125,8 +129,8 @@ import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.source.local.entries.anime.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.Instant
 import java.util.concurrent.TimeUnit
+import kotlin.time.Instant
 
 @Composable
 fun ShowsScreen(
@@ -200,6 +204,11 @@ fun ShowsScreen(
     /** Artwork the caller already shows for this entry (home hero) —
      *  underlays the shared hero image so the morph never draws empty. */
     previewCover: Any? = null,
+    /** Skeleton item heights measured during Loading, keyed by
+     *  [EntryScreenItem] — real items mount constrained to the ghost's
+     *  height for one frame, then animateContentSize glides every
+     *  boundary the ghosts got wrong so nothing snaps on swap. */
+    seedHeightsPx: Map<Any, Int> = emptyMap(),
 ) {
     val context = LocalContext.current
     val onCopyTagToClipboard: (tag: String) -> Unit = {
@@ -264,6 +273,7 @@ fun ShowsScreen(
             onOpenSuggestions = onOpenSuggestions,
             onRetrySuggestions = onRetrySuggestions,
             previewCover = previewCover,
+            seedHeightsPx = seedHeightsPx,
         )
     } else {
         ShowsScreenLargeImpl(
@@ -392,9 +402,32 @@ private fun ShowsScreenSmallImpl(
     onOpenSuggestions: () -> Unit = {},
     onRetrySuggestions: () -> Unit = {},
     previewCover: Any? = null,
+    seedHeightsPx: Map<Any, Int> = emptyMap(),
 ) {
     val density = LocalDensity.current
     val offsetGridPaddingPx = with(density) { GRID_PADDING.roundToPx() }
+
+    // Settle pass after a skeleton→real swap: each item mounts at the
+    // ghost's measured height, then all release on the same frame so
+    // every boundary the skeleton got slightly wrong glides instead of
+    // snapping.
+    var settling by remember(seedHeightsPx) { mutableStateOf(seedHeightsPx.isNotEmpty()) }
+    LaunchedEffect(seedHeightsPx) {
+        if (settling) {
+            withFrameNanos { }
+            withFrameNanos { }
+            settling = false
+        }
+    }
+    fun Modifier.settleIn(key: Any): Modifier = animateContentSize(
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 350f),
+    ).then(
+        if (settling) {
+            Modifier.height(with(density) { (seedHeightsPx[key] ?: 0).toDp() })
+        } else {
+            Modifier
+        },
+    )
     val gridSize = remember(state.anime) { state.anime.seasonDisplayGridSize }
 
     val itemListState = rememberLazyGridState()
@@ -428,13 +461,19 @@ private fun ShowsScreenSmallImpl(
     // episode (falls to the last season when everything is watched). Pill
     // taps are browse-only: the canonical season is derived from seen
     // state, so leaving and re-entering lands on real progress and the
-    // library keeps the progress season's artwork.
-    val progressSeason = remember(listItem, isCinemetaEntry, cinemetaSeasons) {
+    // library keeps the progress season's artwork. Watch order is
+    // ascending — in a descending display the next unseen sits at the
+    // end of the unseen run, not the head.
+    val sortDescending = state.anime.sortDescending()
+    val progressSeason = remember(listItem, isCinemetaEntry, cinemetaSeasons, sortDescending) {
         if (!isCinemetaEntry || cinemetaSeasons.isEmpty()) {
             null
         } else {
+            val unseen = listItem.filter {
+                (it as? EpisodeList.Item)?.episode?.seen == false
+            }
             (
-                listItem.firstOrNull { (it as? EpisodeList.Item)?.episode?.seen == false }
+                (if (sortDescending) unseen.lastOrNull() else unseen.firstOrNull())
                     as? EpisodeList.Item
                 )
                 ?.episode?.scanlator?.let(::parseCinemetaSeason)
@@ -533,8 +572,16 @@ private fun ShowsScreenSmallImpl(
     }
     // Cinemeta can split a show into more seasons than TMDB tracks (e.g.
     // Naruto S5) — fall back to the series poster instead of leaving the
-    // previous season's art in place.
-    val seasonCoverOverride = seasonPosters[selectedCinemetaSeason] ?: seriesPoster
+    // previous season's art in place. A pinned/custom cover beats the
+    // swap — the user chose that art explicitly.
+    val hasCustomCover = remember(state.anime.coverLastModified) {
+        state.anime.hasCustomCover()
+    }
+    val seasonCoverOverride = if (hasCustomCover) {
+        null
+    } else {
+        seasonPosters[selectedCinemetaSeason] ?: seriesPoster
+    }
     val seasonOverview = seasonOverviews[selectedCinemetaSeason]
 
     // The accent follows the artwork the user is looking at, not the
@@ -556,9 +603,16 @@ private fun ShowsScreenSmallImpl(
     // includes it, so without a bump every other screen keeps serving the
     // old image.
     val libraryPoster = progressSeason?.let { seasonPosters[it] } ?: seriesPoster
-    LaunchedEffect(libraryPoster, state.anime.thumbnailUrl) {
+    LaunchedEffect(libraryPoster, state.anime.thumbnailUrl, hasCustomCover) {
         val poster = libraryPoster
-        if (isCinemetaEntry && !isCinemetaMovie && poster != null && poster != state.anime.thumbnailUrl) {
+        // A pinned/custom cover owns the artwork — don't churn
+        // thumbnailUrl underneath it.
+        if (!hasCustomCover &&
+            isCinemetaEntry &&
+            !isCinemetaMovie &&
+            poster != null &&
+            poster != state.anime.thumbnailUrl
+        ) {
             try {
                 updateAnime.await(
                     tachiyomi.domain.entries.shows.model.AnimeUpdate(
@@ -588,6 +642,15 @@ private fun ShowsScreenSmallImpl(
         derivedStateOf {
             episodes.fastAny { it.selected }
         }
+    }
+
+    // First-mount budget: the hero + chrome compose on frame one (they carry
+    // the shared elements); seasons/episodes stream in next frame so a
+    // Success landing mid-push can't stall the flight.
+    var listContentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        listContentReady = true
     }
 
     BackHandler(onBack = {
@@ -630,7 +693,7 @@ private fun ShowsScreenSmallImpl(
                     modifier = Modifier.onSizeChanged { toolbarHeight = it.height },
                     toolbarBackgroundColor = MaterialTheme.colorScheme.background,
                     onClickWebView = onWebViewClicked,
-                onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
+                    onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
                     onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
                     onClickRemoveReadDownloads = onRemoveSeenDownloadsClicked,
                 )
@@ -721,6 +784,7 @@ private fun ShowsScreenSmallImpl(
                             parallaxOffsetPx = heroParallaxPx,
                             accentColor = displayedAccent,
                             previewCover = previewCover,
+                            liveCover = seasonCoverOverride,
                         )
                     }
 
@@ -730,7 +794,9 @@ private fun ShowsScreenSmallImpl(
                         span = { GridItemSpan(maxLineSpan) },
                     ) {
                         Column(
-                            modifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                            modifier = Modifier
+                                .settleIn(EntryScreenItem.ACTION_ROW)
+                                .ignorePadding(offsetGridPaddingPx),
                         ) {
                             val nextEpisode = remember(episodes) {
                                 // Lowest-numbered unseen — the "next in
@@ -765,7 +831,12 @@ private fun ShowsScreenSmallImpl(
                                             nextEpisode != null && hasStarted ->
                                                 stringResource(
                                                     MR.strings.action_continue_named,
-                                                    nextEpisode.name,
+                                                    eu.kanade.presentation.entries.components
+                                                        .qualifiedEpisodeLabel(
+                                                            nextEpisode.name,
+                                                            nextEpisode.episodeNumber,
+                                                            nextEpisode.scanlator,
+                                                        ),
                                                 )
                                             isCinemetaMovie ->
                                                 stringResource(AYMR.strings.action_play)
@@ -828,7 +899,9 @@ private fun ShowsScreenSmallImpl(
                             tagsProvider = { null },
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
-                            modifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                            modifier = Modifier
+                                .settleIn(EntryScreenItem.DESCRIPTION_WITH_TAG)
+                                .ignorePadding(offsetGridPaddingPx),
                             accentColor = displayedAccent,
                         )
                     }
@@ -892,26 +965,48 @@ private fun ShowsScreenSmallImpl(
                                     )
                                 }
                             }
-                            EntryChapterHeader(
-                                itemCountText = headerText,
-                                onClick = onFilterClicked,
-                                accentColor = displayedAccent,
-                                intervalDays = state.intervalDays,
-                                showInterval = state.showInterval,
-                                modifier = Modifier.ignorePadding(offsetGridPaddingPx),
-                            )
-                            if (!isCinemetaEntry) {
-                                // 19-05: canonical-unserved mains add to the
-                                // existing aggregate missing-items slot.
-                                MissingItemCountListItem(
-                                    count = maxOf(missingEpisodesCount, missingSeasonsCount) +
-                                        state.canonicalMissingCount,
+                            // On a seasons page the per-row episode counts
+                            // are one level down — surface the work-wide
+                            // total in the secondary "entries" slot so the
+                            // header still answers "how much is here".
+                            val totalEpisodes = if (state.anime.fetchType == FetchType.Seasons) {
+                                seasons.sumOf { it.seasonAnime.totalCount.coerceAtLeast(0) }
+                            } else {
+                                0L
+                            }
+                            Column(
+                                modifier = Modifier.settleIn(EntryScreenItem.ITEM_HEADER),
+                            ) {
+                                EntryChapterHeader(
+                                    itemCountText = headerText,
+                                    entryCountText = if (totalEpisodes > 0) {
+                                        pluralStringResource(
+                                            AYMR.plurals.anime_num_episodes_in_total,
+                                            count = totalEpisodes.toInt(),
+                                            totalEpisodes.toInt(),
+                                        )
+                                    } else {
+                                        null
+                                    },
+                                    onClick = onFilterClicked,
+                                    accentColor = displayedAccent,
+                                    intervalDays = state.intervalDays,
+                                    showInterval = state.showInterval,
+                                    modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                                 )
+                                if (!isCinemetaEntry) {
+                                    // 19-05: canonical-unserved mains add to the
+                                    // existing aggregate missing-items slot.
+                                    MissingItemCountListItem(
+                                        count = maxOf(missingEpisodesCount, missingSeasonsCount) +
+                                            state.canonicalMissingCount,
+                                    )
+                                }
                             }
                         }
                     }
 
-                    if (!isCinemetaMovie) {
+                    if (!isCinemetaMovie && listContentReady) {
                         when (state.anime.fetchType) {
                             FetchType.Seasons -> {
                                 sharedSeasons(
@@ -967,29 +1062,47 @@ private fun ShowsScreenSmallImpl(
                                             selectedSeason = selectedCinemetaSeason,
                                             watchedSeasons = watchedSeasons,
                                             onSeasonSelected = { seasonBrowseOverride = it },
-                                            modifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                                            onSeasonLongPressed = { season ->
+                                                // Hold = seen/unseen the
+                                                // whole season — seen unless
+                                                // every episode already is.
+                                                val seasonEpisodes = listItem
+                                                    .mapNotNull { (it as? EpisodeList.Item)?.episode }
+                                                    .filter { parseCinemetaSeason(it.scanlator) == season }
+                                                if (seasonEpisodes.isNotEmpty()) {
+                                                    onMultiMarkAsSeenClicked(
+                                                        seasonEpisodes,
+                                                        !seasonEpisodes.all { it.seen },
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .settleIn("cinemeta-season-pills")
+                                                .ignorePadding(offsetGridPaddingPx),
                                             accentColor = displayedAccent,
                                         )
                                     }
                                 }
 
-                                sharedEpisodeItems(
-                                    anime = state.anime,
-                                    episodes = filteredListItem,
-                                    isAnyEpisodeSelected = episodes.fastAny { it.selected },
-                                    showSummaries = state.showSummaries,
-                                    showPreviews = state.showPreviews,
-                                    onEpisodeClicked = onEpisodeClicked,
-                                    onDownloadEpisode = onDownloadEpisode,
-                                    onEpisodeSelected = onEpisodeSelected,
-                                    itemModifier = Modifier.ignorePadding(offsetGridPaddingPx),
-                                    accentColor = displayedAccent,
-                                    commentsCount = state.commentsCount,
-                                    onCommentsClicked = onCommentsClicked,
-                                    hasNoCarriers = hasNoCarriers(state),
-                                    onFindProviderClicked = onFindProviderClicked,
-                                    episodesLoading = episodesLoading(state),
-                                )
+                                if (listContentReady) {
+                                    sharedEpisodeItems(
+                                        anime = state.anime,
+                                        episodes = filteredListItem,
+                                        isAnyEpisodeSelected = episodes.fastAny { it.selected },
+                                        showSummaries = state.showSummaries,
+                                        showPreviews = state.showPreviews,
+                                        onEpisodeClicked = onEpisodeClicked,
+                                        onDownloadEpisode = onDownloadEpisode,
+                                        onEpisodeSelected = onEpisodeSelected,
+                                        itemModifier = Modifier.ignorePadding(offsetGridPaddingPx),
+                                        accentColor = displayedAccent,
+                                        commentsCount = state.commentsCount,
+                                        onCommentsClicked = onCommentsClicked,
+                                        hasNoCarriers = hasNoCarriers(state),
+                                        onFindProviderClicked = onFindProviderClicked,
+                                        episodesLoading = episodesLoading(state),
+                                    )
+                                }
                             }
                         }
                     }
@@ -1104,13 +1217,19 @@ fun ShowsScreenLargeImpl(
     // episode (falls to the last season when everything is watched). Pill
     // taps are browse-only: the canonical season is derived from seen
     // state, so leaving and re-entering lands on real progress and the
-    // library keeps the progress season's artwork.
-    val progressSeason = remember(listItem, isCinemetaEntry, cinemetaSeasons) {
+    // library keeps the progress season's artwork. Watch order is
+    // ascending — in a descending display the next unseen sits at the
+    // end of the unseen run, not the head.
+    val sortDescending = state.anime.sortDescending()
+    val progressSeason = remember(listItem, isCinemetaEntry, cinemetaSeasons, sortDescending) {
         if (!isCinemetaEntry || cinemetaSeasons.isEmpty()) {
             null
         } else {
+            val unseen = listItem.filter {
+                (it as? EpisodeList.Item)?.episode?.seen == false
+            }
             (
-                listItem.firstOrNull { (it as? EpisodeList.Item)?.episode?.seen == false }
+                (if (sortDescending) unseen.lastOrNull() else unseen.firstOrNull())
                     as? EpisodeList.Item
                 )
                 ?.episode?.scanlator?.let(::parseCinemetaSeason)
@@ -1209,8 +1328,16 @@ fun ShowsScreenLargeImpl(
     }
     // Cinemeta can split a show into more seasons than TMDB tracks (e.g.
     // Naruto S5) — fall back to the series poster instead of leaving the
-    // previous season's art in place.
-    val seasonCoverOverride = seasonPosters[selectedCinemetaSeason] ?: seriesPoster
+    // previous season's art in place. A pinned/custom cover beats the
+    // swap — the user chose that art explicitly.
+    val hasCustomCover = remember(state.anime.coverLastModified) {
+        state.anime.hasCustomCover()
+    }
+    val seasonCoverOverride = if (hasCustomCover) {
+        null
+    } else {
+        seasonPosters[selectedCinemetaSeason] ?: seriesPoster
+    }
     val seasonOverview = seasonOverviews[selectedCinemetaSeason]
 
     // The accent follows the artwork the user is looking at, not the
@@ -1232,9 +1359,16 @@ fun ShowsScreenLargeImpl(
     // includes it, so without a bump every other screen keeps serving the
     // old image.
     val libraryPoster = progressSeason?.let { seasonPosters[it] } ?: seriesPoster
-    LaunchedEffect(libraryPoster, state.anime.thumbnailUrl) {
+    LaunchedEffect(libraryPoster, state.anime.thumbnailUrl, hasCustomCover) {
         val poster = libraryPoster
-        if (isCinemetaEntry && !isCinemetaMovie && poster != null && poster != state.anime.thumbnailUrl) {
+        // A pinned/custom cover owns the artwork — don't churn
+        // thumbnailUrl underneath it.
+        if (!hasCustomCover &&
+            isCinemetaEntry &&
+            !isCinemetaMovie &&
+            poster != null &&
+            poster != state.anime.thumbnailUrl
+        ) {
             try {
                 updateAnime.await(
                     tachiyomi.domain.entries.shows.model.AnimeUpdate(
@@ -1268,6 +1402,14 @@ fun ShowsScreenLargeImpl(
             FetchType.Seasons -> state.anime.seasonsFiltered()
             FetchType.Episodes -> state.anime.episodesFiltered()
         }
+    }
+
+    // Same first-mount budget as the phone layout — hero composes on frame
+    // one, seasons/episodes stream in on the next.
+    var listContentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        listContentReady = true
     }
 
     BackHandler(onBack = {
@@ -1307,7 +1449,7 @@ fun ShowsScreenLargeImpl(
                     isManga = false,
                     toolbarBackgroundColor = MaterialTheme.colorScheme.background,
                     onClickWebView = onWebViewClicked,
-                onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
+                    onClickRemoveAllDownloads = onRemoveAllDownloadsClicked,
                     onClickRemoveNonBookmarkedDownloads = onRemoveNonBookmarkedDownloadsClicked,
                     onClickRemoveReadDownloads = onRemoveSeenDownloadsClicked,
                 )
@@ -1383,6 +1525,7 @@ fun ShowsScreenLargeImpl(
                                 parallaxOffsetPx = heroScrollState.value.toFloat(),
                                 accentColor = displayedAccent,
                                 previewCover = previewCover,
+                                liveCover = seasonCoverOverride,
                             )
                             val nextEpisode = remember(episodes) {
                                 // Lowest-numbered unseen — the "next in
@@ -1417,7 +1560,12 @@ fun ShowsScreenLargeImpl(
                                             nextEpisode != null && hasStarted ->
                                                 stringResource(
                                                     MR.strings.action_continue_named,
-                                                    nextEpisode.name,
+                                                    eu.kanade.presentation.entries.components
+                                                        .qualifiedEpisodeLabel(
+                                                            nextEpisode.name,
+                                                            nextEpisode.episodeNumber,
+                                                            nextEpisode.scanlator,
+                                                        ),
                                                 )
                                             isCinemetaMovie ->
                                                 stringResource(AYMR.strings.action_play)
@@ -1555,7 +1703,7 @@ fun ShowsScreenLargeImpl(
                                 }
                             }
 
-                            if (!isCinemetaMovie) {
+                            if (!isCinemetaMovie && listContentReady) {
                                 when (state.anime.fetchType) {
                                     FetchType.Seasons -> {
                                         sharedSeasons(
@@ -1611,6 +1759,17 @@ fun ShowsScreenLargeImpl(
                                                         selectedSeason = selectedCinemetaSeason,
                                                         watchedSeasons = watchedSeasons,
                                                         onSeasonSelected = { seasonBrowseOverride = it },
+                                                        onSeasonLongPressed = { season ->
+                                                            val seasonEpisodes = listItem
+                                                                .mapNotNull { (it as? EpisodeList.Item)?.episode }
+                                                                .filter { parseCinemetaSeason(it.scanlator) == season }
+                                                            if (seasonEpisodes.isNotEmpty()) {
+                                                                onMultiMarkAsSeenClicked(
+                                                                    seasonEpisodes,
+                                                                    !seasonEpisodes.all { it.seen },
+                                                                )
+                                                            }
+                                                        },
                                                         modifier = Modifier.ignorePadding(offsetGridPaddingPx),
                                                         accentColor = displayedAccent,
                                                     )
@@ -1630,25 +1789,27 @@ fun ShowsScreenLargeImpl(
                                             }
                                         }
 
-                                        sharedEpisodeItems(
-                                            anime = state.anime,
-                                            episodes = filteredListItem,
-                                            isAnyEpisodeSelected = episodes.fastAny { it.selected },
-                                            showSummaries = state.showSummaries,
-                                            showPreviews = state.showPreviews,
-                                            onEpisodeClicked = onEpisodeClicked,
-                                            onDownloadEpisode = onDownloadEpisode,
-                                            onEpisodeSelected = onEpisodeSelected,
-                                            itemModifier = Modifier.ignorePadding(
-                                                offsetGridPaddingPx,
-                                            ),
-                                            accentColor = displayedAccent,
-                                            commentsCount = state.commentsCount,
-                                            onCommentsClicked = onCommentsClicked,
-                                            hasNoCarriers = hasNoCarriers(state),
-                                            onFindProviderClicked = onFindProviderClicked,
-                                            episodesLoading = episodesLoading(state),
-                                        )
+                                        if (listContentReady) {
+                                            sharedEpisodeItems(
+                                                anime = state.anime,
+                                                episodes = filteredListItem,
+                                                isAnyEpisodeSelected = episodes.fastAny { it.selected },
+                                                showSummaries = state.showSummaries,
+                                                showPreviews = state.showPreviews,
+                                                onEpisodeClicked = onEpisodeClicked,
+                                                onDownloadEpisode = onDownloadEpisode,
+                                                onEpisodeSelected = onEpisodeSelected,
+                                                itemModifier = Modifier.ignorePadding(
+                                                    offsetGridPaddingPx,
+                                                ),
+                                                accentColor = displayedAccent,
+                                                commentsCount = state.commentsCount,
+                                                onCommentsClicked = onCommentsClicked,
+                                                hasNoCarriers = hasNoCarriers(state),
+                                                onFindProviderClicked = onFindProviderClicked,
+                                                episodesLoading = episodesLoading(state),
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1767,13 +1928,13 @@ private fun LazyGridScope.sharedEpisodeItems(
     ) {
         // Nuvio-style horizontal episode carousel — cards are full-bleed
         // stills, so the row scrolls horizontally with snap-to-card.
-        // Opens on the lowest-numbered unseen episode — "next up"
-        // regardless of sort direction.
-        val nextIndex = episodes.mapIndexedNotNull { index, item ->
-            (item as? EpisodeList.Item)
-                ?.takeIf { !it.episode.seen }
-                ?.let { index to it.episode.episodeNumber }
-        }.minByOrNull { it.second }?.first ?: 0
+        // Opens on the first unseen card in display order: ascending
+        // anchors the lowest unseen, descending the newest unseen at the
+        // row's head — continuing is always a rightward scroll, never
+        // leftward, whichever sort is active.
+        val nextIndex = episodes.indexOfFirst {
+            it is EpisodeList.Item && !it.episode.seen
+        }.takeIf { it >= 0 } ?: 0
         // The same episode carries a thin accent outline on its card.
         val nextEpisodeId = episodes.filterIsInstance<EpisodeList.Item>()
             .filter { !it.episode.seen }
@@ -1784,10 +1945,28 @@ private fun LazyGridScope.sharedEpisodeItems(
         val centeredOffsetPx = with(LocalDensity.current) {
             (16.dp - LocalConfiguration.current.screenWidthDp.dp * 0.125f).roundToPx()
         }
+        val sortDescending = anime.sortDescending()
+        // Descending puts the latest episode at the list head — anchor
+        // there, not on ep1 at the far end, so rightward scroll descends
+        // through numbers rather than forcing a leftward read.
+        val anchorIndex = if (sortDescending) 0 else nextIndex
+        val anchorOffset = if (sortDescending) 0 else centeredOffsetPx
         val rowState = rememberLazyListState(
-            initialFirstVisibleItemIndex = nextIndex,
-            initialFirstVisibleItemScrollOffset = centeredOffsetPx,
+            initialFirstVisibleItemIndex = anchorIndex,
+            initialFirstVisibleItemScrollOffset = anchorOffset,
         )
+        // Re-anchor when the sort direction flips or a season pill swaps
+        // the list — LazyRow otherwise keeps the stale scroll index and
+        // strands the user at the wrong end, needing a backwards scroll.
+        val listHeadId = episodes.firstOrNull()?.let {
+            when (it) {
+                is EpisodeList.Item -> "episode-${it.id}"
+                is EpisodeList.MissingCount -> it.id
+            }
+        }
+        LaunchedEffect(listHeadId, sortDescending) {
+            rowState.scrollToItem(anchorIndex, anchorOffset)
+        }
         LazyRow(
             state = rowState,
             modifier = itemModifier

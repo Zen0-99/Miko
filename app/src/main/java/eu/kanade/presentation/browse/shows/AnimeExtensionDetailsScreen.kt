@@ -45,8 +45,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.domain.extension.anime.interactor.AnimeExtensionSourceItem
-import eu.kanade.presentation.browse.shows.components.AnimeExtensionIcon
 import eu.kanade.presentation.browse.manga.NsfwWarningDialog
+import eu.kanade.presentation.browse.shows.components.AnimeExtensionIcon
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.WarningBanner
 import eu.kanade.presentation.entries.components.ItemCover

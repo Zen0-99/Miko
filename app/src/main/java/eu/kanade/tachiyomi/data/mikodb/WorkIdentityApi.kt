@@ -569,8 +569,10 @@ class WorkIdentityApi {
      *  vote path's "this upvote flipped it" flag. */
     sealed interface SignalResult {
         data object Ok : SignalResult
+
         /** Target absent / tombstone — the row stays as-is. */
         data object NotFound : SignalResult
+
         /** Identity/suspension/rate-limit/transport failure. */
         data object Failed : SignalResult
     }
@@ -599,7 +601,10 @@ class WorkIdentityApi {
         provider: String,
         providerRef: String,
         removed: Boolean,
-    ): SignalResult = postSignal("${baseUrl()}/v1/bindings/remove", RemoveRequest(workId, provider, providerRef, removed))
+    ): SignalResult = postSignal(
+        "${baseUrl()}/v1/bindings/remove",
+        RemoveRequest(workId, provider, providerRef, removed),
+    )
 
     private suspend inline fun <reified T> postSignal(url: String, body: T): SignalResult = try {
         val reqBody = json.encodeToString(body).toRequestBody(jsonMime)

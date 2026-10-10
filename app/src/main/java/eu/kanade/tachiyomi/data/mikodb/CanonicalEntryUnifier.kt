@@ -6,10 +6,10 @@ import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.entries.novel.repository.NovelRepository
-import tachiyomi.domain.items.chapter.repository.ChapterRepository
-import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
+import tachiyomi.domain.items.chapter.repository.ChapterRepository
+import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import java.util.concurrent.ConcurrentHashMap
 
 /**

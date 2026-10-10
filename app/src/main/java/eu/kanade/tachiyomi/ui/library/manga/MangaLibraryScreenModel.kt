@@ -75,6 +75,7 @@ import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.manga.model.sort
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupMode
+import tachiyomi.domain.library.model.LibrarySubtype
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderNode
@@ -133,6 +134,7 @@ class MangaLibraryScreenModel(
     private val removeReadingOrderNode: RemoveReadingOrderNode = Injekt.get(),
     private val deleteReadingOrderInteractor: DeleteReadingOrder = Injekt.get(),
     private val updateReadingOrder: UpdateReadingOrder = Injekt.get(),
+    private val subtypeResolver: eu.kanade.tachiyomi.data.mikodb.LibrarySubtypeResolver = Injekt.get(),
 ) : StateScreenModel<MangaLibraryScreenModel.State>(State()) {
 
     var activeCollectionIndex: Int by libraryPreferences.lastUsedMangaCollection().asState(
@@ -147,7 +149,13 @@ class MangaLibraryScreenModel(
                 getTracksPerManga.subscribe(),
                 getTrackingFilterFlow(),
                 downloadCache.changes,
-            ) { searchQuery, library, tracks, trackingFilter, _ ->
+                libraryPreferences.mangaSubtypeFilter().changes(),
+            ) { values ->
+                val searchQuery = values[0] as String?
+                val library = values[1] as MangaLibraryMap
+                val tracks = values[2] as Map<Long, List<MangaTrack>>
+                val trackingFilter = values[3] as Map<Long, TriState>
+                val subtype = values[5] as LibrarySubtype
                 library
                     .applyFilters(tracks, trackingFilter)
                     .applySort(tracks, trackingFilter.keys)
@@ -158,6 +166,7 @@ class MangaLibraryScreenModel(
                             value
                         }
                     }
+                    .applySubtypeFilter(subtype)
             }
                 .collectLatest {
                     mutableState.update { state ->
@@ -205,6 +214,14 @@ class MangaLibraryScreenModel(
             .onEach { mode ->
                 mutableState.update { state ->
                     state.copy(collectionDisplayMode = mode)
+                }
+            }
+            .launchIn(screenModelScope)
+
+        libraryPreferences.mangaSubtypeFilter().changes()
+            .onEach { subtype ->
+                mutableState.update { state ->
+                    state.copy(subtypeFilter = subtype)
                 }
             }
             .launchIn(screenModelScope)
@@ -313,6 +330,32 @@ class MangaLibraryScreenModel(
         }
 
         return mapValues { (_, value) -> value.fastFilter(filterFn) }
+    }
+
+    /**
+     * Sub-category filter (Manga vs Webtoon) — applies across all
+     * collections in the mode; resolution is local-only via
+     * [LibrarySubtypeResolver] (memoized per entry id).
+     */
+    private suspend fun MangaLibraryMap.applySubtypeFilter(
+        subtype: LibrarySubtype,
+    ): MangaLibraryMap {
+        if (subtype == LibrarySubtype.ALL) return this
+        // Classify once per entry across all collections, in parallel —
+        // serial resolveLocal chains stalled the whole combine for
+        // seconds on a large library.
+        val subtypes = subtypeResolver.classifyManga(
+            values.flatten().map { it.libraryManga.manga },
+        )
+        return mapValues { (_, value) ->
+            value.filter { subtypes[it.libraryManga.manga.id] == subtype }
+        }
+    }
+
+    /** Persisted mode-wide subtype selection — the header context menu
+     *  writes here; the library flow re-filters on the pref change. */
+    fun setSubtypeFilter(subtype: LibrarySubtype) {
+        libraryPreferences.mangaSubtypeFilter().set(subtype)
     }
 
     private suspend fun MangaLibraryMap.applySort(
@@ -1478,6 +1521,7 @@ class MangaLibraryScreenModel(
         val showListStatus: Boolean = false,
         val collectionDisplayMode: tachiyomi.domain.library.model.LibraryCollectionDisplay =
             tachiyomi.domain.library.model.LibraryCollectionDisplay.TABBED,
+        val subtypeFilter: LibrarySubtype = LibrarySubtype.ALL,
         val dialog: Dialog? = null,
         val readingOrderMode: Boolean = false,
         val readingOrderLayers: PersistentList<PersistentList<LibraryManga>> = persistentListOf(),

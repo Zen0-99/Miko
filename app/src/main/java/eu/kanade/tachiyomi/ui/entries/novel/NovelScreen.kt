@@ -39,11 +39,18 @@ import eu.kanade.domain.ui.model.Carrier
 import eu.kanade.domain.ui.model.ContentMode
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
+import eu.kanade.presentation.entries.components.EntryDetailSkeleton
+import eu.kanade.presentation.entries.components.EntryHeroLoadingPreview
+import eu.kanade.presentation.entries.components.SKELETON_FADE_MS
+import eu.kanade.presentation.entries.components.SKELETON_LATE_ARRIVAL_MS
+import eu.kanade.presentation.entries.components.isNavEntering
+import eu.kanade.presentation.entries.components.rememberCachedAccentColor
 import eu.kanade.presentation.entries.manga.carrierSheetContainerColor
 import eu.kanade.presentation.entries.novel.NovelScreen
 import eu.kanade.presentation.entries.novel.components.NovelChapterAudioAction
 import eu.kanade.presentation.entries.novel.components.rememberNovelAccentColor
 import eu.kanade.presentation.util.AssistContentScreen
+import eu.kanade.presentation.util.LocalNavAnimatedVisibilityScope
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
@@ -67,7 +74,6 @@ import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderLockDialog
 import eu.kanade.tachiyomi.ui.readingorder.ReadingOrderViewerScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.EntryCoverMetadata
-import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -79,14 +85,6 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders
 import tachiyomi.domain.readingorder.model.ReadingOrder
-import eu.kanade.presentation.entries.components.EntryDetailSkeleton
-import eu.kanade.presentation.entries.components.EntryHeroLoadingPreview
-import eu.kanade.presentation.entries.components.SKELETON_FADE_MS
-import eu.kanade.presentation.entries.components.SKELETON_LATE_ARRIVAL_MS
-import eu.kanade.presentation.entries.components.isNavEntering
-import eu.kanade.presentation.entries.components.rememberCachedAccentColor
-import eu.kanade.presentation.util.LocalNavAnimatedVisibilityScope
-import tachiyomi.presentation.core.screens.DelayedLoadingScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -200,7 +198,8 @@ class NovelScreen(
         val earlySuccess = state is NovelScreenModel.State.Success &&
             (firstSuccessNanos.takeIf { it >= 0L } ?: System.nanoTime()) - mountNanos <
             SKELETON_LATE_ARRIVAL_MS * 1_000_000L
-        val skeletonWanted = previewCover != null && !isTabletUi() &&
+        val skeletonWanted = previewCover != null &&
+            !isTabletUi() &&
             (state is NovelScreenModel.State.Loading || (entering && !earlySuccess))
         val skeletonAlpha by animateFloatAsState(
             targetValue = if (skeletonWanted) 1f else 0f,
@@ -282,209 +281,211 @@ class NovelScreen(
                 chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
                 chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
                 navigateUp = navigator::pop,
-            onChapterClicked = { chapter ->
-                scope.launch {
-                    val lockedOrders = getLockedReadingOrders.await(novelId)
-                    if (lockedOrders.isNotEmpty()) {
-                        lockDialog = lockedOrders
-                    } else if (successState.novel.isAudiobook) {
-                        // 22-02: audio entries have no text — the reader
-                        // route is meaningless, the tap goes straight to
-                        // the player. A failed play reports inline instead
-                        // of falling back to a reader that can't load.
-                        if (!audiobookPlayer.play(successState.novel, chapter)) {
-                            screenModel.snackbarHostState.showSnackbar(
-                                context.stringResource(
-                                    tachiyomi.i18n.aniyomi.AYMR.strings.audiobook_no_stream,
-                                ),
-                            )
-                        }
-                    } else {
-                        navigator.push(NovelReaderScreen(novelId, chapter.id))
-                    }
-                }
-            },
-            onDownloadChapter = screenModel::runChapterDownloadActions.takeIf {
-                // Canon entries ride a stub source but DO support
-                // downloads — the queue resolves each chapter to its
-                // carrier at enqueue time. Audiobook entries stream —
-                // audio tracks aren't text-downloadable (22-02).
-                !successState.novel.isAudiobook &&
-                    (
-                        !successState.source.isLocalOrStub() ||
-                            eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
-                                .isCanonicalUrl(successState.novel.url)
-                        )
-            },
-            onAudioChapter = { items: List<NovelChapterList.Item>, action: NovelChapterAudioAction ->
-                when (action) {
-                    // D-04: Play opens the audiobook player overlay — same
-                    // locked-reading-order check as onChapterClicked. If the
-                    // rendered file vanished since the state refresh, fall
-                    // back to the reader's live read-along.
-                    NovelChapterAudioAction.PLAY -> scope.launch {
+                onChapterClicked = { chapter ->
+                    scope.launch {
                         val lockedOrders = getLockedReadingOrders.await(novelId)
                         if (lockedOrders.isNotEmpty()) {
                             lockDialog = lockedOrders
-                        } else if (!audiobookPlayer.play(successState.novel, items.first().chapter)) {
+                        } else if (successState.novel.isAudiobook) {
+                            // 22-02: audio entries have no text — the reader
+                            // route is meaningless, the tap goes straight to
+                            // the player. A failed play reports inline instead
+                            // of falling back to a reader that can't load.
+                            if (!audiobookPlayer.play(successState.novel, chapter)) {
+                                screenModel.snackbarHostState.showSnackbar(
+                                    context.stringResource(
+                                        tachiyomi.i18n.aniyomi.AYMR.strings.audiobook_no_stream,
+                                    ),
+                                )
+                            }
+                        } else {
+                            navigator.push(NovelReaderScreen(novelId, chapter.id))
+                        }
+                    }
+                },
+                onDownloadChapter = screenModel::runChapterDownloadActions.takeIf {
+                    // Canon entries ride a stub source but DO support
+                    // downloads — the queue resolves each chapter to its
+                    // carrier at enqueue time. Audiobook entries stream —
+                    // audio tracks aren't text-downloadable (22-02).
+                    !successState.novel.isAudiobook &&
+                        (
+                            !successState.source.isLocalOrStub() ||
+                                eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                                    .isCanonicalUrl(successState.novel.url)
+                            )
+                },
+                onAudioChapter = { items: List<NovelChapterList.Item>, action: NovelChapterAudioAction ->
+                    when (action) {
+                        // D-04: Play opens the audiobook player overlay — same
+                        // locked-reading-order check as onChapterClicked. If the
+                        // rendered file vanished since the state refresh, fall
+                        // back to the reader's live read-along.
+                        NovelChapterAudioAction.PLAY -> scope.launch {
+                            val lockedOrders = getLockedReadingOrders.await(novelId)
+                            if (lockedOrders.isNotEmpty()) {
+                                lockDialog = lockedOrders
+                            } else if (!audiobookPlayer.play(successState.novel, items.first().chapter)) {
+                                navigator.push(
+                                    NovelReaderScreen(
+                                        novelId,
+                                        items.first().chapter.id,
+                                        autoStartTts = true,
+                                    ),
+                                )
+                            }
+                        }
+                        else -> screenModel.runChapterAudioActions(items, action)
+                    }
+                    Unit
+                }.takeIf {
+                    // Same carve-out as onDownloadChapter above: canon entries
+                    // ride a stub source but their carrier files render/play.
+                    !successState.source.isLocalOrStub() ||
+                        eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
+                            .isCanonicalUrl(successState.novel.url)
+                },
+                onAddToLibraryClicked = {
+                    screenModel.toggleFavorite()
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                },
+                onCoverClick = { screenModel.showFullCoverDialog(it) },
+                onWebViewClicked = {
+                    openNovelInWebView(navigator, screenModel.novel, screenModel.source)
+                }.takeIf { isHttpSource },
+                onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
+                onFilterButtonClicked = screenModel::showSettingsDialog,
+                onBookmarkFilterClicked = {
+                    screenModel.setBookmarkedFilter(
+                        when (successState.novel.bookmarkedFilter) {
+                            TriState.DISABLED -> TriState.ENABLED_IS
+                            TriState.ENABLED_IS -> TriState.DISABLED
+                            TriState.ENABLED_NOT -> TriState.DISABLED
+                        },
+                    )
+                },
+                onHighlightsClicked = {
+                    navigator.push(NovelHighlightsScreen(successState.novel.title, successState.novel.id))
+                }.takeIf { successState.novel.favorite },
+                onTrackingClicked = { screenModel.showTrackSheet() },
+                onCommentsClicked = screenModel::showCommentsDialog
+                    .takeIf { screenModel.commentsEnabled },
+                onFindProviderClicked = screenModel::showFindProviderDialog,
+                onCarrierPickerClicked = screenModel::showCarrierPicker,
+                chapterCarrierLabel = screenModel::carrierLabelFor,
+                onChapterCarrierClicked = screenModel::showChapterCarrierPicker,
+                onRefresh = screenModel::fetchAllFromSource,
+                onContinueReading = {
+                    val firstUnread = successState.nextContinueChapter
+                    navigator.push(NovelReaderScreen(novelId, firstUnread?.chapter?.id))
+                },
+                // Same routing as the chapter-row Play action: rendered audio →
+                // player overlay; otherwise the reader opens with live TTS on.
+                onContinueListening = {
+                    val chapter = successState.nextContinueChapter?.chapter
+                    scope.launch {
+                        val lockedOrders = getLockedReadingOrders.await(novelId)
+                        if (lockedOrders.isNotEmpty()) {
+                            lockDialog = lockedOrders
+                        } else if (!audiobookPlayer.resumeListening(successState.novel)) {
                             navigator.push(
                                 NovelReaderScreen(
                                     novelId,
-                                    items.first().chapter.id,
+                                    chapter?.id,
                                     autoStartTts = true,
                                 ),
                             )
                         }
                     }
-                    else -> screenModel.runChapterAudioActions(items, action)
-                }
-                Unit
-            }.takeIf {
-                // Same carve-out as onDownloadChapter above: canon entries
-                // ride a stub source but their carrier files render/play.
-                !successState.source.isLocalOrStub() ||
-                    eu.kanade.tachiyomi.data.mikodb.CanonicalCatalog
-                        .isCanonicalUrl(successState.novel.url)
-            },
-            onAddToLibraryClicked = {
-                screenModel.toggleFavorite()
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            },
-            onCoverClick = { screenModel.showFullCoverDialog(it) },
-            onWebViewClicked = {
-                openNovelInWebView(navigator, screenModel.novel, screenModel.source)
-            }.takeIf { isHttpSource },
-            onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
-            onFilterButtonClicked = screenModel::showSettingsDialog,
-            onBookmarkFilterClicked = {
-                screenModel.setBookmarkedFilter(
-                    when (successState.novel.bookmarkedFilter) {
-                        TriState.DISABLED -> TriState.ENABLED_IS
-                        TriState.ENABLED_IS -> TriState.DISABLED
-                        TriState.ENABLED_NOT -> TriState.DISABLED
-                    },
-                )
-            },
-            onHighlightsClicked = {
-                navigator.push(NovelHighlightsScreen(successState.novel.title, successState.novel.id))
-            }.takeIf { successState.novel.favorite },
-            onTrackingClicked = { screenModel.showTrackSheet() },
-            onCommentsClicked = screenModel::showCommentsDialog
-                .takeIf { screenModel.commentsEnabled },
-            onFindProviderClicked = screenModel::showFindProviderDialog,
-            onCarrierPickerClicked = screenModel::showCarrierPicker,
-            chapterCarrierLabel = screenModel::carrierLabelFor,
-            onChapterCarrierClicked = screenModel::showChapterCarrierPicker,
-            onRefresh = screenModel::fetchAllFromSource,
-            onContinueReading = {
-                val firstUnread = successState.nextContinueChapter
-                navigator.push(NovelReaderScreen(novelId, firstUnread?.chapter?.id))
-            },
-            // Same routing as the chapter-row Play action: rendered audio →
-            // player overlay; otherwise the reader opens with live TTS on.
-            onContinueListening = {
-                val chapter = successState.nextContinueChapter?.chapter
-                scope.launch {
-                    val lockedOrders = getLockedReadingOrders.await(novelId)
-                    if (lockedOrders.isNotEmpty()) {
-                        lockDialog = lockedOrders
-                    } else if (!audiobookPlayer.resumeListening(successState.novel)) {
+                },
+                onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
+                onShareClicked = { shareNovel(context, screenModel.novel, screenModel.source) }.takeIf { isHttpSource },
+                onDownloadActionClicked = screenModel::runDownloadAction
+                    .takeIf { !successState.source.isLocalOrStub() && !successState.novel.isAudiobook },
+                onEditCollectionClicked = screenModel::showChangeCollectionDialog.takeIf {
+                    successState.novel.favorite
+                },
+                onEditNovel = { title, author, desc, status, tags ->
+                    screenModel.updateNovelMetadata(title, author, desc, status, tags)
+                },
+                onMigrateClicked = {
+                    navigator.push(MigrateNovelAllScreen(listOf(successState.novel.id), successState.novel.title))
+                }.takeIf { successState.novel.favorite },
+                onMarkAllReadClicked = { screenModel.markAllRead() },
+                onMarkAllUnreadClicked = { screenModel.markAllUnread() },
+                onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
+                    .takeIf { !successState.source.isLocalOrStub() },
+                onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
+                    .takeIf { !successState.source.isLocalOrStub() },
+                onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
+                    .takeIf { !successState.source.isLocalOrStub() },
+                onMultiBookmarkClicked = screenModel::bookmarkChapters,
+                onMultiMarkAsReadClicked = screenModel::markChaptersRead,
+                onMarkPreviousAsReadClicked = screenModel::markPreviousChaptersRead,
+                onMultiDeleteClicked = screenModel::showDeleteChapterDialog,
+                onChapterSwipe = screenModel::chapterSwipe,
+                onChapterSelected = screenModel::toggleSelection,
+                onAllChapterSelected = screenModel::toggleAllSelection,
+                onInvertSelection = screenModel::invertSelection,
+                onHideChapter = { chapter -> screenModel.hideChapter(chapter) },
+                onUnhideChapters = { screenModel.unhideAllChapters() }
+                    .takeIf { screenModel.hasHiddenChapters() },
+                onFetchNewChapters = { screenModel.fetchNewChapters() }
+                    .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
+                onFetchAllChapters = { screenModel.fetchAllChaptersWithProgress() }
+                    .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
+                onSuggestionClick = { item ->
+                    scope.launch {
+                        val screen = item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen()
+                        navigator.push(screen)
+                    }
+                },
+                onOpenSuggestions = {
+                    val seed = screenModel.getSuggestionSeed()
+                    if (seed != null) {
                         navigator.push(
-                            NovelReaderScreen(
-                                novelId,
-                                chapter?.id,
-                                autoStartTts = true,
+                            EntrySuggestionsScreen(
+                                seed = seed,
+                                sourceId = successState.source.id,
+                                entryUrl = successState.novel.url,
                             ),
                         )
                     }
-                }
-            },
-            onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
-            onShareClicked = { shareNovel(context, screenModel.novel, screenModel.source) }.takeIf { isHttpSource },
-            onDownloadActionClicked = screenModel::runDownloadAction
-                .takeIf { !successState.source.isLocalOrStub() && !successState.novel.isAudiobook },
-            onEditCollectionClicked = screenModel::showChangeCollectionDialog.takeIf { successState.novel.favorite },
-            onEditNovel = { title, author, desc, status, tags ->
-                screenModel.updateNovelMetadata(title, author, desc, status, tags)
-            },
-            onMigrateClicked = {
-                navigator.push(MigrateNovelAllScreen(listOf(successState.novel.id), successState.novel.title))
-            }.takeIf { successState.novel.favorite },
-            onMarkAllReadClicked = { screenModel.markAllRead() },
-            onMarkAllUnreadClicked = { screenModel.markAllUnread() },
-            onRemoveAllDownloadsClicked = { screenModel.deleteAllDownloads() }
-                .takeIf { !successState.source.isLocalOrStub() },
-            onRemoveNonBookmarkedDownloadsClicked = { screenModel.deleteNonBookmarkedDownloads() }
-                .takeIf { !successState.source.isLocalOrStub() },
-            onRemoveReadDownloadsClicked = { screenModel.deleteReadDownloads() }
-                .takeIf { !successState.source.isLocalOrStub() },
-            onMultiBookmarkClicked = screenModel::bookmarkChapters,
-            onMultiMarkAsReadClicked = screenModel::markChaptersRead,
-            onMarkPreviousAsReadClicked = screenModel::markPreviousChaptersRead,
-            onMultiDeleteClicked = screenModel::showDeleteChapterDialog,
-            onChapterSwipe = screenModel::chapterSwipe,
-            onChapterSelected = screenModel::toggleSelection,
-            onAllChapterSelected = screenModel::toggleAllSelection,
-            onInvertSelection = screenModel::invertSelection,
-            onHideChapter = { chapter -> screenModel.hideChapter(chapter) },
-            onUnhideChapters = { screenModel.unhideAllChapters() }
-                .takeIf { screenModel.hasHiddenChapters() },
-            onFetchNewChapters = { screenModel.fetchNewChapters() }
-                .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
-            onFetchAllChapters = { screenModel.fetchAllChaptersWithProgress() }
-                .takeIf { successState.source is NovelHttpSource && !successState.source.isLocalOrStub() },
-            onSuggestionClick = { item ->
-                scope.launch {
-                    val screen = item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen()
-                    navigator.push(screen)
-                }
-            },
-            onOpenSuggestions = {
-                val seed = screenModel.getSuggestionSeed()
-                if (seed != null) {
-                    navigator.push(
-                        EntrySuggestionsScreen(
-                            seed = seed,
-                            sourceId = successState.source.id,
-                            entryUrl = successState.novel.url,
-                        ),
-                    )
-                }
-            },
-            onRetrySuggestions = { screenModel.retrySuggestions() },
-            onDownloadBook = { screenModel.downloadBook() }
-                .takeIf { successState.isBookSource },
-            onDeleteBook = { screenModel.deleteBook() }
-                .takeIf { successState.isBookSource },
-            // 22-06 (B): Editions ▸ Audiobook rows — materialize the
-            // provider entry via its built-in source, then open it like
-            // a source result (fromSource=true, same as suggestions).
-            onAudioEditionClicked = { edition ->
-                scope.launch {
-                    val novel = screenModel.openAudioEdition(edition) ?: return@launch
-                    navigator.push(
-                        NovelScreen(
-                            novel.id,
-                            fromSource = true,
-                            previewCover = novel.thumbnailUrl,
-                            previewTitle = novel.title,
-                        ),
-                    )
-                }
-            },
-            onAudioPartOfClicked = { parent ->
-                scope.launch {
-                    val novel = screenModel.openAudioParentWork(parent) ?: return@launch
-                    navigator.push(
-                        NovelScreen(
-                            novel.id,
-                            fromSource = false,
-                            previewCover = novel.thumbnailUrl,
-                            previewTitle = novel.title,
-                        ),
-                    )
-                }
-            },
+                },
+                onRetrySuggestions = { screenModel.retrySuggestions() },
+                onDownloadBook = { screenModel.downloadBook() }
+                    .takeIf { successState.isBookSource },
+                onDeleteBook = { screenModel.deleteBook() }
+                    .takeIf { successState.isBookSource },
+                // 22-06 (B): Editions ▸ Audiobook rows — materialize the
+                // provider entry via its built-in source, then open it like
+                // a source result (fromSource=true, same as suggestions).
+                onAudioEditionClicked = { edition ->
+                    scope.launch {
+                        val novel = screenModel.openAudioEdition(edition) ?: return@launch
+                        navigator.push(
+                            NovelScreen(
+                                novel.id,
+                                fromSource = true,
+                                previewCover = novel.thumbnailUrl,
+                                previewTitle = novel.title,
+                            ),
+                        )
+                    }
+                },
+                onAudioPartOfClicked = { parent ->
+                    scope.launch {
+                        val novel = screenModel.openAudioParentWork(parent) ?: return@launch
+                        navigator.push(
+                            NovelScreen(
+                                novel.id,
+                                fromSource = false,
+                                previewCover = novel.thumbnailUrl,
+                                previewTitle = novel.title,
+                            ),
+                        )
+                    }
+                },
             )
 
             // Post-landing swap dissolves the held skeleton over the real
@@ -652,6 +653,7 @@ class NovelScreen(
                 val search = successState.providerSearch
                 if (search != null) {
                     eu.kanade.presentation.entries.components.FindProviderDialog(
+                        entryTitle = successState.novel.title,
                         searching = search.searching,
                         rows = search.rows,
                         confirmed = search.confirmed,

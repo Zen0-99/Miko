@@ -16,9 +16,9 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.presentation.browse.manga.ExtensionTrustDialog
 import eu.kanade.presentation.browse.shows.AnimeSourceOptionsDialog
 import eu.kanade.presentation.browse.shows.AnimeSourcesScreen
-import eu.kanade.presentation.browse.manga.ExtensionTrustDialog
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.tachiyomi.extension.InstallStep
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager

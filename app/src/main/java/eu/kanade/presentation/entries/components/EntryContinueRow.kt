@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import tachiyomi.core.common.i18n.stringResource
 
 /**
  * Standalone primary action block for entry detail views — no card chrome.
@@ -230,6 +231,58 @@ fun favoriteActionIcon(favorite: Boolean): ImageVector =
 /** Filled/outlined check circle for the mark-all-done toggle. */
 fun markDoneActionIcon(allDone: Boolean): ImageVector =
     if (allDone) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle
+
+/**
+ * The label [EntryContinueRow] renders for an entry in the callers' three
+ * states — "Continue: <progress>" when there is real progress to resume,
+ * "All up to date" when everything is consumed, "Start" otherwise. Kept
+ * outside the composable so nav-time pre-fills (home hero, library cards)
+ * can produce the exact string the loaded row will show.
+ */
+fun continueRowLabel(
+    context: android.content.Context,
+    allRead: Boolean,
+    hasStarted: Boolean,
+    progress: String?,
+): String = when {
+    allRead -> context.stringResource(tachiyomi.i18n.aniyomi.AYMR.strings.fetching_overlay_all_up_to_date)
+    hasStarted && !progress.isNullOrBlank() ->
+        context.stringResource(tachiyomi.i18n.MR.strings.action_continue_named, progress)
+    else -> context.stringResource(tachiyomi.i18n.MR.strings.action_start)
+}
+
+/**
+ * The continue-row progress fragment for a chapter-style item with its
+ * leading book/volume/season-style group marker kept — "CH.Book 6 14:
+ * Audience" → "Book 6 Chapter 14: Audience", "Vol.2 Ch.30: Title" →
+ * "Volume 2 Chapter 30: Title". Falls back to the plain display name or
+ * raw name when no marker exists.
+ */
+fun qualifiedChapterLabel(name: String): String =
+    eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser.qualifiedDisplayName(name)
+        ?: eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser.displayName(name)
+        ?: eu.kanade.tachiyomi.data.mikodb.ChapterNumberParser.bareNumberDisplayName(name)
+        ?: name
+
+/**
+ * The continue-row progress fragment for an episode — "Season 2
+ * Episode 5: Title" when the scanlator carries a Cinemeta "Season N|…"
+ * encoding; the bare episode name otherwise. Names that already carry
+ * an episode marker are kept as-is under the season prefix; specials
+ * (Season 0) and non-season scanlators get no qualifier.
+ */
+fun qualifiedEpisodeLabel(name: String, episodeNumber: Double, scanlator: String?): String {
+    val season = eu.kanade.tachiyomi.data.comments.ChapterBinder
+        .parseSeason(scanlator)?.takeIf { it > 0 } ?: return name
+    val inner = if (name.startsWith("Episode", ignoreCase = true)) {
+        name
+    } else if (episodeNumber > 0) {
+        "Episode ${eu.kanade.presentation.util.formatEpisodeNumber(episodeNumber)}: $name"
+    } else {
+        name
+    }
+    return "Season $season $inner"
+}
 
 @Composable
 private fun ActionZone(

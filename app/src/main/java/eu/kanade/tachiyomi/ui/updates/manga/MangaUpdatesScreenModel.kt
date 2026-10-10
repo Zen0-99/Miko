@@ -31,6 +31,9 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
@@ -45,7 +48,7 @@ import tachiyomi.domain.updates.manga.interactor.GetMangaUpdates
 import tachiyomi.domain.updates.manga.model.MangaUpdatesWithRelations
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.ZonedDateTime
+import kotlin.time.Clock
 
 class MangaUpdatesScreenModel(
     private val sourceManager: MangaSourceManager = Injekt.get(),
@@ -72,7 +75,7 @@ class MangaUpdatesScreenModel(
     init {
         screenModelScope.launchIO {
             // Set date limit for recent chapters
-            val limit = ZonedDateTime.now().minusMonths(3).toInstant()
+            val limit = Clock.System.now().minus(3, DateTimeUnit.MONTH, TimeZone.currentSystemDefault())
 
             combine(
                 getUpdates.subscribe(limit).distinctUntilChanged(),

@@ -7,8 +7,8 @@ import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import java.util.Date
 import kotlin.random.Random
+import kotlin.time.Clock
 
 class MangaHistoryScreenModelStateProvider : PreviewParameterProvider<MangaHistoryScreenModel.State> {
 
@@ -94,7 +94,7 @@ class MangaHistoryScreenModelStateProvider : PreviewParameterProvider<MangaHisto
                         mangaId = Random.nextLong(),
                         title = "Test Title",
                         chapterNumber = Random.nextDouble(),
-                        readAt = Date.from(Instant.now()),
+                        readAt = Clock.System.now(),
                         readDuration = Random.nextLong(),
                         coverData = MangaCover(
                             mangaId = Random.nextLong(),

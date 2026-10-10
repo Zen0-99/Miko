@@ -56,6 +56,9 @@ class ProviderFinder(
         val tier: String,
         val iconUrl: String?,
         val lang: String?,
+        /** Global confirm count from the tiers overlay ("N pts") —
+         *  null when the provider is unknown to the ledger. */
+        val points: Int? = null,
     )
 
     /** Sheet state — also the cached-search snapshot collectors replay. */
@@ -111,6 +114,10 @@ class ProviderFinder(
          *  the user removed this provider from this entry; the sheet
          *  tags it and offers restore instead of a mint checkbox. */
         val previouslyRemoved: Boolean = false,
+        /** The provider's global ledger confirm count ("N pts") — real
+         *  reputation, shown only when the ledger knows the provider
+         *  (null when unknown, never a match score). */
+        val points: Int? = null,
     )
 
     private data class Entry(
@@ -189,6 +196,7 @@ class ProviderFinder(
                 medium = medium,
                 communityVerified = g.pkgName in communityVerified,
                 previouslyRemoved = g.pkgName in excluded,
+                points = providerTiers.confirmCount(g.pkgName),
             )
         }
         val state = MutableStateFlow(Search(rows = snapshot(), searching = goldens.isNotEmpty()))
@@ -250,6 +258,10 @@ class ProviderFinder(
                         },
                         feed = feed?.takeIf { it.verdict != SeriesMatcher.Decision.REJECT },
                         previouslyRemoved = pkg in excluded,
+                        // Always the ledger's global confirm count —
+                        // the matcher's score stays in logcat, the
+                        // screen only shows real reputation ("pts").
+                        points = providerTiers.confirmCount(pkg),
                     )
                     state.value = state.value.copy(rows = snapshot())
                     logcat {

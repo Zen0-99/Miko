@@ -6,12 +6,12 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.entries.EntryCover
-import tachiyomi.domain.entries.shows.interactor.GetAnime
-import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.model.NovelCover
+import tachiyomi.domain.entries.shows.interactor.GetAnime
+import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.readingorder.interactor.AddReadingOrderEdge
 import tachiyomi.domain.readingorder.interactor.DeleteReadingOrder
 import tachiyomi.domain.readingorder.interactor.GetLockedReadingOrders

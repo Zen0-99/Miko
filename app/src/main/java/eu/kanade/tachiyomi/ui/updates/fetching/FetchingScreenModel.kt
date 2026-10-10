@@ -12,12 +12,12 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import tachiyomi.domain.entries.EntryCover
-import tachiyomi.domain.entries.shows.interactor.GetAnime
-import tachiyomi.domain.entries.shows.model.asAnimeCover
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.model.asMangaCover
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.model.asNovelCover
+import tachiyomi.domain.entries.shows.interactor.GetAnime
+import tachiyomi.domain.entries.shows.model.asAnimeCover
 import tachiyomi.domain.library.interactor.ClearFailedFetches
 import tachiyomi.domain.library.interactor.DeleteFailedFetch
 import tachiyomi.domain.library.interactor.GetFailedFetches

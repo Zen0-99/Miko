@@ -49,16 +49,16 @@ class CinemetaBrowseScreenModel(
         return entry
     }
 
-    /**
-     * Cached catalog items for a type without switching to it — pager
-     * pages preview their own type during a swipe (the settled page owns
-     * [State.metas]). Empty when nothing is cached.
-     */
-    fun peekCachedMetas(type: String): List<MikoMetaShort> =
-        isCacheValid(type)?.metas.orEmpty()
-
     fun changeType(newType: String) {
         if (state.value.type == newType) return
+        // A live query survives a type switch — re-run it scoped to the
+        // new type instead of dropping to the idle catalog while the
+        // top bar still shows the search.
+        state.value.searchQuery?.let { query ->
+            mutableState.update { it.copy(type = newType) }
+            search(query)
+            return
+        }
         // Check cache first — if valid, restore from cache without network call
         val cached = isCacheValid(newType)
         if (cached != null) {
@@ -152,8 +152,14 @@ class CinemetaBrowseScreenModel(
         }
     }
 
+    /** Serializes searches — a type-switch re-search cancels the
+     *  in-flight call so a slower stale-type response can't overwrite
+     *  the new results. */
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     fun search(query: String) {
-        screenModelScope.launch {
+        searchJob?.cancel()
+        searchJob = screenModelScope.launch {
             mutableState.update {
                 it.copy(
                     metas = emptyList(),
@@ -176,6 +182,7 @@ class CinemetaBrowseScreenModel(
                     )
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 mutableState.update { it.copy(loading = false, error = describeError(e)) }
             }
         }

@@ -1,9 +1,7 @@
 package eu.kanade.presentation.reader.settings
 
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -34,43 +32,42 @@ fun ReaderSettingsDialog(
     )
     val pagerState = rememberPagerState { tabTitles.size }
 
-    BoxWithConstraints {
-        // Fixed height — prevents the sheet from resizing when switching tabs,
-        // which was hiding settings. Content scrolls within this fixed height.
-        val sheetHeight = maxHeight * 0.72f
-        TabbedDialog(
-            modifier = Modifier.height(sheetHeight),
-            onDismissRequest = {
-                onDismissRequest()
+    TabbedDialog(
+        // Fixed height — prevents the sheet from resizing when switching
+        // tabs, which was hiding settings. Constrained inside the content
+        // slot (heightFraction): a height() on the sheet's own modifier
+        // collapses ModalBottomSheet's Expanded anchor and top-anchors it.
+        heightFraction = 0.72f,
+        onDismissRequest = {
+            onDismissRequest()
+            onShowMenus()
+        },
+        tabTitles = tabTitles,
+        pagerState = pagerState,
+        fillHeight = true,
+    ) { page ->
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+
+        LaunchedEffect(pagerState.currentPage) {
+            if (pagerState.currentPage == 2) {
+                window?.setDimAmount(0f)
+                onHideMenus()
+            } else {
+                window?.setDimAmount(0.5f)
                 onShowMenus()
-            },
-            tabTitles = tabTitles,
-            pagerState = pagerState,
-            fillHeight = true,
-        ) { page ->
-            val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-
-            LaunchedEffect(pagerState.currentPage) {
-                if (pagerState.currentPage == 2) {
-                    window?.setDimAmount(0f)
-                    onHideMenus()
-                } else {
-                    window?.setDimAmount(0.5f)
-                    onShowMenus()
-                }
             }
+        }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(vertical = TabbedDialogPaddings.Vertical)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                when (page) {
-                    0 -> ReadingModePage(screenModel)
-                    1 -> GeneralPage(screenModel)
-                    2 -> ColorFilterPage(screenModel)
-                }
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(vertical = TabbedDialogPaddings.Vertical)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            when (page) {
+                0 -> ReadingModePage(screenModel)
+                1 -> GeneralPage(screenModel)
+                2 -> ColorFilterPage(screenModel)
             }
         }
     }

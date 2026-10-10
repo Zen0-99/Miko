@@ -68,6 +68,7 @@ internal fun ShowsLibraryList(
                     url = anime.thumbnailUrl,
                     lastModified = anime.coverLastModified,
                 ),
+                sharedCoverTransition = true,
                 badge = {
                     DownloadsBadge(count = libraryItem.downloadCount)
                     UnviewedBadge(count = libraryItem.unseenCount)

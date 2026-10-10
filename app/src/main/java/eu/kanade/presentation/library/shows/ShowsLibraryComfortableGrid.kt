@@ -57,6 +57,7 @@ internal fun ShowsLibraryComfortableGrid(
                     url = anime.thumbnailUrl,
                     lastModified = anime.coverLastModified,
                 ),
+                sharedCoverTransition = true,
                 coverBadgeStart = {
                     DownloadsBadge(count = libraryItem.downloadCount)
                     UnviewedBadge(count = libraryItem.unseenCount)

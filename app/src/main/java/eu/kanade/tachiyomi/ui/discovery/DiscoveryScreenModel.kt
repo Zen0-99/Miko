@@ -4,8 +4,10 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.ui.model.Carrier
+import eu.kanade.tachiyomi.data.catalogrows.CatalogFilter
 import eu.kanade.tachiyomi.data.mikodb.SeenReporter
 import eu.kanade.tachiyomi.data.mikodb.WorkIdResolver
+import eu.kanade.tachiyomi.data.mikodb.WorksBrowseApi
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbDiscover
 import eu.kanade.tachiyomi.metadata.tmdb.TmdbGenres.MediaType
 import kotlinx.collections.immutable.PersistentMap
@@ -32,10 +34,10 @@ import java.util.concurrent.ConcurrentHashMap
  * `UiPreferences.contentMode()` via [Carrier.fromContentMode] and selects
  * which catalog surface renders (Cinemeta for shows, canonical catalog for
  * manga/books). This model owns the UI-level state that must survive tab
- * disposal: the shared-top-bar search query/submission and the per-carrier
- * sub-type pill selection (consumed by the carrier pills / filter state
- * landing in 15-06; the shows Movies/Series toggle itself lives inside
- * `CinemetaBrowseScreenModel`).
+ * disposal: the shared-top-bar search query/submission, the per-carrier
+ * sub-type selection (consumed by the Type/Filter sheet; the shows
+ * Movies/Series toggle itself lives inside `CinemetaBrowseScreenModel`),
+ * and the per-carrier catalog-feed sort.
  *
  * 15-06 adds the per-carrier [DiscoveryFilter] set plus the TMDB
  * `discover` paging state for the shows carrier. Filter state is
@@ -60,9 +62,19 @@ class DiscoveryScreenModel(
         val subTypeSelections: PersistentMap<Carrier, Int> = persistentMapOf(),
         /** Facet filters per carrier — only SHOWS is consumed (TMDB). */
         val filters: PersistentMap<Carrier, DiscoveryFilter> = persistentMapOf(),
-        /** Filter sheet visibility — hoisted so the shared-top-bar filter
-         *  action (living outside the content composable) can open it. */
-        val showFilterSheet: Boolean = false,
+        /** `/v1/works/browse` sort per carrier (manga/books Filter tab). */
+        val browseSorts: PersistentMap<Carrier, DiscoverySort> = persistentMapOf(),
+        /** `/v1/works/browse` facet filters per carrier (22-01) — the
+         *  manga/books counterpart of [filters] (TMDB shows). */
+        val catalogFilters: PersistentMap<Carrier, CatalogFilter> = persistentMapOf(),
+        /** Genre vocabulary per medium (`/v1/genres`) for the filter
+         *  sheet's chips — fetched lazily on first sheet open. */
+        val catalogGenres: PersistentMap<String, List<String>> = persistentMapOf(),
+        /** Type/Filter sheet visibility — hoisted so the trigger rows and
+         *  the sheet (mounted at the tab level) share the state. */
+        val showTypeFilterSheet: Boolean = false,
+        /** Tab the sheet opens on — 0 = Type, 1 = Filter. */
+        val typeFilterSheetPage: Int = 0,
         /** TMDB discover surface — populated while a shows filter is active. */
         val discoverItems: List<TmdbDiscover.Item> = emptyList(),
         val discoverPage: Int = 0,
@@ -85,16 +97,41 @@ class DiscoveryScreenModel(
 
     private val discoverCache = mutableMapOf<Pair<MediaType, DiscoveryFilter>, DiscoverCacheEntry>()
 
-    /** Cached discover items for a (type, filter) pair without switching —
-     *  empty when nothing is cached. */
-    fun peekDiscoverItems(type: MediaType, filter: DiscoveryFilter): List<TmdbDiscover.Item> =
-        discoverCache[type to filter]?.items.orEmpty()
+    /** Per-carrier catalog-feed sort (manga/books Filter tab). */
+    fun browseSortFor(carrier: Carrier): DiscoverySort =
+        state.value.browseSorts[carrier] ?: DiscoverySort.POPULARITY
+
+    fun setBrowseSort(carrier: Carrier, sort: DiscoverySort) {
+        mutableState.update { it.copy(browseSorts = it.browseSorts.put(carrier, sort)) }
+    }
+
+    /** Per-carrier browse facets (22-01). */
+    fun catalogFilterFor(carrier: Carrier): CatalogFilter =
+        state.value.catalogFilters[carrier] ?: CatalogFilter()
+
+    fun setCatalogFilter(carrier: Carrier, filter: CatalogFilter) {
+        mutableState.update { it.copy(catalogFilters = it.catalogFilters.put(carrier, filter)) }
+    }
+
+    /** Fetch the medium's genre vocabulary once — the filter sheet's
+     *  chip set. Fetches on first call per medium; a worker outage
+     *  caches an empty list rather than retry-storming the sheet. */
+    fun ensureCatalogGenres(medium: String) {
+        if (state.value.catalogGenres.containsKey(medium)) return
+        screenModelScope.launchIO {
+            val genres = worksBrowseApi.genres(medium)
+            mutableState.update {
+                it.copy(catalogGenres = it.catalogGenres.put(medium, genres))
+            }
+        }
+    }
 
     // Mint-on-browse deps are lazy so unit tests can construct the model
     // with only a TmdbDiscover fake (Injekt is never touched until a
     // rendered item actually mints).
     private val workIdResolver: WorkIdResolver by injectLazy()
     private val seenReporter: SeenReporter by injectLazy()
+    private val worksBrowseApi: WorksBrowseApi by injectLazy()
 
     /** Minted/reported ids this session — 'tmdb:{type}:{id}' keys. */
     private val mintedDiscoverIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -129,8 +166,14 @@ class DiscoveryScreenModel(
         mutableState.update { it.copy(filters = it.filters.put(carrier, filter)) }
     }
 
-    fun setFilterSheetVisible(visible: Boolean) {
-        mutableState.update { it.copy(showFilterSheet = visible) }
+    fun openTypeFilterSheet(page: Int = 0) {
+        mutableState.update {
+            it.copy(showTypeFilterSheet = true, typeFilterSheetPage = page)
+        }
+    }
+
+    fun setTypeFilterSheetVisible(visible: Boolean) {
+        mutableState.update { it.copy(showTypeFilterSheet = visible) }
     }
 
     /**

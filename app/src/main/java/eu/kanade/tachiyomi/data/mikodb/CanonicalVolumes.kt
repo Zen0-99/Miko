@@ -47,25 +47,44 @@ class CanonicalVolumes(
         /**
          * Pill-style grouping for [chapterNumbers] (the visible list's
          * parsed chapter numbers). Volumes present among the chapters
-         * sort ascending; chapters the map doesn't cover land in
-         * [ungroupedLabel] appended last — the honest tail, never an
-         * "unknown volume" bucket. Null when the map isn't groupable
-         * or no visible chapter maps anywhere.
+         * sort ascending. Chapters the boundary map doesn't name exactly
+         * fold into the volume owning the boundary just below them —
+         * 700.5 sits next to ch 700 in the same volume, and specials
+         * below the map's floor land in the first volume. Only NaN
+         * (unparseable) numbers still land in [ungroupedLabel]. Null
+         * when the map isn't groupable.
          */
         fun grouping(chapterNumbers: List<Double>, ungroupedLabel: String): Grouping? {
             if (!groupable()) return null
-            val vols = chapterNumbers
-                .mapNotNull { boundaries[it] }
-                .distinct()
-                .sorted()
-            if (vols.isEmpty()) return null
-            val labels = vols.map(::volumeLabel)
-            val hasUnmapped = chapterNumbers.any { it !in boundaries }
+            // A sparse map (a marker row per volume start, or a partial
+            // harvest) folds every unmapped chapter into the floor
+            // bucket — 141 chapters under boundaries {0,1,2,3,4,43..50,
+            // 59..61} render as "Volume 1, 7, 8, 9" nonsense. Only a map
+            // naming most visible chapters exactly may group; anything
+            // sparser renders flat instead of guessing.
+            val mappedCount = chapterNumbers.count { !it.isNaN() && boundaries.containsKey(it) }
+            if (mappedCount < chapterNumbers.size * MIN_BOUNDARY_COVERAGE) return null
+            val boundaryChapters = boundaries.keys.sorted()
+            fun volumeFor(n: Double): Double? {
+                if (n.isNaN()) return null
+                boundaries[n]?.let { return it }
+                // Largest boundary chapter ≤ n; n below the map's floor
+                // folds forward into the first boundary's volume.
+                val idx = boundaryChapters.binarySearch(n)
+                val floorIdx = if (idx >= 0) idx else -idx - 2
+                return boundaries[boundaryChapters[if (floorIdx >= 0) floorIdx else 0]]
+            }
+            val mapped = LinkedHashMap<Double, Double>(chapterNumbers.size)
+            var hasUnmapped = false
+            for (n in chapterNumbers) {
+                val v = volumeFor(n)
+                if (v == null) hasUnmapped = true else mapped[n] = v
+            }
+            if (mapped.isEmpty()) return null
+            val vols = mapped.values.distinct().sorted()
             return Grouping(
-                groups = if (hasUnmapped) labels + ungroupedLabel else labels,
-                chapterToGroup = chapterNumbers
-                    .mapNotNull { n -> boundaries[n]?.let { n to volumeLabel(it) } }
-                    .toMap(),
+                groups = vols.map(::volumeLabel) + if (hasUnmapped) listOf(ungroupedLabel) else emptyList(),
+                chapterToGroup = mapped.mapValues { (_, v) -> volumeLabel(v) },
                 meta = vols.associate { volumeLabel(it) to (covers[it] ?: VolumeMeta(it, null, null, null, null)) },
             )
         }
@@ -190,5 +209,10 @@ class CanonicalVolumes(
     companion object {
         /** Worker-reported mean boundary confidence floor for grouping. */
         const val MIN_CONFIDENCE = 0.5
+
+        /** Share of visible chapters the boundary map must name exactly
+         *  before it may group — sparser maps fold unknown ranges into
+         *  floor buckets and render misleading volumes. */
+        const val MIN_BOUNDARY_COVERAGE = 0.5
     }
 }

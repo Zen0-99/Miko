@@ -176,16 +176,32 @@ class AudiobookPlayerController(
         absItemCache?.takeIf { it.id == itemId }
             ?: runCatching { client.item(itemId) }.getOrNull()?.also { absItemCache = it }
 
-    private fun AbsItem.toTrackCtx(): List<AbsProgressSyncer.TrackCtx> =
-        media?.tracks.orEmpty()
-            .map {
+    private fun AbsItem.toTrackCtx(): List<AbsProgressSyncer.TrackCtx> {
+        val tracks = media?.tracks.orEmpty()
+        if (tracks.isNotEmpty()) {
+            return tracks.map {
                 AbsProgressSyncer.TrackCtx(
                     ino = it.ino,
                     startOffsetMs = (it.startOffset * 1000).toLong(),
                     durationMs = (it.duration * 1000).toLong(),
                 )
+            }.sortedBy { it.startOffsetMs }
+        }
+        // ABS ≥2.37 omits media.tracks on freshly scanned items — derive the
+        // same geometry from audioFiles (startOffset = cumulative duration).
+        var offset = 0L
+        return media?.audioFiles.orEmpty()
+            .filter { !it.exclude }
+            .sortedBy { it.trackNumFromFilename ?: it.index }
+            .map { file ->
+                val durationMs = (file.duration * 1000).toLong()
+                AbsProgressSyncer.TrackCtx(
+                    ino = file.ino,
+                    startOffsetMs = offset,
+                    durationMs = durationMs,
+                ).also { offset += durationMs }
             }
-            .sortedBy { it.startOffsetMs }
+    }
 
     /**
      * Arm the sync context for a play session: `chapterId → ino` parses out
@@ -426,9 +442,11 @@ class AudiobookPlayerController(
                     }
                     ?.flatMap { it.sourceIds }
                     .orEmpty()
-                (listOf(source) +
-                    chapters.mapNotNull { downloadManager.carrierDownloadSource(it.url) } +
-                    boundCarrierIds.mapNotNull { sourceManager.get(it) })
+                (
+                    listOf(source) +
+                        chapters.mapNotNull { downloadManager.carrierDownloadSource(it.url) } +
+                        boundCarrierIds.mapNotNull { sourceManager.get(it) }
+                    )
                     .distinctBy { it.id }
             }
             val rendered = audioDirs
@@ -577,9 +595,11 @@ class AudiobookPlayerController(
                 ?.let { workId -> workCarriers.peek(workId)?.carriers }
                 ?.flatMap { it.sourceIds }
                 .orEmpty()
-            (listOf(source) +
-                chapters.mapNotNull { downloadManager.carrierDownloadSource(it.url) } +
-                boundCarrierIds.mapNotNull { sourceManager.get(it) })
+            (
+                listOf(source) +
+                    chapters.mapNotNull { downloadManager.carrierDownloadSource(it.url) } +
+                    boundCarrierIds.mapNotNull { sourceManager.get(it) }
+                )
                 .distinctBy { it.id }
                 .flatMapTo(mutableSetOf()) {
                     downloadProvider.renderedAudioFileNames(novel.title, it)
@@ -592,8 +612,10 @@ class AudiobookPlayerController(
         // chapter is as playable as an on-disk .m4a (22-02).
         fun isPlayable(chapter: NovelChapter) =
             fileName(chapter) in rendered ||
-                (novel.isAudiobook &&
-                    eu.kanade.tachiyomi.source.novel.AudioChapterSchemes.isAudioChapterUrl(chapter.url))
+                (
+                    novel.isAudiobook &&
+                        eu.kanade.tachiyomi.source.novel.AudioChapterSchemes.isAudioChapterUrl(chapter.url)
+                    )
 
         val target = when {
             // Same novel already loaded — resume that track (fast path inside play()).
@@ -649,7 +671,8 @@ class AudiobookPlayerController(
         val backMs = player.seekBackIncrement.takeIf { it > 0 } ?: 15_000L
         val position = player.currentPosition
         val previousIndex = player.previousMediaItemIndex
-        if (position == C.TIME_UNSET || position >= backMs ||
+        if (position == C.TIME_UNSET ||
+            position >= backMs ||
             previousIndex == C.INDEX_UNSET
         ) {
             player.seekBack()

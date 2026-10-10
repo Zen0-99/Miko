@@ -25,10 +25,10 @@ import eu.kanade.tachiyomi.util.system.isReleaseBuildType
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.collection.model.Collection
-import tachiyomi.domain.library.shows.model.AnimeLibrarySort
-import tachiyomi.domain.library.shows.model.sort
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.library.shows.model.AnimeLibrarySort
+import tachiyomi.domain.library.shows.model.sort
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.BaseSortItem

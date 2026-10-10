@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.data.download.novel.model
 
-import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
+import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +15,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 data class NovelDownload(
-    val source: NovelHttpSource,
+    val source: NovelCatalogueSource,
     val novel: Novel,
     val chapter: NovelChapter,
 ) {
@@ -75,13 +75,37 @@ data class NovelDownload(
                     .workIdFromNovelUrl(novel.url) ?: return null
                 val seq = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
                     .seqFromCanonUrl(workId, chapter.url) ?: return null
-                val (carrier, candidate) = Injekt.get<eu.kanade.tachiyomi.data.mikodb
-                    .CanonicalChapterRouter>()
-                    .novelDownloadTarget(workId, seq) ?: return null
+                val (carrier, candidate) = Injekt.get<
+                    eu.kanade.tachiyomi.data.mikodb
+                        .CanonicalChapterRouter,
+                    >()
+                    .novelDownloadTarget(
+                        workId,
+                        seq,
+                        numberHint = chapter.chapterNumber
+                            .takeIf { it >= 0.0 },
+                    ) ?: return null
                 return NovelDownload(carrier, novel, chapter.copy(url = candidate.chapterUrl))
             }
 
-            val source = sourceManager.get(novel.source) as? NovelHttpSource ?: return null
+            // `carrier:{id}:{url}` rows name their serving source — the
+            // row routes itself, no work-map lookup needed.
+            if (eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter.isCarrierUrl(chapter.url)) {
+                val carrierId = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                    .carrierSourceId(chapter.url) ?: return null
+                val carrier = sourceManager.get(carrierId) as? NovelCatalogueSource
+                    ?: return null
+                return NovelDownload(
+                    carrier,
+                    novel,
+                    chapter.copy(
+                        url = eu.kanade.tachiyomi.data.mikodb.CanonicalChapterRouter
+                            .carrierRawUrl(chapter.url),
+                    ),
+                )
+            }
+
+            val source = sourceManager.get(novel.source) as? NovelCatalogueSource ?: return null
 
             return NovelDownload(source, novel, chapter)
         }

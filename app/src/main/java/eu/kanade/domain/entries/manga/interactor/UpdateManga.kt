@@ -3,6 +3,7 @@ package eu.kanade.domain.entries.manga.interactor
 import eu.kanade.domain.entries.manga.model.hasCustomCover
 import eu.kanade.tachiyomi.data.cache.MangaCoverCache
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.datetime.TimeZone
 import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.model.MangaUpdate
@@ -10,16 +11,29 @@ import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.source.local.entries.manga.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.Instant
-import java.time.ZonedDateTime
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class UpdateManga(
     private val mangaRepository: MangaRepository,
     private val mangaFetchInterval: MangaFetchInterval,
+    private val coverUpdates: eu.kanade.tachiyomi.data.cover.CoverUpdateBus = Injekt.get(),
 ) {
 
     suspend fun await(mangaUpdate: MangaUpdate): Boolean {
-        return mangaRepository.updateManga(mangaUpdate)
+        // Cover writes are rare — the row read is a PK lookup, and it
+        // lets the discovery-feed patch fire only on a real URL change.
+        val prev = if (mangaUpdate.thumbnailUrl != null) {
+            runCatching { mangaRepository.getMangaById(mangaUpdate.id) }.getOrNull()
+        } else {
+            null
+        }
+        return mangaRepository.updateManga(mangaUpdate).also { ok ->
+            val url = mangaUpdate.thumbnailUrl
+            if (ok && url != null && prev != null && prev.thumbnailUrl != url) {
+                coverUpdates.emit(prev.id, prev.url, url)
+            }
+        }
     }
 
     suspend fun awaitAll(mangaUpdates: List<MangaUpdate>): Boolean {
@@ -74,7 +88,7 @@ class UpdateManga(
                 // Cover cache file is missing — force refresh
                 !coverFileExists -> {
                     coverCache.deleteFromCache(localManga, false)
-                    val now = Instant.now().toEpochMilli()
+                    val now = Clock.System.now().toEpochMilliseconds()
                     android.util.Log.d(
                         "UpdateManga",
                         "coverLastModified set to $now (cover file was missing, forcing refresh)",
@@ -87,18 +101,20 @@ class UpdateManga(
                 eu.kanade.tachiyomi.data.cover.HiResCoverResolver.isPreferredCoverUrl(
                     localManga.thumbnailUrl,
                 ) &&
-                    (remoteManga.thumbnail_url.isNullOrEmpty() ||
-                        localManga.thumbnailUrl == remoteManga.thumbnail_url) -> null
+                    (
+                        remoteManga.thumbnail_url.isNullOrEmpty() ||
+                            localManga.thumbnailUrl == remoteManga.thumbnail_url
+                        ) -> null
                 // Cover exists and URL hasn't changed — no need to refresh
                 !manualFetch && localManga.thumbnailUrl == remoteManga.thumbnail_url -> null
-                localManga.isLocal() -> Instant.now().toEpochMilli()
+                localManga.isLocal() -> Clock.System.now().toEpochMilliseconds()
                 localManga.hasCustomCover(coverCache) -> {
                     coverCache.deleteFromCache(localManga, false)
                     null
                 }
                 else -> {
                     coverCache.deleteFromCache(localManga, false)
-                    Instant.now().toEpochMilli()
+                    Clock.System.now().toEpochMilliseconds()
                 }
             }
 
@@ -128,30 +144,39 @@ class UpdateManga(
                 updateStrategy = remoteManga.update_strategy,
                 initialized = true,
             ),
-        )
+        ).also { ok ->
+            if (ok && thumbnailUrl != null && thumbnailUrl != localManga.thumbnailUrl) {
+                coverUpdates.emit(localManga.id, localManga.url, thumbnailUrl)
+            }
+        }
     }
 
     suspend fun awaitUpdateFetchInterval(
         manga: Manga,
-        dateTime: ZonedDateTime = ZonedDateTime.now(),
-        window: Pair<Long, Long> = mangaFetchInterval.getWindow(dateTime),
+        dateTime: Instant = Clock.System.now(),
+        timeZone: TimeZone = TimeZone.currentSystemDefault(),
+        window: Pair<Long, Long> = mangaFetchInterval.getWindow(dateTime, timeZone),
     ): Boolean {
         return mangaRepository.updateManga(
-            mangaFetchInterval.toMangaUpdate(manga, dateTime, window),
+            mangaFetchInterval.toMangaUpdate(manga, dateTime, timeZone, window),
         )
     }
 
     suspend fun awaitUpdateLastUpdate(mangaId: Long): Boolean {
-        return mangaRepository.updateManga(MangaUpdate(id = mangaId, lastUpdate = Instant.now().toEpochMilli()))
+        return mangaRepository.updateManga(
+            MangaUpdate(id = mangaId, lastUpdate = Clock.System.now().toEpochMilliseconds()),
+        )
     }
 
     suspend fun awaitUpdateCoverLastModified(mangaId: Long): Boolean {
-        return mangaRepository.updateManga(MangaUpdate(id = mangaId, coverLastModified = Instant.now().toEpochMilli()))
+        return mangaRepository.updateManga(
+            MangaUpdate(id = mangaId, coverLastModified = Clock.System.now().toEpochMilliseconds()),
+        )
     }
 
     suspend fun awaitUpdateFavorite(mangaId: Long, favorite: Boolean): Boolean {
         val dateAdded = when (favorite) {
-            true -> Instant.now().toEpochMilli()
+            true -> Clock.System.now().toEpochMilliseconds()
             false -> 0
         }
         return mangaRepository.updateManga(

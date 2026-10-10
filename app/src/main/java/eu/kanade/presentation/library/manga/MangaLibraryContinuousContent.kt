@@ -55,7 +55,7 @@ fun MangaLibraryContinuousContent(
     selection: List<LibraryManga>,
     contentPadding: PaddingValues,
     hasActiveFilters: Boolean,
-    onMangaClicked: (Long) -> Unit,
+    onMangaClicked: (LibraryManga) -> Unit,
     onContinueReadingClicked: ((LibraryManga) -> Unit)?,
     onToggleSelection: (LibraryManga) -> Unit,
     onToggleRangeSelection: (LibraryManga) -> Unit,
@@ -74,6 +74,8 @@ fun MangaLibraryContinuousContent(
     showListAuthor: Boolean = false,
     showListStatus: Boolean = false,
     isEntryLocked: ((Long) -> Boolean)? = null,
+    subtypeLabel: String? = null,
+    subtypeOptions: List<eu.kanade.presentation.library.components.SubtypeMenuOption> = emptyList(),
 ) {
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
@@ -94,7 +96,7 @@ fun MangaLibraryContinuousContent(
 
     val onClickManga = { manga: LibraryManga ->
         if (notSelectionMode) {
-            onMangaClicked(manga.manga.id)
+            onMangaClicked(manga)
         } else {
             onToggleSelection(manga)
         }
@@ -154,6 +156,8 @@ fun MangaLibraryContinuousContent(
                         sortLabel = getSortLabelForCollection(collection) ?: sortLabel,
                         sortDescending = getSortDescendingForCollection(collection) ?: sortDescending,
                         onSortClick = { onSortClickForCollection(collection) },
+                        subtypeLabel = subtypeLabel,
+                        subtypeOptions = subtypeOptions,
                         modifier = Modifier
                             .padding(horizontal = if (isListMode) 16.dp else 8.dp)
                             .padding(bottom = if (isListMode) 8.dp else 4.dp),
@@ -192,6 +196,13 @@ fun MangaLibraryContinuousContent(
                             null
                         }
 
+                    val continueViewing: (() -> Unit)? = if (onContinueReadingClicked != null &&
+                        isEntryLocked?.invoke(manga.id) != true
+                    ) {
+                        { onContinueReadingClicked(libraryItem.libraryManga) }
+                    } else {
+                        null
+                    }
                     when (displayMode) {
                         LibraryDisplayMode.List -> {
                             val subtitle = buildListSubtitle(manga, showListAuthor, showListStatus)
@@ -199,6 +210,7 @@ fun MangaLibraryContinuousContent(
                                 isSelected = isSelected,
                                 title = manga.title,
                                 coverData = coverData,
+                                sharedCoverTransition = true,
                                 badge = {
                                     DownloadsBadge(count = libraryItem.downloadCount)
                                     UnviewedBadge(count = libraryItem.unreadCount)
@@ -209,13 +221,7 @@ fun MangaLibraryContinuousContent(
                                 },
                                 onLongClick = { onToggleRangeSelection(libraryItem.libraryManga) },
                                 onClick = { onClickManga(libraryItem.libraryManga) },
-                                onClickContinueViewing = if (onContinueReadingClicked != null &&
-                                    isEntryLocked?.invoke(manga.id) != true
-                                ) {
-                                    { onContinueReadingClicked(libraryItem.libraryManga) }
-                                } else {
-                                    null
-                                },
+                                onClickContinueViewing = continueViewing,
                                 subtitle = subtitle,
                             )
                         }
@@ -224,11 +230,13 @@ fun MangaLibraryContinuousContent(
                                 isSelected = isSelected,
                                 title = manga.title,
                                 coverData = coverData,
+                                sharedCoverTransition = true,
                                 coverBadgeStart = coverBadgeStart,
                                 coverBadgeEnd = coverBadgeEnd,
                                 topEndBadge = topEndBadge,
                                 onClick = { onClickManga(libraryItem.libraryManga) },
                                 onLongClick = { onToggleRangeSelection(libraryItem.libraryManga) },
+                                onClickContinueViewing = continueViewing,
                             )
                         }
                         LibraryDisplayMode.CoverOnlyGrid -> {
@@ -236,11 +244,13 @@ fun MangaLibraryContinuousContent(
                                 isSelected = isSelected,
                                 title = null,
                                 coverData = coverData,
+                                sharedCoverTransition = true,
                                 coverBadgeStart = coverBadgeStart,
                                 coverBadgeEnd = coverBadgeEnd,
                                 topEndBadge = topEndBadge,
                                 onClick = { onClickManga(libraryItem.libraryManga) },
                                 onLongClick = { onToggleRangeSelection(libraryItem.libraryManga) },
+                                onClickContinueViewing = continueViewing,
                             )
                         }
                         LibraryDisplayMode.ComfortableGrid -> {
@@ -261,11 +271,13 @@ fun MangaLibraryContinuousContent(
                                 isSelected = isSelected,
                                 title = manga.title,
                                 coverData = coverData,
+                                sharedCoverTransition = true,
                                 coverBadgeStart = coverBadgeStart,
                                 coverBadgeEnd = coverBadgeEnd,
                                 topEndBadge = topEndBadge,
                                 onClick = { onClickManga(libraryItem.libraryManga) },
                                 onLongClick = { onToggleRangeSelection(libraryItem.libraryManga) },
+                                onClickContinueViewing = continueViewing,
                                 subtitle = authorSubtitle,
                             )
                         }

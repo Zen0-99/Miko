@@ -26,6 +26,7 @@ class CatalogRowStore(
     private val json: Json,
 ) {
     private val pref = preferenceStore.getString(KEY)
+
     /** One-shot flag — the seeded recents rows land exactly once, so a
      *  user deleting them is never re-seeded. */
     private val seededPref = preferenceStore.getBoolean("${KEY}_recents_seeded", false)

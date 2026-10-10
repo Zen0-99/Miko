@@ -99,6 +99,28 @@ class SourcePreferences(
         preferredChapterCarriers().set(cur)
     }
 
+    /** Last successful canonize POST per work — `workId|epochMs` entries.
+     *  Gates CanonizeWork's rebuild; the chapter/episode read caches can't
+     *  gate it because their reads refresh the same timestamp the gate
+     *  checks — UI reads would starve feed posts forever (canon froze at
+     *  whatever the last canonize produced). */
+    fun canonizeRanAt() = preferenceStore.getStringSet("canonize_ran_at_v1", emptySet())
+
+    fun canonizeRanAtFor(workId: String): Long = canonizeRanAt().get()
+        .firstNotNullOfOrNull { e ->
+            e.split('|', limit = 2)
+                .takeIf { it[0] == workId }
+                ?.get(1)
+                ?.toLongOrNull()
+        } ?: 0L
+
+    fun markCanonizeRan(workId: String) {
+        val cur = canonizeRanAt().get()
+            .filterNotTo(mutableSetOf()) { it.substringBefore('|') == workId }
+        cur += "$workId|${System.currentTimeMillis()}"
+        canonizeRanAt().set(cur)
+    }
+
     fun incognitoAnimeExtensions() = preferenceStore.getStringSet("incognito_anime_extensions", emptySet())
     fun incognitoMangaExtensions() = preferenceStore.getStringSet("incognito_manga_extensions", emptySet())
     fun incognitoNovelExtensions() = preferenceStore.getStringSet("incognito_novel_extensions", emptySet())
