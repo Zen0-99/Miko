@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.max
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastMap
 import androidx.compose.ui.util.fastMaxBy
+import kotlin.jvm.JvmInline
 import kotlin.math.max
 
 /**

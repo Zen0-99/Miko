@@ -2,6 +2,7 @@ package tachiyomi.presentation.core.components.material
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import kotlin.concurrent.Volatile
 
 /**
  * Shared slot that allows [PullRefresh] (which lives in the Scaffold's body

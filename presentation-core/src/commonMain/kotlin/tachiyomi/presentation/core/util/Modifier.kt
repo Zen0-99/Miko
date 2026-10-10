@@ -3,7 +3,6 @@ package tachiyomi.presentation.core.util
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -95,7 +94,7 @@ fun Modifier.clearFocusOnSoftKeyboardHide(
     var isFocused by remember { mutableStateOf(false) }
     var keyboardShowedSinceFocused by remember { mutableStateOf(false) }
     if (isFocused) {
-        val imeVisible = WindowInsets.isImeVisible
+        val imeVisible = WindowInsets.isImeVisibleCompat()
         val focusManager = LocalFocusManager.current
         LaunchedEffect(imeVisible) {
             if (imeVisible) {
