@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.mikodb
 
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.model.Carrier
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -26,10 +27,11 @@ class CanonizeWorkTest {
     private val animeBridge = mockk<AnimeIdBridge>()
     private val mintTelemetry = mockk<MintTelemetry>(relaxed = true)
     private val workCarriers = mockk<WorkCarriers>(relaxed = true)
+    private val sourcePreferences = mockk<SourcePreferences>(relaxed = true)
 
     private val canonize = CanonizeWork(
         bridge, collector, chapterMap, api, goldenSources, episodeMap, mikoDbManager,
-        mintTelemetry, workCarriers,
+        mintTelemetry, workCarriers, sourcePreferences,
     )
 
     init {
@@ -130,7 +132,9 @@ class CanonizeWorkTest {
 
     @Test
     fun `fresh cache skips collection entirely`() = runBlocking {
-        every { chapterMap.isStale("mk:mb:1") } returns false
+        coEvery { chapterMap.forWork("mk:mb:1") } returns listOf(mockk())
+        every { sourcePreferences.canonizeRanAtFor("mk:mb:1") } returns
+            System.currentTimeMillis()
         val out = canonize.run("mk:mb:1")
         assertEquals(CanonizeWork.Outcome.Fresh, out)
         coVerify(exactly = 0) { collector.collect(any(), any(), any()) }
@@ -138,9 +142,9 @@ class CanonizeWorkTest {
 
     @Test
     fun `accept feeds post with verified provenance`() = runBlocking {
-        every { chapterMap.isStale("mk:mb:1") } returns true
+        coEvery { chapterMap.forWork("mk:mb:1") } returns emptyList()
         coEvery { bridge.byWorkId("mk:mb:1") } returns work
-        coEvery { collector.collect(work, "manga") } returns
+        coEvery { collector.collect(work, "manga", any(), any(), any(), any()) } returns
             result(feeds = listOf(feed("en.mangadex", SeriesMatcher.Decision.ACCEPT)))
         val reqSlot = slot<WorkIdentityApi.CanonizeRequest>()
         coEvery { api.canonize(capture(reqSlot)) } returns
@@ -160,9 +164,9 @@ class CanonizeWorkTest {
 
     @Test
     fun `tentative feed submits flagged for review`() = runBlocking {
-        every { chapterMap.isStale("mk:mb:1") } returns true
+        coEvery { chapterMap.forWork("mk:mb:1") } returns emptyList()
         coEvery { bridge.byWorkId("mk:mb:1") } returns work
-        coEvery { collector.collect(work, "manga") } returns result(
+        coEvery { collector.collect(work, "manga", any(), any(), any(), any()) } returns result(
             feeds = listOf(feed("en.mangadex", SeriesMatcher.Decision.ACCEPT)),
             tentative = listOf(feed("en.asura", SeriesMatcher.Decision.TENTATIVE, 0.83)),
         )
@@ -181,9 +185,9 @@ class CanonizeWorkTest {
 
     @Test
     fun `zero accept feeds never posts`() = runBlocking {
-        every { chapterMap.isStale("mk:mb:1") } returns true
+        coEvery { chapterMap.forWork("mk:mb:1") } returns emptyList()
         coEvery { bridge.byWorkId("mk:mb:1") } returns work
-        coEvery { collector.collect(work, "manga") } returns
+        coEvery { collector.collect(work, "manga", any(), any(), any(), any()) } returns
             result(tentative = listOf(feed("en.asura", SeriesMatcher.Decision.TENTATIVE)))
 
         val out = canonize.run("mk:mb:1")
@@ -194,9 +198,9 @@ class CanonizeWorkTest {
 
     @Test
     fun `failure budget exceeded aborts`() = runBlocking {
-        every { chapterMap.isStale("mk:mb:1") } returns true
+        coEvery { chapterMap.forWork("mk:mb:1") } returns emptyList()
         coEvery { bridge.byWorkId("mk:mb:1") } returns work
-        coEvery { collector.collect(work, "manga") } returns result(
+        coEvery { collector.collect(work, "manga", any(), any(), any(), any()) } returns result(
             failed = mapOf("a" to "x", "b" to "y", "c" to "z"),
         )
 
@@ -207,9 +211,9 @@ class CanonizeWorkTest {
 
     @Test
     fun `post failure surfaces`() = runBlocking {
-        every { chapterMap.isStale("mk:mb:1") } returns true
+        coEvery { chapterMap.forWork("mk:mb:1") } returns emptyList()
         coEvery { bridge.byWorkId("mk:mb:1") } returns work
-        coEvery { collector.collect(work, "manga") } returns
+        coEvery { collector.collect(work, "manga", any(), any(), any(), any()) } returns
             result(feeds = listOf(feed("en.mangadex", SeriesMatcher.Decision.ACCEPT)))
         coEvery { api.canonize(any()) } returns null
 
@@ -225,7 +229,7 @@ class CanonizeWorkTest {
         artifactRows: List<AnimeIdBridge.AnimeEpisode> = emptyList(),
         collect: CanonicalFeedCollector.Result = result(),
     ) {
-        every { episodeMap.isStale(workId) } returns true
+        coEvery { episodeMap.forWork(workId) } returns emptyList()
         coEvery { bridge.byWorkId(workId) } returns work
         every { mikoDbManager.bridge() } returns animeBridge
         every { animeBridge.episodesForImdb(any()) } returns artifactRows
@@ -243,7 +247,7 @@ class CanonizeWorkTest {
             collect = result(feeds = listOf(animeFeed("en.kitsu", SeriesMatcher.Decision.ACCEPT))),
         )
         val reqSlot = slot<List<WorkIdentityApi.EpisodeFeed>>()
-        coEvery { api.canonizeEpisodes(eq("mk:imdb:tt0903747"), capture(reqSlot)) } returns
+        coEvery { api.canonizeEpisodes(eq("mk:imdb:tt0903747"), capture(reqSlot), any()) } returns
             WorkIdentityApi.CanonizeEpisodesResponse("mk:imdb:tt0903747", 3, 3, 0, 0)
 
         val out = canonize.run("mk:imdb:tt0903747", Carrier.SHOWS)
@@ -273,7 +277,7 @@ class CanonizeWorkTest {
             collect = result(feeds = listOf(animeFeed("en.kitsu", SeriesMatcher.Decision.ACCEPT))),
         )
         val reqSlot = slot<List<WorkIdentityApi.EpisodeFeed>>()
-        coEvery { api.canonizeEpisodes(eq("mk:imdb:tt0903747"), capture(reqSlot)) } returns
+        coEvery { api.canonizeEpisodes(eq("mk:imdb:tt0903747"), capture(reqSlot), any()) } returns
             WorkIdentityApi.CanonizeEpisodesResponse("mk:imdb:tt0903747", 4, 4, 0, 0)
 
         canonize.run("mk:imdb:tt0903747", Carrier.SHOWS)
@@ -307,7 +311,7 @@ class CanonizeWorkTest {
             collect = result(feeds = listOf(animeFeed("en.kitsu", SeriesMatcher.Decision.ACCEPT))),
         )
         val reqSlot = slot<List<WorkIdentityApi.EpisodeFeed>>()
-        coEvery { api.canonizeEpisodes(eq("mk:m:abc123"), capture(reqSlot)) } returns
+        coEvery { api.canonizeEpisodes(eq("mk:m:abc123"), capture(reqSlot), any()) } returns
             WorkIdentityApi.CanonizeEpisodesResponse("mk:m:abc123", 2, 0, 0, 0)
 
         val out = canonize.run("mk:m:abc123", Carrier.SHOWS)
@@ -319,13 +323,15 @@ class CanonizeWorkTest {
 
     @Test
     fun `shows fresh episode map skips collection`() = runBlocking {
-        every { episodeMap.isStale("mk:imdb:tt0903747") } returns false
+        coEvery { episodeMap.forWork("mk:imdb:tt0903747") } returns listOf(mockk())
+        every { sourcePreferences.canonizeRanAtFor("mk:imdb:tt0903747") } returns
+            System.currentTimeMillis()
 
         val out = canonize.run("mk:imdb:tt0903747", Carrier.SHOWS)
 
         assertEquals(CanonizeWork.Outcome.Fresh, out)
         coVerify(exactly = 0) { collector.collect(any(), any(), any(), any(), any()) }
-        coVerify(exactly = 0) { api.canonizeEpisodes(any(), any()) }
+        coVerify(exactly = 0) { api.canonizeEpisodes(any(), any(), any()) }
     }
 
     @Test
@@ -339,7 +345,7 @@ class CanonizeWorkTest {
         val out = canonize.run("mk:m:abc123", Carrier.SHOWS)
 
         assertEquals(CanonizeWork.Outcome.NoVerifiedFeeds, out)
-        coVerify(exactly = 0) { api.canonizeEpisodes(any(), any()) }
+        coVerify(exactly = 0) { api.canonizeEpisodes(any(), any(), any()) }
     }
 
     @Test
@@ -354,6 +360,6 @@ class CanonizeWorkTest {
         val out = canonize.run("mk:imdb:tt0903747", Carrier.SHOWS)
 
         assertEquals(CanonizeWork.Outcome.TooManyFailures, out)
-        coVerify(exactly = 0) { api.canonizeEpisodes(any(), any()) }
+        coVerify(exactly = 0) { api.canonizeEpisodes(any(), any(), any()) }
     }
 }

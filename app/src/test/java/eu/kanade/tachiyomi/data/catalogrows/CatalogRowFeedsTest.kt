@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
@@ -64,6 +65,7 @@ class CatalogRowFeedsTest {
     private fun extensionFeed(mangaSource: CatalogueSource?): ExtensionCatalogFeed {
         val mangaManager = mockk<MangaSourceManager> {
             every { get(SOURCE_ID) } returns mangaSource
+            every { isInitialized } returns MutableStateFlow(true)
         }
         return ExtensionCatalogFeed(mangaManager, mockk(), mockk())
     }
@@ -146,6 +148,7 @@ class CatalogRowFeedsTest {
         // MangaSource, not a CatalogueSource — the cast must fail.
         val mangaManager = mockk<MangaSourceManager> {
             every { get(SOURCE_ID) } returns StubMangaSource(SOURCE_ID, "en", "TestSrc")
+            every { isInitialized } returns MutableStateFlow(true)
         }
         assertThrows(ExtensionUnavailableException::class.java) {
             runBlocking {
@@ -385,7 +388,10 @@ class CatalogRowFeedsTest {
         }
         val feed = ExtensionCatalogFeed(
             mockk(),
-            mockk<AnimeSourceManager> { every { get(SOURCE_ID) } returns animeSource },
+            mockk<AnimeSourceManager> {
+                every { get(SOURCE_ID) } returns animeSource
+                every { isInitialized } returns MutableStateFlow(true)
+            },
             mockk(),
         )
         val spec = CatalogRowSpec(
@@ -419,7 +425,10 @@ class CatalogRowFeedsTest {
         val feed = ExtensionCatalogFeed(
             mockk(),
             mockk(),
-            mockk<NovelSourceManager> { every { get(SOURCE_ID) } returns novelSource },
+            mockk<NovelSourceManager> {
+                every { get(SOURCE_ID) } returns novelSource
+                every { isInitialized } returns MutableStateFlow(true)
+            },
         )
         val spec = CatalogRowSpec(
             id = "r1",

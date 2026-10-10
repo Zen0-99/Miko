@@ -73,6 +73,7 @@ class ThreadIdResolverTest {
             every { author } returns null
             every { genre } returns null
             every { source } returns 1L
+            every { isAudiobook } returns false
         }
         assertEquals("books:mk:mb:99", resolver.forNovel(novel))
     }
