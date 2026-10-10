@@ -9,6 +9,8 @@ on:
       - 'ios-app/**'
       - 'iosApp/**'
       - 'core/network/**'
+      - 'core/common/**'
+      - 'i18n/**'
       - 'source-api/**'
       - 'source-js/**'
       - 'gradle/libs.versions.toml'
@@ -40,6 +42,12 @@ jobs:
 
       - name: Compile core:network for iOS (contract module)
         run: ./gradlew :core:network:compileKotlinIosSimulatorArm64 --stacktrace
+
+      - name: Compile i18n for iOS (Phase 26 gate)
+        run: ./gradlew :i18n:compileKotlinIosSimulatorArm64 --stacktrace
+
+      - name: Compile core:common for iOS (Phase 26 gate)
+        run: ./gradlew :core:common:compileKotlinIosSimulatorArm64 --stacktrace
 
       - name: Compile source-api for iOS (Phase 24 gate)
         run: ./gradlew :source-api:compileKotlinIosSimulatorArm64 --stacktrace
