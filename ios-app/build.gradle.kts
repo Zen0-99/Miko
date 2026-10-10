@@ -48,6 +48,10 @@ kotlin {
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
+        freeCompilerArgs.addAll(
+            "-Xexpect-actual-classes",
+            "-opt-in=kotlin.time.ExperimentalTime",
+            "-opt-in=kotlinx.cinterop.ExperimentalForeignApi",
+        )
     }
 }
