@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.source.model
 
-import androidx.compose.runtime.Stable
+import eu.kanade.tachiyomi.util.Stable
 
 @Stable
 data class FilterList(val list: List<Filter<*>>) : List<Filter<*>> by list {

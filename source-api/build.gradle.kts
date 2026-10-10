@@ -8,23 +8,36 @@ plugins {
 
 kotlin {
     androidTarget()
+    iosX64()
+    iosArm64()
+    iosSimulatorArm64()
+
+    // Template is otherwise applied lazily after evaluation; apply now so
+    // the iosMain accessor exists in sourceSets {}.
+    applyDefaultHierarchyTemplate()
+
     sourceSets {
         val commonMain by getting {
             dependencies {
                 api(kotlinx.serialization.json)
+                api(kotlinx.coroutines.core)
                 api(libs.injekt)
-                api(libs.rxjava)
-                api(libs.jsoup)
-                api(aniyomilibs.nanohttpd)
-
-                implementation(project.dependencies.platform(compose.bom))
-                implementation(compose.runtime)
             }
         }
         val androidMain by getting {
             dependencies {
                 implementation(projects.core.common)
                 api(libs.preferencektx)
+
+                // Extensions-lib ABI is JVM-bound: APKs link these exact
+                // types (RxJava fetch* methods, okhttp3 Request/Response/
+                // Headers, nanohttpd HttpServer, jsoup in parsed sources).
+                api(libs.rxjava)
+                api(libs.jsoup)
+                api(aniyomilibs.nanohttpd)
+
+                implementation(project.dependencies.platform(compose.bom))
+                implementation(compose.runtime)
 
                 // Workaround for https://youtrack.jetbrains.com/issue/KT-57605
                 implementation(kotlinx.coroutines.android)

@@ -9,6 +9,7 @@ on:
       - 'ios-app/**'
       - 'iosApp/**'
       - 'core/network/**'
+      - 'source-api/**'
       - 'gradle/libs.versions.toml'
       - 'settings.gradle.kts'
       - '.github/workflows/ios-app.yml'
@@ -38,6 +39,9 @@ jobs:
 
       - name: Compile core:network for iOS (contract module)
         run: ./gradlew :core:network:compileKotlinIosSimulatorArm64 --stacktrace
+
+      - name: Compile source-api for iOS (Phase 24 gate)
+        run: ./gradlew :source-api:compileKotlinIosSimulatorArm64 --stacktrace
 
       - name: Link MikoKit framework (iosSimulatorArm64)
         run: ./gradlew :ios-app:linkDebugFrameworkIosSimulatorArm64 --stacktrace

@@ -2,9 +2,7 @@
 
 package eu.kanade.tachiyomi.animesource.model
 
-import java.io.Serializable
-
-interface SEpisode : Serializable {
+interface SEpisode {
 
     var url: String
 

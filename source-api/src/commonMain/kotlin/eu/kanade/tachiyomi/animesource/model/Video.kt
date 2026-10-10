@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.animesource.model
 
-import android.net.Uri
+import eu.kanade.tachiyomi.util.Headers
+import eu.kanade.tachiyomi.util.Uri
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okhttp3.Headers
 
 @Serializable
 data class Track(val url: String, val lang: String)
@@ -129,7 +129,7 @@ data class SerializableVideo(
                         vid.videoTitle,
                         vid.resolution,
                         vid.bitrate,
-                        vid.headers?.toList(),
+                        vid.headers?.let { h -> (0 until h.size).map { h.name(it) to h.value(it) } },
                         vid.preferred,
                         vid.subtitleTracks,
                         vid.audioTracks,

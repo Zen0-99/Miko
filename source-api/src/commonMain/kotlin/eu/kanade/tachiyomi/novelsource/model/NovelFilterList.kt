@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.novelsource.model
 
-import androidx.compose.runtime.Stable
+import eu.kanade.tachiyomi.util.Stable
 
 @Stable
 data class NovelFilterList(val list: List<NovelFilter<*>>) : List<NovelFilter<*>> by list {

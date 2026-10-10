@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.animesource.model
 
-import androidx.compose.runtime.Stable
+import eu.kanade.tachiyomi.util.Stable
 
 @Stable
 data class AnimeFilterList(val list: List<AnimeFilter<*>>) : List<AnimeFilter<*>> by list {

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.source.model
 
-import android.net.Uri
-import eu.kanade.tachiyomi.network.ProgressListener
+import eu.kanade.tachiyomi.util.ProgressListener
+import eu.kanade.tachiyomi.util.Uri
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable

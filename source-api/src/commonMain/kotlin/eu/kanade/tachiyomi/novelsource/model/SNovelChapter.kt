@@ -2,9 +2,7 @@
 
 package eu.kanade.tachiyomi.novelsource.model
 
-import java.io.Serializable
-
-interface SNovelChapter : Serializable {
+interface SNovelChapter {
 
     var url: String
 
