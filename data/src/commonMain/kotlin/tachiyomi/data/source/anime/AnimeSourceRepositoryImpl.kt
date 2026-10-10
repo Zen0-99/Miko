@@ -3,7 +3,7 @@ package tachiyomi.data.source.anime
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
+import tachiyomi.data.source.isOnlineSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -32,7 +32,7 @@ class AnimeSourceRepositoryImpl(
     override fun getOnlineAnimeSources(): Flow<List<DomainSource>> {
         return sourceManager.catalogueSources.map { sources ->
             sources
-                .filterIsInstance<AnimeHttpSource>()
+                .filter { it.isOnlineSource() }
                 .map(::mapSourceToDomainSource)
         }
     }

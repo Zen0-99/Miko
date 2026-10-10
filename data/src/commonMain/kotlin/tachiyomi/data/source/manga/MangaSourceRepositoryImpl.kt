@@ -3,7 +3,7 @@ package tachiyomi.data.source.manga
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.online.HttpSource
+import tachiyomi.data.source.isOnlineSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -33,7 +33,7 @@ class MangaSourceRepositoryImpl(
     override fun getOnlineMangaSources(): Flow<List<DomainSource>> {
         return sourceManager.catalogueSources.map { sources ->
             sources
-                .filterIsInstance<HttpSource>()
+                .filter { it.isOnlineSource() }
                 .map(::mapSourceToDomainSource)
         }
     }

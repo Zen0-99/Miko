@@ -96,7 +96,7 @@ object GenreAliases {
         val out = LinkedHashMap<String, String>()
         for (term in terms) {
             for (variant in cyrillicVariants(term)) {
-                out.putIfAbsent(variant.lowercase(), variant)
+                out.getOrPut(variant.lowercase()) { variant }
             }
         }
         return out.values.toList()

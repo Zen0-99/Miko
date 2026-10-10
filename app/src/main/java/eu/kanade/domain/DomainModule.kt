@@ -94,6 +94,7 @@ import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepoCount
 import mihon.domain.extensionrepo.novel.interactor.ReplaceNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.UpdateNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.repository.NovelExtensionRepoRepository
+import mihon.domain.extensionrepo.service.AndroidExtensionRepoService
 import mihon.domain.extensionrepo.service.ExtensionRepoService
 import mihon.domain.items.chapter.interactor.FilterChaptersForDownload
 import mihon.domain.items.episode.interactor.FilterEpisodesForDownload
@@ -549,7 +550,7 @@ class DomainModule : InjektModule {
         addFactory { TrustMangaExtension(get(), get()) }
         addFactory { TrustNovelExtension(get(), get()) }
 
-        addFactory { ExtensionRepoService(get(), get()) }
+        addFactory { AndroidExtensionRepoService(get(), get()) as ExtensionRepoService }
 
         addSingletonFactory<AnimeExtensionRepoRepository> { AnimeExtensionRepoRepositoryImpl(get()) }
         addFactory { GetAnimeExtensionRepo(get()) }
@@ -573,7 +574,7 @@ class DomainModule : InjektModule {
         addFactory { eu.kanade.domain.source.novel.interactor.GetNovelIncognitoState(get(), get(), get()) }
 
         addSingletonFactory<NovelStubSourceRepository> { NovelStubSourceRepositoryImpl(get()) }
-        addSingletonFactory<NovelSourceRepository> { NovelSourceRepositoryImpl(get()) }
+        addSingletonFactory<NovelSourceRepository> { NovelSourceRepositoryImpl(get(), get()) }
         addSingletonFactory<NovelExtensionRepoRepository> { NovelExtensionRepoRepositoryImpl(get()) }
         addFactory { GetNovelExtensionRepo(get()) }
         addFactory { GetNovelExtensionRepoCount(get()) }

@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.SNovel
-import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
+import tachiyomi.data.source.isOnlineSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -13,13 +13,11 @@ import tachiyomi.domain.source.novel.model.StubNovelSource
 import tachiyomi.domain.source.novel.repository.NovelSourcePagingSourceType
 import tachiyomi.domain.source.novel.repository.NovelSourceRepository
 import tachiyomi.domain.source.novel.service.NovelSourceManager
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import tachiyomi.domain.source.novel.model.NovelSource as DomainNovelSource
 
 class NovelSourceRepositoryImpl(
-    private val sourceManager: NovelSourceManager = Injekt.get(),
-    private val handler: NovelDatabaseHandler = Injekt.get(),
+    private val sourceManager: NovelSourceManager,
+    private val handler: NovelDatabaseHandler,
 ) : NovelSourceRepository {
 
     override fun getNovelSources(): Flow<List<DomainNovelSource>> {
@@ -36,7 +34,7 @@ class NovelSourceRepositoryImpl(
     override fun getOnlineNovelSources(): Flow<List<DomainNovelSource>> {
         return sourceManager.catalogueSources.map { sources ->
             sources
-                .filterIsInstance<NovelHttpSource>()
+                .filter { it.isOnlineSource() }
                 .map(::mapSourceToDomainSource)
         }
     }
