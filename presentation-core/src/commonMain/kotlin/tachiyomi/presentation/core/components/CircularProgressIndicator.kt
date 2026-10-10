@@ -29,7 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.tooling.preview.Preview
+import tachiyomi.presentation.core.util.Preview
 
 /**
  * A combined [CircularProgressIndicator] that always rotates.
