@@ -41,6 +41,11 @@ kotlin {
                 implementation(kotlinx.immutables)
                 implementation(libs.paging.common)
                 implementation(libs.sqldelight.coroutines.kmp)
+                // project.dependencies.platform — bare platform() is a
+                // compile error in KMP sourceSet blocks (KT-58759).
+                implementation(project.dependencies.platform(libs.coil.bom))
+                implementation(libs.coil.compose)
+                implementation(libs.coil.network.ktor3)
             }
         }
     }
