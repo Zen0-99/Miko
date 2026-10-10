@@ -13,6 +13,8 @@ on:
       - 'i18n/**'
       - 'source-api/**'
       - 'source-js/**'
+      - 'domain/**'
+      - 'data/**'
       - 'gradle/libs.versions.toml'
       - 'settings.gradle.kts'
       - '.github/workflows/ios-app.yml'
