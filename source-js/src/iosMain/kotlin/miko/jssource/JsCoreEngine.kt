@@ -236,4 +236,5 @@ private val nativeInvokeCallback = staticCFunction(::nativeInvokeTrampoline)
  * created/released on a single thread, matching the runtime's
  * single-threaded-per-plugin contract.
  */
+@OptIn(ExperimentalForeignApi::class)
 private val engineDispatchers = mutableMapOf<CPointer<*>, JsNativeDispatcher>()
