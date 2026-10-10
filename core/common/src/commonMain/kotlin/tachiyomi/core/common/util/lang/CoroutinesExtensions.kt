@@ -1,5 +1,6 @@
 package tachiyomi.core.common.util.lang
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -9,6 +10,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * IO-bound dispatcher. `Dispatchers.IO` is JVM-only; on Kotlin/Native it
+ * maps to `Dispatchers.Default` (which backs IO work there anyway).
+ */
+internal expect val ioDispatcher: CoroutineDispatcher
 
 /**
  * Think twice before using this. This is a delicate API. It is easy to accidentally create resource or memory leaks when GlobalScope is used.
@@ -30,7 +37,7 @@ fun launchUI(block: suspend CoroutineScope.() -> Unit): Job =
  */
 @DelicateCoroutinesApi
 fun launchIO(block: suspend CoroutineScope.() -> Unit): Job =
-    GlobalScope.launch(Dispatchers.IO, CoroutineStart.DEFAULT, block)
+    GlobalScope.launch(ioDispatcher, CoroutineStart.DEFAULT, block)
 
 /**
  * Think twice before using this. This is a delicate API. It is easy to accidentally create resource or memory leaks when GlobalScope is used.
@@ -47,7 +54,7 @@ fun CoroutineScope.launchUI(block: suspend CoroutineScope.() -> Unit): Job =
     launch(Dispatchers.Main, block = block)
 
 fun CoroutineScope.launchIO(block: suspend CoroutineScope.() -> Unit): Job =
-    launch(Dispatchers.IO, block = block)
+    launch(ioDispatcher, block = block)
 
 fun CoroutineScope.launchNonCancellable(block: suspend CoroutineScope.() -> Unit): Job =
     launchIO { withContext(NonCancellable, block) }
@@ -58,7 +65,7 @@ suspend fun <T> withUIContext(block: suspend CoroutineScope.() -> T) = withConte
 )
 
 suspend fun <T> withIOContext(block: suspend CoroutineScope.() -> T) = withContext(
-    Dispatchers.IO,
+    ioDispatcher,
     block,
 )
 

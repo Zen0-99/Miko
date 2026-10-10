@@ -31,6 +31,6 @@ actual object Hash {
             out[j++] = chars[15 and data[i].toInt()]
             i++
         }
-        return String(out)
+        return out.concatToString()
     }
 }

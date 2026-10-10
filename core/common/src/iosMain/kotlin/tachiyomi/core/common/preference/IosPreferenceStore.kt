@@ -126,4 +126,5 @@ class IosPreferenceStore(
     )
 
     override fun getAll(): Map<String, *> = defaults.dictionaryRepresentation()
+        .mapKeys { (key, _) -> key.toString() }
 }
