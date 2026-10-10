@@ -9,8 +9,10 @@ import datanovel.Novelhistory
 import datanovel.Novels
 import eu.kanade.tachiyomi.core.network.platformHttpClient
 import io.ktor.client.HttpClient
+import kotlinx.serialization.json.Json
 import mihon.domain.extensionrepo.service.ExtensionRepoService
 import mihon.domain.extensionrepo.service.IosExtensionRepoService
+import miko.jssource.IosJsRuntimeFactory
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
@@ -27,6 +29,7 @@ import tachiyomi.data.StringListColumnAdapter
 import tachiyomi.data.extension.novel.DefaultNovelPluginStorage
 import tachiyomi.data.extension.novel.IosNovelPluginKeyValueStore
 import tachiyomi.data.extension.novel.NovelPluginKeyValueStore
+import tachiyomi.data.extension.novel.NovelPluginRepositoryImpl
 import tachiyomi.data.extension.novel.NovelPluginStorage
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
 import tachiyomi.data.handlers.anime.IosAnimeDatabaseHandler
@@ -34,10 +37,14 @@ import tachiyomi.data.handlers.manga.IosMangaDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.data.handlers.novel.IosNovelDatabaseHandler
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
+import tachiyomi.data.source.novel.NovelStubSourceRepositoryImpl
 import tachiyomi.db.achievement.AchievementsDatabase
+import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.model.Release
 import tachiyomi.domain.release.service.ReleaseService
+import tachiyomi.domain.source.novel.repository.NovelStubSourceRepository
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.mi.data.AnimeDatabase
 import tachiyomi.novel.data.NovelDatabase
 
@@ -114,6 +121,25 @@ class AppGraph {
     val mangaHandler: MangaDatabaseHandler = IosMangaDatabaseHandler(mangaDatabase)
     val animeHandler: AnimeDatabaseHandler = IosAnimeDatabaseHandler(animeDatabase)
     val novelHandler: NovelDatabaseHandler = IosNovelDatabaseHandler(novelDatabase)
+
+    val novelPluginRepository: NovelPluginRepository =
+        NovelPluginRepositoryImpl(novelHandler)
+
+    val novelStubSourceRepository: NovelStubSourceRepository =
+        NovelStubSourceRepositoryImpl(novelHandler)
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    val jsRuntimeFactory = IosJsRuntimeFactory()
+
+    val novelSourceManager: NovelSourceManager = IosNovelSourceManager(
+        pluginRepository = novelPluginRepository,
+        pluginStorage = novelPluginStorage,
+        sourceRepository = novelStubSourceRepository,
+        runtimeFactory = jsRuntimeFactory,
+        httpClient = httpClient,
+        json = json,
+    )
 
     private fun newDriver(
         schema: app.cash.sqldelight.db.SqlSchema<app.cash.sqldelight.db.QueryResult.Value<Unit>>,
