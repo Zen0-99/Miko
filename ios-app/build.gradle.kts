@@ -13,6 +13,7 @@ plugins {
     kotlin("multiplatform")
     kotlin("plugin.compose")
     id("mihon.code.lint")
+    alias(libs.plugins.moko)
 }
 
 val cmpVersion = "1.8.2" // JetBrains Compose Multiplatform — spike-012 proven
@@ -54,4 +55,11 @@ kotlin {
             "-opt-in=kotlinx.cinterop.ExperimentalForeignApi",
         )
     }
+}
+
+// Static frameworks can't carry resources — moko packs them into the
+// framework dir and the Xcode build phase copies them into the app via
+// copyFrameworkResourcesToApp.
+multiplatformResources {
+    resourcesPackage.set("miko.ios")
 }

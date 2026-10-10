@@ -33,6 +33,19 @@ targets:
           cd "$SRCROOT/.."
           ./gradlew :ios-app:embedAndSignAppleFrameworkForXcode
         basedOnDependencyAnalysis: false
+    postBuildScripts:
+      # Static frameworks can't carry resources — moko packs the i18n
+      # .bundle into MikoKit.framework/ and this copies it into the app
+      # so NSBundle.loadableBundle finds it at runtime.
+      - name: Copy MikoKit resource bundles
+        script: |
+          "$SRCROOT/../gradlew" -p "$SRCROOT/../" :ios-app:copyFrameworkResourcesToApp \
+              -Pmoko.resources.BUILT_PRODUCTS_DIR="$BUILT_PRODUCTS_DIR" \
+              -Pmoko.resources.CONTENTS_FOLDER_PATH="$CONTENTS_FOLDER_PATH" \
+              -Pmoko.resources.CONFIGURATION="$CONFIGURATION" \
+              -Pmoko.resources.PLATFORM_NAME="$PLATFORM_NAME" \
+              -Pmoko.resources.ARCHS="$ARCHS"
+        basedOnDependencyAnalysis: false
     dependencies:
       - framework: MikoKit.framework
         embed: false
