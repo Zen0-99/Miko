@@ -46,6 +46,15 @@ jobs:
         working-directory: iosApp
         run: xcodegen
 
+      - name: Create probe simulator (image device list varies)
+        id: sim
+        run: |
+          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "import sys,json; rts=[r for r in json.load(sys.stdin)['runtimes'] if r['isAvailable'] and 'iOS' in r['name']]; print(rts[-1]['identifier'])")
+          echo "runtime: $RUNTIME"
+          SIM_ID=$(xcrun simctl create MikoProbe com.apple.CoreSimulator.SimDeviceType.iPhone-16 "$RUNTIME" 2>/dev/null \
+            || xcrun simctl create MikoProbe com.apple.CoreSimulator.SimDeviceType.iPhone-15 "$RUNTIME")
+          echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
+
       - name: xcodebuild test — Track B2 live-network probe in real .app bundle
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
@@ -53,7 +62,7 @@ jobs:
           xcodebuild test \
             -project iosApp/iosApp.xcodeproj \
             -scheme iosApp \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO
 
