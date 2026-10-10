@@ -8,12 +8,14 @@ import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import tachiyomi.core.common.util.lang.ioDispatcher
+import kotlin.coroutines.CoroutineContext
 
 /**
  * SQLDelight handler for iOS backed by a single-driver model.
@@ -82,15 +84,26 @@ abstract class IosDatabaseHandler<DB : Transacter>(
     }
 
     private suspend fun <T> dispatch(inTransaction: Boolean, block: suspend DB.() -> T): T {
-        return withContext(queryDispatcher) {
-            if (!inTransaction) {
-                return@withContext block(db)
-            }
-            transactionMutex.withLock {
+        if (!inTransaction) {
+            return withContext(queryDispatcher) { block(db) }
+        }
+        if (currentCoroutineContext()[InTransaction] != null) {
+            // Already inside a driver transaction on this thread — run directly
+            // so nested awaits stay in the transaction (Mutex is not reentrant).
+            return block(db)
+        }
+        transactionMutex.withLock {
+            return withContext(queryDispatcher + InTransaction) {
                 db.transactionWithResult {
-                    runBlocking { block(db) }
+                    runBlocking(coroutineContext) { block(db) }
                 }
             }
         }
+    }
+
+    private object InTransaction :
+        CoroutineContext.Element,
+        CoroutineContext.Key<InTransaction> {
+        override val key: CoroutineContext.Key<*> get() = this
     }
 }
