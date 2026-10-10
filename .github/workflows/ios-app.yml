@@ -10,6 +10,7 @@ on:
       - 'iosApp/**'
       - 'core/network/**'
       - 'source-api/**'
+      - 'source-js/**'
       - 'gradle/libs.versions.toml'
       - 'settings.gradle.kts'
       - '.github/workflows/ios-app.yml'
@@ -42,6 +43,27 @@ jobs:
 
       - name: Compile source-api for iOS (Phase 24 gate)
         run: ./gradlew :source-api:compileKotlinIosSimulatorArm64 --stacktrace
+
+      - name: Compile source-js for iOS (Phase 25 gate)
+        run: ./gradlew :source-js:compileKotlinIosSimulatorArm64 --stacktrace
+
+      - name: source-js iOS runtime tests (JSCore bridge probe)
+        run: |
+          set +e
+          ./gradlew :source-js:iosSimulatorArm64Test -Porg.jetbrains.kotlin.native.internal.enforceStrictPlistSanityCheck=false 2>&1 | tee /tmp/jsruntime-test.log
+          STATUS=${PIPESTATUS[0]}
+          if [ $STATUS -ne 0 ]; then
+            mkdir -p /tmp/artifacts && cp /tmp/jsruntime-test.log /tmp/artifacts/
+          fi
+          exit $STATUS
+
+      - name: Upload source-js test log on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: source-js-ios-test-log
+          path: /tmp/artifacts/
+          if-no-files-found: ignore
 
       - name: Link MikoKit framework (iosSimulatorArm64)
         run: ./gradlew :ios-app:linkDebugFrameworkIosSimulatorArm64 --stacktrace
