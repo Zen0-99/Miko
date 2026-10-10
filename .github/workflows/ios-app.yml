@@ -16,6 +16,7 @@ on:
       - 'domain/**'
       - 'data/**'
       - 'presentation-core/**'
+      - 'ui/**'
       - 'gradle/libs.versions.toml'
       - 'settings.gradle.kts'
       - '.github/workflows/ios-app.yml'
@@ -66,6 +67,9 @@ jobs:
 
       - name: Compile presentation-core for iOS (Phase 27-01 gate)
         run: ./gradlew :presentation-core:compileKotlinIosSimulatorArm64 --stacktrace
+
+      - name: Compile ui for iOS (Phase 27-01 gate)
+        run: ./gradlew :ui:compileKotlinIosSimulatorArm64 --stacktrace
 
       - name: source-js iOS runtime tests (JSCore bridge probe)
         run: |
