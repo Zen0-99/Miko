@@ -2,6 +2,7 @@ package miko.jssource
 
 import com.fleeksoft.ksoup.Ksoup
 import dev.whyoleg.cryptography.CryptographyProvider
+import dev.whyoleg.cryptography.DelicateCryptographyApi
 import dev.whyoleg.cryptography.algorithms.AES
 import eu.kanade.tachiyomi.core.network.platformHttpClient
 import io.ktor.client.HttpClient
@@ -181,6 +182,7 @@ class IosJsNativeApi(
     // Crypto
     // ------------------------------------------------------------------
 
+    @OptIn(DelicateCryptographyApi::class)
     override fun aesGcmDecrypt(keyB64: String, ivB64: String, cipherB64: String): String {
         if (keyB64.isBlank() || ivB64.isBlank() || cipherB64.isBlank()) return ""
         return runCatching {
