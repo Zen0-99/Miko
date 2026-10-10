@@ -184,21 +184,18 @@ class IosJsNativeApi(
     override fun aesGcmDecrypt(keyB64: String, ivB64: String, cipherB64: String): String {
         if (keyB64.isBlank() || ivB64.isBlank() || cipherB64.isBlank()) return ""
         return runCatching {
-            runBlocking {
-                val keyRaw = platformBase64Decode(keyB64)
-                val iv = platformBase64Decode(ivB64)
-                val cipherBytes = platformBase64Decode(cipherB64)
-                // JCE semantics: zero-pad key to 32 bytes, 128-bit tag.
-                val keyBytes = ByteArray(32)
-                keyRaw.copyInto(keyBytes, endIndex = minOf(keyRaw.size, keyBytes.size))
-                // cryptography-kotlin GCM packs iv || ciphertext || tag.
-                val packed = iv + cipherBytes
-                val provider = CryptographyProvider.Default
-                val aesGcm = provider.get(AES.GCM)
-                val key = aesGcm.keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, keyBytes)
-                val plain = key.cipher().decrypt(packed)
-                platformBase64Encode(plain)
-            }
+            val keyRaw = platformBase64Decode(keyB64)
+            val iv = platformBase64Decode(ivB64)
+            val cipherBytes = platformBase64Decode(cipherB64)
+            // JCE semantics: zero-pad key to 32 bytes, 128-bit tag.
+            val keyBytes = ByteArray(32)
+            keyRaw.copyInto(keyBytes, endIndex = minOf(keyRaw.size, keyBytes.size))
+            val provider = CryptographyProvider.Default
+            val aesGcm = provider.get(AES.GCM)
+            val key = aesGcm.keyDecoder().decodeFromByteArrayBlocking(AES.Key.Format.RAW, keyBytes)
+            // IvAuthenticatedCipher: decrypt expects ciphertext || tag, iv separately.
+            val plain = key.cipher().decryptWithIvBlocking(iv, cipherBytes)
+            platformBase64Encode(plain)
         }.getOrElse { "" }
     }
 
