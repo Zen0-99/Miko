@@ -21,13 +21,20 @@ kotlin {
             dependencies {
                 api(kotlinx.serialization.json)
                 api(kotlinx.coroutines.core)
-                api(libs.injekt)
+            }
+        }
+        val iosMain by getting {
+            dependencies {
+                // coroutines-core is unversioned in the kotlinx catalog;
+                // Android gets its version from the BOM platform below.
+                implementation(project.dependencies.platform(kotlinx.coroutines.bom))
             }
         }
         val androidMain by getting {
             dependencies {
                 implementation(projects.core.common)
                 api(libs.preferencektx)
+                api(libs.injekt)
 
                 // Extensions-lib ABI is JVM-bound: APKs link these exact
                 // types (RxJava fetch* methods, okhttp3 Request/Response/
