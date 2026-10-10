@@ -34,7 +34,9 @@ import kotlinx.serialization.json.longOrNull
  * single-threaded and re-entrant evaluation would corrupt the polling tokens.
  */
 class IosNovelJsSource(
-    private val runtime: JsRuntime,
+    private val runtimeProvider: () -> JsRuntime,
+    private val script: String,
+    private val pluginId: String,
     private val json: Json,
     override val id: Long,
     override val name: String,
@@ -42,6 +44,26 @@ class IosNovelJsSource(
 ) : NovelCatalogueSource {
 
     private val mutex = Mutex()
+
+    /**
+     * The engine bootstraps lazily on first plugin call — installing many
+     * plugins must not spin up a JSCore context per source at collection
+     * time (mirrors Android's lazy NovelJsRuntimeBinder). Every call site
+     * holds [mutex], so materialization stays single-threaded.
+     */
+    private var runtimeOrNull: JsRuntime? = null
+
+    private val runtime: JsRuntime
+        get() = runtimeOrNull ?: runtimeProvider().also {
+            it.loadPlugin(script, pluginId)
+            runtimeOrNull = it
+        }
+
+    /** Releases the engine if it was ever materialized. */
+    fun shutdown() {
+        runtimeOrNull?.release()
+        runtimeOrNull = null
+    }
 
     // Mirrors Android's capabilities.latestListingMethod detection:
     // `typeof __plugin.latestNovels === "function"` -> latestNovels, else the
@@ -172,7 +194,7 @@ class IosNovelJsSource(
 
     private fun JsonObject.chapters(): List<JsonObject> {
         return listOf("chapters", "items").firstNotNullOfOrNull { key ->
-            this[key]?.jsonArrayOrNull()
+            this[key]?.jsonArrayOrNull()?.mapNotNull { it.jsonObjectOrNull() }
         } ?: emptyList()
     }
 
