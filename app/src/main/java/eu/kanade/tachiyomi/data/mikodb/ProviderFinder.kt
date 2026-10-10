@@ -249,7 +249,8 @@ class ProviderFinder(
                         }?.reasons?.let(SeriesMatcher::dominantReason),
                         missingCount = if (
                             medium == WorkIdResolver.MEDIUM_SHOWS &&
-                            feed != null && feed.verdict != SeriesMatcher.Decision.REJECT &&
+                            feed != null &&
+                            feed.verdict != SeriesMatcher.Decision.REJECT &&
                             canon.isNotEmpty()
                         ) {
                             canonMissingCount(canon, feed.episodes)
