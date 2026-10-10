@@ -30,7 +30,7 @@ class FeatureUsageCollector(
      * Обработать событие FeatureUsed
      */
     fun onFeatureUsed(feature: AchievementEvent.Feature, count: Int = 1) {
-        val current = featureCounts.getOrDefault(feature, 0)
+        val current = featureCounts.getOrElse(feature) { 0 }
         featureCounts[feature] = current + count
     }
 
@@ -56,7 +56,7 @@ class FeatureUsageCollector(
      * Получить счетчик использования функции
      */
     fun getFeatureCount(feature: AchievementEvent.Feature): Int {
-        return featureCounts.getOrDefault(feature, 0)
+        return featureCounts.getOrElse(feature) { 0 }
     }
 
     /**
