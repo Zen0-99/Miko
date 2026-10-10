@@ -2,6 +2,7 @@ package miko.ios
 
 import app.cash.sqldelight.driver.native.NativeSqliteDriver
 import co.touchlab.sqliter.DatabaseConfiguration
+import co.touchlab.sqliter.SynchronousFlag
 import data.History
 import data.Mangas
 import dataanime.Animehistory
@@ -179,19 +180,21 @@ class AppGraph {
         fileName: String,
     ): NativeSqliteDriver {
         // sqliter rejects path separators in `name` — the directory goes
-        // through Extended.basePath; foreign keys via the config so every
-        // pooled connection gets them.
-        val driver = NativeSqliteDriver(schema, fileName) { config ->
-            config.copy(
-                extendedConfig = DatabaseConfiguration.Extended(
-                    foreignKeyConstraints = true,
-                    basePath = databasesDir,
-                ),
-            )
-        }
-        driver.execute(null, "PRAGMA journal_mode = WAL", 0)
-        driver.execute(null, "PRAGMA synchronous = NORMAL", 0)
-        return driver
+        // through Extended.basePath. Journal mode defaults to WAL; foreign
+        // keys + synchronous via config so every pooled connection gets them.
+        return NativeSqliteDriver(
+            schema = schema,
+            name = fileName,
+            onConfiguration = { configuration ->
+                configuration.copy(
+                    extendedConfig = DatabaseConfiguration.Extended(
+                        basePath = databasesDir,
+                        foreignKeyConstraints = true,
+                        synchronousFlag = SynchronousFlag.NORMAL,
+                    ),
+                )
+            },
+        )
     }
 
     companion object {
