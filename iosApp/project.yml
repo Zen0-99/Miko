@@ -20,6 +20,8 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # CMP strict plist check — required by ComposeUIViewController.
+        CADisableMinimumFrameDurationOnPhone: true
     settings:
       base:
         FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/../ios-app/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
