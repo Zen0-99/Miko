@@ -24,7 +24,10 @@ kotlin {
                 api(kotlinx.coroutines.core)
                 api(kotlinx.serialization.json)
                 api(kotlinx.serialization.protobuf)
-                api("com.fleeksoft.ksoup:ksoup:0.2.6")
+                // Pinned to 0.2.5: 0.2.6's klibs are built with Kotlin 2.3.10
+                // (abi_version 2.3.0) which our Kotlin 2.2.0 K/N toolchain
+                // cannot consume. 0.2.5 is built with Kotlin 2.2.0.
+                api("com.fleeksoft.ksoup:ksoup:0.2.5")
             }
         }
         val commonTest by getting {
