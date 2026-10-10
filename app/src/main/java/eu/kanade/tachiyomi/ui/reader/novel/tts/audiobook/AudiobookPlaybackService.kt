@@ -71,7 +71,8 @@ class AudiobookPlaybackService : MediaLibraryService() {
                 Injekt.get<NovelSourceManager>()
                     .get(AbsNovelSource.ABS_SOURCE_ID) as? AbsNovelSource
             }.getOrNull()?.client
-            if (client != null && client.isConfigured() &&
+            if (client != null &&
+                client.isConfigured() &&
                 hostKeyOf(dataSpec.uri) == client.hostKey()
             ) {
                 dataSpec.withAdditionalHeaders(client.authHeaders())

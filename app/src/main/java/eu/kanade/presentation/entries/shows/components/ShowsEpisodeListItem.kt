@@ -466,8 +466,11 @@ private fun EpisodeInformation(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                         .copy(alpha = SECONDARY_ALPHA),
                 )
-                if (fillermark || date != null || watchProgress != null ||
-                    scanlator != null || note != null
+                if (fillermark ||
+                    date != null ||
+                    watchProgress != null ||
+                    scanlator != null ||
+                    note != null
                 ) {
                     DotSeparatorText()
                 }

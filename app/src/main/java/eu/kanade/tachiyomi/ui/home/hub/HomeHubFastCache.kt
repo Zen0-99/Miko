@@ -129,7 +129,8 @@ data class CachedHomeHubState(
         val list = heroes.entries.firstOrNull { (k, v) ->
             HomeHubMediaType.fromKey(k) == want && v.isNotEmpty()
         }?.value.orEmpty()
-        return if (list.isEmpty() && hero != null &&
+        return if (list.isEmpty() &&
+            hero != null &&
             HomeHubMediaType.fromKey(hero.mediaType) == want
         ) {
             listOf(hero)

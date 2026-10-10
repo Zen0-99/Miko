@@ -99,7 +99,8 @@ class WorkCarriers(
          *  content, not a personalized row (mirrors the worker's
          *  strict serve predicate). */
         val readable: List<Carrier> get() = carriers.filter {
-            it.enabled && (it.status == "confirmed" || it.mine) &&
+            it.enabled &&
+                (it.status == "confirmed" || it.mine) &&
                 it.status != "quarantined"
         }
 

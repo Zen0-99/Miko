@@ -174,8 +174,10 @@ class CanonicalChapterSync(
             val bookmark = winner.bookmark || loser.bookmark
             val lastPage = maxOf(winner.lastPageRead, loser.lastPageRead)
             val dateFetch = minOf(winner.dateFetch, loser.dateFetch)
-            if (read == winner.read && bookmark == winner.bookmark &&
-                lastPage == winner.lastPageRead && dateFetch == winner.dateFetch
+            if (read == winner.read &&
+                bookmark == winner.bookmark &&
+                lastPage == winner.lastPageRead &&
+                dateFetch == winner.dateFetch
             ) {
                 null
             } else {
@@ -225,8 +227,10 @@ class CanonicalChapterSync(
             val bookmark = winner.bookmark || loser.bookmark
             val lastChar = maxOf(winner.lastCharRead, loser.lastCharRead)
             val dateFetch = minOf(winner.dateFetch, loser.dateFetch)
-            if (read == winner.read && bookmark == winner.bookmark &&
-                lastChar == winner.lastCharRead && dateFetch == winner.dateFetch
+            if (read == winner.read &&
+                bookmark == winner.bookmark &&
+                lastChar == winner.lastCharRead &&
+                dateFetch == winner.dateFetch
             ) {
                 null
             } else {
