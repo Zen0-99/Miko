@@ -1,14 +1,9 @@
 package miko.jssource
 
-import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.usePinned
-import platform.Foundation.NSData
 import platform.Foundation.NSURL
-import platform.Foundation.create
-import platform.posix.memcpy
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 @OptIn(ExperimentalForeignApi::class)
 actual fun platformResolveUrl(input: String, base: String?): String {
@@ -32,25 +27,10 @@ actual fun platformGetPathname(url: String): String {
     return runCatching { NSURL.URLWithString(value)?.path ?: "" }.getOrDefault("")
 }
 
-@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-actual fun platformBase64Encode(bytes: ByteArray): String {
-    if (bytes.isEmpty()) return ""
-    val data = bytes.usePinned { pinned ->
-        NSData.create(bytes = pinned.addressOf(0), length = bytes.size.toULong())
-    }
-    return data.base64EncodedStringWithOptions(0u)
-}
+@OptIn(ExperimentalEncodingApi::class)
+actual fun platformBase64Encode(bytes: ByteArray): String =
+    if (bytes.isEmpty()) "" else Base64.encode(bytes)
 
-@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-actual fun platformBase64Decode(b64: String): ByteArray {
-    val data = NSData.create(base64EncodedString = b64, options = 0u) ?: return ByteArray(0)
-    val size = data.length.toInt()
-    if (size == 0) return ByteArray(0)
-    val out = ByteArray(size)
-    memScoped {
-        out.usePinned { pinned ->
-            memcpy(pinned.addressOf(0), data.bytes, data.length)
-        }
-    }
-    return out
-}
+@OptIn(ExperimentalEncodingApi::class)
+actual fun platformBase64Decode(b64: String): ByteArray =
+    runCatching { Base64.decode(b64) }.getOrElse { ByteArray(0) }

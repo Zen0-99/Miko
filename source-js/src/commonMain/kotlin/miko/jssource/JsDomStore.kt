@@ -19,7 +19,7 @@ import com.fleeksoft.ksoup.nodes.TextNode
 class JsDomStore {
 
     private var nextHandle = 1
-    private val nodes = LinkedHashMap<Int, Node>(256, 0.75f, true)
+    private val nodes = LinkedHashMap<Int, Node>(256, 0.75f)
 
     // ------------------------------------------------------------------
     // Document lifecycle

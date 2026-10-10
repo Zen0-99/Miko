@@ -1,19 +1,17 @@
 package miko.jssource
 
-import kotlin.native.internal.NativePtr
 import kotlinx.cinterop.ByteVar
-import kotlinx.cinterop.COpaquePointer
 import kotlinx.cinterop.CPointer
-import kotlinx.cinterop.CPointerVar
-import kotlinx.cinterop.CPointerVarOf
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.convert
+import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.set
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.value
@@ -35,19 +33,15 @@ import platform.JavaScriptCore.JSStringGetMaximumUTF8CStringSize
 import platform.JavaScriptCore.JSStringGetUTF8CString
 import platform.JavaScriptCore.JSStringRef
 import platform.JavaScriptCore.JSStringRelease
+import platform.JavaScriptCore.JSType
+import platform.JavaScriptCore.JSValueGetType
 import platform.JavaScriptCore.JSValueMakeString
 import platform.JavaScriptCore.JSValueRef
+import platform.JavaScriptCore.JSValueRefVar
 import platform.JavaScriptCore.JSValueToBoolean
 import platform.JavaScriptCore.JSValueToNumber
 import platform.JavaScriptCore.JSValueToStringCopy
 import platform.JavaScriptCore.kJSPropertyAttributeNone
-import platform.JavaScriptCore.kJSTypeBoolean
-import platform.JavaScriptCore.kJSTypeNull
-import platform.JavaScriptCore.kJSTypeNumber
-import platform.JavaScriptCore.kJSTypeObject
-import platform.JavaScriptCore.kJSTypeString
-import platform.JavaScriptCore.kJSTypeUndefined
-import platform.JavaScriptCore.JSValueGetType
 import platform.posix.size_t
 
 /**
@@ -93,7 +87,7 @@ class JsCoreEngine(
         return memScoped {
             val jsScript = JSStringCreateWithUTF8CString(script)
             val jsFile = JSStringCreateWithUTF8CString(fileName)
-            val exceptionVar = alloc<CPointerVar<JSValueRef>>()
+            val exceptionVar = alloc<JSValueRefVar>()
             val result = JSEvaluateScript(
                 context,
                 jsScript,
@@ -126,18 +120,20 @@ class JsCoreEngine(
     private fun jsValueToKotlin(value: JSValueRef): Any? {
         val ctx = context
         return when (JSValueGetType(ctx, value)) {
-            kJSTypeUndefined, kJSTypeNull -> null
-            kJSTypeBoolean -> JSValueToBoolean(ctx, value)
-            kJSTypeNumber -> JSValueToNumber(ctx, value, null)
-            kJSTypeString -> jsStringRefToKotlin(JSValueToStringCopy(ctx, value, null))
-            kJSTypeObject -> jsValueToJsonString(value)
+            JSType.kJSTypeUndefined, JSType.kJSTypeNull -> null
+            JSType.kJSTypeBoolean -> JSValueToBoolean(ctx, value)
+            JSType.kJSTypeNumber -> JSValueToNumber(ctx, value, null)
+            JSType.kJSTypeString -> jsStringRefToKotlin(JSValueToStringCopy(ctx, value, null))
+            JSType.kJSTypeObject -> jsValueToJsonString(value)
             else -> jsStringRefToKotlin(JSValueToStringCopy(ctx, value, null))
         }
     }
 
     private fun jsValueToKotlinString(value: JSValueRef): String {
         return runCatching { jsValueToJsonString(value) }
-            .getOrElse { jsStringRefToKotlin(JSValueToStringCopy(context, value, null)) ?: "<unprintable>" }
+            .getOrNull()
+            ?: jsStringRefToKotlin(JSValueToStringCopy(context, value, null))
+            ?: "<unprintable>"
     }
 
     /** JSON.stringify(value) — used for object results and error reporting. */
@@ -154,7 +150,7 @@ class JsCoreEngine(
             JSStringRelease(jsonName)
             JSStringRelease(stringifyName)
             if (stringifyFn == null) return@memScoped null
-            val argsArr = allocArray<CPointerVar<JSValueRef>>(1)
+            val argsArr = allocArray<JSValueRefVar>(1)
             argsArr[0] = value
             val stringified = JSObjectCallAsFunction(
                 ctx,
@@ -192,8 +188,8 @@ class JsCoreEngine(
             function: JSObjectRef?,
             thisObject: JSObjectRef?,
             argumentCount: size_t,
-            arguments: CPointer<CPointerVar<JSValueRef>>?,
-            exception: CPointer<CPointerVar<JSValueRef>>?,
+            arguments: CPointer<JSValueRefVar>?,
+            exception: CPointer<JSValueRefVar>?,
         ): JSValueRef? {
             val dispatcher = function?.let { JSObjectGetPrivate(it) }
                 ?.asStableRef<JsNativeDispatcher>()
@@ -220,7 +216,7 @@ class JsCoreEngine(
             } catch (e: Throwable) {
                 val msg = JSStringCreateWithUTF8CString("native invoke failed: ${e.message}")
                 val errValue = ctx?.let { JSValueMakeString(it, msg) }
-                if (exception != null) exception.pointed.value = errValue
+                exception?.pointed?.let { it.value = errValue }
                 JSStringRelease(msg)
                 null
             }
