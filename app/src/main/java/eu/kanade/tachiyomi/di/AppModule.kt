@@ -75,6 +75,7 @@ import miko.core.common.torrent.TorrentServerUtils
 import nl.adaptivity.xmlutil.XmlDeclMode.Charset
 import nl.adaptivity.xmlutil.core.XmlVersion
 import nl.adaptivity.xmlutil.serialization.XML
+import tachiyomi.core.common.preference.AndroidPreferenceStore
 import tachiyomi.core.common.storage.AndroidStorageFolderProvider
 import tachiyomi.data.AnimeUpdateStrategyColumnAdapter
 import tachiyomi.data.Database
@@ -88,7 +89,6 @@ import tachiyomi.data.extension.novel.NovelPluginDownloader
 import tachiyomi.data.extension.novel.NovelPluginInstaller
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
 import tachiyomi.data.extension.novel.NovelPluginKeyValueStore
-import tachiyomi.data.extension.novel.NovelPluginStorage
 import tachiyomi.data.handlers.anime.AndroidAnimeDatabaseHandler
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
 import tachiyomi.data.handlers.manga.AndroidMangaDatabaseHandler
@@ -448,8 +448,8 @@ class AppModule(val app: Application) : InjektModule {
         // --- JS novel plugin runtime wiring ---
         // Storage for plugin scripts and custom assets
         addSingletonFactory {
-            tachiyomi.data.extension.novel.NovelPluginStorage(
-                java.io.File(app.filesDir, "novel_plugins"),
+            tachiyomi.data.extension.novel.DefaultNovelPluginStorage(
+                java.io.File(app.filesDir, "novel_plugins").absolutePath,
             )
         }
         // Key-value store for plugin settings (SharedPreferences-backed)
@@ -588,7 +588,10 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { tachiyomi.data.achievement.UserProfileManager(get()) }
         addSingletonFactory {
             tachiyomi.data.achievement.UnlockableManager(
-                app.getSharedPreferences("achievement_unlockables", Context.MODE_PRIVATE),
+                AndroidPreferenceStore(
+                    app,
+                    app.getSharedPreferences("achievement_unlockables", Context.MODE_PRIVATE),
+                ),
                 get(),
             )
         }

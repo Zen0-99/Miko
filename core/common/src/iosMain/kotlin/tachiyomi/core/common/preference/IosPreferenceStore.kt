@@ -59,6 +59,19 @@ class IosPreferenceStore(
         writer: NSUserDefaults.(String, T) -> Unit,
     ): Preference<T> = IosPreference(key, defaultValue, reader, writer)
 
+    // NSUserDefaultsDidChangeNotification carries no changed-key info —
+    // emit null and let collectors re-snapshot.
+    override fun changes(): Flow<String?> = callbackFlow {
+        val observer = NSNotificationCenter.defaultCenter.addObserverForName(
+            NSUserDefaultsDidChangeNotification,
+            null,
+            NSOperationQueue.mainQueue,
+        ) { _ ->
+            trySend(null)
+        }
+        awaitClose { NSNotificationCenter.defaultCenter.removeObserver(observer) }
+    }
+
     private inline fun <T> readOrDefault(key: String, default: T, read: NSUserDefaults.() -> T): T =
         if (defaults.objectForKey(key) == null) default else defaults.read()
 

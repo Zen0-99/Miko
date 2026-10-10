@@ -1,5 +1,7 @@
 package tachiyomi.core.common.preference
 
+import kotlinx.coroutines.flow.Flow
+
 interface PreferenceStore {
 
     fun getString(key: String, defaultValue: String = ""): Preference<String>
@@ -22,6 +24,12 @@ interface PreferenceStore {
     ): Preference<T>
 
     fun getAll(): Map<String, *>
+
+    /**
+     * Emits the key of a changed preference, or `null` when the platform
+     * cannot report which key changed (iOS). Initial state is not emitted.
+     */
+    fun changes(): Flow<String?>
 }
 
 inline fun <reified T : Enum<T>> PreferenceStore.getEnum(

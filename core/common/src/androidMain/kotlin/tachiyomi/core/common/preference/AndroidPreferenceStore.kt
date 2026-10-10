@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.PreferenceManager
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import tachiyomi.core.common.preference.AndroidPreference.BooleanPrimitive
 import tachiyomi.core.common.preference.AndroidPreference.FloatPrimitive
@@ -63,6 +64,8 @@ class AndroidPreferenceStore(
     override fun getAll(): Map<String, *> {
         return sharedPreferences.all ?: emptyMap<String, Any>()
     }
+
+    override fun changes(): Flow<String?> = sharedPreferences.keyFlow
 }
 
 private val SharedPreferences.keyFlow

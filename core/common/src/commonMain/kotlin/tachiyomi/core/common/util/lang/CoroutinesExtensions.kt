@@ -15,7 +15,7 @@ import kotlinx.coroutines.withContext
  * IO-bound dispatcher. `Dispatchers.IO` is JVM-only; on Kotlin/Native it
  * maps to `Dispatchers.Default` (which backs IO work there anyway).
  */
-internal expect val ioDispatcher: CoroutineDispatcher
+expect val ioDispatcher: CoroutineDispatcher
 
 /**
  * Think twice before using this. This is a delicate API. It is easy to accidentally create resource or memory leaks when GlobalScope is used.

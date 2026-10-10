@@ -67,6 +67,8 @@ class InMemoryPreferenceStore(
         return preferences
     }
 
+    override fun changes(): Flow<String?> = flow { }
+
     class InMemoryPreference<T>(
         private val key: String,
         private var data: T?,
