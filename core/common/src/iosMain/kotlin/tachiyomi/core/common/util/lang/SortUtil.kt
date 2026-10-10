@@ -12,7 +12,7 @@ import platform.Foundation.NSWidthInsensitiveSearch
 actual fun String.compareToWithCollator(other: String): Int {
     val result = (this as NSString).compare(
         other,
-        options = NSCaseInsensitiveSearch or NSDiacriticInsensitiveSearch or NSWidthInsensitiveSearch,
+        NSCaseInsensitiveSearch or NSDiacriticInsensitiveSearch or NSWidthInsensitiveSearch,
     )
     return result.toInt()
 }
