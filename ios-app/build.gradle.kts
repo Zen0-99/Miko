@@ -31,7 +31,12 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(projects.core.common)
             implementation(projects.core.network)
+            implementation(projects.data)
+            implementation(projects.domain)
+            implementation(projects.sourceApi)
+            implementation(projects.sourceJs)
             implementation(projects.ui)
             implementation("org.jetbrains.compose.runtime:runtime:$cmpVersion")
             implementation("org.jetbrains.compose.foundation:foundation:$cmpVersion")
