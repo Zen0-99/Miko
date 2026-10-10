@@ -104,16 +104,34 @@ class JsNativeDispatcher(
             "consoleWarn" -> api.consoleWarn(str(0))
             else -> throw IllegalArgumentException("Unknown __native method: $name")
         }
-        return encodeResult(result)
+        return encodeResult(result, rawJson = name in RAW_JSON_METHODS)
     }
 
-    private fun encodeResult(result: Any?): String {
+    private fun encodeResult(result: Any?, rawJson: Boolean): String {
         return when (result) {
             null, is Unit -> "null"
-            is String -> json.encodeToString(JsonElement.serializer(), kotlinx.serialization.json.JsonPrimitive(result))
+            is String -> if (rawJson) {
+                result
+            } else {
+                json.encodeToString(JsonElement.serializer(), kotlinx.serialization.json.JsonPrimitive(result))
+            }
             is Boolean, is Int, is Long, is Double -> result.toString()
             is JsonElement -> json.encodeToString(JsonElement.serializer(), result)
             else -> json.encodeToString(JsonElement.serializer(), kotlinx.serialization.json.JsonPrimitive(result.toString()))
         }
+    }
+
+    companion object {
+        /**
+         * Methods whose [JsNativeApi] implementation already returns a
+         * JSON-encoded string. Encoding it again as a JsonPrimitive would
+         * double-quote it and break `JSON.parse` on the JS side.
+         */
+        private val RAW_JSON_METHODS = setOf(
+            "fetch", "fetchProto", "select",
+            "storageKeys", "localStorageKeys", "sessionStorageKeys",
+            "domSelect", "domChildren", "domNextAll", "domPrevAll", "domSiblings",
+            "domContents", "domNot", "domAttrs",
+        )
     }
 }

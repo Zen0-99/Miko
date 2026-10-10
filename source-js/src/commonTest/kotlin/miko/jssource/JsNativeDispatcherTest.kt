@@ -91,8 +91,9 @@ class JsNativeDispatcherTest {
         val api = FakeApi()
         val dispatcher = JsNativeDispatcher(api, json)
         val result = dispatcher.dispatch("fetch", """["https://x",{"method":"GET"}]""")
-        // Kotlin returns a raw JSON string -> encoded as a JSON string value
-        assertEquals("\"{\\\"status\\\":200,\\\"url\\\":\\\"u\\\",\\\"headers\\\":{},\\\"body\\\":\\\"hi\\\"}\"", result)
+        // fetch is a raw-JSON method: the impl returns JSON text, which the
+        // dispatcher passes through verbatim (the JS side does JSON.parse).
+        assertEquals("{\"status\":200,\"url\":\"u\",\"headers\":{},\"body\":\"hi\"}", result)
         assertEquals("https://x", api.calls[0].second[0])
         assertEquals("{\"method\":\"GET\"}", api.calls[0].second[1])
     }
