@@ -70,7 +70,7 @@ class JsCoreRuntimeTest {
             )
             assertEquals("ok", status)
             val abs = runtime.evaluate(
-                """require("@libs/isAbsoluteUrl").isAbsoluteUrl("https://x")""",
+                """require("@libs/isAbsoluteUrl").isUrlAbsolute("https://x")""",
             )
             assertEquals(true, abs)
         } finally {

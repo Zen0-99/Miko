@@ -69,7 +69,9 @@ class JsRuntime(
         maxCycles: Int,
         args: List<String>,
     ): String {
-        val token = "rn_${Random.nextLong()}_${tokenCounter++}"
+        // Non-negative: a negative value would make __r_<token> an invalid
+        // JS identifier (minus parses as subtraction -> SyntaxError on eval).
+        val token = "rn_${Random.nextLong().ushr(1)}_${tokenCounter++}"
         val joinedArgs = args.joinToString(", ")
 
         evaluate(

@@ -3,10 +3,8 @@ package miko.jssource
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
-import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
@@ -16,6 +14,7 @@ import kotlinx.cinterop.set
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.value
+import platform.JavaScriptCore.JSContextGetGlobalContext
 import platform.JavaScriptCore.JSContextGetGlobalObject
 import platform.JavaScriptCore.JSContextRef
 import platform.JavaScriptCore.JSEvaluateScript
@@ -23,11 +22,9 @@ import platform.JavaScriptCore.JSGlobalContextCreate
 import platform.JavaScriptCore.JSGlobalContextRef
 import platform.JavaScriptCore.JSGlobalContextRelease
 import platform.JavaScriptCore.JSObjectCallAsFunction
-import platform.JavaScriptCore.JSObjectGetPrivate
 import platform.JavaScriptCore.JSObjectGetProperty
 import platform.JavaScriptCore.JSObjectMakeFunctionWithCallback
 import platform.JavaScriptCore.JSObjectRef
-import platform.JavaScriptCore.JSObjectSetPrivate
 import platform.JavaScriptCore.JSObjectSetProperty
 import platform.JavaScriptCore.JSStringCreateWithUTF8CString
 import platform.JavaScriptCore.JSStringGetMaximumUTF8CStringSize
@@ -51,8 +48,9 @@ import platform.posix.size_t
  * Uses the plain C API (the only JS-interop surface K/N binds fully):
  * a single `__nativeInvoke(name, argsJson)` callback is registered on the
  * global object; [JsNativeDispatch] builds the `__native.*` JS facade on
- * top. The callback's private data holds a [StableRef] to the
- * [JsNativeDispatcher], which is how JS calls reach Kotlin without
+ * top. The trampoline recovers the per-context [JsNativeDispatcher] from
+ * a process-level registry keyed by JSGlobalContextRef (function objects
+ * cannot hold private data), which is how JS calls reach Kotlin without
  * capturing lambdas (staticCFunction requires non-capturing callbacks).
  */
 @OptIn(ExperimentalForeignApi::class)
@@ -62,12 +60,15 @@ class JsCoreEngine(
 ) : JsEngine {
 
     private val dispatcher = JsNativeDispatcher(nativeApi)
-    private val dispatcherRef = StableRef.create(dispatcher)
     private val context: JSGlobalContextRef
 
     init {
         context = JSGlobalContextCreate(null)
             ?: error("Failed to create JavaScriptCore global context for plugin $pluginId")
+        // Function objects made by JSObjectMakeFunctionWithCallback use the
+        // default JSClass, which cannot hold private data — so the dispatcher
+        // is recovered per-context from this process-level registry instead.
+        engineDispatchers[context] = dispatcher
         bindNativeInvoke()
         // Build the __native.* JS facade on top of __nativeInvoke.
         evaluate(JsNativeDispatch.script, "__native-dispatch.js")
@@ -77,7 +78,6 @@ class JsCoreEngine(
         memScoped {
             val nameStr = JSStringCreateWithUTF8CString("__nativeInvoke")
             val fn = JSObjectMakeFunctionWithCallback(context, nameStr, nativeInvokeCallback)
-            JSObjectSetPrivate(fn, dispatcherRef.asCPointer())
             val global = JSContextGetGlobalObject(context)
             JSObjectSetProperty(context, global, nameStr, fn, kJSPropertyAttributeNone, null)
             JSStringRelease(nameStr)
@@ -110,8 +110,8 @@ class JsCoreEngine(
     }
 
     override fun release() {
+        engineDispatchers.remove(context)
         JSGlobalContextRelease(context)
-        dispatcherRef.dispose()
     }
 
     // ------------------------------------------------------------------
@@ -193,9 +193,10 @@ private fun nativeInvokeTrampoline(
     arguments: CPointer<JSValueRefVar>?,
     exception: CPointer<JSValueRefVar>?,
 ): JSValueRef? {
-    val dispatcher = function?.let { JSObjectGetPrivate(it) }
-        ?.asStableRef<JsNativeDispatcher>()
-        ?.get() ?: return null
+    val dispatcher = ctx
+        ?.let { JSContextGetGlobalContext(it) }
+        ?.let { engineDispatchers[it] }
+        ?: return null
     fun argToString(i: Int): String? {
         if (arguments == null || i.toULong() >= argumentCount) return null
         val str = JSValueToStringCopy(ctx, arguments[i], null) ?: return null
@@ -226,3 +227,13 @@ private fun nativeInvokeTrampoline(
 
 @OptIn(ExperimentalForeignApi::class)
 private val nativeInvokeCallback = staticCFunction(::nativeInvokeTrampoline)
+
+/**
+ * Process-level registry mapping each [JSGlobalContextRef] to its
+ * [JsNativeDispatcher]. Needed because JavaScriptCore function objects use
+ * the default JSClass, which cannot store private data — so the dispatcher
+ * cannot ride along on the bound function object itself. Engines are
+ * created/released on a single thread, matching the runtime's
+ * single-threaded-per-plugin contract.
+ */
+private val engineDispatchers = mutableMapOf<CPointer<*>, JsNativeDispatcher>()
