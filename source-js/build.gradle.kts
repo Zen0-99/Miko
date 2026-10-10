@@ -41,6 +41,8 @@ kotlin {
                 // the BOM platform supplies the version on non-Android targets.
                 implementation(project.dependencies.platform(kotlinx.coroutines.bom))
                 implementation(projects.core.network)
+                implementation(projects.sourceApi)
+                implementation(libs.kotlinx.datetime)
                 implementation("dev.whyoleg.cryptography:cryptography-core:0.5.0")
                 implementation("dev.whyoleg.cryptography:cryptography-provider-apple:0.5.0")
             }
@@ -54,6 +56,9 @@ kotlin {
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
+        freeCompilerArgs.addAll(
+            "-Xexpect-actual-classes",
+            "-opt-in=kotlin.time.ExperimentalTime",
+        )
     }
 }
