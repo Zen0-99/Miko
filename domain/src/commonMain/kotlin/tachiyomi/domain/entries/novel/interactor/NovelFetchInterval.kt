@@ -1,10 +1,10 @@
 package tachiyomi.domain.entries.novel.interactor
 
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.toLocalDateTime
 import tachiyomi.domain.items.chapter.model.NovelChapter
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.temporal.ChronoUnit
+import kotlin.time.Instant
 
 class NovelFetchInterval {
 
@@ -14,16 +14,17 @@ class NovelFetchInterval {
      * Returns null when there isn't enough date data to compute a meaningful
      * interval (fewer than 3 chapters with valid dates).
      */
-    fun calculateInterval(chapters: List<NovelChapter>, zone: ZoneId = ZoneId.systemDefault()): Int? {
+    fun calculateInterval(
+        chapters: List<NovelChapter>,
+        zone: TimeZone = TimeZone.currentSystemDefault(),
+    ): Int? {
         val chapterWindow = if (chapters.size <= 8) 3 else 10
 
         val uploadDates = chapters.asSequence()
             .filter { it.dateUpload > 0L }
             .sortedByDescending { it.dateUpload }
             .map {
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(it.dateUpload), zone)
-                    .toLocalDate()
-                    .atStartOfDay()
+                Instant.fromEpochMilliseconds(it.dateUpload).toLocalDateTime(zone).date
             }
             .distinct()
             .take(chapterWindow)
@@ -32,9 +33,7 @@ class NovelFetchInterval {
         val fetchDates = chapters.asSequence()
             .sortedByDescending { it.dateFetch }
             .map {
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(it.dateFetch), zone)
-                    .toLocalDate()
-                    .atStartOfDay()
+                Instant.fromEpochMilliseconds(it.dateFetch).toLocalDateTime(zone).date
             }
             .distinct()
             .take(chapterWindow)
@@ -42,14 +41,14 @@ class NovelFetchInterval {
 
         val interval = when {
             uploadDates.size >= 3 -> {
-                val delta = uploadDates.last().until(uploadDates.first(), ChronoUnit.DAYS)
+                val delta = uploadDates.last().daysUntil(uploadDates.first())
                 val period = uploadDates.indexOf(uploadDates.last())
-                delta.floorDiv(period).toInt()
+                delta.floorDiv(period)
             }
             fetchDates.size >= 3 -> {
-                val delta = fetchDates.last().until(fetchDates.first(), ChronoUnit.DAYS)
+                val delta = fetchDates.last().daysUntil(fetchDates.first())
                 val period = fetchDates.indexOf(fetchDates.last())
-                delta.floorDiv(period).toInt()
+                delta.floorDiv(period)
             }
             else -> return null
         }

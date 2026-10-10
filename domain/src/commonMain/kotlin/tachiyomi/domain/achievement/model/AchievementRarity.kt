@@ -1,8 +1,8 @@
 package tachiyomi.domain.achievement.model
 
-import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import tachiyomi.domain.util.Immutable
 
 /**
  * Rarity tier of an achievement. Drives banner styling (fireworks/glow),

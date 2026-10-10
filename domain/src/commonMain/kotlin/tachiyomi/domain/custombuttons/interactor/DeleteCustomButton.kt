@@ -1,7 +1,7 @@
 package tachiyomi.domain.custombuttons.interactor
 
-import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.custombuttons.model.CustomButtonUpdate
 import tachiyomi.domain.custombuttons.repository.CustomButtonRepository

@@ -1,6 +1,6 @@
 package tachiyomi.domain.achievement.model
 
-import androidx.compose.runtime.Immutable
+import tachiyomi.domain.util.Immutable
 
 /**
  * Профиль пользователя с информацией о прогрессе и наградах

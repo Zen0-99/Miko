@@ -1,9 +1,9 @@
-import java.util.Date;
+import kotlin.time.Instant;
 
 CREATE TABLE animehistory(
     _id INTEGER NOT NULL PRIMARY KEY,
     episode_id INTEGER NOT NULL UNIQUE,
-    last_seen INTEGER AS Date,
+    last_seen INTEGER AS Instant,
     FOREIGN KEY(episode_id) REFERENCES episodes (_id)
     ON DELETE CASCADE
 );

@@ -1,7 +1,7 @@
 package tachiyomi.domain.items.season.interactor
 
-import logcat.LogPriority
 import miko.domain.shows.SeasonAnime
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.shows.repository.AnimeRepository
 

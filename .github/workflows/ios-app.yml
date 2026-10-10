@@ -49,6 +49,9 @@ jobs:
       - name: Compile core:common for iOS (Phase 26 gate)
         run: ./gradlew :core:common:compileKotlinIosSimulatorArm64 --stacktrace
 
+      - name: Compile domain for iOS (Phase 26 gate)
+        run: ./gradlew :domain:compileKotlinIosSimulatorArm64 --stacktrace
+
       - name: Compile source-api for iOS (Phase 24 gate)
         run: ./gradlew :source-api:compileKotlinIosSimulatorArm64 --stacktrace
 

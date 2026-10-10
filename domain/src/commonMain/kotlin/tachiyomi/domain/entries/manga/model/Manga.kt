@@ -1,11 +1,11 @@
 package tachiyomi.domain.entries.manga.model
 
-import androidx.compose.runtime.Immutable
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import tachiyomi.core.common.preference.TriState
-import java.io.Serializable
-import java.time.Instant
+import tachiyomi.domain.util.Immutable
+import tachiyomi.domain.util.PlatformSerializable
+import kotlin.time.Instant
 
 @Immutable
 data class Manga(
@@ -33,12 +33,12 @@ data class Manga(
     val favoriteModifiedAt: Long?,
     val version: Long,
     val uuid: String? = null,
-) : Serializable {
+) : PlatformSerializable {
 
     val expectedNextUpdate: Instant?
         get() = nextUpdate
             .takeIf { status != SManga.COMPLETED.toLong() }
-            ?.let { Instant.ofEpochMilli(it) }
+            ?.let { Instant.fromEpochMilliseconds(it) }
 
     val sorting: Long
         get() = chapterFlags and CHAPTER_SORTING_MASK

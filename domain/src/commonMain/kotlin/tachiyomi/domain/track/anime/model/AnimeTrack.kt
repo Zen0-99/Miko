@@ -1,6 +1,6 @@
 package tachiyomi.domain.track.anime.model
 
-import java.io.Serializable
+import tachiyomi.domain.util.PlatformSerializable
 
 data class AnimeTrack(
     val id: Long,
@@ -17,4 +17,4 @@ data class AnimeTrack(
     val startDate: Long,
     val finishDate: Long,
     val private: Boolean,
-) : Serializable
+) : PlatformSerializable

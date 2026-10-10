@@ -2,8 +2,8 @@ package tachiyomi.domain.collection.manga.interactor
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
 import tachiyomi.domain.collection.model.Collection

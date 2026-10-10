@@ -1,6 +1,6 @@
 package tachiyomi.domain.items.episode.interactor
 
-import logcat.LogPriority
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.repository.EpisodeRepository

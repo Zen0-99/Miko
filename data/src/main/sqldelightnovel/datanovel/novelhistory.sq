@@ -1,9 +1,9 @@
-import java.util.Date;
+import kotlin.time.Instant;
 
 CREATE TABLE novelhistory(
     _id INTEGER NOT NULL PRIMARY KEY,
     chapter_id INTEGER NOT NULL UNIQUE,
-    last_read INTEGER AS Date,
+    last_read INTEGER AS Instant,
     time_read INTEGER NOT NULL,
     FOREIGN KEY(chapter_id) REFERENCES novelchapters (_id)
     ON DELETE CASCADE

@@ -11,13 +11,13 @@ import mihon.domain.extensionrepo.model.ExtensionRepo
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 
-class ExtensionRepoService(
+class AndroidExtensionRepoService(
     networkHelper: NetworkHelper,
     private val json: Json,
-) {
+) : ExtensionRepoService {
     val client = networkHelper.client
 
-    suspend fun fetchRepoDetails(
+    override suspend fun fetchRepoDetails(
         repo: String,
     ): ExtensionRepo? {
         return withIOContext {
@@ -63,7 +63,7 @@ class ExtensionRepoService(
      *
      * Returns a list of normalized [ExtensionIndexEntry] regardless of format.
      */
-    suspend fun fetchExtensionIndex(repo: String): List<ExtensionIndexEntry>? {
+    override suspend fun fetchExtensionIndex(repo: String): List<ExtensionIndexEntry>? {
         return withIOContext {
             logcat(LogPriority.DEBUG) { "fetchExtensionIndex for repo: $repo" }
             // Try protobuf first
@@ -138,7 +138,7 @@ class ExtensionRepoService(
      * Also checks for LNReader plugin repos (plugins.min.json / plugins.json)
      * and routes them to "novel" since LNReader plugins are novel plugins.
      */
-    suspend fun probeRepoTypes(repo: String): Set<String> {
+    override suspend fun probeRepoTypes(repo: String): Set<String> {
         // Normalize: strip known index file suffixes so probing works
         // regardless of whether the user pasted a bare repo URL or a
         // full path to an index file (e.g. .../v3.0.0/.dist/plugins.min.json).
@@ -202,7 +202,7 @@ class ExtensionRepoService(
      * Kept for backward compatibility; prefer [probeRepoTypes] for repos
      * that may serve multiple content types.
      */
-    suspend fun probeRepoType(repo: String): String {
+    override suspend fun probeRepoType(repo: String): String {
         val types = probeRepoTypes(repo)
         return when {
             "novel" in types && types.size == 1 -> "novel"

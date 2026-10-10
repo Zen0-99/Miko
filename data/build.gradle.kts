@@ -44,7 +44,10 @@ android {
 
 kotlin {
     compilerOptions {
-        freeCompilerArgs.add("-opt-in=kotlinx.serialization.ExperimentalSerializationApi")
+        freeCompilerArgs.addAll(
+            "-opt-in=kotlinx.serialization.ExperimentalSerializationApi",
+            "-opt-in=kotlin.time.ExperimentalTime",
+        )
     }
 }
 
@@ -53,6 +56,8 @@ dependencies {
     implementation(projects.domain)
     implementation(projects.core.common)
     implementation(projects.i18n)
+
+    implementation(libs.kotlinx.datetime)
 
     api(libs.bundles.sqldelight)
 }

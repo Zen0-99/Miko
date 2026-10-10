@@ -4,8 +4,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.repository.MangaRepository
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 class NetworkToLocalManga(
     private val mangaRepository: MangaRepository,
@@ -13,10 +13,11 @@ class NetworkToLocalManga(
 
     /** Serializes concurrent materializes so lookup-miss races can't mint
      *  duplicate canonical rows (same hazard as the novel path). */
-    private val locks = ConcurrentHashMap<String, Mutex>()
+    private val locksGuard = Mutex()
+    private val locks = LinkedHashMap<String, Mutex>()
 
     suspend fun await(manga: Manga): Manga {
-        val lock = locks.getOrPut("${manga.source}:${manga.url}") { Mutex() }
+        val lock = locksGuard.withLock { locks.getOrPut("${manga.source}:${manga.url}") { Mutex() } }
         return lock.withLock { awaitLocked(manga) }
     }
 
@@ -44,10 +45,13 @@ class NetworkToLocalManga(
 
     private suspend fun insertManga(manga: Manga): Long? {
         val mangaWithUuid = if (manga.uuid.isNullOrBlank()) {
-            manga.copy(uuid = UUID.randomUUID().toString())
+            manga.copy(uuid = randomUuidString())
         } else {
             manga
         }
         return mangaRepository.insertManga(mangaWithUuid)
     }
 }
+
+@OptIn(ExperimentalUuidApi::class)
+private fun randomUuidString(): String = Uuid.random().toString()

@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.animesource.model.AnimeUpdateStrategy
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.novelsource.model.NovelUpdateStrategy
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import java.util.Date
+import kotlin.time.Instant
 
-object DateColumnAdapter : ColumnAdapter<Date, Long> {
-    override fun decode(databaseValue: Long): Date = Date(databaseValue)
-    override fun encode(value: Date): Long = value.time
+object DateColumnAdapter : ColumnAdapter<Instant, Long> {
+    override fun decode(databaseValue: Long): Instant = Instant.fromEpochMilliseconds(databaseValue)
+    override fun encode(value: Instant): Long = value.toEpochMilliseconds()
 }
 
 private const val LIST_OF_STRINGS_SEPARATOR = ", "

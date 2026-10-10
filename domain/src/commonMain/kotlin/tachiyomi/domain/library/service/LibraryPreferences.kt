@@ -5,13 +5,13 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getEnum
-import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.novel.model.Novel
-import tachiyomi.domain.library.shows.model.AnimeLibrarySort
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.novel.model.NovelLibrarySort
+import tachiyomi.domain.library.shows.model.AnimeLibrarySort
 
 class LibraryPreferences(
     private val preferenceStore: PreferenceStore,
@@ -83,6 +83,26 @@ class LibraryPreferences(
     )
 
     fun collectionNumberOfItems() = preferenceStore.getBoolean("display_number_of_items", false)
+
+    /**
+     * Sub-category filter per library mode (Manga/Webtoon, Book/Novel,
+     * Series/Movie) — see [tachiyomi.domain.library.model.LibrarySubtype].
+     * Applies across all collections in the mode; ALL shows everything.
+     */
+    fun mangaSubtypeFilter() = preferenceStore.getEnum(
+        "pref_library_manga_subtype",
+        tachiyomi.domain.library.model.LibrarySubtype.ALL,
+    )
+
+    fun novelSubtypeFilter() = preferenceStore.getEnum(
+        "pref_library_novel_subtype",
+        tachiyomi.domain.library.model.LibrarySubtype.ALL,
+    )
+
+    fun showsSubtypeFilter() = preferenceStore.getEnum(
+        "pref_library_shows_subtype",
+        tachiyomi.domain.library.model.LibrarySubtype.ALL,
+    )
 
     fun showLibraryTitle() = preferenceStore.getBoolean("display_library_title", true)
 

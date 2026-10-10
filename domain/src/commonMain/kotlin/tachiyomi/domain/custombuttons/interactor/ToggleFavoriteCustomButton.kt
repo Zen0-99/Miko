@@ -2,8 +2,8 @@ package tachiyomi.domain.custombuttons.interactor
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.custombuttons.model.CustomButton
 import tachiyomi.domain.custombuttons.model.CustomButtonUpdate

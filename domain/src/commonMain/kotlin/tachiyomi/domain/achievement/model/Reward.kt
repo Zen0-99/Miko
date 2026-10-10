@@ -1,7 +1,7 @@
 package tachiyomi.domain.achievement.model
 
-import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
+import tachiyomi.domain.util.Immutable
 
 /**
  * Типы наград за достижения

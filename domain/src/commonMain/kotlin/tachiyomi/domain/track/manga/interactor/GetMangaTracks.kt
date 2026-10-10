@@ -1,7 +1,7 @@
 package tachiyomi.domain.track.manga.interactor
 
 import kotlinx.coroutines.flow.Flow
-import logcat.LogPriority
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.manga.model.MangaTrack
 import tachiyomi.domain.track.manga.repository.MangaTrackRepository

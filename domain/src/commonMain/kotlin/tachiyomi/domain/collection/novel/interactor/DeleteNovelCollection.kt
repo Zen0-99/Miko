@@ -1,7 +1,7 @@
 package tachiyomi.domain.collection.novel.interactor
 
-import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.collection.model.CollectionUpdate
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository

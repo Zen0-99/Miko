@@ -1,8 +1,8 @@
 package tachiyomi.domain.savedsearches.shows.interactor
 
 import kotlinx.coroutines.flow.Flow
-import tachiyomi.domain.savedsearches.shows.repository.AnimeSavedSearchRepository
 import tachiyomi.domain.savedsearches.model.SavedSearch
+import tachiyomi.domain.savedsearches.shows.repository.AnimeSavedSearchRepository
 
 class GetAnimeSavedSearches(
     private val repository: AnimeSavedSearchRepository,

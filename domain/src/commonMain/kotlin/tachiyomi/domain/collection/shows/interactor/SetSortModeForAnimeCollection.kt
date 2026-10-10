@@ -1,11 +1,11 @@
 package tachiyomi.domain.collection.shows.interactor
 
-import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
-import tachiyomi.domain.library.shows.model.AnimeLibrarySort
+import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 import tachiyomi.domain.library.model.plus
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.library.shows.model.AnimeLibrarySort
 import kotlin.random.Random
 
 class SetSortModeForAnimeCollection(

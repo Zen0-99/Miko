@@ -2,27 +2,26 @@ package tachiyomi.domain.entries.shows.interactor
 
 import io.kotest.matchers.shouldBe
 import io.mockk.mockk
+import kotlinx.datetime.TimeZone
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import tachiyomi.domain.items.episode.model.Episode
-import java.time.ZoneOffset
-import java.time.ZonedDateTime
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.DurationUnit
+import kotlin.time.Instant
 import kotlin.time.toDuration
-import kotlin.time.toJavaDuration
 
 @Execution(ExecutionMode.CONCURRENT)
 class AnimeFetchIntervalTest {
 
-    private val testTime = ZonedDateTime.parse("2020-01-01T00:00:00Z")
-    private val testZoneId = ZoneOffset.UTC
+    private val testTime = Instant.parse("2020-01-01T00:00:00Z")
+    private val testZoneId = TimeZone.UTC
     private var episode = Episode.create().copy(
-        dateFetch = testTime.toEpochSecond() * 1000,
-        dateUpload = testTime.toEpochSecond() * 1000,
+        dateFetch = testTime.epochSeconds * 1000,
+        dateUpload = testTime.epochSeconds * 1000,
     )
 
     private val fetchInterval = AnimeFetchInterval(mockk())
@@ -133,7 +132,7 @@ class AnimeFetchIntervalTest {
     }
 
     private fun episodeWithTime(episode: Episode, duration: Duration): Episode {
-        val newTime = testTime.plus(duration.toJavaDuration()).toEpochSecond() * 1000
+        val newTime = testTime.plus(duration).epochSeconds * 1000
         return episode.copy(dateFetch = newTime, dateUpload = newTime)
     }
 

@@ -1,6 +1,6 @@
 package tachiyomi.domain.track.anime.interactor
 
-import logcat.LogPriority
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.anime.model.AnimeTrack
 import tachiyomi.domain.track.anime.repository.AnimeTrackRepository

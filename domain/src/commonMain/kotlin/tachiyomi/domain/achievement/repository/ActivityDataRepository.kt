@@ -1,9 +1,10 @@
 package tachiyomi.domain.achievement.repository
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.datetime.LocalDate
 import tachiyomi.domain.achievement.model.DayActivity
 import tachiyomi.domain.achievement.model.MonthStats
-import java.time.LocalDate
+import tachiyomi.domain.achievement.model.YearMonth
 
 interface ActivityDataRepository {
     fun getActivityData(days: Int = 365): Flow<List<DayActivity>>
@@ -15,7 +16,7 @@ interface ActivityDataRepository {
     suspend fun recordAppSession(durationMs: Long)
     suspend fun recordAppOpen()
     suspend fun recordAchievementUnlock()
-    suspend fun getLastTwelveMonthsStats(): List<Pair<java.time.YearMonth, MonthStats>>
+    suspend fun getLastTwelveMonthsStats(): List<Pair<YearMonth, MonthStats>>
 
     // Backup/Restore support
     suspend fun upsertActivityData(

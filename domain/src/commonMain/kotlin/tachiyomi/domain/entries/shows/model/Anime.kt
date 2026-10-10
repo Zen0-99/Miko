@@ -1,14 +1,14 @@
 package tachiyomi.domain.entries.shows.model
 
-import androidx.compose.runtime.Immutable
 import eu.kanade.tachiyomi.animesource.model.AnimeUpdateStrategy
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import miko.domain.shows.SeasonDisplayMode
 import tachiyomi.core.common.preference.TriState
-import java.io.Serializable
-import java.time.Instant
+import tachiyomi.domain.util.Immutable
+import tachiyomi.domain.util.PlatformSerializable
 import kotlin.math.pow
+import kotlin.time.Instant
 
 @Immutable
 data class Anime(
@@ -46,12 +46,12 @@ data class Anime(
     // Cinemeta runtime string (e.g. "127 min") — movies show this instead of
     // "1 episode"; also available for series (per-episode runtime).
     val runtime: String? = null,
-) : Serializable {
+) : PlatformSerializable {
 
     val expectedNextUpdate: Instant?
         get() = nextUpdate
             .takeIf { status != SAnime.COMPLETED.toLong() }
-            ?.let { Instant.ofEpochMilli(it) }
+            ?.let { Instant.fromEpochMilliseconds(it) }
 
     val sorting: Long
         get() = episodeFlags and EPISODE_SORTING_MASK

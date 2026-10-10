@@ -1,7 +1,7 @@
 package tachiyomi.domain.history.shows.model
 
 import tachiyomi.domain.entries.shows.model.AnimeCover
-import java.util.Date
+import kotlin.time.Instant
 
 data class AnimeHistoryWithRelations(
     val id: Long,
@@ -9,7 +9,7 @@ data class AnimeHistoryWithRelations(
     val animeId: Long,
     val title: String,
     val episodeNumber: Double,
-    val seenAt: Date?,
+    val seenAt: Instant?,
     val coverData: AnimeCover,
     // Cinemeta extras — season (from episode scanlator "Season N|★R.R") and
     // movie runtime, so home/history labels can show "S2 · Ep.5" or "2h 07min".

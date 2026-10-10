@@ -1,8 +1,8 @@
 package tachiyomi.domain.history.shows.model
 
-import java.util.Date
+import kotlin.time.Instant
 
 data class AnimeHistoryUpdate(
     val episodeId: Long,
-    val seenAt: Date,
+    val seenAt: Instant,
 )

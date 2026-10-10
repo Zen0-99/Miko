@@ -1,7 +1,7 @@
 package tachiyomi.domain.history.novel.model
 
 import tachiyomi.domain.entries.novel.model.NovelCover
-import java.util.Date
+import kotlin.time.Instant
 
 data class NovelHistoryWithRelations(
     val id: Long,
@@ -10,7 +10,7 @@ data class NovelHistoryWithRelations(
     val title: String,
     val chapterName: String? = null,
     val chapterNumber: Double,
-    val readAt: Date?,
+    val readAt: Instant?,
     val readDuration: Long,
     val coverData: NovelCover,
 )

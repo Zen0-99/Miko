@@ -1,12 +1,12 @@
 package mihon.domain.extensionrepo.manga.interactor
 
-import logcat.LogPriority
 import mihon.domain.extensionrepo.exception.SaveExtensionRepoException
 import mihon.domain.extensionrepo.manga.repository.MangaExtensionRepoRepository
 import mihon.domain.extensionrepo.model.ExtensionRepo
 import mihon.domain.extensionrepo.service.ExtensionRepoService
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.util.toHttpUrlOrNull
 
 class CreateMangaExtensionRepo(
     private val repository: MangaExtensionRepoRepository,

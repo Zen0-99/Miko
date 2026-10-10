@@ -1,6 +1,6 @@
 package tachiyomi.domain.achievement.model
 
-import androidx.compose.runtime.Immutable
+import tachiyomi.domain.util.Immutable
 
 @Immutable
 data class UserPoints(

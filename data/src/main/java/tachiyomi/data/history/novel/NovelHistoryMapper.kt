@@ -3,13 +3,13 @@ package tachiyomi.data.history.novel
 import tachiyomi.domain.entries.novel.model.NovelCover
 import tachiyomi.domain.history.novel.model.NovelHistory
 import tachiyomi.domain.history.novel.model.NovelHistoryWithRelations
-import java.util.Date
+import kotlin.time.Instant
 
 object NovelHistoryMapper {
     fun mapNovelHistory(
         id: Long,
         chapterId: Long,
-        readAt: Date?,
+        readAt: Instant?,
         readDuration: Long,
     ): NovelHistory = NovelHistory(
         id = id,
@@ -29,7 +29,7 @@ object NovelHistoryMapper {
         isFavorite: Boolean,
         coverLastModified: Long,
         chapterNumber: Double,
-        readAt: Date?,
+        readAt: Instant?,
         readDuration: Long,
     ): NovelHistoryWithRelations = NovelHistoryWithRelations(
         id = historyId,

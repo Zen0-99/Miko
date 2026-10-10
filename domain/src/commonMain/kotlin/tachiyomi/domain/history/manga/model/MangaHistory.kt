@@ -1,11 +1,11 @@
 package tachiyomi.domain.history.manga.model
 
-import java.util.Date
+import kotlin.time.Instant
 
 data class MangaHistory(
     val id: Long,
     val chapterId: Long,
-    val readAt: Date?,
+    val readAt: Instant?,
     val readDuration: Long,
 ) {
     companion object {

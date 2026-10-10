@@ -1,6 +1,6 @@
 package tachiyomi.domain.readingorder.model
 
-import java.io.Serializable
+import tachiyomi.domain.util.PlatformSerializable
 
 data class ReadingOrder(
     val id: Long,
@@ -9,4 +9,4 @@ data class ReadingOrder(
     val entryKind: String,
     val createdAt: Long,
     val updatedAt: Long,
-) : Serializable
+) : PlatformSerializable

@@ -3,13 +3,13 @@ package tachiyomi.data.history.manga
 import tachiyomi.domain.entries.manga.model.MangaCover
 import tachiyomi.domain.history.manga.model.MangaHistory
 import tachiyomi.domain.history.manga.model.MangaHistoryWithRelations
-import java.util.Date
+import kotlin.time.Instant
 
 object MangaHistoryMapper {
     fun mapMangaHistory(
         id: Long,
         chapterId: Long,
-        readAt: Date?,
+        readAt: Instant?,
         readDuration: Long,
     ): MangaHistory = MangaHistory(
         id = id,
@@ -28,7 +28,7 @@ object MangaHistoryMapper {
         isFavorite: Boolean,
         coverLastModified: Long,
         chapterNumber: Double,
-        readAt: Date?,
+        readAt: Instant?,
         readDuration: Long,
     ): MangaHistoryWithRelations = MangaHistoryWithRelations(
         id = historyId,

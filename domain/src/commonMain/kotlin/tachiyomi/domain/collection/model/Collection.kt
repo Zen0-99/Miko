@@ -1,6 +1,6 @@
 package tachiyomi.domain.collection.model
 
-import java.io.Serializable
+import tachiyomi.domain.util.PlatformSerializable
 
 data class Collection(
     val id: Long,
@@ -8,7 +8,7 @@ data class Collection(
     val order: Long,
     val flags: Long,
     val hidden: Boolean,
-) : Serializable {
+) : PlatformSerializable {
 
     val isSystemCollection: Boolean = id == UNCATEGORIZED_ID
 

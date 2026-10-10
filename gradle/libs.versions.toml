@@ -38,6 +38,9 @@ okhttp-brotli = { module = "com.squareup.okhttp3:okhttp-brotli", version.ref = "
 okhttp-dnsoverhttps = { module = "com.squareup.okhttp3:okhttp-dnsoverhttps", version.ref = "okhttp_version" }
 okhttp-zstd = { module = "com.squareup.okhttp3:okhttp-zstd", version.ref = "okhttp_version" }
 okio = "com.squareup.okio:okio:3.18.2"
+kotlinx-datetime = "org.jetbrains.kotlinx:kotlinx-datetime:0.7.1"
+kotlinx-io-core = "org.jetbrains.kotlinx:kotlinx-io-core:0.8.0"
+paging-common = "androidx.paging:paging-common:3.4.2"
 
 conscrypt-android = "org.conscrypt:conscrypt-android:2.6.3"
 

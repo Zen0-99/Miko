@@ -5,14 +5,16 @@ import app.cash.sqldelight.coroutines.mapToList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toKotlinLocalDate
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.achievement.database.AchievementsDatabase
 import tachiyomi.domain.achievement.model.ActivityType
 import tachiyomi.domain.achievement.model.DayActivity
 import tachiyomi.domain.achievement.model.MonthStats
+import tachiyomi.domain.achievement.model.YearMonth
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 /**
@@ -59,7 +61,7 @@ class ActivityDataRepositoryImpl(
                         ActivityType.APP_OPEN to 0
                     }
 
-                    activities.add(DayActivity(currentDate, level, type))
+                    activities.add(DayActivity(currentDate.toKotlinLocalDate(), level, type))
                     currentDate = currentDate.plusDays(1)
                 }
 
@@ -68,11 +70,11 @@ class ActivityDataRepositoryImpl(
     }
 
     override suspend fun getMonthStats(year: Int, month: Int): MonthStats {
-        val yearMonth = YearMonth.of(year, month)
+        val yearMonth = YearMonth(year, month)
         val startDate = yearMonth.atDay(1)
         val endDate = yearMonth.atEndOfMonth()
-        val startDateStr = startDate.format(dateFormatter)
-        val endDateStr = endDate.format(dateFormatter)
+        val startDateStr = startDate.toJavaLocalDate().format(dateFormatter)
+        val endDateStr = endDate.toJavaLocalDate().format(dateFormatter)
 
         val stats = database.activityLogQueries
             .getActivityStats(startDateStr, endDateStr)
@@ -176,14 +178,14 @@ class ActivityDataRepositoryImpl(
 
     // Backup/Restore support
     override suspend fun upsertActivityData(
-        date: LocalDate,
+        date: kotlinx.datetime.LocalDate,
         chaptersRead: Int,
         episodesWatched: Int,
         appOpens: Int,
         achievementsUnlocked: Int,
         durationMs: Long,
     ) {
-        val dateStr = date.format(dateFormatter)
+        val dateStr = date.toJavaLocalDate().format(dateFormatter)
         val (type, level) = calculateActivityTypeAndLevel(
             chaptersRead = chaptersRead,
             episodesWatched = episodesWatched,

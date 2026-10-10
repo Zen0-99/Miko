@@ -191,6 +191,7 @@ kotlin {
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
             "-opt-in=androidx.compose.ui.ExperimentalComposeUiApi",
             "-opt-in=coil3.annotation.ExperimentalCoilApi",
+            "-opt-in=kotlin.time.ExperimentalTime",
             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
             "-opt-in=kotlinx.coroutines.FlowPreview",
             "-opt-in=kotlinx.coroutines.InternalCoroutinesApi",
@@ -237,6 +238,7 @@ dependencies {
 
     implementation(platform(kotlinx.coroutines.bom))
     implementation(kotlinx.bundles.coroutines)
+    implementation(libs.kotlinx.datetime)
 
     // AndroidX libraries
     implementation(androidx.annotation)

@@ -1,11 +1,11 @@
 package tachiyomi.domain.entries.novel.model
 
-import androidx.compose.runtime.Immutable
 import eu.kanade.tachiyomi.novelsource.model.NovelUpdateStrategy
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import tachiyomi.core.common.preference.TriState
-import java.io.Serializable
-import java.time.Instant
+import tachiyomi.domain.util.Immutable
+import tachiyomi.domain.util.PlatformSerializable
+import kotlin.time.Instant
 
 @Immutable
 data class Novel(
@@ -32,12 +32,12 @@ data class Novel(
     val lastModifiedAt: Long,
     val favoriteModifiedAt: Long?,
     val version: Long,
-) : Serializable {
+) : PlatformSerializable {
 
     val expectedNextUpdate: Instant?
         get() = nextUpdate
             .takeIf { status != SNovel.COMPLETED.toLong() }
-            ?.let { Instant.ofEpochMilli(it) }
+            ?.let { Instant.fromEpochMilliseconds(it) }
 
     /** Whether this entry is a remote/local audiobook — `abs://` (and
      *  later `lv://`/`ia://`) carrier rows, stamped from

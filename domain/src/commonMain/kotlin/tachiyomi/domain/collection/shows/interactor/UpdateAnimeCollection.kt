@@ -1,8 +1,8 @@
 package tachiyomi.domain.collection.shows.interactor
 
 import tachiyomi.core.common.util.lang.withNonCancellableContext
-import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 import tachiyomi.domain.collection.model.CollectionUpdate
+import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 
 class UpdateAnimeCollection(
     private val collectionRepository: AnimeCollectionRepository,

@@ -1,6 +1,6 @@
 package tachiyomi.domain.custombuttons.exception
 
-import java.io.IOException
+import kotlinx.io.IOException
 
 /**
  * Exception to abstract over SQLiteException and SQLiteConstraintException for multiplatform.

@@ -1,8 +1,8 @@
 package tachiyomi.domain.readingorder.interactor
 
-import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.novel.interactor.GetNovel
+import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.items.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId

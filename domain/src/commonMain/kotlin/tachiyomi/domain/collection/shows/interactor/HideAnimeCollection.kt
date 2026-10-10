@@ -1,11 +1,11 @@
 package tachiyomi.domain.collection.shows.interactor
 
-import logcat.LogPriority
 import tachiyomi.core.common.util.lang.withNonCancellableContext
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
+import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 
 class HideAnimeCollection(
     private val collectionRepository: AnimeCollectionRepository,

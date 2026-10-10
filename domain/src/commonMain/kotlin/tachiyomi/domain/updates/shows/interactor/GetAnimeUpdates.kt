@@ -3,7 +3,7 @@ package tachiyomi.domain.updates.shows.interactor
 import kotlinx.coroutines.flow.Flow
 import tachiyomi.domain.updates.shows.model.AnimeUpdatesWithRelations
 import tachiyomi.domain.updates.shows.repository.AnimeUpdatesRepository
-import java.time.Instant
+import kotlin.time.Instant
 
 class GetAnimeUpdates(
     private val repository: AnimeUpdatesRepository,
@@ -14,7 +14,7 @@ class GetAnimeUpdates(
     }
 
     fun subscribe(instant: Instant): Flow<List<AnimeUpdatesWithRelations>> {
-        return repository.subscribeAllAnimeUpdates(instant.toEpochMilli(), limit = 500)
+        return repository.subscribeAllAnimeUpdates(instant.toEpochMilliseconds(), limit = 500)
     }
 
     fun subscribe(seen: Boolean, after: Long): Flow<List<AnimeUpdatesWithRelations>> {

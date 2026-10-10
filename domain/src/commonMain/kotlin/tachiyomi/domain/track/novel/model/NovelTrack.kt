@@ -1,6 +1,6 @@
 package tachiyomi.domain.track.novel.model
 
-import java.io.Serializable
+import tachiyomi.domain.util.PlatformSerializable
 
 data class NovelTrack(
     val id: Long,
@@ -17,4 +17,4 @@ data class NovelTrack(
     val startDate: Long,
     val finishDate: Long,
     val private: Boolean,
-) : Serializable
+) : PlatformSerializable

@@ -1,14 +1,22 @@
 package tachiyomi.domain.entries.shows.interactor
 
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.atTime
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.minus
+import kotlinx.datetime.offsetIn
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.episode.model.Episode
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.temporal.ChronoUnit
 import kotlin.math.absoluteValue
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class AnimeFetchInterval(
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId,
@@ -16,40 +24,39 @@ class AnimeFetchInterval(
 
     suspend fun toAnimeUpdate(
         anime: Anime,
-        dateTime: ZonedDateTime,
+        dateTime: Instant,
+        timeZone: TimeZone,
         window: Pair<Long, Long>,
     ): AnimeUpdate {
         val interval = anime.fetchInterval.takeIf { it < 0 } ?: calculateInterval(
             episodes = getEpisodesByAnimeId.await(anime.id),
-            zone = dateTime.zone,
+            zone = timeZone,
         )
         val currentWindow = if (window.first == 0L && window.second == 0L) {
-            getWindow(ZonedDateTime.now())
+            getWindow(Clock.System.now(), timeZone)
         } else {
             window
         }
-        val nextUpdate = calculateNextUpdate(anime, interval, dateTime, currentWindow)
+        val nextUpdate = calculateNextUpdate(anime, interval, dateTime, timeZone, currentWindow)
 
         return AnimeUpdate(id = anime.id, nextUpdate = nextUpdate, fetchInterval = interval)
     }
 
-    fun getWindow(dateTime: ZonedDateTime): Pair<Long, Long> {
-        val today = dateTime.toLocalDate().atStartOfDay(dateTime.zone)
-        val lowerBound = today.minusDays(GRACE_PERIOD)
-        val upperBound = today.plusDays(GRACE_PERIOD)
-        return Pair(lowerBound.toEpochSecond() * 1000, upperBound.toEpochSecond() * 1000 - 1)
+    fun getWindow(dateTime: Instant, timeZone: TimeZone): Pair<Long, Long> {
+        val today = dateTime.toLocalDateTime(timeZone).date.atStartOfDayIn(timeZone)
+        val lowerBound = today.minus(GRACE_PERIOD.toInt(), DateTimeUnit.DAY, timeZone)
+        val upperBound = today.plus(GRACE_PERIOD.toInt(), DateTimeUnit.DAY, timeZone)
+        return Pair(lowerBound.epochSeconds * 1000, upperBound.epochSeconds * 1000 - 1)
     }
 
-    fun calculateInterval(episodes: List<Episode>, zone: ZoneId): Int {
+    fun calculateInterval(episodes: List<Episode>, zone: TimeZone): Int {
         val episodeWindow = if (episodes.size <= 8) 3 else 10
 
         val uploadDates = episodes.asSequence()
             .filter { it.dateUpload > 0L }
             .sortedByDescending { it.dateUpload }
             .map {
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(it.dateUpload), zone)
-                    .toLocalDate()
-                    .atStartOfDay()
+                Instant.fromEpochMilliseconds(it.dateUpload).toLocalDateTime(zone).date
             }
             .distinct()
             .take(episodeWindow)
@@ -58,9 +65,7 @@ class AnimeFetchInterval(
         val fetchDates = episodes.asSequence()
             .sortedByDescending { it.dateFetch }
             .map {
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(it.dateFetch), zone)
-                    .toLocalDate()
-                    .atStartOfDay()
+                Instant.fromEpochMilliseconds(it.dateFetch).toLocalDateTime(zone).date
             }
             .distinct()
             .take(episodeWindow)
@@ -69,15 +74,15 @@ class AnimeFetchInterval(
         val interval = when {
             // Enough upload date from source
             uploadDates.size >= 3 -> {
-                val uploadDelta = uploadDates.last().until(uploadDates.first(), ChronoUnit.DAYS)
+                val uploadDelta = uploadDates.last().daysUntil(uploadDates.first())
                 val uploadPeriod = uploadDates.indexOf(uploadDates.last())
-                uploadDelta.floorDiv(uploadPeriod).toInt()
+                uploadDelta.floorDiv(uploadPeriod)
             }
             // Enough fetch date from client
             fetchDates.size >= 3 -> {
-                val fetchDelta = fetchDates.last().until(fetchDates.first(), ChronoUnit.DAYS)
+                val fetchDelta = fetchDates.last().daysUntil(fetchDates.first())
                 val uploadPeriod = fetchDates.indexOf(fetchDates.last())
-                fetchDelta.floorDiv(uploadPeriod).toInt()
+                fetchDelta.floorDiv(uploadPeriod)
             }
             // Default to 7 days
             else -> 7
@@ -89,29 +94,37 @@ class AnimeFetchInterval(
     private fun calculateNextUpdate(
         anime: Anime,
         interval: Int,
-        dateTime: ZonedDateTime,
+        dateTime: Instant,
+        timeZone: TimeZone,
         window: Pair<Long, Long>,
     ): Long {
         if (anime.nextUpdate in window.first.rangeTo(window.second + 1)) {
             return anime.nextUpdate
         }
 
-        val latestDate = ZonedDateTime.ofInstant(
-            if (anime.lastUpdate > 0) Instant.ofEpochMilli(anime.lastUpdate) else Instant.now(),
-            dateTime.zone,
-        )
-            .toLocalDate()
-            .atStartOfDay()
-        val timeSinceLatest = ChronoUnit.DAYS.between(latestDate, dateTime).toInt()
+        val latestDate = (
+            if (anime.lastUpdate > 0) {
+                Instant.fromEpochMilliseconds(anime.lastUpdate)
+            } else {
+                Clock.System.now()
+            }
+            )
+            .toLocalDateTime(timeZone)
+            .date
+        val timeSinceLatest = latestDate.daysUntil(dateTime.toLocalDateTime(timeZone).date)
         val cycle = timeSinceLatest.floorDiv(
             interval.absoluteValue.takeIf { interval < 0 }
                 ?: increaseInterval(interval, timeSinceLatest, increaseWhenOver = 10),
         )
-        return latestDate.plusDays((cycle + 1) * interval.absoluteValue.toLong()).toEpochSecond(dateTime.offset) * 1000
+        return latestDate
+            .plus((cycle + 1) * interval.absoluteValue, DateTimeUnit.DAY)
+            .atTime(0, 0)
+            .toInstant(dateTime.offsetIn(timeZone))
+            .epochSeconds * 1000
     }
 
     private fun increaseInterval(delta: Int, timeSinceLatest: Int, increaseWhenOver: Int): Int {
-        if (delta >= AnimeFetchInterval.MAX_INTERVAL) return AnimeFetchInterval.MAX_INTERVAL
+        if (delta >= MAX_INTERVAL) return MAX_INTERVAL
 
         // double delta again if missed more than 9 check in new delta
         val cycle = timeSinceLatest.floorDiv(delta) + 1

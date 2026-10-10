@@ -3,7 +3,7 @@ package tachiyomi.domain.updates.manga.interactor
 import kotlinx.coroutines.flow.Flow
 import tachiyomi.domain.updates.manga.model.MangaUpdatesWithRelations
 import tachiyomi.domain.updates.manga.repository.MangaUpdatesRepository
-import java.time.Instant
+import kotlin.time.Instant
 
 class GetMangaUpdates(
     private val repository: MangaUpdatesRepository,
@@ -14,7 +14,7 @@ class GetMangaUpdates(
     }
 
     fun subscribe(instant: Instant): Flow<List<MangaUpdatesWithRelations>> {
-        return repository.subscribeAllMangaUpdates(instant.toEpochMilli(), limit = 500)
+        return repository.subscribeAllMangaUpdates(instant.toEpochMilliseconds(), limit = 500)
     }
 
     fun subscribe(read: Boolean, after: Long): Flow<List<MangaUpdatesWithRelations>> {

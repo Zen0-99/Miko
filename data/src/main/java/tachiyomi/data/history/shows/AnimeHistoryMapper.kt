@@ -3,13 +3,13 @@ package tachiyomi.data.history.shows
 import tachiyomi.domain.entries.shows.model.AnimeCover
 import tachiyomi.domain.history.shows.model.AnimeHistory
 import tachiyomi.domain.history.shows.model.AnimeHistoryWithRelations
-import java.util.Date
+import kotlin.time.Instant
 
 object AnimeHistoryMapper {
     fun mapAnimeHistory(
         id: Long,
         episodeId: Long,
-        seenAt: Date?,
+        seenAt: Instant?,
     ): AnimeHistory = AnimeHistory(
         id = id,
         episodeId = episodeId,
@@ -29,7 +29,7 @@ object AnimeHistoryMapper {
         runtime: String?,
         episodeNumber: Double,
         episodeScanlator: String?,
-        seenAt: Date?,
+        seenAt: Instant?,
     ): AnimeHistoryWithRelations = AnimeHistoryWithRelations(
         id = historyId,
         episodeId = episodeId,

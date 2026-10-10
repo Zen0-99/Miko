@@ -1,6 +1,6 @@
 package tachiyomi.domain.achievement.model
 
-import java.time.LocalDate
+import kotlinx.datetime.LocalDate
 
 data class DayActivity(
     val date: LocalDate,

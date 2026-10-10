@@ -1,7 +1,7 @@
 package tachiyomi.domain.entries.novel.interactor
 
 import kotlinx.coroutines.flow.Flow
-import logcat.LogPriority
+import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.repository.NovelRepository

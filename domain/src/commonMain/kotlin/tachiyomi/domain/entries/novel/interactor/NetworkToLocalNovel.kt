@@ -5,12 +5,9 @@ import kotlinx.coroutines.sync.withLock
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.entries.novel.repository.NovelRepository
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import java.util.concurrent.ConcurrentHashMap
 
 class NetworkToLocalNovel(
-    private val novelRepository: NovelRepository = Injekt.get(),
+    private val novelRepository: NovelRepository,
 ) {
     /**
      * Per-(url, source) mutex: concurrent materializes (prefetch, detail
@@ -18,10 +15,11 @@ class NetworkToLocalNovel(
      * fresh row. This serializes them so the first insert is found by
      * the rest.
      */
-    private val locks = ConcurrentHashMap<String, Mutex>()
+    private val locksGuard = Mutex()
+    private val locks = LinkedHashMap<String, Mutex>()
 
     suspend fun await(novel: Novel): Novel {
-        val lock = locks.getOrPut("${novel.source}:${novel.url}") { Mutex() }
+        val lock = locksGuard.withLock { locks.getOrPut("${novel.source}:${novel.url}") { Mutex() } }
         return lock.withLock { awaitLocked(novel) }
     }
 
