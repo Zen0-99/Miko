@@ -4,30 +4,33 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import dev.icerock.moko.resources.PluralsResource
 import dev.icerock.moko.resources.StringResource
-import dev.icerock.moko.resources.desc.StringDesc
+import dev.icerock.moko.resources.desc.PluralFormattedStringDesc
+import dev.icerock.moko.resources.desc.PluralStringDesc
+import dev.icerock.moko.resources.desc.ResourceFormattedStringDesc
+import dev.icerock.moko.resources.desc.ResourceStringDesc
 
 @Composable
 @ReadOnlyComposable
 actual fun stringResource(resource: StringResource): String {
-    return StringDesc.Resource(resource).localized().fixed()
+    return ResourceStringDesc(resource).localized().fixed()
 }
 
 @Composable
 @ReadOnlyComposable
 actual fun stringResource(resource: StringResource, vararg args: Any): String {
-    return StringDesc.ResourceFormatted(resource, *args).localized().fixed()
+    return ResourceFormattedStringDesc(resource, args.toList()).localized().fixed()
 }
 
 @Composable
 @ReadOnlyComposable
 actual fun pluralStringResource(resource: PluralsResource, count: Int): String {
-    return StringDesc.Plural(resource, count).localized().fixed()
+    return PluralStringDesc(resource, count).localized().fixed()
 }
 
 @Composable
 @ReadOnlyComposable
 actual fun pluralStringResource(resource: PluralsResource, count: Int, vararg args: Any): String {
-    return StringDesc.PluralFormatted(resource, count, *args).localized().fixed()
+    return PluralFormattedStringDesc(resource, count, args.toList()).localized().fixed()
 }
 
 // Same workaround as core:common's Android Localize for
