@@ -134,8 +134,10 @@ class IosNovelSourceManager(
     }
 
     // Missing script bytes skip the source entirely — same contract as
-    // Android's NovelJsSourceFactory.create returning null.
+    // Android's NovelJsSourceFactory.create returning null. Non-novel kinds
+    // park in the table until their bridges exist.
     private fun createSource(plugin: NovelPlugin.Installed): IosNovelJsSource? {
+        if (plugin.kind != "novel") return null
         val script = pluginStorage.readPluginScript(plugin.id)?.decodeToString()
             ?: return null
         return IosNovelJsSource(

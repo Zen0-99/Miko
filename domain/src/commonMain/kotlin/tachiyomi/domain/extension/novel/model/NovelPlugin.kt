@@ -16,6 +16,13 @@ sealed class NovelPlugin {
     abstract val repoUrl: String
     abstract val isNsfw: Boolean
 
+    /**
+     * Media kind this plugin serves: "novel" (default), "manga", "anime".
+     * JS plugin indexes declare it per entry; APK extensions don't have a
+     * kind (Untrusted always reports "novel").
+     */
+    abstract val kind: String
+
     data class Available(
         override val id: String,
         override val name: String,
@@ -35,6 +42,7 @@ sealed class NovelPlugin {
         val apkUrl: String? = null,
         val isKotlinExtension: Boolean = false,
         override val isNsfw: Boolean = false,
+        override val kind: String = "novel",
     ) : NovelPlugin()
 
     data class Installed(
@@ -56,6 +64,7 @@ sealed class NovelPlugin {
         val apkUrl: String? = null,
         val isKotlinExtension: Boolean = false,
         override val isNsfw: Boolean = false,
+        override val kind: String = "novel",
     ) : NovelPlugin()
 
     data class Untrusted(
@@ -76,5 +85,6 @@ sealed class NovelPlugin {
         val signatureHash: String,
         val isKotlinExtension: Boolean = true,
         override val isNsfw: Boolean = false,
+        override val kind: String = "novel",
     ) : NovelPlugin()
 }

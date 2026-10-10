@@ -96,5 +96,7 @@ fun NovelPlugin.Available.toInstalled(): NovelPlugin.Installed {
         pkgName = pkgName,
         apkUrl = apkUrl,
         isKotlinExtension = isKotlinExtension,
+        isNsfw = isNsfw,
+        kind = kind,
     )
 }

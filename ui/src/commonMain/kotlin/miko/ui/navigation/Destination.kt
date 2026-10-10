@@ -20,4 +20,7 @@ sealed interface Destination {
 
     /** Saved entries (favorites) backed by the local database. */
     data object Library : Destination
+
+    /** Extension-repo management — consolidated per-type tabs + add/delete. */
+    data object ExtensionRepos : Destination
 }

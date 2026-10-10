@@ -37,6 +37,7 @@ class NovelPluginRepositoryImpl(
                 repo_url = plugin.repoUrl,
                 repo_name = plugin.repoName,
                 version_name = plugin.versionName,
+                kind = plugin.kind,
             )
         }
     }
@@ -60,6 +61,7 @@ class NovelPluginRepositoryImpl(
         repo_url: String,
         repo_name: String?,
         version_name: String?,
+        kind: String,
     ): NovelPlugin.Installed {
         return NovelPlugin.Installed(
             id = id,
@@ -76,6 +78,7 @@ class NovelPluginRepositoryImpl(
             sha256 = sha256,
             repoUrl = repo_url,
             repoName = repo_name,
+            kind = kind,
         )
     }
 }

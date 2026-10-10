@@ -27,10 +27,12 @@ kotlin {
                 implementation(projects.core.common)
                 implementation(projects.data)
                 implementation(projects.i18n)
+                implementation(projects.i18nAniyomi)
                 implementation(projects.sourceApi)
 
                 // Compose Multiplatform — same packages as androidx.*
                 implementation("org.jetbrains.compose.foundation:foundation:$cmpVersion")
+                implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
                 implementation("org.jetbrains.compose.material3:material3:$cmpVersion")
                 implementation("org.jetbrains.compose.runtime:runtime:$cmpVersion")
                 implementation("org.jetbrains.compose.ui:ui:$cmpVersion")

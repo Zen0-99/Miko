@@ -29,6 +29,7 @@ kotlin {
                 implementation(kotlinx.serialization.json)
                 implementation(libs.kotlinx.datetime)
                 implementation(libs.kotlinx.io.core)
+                implementation(libs.ktor.client.core)
                 implementation(libs.paging.common)
 
                 implementation(libs.sqldelight.coroutines.kmp)
@@ -46,6 +47,12 @@ kotlin {
                 api(libs.sqldelight.android.driver)
                 implementation(libs.sqldelight.coroutines)
                 implementation(project.dependencies.platform(kotlinx.coroutines.bom))
+            }
+        }
+        val androidUnitTest by getting {
+            dependencies {
+                implementation(libs.bundles.test)
+                implementation(kotlinx.coroutines.test)
             }
         }
     }
