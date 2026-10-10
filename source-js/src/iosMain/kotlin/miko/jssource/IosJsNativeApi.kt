@@ -194,7 +194,7 @@ class IosJsNativeApi(
             val aesGcm = provider.get(AES.GCM)
             val key = aesGcm.keyDecoder().decodeFromByteArrayBlocking(AES.Key.Format.RAW, keyBytes)
             // IvAuthenticatedCipher: decrypt expects ciphertext || tag, iv separately.
-            val plain = key.cipher().decryptWithIvBlocking(iv, cipherBytes)
+            val plain = runBlocking { key.cipher().decryptWithIv(iv, cipherBytes) }
             platformBase64Encode(plain)
         }.getOrElse { "" }
     }

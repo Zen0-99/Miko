@@ -10,6 +10,7 @@ import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.set
 import kotlinx.cinterop.staticCFunction
