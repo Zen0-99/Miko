@@ -7,17 +7,21 @@ import MikoKit
 final class ProbeTests: XCTestCase {
 
     func testLiveNetworkFetch() throws {
-        let expectation = expectation(description: "fetch api.github.com")
+        let expectation = expectation(description: "fetch raw.githubusercontent.com")
         var captured: String?
 
-        ProbeKt.probeNetworkAsync(url: "https://api.github.com/repos/Zen0-99/Miko") { body, error in
+        // raw.githubusercontent.com is a file CDN — not subject to the
+        // api.github.com per-IP rate limit that flakes on shared runner IPs.
+        ProbeKt.probeNetworkAsync(
+            url: "https://raw.githubusercontent.com/Zen0-99/Miko/main/settings.gradle.kts",
+        ) { body, error in
             captured = body ?? "ERROR: \(error ?? "unknown")"
             expectation.fulfill()
         }
 
         waitForExpectations(timeout: 30)
         XCTAssertTrue(
-            captured?.contains("Zen0-99/Miko") ?? false,
+            captured?.contains("pluginManagement") ?? false,
             "probe did not return repo payload — got: \(captured ?? "nil")",
         )
     }
