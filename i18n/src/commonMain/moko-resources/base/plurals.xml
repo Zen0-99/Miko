@@ -61,6 +61,11 @@
         <item quantity="other">%1$s entries</item>
     </plurals>
 
+    <plurals name="num_chapters_in_total">
+        <item quantity="one">%1$s chapter in total</item>
+        <item quantity="other">%1$s chapters in total</item>
+    </plurals>
+
     <plurals name="download_amount">
         <item quantity="one">Next chapter</item>
         <item quantity="other">Next %d chapters</item>

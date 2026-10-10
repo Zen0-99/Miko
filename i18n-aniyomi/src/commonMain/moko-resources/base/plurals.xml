@@ -36,6 +36,10 @@
         <item quantity="one">%d entry</item>
         <item quantity="other">%d entries</item>
     </plurals>
+    <plurals name="anime_num_episodes_in_total">
+        <item quantity="one">%d ep in total</item>
+        <item quantity="other">%d ep in total</item>
+    </plurals>
     <plurals name="download_amount_anime">
         <item quantity="one">Next episode</item>
         <item quantity="other">Next %d episodes</item>
