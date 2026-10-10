@@ -2050,7 +2050,9 @@ private fun LazyGridScope.sharedEpisodeItems(
                                 null
                             },
                             summary = episodeItem.episode.summary.takeIf { !it.isNullOrBlank() && showSummaries },
-                            previewUrl = episodeItem.episode.previewUrl.takeIf { !it.isNullOrBlank() && showPreviews },
+                            previewUrl = episodeItem.episode.previewUrl.takeIf {
+                                !it.isNullOrBlank() && showPreviews
+                            },
                             seen = episodeItem.episode.seen,
                             bookmark = episodeItem.episode.bookmark,
                             selected = episodeItem.selected,

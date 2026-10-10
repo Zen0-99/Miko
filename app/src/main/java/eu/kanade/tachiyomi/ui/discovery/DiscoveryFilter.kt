@@ -60,8 +60,10 @@ data class DiscoveryFilter(
     val isActive: Boolean
         get() = genreStates.values.any { it != TriState.DISABLED } ||
             keywordStates.values.any { it != TriState.DISABLED } ||
-            yearFrom != null || yearTo != null ||
-            voteAverageGte != null || voteCountGte != null ||
+            yearFrom != null ||
+            yearTo != null ||
+            voteAverageGte != null ||
+            voteCountGte != null ||
             sort != DiscoverySort.POPULARITY
 
     fun withGenreState(genreId: Int, state: TriState): DiscoveryFilter =
