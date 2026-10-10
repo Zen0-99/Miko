@@ -13,6 +13,7 @@ import kotlinx.serialization.json.Json
 import mihon.domain.extensionrepo.service.ExtensionRepoService
 import mihon.domain.extensionrepo.service.IosExtensionRepoService
 import miko.jssource.IosJsRuntimeFactory
+import miko.ui.MikoUiGraph
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
@@ -26,6 +27,7 @@ import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.NovelUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
+import tachiyomi.data.entries.novel.NovelRepositoryImpl
 import tachiyomi.data.extension.novel.DefaultNovelPluginStorage
 import tachiyomi.data.extension.novel.IosNovelPluginKeyValueStore
 import tachiyomi.data.extension.novel.NovelPluginKeyValueStore
@@ -37,9 +39,16 @@ import tachiyomi.data.handlers.manga.IosMangaDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.data.handlers.novel.IosNovelDatabaseHandler
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
+import tachiyomi.data.items.chapter.NovelChapterRepositoryImpl
 import tachiyomi.data.source.novel.NovelStubSourceRepositoryImpl
 import tachiyomi.db.achievement.AchievementsDatabase
+import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
+import tachiyomi.domain.entries.novel.interactor.GetNovel
+import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
+import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
+import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
+import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.model.Release
 import tachiyomi.domain.release.service.ReleaseService
@@ -139,6 +148,29 @@ class AppGraph {
         runtimeFactory = jsRuntimeFactory,
         httpClient = httpClient,
         json = json,
+    )
+
+    val novelRepository: NovelRepository = NovelRepositoryImpl(novelHandler)
+
+    val novelChapterRepository: NovelChapterRepository =
+        NovelChapterRepositoryImpl(novelHandler)
+
+    val getNovel = GetNovel(novelRepository)
+
+    val getLibraryNovels = GetLibraryNovels(novelRepository)
+
+    val getNovelChaptersByNovelId = GetNovelChaptersByNovelId(novelChapterRepository)
+
+    val networkToLocalNovel = NetworkToLocalNovel(novelRepository)
+
+    val uiGraph = MikoUiGraph(
+        novelSourceManager = novelSourceManager,
+        getLibraryNovels = getLibraryNovels,
+        getNovel = getNovel,
+        getNovelChaptersByNovelId = getNovelChaptersByNovelId,
+        networkToLocalNovel = networkToLocalNovel,
+        novelRepository = novelRepository,
+        novelChapterRepository = novelChapterRepository,
     )
 
     private fun newDriver(
