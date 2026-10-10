@@ -90,7 +90,8 @@ private fun ExtensionList(
     // first, then alphabetical.
     val availableByLang = notInstalled
         .groupBy { it.lang.ifBlank { "?" } }
-        .toSortedMap(compareBy({ it != "all" }, { it }))
+        .entries
+        .sortedWith(compareBy({ it.key != "all" }, { it.key }))
 
     LazyColumn(modifier = modifier.fillMaxSize()) {
         if (state.installed.isNotEmpty()) {
