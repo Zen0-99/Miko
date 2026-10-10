@@ -1,6 +1,7 @@
 package tachiyomi.domain.achievement.model
 
 import tachiyomi.domain.util.Immutable
+import kotlin.time.Clock
 
 @Immutable
 data class Achievement(
@@ -17,7 +18,7 @@ data class Achievement(
     val isSecret: Boolean = false,
     val unlockableId: String? = null,
     val version: Int = 1,
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = Clock.System.now().toEpochMilliseconds(),
     // Многоуровневая система (Tiered System)
     val tiers: List<AchievementTier>? = null,
     val maxTier: Int = tiers?.size ?: 0,
@@ -123,7 +124,7 @@ data class Achievement(
             unlockableId: String? = null,
             rewards: List<Reward>? = null,
             version: Int = 1,
-            createdAt: Long = System.currentTimeMillis(),
+            createdAt: Long = Clock.System.now().toEpochMilliseconds(),
         ): Achievement {
             return Achievement(
                 id = id,
@@ -161,7 +162,7 @@ data class Achievement(
             rewards: List<Reward>,
             unlockableId: String? = null,
             version: Int = 1,
-            createdAt: Long = System.currentTimeMillis(),
+            createdAt: Long = Clock.System.now().toEpochMilliseconds(),
         ): Achievement {
             return Achievement(
                 id = id,

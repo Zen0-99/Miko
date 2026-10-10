@@ -1,6 +1,8 @@
 package tachiyomi.domain.achievement.model
 
 import tachiyomi.domain.util.Immutable
+import kotlin.math.pow
+import kotlin.time.Clock
 
 /**
  * Профиль пользователя с информацией о прогрессе и наградах
@@ -31,7 +33,7 @@ data class UserProfile(
     val unlockedThemes: List<String> = emptyList(),
     val achievementsUnlocked: Int = 0,
     val totalAchievements: Int = 0,
-    val joinDate: Long = System.currentTimeMillis(),
+    val joinDate: Long = Clock.System.now().toEpochMilliseconds(),
 ) {
     /**
      * Процент выполнения до следующего уровня (0.0 - 1.0)
@@ -90,7 +92,7 @@ data class UserProfile(
          * Формула: XP для уровня N = 100 * N^1.5
          */
         fun getXPForLevel(level: Int): Int {
-            return (100 * Math.pow(level.toDouble(), 1.5)).toInt()
+            return (100 * level.toDouble().pow(1.5)).toInt()
         }
 
         /**

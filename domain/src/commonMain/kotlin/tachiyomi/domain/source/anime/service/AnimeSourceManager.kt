@@ -2,7 +2,6 @@ package tachiyomi.domain.source.anime.service
 
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.AnimeSource
-import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import tachiyomi.domain.source.anime.model.StubAnimeSource
@@ -17,7 +16,7 @@ interface AnimeSourceManager {
 
     fun getOrStub(sourceKey: Long): AnimeSource
 
-    fun getOnlineSources(): List<AnimeHttpSource>
+    fun getOnlineSources(): List<AnimeCatalogueSource>
 
     fun getCatalogueSources(): List<AnimeCatalogueSource>
 

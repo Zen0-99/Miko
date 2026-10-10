@@ -1,6 +1,7 @@
 package tachiyomi.domain.achievement.model
 
 import tachiyomi.domain.util.Immutable
+import kotlin.time.Clock
 
 @Immutable
 data class AchievementProgress(
@@ -9,7 +10,7 @@ data class AchievementProgress(
     val maxProgress: Int = 100,
     val isUnlocked: Boolean = false,
     val unlockedAt: Long? = null,
-    val lastUpdated: Long = System.currentTimeMillis(),
+    val lastUpdated: Long = Clock.System.now().toEpochMilliseconds(),
     // Многоуровневая система
     val currentTier: Int = 0, // Текущий достигнутый уровень (0 = нет уровня)
     val maxTier: Int = 0, // Максимальный уровень в достижении
@@ -50,7 +51,7 @@ data class AchievementProgress(
             maxProgress: Int = 100,
             isUnlocked: Boolean = false,
             unlockedAt: Long? = null,
-            lastUpdated: Long = System.currentTimeMillis(),
+            lastUpdated: Long = Clock.System.now().toEpochMilliseconds(),
         ): AchievementProgress {
             return AchievementProgress(
                 achievementId = achievementId,
@@ -78,7 +79,7 @@ data class AchievementProgress(
             tierMaxProgress: Int,
             isUnlocked: Boolean = false,
             unlockedAt: Long? = null,
-            lastUpdated: Long = System.currentTimeMillis(),
+            lastUpdated: Long = Clock.System.now().toEpochMilliseconds(),
         ): AchievementProgress {
             return AchievementProgress(
                 achievementId = achievementId,

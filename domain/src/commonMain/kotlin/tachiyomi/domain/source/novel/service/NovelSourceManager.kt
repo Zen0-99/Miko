@@ -2,7 +2,6 @@ package tachiyomi.domain.source.novel.service
 
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.NovelSource
-import eu.kanade.tachiyomi.novelsource.online.NovelHttpSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import tachiyomi.domain.source.novel.model.StubNovelSource
@@ -17,7 +16,7 @@ interface NovelSourceManager {
 
     fun getOrStub(sourceKey: Long): NovelSource
 
-    fun getOnlineSources(): List<NovelHttpSource>
+    fun getOnlineSources(): List<NovelCatalogueSource>
 
     fun getCatalogueSources(): List<NovelCatalogueSource>
 
