@@ -151,6 +151,8 @@ class GetNovelIncognitoStateTest {
             objects.getOrPut(key) { FakePreference(defaultValue as Any) as Preference<Any> } as Preference<T>
 
         override fun getAll(): Map<String, *> = emptyMap<String, Any>()
+
+        override fun changes(): Flow<String?> = kotlinx.coroutines.flow.emptyFlow()
     }
 
     private class FakePreference<T>(initial: T) : Preference<T> {

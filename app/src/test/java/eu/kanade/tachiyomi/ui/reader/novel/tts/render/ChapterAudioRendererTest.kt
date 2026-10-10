@@ -610,5 +610,7 @@ class ChapterAudioRendererTest {
         ): Preference<T> = pref(key, defaultValue)
 
         override fun getAll(): Map<String, *> = emptyMap<String, Any>()
+
+        override fun changes(): Flow<String?> = kotlinx.coroutines.flow.emptyFlow()
     }
 }
