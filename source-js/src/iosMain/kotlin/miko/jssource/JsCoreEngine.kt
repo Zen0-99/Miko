@@ -177,52 +177,52 @@ class JsCoreEngine(
     }
 
     class JsEngineException(message: String) : Exception(message)
+}
 
-    companion object {
-        /**
-         * JS→Kotlin trampoline for `__nativeInvoke(name, argsJson)`.
-         * Must be a non-capturing function for staticCFunction; the
-         * dispatcher is recovered from the function object's private data.
-         */
-        private fun nativeInvokeTrampoline(
-            ctx: JSContextRef?,
-            function: JSObjectRef?,
-            thisObject: JSObjectRef?,
-            argumentCount: size_t,
-            arguments: CPointer<JSValueRefVar>?,
-            exception: CPointer<JSValueRefVar>?,
-        ): JSValueRef? {
-            val dispatcher = function?.let { JSObjectGetPrivate(it) }
-                ?.asStableRef<JsNativeDispatcher>()
-                ?.get() ?: return null
-            fun argToString(i: Int): String? {
-                if (arguments == null || i.toULong() >= argumentCount) return null
-                val str = JSValueToStringCopy(ctx, arguments[i], null) ?: return null
-                return memScoped {
-                    val maxSize = JSStringGetMaximumUTF8CStringSize(str)
-                    val buffer = allocArray<ByteVar>(maxSize.convert())
-                    val written = JSStringGetUTF8CString(str, buffer, maxSize)
-                    JSStringRelease(str)
-                    if (written.toLong() > 0) buffer.toKString() else ""
-                }
-            }
-            return try {
-                val name = argToString(0) ?: ""
-                val argsJson = argToString(1) ?: "[]"
-                val resultJson = dispatcher.dispatch(name, argsJson)
-                val resultStr = JSStringCreateWithUTF8CString(resultJson)
-                val out = ctx?.let { JSValueMakeString(it, resultStr) }
-                JSStringRelease(resultStr)
-                out
-            } catch (e: Throwable) {
-                val msg = JSStringCreateWithUTF8CString("native invoke failed: ${e.message}")
-                val errValue = ctx?.let { JSValueMakeString(it, msg) }
-                exception?.pointed?.let { it.value = errValue }
-                JSStringRelease(msg)
-                null
-            }
+/**
+ * JS→Kotlin trampoline for `__nativeInvoke(name, argsJson)`.
+ * Must be a non-capturing top-level function for staticCFunction; the
+ * dispatcher is recovered from the function object's private data.
+ */
+@OptIn(ExperimentalForeignApi::class)
+private fun nativeInvokeTrampoline(
+    ctx: JSContextRef?,
+    function: JSObjectRef?,
+    thisObject: JSObjectRef?,
+    argumentCount: size_t,
+    arguments: CPointer<JSValueRefVar>?,
+    exception: CPointer<JSValueRefVar>?,
+): JSValueRef? {
+    val dispatcher = function?.let { JSObjectGetPrivate(it) }
+        ?.asStableRef<JsNativeDispatcher>()
+        ?.get() ?: return null
+    fun argToString(i: Int): String? {
+        if (arguments == null || i.toULong() >= argumentCount) return null
+        val str = JSValueToStringCopy(ctx, arguments[i], null) ?: return null
+        return memScoped {
+            val maxSize = JSStringGetMaximumUTF8CStringSize(str)
+            val buffer = allocArray<ByteVar>(maxSize.convert())
+            val written = JSStringGetUTF8CString(str, buffer, maxSize)
+            JSStringRelease(str)
+            if (written.toLong() > 0) buffer.toKString() else ""
         }
-
-        private val nativeInvokeCallback = staticCFunction(::nativeInvokeTrampoline)
+    }
+    return try {
+        val name = argToString(0) ?: ""
+        val argsJson = argToString(1) ?: "[]"
+        val resultJson = dispatcher.dispatch(name, argsJson)
+        val resultStr = JSStringCreateWithUTF8CString(resultJson)
+        val out = ctx?.let { JSValueMakeString(it, resultStr) }
+        JSStringRelease(resultStr)
+        out
+    } catch (e: Throwable) {
+        val msg = JSStringCreateWithUTF8CString("native invoke failed: ${e.message}")
+        val errValue = ctx?.let { JSValueMakeString(it, msg) }
+        exception?.pointed?.let { it.value = errValue }
+        JSStringRelease(msg)
+        null
     }
 }
+
+@OptIn(ExperimentalForeignApi::class)
+private val nativeInvokeCallback = staticCFunction(::nativeInvokeTrampoline)
