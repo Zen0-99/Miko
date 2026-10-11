@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
@@ -63,10 +65,16 @@ class AnimeCarrierBinding(
         animeRepository.updateAnime(AnimeUpdate(id = localId, favorite = favorite))
     }
 
-    override fun localItems(localId: Long): Flow<List<LocalItem>> =
-        episodeRepository.getEpisodeByAnimeIdAsFlow(localId).map { episodes ->
-            episodes.map { LocalItem(id = it.id, url = it.url, name = it.name, done = it.seen) }
-        }
+    override fun localItems(localId: Long): Flow<List<LocalItem>> = flow {
+        // getEpisodeByAnimeIdAsFlow is suspend (unlike the novel repo's).
+        emitAll(
+            episodeRepository.getEpisodeByAnimeIdAsFlow(localId).map { episodes ->
+                episodes.map {
+                    LocalItem(id = it.id, url = it.url, name = it.name, done = it.seen)
+                }
+            },
+        )
+    }
 
     override suspend fun getLocalItems(localId: Long): List<LocalItem> =
         episodeRepository.getEpisodeByAnimeId(localId).map {

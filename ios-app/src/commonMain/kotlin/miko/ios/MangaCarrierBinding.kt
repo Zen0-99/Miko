@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
@@ -65,10 +67,16 @@ class MangaCarrierBinding(
         mangaRepository.updateManga(MangaUpdate(id = localId, favorite = favorite))
     }
 
-    override fun localItems(localId: Long): Flow<List<LocalItem>> =
-        chapterRepository.getChapterByMangaIdAsFlow(localId).map { chapters ->
-            chapters.map { LocalItem(id = it.id, url = it.url, name = it.name, done = it.read) }
-        }
+    override fun localItems(localId: Long): Flow<List<LocalItem>> = flow {
+        // getChapterByMangaIdAsFlow is suspend (unlike the novel repo's).
+        emitAll(
+            chapterRepository.getChapterByMangaIdAsFlow(localId).map { chapters ->
+                chapters.map {
+                    LocalItem(id = it.id, url = it.url, name = it.name, done = it.read)
+                }
+            },
+        )
+    }
 
     override suspend fun getLocalItems(localId: Long): List<LocalItem> =
         chapterRepository.getChapterByMangaId(localId).map {
