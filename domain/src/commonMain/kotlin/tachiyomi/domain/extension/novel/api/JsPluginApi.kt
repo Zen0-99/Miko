@@ -7,12 +7,21 @@ import mihon.domain.extensionrepo.anime.repository.AnimeExtensionRepoRepository
 import mihon.domain.extensionrepo.manga.repository.MangaExtensionRepoRepository
 import mihon.domain.extensionrepo.model.ExtensionRepo
 import mihon.domain.extensionrepo.novel.repository.NovelExtensionRepoRepository
+import mihon.domain.extensionrepo.service.ExtensionIndexEntry
+import mihon.domain.extensionrepo.service.ExtensionRepoService
 import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.extension.novel.model.NovelPlugin
 
 interface JsPluginApiFacade {
     suspend fun fetchAvailablePlugins(): List<NovelPlugin.Available>
+
+    /**
+     * APK-index entries across all saved repos. Android shows these in the
+     * extensions list as installable; iOS renders them display-only since
+     * APKs can't run there.
+     */
+    suspend fun fetchRepoExtensions(): List<ExtensionIndexEntry>
 }
 
 interface JsPluginRepoProvider {
@@ -49,6 +58,7 @@ class JsPluginApi(
     private val fetcher: JsPluginIndexFetcher,
     private val parser: JsPluginIndexParser,
     private val includeKotlinExtensions: Boolean = true,
+    private val extensionRepoService: ExtensionRepoService? = null,
 ) : JsPluginApiFacade {
     override suspend fun fetchAvailablePlugins(): List<NovelPlugin.Available> {
         return withContext(Dispatchers.Default) {
@@ -68,6 +78,22 @@ class JsPluginApi(
                 }
             }.also {
                 logcat(LogPriority.DEBUG) { "JsPluginApi: total available plugins fetched = ${it.size}" }
+            }
+        }
+    }
+
+    override suspend fun fetchRepoExtensions(): List<ExtensionIndexEntry> {
+        val service = extensionRepoService ?: return emptyList()
+        return withContext(Dispatchers.Default) {
+            repoProvider.getAll().flatMap { repo ->
+                try {
+                    service.fetchExtensionIndex(repo.baseUrl).orEmpty()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e) { "Failed to fetch extension index from ${repo.baseUrl}" }
+                    emptyList()
+                }
             }
         }
     }

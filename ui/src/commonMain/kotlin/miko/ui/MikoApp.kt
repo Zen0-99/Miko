@@ -4,14 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -24,9 +22,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import miko.ui.details.NovelDetailsScreen
 import miko.ui.details.NovelDetailsScreenModel
+import miko.ui.extensions.ExtensionCatalog
 import miko.ui.extensions.ExtensionsScreen
 import miko.ui.extensions.ExtensionsScreenModel
 import miko.ui.feed.SourceFeedScreen
@@ -49,6 +48,8 @@ import miko.ui.navigation.Navigator
 import miko.ui.navigation.rememberNavigator
 import miko.ui.repos.ExtensionReposScreen
 import miko.ui.repos.ExtensionReposScreenModel
+import miko.ui.search.GlobalNovelSearchScreen
+import miko.ui.search.GlobalNovelSearchScreenModel
 import miko.ui.sources.SourcesScreen
 import miko.ui.sources.SourcesScreenModel
 import tachiyomi.i18n.MR
@@ -64,34 +65,120 @@ enum class BrowseMode { BROWSE, EXTENSIONS }
 @Composable
 fun MikoApp(graph: MikoUiGraph) {
     val navigator = rememberNavigator(Destination.Browse)
+
+    // Browse-tab search state — mirrors Android's SharedTopBarState fields:
+    // non-null query = search open ("" = just opened). Reset when leaving
+    // Browse, same as Android's per-tab resetSearch.
+    var browseSearchQuery by remember { mutableStateOf<String?>(null) }
     var browseMode by remember { mutableStateOf(BrowseMode.BROWSE) }
+    LaunchedEffect(navigator.current) {
+        if (navigator.current != Destination.Browse) browseSearchQuery = null
+    }
+
+    // The global-search screen's model lives at app scope so the top bar's
+    // search field can submit into it (Android embeds the toolbar in the
+    // screen's own Scaffold; the shared shell hoists it instead).
+    val globalSearchDest = navigator.current as? Destination.GlobalSearch
+    val globalSearchModel = remember(globalSearchDest?.query) {
+        globalSearchDest?.let { GlobalNovelSearchScreenModel(graph.novelSourceManager, it.query) }
+    }
+    DisposableEffect(globalSearchModel) {
+        onDispose { globalSearchModel?.dispose() }
+    }
+
+    // Browse-tab catalog + screen models live at app scope — Android's
+    // rememberScreenModel keeps them alive across navigation, so the lists
+    // don't refetch every time the tab remounts after a push/pop.
+    val browseCatalog = remember {
+        ExtensionCatalog(
+            jsPluginApi = graph.jsPluginApi,
+            pluginRepository = graph.novelPluginRepository,
+        )
+    }
+    val sourcesModel = remember { SourcesScreenModel(graph.novelSourceManager, browseCatalog) }
+    val extensionsModel = remember {
+        ExtensionsScreenModel(
+            catalog = browseCatalog,
+            installer = graph.novelPluginInstaller,
+        )
+    }
 
     MikoTheme {
         Scaffold(
             topBar = {
-                if (navigator.canPop) {
-                    TopAppBar(
-                        title = { Text(screenTitle(navigator.current)) },
-                        navigationIcon = {
-                            IconButton(onClick = { navigator.pop() }) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = null,
-                                )
+                val current = navigator.current
+                when {
+                    navigator.canPop -> {
+                        if (current is Destination.GlobalSearch) {
+                            // Always-open search field — Android's
+                            // GlobalNovelSearchToolbar equivalent.
+                            var query by remember { mutableStateOf(current.query) }
+                            MikoTopBar(
+                                title = "",
+                                canSearch = true,
+                                searchQuery = query,
+                                onSearchQueryChange = { query = it ?: current.query },
+                                onSearch = { globalSearchModel?.search(it) },
+                                searchPlaceholderText = stringResource(MR.strings.action_search_hint),
+                                navigateUp = { navigator.pop() },
+                                actions = {},
+                            )
+                        } else {
+                            MikoTopBar(
+                                title = screenTitle(current),
+                                canSearch = false,
+                                searchQuery = null,
+                                onSearchQueryChange = {},
+                                onSearch = {},
+                                searchPlaceholderText = null,
+                                navigateUp = { navigator.pop() },
+                                actions = {},
+                            )
+                        }
+                    }
+                    else -> MikoTopBar(
+                        title = screenTitle(current),
+                        canSearch = current == Destination.Browse,
+                        searchQuery = browseSearchQuery,
+                        onSearchQueryChange = { browseSearchQuery = it },
+                        onSearch = { query ->
+                            if (browseMode == BrowseMode.BROWSE) {
+                                // Android pushes GlobalNovelSearchScreen and
+                                // closes the browse search.
+                                navigator.push(Destination.GlobalSearch(query))
+                                browseSearchQuery = null
                             }
                         },
-                    )
-                } else {
-                    TopAppBar(
-                        title = { Text(screenTitle(navigator.current)) },
+                        searchPlaceholderText = if (current == Destination.Browse) {
+                            stringResource(
+                                if (browseMode == BrowseMode.EXTENSIONS) {
+                                    MR.strings.search_hint_extensions
+                                } else {
+                                    MR.strings.search_hint_browse
+                                },
+                            )
+                        } else {
+                            null
+                        },
+                        navigateUp = null,
                         actions = {
-                            if (navigator.current == Destination.Browse) {
+                            if (current == Destination.Browse) {
                                 BrowseOverflowMenu(
                                     onOpenExtensionRepos = {
                                         navigator.push(Destination.ExtensionRepos)
                                     },
                                 )
                             }
+                        },
+                        pillContent = if (current == Destination.Browse) {
+                            {
+                                BrowseModePill(
+                                    browseMode = browseMode,
+                                    onModeChange = { browseMode = it },
+                                )
+                            }
+                        } else {
+                            null
                         },
                     )
                 }
@@ -117,10 +204,11 @@ fun MikoApp(graph: MikoUiGraph) {
         ) { padding ->
             when (val destination = navigator.current) {
                 Destination.Browse -> BrowseDestination(
-                    graph = graph,
                     navigator = navigator,
+                    sourcesModel = sourcesModel,
+                    extensionsModel = extensionsModel,
                     browseMode = browseMode,
-                    onBrowseModeChange = { browseMode = it },
+                    searchQuery = browseSearchQuery,
                     modifier = Modifier.padding(padding),
                 )
                 Destination.Library -> LibraryDestination(
@@ -144,6 +232,11 @@ fun MikoApp(graph: MikoUiGraph) {
                     graph = graph,
                     modifier = Modifier.padding(padding),
                 )
+                is Destination.GlobalSearch -> GlobalSearchDestination(
+                    model = globalSearchModel,
+                    navigator = navigator,
+                    modifier = Modifier.padding(padding),
+                )
             }
         }
     }
@@ -155,6 +248,7 @@ private fun screenTitle(destination: Destination): String = when (destination) {
     Destination.Library -> stringResource(MR.strings.label_library)
     Destination.ExtensionRepos -> stringResource(MR.strings.label_extension_repos)
     is Destination.SourceFeed -> stringResource(MR.strings.sources)
+    is Destination.GlobalSearch -> stringResource(MR.strings.action_search_hint)
     is Destination.Details -> ""
 }
 
@@ -181,46 +275,50 @@ private fun BrowseOverflowMenu(onOpenExtensionRepos: () -> Unit) {
 }
 
 /**
- * Browse tab content — BROWSE|EXTENSIONS pill over sources/extensions lists,
- * mirroring the Android BrowseTab structure. Both models are created eagerly
- * like Android's `rememberScreenModel` calls so switching the pill doesn't
- * re-fetch.
+ * Browse tab content — sources list always mounted underneath (Android keeps
+ * the source tab composed during search for icon/scroll preservation); the
+ * extensions list overlays it as opaque search content while EXTENSIONS
+ * mode is active. The BROWSE|EXTENSIONS pill itself renders inside the top
+ * bar, appearing only while search is open — same as Android.
  */
 @Composable
 private fun BrowseDestination(
-    graph: MikoUiGraph,
     navigator: Navigator,
+    sourcesModel: SourcesScreenModel,
+    extensionsModel: ExtensionsScreenModel,
     browseMode: BrowseMode,
-    onBrowseModeChange: (BrowseMode) -> Unit,
+    searchQuery: String?,
     modifier: Modifier = Modifier,
 ) {
-    val sourcesModel = remember { SourcesScreenModel(graph.novelSourceManager) }
-    val extensionsModel = remember {
-        ExtensionsScreenModel(
-            pluginRepository = graph.novelPluginRepository,
-            jsPluginApi = graph.jsPluginApi,
-            installer = graph.novelPluginInstaller,
-        )
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            sourcesModel.dispose()
-            extensionsModel.dispose()
-        }
+    // Push the live query into the extension model only while EXTENSIONS
+    // search is active — mirrors Android's LaunchedEffect wiring.
+    LaunchedEffect(searchQuery, browseMode) {
+        extensionsModel.search(if (browseMode == BrowseMode.EXTENSIONS) searchQuery else null)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        BrowseModePill(browseMode = browseMode, onModeChange = onBrowseModeChange)
-        when (browseMode) {
-            BrowseMode.BROWSE -> SourcesScreen(
-                model = sourcesModel,
-                onSourceClick = { sourceId -> navigator.push(Destination.SourceFeed(sourceId)) },
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
-            BrowseMode.EXTENSIONS -> ExtensionsScreen(
-                model = extensionsModel,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
+    Box(modifier = modifier.fillMaxSize()) {
+        SourcesScreen(
+            model = sourcesModel,
+            extensionsModel = extensionsModel,
+            onSourceClick = { sourceId -> navigator.push(Destination.SourceFeed(sourceId)) },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        // Search overlay — extensions list while EXTENSIONS mode is active.
+        // Opaque background hides the sources tab beneath (Android parity).
+        val showExtensionOverlay = searchQuery != null && browseMode == BrowseMode.EXTENSIONS
+        if (showExtensionOverlay) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+            ) {
+                ExtensionsScreen(
+                    model = extensionsModel,
+                    onOpenExtensionRepos = { navigator.push(Destination.ExtensionRepos) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
@@ -311,6 +409,24 @@ private fun ExtensionReposDestination(
         onDispose { model.dispose() }
     }
     ExtensionReposScreen(model = model, modifier = modifier.fillMaxSize())
+}
+
+@Composable
+private fun GlobalSearchDestination(
+    model: GlobalNovelSearchScreenModel?,
+    navigator: Navigator,
+    modifier: Modifier = Modifier,
+) {
+    if (model != null) {
+        GlobalNovelSearchScreen(
+            model = model,
+            onSourceClick = { sourceId -> navigator.push(Destination.SourceFeed(sourceId)) },
+            onNovelClick = { sourceId, novelUrl ->
+                navigator.push(Destination.Details(sourceId, novelUrl))
+            },
+            modifier = modifier.fillMaxSize(),
+        )
+    }
 }
 
 @Composable

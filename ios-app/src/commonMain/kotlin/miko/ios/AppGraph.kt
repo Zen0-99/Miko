@@ -207,6 +207,8 @@ class AppGraph {
         parser = jsPluginIndexParser,
         // APK rows aren't installable on iOS — exclude them from the list.
         includeKotlinExtensions = false,
+        // …but the APK index still feeds the repo's Not-Installed rows.
+        extensionRepoService = extensionRepoService,
     )
 
     val createAnimeExtensionRepo = CreateAnimeExtensionRepo(animeExtensionRepoRepository, extensionRepoService)

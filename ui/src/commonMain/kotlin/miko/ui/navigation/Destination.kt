@@ -23,4 +23,7 @@ sealed interface Destination {
 
     /** Extension-repo management — consolidated per-type tabs + add/delete. */
     data object ExtensionRepos : Destination
+
+    /** Cross-source novel search results — Android's GlobalNovelSearchScreen. */
+    data class GlobalSearch(val query: String) : Destination
 }
