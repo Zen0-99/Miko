@@ -104,7 +104,7 @@ fun SourceFeedScreen(
             }
             if (state.hasFilters) {
                 FilterChip(
-                    selected = false,
+                    selected = state.filtersApplied,
                     onClick = model::openFilterSheet,
                     leadingIcon = {
                         Icon(

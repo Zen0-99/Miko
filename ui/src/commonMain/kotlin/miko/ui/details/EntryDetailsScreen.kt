@@ -62,6 +62,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import miko.ui.carrier.BrowseCarrier
@@ -103,6 +105,30 @@ fun EntryDetailsScreen(
         )
     }
 
+    // Android's NovelCoverDialog/MangaCoverDialog — tap the hero cover for
+    // a fullscreen viewer; tap anywhere to dismiss.
+    var coverExpanded by remember { mutableStateOf(false) }
+    if (coverExpanded) {
+        Dialog(
+            onDismissRequest = { coverExpanded = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { coverExpanded = false },
+            ) {
+                AsyncImage(
+                    model = state.details?.thumbnailUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+
     // Android's details swipe-refresh — reloads details + item list.
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(state.detailsLoading, state.itemsLoading) {
@@ -121,6 +147,7 @@ fun EntryDetailsScreen(
             item {
                 NovelHero(
                     coverUrl = state.details?.thumbnailUrl,
+                    onCoverClick = { coverExpanded = true },
                     title = state.details?.title ?: state.local?.title ?: "",
                     metaItems = listOfNotNull(
                         state.details?.author,
@@ -258,6 +285,7 @@ private fun NovelHero(
     coverUrl: String?,
     title: String,
     metaItems: List<String>,
+    onCoverClick: () -> Unit,
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
     Box(
@@ -269,7 +297,9 @@ private fun NovelHero(
             model = coverUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(onClick = onCoverClick),
         )
         Box(
             modifier = Modifier

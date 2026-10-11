@@ -41,6 +41,8 @@ class SourceFeedScreenModel(
         val error: String? = null,
         val displayMode: LibraryDisplayMode = LibraryDisplayMode.default,
         val hasFilters: Boolean = false,
+        /** Android's hasFilters tint — the chip highlights once applied. */
+        val filtersApplied: Boolean = false,
         val filters: List<FeedFilter> = emptyList(),
         val showFilterSheet: Boolean = false,
     )
@@ -98,17 +100,12 @@ class SourceFeedScreenModel(
         _state.value = _state.value.copy(showFilterSheet = false)
     }
 
-    // Android semantics: applying filters routes the feed through
-    // source.search(page, query, filters) even with a blank query —
-    // a filtered listing IS a search.
-    private var filtersApplied = false
-
     /**
      * Called after a FeedFilter mutation — the edit already wrote through
      * to the carrier filter objects; the feed just needs a clean reload.
      */
     fun onFilterChanged() {
-        filtersApplied = true
+        _state.value = _state.value.copy(filtersApplied = true)
         reset()
     }
 
@@ -119,6 +116,7 @@ class SourceFeedScreenModel(
         _state.value = _state.value.copy(
             filters = filters,
             hasFilters = filters.isNotEmpty(),
+            filtersApplied = false,
         )
     }
 
@@ -159,7 +157,7 @@ class SourceFeedScreenModel(
                 val nextPage = page + 1
                 val result = runCatching {
                     when {
-                        current.query.isNotBlank() || filtersApplied ->
+                        current.query.isNotBlank() || current.filtersApplied ->
                             src.search(nextPage, current.query)
                         current.listing == Listing.Latest -> src.latest(nextPage)
                         else -> src.popular(nextPage)
