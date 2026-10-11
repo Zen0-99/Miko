@@ -8,6 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -88,6 +89,10 @@ class GlobalSearchScreenModel(
             }
         }
     }
+
+    /** Per-source favorited urls — Android's in-library badge on search cards. */
+    fun favoritedUrls(sourceId: Long): Flow<Set<String>> =
+        binding.favoritedUrls(sourceId)
 
     private fun setResult(source: CarrierSource, result: SearchItemResult) {
         _state.value = _state.value.copy(

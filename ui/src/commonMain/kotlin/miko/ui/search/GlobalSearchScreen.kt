@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -34,7 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.FeedEntry
+import miko.ui.components.BROWSE_FAVORITE_COVER_ALPHA
 import miko.ui.components.CoverComfortableItem
+import miko.ui.components.InLibraryBadge
 import tachiyomi.domain.extension.novel.langDisplayName
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -68,9 +71,16 @@ fun GlobalSearchScreen(
         ) {
             state.items.forEach { (source, result) ->
                 item(key = "source-${source.id}") {
+                    val favoritedUrls by produceState<Set<String>>(
+                        initialValue = emptySet(),
+                        key1 = source.id,
+                    ) {
+                        model.favoritedUrls(source.id).collect { value = it }
+                    }
                     GlobalSearchResultItem(
                         source = source,
                         result = result,
+                        favoritedUrls = favoritedUrls,
                         onClickSource = { onSourceClick(source.id, source.name) },
                         onClickItem = { entry -> onEntryClick(source.id, entry.url, entry.title) },
                     )
@@ -84,6 +94,7 @@ fun GlobalSearchScreen(
 private fun GlobalSearchResultItem(
     source: CarrierSource,
     result: GlobalSearchScreenModel.SearchItemResult,
+    favoritedUrls: Set<String>,
     onClickSource: () -> Unit,
     onClickItem: (FeedEntry) -> Unit,
 ) {
@@ -185,12 +196,19 @@ private fun GlobalSearchResultItem(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         items(result.entries, key = { it.url }) { entry ->
+                            val inLibrary = entry.url in favoritedUrls
                             Box(modifier = Modifier.width(96.dp)) {
                                 CoverComfortableItem(
                                     title = entry.title,
                                     coverUrl = entry.coverUrl,
+                                    coverAlpha = if (inLibrary) {
+                                        BROWSE_FAVORITE_COVER_ALPHA
+                                    } else {
+                                        1f
+                                    },
                                     titleMaxLines = 3,
                                     onClick = { onClickItem(entry) },
+                                    coverBadge = { InLibraryBadge(inLibrary) },
                                 )
                             }
                         }
