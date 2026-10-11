@@ -42,9 +42,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import miko.ui.carrier.FeedEntry
+import miko.ui.components.BROWSE_FAVORITE_COVER_ALPHA
 import miko.ui.components.CoverComfortableItem
 import miko.ui.components.CoverGridItem
 import miko.ui.components.CoverListItem
+import miko.ui.components.InLibraryBadge
 import miko.ui.feed.SourceFeedScreenModel.Listing
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
@@ -170,17 +172,22 @@ private fun FeedGrid(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         items(state.items, key = { it.url }) { entry ->
+            val inLibrary = entry.url in state.favoritedUrls
             if (compact) {
                 CoverGridItem(
                     title = entry.title,
                     coverUrl = entry.coverUrl,
+                    coverAlpha = if (inLibrary) BROWSE_FAVORITE_COVER_ALPHA else 1f,
                     onClick = { onEntryClick(entry) },
+                    topStartBadge = { InLibraryBadge(inLibrary) },
                 )
             } else {
                 CoverComfortableItem(
                     title = entry.title,
                     coverUrl = entry.coverUrl,
+                    coverAlpha = if (inLibrary) BROWSE_FAVORITE_COVER_ALPHA else 1f,
                     onClick = { onEntryClick(entry) },
+                    coverBadge = { InLibraryBadge(inLibrary) },
                 )
             }
         }
@@ -217,6 +224,11 @@ private fun FeedList(
                 title = entry.title,
                 coverUrl = entry.coverUrl,
                 subtitle = entry.subtitle,
+                coverAlpha = if (entry.url in state.favoritedUrls) {
+                    BROWSE_FAVORITE_COVER_ALPHA
+                } else {
+                    1f
+                },
                 onClick = { onEntryClick(entry) },
             )
         }

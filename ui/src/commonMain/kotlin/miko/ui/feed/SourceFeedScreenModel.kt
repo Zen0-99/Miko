@@ -45,6 +45,8 @@ class SourceFeedScreenModel(
         val filtersApplied: Boolean = false,
         val filters: List<FeedFilter> = emptyList(),
         val showFilterSheet: Boolean = false,
+        /** Favorited entry urls — Android's in-library badge + cover dim. */
+        val favoritedUrls: Set<String> = emptySet(),
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -75,6 +77,11 @@ class SourceFeedScreenModel(
                     hasFilters = filters.isNotEmpty(),
                 )
                 if (retry) reset()
+            }
+        }
+        scope.launch {
+            binding.favoritedUrls(sourceId).collect { urls ->
+                _state.value = _state.value.copy(favoritedUrls = urls)
             }
         }
         loadNext()

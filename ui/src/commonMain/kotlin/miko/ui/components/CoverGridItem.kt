@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,10 +30,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import tachiyomi.presentation.core.components.Badge
 import tachiyomi.presentation.core.util.selectedBackground
 
 private val CoverPlaceholderColor = Color(0x1F888888)
 private const val COVER_RATIO = 2f / 3f
+
+/** Android's `CommonEntryItemDefaults.BrowseFavoriteCoverAlpha`. */
+const val BROWSE_FAVORITE_COVER_ALPHA = 0.34f
+
+/**
+ * Android's `InLibraryBadge` — the bookmark-strip corner badge on browse
+ * covers when the entry is already a library favorite.
+ */
+@Composable
+fun InLibraryBadge(enabled: Boolean) {
+    if (enabled) {
+        Badge(imageVector = Icons.Outlined.CollectionsBookmark)
+    }
+}
 
 /** Android's GRID_SELECTED_COVER_ALPHA — covers dim in selection mode. */
 private const val SELECTED_COVER_ALPHA = 0.76f
@@ -109,6 +126,7 @@ fun CoverListItem(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     isSelected: Boolean = false,
+    coverAlpha: Float = 1f,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
@@ -125,6 +143,7 @@ fun CoverListItem(
             placeholder = ColorPainter(CoverPlaceholderColor),
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            alpha = coverAlpha,
             modifier = Modifier
                 .fillMaxHeight()
                 .aspectRatio(COVER_RATIO)
@@ -168,6 +187,7 @@ fun CoverGridItem(
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
+    coverAlpha: Float = 1f,
     topStartBadge: (@Composable () -> Unit)? = null,
 ) {
     Box(
@@ -182,7 +202,7 @@ fun CoverGridItem(
             placeholder = ColorPainter(CoverPlaceholderColor),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            alpha = if (isSelected) SELECTED_COVER_ALPHA else 1f,
+            alpha = if (isSelected) SELECTED_COVER_ALPHA else coverAlpha,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(COVER_RATIO),

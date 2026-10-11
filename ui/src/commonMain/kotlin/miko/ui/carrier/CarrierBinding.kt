@@ -184,6 +184,12 @@ interface CarrierBinding {
     suspend fun localEntryById(id: Long): LocalEntry? = null
 
     /**
+     * Favorited entry urls for [sourceId] — drives the browse feed's
+     * in-library badge (Android's `InLibraryBadge` + dimmed cover).
+     */
+    fun favoritedUrls(sourceId: Long): Flow<Set<String>> = flowOf(emptySet())
+
+    /**
      * Maps an update/history row's entry+item ids to urls for navigation —
      * feed rows carry ids while details/reader destinations are url-keyed.
      * The source id comes from the local entry (history rows don't carry it).

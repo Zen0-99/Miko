@@ -105,6 +105,11 @@ class AnimeCarrierBinding(
     override suspend fun localEntryById(id: Long): LocalEntry? =
         runCatching { animeRepository.getAnimeById(id) }.getOrNull()?.toLocalEntry()
 
+    override fun favoritedUrls(sourceId: Long): Flow<Set<String>> =
+        GetAnimeFavorites(animeRepository).subscribe(sourceId).map { list ->
+            list.mapTo(HashSet()) { it.url }
+        }
+
     override suspend fun materialize(details: RemoteDetails, sourceId: Long): LocalEntry {
         val anime = networkToLocalAnime.await(details.toDomainAnime(sourceId))
         return anime.toLocalEntry()
