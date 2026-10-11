@@ -13,8 +13,11 @@ import miko.ui.model.toDomainNovel
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
+import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.interactor.NovelFetchInterval
+import tachiyomi.domain.entries.novel.interactor.SetNovelChapterFlags
+import tachiyomi.domain.entries.novel.interactor.SetNovelDefaultChapterFlags
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.entries.novel.repository.NovelRepository
@@ -23,6 +26,7 @@ import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import kotlin.time.Clock
 
@@ -41,6 +45,12 @@ class NovelCarrierBinding(
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
     private val fetchInterval = NovelFetchInterval()
     private val openSessions = mutableMapOf<Long, Long>()
+    private val libraryPreferences = LibraryPreferences(preferenceStore)
+    private val setDefaultFlags = SetNovelDefaultChapterFlags(
+        libraryPreferences,
+        SetNovelChapterFlags(novelRepository),
+        GetNovelFavorites(novelRepository),
+    )
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
 
@@ -235,6 +245,23 @@ class NovelCarrierBinding(
         chapterRepository.updateNovelChapter(
             NovelChapterUpdate(id = itemId, lastCharRead = page.toLong()),
         )
+    }
+
+    /** Android's setCurrentSettingsAsDefault — entry flags → default prefs. */
+    override suspend fun setEntryFlagsAsDefault(localId: Long) {
+        getNovel.await(localId)?.let {
+            libraryPreferences.setNovelChapterSettingsDefault(it)
+        }
+    }
+
+    /** Android's resetToDefaultSettings — default prefs → entry flags. */
+    override suspend fun resetEntryFlagsToDefault(localId: Long) {
+        getNovel.await(localId)?.let { setDefaultFlags.await(it) }
+    }
+
+    /** SetAsDefaultDialog's applyToExisting — defaults → every favorite. */
+    override suspend fun applyDefaultFlagsToAll() {
+        setDefaultFlags.awaitAll()
     }
 
     override fun collections() = collectionRepository.subscribeAllVisible()

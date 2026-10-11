@@ -212,6 +212,16 @@ interface CarrierBinding {
     fun excludedScanlators(localId: Long): Flow<Set<String>> = flowOf(emptySet())
     suspend fun setExcludedScanlators(localId: Long, excluded: Set<String>) = Unit
 
+    /**
+     * Android's chapter-settings overflow actions — "Set as default"
+     * copies this entry's flags into the shared default prefs,
+     * "Reset" rewrites the entry's flags from them, and
+     * applyToExisting rewrites every favorite's flags.
+     */
+    suspend fun setEntryFlagsAsDefault(localId: Long) = Unit
+    suspend fun resetEntryFlagsToDefault(localId: Long) = Unit
+    suspend fun applyDefaultFlagsToAll() = Unit
+
     /** Visible collections — Android's GetVisibleXCollections. */
     fun collections(): Flow<List<Collection>> = flowOf(emptyList())
 

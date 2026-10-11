@@ -2,6 +2,7 @@ package miko.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,19 +12,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,20 +66,81 @@ fun ChapterSettingsSheet(
     /** Scanlator exclusion row (manga) — null hides it like Android. */
     scanlatorFilterActive: Boolean = false,
     onScanlatorFilterClick: (() -> Unit)? = null,
+    /** Android's tab overflow — SetAsDefaultDialog + reset. */
+    onSetAsDefault: ((Boolean) -> Unit)? = null,
+    onResetToDefault: (() -> Unit)? = null,
 ) {
     var page by remember { mutableIntStateOf(0) }
+    var defaultDialogOpen by remember { mutableStateOf(false) }
+    if (defaultDialogOpen) {
+        SetAsDefaultDialog(
+            onDismissRequest = { defaultDialogOpen = false },
+            onConfirm = { applyToExisting ->
+                defaultDialogOpen = false
+                onSetAsDefault?.invoke(applyToExisting)
+            },
+        )
+    }
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
-        TabRow(selectedTabIndex = page) {
-            listOf(
-                MR.strings.action_filter,
-                MR.strings.action_sort,
-                MR.strings.action_display,
-            ).forEachIndexed { index, res ->
-                Tab(
-                    selected = page == index,
-                    onClick = { page = index },
-                    text = { Text(stringResource(res)) },
-                )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TabRow(
+                selectedTabIndex = page,
+                modifier = Modifier.weight(1f),
+            ) {
+                listOf(
+                    MR.strings.action_filter,
+                    MR.strings.action_sort,
+                    MR.strings.action_display,
+                ).forEachIndexed { index, res ->
+                    Tab(
+                        selected = page == index,
+                        onClick = { page = index },
+                        text = { Text(stringResource(res)) },
+                    )
+                }
+            }
+            if (onSetAsDefault != null || onResetToDefault != null) {
+                var overflowOpen by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { overflowOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Outlined.MoreVert,
+                            contentDescription = null,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = overflowOpen,
+                        onDismissRequest = { overflowOpen = false },
+                    ) {
+                        if (onSetAsDefault != null) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(
+                                            MR.strings
+                                                .set_chapter_settings_as_default,
+                                        ),
+                                    )
+                                },
+                                onClick = {
+                                    overflowOpen = false
+                                    defaultDialogOpen = true
+                                },
+                            )
+                        }
+                        if (onResetToDefault != null) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(stringResource(MR.strings.action_reset))
+                                },
+                                onClick = {
+                                    overflowOpen = false
+                                    onResetToDefault()
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
         Column(
@@ -195,6 +264,54 @@ private fun SheetRadioRow(label: String, selected: Boolean, onClick: () -> Unit)
     SheetRowBase(label = label, onClick = onClick) {
         RadioButton(selected = selected, onClick = null)
     }
+}
+
+/**
+ * Android's `SetAsDefaultDialog` — confirm saving the entry's current
+ * flags as the default, with the optional apply-to-library checkbox.
+ */
+@Composable
+private fun SetAsDefaultDialog(
+    onDismissRequest: () -> Unit,
+    onConfirm: (applyToExisting: Boolean) -> Unit,
+) {
+    var applyToExisting by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text(stringResource(MR.strings.chapter_settings)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(MR.strings.confirm_set_chapter_settings))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { applyToExisting = !applyToExisting },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = applyToExisting,
+                        onCheckedChange = { applyToExisting = it },
+                    )
+                    Text(
+                        text = stringResource(
+                            MR.strings.also_set_chapter_settings_for_library,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(applyToExisting) }) {
+                Text(stringResource(MR.strings.action_ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(stringResource(MR.strings.action_cancel))
+            }
+        },
+    )
 }
 
 /** Android's `SortItem` — the row's arrow shows direction only when active. */

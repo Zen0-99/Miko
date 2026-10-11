@@ -29,16 +29,20 @@ import tachiyomi.domain.collection.model.CollectionUpdate
 import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 import tachiyomi.domain.entries.shows.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.shows.interactor.GetAnime
+import tachiyomi.domain.entries.shows.interactor.GetAnimeFavorites
 import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
+import tachiyomi.domain.entries.shows.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate
 import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.history.shows.model.AnimeHistoryUpdate
 import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
 import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
+import tachiyomi.domain.items.episode.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.repository.EpisodeRepository
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import kotlin.time.Clock
 
@@ -57,6 +61,12 @@ class AnimeCarrierBinding(
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
 
     private val fetchInterval = AnimeFetchInterval(GetEpisodesByAnimeId(episodeRepository))
+    private val libraryPreferences = LibraryPreferences(preferenceStore)
+    private val setDefaultFlags = SetAnimeDefaultEpisodeFlags(
+        libraryPreferences,
+        SetAnimeEpisodeFlags(animeRepository),
+        GetAnimeFavorites(animeRepository),
+    )
 
     override val catalogueSources: Flow<List<CarrierSource>> =
         sourceManager.catalogueSources.map { sources ->
@@ -247,6 +257,23 @@ class AnimeCarrierBinding(
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
         episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, bookmark = bookmarked))
+    }
+
+    /** Android's setCurrentSettingsAsDefault — entry flags → default prefs. */
+    override suspend fun setEntryFlagsAsDefault(localId: Long) {
+        getAnime.await(localId)?.let {
+            libraryPreferences.setEpisodeSettingsDefault(it)
+        }
+    }
+
+    /** Android's resetToDefaultSettings — default prefs → entry flags. */
+    override suspend fun resetEntryFlagsToDefault(localId: Long) {
+        getAnime.await(localId)?.let { setDefaultFlags.await(it) }
+    }
+
+    /** SetAsDefaultDialog's applyToExisting — defaults → every favorite. */
+    override suspend fun applyDefaultFlagsToAll() {
+        setDefaultFlags.awaitAll()
     }
 
     override fun collections() = collectionRepository.getAllVisibleAnimeCollectionsAsFlow()

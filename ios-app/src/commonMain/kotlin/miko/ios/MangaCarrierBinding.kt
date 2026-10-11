@@ -28,8 +28,10 @@ import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
 import tachiyomi.domain.entries.manga.interactor.GetManga
+import tachiyomi.domain.entries.manga.interactor.GetMangaFavorites
 import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
+import tachiyomi.domain.entries.manga.interactor.SetMangaChapterFlags
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.model.MangaUpdate
 import tachiyomi.domain.entries.manga.repository.MangaRepository
@@ -38,7 +40,9 @@ import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
 import tachiyomi.domain.items.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.items.chapter.model.ChapterUpdate
+import tachiyomi.domain.items.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import kotlin.time.Clock
 
@@ -58,6 +62,12 @@ class MangaCarrierBinding(
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
     private val fetchInterval = MangaFetchInterval(GetChaptersByMangaId(chapterRepository))
     private val openSessions = mutableMapOf<Long, Long>()
+    private val libraryPreferences = LibraryPreferences(preferenceStore)
+    private val setDefaultFlags = SetMangaDefaultChapterFlags(
+        libraryPreferences,
+        SetMangaChapterFlags(mangaRepository),
+        GetMangaFavorites(mangaRepository),
+    )
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
 
@@ -299,6 +309,21 @@ class MangaCarrierBinding(
                 excluded_scanlatorsQueries.remove(localId, removed)
             }
         }
+    }
+
+    /** Android's setCurrentSettingsAsDefault — entry flags → default prefs. */
+    override suspend fun setEntryFlagsAsDefault(localId: Long) {
+        getManga.await(localId)?.let { libraryPreferences.setChapterSettingsDefault(it) }
+    }
+
+    /** Android's resetToDefaultSettings — default prefs → entry flags. */
+    override suspend fun resetEntryFlagsToDefault(localId: Long) {
+        getManga.await(localId)?.let { setDefaultFlags.await(it) }
+    }
+
+    /** SetAsDefaultDialog's applyToExisting — defaults → every favorite. */
+    override suspend fun applyDefaultFlagsToAll() {
+        setDefaultFlags.awaitAll()
     }
 
     override fun collections() = collectionRepository.getAllVisibleMangaCollectionsAsFlow()

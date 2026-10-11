@@ -242,6 +242,18 @@ fun EntryDetailsScreen(
                         } else {
                             null
                         },
+                        // Android's tab overflow — defaults live on
+                        // materialized entries only.
+                        onSetAsDefault = if (state.local != null) {
+                            model::setFlagsAsDefault
+                        } else {
+                            null
+                        },
+                        onResetToDefault = if (state.local != null) {
+                            model::resetFlagsToDefault
+                        } else {
+                            null
+                        },
                     )
                 }
                 if (state.scanlatorSheetOpen) {

@@ -334,6 +334,21 @@ class EntryDetailsScreenModel(
         scope.launch { binding.setExcludedScanlators(local.id, excluded) }
     }
 
+    /** Android's setCurrentSettingsAsDefault + optional applyToExisting. */
+    fun setFlagsAsDefault(applyToExisting: Boolean) {
+        val local = _state.value.local ?: return
+        scope.launch {
+            binding.setEntryFlagsAsDefault(local.id)
+            if (applyToExisting) binding.applyDefaultFlagsToAll()
+        }
+    }
+
+    /** Android's resetToDefaultSettings — entry flags ← default prefs. */
+    fun resetFlagsToDefault() {
+        val local = _state.value.local ?: return
+        scope.launch { binding.resetEntryFlagsToDefault(local.id) }
+    }
+
     /**
      * Android's showChangeCollectionDialog — snapshots the entry's current
      * memberships so the checkbox list opens pre-selected.
