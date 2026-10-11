@@ -70,6 +70,7 @@ import miko.ui.carrier.RemoteItem
 import miko.ui.components.ChangeCollectionSheet
 import miko.ui.components.ChapterSettingsSheet
 import miko.ui.components.MigrateSourceSheet
+import miko.ui.platform.rememberShareHandler
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -96,6 +97,7 @@ fun EntryDetailsScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+    val share = rememberShareHandler()
 
     if (state.collectionSheetOpen) {
         ChangeCollectionSheet(
@@ -300,6 +302,29 @@ fun EntryDetailsScreen(
                                     onClick = {
                                         rowMenuOpen = false
                                         model.toggleItemBookmark(item.url)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(
+                                                MR.strings
+                                                    .action_mark_previous_as_read,
+                                            ),
+                                        )
+                                    },
+                                    onClick = {
+                                        rowMenuOpen = false
+                                        model.markPreviousDone(item.url)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(stringResource(MR.strings.action_share))
+                                    },
+                                    onClick = {
+                                        rowMenuOpen = false
+                                        share(item.url)
                                     },
                                 )
                             }

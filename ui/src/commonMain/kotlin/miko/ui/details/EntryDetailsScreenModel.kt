@@ -262,6 +262,24 @@ class EntryDetailsScreenModel(
         }
     }
 
+    /**
+     * Android's "mark previous as read" — every item before the selected
+     * one in reading order (the current sort mode, ascending).
+     */
+    fun markPreviousDone(itemUrl: String) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            val state = _state.value
+            val readingOrder = state.sortMode.ordered(state.items, descending = false)
+            val index = readingOrder.indexOfFirst { it.url == itemUrl }
+            if (index <= 0) return@launch
+            val previousUrls = readingOrder.take(index).mapTo(HashSet()) { it.url }
+            binding.getLocalItems(local.id)
+                .filter { it.url in previousUrls && !it.done }
+                .forEach { binding.setItemDone(it.id, true) }
+        }
+    }
+
     /** Android's chapter bookmark toggle — row long-press action. */
     fun toggleItemBookmark(itemUrl: String) {
         scope.launch {
