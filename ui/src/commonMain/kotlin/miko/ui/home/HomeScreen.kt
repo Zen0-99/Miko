@@ -107,10 +107,24 @@ fun HomeScreen(
         }
 
         when {
-            !state.initialized -> LoadingScreen()
-            state.recents.isEmpty() -> EmptyScreen(
-                stringRes = AYMR.strings.information_no_home_history,
-            )
+            !state.initialized -> Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(360.dp),
+            ) {
+                LoadingScreen()
+            }
+            state.recents.isEmpty() -> Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(360.dp),
+            ) {
+                // fillMaxSize/verticalScroll children must stay bounded —
+                // this Column is itself vertically scrollable.
+                EmptyScreen(
+                    stringRes = AYMR.strings.information_no_home_history,
+                )
+            }
             else -> {
                 val hero = state.recents.first()
                 HeroCard(
