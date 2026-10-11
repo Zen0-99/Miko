@@ -1,5 +1,8 @@
 package miko.ui.updates
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,15 +23,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +43,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,8 +55,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
@@ -191,18 +202,18 @@ fun UpdatesScreen(
         }
 
         when {
-            !state.initialized -> LoadingScreen(modifier = Modifier.fillMaxSize())
+            !state.initialized -> LoadingScreen(modifier = Modifier.weight(1f))
             state.rows.isEmpty() -> EmptyScreen(
                 stringRes = if (state.mode == UpdatesScreenModel.Mode.Updates) {
                     MR.strings.information_no_recent
                 } else {
                     MR.strings.information_no_recent_manga
                 },
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f),
             )
             else -> {
                 val listState = rememberLazyListState()
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
                     // Android's Calendar tab — month grid over the list;
                     // day taps scroll to that date's header group.
                     if (state.mode == UpdatesScreenModel.Mode.Upcoming) {
@@ -245,16 +256,26 @@ fun UpdatesScreen(
                                 downloadState = downloadStates[row.itemUrl],
                                 downloadProgress = downloadProgress[row.itemUrl] ?: 0f,
                                 downloaded = model.itemDirPath(row) in downloadedDirs,
+                                selected = row.itemId in state.selected,
                                 onDownloadClick = { model.onDownloadClick(row) },
                                 onToggleDone = { model.markItemDone(row.itemId, !row.done) },
                                 onClick = {
-                                    scope.launch {
-                                        model.resolveTarget(row.entryId, row.itemId)
-                                            ?.let { t ->
-                                                onOpenItem(t.sourceId, t.entryUrl, t.itemUrl)
-                                            }
+                                    // Selection mode eats the row click —
+                                    // Android toggles instead of opening.
+                                    if (state.selectionMode) {
+                                        model.toggleSelection(row)
+                                    } else {
+                                        scope.launch {
+                                            model.resolveTarget(row.entryId, row.itemId)
+                                                ?.let { t ->
+                                                    onOpenItem(t.sourceId, t.entryUrl, t.itemUrl)
+                                                }
+                                        }
                                     }
                                 },
+                                onLongClick = { model.toggleSelection(row) },
+                                // Android gates the cover hit target on
+                                // selection mode — cover taps toggle too.
                                 onCoverClick = {
                                     scope.launch {
                                         model.resolveTarget(row.entryId, row.itemId)
@@ -262,7 +283,8 @@ fun UpdatesScreen(
                                                 onOpenEntry(t.sourceId, t.entryUrl, row.entryTitle)
                                             }
                                     }
-                                },
+                                    Unit
+                                }.takeIf { !state.selectionMode },
                             )
                             is UpdatesScreenModel.Row.History -> HistoryRow(
                                 row = row,
@@ -296,6 +318,161 @@ fun UpdatesScreen(
                 }
             }
         }
+
+        // Android's updates action-mode bottom bar — long-press selects;
+        // actions gate on the selection's bookmark/read/download states.
+        val selectedRows = state.rows.filterIsInstance<UpdatesScreenModel.Row.Update>()
+            .filter { it.itemId in state.selected }
+        UpdatesActionMenu(
+            visible = state.selectionMode,
+            carrier = carrier,
+            anyUnbookmarked = selectedRows.any { !it.bookmarked },
+            allBookmarked = selectedRows.isNotEmpty() && selectedRows.all { it.bookmarked },
+            anyUndone = selectedRows.any { !it.done },
+            anyDone = selectedRows.any { it.done },
+            anyUndownloaded = selectedRows.any {
+                model.itemDirPath(it) !in downloadedDirs
+            },
+            anyDownloaded = selectedRows.any {
+                model.itemDirPath(it) in downloadedDirs
+            },
+            onBookmark = { model.bookmarkSelected(true) },
+            onUnbookmark = { model.bookmarkSelected(false) },
+            onMarkDone = { model.markSelectedDone(true) },
+            onMarkUndone = { model.markSelectedDone(false) },
+            onDownload = model::downloadSelected,
+            onDeleteDownloads = model::deleteSelectedDownloads,
+        )
+    }
+}
+
+/**
+ * Android's updates action-mode bar — the icon+label column idiom from
+ * SelectionActionMenu; actions appear only when the selection supports
+ * them (bookmark when any unbookmarked, download while any undownloaded).
+ */
+@Composable
+private fun UpdatesActionMenu(
+    visible: Boolean,
+    carrier: BrowseCarrier,
+    anyUnbookmarked: Boolean,
+    allBookmarked: Boolean,
+    anyUndone: Boolean,
+    anyDone: Boolean,
+    anyUndownloaded: Boolean,
+    anyDownloaded: Boolean,
+    onBookmark: () -> Unit,
+    onUnbookmark: () -> Unit,
+    onMarkDone: () -> Unit,
+    onMarkUndone: () -> Unit,
+    onDownload: () -> Unit,
+    onDeleteDownloads: () -> Unit,
+) {
+    val isShows = carrier == BrowseCarrier.SHOWS
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically(expandFrom = Alignment.Bottom),
+        exit = shrinkVertically(shrinkTowards = Alignment.Bottom),
+    ) {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+            ) {
+                if (anyUnbookmarked) {
+                    UpdatesAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_bookmark_episode
+                            } else {
+                                MR.strings.action_bookmark
+                            },
+                        ),
+                        icon = Icons.Outlined.BookmarkBorder,
+                        onClick = onBookmark,
+                    )
+                }
+                if (allBookmarked) {
+                    UpdatesAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_remove_bookmark_episode
+                            } else {
+                                MR.strings.action_remove_bookmark
+                            },
+                        ),
+                        icon = Icons.Filled.BookmarkRemove,
+                        onClick = onUnbookmark,
+                    )
+                }
+                if (anyUndone) {
+                    UpdatesAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_mark_as_seen
+                            } else {
+                                MR.strings.action_mark_as_read
+                            },
+                        ),
+                        icon = Icons.Filled.Visibility,
+                        onClick = onMarkDone,
+                    )
+                }
+                if (anyDone) {
+                    UpdatesAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_mark_as_unseen
+                            } else {
+                                MR.strings.action_mark_as_unread
+                            },
+                        ),
+                        icon = Icons.Outlined.VisibilityOff,
+                        onClick = onMarkUndone,
+                    )
+                }
+                if (!isShows && anyUndownloaded) {
+                    UpdatesAction(
+                        label = stringResource(MR.strings.action_download),
+                        icon = Icons.Outlined.Download,
+                        onClick = onDownload,
+                    )
+                }
+                if (!isShows && anyDownloaded) {
+                    UpdatesAction(
+                        label = stringResource(MR.strings.action_delete),
+                        icon = Icons.Outlined.Delete,
+                        onClick = onDeleteDownloads,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.UpdatesAction(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .weight(1f)
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+    ) {
+        Icon(imageVector = icon, contentDescription = null)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -447,9 +624,11 @@ private fun UpdateRow(
     downloadState: DownloadState?,
     downloadProgress: Float,
     downloaded: Boolean,
+    selected: Boolean,
     onDownloadClick: () -> Unit,
     onClick: () -> Unit,
-    onCoverClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onCoverClick: (() -> Unit)?,
     onToggleDone: () -> Unit,
 ) {
     // Read items dim like Android's read-state rows; trailing check toggles.
@@ -457,8 +636,10 @@ private fun UpdateRow(
         title = row.entryTitle,
         coverUrl = row.coverUrl,
         onClick = onClick,
-        onLongClick = onCoverClick,
+        onLongClick = onLongClick,
         subtitle = row.itemName,
+        isSelected = selected,
+        onCoverClick = onCoverClick,
         modifier = if (row.done) Modifier.secondaryItemAlpha() else Modifier,
         trailing = {
             if (carrier != BrowseCarrier.SHOWS) {
@@ -574,7 +755,7 @@ private fun HistoryRow(
         title = row.entryTitle,
         coverUrl = row.coverUrl,
         onClick = onClick,
-        onLongClick = onCoverClick,
+        onCoverClick = onCoverClick,
         subtitle = subtitle,
         trailing = {
             IconButton(onClick = { deleteOpen = true }) {

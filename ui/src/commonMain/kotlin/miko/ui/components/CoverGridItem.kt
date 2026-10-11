@@ -1,6 +1,7 @@
 package miko.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -127,6 +128,7 @@ fun CoverListItem(
     subtitle: String? = null,
     isSelected: Boolean = false,
     coverAlpha: Float = 1f,
+    onCoverClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
@@ -147,7 +149,16 @@ fun CoverListItem(
             modifier = Modifier
                 .fillMaxHeight()
                 .aspectRatio(COVER_RATIO)
-                .clip(MaterialTheme.shapes.extraSmall),
+                .clip(MaterialTheme.shapes.extraSmall)
+                .then(
+                    // Android's row-cover hit target — opens the entry page
+                    // independently of the row's own click.
+                    if (onCoverClick != null) {
+                        Modifier.clickable(onClick = onCoverClick)
+                    } else {
+                        Modifier
+                    },
+                ),
         )
         Column(
             modifier = Modifier

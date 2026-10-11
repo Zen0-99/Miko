@@ -55,6 +55,7 @@ class UpdatesScreenModel(
             val itemUrl: String,
             val sourceName: String,
             val done: Boolean,
+            val bookmarked: Boolean,
             val dateFetch: Long,
             val coverUrl: String?,
         ) : Row
@@ -88,7 +89,11 @@ class UpdatesScreenModel(
         val events: Map<LocalDate, Int> = emptyMap(),
         /** Month the calendar renders (day-1 of the month), today by default. */
         val calendarMonthStart: LocalDate = currentMonthStart(),
-    )
+        /** Android's updates selection mode — itemIds currently selected. */
+        val selected: Set<Long> = emptySet(),
+    ) {
+        val selectionMode: Boolean get() = selected.isNotEmpty()
+    }
 
     private val scope = CoroutineScope(Job() + dispatcher)
 
@@ -107,17 +112,33 @@ class UpdatesScreenModel(
     // History-mode toolbar query — Android's HistoriesTab subscribe(query).
     private val historyQuery = MutableStateFlow("")
 
+    /**
+     * The (carrier, mode) feed the current rows came from — Android exits
+     * action mode when the tab changes, so the selection resets on feed
+     * swaps while surviving same-feed re-emissions (pruned to live ids).
+     */
+    private var lastFeed: Pair<BrowseCarrier, Mode>? = null
+
     init {
         scope.launch {
             carrierFlow.flatMapLatest { carrier ->
                 modeFlow.flatMapLatest { mode ->
                     historyQuery.flatMapLatest { query ->
                         rowsFor(carrier, mode, query).map { (rows, events) ->
+                            val feedChanged = lastFeed != (carrier to mode)
+                            lastFeed = carrier to mode
+                            val updateIds = rows.filterIsInstance<Row.Update>()
+                                .map { it.itemId }.toSet()
                             _state.value.copy(
                                 mode = mode,
                                 initialized = true,
                                 rows = rows,
                                 events = events,
+                                selected = if (feedChanged) {
+                                    emptySet()
+                                } else {
+                                    _state.value.selected intersect updateIds
+                                },
                             )
                         }
                     }
@@ -194,6 +215,102 @@ class UpdatesScreenModel(
                     }
             }
         }
+    }
+
+    /**
+     * Android's updates selection — long-press toggles an item into the
+     * selection set; the mode exits when the set empties.
+     */
+    fun toggleSelection(row: Row.Update) {
+        val selected = _state.value.selected.let {
+            if (row.itemId in it) it - row.itemId else it + row.itemId
+        }
+        _state.value = _state.value.copy(selected = selected)
+    }
+
+    /** Android's select-all in the updates action-mode toolbar. */
+    fun selectAll() {
+        _state.value = _state.value.copy(
+            selected = _state.value.rows.filterIsInstance<Row.Update>()
+                .map { it.itemId }.toSet(),
+        )
+    }
+
+    /** Android's invert-selection in the updates action-mode toolbar. */
+    fun invertSelection() {
+        val all = _state.value.rows.filterIsInstance<Row.Update>()
+            .map { it.itemId }.toSet()
+        _state.value = _state.value.copy(selected = all - _state.value.selected)
+    }
+
+    fun clearSelection() {
+        _state.value = _state.value.copy(selected = emptySet())
+    }
+
+    private fun selectedRows(): List<Row.Update> =
+        _state.value.rows.filterIsInstance<Row.Update>()
+            .filter { it.itemId in _state.value.selected }
+
+    /** Android's action-mode bookmark — flags every selected item. */
+    fun bookmarkSelected(bookmark: Boolean) {
+        val rows = selectedRows()
+        scope.launch {
+            val binding = graph.binding(carrierFlow.value)
+            rows.forEach { runCatching { binding.setItemBookmark(it.itemId, bookmark) } }
+        }
+        clearSelection()
+    }
+
+    /** Android's action-mode mark read/unread. */
+    fun markSelectedDone(done: Boolean) {
+        val rows = selectedRows()
+        scope.launch {
+            val binding = graph.binding(carrierFlow.value)
+            rows.forEach { runCatching { binding.setItemDone(it.itemId, done) } }
+        }
+        clearSelection()
+    }
+
+    /** Android's action-mode download — enqueues every selected item. */
+    fun downloadSelected() {
+        val rows = selectedRows()
+        scope.launch {
+            val carrier = carrierFlow.value
+            val binding = graph.binding(carrier)
+            rows
+                .filter { it.itemUrl.isNotBlank() && it.sourceName.isNotBlank() }
+                .forEach { row ->
+                    runCatching {
+                        DownloadManager.enqueue(
+                            carrier,
+                            row.sourceName,
+                            row.entryTitle,
+                            row.itemName,
+                            row.itemUrl,
+                        ) { binding.itemPayload(row.sourceId, row.itemUrl) }
+                    }
+                }
+        }
+        clearSelection()
+    }
+
+    /** Android's action-mode delete downloads. */
+    fun deleteSelectedDownloads() {
+        val rows = selectedRows()
+        scope.launch {
+            val carrier = carrierFlow.value
+            rows.forEach { row ->
+                runCatching {
+                    DownloadManager.delete(
+                        carrier,
+                        row.sourceName,
+                        row.entryTitle,
+                        row.itemName,
+                    )
+                }
+            }
+        }
+        clearSelection()
     }
 
     fun setMode(mode: Mode) {
@@ -302,16 +419,18 @@ class UpdatesScreenModel(
             BrowseCarrier.SHOWS -> graph.getAnimeUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
                 val itemsByEntry = localItemsByEntry(binding, list.map { it.animeId })
                 list.map {
+                    val localItem = itemsByEntry[it.animeId]
+                        ?.firstOrNull { item -> item.id == it.episodeId }
                     Row.Update(
                         entryId = it.animeId,
                         itemId = it.episodeId,
                         sourceId = it.sourceId,
                         entryTitle = it.animeTitle,
                         itemName = it.episodeName,
-                        itemUrl = itemsByEntry[it.animeId]
-                            ?.firstOrNull { item -> item.id == it.episodeId }?.url ?: "",
+                        itemUrl = localItem?.url ?: "",
                         sourceName = binding.source(it.sourceId)?.name ?: "",
                         done = it.seen,
+                        bookmarked = localItem?.bookmarked ?: false,
                         dateFetch = it.dateFetch,
                         coverUrl = it.coverData.url,
                     )
@@ -320,16 +439,18 @@ class UpdatesScreenModel(
             BrowseCarrier.MANGA -> graph.getMangaUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
                 val itemsByEntry = localItemsByEntry(binding, list.map { it.mangaId })
                 list.map {
+                    val localItem = itemsByEntry[it.mangaId]
+                        ?.firstOrNull { item -> item.id == it.chapterId }
                     Row.Update(
                         entryId = it.mangaId,
                         itemId = it.chapterId,
                         sourceId = it.sourceId,
                         entryTitle = it.mangaTitle,
                         itemName = it.chapterName,
-                        itemUrl = itemsByEntry[it.mangaId]
-                            ?.firstOrNull { item -> item.id == it.chapterId }?.url ?: "",
+                        itemUrl = localItem?.url ?: "",
                         sourceName = binding.source(it.sourceId)?.name ?: "",
                         done = it.read,
+                        bookmarked = localItem?.bookmarked ?: false,
                         dateFetch = it.dateFetch,
                         coverUrl = it.coverData.url,
                     )
@@ -338,16 +459,18 @@ class UpdatesScreenModel(
             BrowseCarrier.BOOKS -> graph.getNovelUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
                 val itemsByEntry = localItemsByEntry(binding, list.map { it.novelId })
                 list.map {
+                    val localItem = itemsByEntry[it.novelId]
+                        ?.firstOrNull { item -> item.id == it.chapterId }
                     Row.Update(
                         entryId = it.novelId,
                         itemId = it.chapterId,
                         sourceId = it.sourceId,
                         entryTitle = it.novelTitle,
                         itemName = it.chapterName,
-                        itemUrl = itemsByEntry[it.novelId]
-                            ?.firstOrNull { item -> item.id == it.chapterId }?.url ?: "",
+                        itemUrl = localItem?.url ?: "",
                         sourceName = binding.source(it.sourceId)?.name ?: "",
                         done = it.read,
+                        bookmarked = localItem?.bookmarked ?: false,
                         dateFetch = it.dateFetch,
                         coverUrl = it.coverData.url,
                     )

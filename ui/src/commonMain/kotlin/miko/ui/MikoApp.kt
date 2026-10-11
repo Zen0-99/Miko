@@ -498,9 +498,21 @@ fun MikoApp(graph: MikoUiGraph) {
                             .collectAsStateWithLifecycle().value.selected
                         val librarySelecting =
                             current == Destination.Library && librarySelected.isNotEmpty()
+                        // Android's updates action-mode — same toolbar swap
+                        // as the library's (count title, close, select-all).
+                        val updatesSelected = updatesModel.state
+                            .collectAsStateWithLifecycle().value.selected
+                        val updatesSelecting =
+                            current == Destination.Updates && updatesSelected.isNotEmpty()
+                        val anySelecting = librarySelecting || updatesSelecting
+                        val selectedCount = if (librarySelecting) {
+                            librarySelected.size
+                        } else {
+                            updatesSelected.size
+                        }
                         MikoTopBar(
-                            title = if (librarySelecting) "${librarySelected.size}" else screenTitle(current),
-                            canSearch = !librarySelecting &&
+                            title = if (anySelecting) "$selectedCount" else screenTitle(current),
+                            canSearch = !anySelecting &&
                                 (
                                     current == Destination.Browse ||
                                         current == Destination.Updates ||
@@ -555,27 +567,43 @@ fun MikoApp(graph: MikoUiGraph) {
                                 )
                                 else -> null
                             },
-                            navigateUp = if (librarySelecting) {
-                                { libraryModel.clearSelection() }
-                            } else {
-                                null
+                            navigateUp = when {
+                                librarySelecting -> ({ libraryModel.clearSelection() })
+                                updatesSelecting -> ({ updatesModel.clearSelection() })
+                                else -> null
                             },
-                            navigateUpIcon = if (librarySelecting) {
+                            navigateUpIcon = if (anySelecting) {
                                 Icons.Filled.Close
                             } else {
                                 Icons.AutoMirrored.Outlined.ArrowBack
                             },
                             actions = {
-                                if (librarySelecting) {
+                                if (anySelecting) {
                                     // Android's LibrarySelectionToolbar —
                                     // select-all + invert-selection.
-                                    IconButton(onClick = libraryModel::selectAll) {
+                                    IconButton(
+                                        onClick = {
+                                            if (librarySelecting) {
+                                                libraryModel.selectAll()
+                                            } else {
+                                                updatesModel.selectAll()
+                                            }
+                                        },
+                                    ) {
                                         Icon(
                                             Icons.Outlined.SelectAll,
                                             contentDescription = stringResource(MR.strings.action_select_all),
                                         )
                                     }
-                                    IconButton(onClick = libraryModel::invertSelection) {
+                                    IconButton(
+                                        onClick = {
+                                            if (librarySelecting) {
+                                                libraryModel.invertSelection()
+                                            } else {
+                                                updatesModel.invertSelection()
+                                            }
+                                        },
+                                    ) {
                                         Icon(
                                             Icons.Outlined.FlipToBack,
                                             contentDescription = stringResource(MR.strings.action_select_inverse),
