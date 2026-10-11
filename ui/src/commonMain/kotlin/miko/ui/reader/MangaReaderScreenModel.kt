@@ -19,6 +19,7 @@ import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.ordered
 import miko.ui.download.DownloadManager
 import tachiyomi.core.common.preference.PreferenceStore
+import kotlin.math.floor
 
 /**
  * Manga image reader — mirrors [ReaderScreenModel]'s shape but loads page
@@ -42,8 +43,9 @@ class MangaReaderScreenModel(
         val pages: List<PageEntry> = emptyList(),
         val loading: Boolean = true,
         val error: String? = null,
-        val hasPrev: Boolean = false,
-        val hasNext: Boolean = false,
+        /** Transition-page neighbors — null when there is no prev/next. */
+        val prevChapter: NeighborChapter? = null,
+        val nextChapter: NeighborChapter? = null,
         /** Chapter-sheet rows — remote item names with local read state. */
         val chapters: List<ChapterRow> = emptyList(),
         val showChapters: Boolean = false,
@@ -54,6 +56,8 @@ class MangaReaderScreenModel(
         val showPageNumber: Boolean = true,
         /** Android's readerPreferences.keepScreenOn — drives KeepScreenOn. */
         val keepScreenOn: Boolean = true,
+        /** Android's always_show_chapter_transition — end-of-chapter cards. */
+        val showTransitions: Boolean = true,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -87,6 +91,12 @@ class MangaReaderScreenModel(
         true,
     )
 
+    // Android's readerPreferences.alwaysShowChapterTransition — same key.
+    private val transitionsPref = preferenceStore.getBoolean(
+        "always_show_chapter_transition",
+        true,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -111,6 +121,11 @@ class MangaReaderScreenModel(
                 _state.value = _state.value.copy(keepScreenOn = v)
             }
         }
+        scope.launch {
+            transitionsPref.changes().collect { v ->
+                _state.value = _state.value.copy(showTransitions = v)
+            }
+        }
     }
 
     private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
@@ -128,6 +143,24 @@ class MangaReaderScreenModel(
     }
 
     fun setShowPageNumber(show: Boolean) = showPageNumberPref.set(show)
+
+    fun setShowTransitions(show: Boolean) = transitionsPref.set(show)
+
+    /**
+     * Android's calculateChapterGap — floor(higher) − floor(lower) − 1;
+     * 0 for missing or unrecognized (negative) numbers.
+     */
+    private fun gapBetween(higher: RemoteItem?, lower: RemoteItem?): Int {
+        if (higher == null || lower == null) return 0
+        if (higher.number < 0.0 || lower.number < 0.0) return 0
+        return floor(higher.number).toInt() - floor(lower.number).toInt() - 1
+    }
+
+    private fun RemoteItem.neighbor(gap: Int) = NeighborChapter(
+        name = name,
+        scanlator = scanlator,
+        gap = gap,
+    )
 
     /** Android's center-tap app-bar toggle. */
     fun toggleChrome() {
@@ -198,13 +231,16 @@ class MangaReaderScreenModel(
                         .firstOrNull { it.url == chapterUrl }
                 }.getOrNull()
             }
+            val curr = items.getOrNull(index)
+            val prev = items.getOrNull(index - 1)
+            val next = items.getOrNull(index + 1)
             _state.value = _state.value.copy(
                 chapterUrl = chapterUrl,
-                chapterName = items.getOrNull(index)?.name ?: "",
+                chapterName = curr?.name ?: "",
                 loading = true,
                 error = null,
-                hasPrev = index > 0,
-                hasNext = index >= 0 && index < items.lastIndex,
+                prevChapter = prev?.neighbor(gapBetween(curr, prev)),
+                nextChapter = next?.neighbor(gapBetween(next, curr)),
                 initialPage = localItem?.lastPageRead ?: 0,
             )
             // Offline path — serve the downloaded pages when the chapter's

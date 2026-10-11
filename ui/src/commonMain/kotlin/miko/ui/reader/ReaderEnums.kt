@@ -28,6 +28,16 @@ data class ChapterRow(
 )
 
 /**
+ * Adjacent chapter for Android's transition pages — neighbor name and
+ * scanlator plus the `calculateChapterGap` missing-item count (0 = none).
+ */
+data class NeighborChapter(
+    val name: String,
+    val scanlator: String?,
+    val gap: Int,
+)
+
+/**
  * Mirror of Android's `ReadingMode` — same flagValues so a manga's
  * `viewerFlags` low three bits carry identical semantics across platforms.
  * DEFAULT resolves through `pref_default_reading_mode_key`.
