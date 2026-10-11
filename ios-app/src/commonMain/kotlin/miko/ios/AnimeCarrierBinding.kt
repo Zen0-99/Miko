@@ -96,6 +96,7 @@ class AnimeCarrierBinding(
 
     override suspend fun addMissingItems(localId: Long, remote: List<RemoteItem>) {
         val existing = getLocalItems(localId).mapTo(HashSet()) { it.url }
+        val now = Clock.System.now().toEpochMilliseconds()
         val missing = remote.mapIndexedNotNull { index, item ->
             if (item.url in existing) {
                 null
@@ -105,6 +106,7 @@ class AnimeCarrierBinding(
                     url = item.url,
                     name = item.name,
                     dateUpload = item.dateUpload,
+                    dateFetch = now,
                     episodeNumber = item.number,
                     scanlator = item.scanlator,
                     summary = item.summary,
@@ -114,6 +116,17 @@ class AnimeCarrierBinding(
             }
         }
         if (missing.isNotEmpty()) episodeRepository.addAllEpisodes(missing)
+    }
+
+    override suspend fun refreshFavorites(): Int {
+        var fetched = 0
+        for (libraryAnime in animeRepository.getLibraryAnime()) {
+            val anime = libraryAnime.anime
+            val remote = source(anime.source)?.items(anime.url) ?: continue
+            addMissingItems(anime.id, remote)
+            fetched++
+        }
+        return fetched
     }
 
     override suspend fun setItemDone(itemId: Long, done: Boolean) {

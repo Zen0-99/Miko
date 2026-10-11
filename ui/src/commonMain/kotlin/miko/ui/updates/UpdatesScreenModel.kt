@@ -73,6 +73,9 @@ class UpdatesScreenModel(
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
     init {
         scope.launch {
             carrierFlow.flatMapLatest { carrier ->
@@ -87,6 +90,24 @@ class UpdatesScreenModel(
 
     fun setMode(mode: Mode) {
         modeFlow.value = mode
+    }
+
+    /**
+     * Manual library update — Android's toolbar refresh. Refetches every
+     * favorite's item list; new chapters/episodes land in the updates view
+     * (their date_fetch is stamped on insert). Rows re-emit through the DB
+     * subscription; no explicit state write needed here.
+     */
+    fun refresh() {
+        if (_refreshing.value) return
+        scope.launch {
+            _refreshing.value = true
+            try {
+                graph.binding(carrierFlow.value).refreshFavorites()
+            } finally {
+                _refreshing.value = false
+            }
+        }
     }
 
     private fun rowsFor(carrier: BrowseCarrier, mode: Mode) = when (mode) {

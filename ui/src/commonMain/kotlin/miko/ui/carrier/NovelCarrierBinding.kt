@@ -80,6 +80,7 @@ class NovelCarrierBinding(
 
     override suspend fun addMissingItems(localId: Long, remote: List<RemoteItem>) {
         val existing = getLocalItems(localId).mapTo(HashSet()) { it.url }
+        val now = Clock.System.now().toEpochMilliseconds()
         val missing = remote.mapIndexedNotNull { index, item ->
             if (item.url in existing) {
                 null
@@ -89,6 +90,7 @@ class NovelCarrierBinding(
                     url = item.url,
                     name = item.name,
                     dateUpload = item.dateUpload,
+                    dateFetch = now,
                     chapterNumber = item.number,
                     scanlator = item.scanlator,
                     sourceOrder = index.toLong(),
@@ -96,6 +98,17 @@ class NovelCarrierBinding(
             }
         }
         if (missing.isNotEmpty()) chapterRepository.addAllNovelChapters(missing)
+    }
+
+    override suspend fun refreshFavorites(): Int {
+        var fetched = 0
+        for (libraryNovel in novelRepository.getLibraryNovels()) {
+            val novel = libraryNovel.novel
+            val remote = source(novel.source)?.items(novel.url) ?: continue
+            addMissingItems(novel.id, remote)
+            fetched++
+        }
+        return fetched
     }
 
     override suspend fun setItemDone(itemId: Long, done: Boolean) {

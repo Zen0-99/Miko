@@ -116,6 +116,14 @@ interface CarrierBinding {
     /** Insert remote items missing locally (compares by url). */
     suspend fun addMissingItems(localId: Long, remote: List<RemoteItem>)
 
+    /**
+     * Manual library update — Android's refresh action. Refetches every
+     * favorited entry's item list from its source and inserts the missing
+     * chapters/episodes; new items land in the updates view because their
+     * date_fetch postdates the entry's date_added. Returns entries fetched.
+     */
+    suspend fun refreshFavorites(): Int = 0
+
     suspend fun setItemDone(itemId: Long, done: Boolean)
     suspend fun setAllItemsDone(localId: Long, done: Boolean)
 
