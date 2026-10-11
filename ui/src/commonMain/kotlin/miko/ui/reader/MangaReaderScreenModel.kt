@@ -76,6 +76,8 @@ class MangaReaderScreenModel(
         val webtoonSidePadding: Int = 0,
         /** Android's navigate_pan — panning past a zoomed edge flips the page. */
         val navigateToPan: Boolean = true,
+        /** Android's reader_navigation_mode_pager — tap zone layout. */
+        val navMode: Int = 0,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -157,6 +159,12 @@ class MangaReaderScreenModel(
         true,
     )
 
+    // Android's readerPreferences.navigationModePager — same key/default.
+    private val navModePref = preferenceStore.getInt(
+        "reader_navigation_mode_pager",
+        0,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -221,6 +229,11 @@ class MangaReaderScreenModel(
                 _state.value = _state.value.copy(navigateToPan = v)
             }
         }
+        scope.launch {
+            navModePref.changes().collect { v ->
+                _state.value = _state.value.copy(navMode = v)
+            }
+        }
     }
 
     private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
@@ -254,6 +267,8 @@ class MangaReaderScreenModel(
     fun setWebtoonSidePadding(pct: Int) = webtoonSidePaddingPref.set(pct)
 
     fun setNavigateToPan(on: Boolean) = navigateToPanPref.set(on)
+
+    fun setNavMode(mode: Int) = navModePref.set(mode)
 
     /**
      * Android's calculateChapterGap — floor(higher) − floor(lower) − 1;

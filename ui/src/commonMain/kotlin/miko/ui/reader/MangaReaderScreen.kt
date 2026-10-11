@@ -199,6 +199,7 @@ fun MangaReaderScreen(
             onFullscreenChange = model::setFullscreen,
             onLongTapChange = model::setLongTapScroll,
             onScaleTypeSelect = model::setImageScaleType,
+            onNavModeSelect = model::setNavMode,
             onTappingInvertSelect = model::setTappingInverted,
             onSidePaddingChange = model::setWebtoonSidePadding,
             onNavigateToPanChange = model::setNavigateToPan,
@@ -361,39 +362,22 @@ private fun PagedViewer(
                                 return@awaitEachGesture
                             }
                             up.consume()
-                            val offset = up.position
-                            // Android's reader_tapping_inverted — flips the
-                            // zones on the axis the mode navigates by.
-                            val inverted = if (state.readingMode == MangaReadingMode.VERTICAL) {
-                                state.tappingInverted.shouldInvertVertical
-                            } else {
-                                state.tappingInverted.shouldInvertHorizontal
-                            }
-                            val rawTarget =
-                                if (state.readingMode == MangaReadingMode.VERTICAL) {
-                                    when {
-                                        offset.y < size.height / 3 -> -1
-                                        offset.y > size.height * 2 / 3 -> 1
-                                        else -> 0
-                                    }
-                                } else {
-                                    val nextEdge = if (rtl) {
-                                        offset.x < size.width / 3
-                                    } else {
-                                        offset.x > size.width * 2 / 3
-                                    }
-                                    val prevEdge = if (rtl) {
-                                        offset.x > size.width * 2 / 3
-                                    } else {
-                                        offset.x < size.width / 3
-                                    }
-                                    when {
-                                        nextEdge -> 1
-                                        prevEdge -> -1
-                                        else -> 0
-                                    }
+                            // Android's ViewerNavigation: normalized region
+                            // rects per nav layout, inverted by mirroring the
+                            // rects (not the action); uncovered taps = menu.
+                            val px = up.position.x / size.width
+                            val py = up.position.y / size.height
+                            val region = navRegions(state.navMode, state.tappingInverted)
+                                .firstOrNull { px in it.l..it.r && py in it.t..it.b }
+                            val target = when {
+                                region == null -> 0
+                                state.readingMode == MangaReadingMode.VERTICAL -> {
+                                    region.zone.delta
                                 }
-                            val target = if (inverted) -rawTarget else rawTarget
+                                region.zone == NavZone.LEFT -> if (rtl) 1 else -1
+                                region.zone == NavZone.RIGHT -> if (rtl) -1 else 1
+                                else -> region.zone.delta
+                            }
                             if (target != 0) {
                                 val page = (pagerState.currentPage + target)
                                     .coerceIn(
@@ -859,6 +843,7 @@ private fun ReaderSettingsSheet(
     onFullscreenChange: (Boolean) -> Unit,
     onLongTapChange: (Boolean) -> Unit,
     onScaleTypeSelect: (Int) -> Unit,
+    onNavModeSelect: (Int) -> Unit,
     onTappingInvertSelect: (TappingInvertMode) -> Unit,
     onSidePaddingChange: (Int) -> Unit,
     onNavigateToPanChange: (Boolean) -> Unit,
@@ -904,11 +889,22 @@ private fun ReaderSettingsSheet(
                 onSelect = onScaleTypeSelect,
             )
             SettingDropdown(
-                labelRes = MR.strings.pref_read_with_tapping_inverted,
-                current = stringResource(state.tappingInverted.titleRes),
-                options = TappingInvertMode.entries.map { it to it.titleRes },
-                onSelect = onTappingInvertSelect,
+                labelRes = MR.strings.pref_viewer_nav,
+                current = stringResource(
+                    navModeOptions[state.navMode.coerceIn(navModeOptions.indices)],
+                ),
+                options = navModeOptions.mapIndexed { i, res -> i to res },
+                onSelect = onNavModeSelect,
             )
+            // Android hides the invert chips for the disabled layout.
+            if (state.navMode != 5) {
+                SettingDropdown(
+                    labelRes = MR.strings.pref_read_with_tapping_inverted,
+                    current = stringResource(state.tappingInverted.titleRes),
+                    options = TappingInvertMode.entries.map { it to it.titleRes },
+                    onSelect = onTappingInvertSelect,
+                )
+            }
             SettingSlider(
                 labelRes = MR.strings.pref_webtoon_side_padding,
                 value = state.webtoonSidePadding.toFloat(),
@@ -947,6 +943,91 @@ private fun ReaderSettingsSheet(
 
 private const val MAX_ZOOM_SCALE = 3f
 private const val DOUBLE_TAP_ZOOM_SCALE = 2.5f
+
+/** Android's ViewerNavigation.NavigationRegion — LEFT/RIGHT are spatial. */
+private enum class NavZone(val delta: Int) {
+    MENU(0),
+    PREV(-1),
+    NEXT(1),
+    LEFT(-1),
+    RIGHT(1),
+}
+
+/** Android's Region — normalized rect (l,t,r,b) mapped to a zone. */
+private data class NavRegion(
+    val l: Float,
+    val t: Float,
+    val r: Float,
+    val b: Float,
+    val zone: NavZone,
+)
+
+private val RIGHT_AND_LEFT_REGIONS = listOf(
+    NavRegion(0f, 0f, 0.33f, 1f, NavZone.LEFT),
+    NavRegion(0.66f, 0f, 1f, 1f, NavZone.RIGHT),
+)
+
+private val L_REGIONS = listOf(
+    NavRegion(0f, 0.33f, 0.33f, 0.66f, NavZone.PREV),
+    NavRegion(0f, 0f, 1f, 0.33f, NavZone.PREV),
+    NavRegion(0.66f, 0.33f, 1f, 0.66f, NavZone.NEXT),
+    NavRegion(0f, 0.66f, 1f, 1f, NavZone.NEXT),
+)
+
+private val KINDLISH_REGIONS = listOf(
+    NavRegion(0.33f, 0.33f, 1f, 1f, NavZone.NEXT),
+    NavRegion(0f, 0.33f, 0.33f, 1f, NavZone.PREV),
+)
+
+private val EDGE_REGIONS = listOf(
+    NavRegion(0f, 0f, 0.33f, 1f, NavZone.NEXT),
+    NavRegion(0.33f, 0.66f, 0.66f, 1f, NavZone.PREV),
+    NavRegion(0.66f, 0f, 1f, 1f, NavZone.NEXT),
+)
+
+/**
+ * Android's nav layouts per `reader_navigation_mode_pager` — 0/4 are the
+ * right-and-left thirds, 5 is Disabled (every tap = menu). Inversion
+ * mirrors the rects like `RectF.invert`, not the action.
+ */
+private fun navRegions(mode: Int, invert: TappingInvertMode): List<NavRegion> {
+    val base = when (mode) {
+        1 -> L_REGIONS
+        2 -> KINDLISH_REGIONS
+        3 -> EDGE_REGIONS
+        5 -> emptyList()
+        else -> RIGHT_AND_LEFT_REGIONS
+    }
+    return base.map { region ->
+        when {
+            invert.shouldInvertHorizontal && invert.shouldInvertVertical -> region.copy(
+                l = 1f - region.r,
+                r = 1f - region.l,
+                t = 1f - region.b,
+                b = 1f - region.t,
+            )
+            invert.shouldInvertHorizontal -> region.copy(
+                l = 1f - region.r,
+                r = 1f - region.l,
+            )
+            invert.shouldInvertVertical -> region.copy(
+                t = 1f - region.b,
+                b = 1f - region.t,
+            )
+            else -> region
+        }
+    }
+}
+
+/** Android's TapZones list — pref values are the list index. */
+private val navModeOptions = listOf(
+    MR.strings.label_default,
+    MR.strings.l_nav,
+    MR.strings.kindlish_nav,
+    MR.strings.edge_nav,
+    MR.strings.right_and_left_nav,
+    MR.strings.disabled_nav,
+)
 
 /**
  * Android's page zoom state (SubsamplingScaleImageView scale + pan vTranslate,
