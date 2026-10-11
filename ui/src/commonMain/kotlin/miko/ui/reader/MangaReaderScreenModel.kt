@@ -49,6 +49,8 @@ class MangaReaderScreenModel(
         val viewerFlag: Int = 0,
         val showPageNumber: Boolean = true,
         val showSettings: Boolean = false,
+        /** Android's lastPageRead restore — page to open the viewer at. */
+        val initialPage: Int = 0,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -164,6 +166,12 @@ class MangaReaderScreenModel(
                 return@launch
             }
             val index = items.indexOfFirst { it.url == chapterUrl }
+            // lastPageRead is resolved before the viewer composes so
+            // key(chapterUrl) seeds the pager/list at the saved page.
+            val localItem = runCatching {
+                val local = binding.localEntry(entryUrl, sourceId).first() ?: return@runCatching null
+                binding.getLocalItems(local.id).firstOrNull { it.url == chapterUrl }
+            }.getOrNull()
             _state.value = _state.value.copy(
                 chapterUrl = chapterUrl,
                 chapterName = items.getOrNull(index)?.name ?: "",
@@ -171,6 +179,7 @@ class MangaReaderScreenModel(
                 error = null,
                 hasPrev = index > 0,
                 hasNext = index >= 0 && index < items.lastIndex,
+                initialPage = localItem?.lastPageRead ?: 0,
             )
             val result = runCatching { binding.pageList(src.id, chapterUrl) }
             result.fold(
@@ -203,6 +212,12 @@ class MangaReaderScreenModel(
 
     /** Chapter id with an open read session — closed on switch/dispose. */
     private var openItemId: Long? = null
+
+    /** Viewer page position — Android's `lastPageRead` write-through. */
+    fun savePageProgress(page: Int) {
+        val itemId = openItemId ?: return
+        scope.launch { binding.setItemPageProgress(itemId, page) }
+    }
 
     private suspend fun markRead(chapterUrl: String) {
         val local = binding.localEntry(entryUrl, sourceId).first() ?: return

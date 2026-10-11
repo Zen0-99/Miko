@@ -129,7 +129,13 @@ class MangaCarrierBinding(
         emitAll(
             chapterRepository.getChapterByMangaIdAsFlow(localId).map { chapters ->
                 chapters.map {
-                    LocalItem(id = it.id, url = it.url, name = it.name, done = it.read)
+                    LocalItem(
+                        id = it.id,
+                        url = it.url,
+                        name = it.name,
+                        done = it.read,
+                        lastPageRead = it.lastPageRead.toInt(),
+                    )
                 }
             },
         )
@@ -137,7 +143,13 @@ class MangaCarrierBinding(
 
     override suspend fun getLocalItems(localId: Long): List<LocalItem> =
         chapterRepository.getChapterByMangaId(localId).map {
-            LocalItem(id = it.id, url = it.url, name = it.name, done = it.read)
+            LocalItem(
+                id = it.id,
+                url = it.url,
+                name = it.name,
+                done = it.read,
+                lastPageRead = it.lastPageRead.toInt(),
+            )
         }
 
     override suspend fun addMissingItems(localId: Long, remote: List<RemoteItem>) {
@@ -182,6 +194,12 @@ class MangaCarrierBinding(
 
     override suspend fun setItemDone(itemId: Long, done: Boolean) {
         chapterRepository.updateChapter(ChapterUpdate(id = itemId, read = done))
+    }
+
+    override suspend fun setItemPageProgress(itemId: Long, page: Int) {
+        chapterRepository.updateChapter(
+            ChapterUpdate(id = itemId, lastPageRead = page.toLong()),
+        )
     }
 
     override suspend fun setAllItemsDone(localId: Long, done: Boolean) {

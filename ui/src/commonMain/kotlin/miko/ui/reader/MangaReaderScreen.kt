@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -28,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,6 +82,7 @@ fun MangaReaderScreen(
             }
             else -> PageViewer(
                 state = state,
+                onPageChange = model::savePageProgress,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -142,14 +145,15 @@ fun MangaReaderScreen(
 @Composable
 private fun PageViewer(
     state: MangaReaderScreenModel.State,
+    onPageChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (state.readingMode) {
         MangaReadingMode.LEFT_TO_RIGHT,
         MangaReadingMode.RIGHT_TO_LEFT,
         MangaReadingMode.VERTICAL,
-        -> PagedViewer(state, modifier)
-        else -> WebtoonViewer(state, modifier)
+        -> PagedViewer(state, onPageChange, modifier)
+        else -> WebtoonViewer(state, onPageChange, modifier)
     }
 }
 
@@ -160,12 +164,20 @@ private fun PageViewer(
 @Composable
 private fun PagedViewer(
     state: MangaReaderScreenModel.State,
+    onPageChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Reset page position whenever the chapter changes.
+    // Reset page position whenever the chapter changes; lastPageRead
+    // seeds the resume page (Android's preserveReadingPosition).
     key(state.chapterUrl) {
-        val pagerState = rememberPagerState(pageCount = { state.pages.size })
+        val pagerState = rememberPagerState(
+            initialPage = state.initialPage.coerceIn(0, state.pages.lastIndex.coerceAtLeast(0)),
+            pageCount = { state.pages.size },
+        )
         val scope = rememberCoroutineScope()
+        LaunchedEffect(pagerState.currentPage) {
+            onPageChange(pagerState.currentPage)
+        }
         val rtl = state.readingMode == MangaReadingMode.RIGHT_TO_LEFT
         Box(
             modifier = modifier
@@ -248,9 +260,20 @@ private fun PagedViewer(
 @Composable
 private fun WebtoonViewer(
     state: MangaReaderScreenModel.State,
+    onPageChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // +1 shifts past the chapter-name header item; strip it when saving
+    // so the stored index stays a page index, not a row index.
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = (state.initialPage + 1)
+            .coerceIn(0, state.pages.size + 1),
+    )
+    LaunchedEffect(listState.firstVisibleItemIndex) {
+        onPageChange((listState.firstVisibleItemIndex - 1).coerceAtLeast(0))
+    }
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 4.dp),
     ) {

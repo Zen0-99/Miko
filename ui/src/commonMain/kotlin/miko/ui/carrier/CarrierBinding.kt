@@ -66,6 +66,8 @@ data class LocalItem(
     val url: String,
     val name: String,
     val done: Boolean,
+    /** Manga reader position — Android's `last_page_read`. */
+    val lastPageRead: Int = 0,
 )
 
 /** A manga reader page. */
@@ -160,6 +162,9 @@ interface CarrierBinding {
 
     suspend fun setItemDone(itemId: Long, done: Boolean)
     suspend fun setAllItemsDone(localId: Long, done: Boolean)
+
+    /** Manga reader position — Android's `last_page_read` write. */
+    suspend fun setItemPageProgress(itemId: Long, page: Int) = Unit
 
     /** Chapter-list sort direction — the entry's chapterFlags sort bit. */
     suspend fun setChapterSortDescending(localId: Long, descending: Boolean) = Unit
