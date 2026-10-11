@@ -22,6 +22,7 @@ import mihon.domain.upcoming.shows.interactor.GetUpcomingAnime
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.NovelCarrierBinding
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
@@ -53,6 +54,7 @@ class MikoUiGraph(
     val novelSourceManager: NovelSourceManager,
     val mangaSourceManager: MangaSourceManager,
     val animeSourceManager: AnimeSourceManager,
+    val preferenceStore: PreferenceStore,
     val mangaBinding: CarrierBinding,
     val animeBinding: CarrierBinding,
     val getLibraryNovels: GetLibraryNovels,

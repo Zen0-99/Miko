@@ -39,6 +39,8 @@ class LibraryScreenModel(
     data class State(
         val initialized: Boolean = false,
         val entries: List<LibraryEntry> = emptyList(),
+        /** Android's display_library_title — covers show title overlays. */
+        val showTitle: Boolean = true,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -88,8 +90,14 @@ class LibraryScreenModel(
                     }
                 }
             }.collect { entries ->
-                _state.value = State(initialized = true, entries = entries)
+                _state.value = _state.value.copy(initialized = true, entries = entries)
             }
+        }
+        scope.launch {
+            graph.preferenceStore
+                .getBoolean("display_library_title", true)
+                .changes()
+                .collect { show -> _state.value = _state.value.copy(showTitle = show) }
         }
     }
 

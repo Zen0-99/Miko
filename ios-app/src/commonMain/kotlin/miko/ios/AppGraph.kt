@@ -387,6 +387,7 @@ class AppGraph {
         novelSourceManager = novelSourceManager,
         mangaSourceManager = mangaSourceManager,
         animeSourceManager = animeSourceManager,
+        preferenceStore = preferenceStore,
         mangaBinding = mangaBinding,
         animeBinding = animeBinding,
         getLibraryNovels = getLibraryNovels,

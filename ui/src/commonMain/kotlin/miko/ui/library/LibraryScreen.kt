@@ -77,7 +77,7 @@ fun LibraryScreen(
             ) {
                 items(state.entries, key = { it.id }) { entry ->
                     CoverGridItem(
-                        title = entry.title,
+                        title = if (state.showTitle) entry.title else null,
                         coverUrl = entry.coverUrl,
                         onClick = { onEntryClick(entry) },
                         topStartBadge = if (entry.unreadCount > 0) {

@@ -2,6 +2,7 @@ package miko.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Search
@@ -55,6 +57,7 @@ import miko.ui.home.HomeScreen
 import miko.ui.home.HomeScreenModel
 import miko.ui.library.LibraryScreen
 import miko.ui.library.LibraryScreenModel
+import miko.ui.more.MoreScreen
 import miko.ui.navigation.Destination
 import miko.ui.navigation.Navigator
 import miko.ui.navigation.rememberNavigator
@@ -68,10 +71,16 @@ import miko.ui.repos.ExtensionReposScreen
 import miko.ui.repos.ExtensionReposScreenModel
 import miko.ui.search.GlobalSearchScreen
 import miko.ui.search.GlobalSearchScreenModel
+import miko.ui.settings.SettingsScreen
+import miko.ui.settings.SettingsScreenModel
+import miko.ui.settings.ThemeMode
 import miko.ui.sources.SourcesScreen
 import miko.ui.sources.SourcesScreenModel
+import miko.ui.stats.StatsScreen
+import miko.ui.stats.StatsScreenModel
 import miko.ui.updates.UpdatesScreen
 import miko.ui.updates.UpdatesScreenModel
+import tachiyomi.core.common.preference.getEnum
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -86,7 +95,7 @@ enum class BrowseMode { BROWSE, EXTENSIONS }
 
 @Composable
 fun MikoApp(graph: MikoUiGraph) {
-    val navigator = rememberNavigator(Destination.Browse)
+    val navigator = rememberNavigator(Destination.Home)
 
     // Browse-tab search state — mirrors Android's SharedTopBarState fields:
     // non-null query = search open ("" = just opened). Reset when leaving
@@ -166,7 +175,19 @@ fun MikoApp(graph: MikoUiGraph) {
         updatesModel.setHistoryQuery(updatesSearchQuery.orEmpty())
     }
 
-    MikoTheme {
+    // Android's pref_theme_mode_key — shared via the injected store.
+    val themeMode by graph.preferenceStore
+        .getEnum("pref_theme_mode_key", ThemeMode.SYSTEM)
+        .changes()
+        .collectAsStateWithLifecycle(ThemeMode.SYSTEM)
+
+    MikoTheme(
+        darkTheme = when (themeMode) {
+            ThemeMode.DARK -> true
+            ThemeMode.LIGHT -> false
+            ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        },
+    ) {
         Scaffold(
             topBar = {
                 val current = navigator.current
@@ -302,7 +323,7 @@ fun MikoApp(graph: MikoUiGraph) {
             bottomBar = {
                 if (!navigator.canPop) {
                     // Android's nav order minus Discovery: Home | Library |
-                    // Updates | Browse.
+                    // Updates | Browse | More.
                     NavigationBar {
                         NavigationBarItem(
                             selected = navigator.current == Destination.Home,
@@ -327,6 +348,12 @@ fun MikoApp(graph: MikoUiGraph) {
                             onClick = { navigator.replace(Destination.Browse) },
                             icon = { Icon(Icons.Filled.Search, contentDescription = null) },
                             label = { Text(stringResource(MR.strings.browse)) },
+                        )
+                        NavigationBarItem(
+                            selected = navigator.current == Destination.More,
+                            onClick = { navigator.replace(Destination.More) },
+                            icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
+                            label = { Text(stringResource(MR.strings.label_more)) },
                         )
                     }
                 }
@@ -397,6 +424,19 @@ fun MikoApp(graph: MikoUiGraph) {
                     destination = destination,
                     modifier = Modifier.padding(padding),
                 )
+                Destination.More -> MoreScreen(
+                    onClickStats = { navigator.push(Destination.Stats) },
+                    onClickSettings = { navigator.push(Destination.Settings) },
+                    modifier = Modifier.padding(padding),
+                )
+                Destination.Stats -> StatsDestination(
+                    graph = graph,
+                    modifier = Modifier.padding(padding),
+                )
+                Destination.Settings -> SettingsDestination(
+                    graph = graph,
+                    modifier = Modifier.padding(padding),
+                )
             }
         }
     }
@@ -408,6 +448,9 @@ private fun screenTitle(destination: Destination): String = when (destination) {
     Destination.Browse -> stringResource(MR.strings.browse)
     Destination.Library -> stringResource(MR.strings.label_library)
     Destination.Updates -> stringResource(MR.strings.label_recent_updates)
+    Destination.More -> stringResource(MR.strings.label_more)
+    Destination.Stats -> stringResource(MR.strings.label_stats)
+    Destination.Settings -> stringResource(MR.strings.label_settings)
     Destination.ExtensionRepos -> stringResource(MR.strings.label_extension_repos)
     is Destination.SourceFeed -> destination.sourceName
     is Destination.GlobalSearch -> stringResource(MR.strings.action_search_hint)
@@ -865,4 +908,28 @@ private fun LibraryDestination(
         },
         modifier = modifier.fillMaxSize(),
     )
+}
+
+@Composable
+private fun StatsDestination(
+    graph: MikoUiGraph,
+    modifier: Modifier = Modifier,
+) {
+    val model = remember { StatsScreenModel(graph) }
+    DisposableEffect(model) {
+        onDispose { model.dispose() }
+    }
+    StatsScreen(model = model, modifier = modifier.fillMaxSize())
+}
+
+@Composable
+private fun SettingsDestination(
+    graph: MikoUiGraph,
+    modifier: Modifier = Modifier,
+) {
+    val model = remember { SettingsScreenModel(graph.preferenceStore) }
+    DisposableEffect(model) {
+        onDispose { model.dispose() }
+    }
+    SettingsScreen(model = model, modifier = modifier.fillMaxSize())
 }

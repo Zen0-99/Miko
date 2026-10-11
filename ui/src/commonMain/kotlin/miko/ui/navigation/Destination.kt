@@ -38,6 +38,15 @@ sealed interface Destination {
     /** Recent chapter/episode updates + read/watch history — Android's UpdatesTab. */
     data object Updates : Destination
 
+    /** Android's MoreTab — stats/settings entry points. */
+    data object More : Destination
+
+    /** Per-carrier library/reading stats — pushed from More. */
+    data object Stats : Destination
+
+    /** App preferences — pushed from More. */
+    data object Settings : Destination
+
     /** Extension-repo management — consolidated per-type tabs + add/delete. */
     data object ExtensionRepos : Destination
 
