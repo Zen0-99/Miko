@@ -127,4 +127,16 @@ interface CarrierBinding {
 
     /** Resolved streams for a hoster target — shows only. */
     suspend fun videos(sourceId: Long, target: String): List<VideoEntry> = emptyList()
+
+    /**
+     * History row — recorded when an item opens for reading/watching
+     * (Android upserts on reader/player open).
+     */
+    suspend fun recordItemOpen(itemId: Long) = Unit
+
+    /**
+     * Session close — accumulates read/watch duration into the history row
+     * for carriers that track it (books/manga); a no-op elsewhere.
+     */
+    suspend fun recordItemClose(itemId: Long) = Unit
 }

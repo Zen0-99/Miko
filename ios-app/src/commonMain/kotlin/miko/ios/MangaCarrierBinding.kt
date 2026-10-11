@@ -20,10 +20,13 @@ import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.entries.manga.model.MangaUpdate
 import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.history.manga.model.MangaHistoryUpdate
+import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.items.chapter.model.ChapterUpdate
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
 import tachiyomi.domain.source.manga.service.MangaSourceManager
+import kotlin.time.Clock
 
 /** Manga carrier — wraps the JS manga source manager + manga repositories. */
 class MangaCarrierBinding(
@@ -32,7 +35,11 @@ class MangaCarrierBinding(
     private val networkToLocalManga: NetworkToLocalManga,
     private val mangaRepository: MangaRepository,
     private val chapterRepository: ChapterRepository,
+    private val historyRepository: MangaHistoryRepository,
 ) : CarrierBinding {
+
+    /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
+    private val openSessions = mutableMapOf<Long, Long>()
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
 
@@ -96,6 +103,21 @@ class MangaCarrierBinding(
         val updates = getLocalItems(localId)
             .map { ChapterUpdate(id = it.id, read = done) }
         if (updates.isNotEmpty()) chapterRepository.updateAllChapters(updates)
+    }
+
+    override suspend fun recordItemOpen(itemId: Long) {
+        openSessions[itemId] = Clock.System.now().toEpochMilliseconds()
+        historyRepository.upsertMangaHistory(
+            MangaHistoryUpdate(itemId, Clock.System.now(), 0),
+        )
+    }
+
+    override suspend fun recordItemClose(itemId: Long) {
+        val started = openSessions.remove(itemId) ?: return
+        val duration = Clock.System.now().toEpochMilliseconds() - started
+        historyRepository.upsertMangaHistory(
+            MangaHistoryUpdate(itemId, Clock.System.now(), duration),
+        )
     }
 
     /** Chapter page images — the manga reader's page source. */

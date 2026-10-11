@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.RemoteItem
 
@@ -113,17 +114,33 @@ class ReaderScreenModel(
         items.getOrNull(index + 1)?.let { openChapter(it.url) }
     }
 
-    /** Marks the local row read — no-op for non-library entries (no local rows). */
+    /** Chapter id with an open read session — closed on switch/dispose. */
+    private var openItemId: Long? = null
+
+    /**
+     * Marks the local row read + records the history session — no-op for
+     * non-library entries (no local rows). Re-reading an already-read
+     * chapter still opens a history session, matching Android.
+     */
     private suspend fun markRead(chapterUrl: String) {
         val local = binding.localEntry(entryUrl, sourceId).first() ?: return
         val chapter = binding.getLocalItems(local.id)
             .firstOrNull { it.url == chapterUrl }
             ?: return
-        if (chapter.done) return
-        binding.setItemDone(chapter.id, true)
+        openItemId?.takeIf { it != chapter.id }?.let { binding.recordItemClose(it) }
+        if (!chapter.done) binding.setItemDone(chapter.id, true)
+        openItemId = chapter.id
+        binding.recordItemOpen(chapter.id)
     }
 
-    fun dispose() = scope.cancel()
+    fun dispose() {
+        val open = openItemId
+        openItemId = null
+        scope.cancel()
+        // The reader scope is gone — close the session synchronously; the
+        // upsert is a single-row write.
+        if (open != null) runBlocking { binding.recordItemClose(open) }
+    }
 }
 
 internal fun htmlToParagraphs(html: String): List<String> {

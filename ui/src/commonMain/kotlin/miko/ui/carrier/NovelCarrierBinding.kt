@@ -10,10 +10,13 @@ import miko.ui.model.toDomainNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.repository.NovelRepository
+import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
+import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
 import tachiyomi.domain.items.chapter.model.NovelChapter
 import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.source.novel.service.NovelSourceManager
+import kotlin.time.Clock
 
 /** Books carrier — wraps the JS novel source manager + novel repositories. */
 class NovelCarrierBinding(
@@ -22,7 +25,11 @@ class NovelCarrierBinding(
     private val networkToLocalNovel: NetworkToLocalNovel,
     private val novelRepository: NovelRepository,
     private val chapterRepository: NovelChapterRepository,
+    private val historyRepository: NovelHistoryRepository,
 ) : CarrierBinding {
+
+    /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
+    private val openSessions = mutableMapOf<Long, Long>()
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
 
@@ -86,6 +93,21 @@ class NovelCarrierBinding(
         val updates = getLocalItems(localId)
             .map { NovelChapterUpdate(id = it.id, read = done) }
         if (updates.isNotEmpty()) chapterRepository.updateAllNovelChapters(updates)
+    }
+
+    override suspend fun recordItemOpen(itemId: Long) {
+        openSessions[itemId] = Clock.System.now().toEpochMilliseconds()
+        historyRepository.upsertNovelHistory(
+            NovelHistoryUpdate(itemId, Clock.System.now(), 0),
+        )
+    }
+
+    override suspend fun recordItemClose(itemId: Long) {
+        val started = openSessions.remove(itemId) ?: return
+        val duration = Clock.System.now().toEpochMilliseconds() - started
+        historyRepository.upsertNovelHistory(
+            NovelHistoryUpdate(itemId, Clock.System.now(), duration),
+        )
     }
 
     /** Chapter body text — the books reader's content source. */

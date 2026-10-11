@@ -69,6 +69,9 @@ import tachiyomi.data.handlers.manga.IosMangaDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.data.handlers.novel.IosNovelDatabaseHandler
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
+import tachiyomi.data.history.anime.AnimeHistoryRepositoryImpl
+import tachiyomi.data.history.manga.MangaHistoryRepositoryImpl
+import tachiyomi.data.history.novel.NovelHistoryRepositoryImpl
 import tachiyomi.data.items.chapter.ChapterRepositoryImpl
 import tachiyomi.data.items.chapter.NovelChapterRepositoryImpl
 import tachiyomi.data.items.episode.EpisodeRepositoryImpl
@@ -93,6 +96,9 @@ import tachiyomi.domain.extension.novel.api.JsPluginApi
 import tachiyomi.domain.extension.novel.api.JsPluginIndexFetcher
 import tachiyomi.domain.extension.novel.api.JsPluginIndexParser
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
+import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
+import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
+import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
@@ -294,6 +300,15 @@ class AppGraph {
 
     val episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(animeHandler)
 
+    val mangaHistoryRepository: MangaHistoryRepository =
+        MangaHistoryRepositoryImpl(mangaHandler)
+
+    val animeHistoryRepository: AnimeHistoryRepository =
+        AnimeHistoryRepositoryImpl(animeHandler)
+
+    val novelHistoryRepository: NovelHistoryRepository =
+        NovelHistoryRepositoryImpl(novelHandler)
+
     val getManga = GetManga(mangaRepository)
 
     val getAnime = GetAnime(animeRepository)
@@ -308,6 +323,7 @@ class AppGraph {
         networkToLocalManga = networkToLocalManga,
         mangaRepository = mangaRepository,
         chapterRepository = chapterRepository,
+        historyRepository = mangaHistoryRepository,
     )
 
     val animeBinding = AnimeCarrierBinding(
@@ -316,6 +332,7 @@ class AppGraph {
         networkToLocalAnime = networkToLocalAnime,
         animeRepository = animeRepository,
         episodeRepository = episodeRepository,
+        historyRepository = animeHistoryRepository,
     )
 
     val novelRepository: NovelRepository = NovelRepositoryImpl(novelHandler)
@@ -349,6 +366,7 @@ class AppGraph {
         networkToLocalNovel = networkToLocalNovel,
         novelRepository = novelRepository,
         novelChapterRepository = novelChapterRepository,
+        novelHistoryRepository = novelHistoryRepository,
         extensionRepoService = extensionRepoService,
         jsPluginApi = jsPluginApi,
         novelPluginRepository = novelPluginRepository,

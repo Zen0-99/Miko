@@ -61,6 +61,7 @@ kotlin {
             "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
             "-opt-in=androidx.compose.ui.ExperimentalComposeUiApi",
+            "-opt-in=kotlin.time.ExperimentalTime",
             "-opt-in=kotlinx.coroutines.FlowPreview",
             "-Xexpect-actual-classes",
         )

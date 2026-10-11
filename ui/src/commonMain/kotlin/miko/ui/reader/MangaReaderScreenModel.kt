@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteItem
@@ -110,14 +111,24 @@ class MangaReaderScreenModel(
         items.getOrNull(index + 1)?.let { openChapter(it.url) }
     }
 
+    /** Chapter id with an open read session — closed on switch/dispose. */
+    private var openItemId: Long? = null
+
     private suspend fun markRead(chapterUrl: String) {
         val local = binding.localEntry(entryUrl, sourceId).first() ?: return
         val chapter = binding.getLocalItems(local.id)
             .firstOrNull { it.url == chapterUrl }
             ?: return
-        if (chapter.done) return
-        binding.setItemDone(chapter.id, true)
+        openItemId?.takeIf { it != chapter.id }?.let { binding.recordItemClose(it) }
+        if (!chapter.done) binding.setItemDone(chapter.id, true)
+        openItemId = chapter.id
+        binding.recordItemOpen(chapter.id)
     }
 
-    fun dispose() = scope.cancel()
+    fun dispose() {
+        val open = openItemId
+        openItemId = null
+        scope.cancel()
+        if (open != null) runBlocking { binding.recordItemClose(open) }
+    }
 }

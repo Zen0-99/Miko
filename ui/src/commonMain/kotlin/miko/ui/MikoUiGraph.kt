@@ -28,6 +28,7 @@ import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
 import tachiyomi.domain.extension.novel.api.JsPluginApiFacade
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
+import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
@@ -53,6 +54,7 @@ class MikoUiGraph(
     val networkToLocalNovel: NetworkToLocalNovel,
     val novelRepository: NovelRepository,
     val novelChapterRepository: NovelChapterRepository,
+    val novelHistoryRepository: NovelHistoryRepository,
     val extensionRepoService: ExtensionRepoService,
     val jsPluginApi: JsPluginApiFacade,
     val novelPluginRepository: NovelPluginRepository,
@@ -82,6 +84,7 @@ class MikoUiGraph(
         networkToLocalNovel = networkToLocalNovel,
         novelRepository = novelRepository,
         chapterRepository = novelChapterRepository,
+        historyRepository = novelHistoryRepository,
     )
 
     fun binding(carrier: BrowseCarrier): CarrierBinding = when (carrier) {

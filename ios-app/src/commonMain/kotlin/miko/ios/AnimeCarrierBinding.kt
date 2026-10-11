@@ -21,10 +21,13 @@ import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate
 import tachiyomi.domain.entries.shows.repository.AnimeRepository
+import tachiyomi.domain.history.shows.model.AnimeHistoryUpdate
+import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.repository.EpisodeRepository
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
+import kotlin.time.Clock
 
 /** Shows carrier — wraps the JS anime source manager + anime repositories. */
 class AnimeCarrierBinding(
@@ -33,6 +36,7 @@ class AnimeCarrierBinding(
     private val networkToLocalAnime: NetworkToLocalAnime,
     private val animeRepository: AnimeRepository,
     private val episodeRepository: EpisodeRepository,
+    private val historyRepository: AnimeHistoryRepository,
 ) : CarrierBinding {
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
@@ -100,6 +104,14 @@ class AnimeCarrierBinding(
             .map { EpisodeUpdate(id = it.id, seen = done) }
         if (updates.isNotEmpty()) episodeRepository.updateAllEpisodes(updates)
     }
+
+    override suspend fun recordItemOpen(itemId: Long) {
+        historyRepository.upsertAnimeHistory(
+            AnimeHistoryUpdate(itemId, Clock.System.now()),
+        )
+    }
+
+    // Anime history has no duration column — seenAt on open is the row.
 
     /** Episode stream hosts — resolved lazily the way Android's player does. */
     override suspend fun hosters(sourceId: Long, episodeUrl: String): List<HosterEntry> {
@@ -182,7 +194,19 @@ private class AnimeCarrierSource(
             url = entryUrl
             title = entryUrl
         }
-        return source.getEpisodeList(stub).map { it.toRemoteItem() }
+        val seasons = source.getSeasonList(stub)
+        // Flat plugins echo the anime back as the only "season" — then the
+        // episode list comes straight off the entry. Season-structured
+        // plugins get one getEpisodeList per season, merged in order.
+        val flat = seasons.size <= 1 && seasons.firstOrNull()?.url == entryUrl
+        if (flat) {
+            return source.getEpisodeList(stub).map { it.toRemoteItem() }
+        }
+        return seasons.flatMap { season ->
+            runCatching { source.getEpisodeList(season) }
+                .getOrDefault(emptyList())
+                .map { it.toRemoteItem() }
+        }
     }
 
     private fun AnimesPage.toFeedPage() =

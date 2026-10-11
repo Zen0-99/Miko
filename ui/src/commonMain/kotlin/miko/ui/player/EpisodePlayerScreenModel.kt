@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
@@ -137,14 +138,24 @@ class EpisodePlayerScreenModel(
         items.getOrNull(index + 1)?.let { openEpisode(it.url) }
     }
 
+    /** Episode id with an open watch session — closed on switch/dispose. */
+    private var openItemId: Long? = null
+
     private suspend fun markSeen(episodeUrl: String) {
         val local = binding.localEntry(entryUrl, sourceId).first() ?: return
         val episode = binding.getLocalItems(local.id)
             .firstOrNull { it.url == episodeUrl }
             ?: return
-        if (episode.done) return
-        binding.setItemDone(episode.id, true)
+        openItemId?.takeIf { it != episode.id }?.let { binding.recordItemClose(it) }
+        if (!episode.done) binding.setItemDone(episode.id, true)
+        openItemId = episode.id
+        binding.recordItemOpen(episode.id)
     }
 
-    fun dispose() = scope.cancel()
+    fun dispose() {
+        val open = openItemId
+        openItemId = null
+        scope.cancel()
+        if (open != null) runBlocking { binding.recordItemClose(open) }
+    }
 }
