@@ -65,6 +65,7 @@ import miko.ui.more.MoreScreen
 import miko.ui.navigation.Destination
 import miko.ui.navigation.Navigator
 import miko.ui.navigation.rememberNavigator
+import miko.ui.platform.rememberShareHandler
 import miko.ui.player.EpisodePlayerScreen
 import miko.ui.player.EpisodePlayerScreenModel
 import miko.ui.reader.MangaReaderScreen
@@ -294,29 +295,48 @@ fun MikoApp(graph: MikoUiGraph) {
                                                 contentDescription = null,
                                             )
                                         }
-                                        // Android's entry-toolbar overflow —
-                                        // "Edit" (collections) is favorites-only.
+                                        // Overflow — Android's bottom-menu Share
+                                        // (http entries only) + the toolbar's
+                                        // "Edit" collections action (favorites).
                                         val detailsState = detailsModel?.state
                                             ?.collectAsStateWithLifecycle()?.value
-                                        if (detailsState?.favorite == true) {
-                                            var overflowOpen by remember {
-                                                mutableStateOf(false)
+                                        val share = rememberShareHandler()
+                                        var overflowOpen by remember {
+                                            mutableStateOf(false)
+                                        }
+                                        Box {
+                                            IconButton(onClick = {
+                                                overflowOpen = true
+                                            }) {
+                                                Icon(
+                                                    Icons.Filled.MoreVert,
+                                                    contentDescription = null,
+                                                )
                                             }
-                                            Box {
-                                                IconButton(onClick = {
-                                                    overflowOpen = true
-                                                }) {
-                                                    Icon(
-                                                        Icons.Filled.MoreVert,
-                                                        contentDescription = null,
+                                            DropdownMenu(
+                                                expanded = overflowOpen,
+                                                onDismissRequest = {
+                                                    overflowOpen = false
+                                                },
+                                            ) {
+                                                if (current.entryKey
+                                                        .startsWith("http")
+                                                ) {
+                                                    DropdownMenuItem(
+                                                        text = {
+                                                            Text(
+                                                                stringResource(
+                                                                    MR.strings.action_share,
+                                                                ),
+                                                            )
+                                                        },
+                                                        onClick = {
+                                                            overflowOpen = false
+                                                            share(current.entryKey)
+                                                        },
                                                     )
                                                 }
-                                                DropdownMenu(
-                                                    expanded = overflowOpen,
-                                                    onDismissRequest = {
-                                                        overflowOpen = false
-                                                    },
-                                                ) {
+                                                if (detailsState?.favorite == true) {
                                                     DropdownMenuItem(
                                                         text = {
                                                             Text(
