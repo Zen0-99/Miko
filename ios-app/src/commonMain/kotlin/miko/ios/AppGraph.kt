@@ -69,7 +69,7 @@ import tachiyomi.data.handlers.manga.IosMangaDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.data.handlers.novel.IosNovelDatabaseHandler
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
-import tachiyomi.data.history.anime.AnimeHistoryRepositoryImpl
+import tachiyomi.data.history.shows.AnimeHistoryRepositoryImpl
 import tachiyomi.data.history.manga.MangaHistoryRepositoryImpl
 import tachiyomi.data.history.novel.NovelHistoryRepositoryImpl
 import tachiyomi.data.items.chapter.ChapterRepositoryImpl
