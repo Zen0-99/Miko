@@ -19,13 +19,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -125,14 +128,13 @@ fun EntryDetailsScreen(
         }
 
         item {
-            Text(
-                text = pluralStringResource(
-                    MR.plurals.manga_num_chapters,
-                    count = state.items.size,
-                    state.items.size,
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            ChapterListHeader(
+                count = state.items.size,
+                sortDescending = state.sortDescending,
+                unreadOnly = state.unreadOnly,
+                showActions = state.local != null,
+                onSortClick = model::toggleSortDirection,
+                onFilterClick = model::toggleUnreadFilter,
             )
         }
 
@@ -146,7 +148,7 @@ fun EntryDetailsScreen(
                 )
             }
             else -> {
-                val items = state.items
+                val items = state.displayItems
                 val doneUrls = state.doneUrls
                 items(items, key = { it.url }) { item ->
                     ItemRow(
@@ -526,6 +528,62 @@ private fun ExpandableDescription(
 }
 
 private val whitespaceLineRegex = Regex("\\s*\n\\s*")
+
+/**
+ * Android's `ChapterListHeader` (reduced): item count plus sort-direction and
+ * unread-filter icons writing back to the entry's chapterFlags. Actions hide
+ * until the entry has a local row to persist flags onto.
+ */
+@Composable
+private fun ChapterListHeader(
+    count: Int,
+    sortDescending: Boolean,
+    unreadOnly: Boolean,
+    showActions: Boolean,
+    onSortClick: () -> Unit,
+    onFilterClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
+    ) {
+        Text(
+            text = pluralStringResource(
+                MR.plurals.manga_num_chapters,
+                count = count,
+                count,
+            ),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
+        if (showActions) {
+            IconButton(onClick = onSortClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                    contentDescription = null,
+                    tint = if (sortDescending) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onFilterClick) {
+                Icon(
+                    imageVector = Icons.Filled.FilterList,
+                    contentDescription = null,
+                    tint = if (unreadOnly) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun ItemRow(

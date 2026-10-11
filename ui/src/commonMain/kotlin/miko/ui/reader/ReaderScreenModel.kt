@@ -120,8 +120,14 @@ class ReaderScreenModel(
 
     private suspend fun loadItemList() {
         val src = source ?: return
-        items = src.items(entryUrl)
         val local = binding.localEntry(entryUrl, sourceId).first()
+        val remoteItems = src.items(entryUrl)
+        // Android sorts the reader's chapter list by the entry's chapterFlags.
+        items = if (local?.sortDescending == true) {
+            remoteItems.sortedByDescending { it.number }
+        } else {
+            remoteItems.sortedBy { it.number }
+        }
         val doneUrls = local?.let { entry ->
             binding.getLocalItems(entry.id)
                 .filter { it.done }

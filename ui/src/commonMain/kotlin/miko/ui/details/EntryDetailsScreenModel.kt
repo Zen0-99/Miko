@@ -37,10 +37,28 @@ class EntryDetailsScreenModel(
         val detailsLoading: Boolean = true,
         val itemsLoading: Boolean = true,
         val error: String? = null,
+        /** Entry chapterFlags semantics — sort direction + unread filter. */
+        val sortDescending: Boolean = false,
+        val unreadOnly: Boolean = false,
     ) {
         /** First undone item — Android's `nextContinueChapter`. */
         val nextItem: RemoteItem?
-            get() = items.firstOrNull { it.url !in doneUrls }
+            get() = displayItems.firstOrNull { it.url !in doneUrls }
+
+        /** Items after the entry's chapterFlags — what the list renders. */
+        val displayItems: List<RemoteItem>
+            get() {
+                val filtered = if (unreadOnly) {
+                    items.filter { it.url !in doneUrls }
+                } else {
+                    items
+                }
+                return if (sortDescending) {
+                    filtered.sortedByDescending { it.number }
+                } else {
+                    filtered.sortedBy { it.number }
+                }
+            }
 
         val allItemsDone: Boolean
             get() = items.isNotEmpty() && items.all { it.url in doneUrls }
@@ -64,6 +82,8 @@ class EntryDetailsScreenModel(
                 _state.value = _state.value.copy(
                     local = local,
                     favorite = local?.favorite == true,
+                    sortDescending = local?.sortDescending == true,
+                    unreadOnly = local?.unreadOnly == true,
                 )
                 if (local != null) subscribeLocalItems(local.id)
             }
@@ -155,6 +175,22 @@ class EntryDetailsScreenModel(
             if (target) {
                 syncLocalItems(local.id, current.items)
             }
+        }
+    }
+
+    /** Chapter-header sort toggle — writes the entry's chapterFlags bit. */
+    fun toggleSortDirection() {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setChapterSortDescending(local.id, !_state.value.sortDescending)
+        }
+    }
+
+    /** Chapter-header unread filter — writes the entry's chapterFlags bits. */
+    fun toggleUnreadFilter() {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setChapterUnreadOnly(local.id, !_state.value.unreadOnly)
         }
     }
 

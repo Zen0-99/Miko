@@ -12,6 +12,8 @@ import miko.ui.model.toDomainNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.interactor.NovelFetchInterval
+import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
 import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
@@ -45,31 +47,55 @@ class NovelCarrierBinding(
     override fun source(sourceId: Long): CarrierSource? =
         (sourceManager.get(sourceId) as? NovelCatalogueSource)?.let(::NovelCarrierSource)
 
+    private fun Novel.toLocalEntry() = LocalEntry(
+        id = id,
+        title = title,
+        favorite = favorite,
+        url = url,
+        sourceId = source,
+        sortDescending = sortDescending(),
+        unreadOnly = unreadFilterRaw == Novel.CHAPTER_SHOW_UNREAD,
+    )
+
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
-        getNovel.subscribe(url, sourceId).map { novel ->
-            novel?.let {
-                LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
-            }
-        }
+        getNovel.subscribe(url, sourceId).map { novel -> novel?.toLocalEntry() }
 
     override suspend fun localEntryById(id: Long): LocalEntry? =
-        runCatching { novelRepository.getNovelById(id) }.getOrNull()?.let {
-            LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
-        }
+        runCatching { novelRepository.getNovelById(id) }.getOrNull()?.toLocalEntry()
 
     override suspend fun materialize(details: RemoteDetails, sourceId: Long): LocalEntry {
         val novel = networkToLocalNovel.await(details.toSNovel().toDomainNovel(sourceId))
-        return LocalEntry(
-            id = novel.id,
-            title = novel.title,
-            favorite = novel.favorite,
-            url = novel.url,
-            sourceId = novel.source,
-        )
+        return novel.toLocalEntry()
     }
 
     override suspend fun setFavorite(localId: Long, favorite: Boolean) {
         novelRepository.updateNovelFavorite(localId, favorite)
+    }
+
+    override suspend fun setChapterSortDescending(localId: Long, descending: Boolean) {
+        val novel = runCatching { novelRepository.getNovelById(localId) }.getOrNull() ?: return
+        val direction = if (descending) Novel.CHAPTER_SORT_DESC else Novel.CHAPTER_SORT_ASC
+        novelRepository.updateNovel(
+            NovelUpdate(
+                id = localId,
+                chapterFlags = novel.chapterFlags
+                    .and(Novel.CHAPTER_SORT_DIR_MASK.inv())
+                    .or(direction),
+            ),
+        )
+    }
+
+    override suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) {
+        val novel = runCatching { novelRepository.getNovelById(localId) }.getOrNull() ?: return
+        val flag = if (onlyUnread) Novel.CHAPTER_SHOW_UNREAD else 0L
+        novelRepository.updateNovel(
+            NovelUpdate(
+                id = localId,
+                chapterFlags = novel.chapterFlags
+                    .and(Novel.CHAPTER_UNREAD_MASK.inv())
+                    .or(flag),
+            ),
+        )
     }
 
     override fun localItems(localId: Long): Flow<List<LocalItem>> =

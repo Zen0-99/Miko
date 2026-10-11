@@ -24,6 +24,7 @@ import miko.ui.carrier.RemoteItem
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
+import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.model.MangaUpdate
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.history.manga.model.MangaHistoryUpdate
@@ -59,31 +60,55 @@ class MangaCarrierBinding(
     override fun source(sourceId: Long): CarrierSource? =
         (sourceManager.get(sourceId) as? CatalogueSource)?.let(::MangaCarrierSource)
 
+    private fun Manga.toLocalEntry() = LocalEntry(
+        id = id,
+        title = title,
+        favorite = favorite,
+        url = url,
+        sourceId = source,
+        sortDescending = sortDescending(),
+        unreadOnly = unreadFilterRaw == Manga.CHAPTER_SHOW_UNREAD,
+    )
+
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
-        getManga.subscribe(url, sourceId).map { manga ->
-            manga?.let {
-                LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
-            }
-        }
+        getManga.subscribe(url, sourceId).map { manga -> manga?.toLocalEntry() }
 
     override suspend fun localEntryById(id: Long): LocalEntry? =
-        runCatching { mangaRepository.getMangaById(id) }.getOrNull()?.let {
-            LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
-        }
+        runCatching { mangaRepository.getMangaById(id) }.getOrNull()?.toLocalEntry()
 
     override suspend fun materialize(details: RemoteDetails, sourceId: Long): LocalEntry {
         val manga = networkToLocalManga.await(details.toDomainManga(sourceId))
-        return LocalEntry(
-            id = manga.id,
-            title = manga.title,
-            favorite = manga.favorite,
-            url = manga.url,
-            sourceId = manga.source,
-        )
+        return manga.toLocalEntry()
     }
 
     override suspend fun setFavorite(localId: Long, favorite: Boolean) {
         mangaRepository.updateManga(MangaUpdate(id = localId, favorite = favorite))
+    }
+
+    override suspend fun setChapterSortDescending(localId: Long, descending: Boolean) {
+        val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
+        val direction = if (descending) Manga.CHAPTER_SORT_DESC else Manga.CHAPTER_SORT_ASC
+        mangaRepository.updateManga(
+            MangaUpdate(
+                id = localId,
+                chapterFlags = manga.chapterFlags
+                    .and(Manga.CHAPTER_SORT_DIR_MASK.inv())
+                    .or(direction),
+            ),
+        )
+    }
+
+    override suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) {
+        val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
+        val flag = if (onlyUnread) Manga.CHAPTER_SHOW_UNREAD else 0L
+        mangaRepository.updateManga(
+            MangaUpdate(
+                id = localId,
+                chapterFlags = manga.chapterFlags
+                    .and(Manga.CHAPTER_UNREAD_MASK.inv())
+                    .or(flag),
+            ),
+        )
     }
 
     override fun localItems(localId: Long): Flow<List<LocalItem>> = flow {

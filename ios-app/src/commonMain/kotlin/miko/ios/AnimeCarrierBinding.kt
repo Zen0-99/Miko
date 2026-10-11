@@ -25,6 +25,7 @@ import miko.ui.carrier.VideoEntry
 import tachiyomi.domain.entries.shows.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate
 import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.history.shows.model.AnimeHistoryUpdate
@@ -58,31 +59,55 @@ class AnimeCarrierBinding(
     override fun source(sourceId: Long): CarrierSource? =
         (sourceManager.get(sourceId) as? AnimeCatalogueSource)?.let(::AnimeCarrierSource)
 
+    private fun Anime.toLocalEntry() = LocalEntry(
+        id = id,
+        title = title,
+        favorite = favorite,
+        url = url,
+        sourceId = source,
+        sortDescending = sortDescending(),
+        unreadOnly = unseenFilterRaw == Anime.EPISODE_SHOW_UNSEEN,
+    )
+
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
-        getAnime.subscribe(url, sourceId).map { anime ->
-            anime?.let {
-                LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
-            }
-        }
+        getAnime.subscribe(url, sourceId).map { anime -> anime?.toLocalEntry() }
 
     override suspend fun localEntryById(id: Long): LocalEntry? =
-        runCatching { animeRepository.getAnimeById(id) }.getOrNull()?.let {
-            LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
-        }
+        runCatching { animeRepository.getAnimeById(id) }.getOrNull()?.toLocalEntry()
 
     override suspend fun materialize(details: RemoteDetails, sourceId: Long): LocalEntry {
         val anime = networkToLocalAnime.await(details.toDomainAnime(sourceId))
-        return LocalEntry(
-            id = anime.id,
-            title = anime.title,
-            favorite = anime.favorite,
-            url = anime.url,
-            sourceId = anime.source,
-        )
+        return anime.toLocalEntry()
     }
 
     override suspend fun setFavorite(localId: Long, favorite: Boolean) {
         animeRepository.updateAnime(AnimeUpdate(id = localId, favorite = favorite))
+    }
+
+    override suspend fun setChapterSortDescending(localId: Long, descending: Boolean) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
+        val direction = if (descending) Anime.EPISODE_SORT_DESC else Anime.EPISODE_SORT_ASC
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                episodeFlags = anime.episodeFlags
+                    .and(Anime.EPISODE_SORT_DIR_MASK.inv())
+                    .or(direction),
+            ),
+        )
+    }
+
+    override suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
+        val flag = if (onlyUnread) Anime.EPISODE_SHOW_UNSEEN else 0L
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                episodeFlags = anime.episodeFlags
+                    .and(Anime.EPISODE_UNSEEN_MASK.inv())
+                    .or(flag),
+            ),
+        )
     }
 
     override fun localItems(localId: Long): Flow<List<LocalItem>> = flow {

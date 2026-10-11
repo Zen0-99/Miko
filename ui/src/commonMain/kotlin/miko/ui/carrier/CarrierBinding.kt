@@ -53,6 +53,9 @@ data class LocalEntry(
     val favorite: Boolean,
     val url: String = "",
     val sourceId: Long = 0,
+    /** Carrier chapterFlags/episodeFlags semantics — sort + unread filter. */
+    val sortDescending: Boolean = false,
+    val unreadOnly: Boolean = false,
 )
 
 /** Local chapter/episode row; [done] is read (books/manga) or seen (shows). */
@@ -155,6 +158,12 @@ interface CarrierBinding {
 
     suspend fun setItemDone(itemId: Long, done: Boolean)
     suspend fun setAllItemsDone(localId: Long, done: Boolean)
+
+    /** Chapter-list sort direction — the entry's chapterFlags sort bit. */
+    suspend fun setChapterSortDescending(localId: Long, descending: Boolean) = Unit
+
+    /** Chapter-list unread filter — the entry's chapterFlags unread bits. */
+    suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) = Unit
 
     /** Chapter body text — books only; other carriers return "". */
     suspend fun itemText(sourceId: Long, itemUrl: String): String = ""
