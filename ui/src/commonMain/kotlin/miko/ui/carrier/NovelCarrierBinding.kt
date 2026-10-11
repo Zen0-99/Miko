@@ -6,9 +6,11 @@ import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.TimeZone
 import miko.ui.model.toDomainNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
+import tachiyomi.domain.entries.novel.interactor.NovelFetchInterval
 import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
 import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
@@ -29,6 +31,7 @@ class NovelCarrierBinding(
 ) : CarrierBinding {
 
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
+    private val fetchInterval = NovelFetchInterval()
     private val openSessions = mutableMapOf<Long, Long>()
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
@@ -102,10 +105,25 @@ class NovelCarrierBinding(
 
     override suspend fun refreshFavorites(): Int {
         var fetched = 0
+        val now = Clock.System.now()
+        val timeZone = TimeZone.currentSystemDefault()
         for (libraryNovel in novelRepository.getLibraryNovels()) {
             val novel = libraryNovel.novel
             val remote = source(novel.source)?.items(novel.url) ?: continue
             addMissingItems(novel.id, remote)
+            // Android's update job: stamp lastUpdate + expected next_update
+            // so the Upcoming feed has data.
+            novelRepository.updateNovel(
+                fetchInterval
+                    .toNovelUpdate(
+                        novel,
+                        chapterRepository.getNovelChaptersByNovelId(novel.id),
+                        now,
+                        timeZone,
+                        fetchInterval.getWindow(now, timeZone),
+                    )
+                    .copy(lastUpdate = now.toEpochMilliseconds()),
+            )
             fetched++
         }
         return fetched

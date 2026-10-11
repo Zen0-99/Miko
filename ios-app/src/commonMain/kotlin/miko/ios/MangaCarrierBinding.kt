@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.TimeZone
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.FeedEntry
@@ -19,11 +20,13 @@ import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import tachiyomi.domain.entries.manga.interactor.GetManga
+import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.entries.manga.model.MangaUpdate
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.history.manga.model.MangaHistoryUpdate
 import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
+import tachiyomi.domain.items.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.items.chapter.model.ChapterUpdate
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
@@ -41,6 +44,7 @@ class MangaCarrierBinding(
 ) : CarrierBinding {
 
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
+    private val fetchInterval = MangaFetchInterval(GetChaptersByMangaId(chapterRepository))
     private val openSessions = mutableMapOf<Long, Long>()
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
@@ -120,10 +124,17 @@ class MangaCarrierBinding(
 
     override suspend fun refreshFavorites(): Int {
         var fetched = 0
+        val now = Clock.System.now()
+        val timeZone = TimeZone.currentSystemDefault()
         for (libraryManga in mangaRepository.getLibraryManga()) {
             val manga = libraryManga.manga
             val remote = source(manga.source)?.items(manga.url) ?: continue
             addMissingItems(manga.id, remote)
+            mangaRepository.updateManga(
+                fetchInterval
+                    .toMangaUpdate(manga, now, timeZone, fetchInterval.getWindow(now, timeZone))
+                    .copy(lastUpdate = now.toEpochMilliseconds()),
+            )
             fetched++
         }
         return fetched

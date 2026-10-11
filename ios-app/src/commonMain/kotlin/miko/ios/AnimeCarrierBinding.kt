@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.TimeZone
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.FeedEntry
@@ -19,12 +20,14 @@ import miko.ui.carrier.LocalItem
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
+import tachiyomi.domain.entries.shows.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate
 import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.history.shows.model.AnimeHistoryUpdate
 import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
+import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.repository.EpisodeRepository
@@ -42,6 +45,8 @@ class AnimeCarrierBinding(
 ) : CarrierBinding {
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
+
+    private val fetchInterval = AnimeFetchInterval(GetEpisodesByAnimeId(episodeRepository))
 
     override val catalogueSources: Flow<List<CarrierSource>> =
         sourceManager.catalogueSources.map { sources ->
@@ -120,10 +125,17 @@ class AnimeCarrierBinding(
 
     override suspend fun refreshFavorites(): Int {
         var fetched = 0
+        val now = Clock.System.now()
+        val timeZone = TimeZone.currentSystemDefault()
         for (libraryAnime in animeRepository.getLibraryAnime()) {
             val anime = libraryAnime.anime
             val remote = source(anime.source)?.items(anime.url) ?: continue
             addMissingItems(anime.id, remote)
+            animeRepository.updateAnime(
+                fetchInterval
+                    .toAnimeUpdate(anime, now, timeZone, fetchInterval.getWindow(now, timeZone))
+                    .copy(lastUpdate = now.toEpochMilliseconds()),
+            )
             fetched++
         }
         return fetched
