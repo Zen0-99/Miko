@@ -99,6 +99,7 @@ class MangaCarrierBinding(
         displayByNumber = displayMode == Manga.CHAPTER_DISPLAY_NUMBER,
         unreadFilter = unreadFilter,
         viewer = (viewerFlags and MANGA_READING_MODE_MASK).toInt(),
+        viewerOrientation = (viewerFlags and MANGA_ORIENTATION_MASK).toInt(),
     )
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
@@ -216,6 +217,18 @@ class MangaCarrierBinding(
                 id = localId,
                 viewerFlags = manga.viewerFlags
                     .and(MANGA_READING_MODE_MASK.inv())
+                    .or(flag.toLong()),
+            ),
+        )
+    }
+
+    override suspend fun setViewerOrientation(localId: Long, flag: Int) {
+        val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
+        mangaRepository.updateManga(
+            MangaUpdate(
+                id = localId,
+                viewerFlags = manga.viewerFlags
+                    .and(MANGA_ORIENTATION_MASK.inv())
                     .or(flag.toLong()),
             ),
         )
@@ -541,6 +554,9 @@ private class MangaCarrierSource(
 
 /** Android's `ReadingMode.MASK` — the viewerFlags' low three bits. */
 private const val MANGA_READING_MODE_MASK = 0x00000007L
+
+/** Android's `ReaderOrientation.MASK` — the viewerFlags' 0x38 bits. */
+private const val MANGA_ORIENTATION_MASK = 0x00000038L
 
 private fun LibraryPreferences.ChapterSwipeAction.toItemSwipe() = when (this) {
     LibraryPreferences.ChapterSwipeAction.ToggleRead -> ItemSwipeAction.ToggleDone

@@ -95,9 +95,12 @@ class MangaReaderScreenModel(
         /**
          * Android's pref_default_orientation_type_key — ReaderOrientation
          * flagValue (0 default, 8 free, 0x10/0x18 portrait/landscape,
-         * 0x20/0x28 locked, 0x30 reverse portrait).
+         * 0x20/0x28 locked, 0x30 reverse portrait). Resolved: the entry's
+         * viewerOrientation flag overrides the global pref like Android.
          */
         val orientation: Int = 8,
+        /** Per-entry viewerFlags 0x38 bits — 0 when the entry defers to the pref. */
+        val orientationFlag: Int = 0,
         /**
          * Android's landscape_zoom — wide (landscape) pages auto-zoom to
          * fill when the scale type is Fit, anchored at the zoom-start
@@ -465,7 +468,7 @@ class MangaReaderScreenModel(
         }
         scope.launch {
             orientationPref.changes().collect { v ->
-                _state.value = _state.value.copy(orientation = v)
+                resolveOrientation(_state.value.orientationFlag, v)
             }
         }
         scope.launch {
@@ -579,6 +582,14 @@ class MangaReaderScreenModel(
         scope.launch { binding.setViewer(id, mode.flagValue) }
     }
 
+    /** Entry flag wins when set; 0 defers to the global pref — Android's rule. */
+    private fun resolveOrientation(entryFlag: Int, prefFlag: Int) {
+        _state.value = _state.value.copy(
+            orientation = if (entryFlag != 0) entryFlag else prefFlag,
+            orientationFlag = entryFlag,
+        )
+    }
+
     fun setShowPageNumber(show: Boolean) = showPageNumberPref.set(show)
 
     fun setShowTransitions(show: Boolean) = transitionsPref.set(show)
@@ -615,7 +626,12 @@ class MangaReaderScreenModel(
 
     fun setInvertedColors(on: Boolean) = invertedColorsPref.set(on)
 
-    fun setOrientation(flagValue: Int) = orientationPref.set(flagValue)
+    /** Persist the orientation onto the manga's viewerFlags (Android semantics). */
+    fun setOrientation(flagValue: Int) {
+        resolveOrientation(flagValue, orientationPref.get())
+        val id = localId ?: return
+        scope.launch { binding.setViewerOrientation(id, flagValue) }
+    }
 
     fun setLandscapeZoom(on: Boolean) = landscapeZoomPref.set(on)
 
@@ -689,6 +705,7 @@ class MangaReaderScreenModel(
         val local = binding.localEntry(entryUrl, sourceId).first()
         localId = local?.id
         resolveMode(local?.viewer ?: 0, defaultModePref.get())
+        resolveOrientation(local?.viewerOrientation ?: 0, orientationPref.get())
         val remoteItems = src.items(entryUrl)
         // Android sorts the reader's chapter list by the entry's chapterFlags.
         items = (local?.sortMode ?: ChapterSortMode.NUMBER)

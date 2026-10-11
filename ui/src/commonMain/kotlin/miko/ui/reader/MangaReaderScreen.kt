@@ -1320,7 +1320,7 @@ private fun ReaderSettingsSheet(
                 .verticalScroll(rememberScrollState()),
         ) {
             Text(
-                text = stringResource(MR.strings.pref_category_reading_mode),
+                text = stringResource(MR.strings.pref_category_for_this_series),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
@@ -1344,7 +1344,7 @@ private fun ReaderSettingsSheet(
             ) {
                 orientationOptions.forEach { (labelRes, value) ->
                     FilterChip(
-                        selected = state.orientation == value,
+                        selected = state.orientationFlag == value,
                         onClick = { onOrientationSelect(value) },
                         label = { Text(stringResource(labelRes)) },
                     )

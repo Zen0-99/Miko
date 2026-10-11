@@ -73,6 +73,8 @@ data class LocalEntry(
     val showSummaries: Boolean = true,
     /** Carrier viewer flag — manga reading mode 0..5; 0 = use pref default. */
     val viewer: Int = 0,
+    /** Manga viewerFlags 0x38 bits — ReaderOrientation flag; 0 = use pref default. */
+    val viewerOrientation: Int = 0,
 )
 
 /**
@@ -357,6 +359,13 @@ interface CarrierBinding {
      * (0 clears to the global pref). Other carriers no-op.
      */
     suspend fun setViewer(localId: Long, flag: Int) = Unit
+
+    /**
+     * Per-entry reader orientation — manga only; [flag] is a
+     * ReaderOrientation flagValue (0 clears to the global pref).
+     * Other carriers no-op.
+     */
+    suspend fun setViewerOrientation(localId: Long, flag: Int) = Unit
 
     /** Chapter body text — books only; other carriers return "". */
     suspend fun itemText(sourceId: Long, itemUrl: String): String = ""
