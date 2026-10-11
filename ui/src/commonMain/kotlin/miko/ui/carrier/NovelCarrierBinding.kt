@@ -188,6 +188,7 @@ class NovelCarrierBinding(
             number = chapter.chapterNumber,
             done = chapter.read,
             lastPageRead = chapter.lastCharRead.toInt(),
+            totalChars = chapter.totalCharCount,
             bookmarked = chapter.bookmark,
         )
 

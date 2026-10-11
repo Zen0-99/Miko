@@ -46,6 +46,11 @@ class EntryDetailsScreenModel(
         val doneUrls: Set<String> = emptySet(),
         /** Bookmarked item urls — Android's chapter bookmark badges. */
         val bookmarkedUrls: Set<String> = emptySet(),
+        /** Partial read positions — manga "Page: N" pill / novel "% Read" pill. */
+        val progressPages: Map<String, Int> = emptyMap(),
+        val progressPercents: Map<String, Int> = emptyMap(),
+        /** Partial watch positions (shows) — pill + bottom-edge progress bar. */
+        val progressSeconds: Map<String, Pair<Long, Long>> = emptyMap(),
         val favorite: Boolean = false,
         val detailsLoading: Boolean = true,
         val itemsLoading: Boolean = true,
@@ -189,6 +194,18 @@ class EntryDetailsScreenModel(
                         .mapTo(HashSet()) { it.url },
                     fillermarkedUrls = items.filter { it.fillermarked }
                         .mapTo(HashSet()) { it.url },
+                    progressPages = items
+                        .filter { !it.done && it.lastPageRead > 0 && it.totalChars == 0L }
+                        .associate { it.url to it.lastPageRead },
+                    progressPercents = items
+                        .filter { !it.done && it.lastPageRead > 0 && it.totalChars > 0 }
+                        .associate {
+                            it.url to
+                                (it.lastPageRead * 100 / it.totalChars).toInt().coerceIn(1, 99)
+                        },
+                    progressSeconds = items
+                        .filter { !it.done && it.lastSecondSeen > 0 }
+                        .associate { it.url to (it.lastSecondSeen to it.totalSeconds) },
                 )
             }
         }

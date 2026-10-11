@@ -6,27 +6,28 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -50,16 +51,12 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -90,8 +87,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import miko.ui.carrier.BrowseCarrier
-import miko.ui.carrier.ItemSwipeAction
 import miko.ui.carrier.RemoteItem
 import miko.ui.components.ChangeCollectionSheet
 import miko.ui.components.ChapterSettingsSheet
@@ -106,8 +104,9 @@ import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
-import tachiyomi.presentation.core.util.secondaryItemAlpha
+import tachiyomi.presentation.core.util.clickableNoIndication
 import kotlin.math.floor
+import kotlin.time.Instant
 
 private const val HERO_HEIGHT = 380
 
@@ -426,123 +425,60 @@ fun EntryDetailsScreen(
                                 prev = item
                             }
                         }
-                        items(
-                            rows,
-                            key = {
-                                when (it) {
-                                    is ItemRowEntry.ChapterRow -> it.item.url
-                                    is ItemRowEntry.MissingCount -> it.key
-                                }
-                            },
-                        ) { row ->
-                            if (row is ItemRowEntry.MissingCount) {
-                                MissingItemRow(row.count)
-                                return@items
-                            }
-                            val item = (row as ItemRowEntry.ChapterRow).item
-                            val itemDone = item.url in doneUrls
-                            val selected = item.url in state.selectedUrls
-                            val canDownload = carrier != BrowseCarrier.SHOWS &&
-                                state.local != null
-                            // Android's chapter/episode swipe actions —
-                            // the reveal triggers, then the row snaps back
-                            // (confirmValueChange returns false, never
-                            // Settled). Disabled in selection mode.
-                            val swipeEnabled = !selecting && state.local != null
-                            val dismissState = rememberSwipeToDismissBoxState(
-                                confirmValueChange = { value ->
-                                    val action = when (value) {
-                                        SwipeToDismissBoxValue.StartToEnd -> state.swipeStart
-                                        SwipeToDismissBoxValue.EndToStart -> state.swipeEnd
-                                        else -> ItemSwipeAction.Disabled
+                        // Android's details item list is a horizontal
+                        // snap carousel of 0.75×screen cards (the Nuvio
+                        // episode-card styling), not a vertical list —
+                        // scrubber above when the row is ≥40 items.
+                        item(key = "item-carousel") {
+                            val carouselState = rememberLazyListState(
+                                initialFirstVisibleItemIndex = rows
+                                    .indexOfFirst {
+                                        it is ItemRowEntry.ChapterRow &&
+                                            it.item.url == state.nextItem?.url
                                     }
-                                    if (swipeEnabled && action != ItemSwipeAction.Disabled) {
-                                        model.performItemSwipe(item.url, action)
-                                    }
-                                    false
-                                },
+                                    .takeIf { it >= 0 } ?: 0,
                             )
-                            SwipeToDismissBox(
-                                state = dismissState,
-                                enableDismissFromStartToEnd = swipeEnabled &&
-                                    state.swipeStart != ItemSwipeAction.Disabled,
-                                enableDismissFromEndToStart = swipeEnabled &&
-                                    state.swipeEnd != ItemSwipeAction.Disabled,
-                                backgroundContent = {
-                                    val action = when (dismissState.dismissDirection) {
-                                        SwipeToDismissBoxValue.StartToEnd -> state.swipeStart
-                                        else -> state.swipeEnd
-                                    }
-                                    SwipeActionBackground(
-                                        action = action,
-                                        towardStart = dismissState.dismissDirection ==
-                                            SwipeToDismissBoxValue.StartToEnd,
-                                    )
-                                },
-                            ) {
-                                Column {
-                                    ItemRow(
-                                        item = item,
-                                        numberPrefix = itemPrefix(carrier),
-                                        done = itemDone,
-                                        displayByNumber = state.displayByNumber,
-                                        bookmarked = item.url in state.bookmarkedUrls,
-                                        selected = selected,
-                                        showPreview = state.showPreviews,
-                                        showSummary = state.showSummaries,
-                                        downloadState = if (canDownload) {
-                                            state.downloadStates[item.url]
-                                        } else {
-                                            null
-                                        },
-                                        downloadProgress =
-                                        state.downloadProgress[item.url] ?: 0f,
-                                        downloaded = canDownload &&
-                                            DownloadManager.sanitizeName(item.name) in
-                                            state.downloadedNames,
-                                        onDownloadClick = if (
-                                            canDownload &&
-                                            state.downloadStates[item.url] == null
-                                        ) {
-                                            { model.downloadItem(item.url) }
-                                        } else {
-                                            null
-                                        },
-                                        onCancelClick = if (
-                                            canDownload &&
-                                            state.downloadStates[item.url] in
-                                            setOf(
-                                                DownloadState.QUEUED,
-                                                DownloadState.DOWNLOADING,
-                                            )
-                                        ) {
-                                            { model.cancelDownload(item.url) }
-                                        } else {
-                                            null
-                                        },
-                                        onDeleteClick = if (canDownload) {
-                                            { model.deleteDownload(item.url) }
-                                        } else {
-                                            null
-                                        },
-                                        onClick = {
-                                            if (selecting) {
-                                                model.toggleSelection(item.url)
-                                            } else {
-                                                onItemClick(item)
+                            Column {
+                                ItemCarouselScrubber(
+                                    listState = carouselState,
+                                    itemCount = rows.size,
+                                )
+                                LazyRow(
+                                    state = carouselState,
+                                    flingBehavior = rememberSnapFlingBehavior(
+                                        lazyListState = carouselState,
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement =
+                                    Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                ) {
+                                    items(
+                                        rows,
+                                        key = {
+                                            when (it) {
+                                                is ItemRowEntry.ChapterRow -> it.item.url
+                                                is ItemRowEntry.MissingCount -> it.key
                                             }
                                         },
-                                        // Android's action mode — long-press selects
-                                        // once the entry has a local row to mutate.
-                                        onLongClick = if (state.local != null) {
-                                            { model.toggleSelection(item.url) }
-                                        } else {
-                                            null
-                                        },
-                                    )
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                    )
+                                    ) { row ->
+                                        when (row) {
+                                            is ItemRowEntry.MissingCount ->
+                                                MissingCountCarouselCard(row.count)
+                                            is ItemRowEntry.ChapterRow ->
+                                                ItemCarouselCard(
+                                                    item = row.item,
+                                                    carrier = carrier,
+                                                    state = state,
+                                                    selecting = selecting,
+                                                    onItemClick = onItemClick,
+                                                    onToggleSelect = model::toggleSelection,
+                                                    onDownload = model::downloadItem,
+                                                    onCancelDownload = model::cancelDownload,
+                                                    onDeleteDownload = model::deleteDownload,
+                                                )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1036,171 +972,185 @@ private fun ChapterListHeader(
     }
 }
 
+/**
+ * Card dispatcher — manga/novel get the tinted-surface
+ * [ChapterCarouselCard], shows the full-bleed [EpisodeStillCard]. Same
+ * data flows (done/selected/next/download) drive both.
+ */
 @Composable
-private fun ItemRow(
+private fun ItemCarouselCard(
     item: RemoteItem,
-    numberPrefix: String,
-    done: Boolean,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-    bookmarked: Boolean = false,
-    displayByNumber: Boolean = false,
-    selected: Boolean = false,
-    showPreview: Boolean = true,
-    showSummary: Boolean = true,
-    /** Android's ChapterDownloadIndicator — null hides it (shows/remote-only). */
-    downloadState: DownloadState? = null,
-    downloadProgress: Float = 0f,
-    downloaded: Boolean = false,
-    onDownloadClick: (() -> Unit)? = null,
-    /** Tap while queued/downloading cancels — Android's indicator behavior. */
-    onCancelClick: (() -> Unit)? = null,
-    /** Tap while downloaded deletes the files — Android's indicator behavior. */
-    onDeleteClick: (() -> Unit)? = null,
+    carrier: BrowseCarrier,
+    state: EntryDetailsScreenModel.State,
+    selecting: Boolean,
+    onItemClick: (RemoteItem) -> Unit,
+    onToggleSelect: (String) -> Unit,
+    onDownload: (String) -> Unit,
+    onCancelDownload: (String) -> Unit,
+    onDeleteDownload: (String) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                if (selected) {
-                    // Android's action-mode row highlight.
-                    MaterialTheme.colorScheme.secondaryContainer
+    val done = item.url in state.doneUrls
+    val canDownload = carrier != BrowseCarrier.SHOWS && state.local != null
+    val downloadTrailing: (@Composable (Color) -> Unit)? = if (canDownload) {
+        { tint ->
+            ItemDownloadIndicator(
+                tint = tint,
+                downloadState = state.downloadStates[item.url],
+                downloadProgress = state.downloadProgress[item.url] ?: 0f,
+                downloaded = DownloadManager.sanitizeName(item.name) in state.downloadedNames,
+                onDownloadClick = if (state.downloadStates[item.url] == null) {
+                    { onDownload(item.url) }
                 } else {
-                    Color.Transparent
+                    null
                 },
+                onCancelClick = if (
+                    state.downloadStates[item.url] in
+                    setOf(DownloadState.QUEUED, DownloadState.DOWNLOADING)
+                ) {
+                    { onCancelDownload(item.url) }
+                } else {
+                    null
+                },
+                onDeleteClick = { onDeleteDownload(item.url) },
             )
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-    ) {
-        if (showPreview && !item.previewUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = item.previewUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+        }
+    } else {
+        null
+    }
+    val title = if (state.displayByNumber && item.number >= 0.0) {
+        "${itemPrefix(carrier)} ${formatItemNumber(item.number)}"
+    } else {
+        item.name
+    }
+    val dateLabel = remember(item.dateUpload) {
+        miko.ui.updates.dateLabel(
+            Instant.fromEpochMilliseconds(item.dateUpload)
+                .toLocalDateTime(TimeZone.currentSystemDefault()).date,
+        )
+    }
+    val progressLabel = when (carrier) {
+        BrowseCarrier.SHOWS -> state.progressSeconds[item.url]
+            ?.let { (seen, _) -> formatEpisodeRuntime(seen * 1000) }
+        BrowseCarrier.BOOKS -> state.progressPercents[item.url]
+            ?.let { stringResource(MR.strings.novel_chapter_progress, it) }
+        else -> state.progressPages[item.url]
+            ?.let { stringResource(MR.strings.chapter_progress, it + 1) }
+    }
+    val click = {
+        if (selecting) onToggleSelect(item.url) else onItemClick(item)
+    }
+    val longClick: () -> Unit = { onToggleSelect(item.url) }
+
+    if (carrier == BrowseCarrier.SHOWS) {
+        EpisodeStillCard(
+            title = title,
+            episodeString = if (item.number >= 0.0) {
+                "Ep. ${formatItemNumber(item.number)}"
+            } else {
+                ""
+            },
+            date = dateLabel,
+            watchProgress = if (done) null else progressLabel,
+            progressFraction = state.progressSeconds[item.url]
+                ?.let { (seen, total) -> if (total > 0) seen.toFloat() / total else null },
+            scanlator = item.scanlator,
+            summary = item.summary.takeIf { state.showSummaries },
+            previewUrl = item.previewUrl.takeIf { state.showPreviews },
+            seen = done,
+            bookmark = item.url in state.bookmarkedUrls,
+            selected = item.url in state.selectedUrls,
+            isNext = item.url == state.nextItem?.url,
+            onLongClick = if (state.local != null) longClick else ({}),
+            onClick = click,
+            trailing = downloadTrailing,
+        )
+    } else {
+        ChapterCarouselCard(
+            title = title,
+            dateLabel = dateLabel,
+            scanlator = item.scanlator?.takeIf { it.isNotBlank() },
+            progress = if (done) null else progressLabel,
+            read = done,
+            bookmark = item.url in state.bookmarkedUrls,
+            selected = item.url in state.selectedUrls,
+            isNext = item.url == state.nextItem?.url,
+            onLongClick = if (state.local != null) longClick else ({}),
+            onClick = click,
+            trailing = downloadTrailing,
+        )
+    }
+}
+
+/** Android's ChapterDownloadIndicator as a card trailing slot. */
+@Composable
+private fun ItemDownloadIndicator(
+    tint: Color,
+    downloadState: DownloadState?,
+    downloadProgress: Float,
+    downloaded: Boolean,
+    onDownloadClick: (() -> Unit)?,
+    onCancelClick: (() -> Unit)?,
+    onDeleteClick: () -> Unit,
+) {
+    when {
+        downloadState == DownloadState.DOWNLOADING -> {
+            CircularProgressIndicator(
+                progress = { downloadProgress },
+                color = tint,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .clip(MaterialTheme.shapes.small),
-            )
-            Spacer(Modifier.height(8.dp))
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                // Android's displayMode flag — "Chapter 5" vs the source
-                // title as the row's primary text.
-                text = if (displayByNumber && item.number >= 0.0) {
-                    "$numberPrefix ${formatItemNumber(item.number)}"
-                } else {
-                    item.name
-                },
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (done) {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                modifier = Modifier.weight(1f),
-            )
-            if (bookmarked) {
-                Icon(
-                    imageVector = Icons.Filled.Bookmark,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            // Android's ChapterDownloadIndicator — icon state mirrors
-            // queued / downloading (progress ring) / downloaded / error.
-            when {
-                downloadState == DownloadState.DOWNLOADING -> {
-                    CircularProgressIndicator(
-                        progress = { downloadProgress },
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .size(16.dp)
-                            .then(
-                                if (onCancelClick != null) {
-                                    Modifier.clickable(onClick = onCancelClick)
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                        strokeWidth = 2.dp,
-                    )
-                }
-                downloadState == DownloadState.QUEUED -> {
-                    Icon(
-                        imageVector = Icons.Outlined.Schedule,
-                        contentDescription = "Queued for download",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .size(16.dp)
-                            .then(
-                                if (onCancelClick != null) {
-                                    Modifier.clickable(onClick = onCancelClick)
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                    )
-                }
-                downloadState == DownloadState.ERROR -> {
-                    Icon(
-                        imageVector = Icons.Outlined.ErrorOutline,
-                        contentDescription = "Download failed",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 8.dp).size(18.dp),
-                    )
-                }
-                downloaded -> {
-                    Icon(
-                        imageVector = Icons.Filled.DownloadDone,
-                        contentDescription = "Downloaded",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .size(18.dp)
-                            .then(
-                                if (onDeleteClick != null) {
-                                    Modifier.clickable(onClick = onDeleteClick)
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                    )
-                }
-                onDownloadClick != null -> {
-                    Icon(
-                        imageVector = Icons.Outlined.FileDownload,
-                        contentDescription = "Download",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .size(18.dp)
-                            .clickable(onClick = onDownloadClick),
-                    )
-                }
-            }
-        }
-        if (item.number >= 0.0 && !displayByNumber) {
-            Text(
-                text = "$numberPrefix ${formatItemNumber(item.number)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                    alpha = if (done) 0.5f else 1f,
-                ),
+                    .size(16.dp)
+                    .then(
+                        if (onCancelClick != null) {
+                            Modifier.clickableNoIndication(onClick = onCancelClick)
+                        } else {
+                            Modifier
+                        },
+                    ),
+                strokeWidth = 2.dp,
             )
         }
-        if (showSummary && !item.summary.isNullOrBlank()) {
-            Text(
-                text = item.summary,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                    alpha = if (done) 0.5f else 1f,
-                ),
+        downloadState == DownloadState.QUEUED -> {
+            Icon(
+                imageVector = Icons.Outlined.Schedule,
+                contentDescription = "Queued for download",
+                tint = tint,
+                modifier = Modifier
+                    .size(16.dp)
+                    .then(
+                        if (onCancelClick != null) {
+                            Modifier.clickableNoIndication(onClick = onCancelClick)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            )
+        }
+        downloadState == DownloadState.ERROR -> {
+            Icon(
+                imageVector = Icons.Outlined.ErrorOutline,
+                contentDescription = "Download failed",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        downloaded -> {
+            Icon(
+                imageVector = Icons.Filled.DownloadDone,
+                contentDescription = "Downloaded",
+                tint = tint,
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickableNoIndication(onClick = onDeleteClick),
+            )
+        }
+        onDownloadClick != null -> {
+            Icon(
+                imageVector = Icons.Outlined.FileDownload,
+                contentDescription = "Download",
+                tint = tint,
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickableNoIndication(onClick = onDownloadClick),
             )
         }
     }
@@ -1391,59 +1341,8 @@ private fun RowScope.SelectionAction(
     }
 }
 
-/**
- * Android's swipe-reveal background — the action icon at the revealed edge
- * on primaryContainer, mirroring saket.swipe's action layout.
- */
-@Composable
-private fun SwipeActionBackground(
-    action: ItemSwipeAction,
-    /** True when the reveal is at the start edge (swipe right). */
-    towardStart: Boolean,
-) {
-    val icon = when (action) {
-        ItemSwipeAction.ToggleDone -> Icons.Filled.Visibility
-        ItemSwipeAction.ToggleBookmark -> Icons.Filled.Bookmark
-        ItemSwipeAction.ToggleFillermark -> Icons.Filled.Label
-        ItemSwipeAction.Download -> Icons.Outlined.FileDownload
-        ItemSwipeAction.Disabled -> Icons.Outlined.FileDownload
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = if (towardStart) Alignment.CenterStart else Alignment.CenterEnd,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-    }
-}
-
 /** Row model for the items list — chapters/episodes or a missing-count separator. */
 private sealed interface ItemRowEntry {
     data class ChapterRow(val item: RemoteItem) : ItemRowEntry
     data class MissingCount(val key: String, val count: Int) : ItemRowEntry
-}
-
-/** Android's MissingItemCountListItem — flanking dividers + dimmed label. */
-@Composable
-private fun MissingItemRow(count: Int) {
-    Row(
-        modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .secondaryItemAlpha(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        HorizontalDivider(modifier = Modifier.weight(1f))
-        Text(
-            text = pluralStringResource(AYMR.plurals.missing_items, count, count),
-            style = MaterialTheme.typography.labelMedium,
-        )
-        HorizontalDivider(modifier = Modifier.weight(1f))
-    }
 }

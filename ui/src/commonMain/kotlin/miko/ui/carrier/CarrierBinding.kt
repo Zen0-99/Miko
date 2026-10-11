@@ -106,8 +106,12 @@ data class LocalItem(
     val done: Boolean,
     /** In-item resume position — Android's `last_page_read` (manga) / `lastCharRead` (novel). */
     val lastPageRead: Int = 0,
+    /** Chapter length in chars (novels) — lastPageRead/totalChars = read percent. */
+    val totalChars: Long = 0,
     /** Playback resume position (shows) — Android's `lastSecondSeen`. */
     val lastSecondSeen: Long = 0,
+    /** Stream duration (shows) — drives the episode progress bar fraction. */
+    val totalSeconds: Long = 0,
     /** Android's per-item bookmark flag. */
     val bookmarked: Boolean = false,
     /** Episode filler flag (shows) — `fillermark || canonicalFiller`. */

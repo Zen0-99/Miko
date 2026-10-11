@@ -256,6 +256,7 @@ class AnimeCarrierBinding(
                         done = it.seen,
                         bookmarked = it.bookmark,
                         lastSecondSeen = it.lastSecondSeen,
+                        totalSeconds = it.totalSeconds,
                         fillermarked = it.fillermark || it.canonicalFiller == true,
                     )
                 }
@@ -273,6 +274,7 @@ class AnimeCarrierBinding(
                 done = it.seen,
                 bookmarked = it.bookmark,
                 lastSecondSeen = it.lastSecondSeen,
+                totalSeconds = it.totalSeconds,
                 fillermarked = it.fillermark || it.canonicalFiller == true,
             )
         }
