@@ -199,6 +199,13 @@ fun MikoApp(graph: MikoUiGraph) {
     val collectionsModel = remember {
         CollectionsScreenModel(graph, browseCarrier)
     }
+    // Android's BasePreferences.incognitoMode — the More-screen global
+    // history pause; bindings check it inside recordItemOpen.
+    val incognitoPref = remember {
+        graph.preferenceStore.getBoolean("__APP_STATE_incognito_mode", false)
+    }
+    val incognitoMode by incognitoPref.changes()
+        .collectAsStateWithLifecycle(incognitoPref.get())
     // Updates-toolbar search — Android's HistoriesTab subscribe(query).
     var updatesSearchQuery by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(updatesSearchQuery) {
@@ -547,6 +554,8 @@ fun MikoApp(graph: MikoUiGraph) {
                     onClickCollections = {
                         navigator.push(Destination.Collections)
                     },
+                    incognitoMode = incognitoMode,
+                    onIncognitoModeChange = { incognitoPref.set(it) },
                     modifier = Modifier.padding(padding),
                 )
                 Destination.Collections -> CollectionsDestination(

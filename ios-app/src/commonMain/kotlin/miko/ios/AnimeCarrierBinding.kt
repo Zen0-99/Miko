@@ -22,6 +22,7 @@ import miko.ui.carrier.LocalItem
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
 import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
@@ -49,6 +50,7 @@ class AnimeCarrierBinding(
     private val episodeRepository: EpisodeRepository,
     private val historyRepository: AnimeHistoryRepository,
     private val collectionRepository: AnimeCollectionRepository,
+    private val preferenceStore: PreferenceStore,
 ) : CarrierBinding {
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
@@ -237,10 +239,16 @@ class AnimeCarrierBinding(
     }
 
     override suspend fun recordItemOpen(itemId: Long) {
+        // Android's incognito mode — history writes pause while enabled.
+        if (incognitoMode()) return
         historyRepository.upsertAnimeHistory(
             AnimeHistoryUpdate(itemId, Clock.System.now()),
         )
     }
+
+    /** Android's BasePreferences.incognitoMode — global history pause. */
+    private fun incognitoMode(): Boolean =
+        preferenceStore.getBoolean("__APP_STATE_incognito_mode", false).get()
 
     // Anime history has no duration column — seenAt on open is the row.
 

@@ -108,6 +108,7 @@ class MikoUiGraph(
         chapterRepository = novelChapterRepository,
         historyRepository = novelHistoryRepository,
         collectionRepository = novelCollectionRepository,
+        preferenceStore = preferenceStore,
     )
 
     fun binding(carrier: BrowseCarrier): CarrierBinding = when (carrier) {

@@ -21,6 +21,7 @@ import miko.ui.carrier.LocalItem
 import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
@@ -48,6 +49,7 @@ class MangaCarrierBinding(
     private val chapterRepository: ChapterRepository,
     private val historyRepository: MangaHistoryRepository,
     private val collectionRepository: MangaCollectionRepository,
+    private val preferenceStore: PreferenceStore,
 ) : CarrierBinding {
 
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
@@ -257,11 +259,17 @@ class MangaCarrierBinding(
     }
 
     override suspend fun recordItemOpen(itemId: Long) {
+        // Android's incognito mode — history writes pause while enabled.
+        if (incognitoMode()) return
         openSessions[itemId] = Clock.System.now().toEpochMilliseconds()
         historyRepository.upsertMangaHistory(
             MangaHistoryUpdate(itemId, Clock.System.now(), 0),
         )
     }
+
+    /** Android's BasePreferences.incognitoMode — global history pause. */
+    private fun incognitoMode(): Boolean =
+        preferenceStore.getBoolean("__APP_STATE_incognito_mode", false).get()
 
     override suspend fun recordItemClose(itemId: Long) {
         val started = openSessions.remove(itemId) ?: return

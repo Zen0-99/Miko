@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
 import miko.ui.model.toDomainNovel
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
@@ -34,6 +35,7 @@ class NovelCarrierBinding(
     private val chapterRepository: NovelChapterRepository,
     private val historyRepository: NovelHistoryRepository,
     private val collectionRepository: NovelCollectionRepository,
+    private val preferenceStore: PreferenceStore,
 ) : CarrierBinding {
 
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
@@ -216,6 +218,8 @@ class NovelCarrierBinding(
     }
 
     override suspend fun recordItemOpen(itemId: Long) {
+        // Android's incognito mode — history writes pause while enabled.
+        if (incognitoMode()) return
         openSessions[itemId] = Clock.System.now().toEpochMilliseconds()
         historyRepository.upsertNovelHistory(
             NovelHistoryUpdate(itemId, Clock.System.now(), 0),
@@ -229,6 +233,10 @@ class NovelCarrierBinding(
             NovelHistoryUpdate(itemId, Clock.System.now(), duration),
         )
     }
+
+    /** Android's BasePreferences.incognitoMode — global history pause. */
+    private fun incognitoMode(): Boolean =
+        preferenceStore.getBoolean("__APP_STATE_incognito_mode", false).get()
 
     /** Chapter body text — the books reader's content source. */
     override suspend fun itemText(sourceId: Long, itemUrl: String): String {

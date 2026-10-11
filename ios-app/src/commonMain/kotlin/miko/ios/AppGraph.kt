@@ -367,6 +367,7 @@ class AppGraph {
         chapterRepository = chapterRepository,
         historyRepository = mangaHistoryRepository,
         collectionRepository = mangaCollectionRepository,
+        preferenceStore = preferenceStore,
     )
 
     val animeBinding = AnimeCarrierBinding(
@@ -377,6 +378,7 @@ class AppGraph {
         episodeRepository = episodeRepository,
         historyRepository = animeHistoryRepository,
         collectionRepository = animeCollectionRepository,
+        preferenceStore = preferenceStore,
     )
 
     val novelRepository: NovelRepository = NovelRepositoryImpl(novelHandler)
