@@ -332,10 +332,6 @@ class AppGraph {
     val getMangaUpdates = GetMangaUpdates(mangaUpdatesRepository)
     val getAnimeUpdates = GetAnimeUpdates(animeUpdatesRepository)
 
-    val getUpcomingNovel = GetUpcomingNovel(novelRepository)
-    val getUpcomingManga = GetUpcomingManga(mangaRepository)
-    val getUpcomingAnime = GetUpcomingAnime(animeRepository)
-
     val getNovelHistory = GetNovelHistory(novelHistoryRepository)
     val getMangaHistory = GetMangaHistory(mangaHistoryRepository)
     val getAnimeHistory = GetAnimeHistory(animeHistoryRepository)
@@ -372,6 +368,10 @@ class AppGraph {
         NovelChapterRepositoryImpl(novelHandler)
 
     val getNovel = GetNovel(novelRepository)
+
+    val getUpcomingNovel = GetUpcomingNovel(novelRepository)
+    val getUpcomingManga = GetUpcomingManga(mangaRepository)
+    val getUpcomingAnime = GetUpcomingAnime(animeRepository)
 
     val getLibraryNovels = GetLibraryNovels(novelRepository)
 
