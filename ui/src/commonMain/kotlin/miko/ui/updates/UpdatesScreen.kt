@@ -218,6 +218,8 @@ private fun timeLabel(epochMs: Long): String {
     val today = kotlin.time.Instant.fromEpochMilliseconds(
         kotlin.time.Clock.System.now().toEpochMilliseconds(),
     ).toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
-    val time = "%02d:%02d".format(ldt.hour, ldt.minute)
+    // padStart, not String.format — the latter is JVM-only on K/N.
+    val time = ldt.hour.toString().padStart(2, '0') + ":" +
+        ldt.minute.toString().padStart(2, '0')
     return if (ldt.date == today) time else dateLabel(ldt.date) + " " + time
 }
