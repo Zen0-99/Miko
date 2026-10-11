@@ -2,12 +2,14 @@ package miko.ui.details
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -540,6 +545,100 @@ private fun EpisodeStillPlaceholder(episodeString: String) {
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Port of Android's `ChapterGroupPillRow` — "Volume 4"/"Book 2" pills
+ * above the carousel. Selected = accent fill; complete groups dim with a
+ * check; unselected pills sit on the accent-tinted surface.
+ */
+@Composable
+fun ChapterGroupPillRow(
+    groups: List<String>,
+    selectedGroup: String,
+    completedGroups: Set<String> = emptySet(),
+    onGroupSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    accentColor: Color? = null,
+) {
+    if (groups.size <= 1) return
+
+    val listState = rememberLazyListState()
+    // Scroll the selected pill into view only when it isn't fully
+    // visible — fires on progress/fallback selection, not taps.
+    LaunchedEffect(selectedGroup, groups) {
+        val index = groups.indexOf(selectedGroup)
+        if (index < 0) return@LaunchedEffect
+        val info = listState.layoutInfo
+        val pill = info.visibleItemsInfo.firstOrNull { it.index == index }
+        val fullyVisible = pill != null &&
+            pill.offset >= info.viewportStartOffset &&
+            pill.offset + pill.size <= info.viewportEndOffset
+        if (!fullyVisible) {
+            listState.animateScrollToItem(index)
+        }
+    }
+
+    LazyRow(
+        state = listState,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, bottom = 14.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        items(groups.size, key = { it }) { index ->
+            val group = groups[index]
+            val isSelected = group == selectedGroup
+            val selectedBg = accentColor ?: MaterialTheme.colorScheme.primary
+            val isComplete = group in completedGroups
+            val unselectedBg = accentTintedSurface(
+                accent = selectedBg,
+                background = MaterialTheme.colorScheme.background,
+                dimmed = isComplete,
+            )
+            val selectedText = if (selectedBg.luminance() > 0.5f) {
+                Color.Black
+            } else {
+                Color.White
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (isSelected) selectedBg else unselectedBg)
+                    .clickable { onGroupSelected(group) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (isComplete) {
+                        Icon(
+                            imageVector = Icons.Outlined.Check,
+                            contentDescription = null,
+                            tint = if (isSelected) selectedText else selectedBg,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    Text(
+                        text = group,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) {
+                            selectedText
+                        } else if (isComplete) {
+                            selectedBg.copy(alpha = 0.72f)
+                        } else {
+                            selectedBg
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 

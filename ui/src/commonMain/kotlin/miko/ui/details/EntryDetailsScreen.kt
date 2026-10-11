@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -189,6 +190,43 @@ fun EntryDetailsScreen(
         if (!state.detailsLoading && !state.itemsLoading) isRefreshing = false
     }
 
+    // Rating feeds the hero's star; stat/alt-title noise is stripped
+    // from the rendered description.
+    val parsedDescription = remember(state.details?.description) {
+        EntryDescriptionParser.parse(state.details?.description)
+    }
+
+    // Android's chapter-group pills — every item name must carry a
+    // Vol/Book/… marker or the row hides (canonical volume grouping is
+    // mikoDB-side, not yet ported).
+    val chapterGroups = remember(state.items) {
+        ChapterNameGroup.computeGroups(state.items.map { it.name })
+    }
+    val progressGroup = remember(chapterGroups, state.doneUrls) {
+        state.items
+            .filter { it.url !in state.doneUrls }
+            .minByOrNull { it.number }
+            ?.let { ChapterNameGroup.parse(it.name) }
+            ?.takeIf { it in chapterGroups }
+    }
+    var groupOverride by remember(state.local?.id) { mutableStateOf<String?>(null) }
+    val selectedGroup = groupOverride?.takeIf { it in chapterGroups }
+        ?: progressGroup
+        ?: chapterGroups.lastOrNull()
+    val completedGroups = remember(chapterGroups, state.doneUrls) {
+        if (chapterGroups.size <= 1) {
+            emptySet()
+        } else {
+            state.items
+                .groupBy { ChapterNameGroup.parse(it.name) }
+                .filterKeys { it != null }
+                .filterValues { chs -> chs.all { it.url in state.doneUrls } }
+                .keys
+                .filterNotNull()
+                .toSet()
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = isRefreshing,
@@ -209,6 +247,7 @@ fun EntryDetailsScreen(
                             state.details?.status?.let { statusLabel(it) },
                             state.sourceName.ifBlank { null },
                         ),
+                        rating = parsedDescription.rating,
                     )
                 }
 
@@ -244,9 +283,11 @@ fun EntryDetailsScreen(
                     }
                 }
 
-                state.details?.description?.takeIf { it.isNotBlank() }?.let { description ->
+                if (parsedDescription.description.isNotBlank()) {
                     item {
-                        ExpandableDescription(description = description)
+                        ExpandableDescription(
+                            description = parsedDescription.description,
+                        )
                     }
                 }
 
@@ -393,7 +434,13 @@ fun EntryDetailsScreen(
                         )
                     }
                     else -> {
-                        val items = state.displayItems
+                        val items = if (chapterGroups.size > 1 && selectedGroup != null) {
+                            state.displayItems.filter {
+                                ChapterNameGroup.parse(it.name) == selectedGroup
+                            }
+                        } else {
+                            state.displayItems
+                        }
                         val doneUrls = state.doneUrls
                         val selecting = state.selectedUrls.isNotEmpty()
                         // Android's insertSeparators — "Missing N items"
@@ -446,6 +493,13 @@ fun EntryDetailsScreen(
                                     .takeIf { it >= 0 } ?: 0,
                             )
                             Column {
+                                ChapterGroupPillRow(
+                                    groups = chapterGroups,
+                                    selectedGroup = selectedGroup ?: "",
+                                    completedGroups = completedGroups,
+                                    onGroupSelected = { groupOverride = it },
+                                    accentColor = accentColor,
+                                )
                                 ItemCarouselScrubber(
                                     listState = carouselState,
                                     itemCount = rows.size,
@@ -539,6 +593,8 @@ private fun NovelHero(
     title: String,
     metaItems: List<String>,
     onCoverClick: () -> Unit,
+    /** Parsed source rating — star glyph next to the meta line. */
+    rating: String? = null,
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
     Box(
@@ -601,17 +657,43 @@ private fun NovelHero(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )
-            if (metaItems.isNotEmpty()) {
-                Text(
-                    text = metaItems.joinToString("  ·  "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
+            if (metaItems.isNotEmpty() || rating != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(top = 8.dp),
-                )
+                ) {
+                    if (metaItems.isNotEmpty()) {
+                        Text(
+                            text = metaItems.joinToString("  ·  "),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onBackground
+                                .copy(alpha = SECONDARY_ALPHA),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    rating?.let {
+                        // ImdbRatingLabel (STAR mark) — parsed source rating.
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onBackground
+                                .copy(alpha = SECONDARY_ALPHA),
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onBackground
+                                .copy(alpha = SECONDARY_ALPHA),
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
     }
