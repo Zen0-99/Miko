@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +47,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.NavTarget
 import miko.ui.components.ChangeCollectionSheet
 import miko.ui.components.CoverComfortableItem
 import miko.ui.components.CoverGridItem
@@ -75,15 +78,25 @@ fun LibraryScreen(
     onEntryClick: (LibraryScreenModel.LibraryEntry) -> Unit,
     modifier: Modifier = Modifier,
     onManageCollections: () -> Unit = {},
+    onContinueViewing: (NavTarget) -> Unit = {},
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val carrier by carrierFlow.collectAsStateWithLifecycle()
     val selecting = state.selected.isNotEmpty()
     var collectionsOpen by remember { mutableStateOf(false) }
     var deleteOpen by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val onCellClick: (LibraryScreenModel.LibraryEntry) -> Unit = { entry ->
         if (selecting) model.toggleSelect(entry.id) else onEntryClick(entry)
+    }
+
+    // Android's continue-viewing button — resolves the entry's next
+    // undone item in flag order and jumps straight to the reader/player.
+    val onContinue: (LibraryScreenModel.LibraryEntry) -> Unit = { entry ->
+        scope.launch {
+            model.nextUnreadTarget(entry.id)?.let(onContinueViewing)
+        }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -166,6 +179,11 @@ fun LibraryScreen(
                                         sourceLanguage = languageTag(state, entry),
                                     )
                                 },
+                                onClickContinueViewing = if (showContinue(state, entry)) {
+                                    { onContinue(entry) }
+                                } else {
+                                    null
+                                },
                             )
                         }
                     }
@@ -196,6 +214,11 @@ fun LibraryScreen(
                                             sourceLanguage = languageTag(state, entry),
                                         )
                                     },
+                                    onClickContinueViewing = if (showContinue(state, entry)) {
+                                        { onContinue(entry) }
+                                    } else {
+                                        null
+                                    },
                                 )
                             } else {
                                 CoverGridItem(
@@ -213,6 +236,11 @@ fun LibraryScreen(
                                             isLocal = state.badges.local && entry.isLocal,
                                             sourceLanguage = languageTag(state, entry),
                                         )
+                                    },
+                                    onClickContinueViewing = if (showContinue(state, entry)) {
+                                        { onContinue(entry) }
+                                    } else {
+                                        null
                                     },
                                 )
                             }
@@ -475,3 +503,14 @@ private fun languageTag(
     state: LibraryScreenModel.State,
     entry: LibraryScreenModel.LibraryEntry,
 ): String = if (state.badges.language) entry.sourceLanguage else ""
+
+/**
+ * Android's `shouldShowContinueViewingAction` — the cover resume button
+ * shows only with the pref on and unread items left. The count is the
+ * badge-gated one: Android zeroes unreadCount with the unread-badge pref,
+ * which hides the button too — same coupling.
+ */
+private fun showContinue(
+    state: LibraryScreenModel.State,
+    entry: LibraryScreenModel.LibraryEntry,
+): Boolean = state.badges.continueButton && unviewedCount(state, entry) > 0

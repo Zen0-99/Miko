@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.outlined.CollectionsBookmark
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,11 +32,14 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Badge
 import tachiyomi.presentation.core.components.BadgeGroup
+import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.selectedBackground
 
 private val CoverPlaceholderColor = Color(0x1F888888)
@@ -79,6 +85,7 @@ fun CoverComfortableItem(
     isSelected: Boolean = false,
     coverBadge: (@Composable RowScope.() -> Unit)? = null,
     coverBadgeEnd: (@Composable RowScope.() -> Unit)? = null,
+    onClickContinueViewing: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -114,6 +121,16 @@ fun CoverComfortableItem(
                     content = coverBadgeEnd,
                 )
             }
+            if (onClickContinueViewing != null) {
+                ContinueViewingButton(
+                    size = 30.dp,
+                    iconSize = 18.dp,
+                    onClick = onClickContinueViewing,
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .align(Alignment.BottomEnd),
+                )
+            }
         }
         Text(
             text = title,
@@ -144,6 +161,7 @@ fun CoverListItem(
     coverAlpha: Float = 1f,
     onCoverClick: (() -> Unit)? = null,
     badge: (@Composable RowScope.() -> Unit)? = null,
+    onClickContinueViewing: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
@@ -199,6 +217,14 @@ fun CoverListItem(
         if (badge != null) {
             BadgeGroup(content = badge)
         }
+        if (onClickContinueViewing != null) {
+            ContinueViewingButton(
+                size = 28.dp,
+                iconSize = 16.dp,
+                onClick = onClickContinueViewing,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
         trailing?.invoke()
     }
 }
@@ -219,6 +245,7 @@ fun CoverGridItem(
     coverAlpha: Float = 1f,
     topStartBadge: (@Composable RowScope.() -> Unit)? = null,
     topEndBadge: (@Composable RowScope.() -> Unit)? = null,
+    onClickContinueViewing: (() -> Unit)? = null,
 ) {
     Box(
         modifier = modifier
@@ -251,6 +278,16 @@ fun CoverGridItem(
                     .align(Alignment.TopEnd)
                     .padding(4.dp),
                 content = topEndBadge,
+            )
+        }
+        if (onClickContinueViewing != null) {
+            ContinueViewingButton(
+                size = 30.dp,
+                iconSize = 18.dp,
+                onClick = onClickContinueViewing,
+                modifier = Modifier
+                    .padding(6.dp)
+                    .align(Alignment.BottomEnd),
             )
         }
         if (title != null) {
@@ -286,5 +323,37 @@ fun CoverGridItem(
                     .padding(8.dp),
             )
         }
+    }
+}
+
+/**
+ * Android's `ContinueViewingButton` — the dark scrim circle with a book
+ * icon overlaid on library covers/rows; tap resumes at the next unread
+ * item. Grid uses 30dp/18dp at cover bottom-end, list rows 28dp/16dp.
+ */
+@Composable
+private fun ContinueViewingButton(
+    size: Dp,
+    iconSize: Dp,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(size / 2))
+            .background(Color(0xAD212121))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.MenuBook,
+            contentDescription = stringResource(MR.strings.action_resume),
+            tint = Color.White,
+            modifier = Modifier.size(iconSize),
+        )
     }
 }

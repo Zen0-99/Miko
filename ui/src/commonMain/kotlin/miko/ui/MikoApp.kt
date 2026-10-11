@@ -1324,6 +1324,20 @@ private fun LibraryDestination(
             model.clearSelection()
             navigator.push(Destination.Collections)
         },
+        // Android's continue-viewing button — opens the next undone item
+        // straight in the carrier's reader/player.
+        onContinueViewing = { target ->
+            navigator.push(
+                when (carrierFlow.value) {
+                    BrowseCarrier.SHOWS ->
+                        Destination.EpisodePlayer(target.sourceId, target.entryUrl, target.itemUrl)
+                    BrowseCarrier.MANGA ->
+                        Destination.MangaReader(target.sourceId, target.entryUrl, target.itemUrl)
+                    BrowseCarrier.BOOKS ->
+                        Destination.Reader(target.sourceId, target.entryUrl, target.itemUrl)
+                },
+            )
+        },
         modifier = modifier.fillMaxSize(),
     )
 }

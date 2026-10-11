@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import miko.ui.MikoUiGraph
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.NavTarget
 import miko.ui.download.DownloadManager
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getEnum
@@ -148,6 +149,8 @@ class LibraryScreenModel(
         val unread: Boolean = true,
         val local: Boolean = true,
         val language: Boolean = false,
+        /** Android's display_continue_reading_button — cover resume pill. */
+        val continueButton: Boolean = false,
     )
 
     /** Badge ids — `display_*_badge` pref keys match Android's. */
@@ -156,6 +159,7 @@ class LibraryScreenModel(
         UNREAD,
         LOCAL,
         LANGUAGE,
+        CONTINUE_BUTTON,
     }
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -369,6 +373,7 @@ class LibraryScreenModel(
                     unread = values[1],
                     local = values[2],
                     language = values[3],
+                    continueButton = values[4],
                 )
             }.collect { badges ->
                 _state.value = _state.value.copy(badges = badges)
@@ -482,6 +487,7 @@ class LibraryScreenModel(
         LibraryBadgeId.UNREAD -> "display_unread_badge"
         LibraryBadgeId.LOCAL -> "display_local_badge"
         LibraryBadgeId.LANGUAGE -> "display_language_badge"
+        LibraryBadgeId.CONTINUE_BUTTON -> "display_continue_reading_button"
     }
 
     private fun badgeDefault(id: LibraryBadgeId) = when (id) {
@@ -489,6 +495,7 @@ class LibraryScreenModel(
         LibraryBadgeId.UNREAD -> true
         LibraryBadgeId.LOCAL -> true
         LibraryBadgeId.LANGUAGE -> false
+        LibraryBadgeId.CONTINUE_BUTTON -> false
     }
 
     /** Android's Badges-tab checkbox — flips the display_*_badge pref. */
@@ -499,6 +506,13 @@ class LibraryScreenModel(
             pref.set(!pref.get())
         }
     }
+
+    /**
+     * Android's continue-viewing button target — the entry's next undone
+     * item in display order (flag filters + sort applied by the binding).
+     */
+    suspend fun nextUnreadTarget(entryId: Long): NavTarget? =
+        graph.binding(carrierFlow.value).nextUndoneItem(entryId)
 
     /** Android's toggleFilter — DISABLED → INCLUDE → EXCLUDE → off. */
     fun toggleFilter(id: LibraryFilterId) {

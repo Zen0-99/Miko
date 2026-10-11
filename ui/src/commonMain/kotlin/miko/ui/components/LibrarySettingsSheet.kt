@@ -35,6 +35,7 @@ import miko.ui.library.LibraryScreenModel
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -157,6 +158,19 @@ fun LibrarySettingsSheet(
                             onCheckedChange = { onToggleBadge(id) },
                         )
                     }
+                    // Android's "Actions" section — the continue-viewing
+                    // cover button (reading-order badge stays deferred
+                    // with mikoDB infra).
+                    SheetHeading(stringResource(MR.strings.overlay_actions))
+                    LabeledCheckbox(
+                        label = stringResource(
+                            AYMR.strings.action_display_show_continue_reading_button,
+                        ),
+                        checked = badges.continueButton,
+                        onCheckedChange = {
+                            onToggleBadge(LibraryScreenModel.LibraryBadgeId.CONTINUE_BUTTON)
+                        },
+                    )
                 }
                 else -> listOf(
                     MR.strings.action_sort_alpha to LibraryScreenModel.SortType.ALPHABETICAL,

@@ -186,6 +186,7 @@ class NovelCarrierBinding(
             url = chapter.url,
             name = chapter.name,
             number = chapter.chapterNumber,
+            dateUpload = chapter.dateUpload,
             done = chapter.read,
             lastPageRead = chapter.lastCharRead.toInt(),
             totalChars = chapter.totalCharCount,

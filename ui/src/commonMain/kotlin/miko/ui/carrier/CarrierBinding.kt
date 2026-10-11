@@ -81,6 +81,13 @@ data class LocalEntry(
  */
 enum class ChapterSortMode { SOURCE, NUMBER, UPLOAD_DATE, ALPHABET }
 
+/** Android's chapterFlags TriState predicate — include/exclude/off. */
+internal fun triStateMatch(state: TriState, matches: Boolean) = when (state) {
+    TriState.DISABLED -> true
+    TriState.ENABLED_IS -> matches
+    TriState.ENABLED_NOT -> !matches
+}
+
 /**
  * Orders [items] per the mode, then applies [descending] — Android's
  * sortDescending reverses even raw source order. Shared by the details list
@@ -103,6 +110,8 @@ data class LocalItem(
     val name: String,
     /** chapterNumber/episodeNumber — migration state transfer matches on it. */
     val number: Double = -1.0,
+    /** Android's date_upload — the UPLOAD_DATE chapter sort's key. */
+    val dateUpload: Long = 0,
     val done: Boolean,
     /** In-item resume position — Android's `last_page_read` (manga) / `lastCharRead` (novel). */
     val lastPageRead: Int = 0,
@@ -209,6 +218,35 @@ interface CarrierBinding {
 
     fun localItems(localId: Long): Flow<List<LocalItem>>
     suspend fun getLocalItems(localId: Long): List<LocalItem>
+
+    /**
+     * Android's `getNextUnread` — the entry's flag filters + sort applied,
+     * then the first undone item in display order (descending picks the
+     * list's last undone, matching `findLast` on the unreversed list).
+     * Used by the library's continue-viewing button.
+     */
+    suspend fun nextUndoneItem(entryId: Long): NavTarget? {
+        val local = localEntryById(entryId) ?: return null
+        val items = getLocalItems(local.id).filter { item ->
+            triStateMatch(local.unreadFilter, !item.done) &&
+                triStateMatch(local.bookmarkedFilter, item.bookmarked) &&
+                triStateMatch(local.fillermarkedFilter, item.fillermarked)
+        }
+        val sorted = when (local.sortMode) {
+            // DB order stands in for the remote's source order — the
+            // chapters table preserves insertion order.
+            ChapterSortMode.SOURCE -> items
+            ChapterSortMode.NUMBER -> items.sortedBy { it.number }
+            ChapterSortMode.UPLOAD_DATE -> items.sortedBy { it.dateUpload }
+            ChapterSortMode.ALPHABET -> items.sortedBy { it.name.lowercase() }
+        }
+        val next = if (local.sortDescending) {
+            sorted.lastOrNull { !it.done }
+        } else {
+            sorted.firstOrNull { !it.done }
+        }
+        return next?.let { NavTarget(local.sourceId, local.url, it.url) }
+    }
 
     /** Insert remote items missing locally (compares by url). */
     suspend fun addMissingItems(localId: Long, remote: List<RemoteItem>)
