@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 
 /**
@@ -37,6 +38,8 @@ class SourceFeedScreenModel(
         val isLoading: Boolean = false,
         val initialLoading: Boolean = true,
         val error: String? = null,
+        val displayMode: LibraryDisplayMode = LibraryDisplayMode.default,
+        val hasFilters: Boolean = false,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -60,6 +63,7 @@ class SourceFeedScreenModel(
                     _state.value = _state.value.copy(
                         sourceName = source?.name.orEmpty(),
                         supportsLatest = source?.supportsLatest == true,
+                        hasFilters = source?.getFilterList()?.isNotEmpty() == true,
                     )
                 }
             }
@@ -71,6 +75,10 @@ class SourceFeedScreenModel(
         if (query == _state.value.query) return
         _state.value = _state.value.copy(query = query)
         reset()
+    }
+
+    fun setDisplayMode(mode: LibraryDisplayMode) {
+        _state.value = _state.value.copy(displayMode = mode)
     }
 
     fun setListing(listing: Listing) {

@@ -10,13 +10,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material.icons.outlined.RadioButtonChecked
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -34,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import miko.ui.details.NovelDetailsScreen
 import miko.ui.details.NovelDetailsScreenModel
 import miko.ui.extensions.ExtensionCatalog
@@ -46,12 +52,15 @@ import miko.ui.library.LibraryScreenModel
 import miko.ui.navigation.Destination
 import miko.ui.navigation.Navigator
 import miko.ui.navigation.rememberNavigator
+import miko.ui.reader.ReaderScreen
+import miko.ui.reader.ReaderScreenModel
 import miko.ui.repos.ExtensionReposScreen
 import miko.ui.repos.ExtensionReposScreenModel
 import miko.ui.search.GlobalNovelSearchScreen
 import miko.ui.search.GlobalNovelSearchScreenModel
 import miko.ui.sources.SourcesScreen
 import miko.ui.sources.SourcesScreenModel
+import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -84,6 +93,23 @@ fun MikoApp(graph: MikoUiGraph) {
     }
     DisposableEffect(globalSearchModel) {
         onDispose { globalSearchModel?.dispose() }
+    }
+
+    // Source-feed model + local search — hoisted so the top bar can reach it
+    // (Android's BrowseNovelSourceScreen owns its toolbar; the shared shell's
+    // bar lives above the nav host instead).
+    val feedDest = navigator.current as? Destination.SourceFeed
+    val feedModel = remember(feedDest) {
+        feedDest?.let { SourceFeedScreenModel(graph.novelSourceManager, it.sourceId) }
+    }
+    DisposableEffect(feedModel) {
+        onDispose { feedModel?.dispose() }
+    }
+    var feedSearchQuery by remember(feedDest) { mutableStateOf<String?>(null) }
+    LaunchedEffect(feedSearchQuery) {
+        // Android debounces the feed query 300ms inside the screen model.
+        kotlinx.coroutines.delay(300L)
+        feedModel?.setQuery(feedSearchQuery.orEmpty())
     }
 
     // Browse-tab catalog + screen models live at app scope — Android's
@@ -122,6 +148,37 @@ fun MikoApp(graph: MikoUiGraph) {
                                 searchPlaceholderText = stringResource(MR.strings.action_search_hint),
                                 navigateUp = { navigator.pop() },
                                 actions = {},
+                            )
+                        } else if (current is Destination.SourceFeed) {
+                            // Android's BrowseNovelSourceScreen bar: back +
+                            // source name + trailing search icon (SearchToolbar
+                            // style) + display-mode dropdown. Back while
+                            // searching resets to the listing, same as Android.
+                            MikoTopBar(
+                                title = current.sourceName,
+                                canSearch = true,
+                                searchQuery = feedSearchQuery,
+                                onSearchQueryChange = { feedSearchQuery = it },
+                                onSearch = { feedModel?.setQuery(it) },
+                                searchPlaceholderText = stringResource(MR.strings.action_search_hint),
+                                navigateUp = {
+                                    if (feedSearchQuery != null) {
+                                        feedSearchQuery = null
+                                    } else {
+                                        navigator.pop()
+                                    }
+                                },
+                                searchStyle = MikoTopBarSearchStyle.TrailingIcon,
+                                actions = {
+                                    val feedDisplayMode = feedModel?.state
+                                        ?.collectAsStateWithLifecycle()
+                                        ?.value?.displayMode
+                                        ?: LibraryDisplayMode.default
+                                    FeedDisplayModeAction(
+                                        displayMode = feedDisplayMode,
+                                        onDisplayModeChange = { feedModel?.setDisplayMode(it) },
+                                    )
+                                },
                             )
                         } else {
                             MikoTopBar(
@@ -217,13 +274,14 @@ fun MikoApp(graph: MikoUiGraph) {
                     modifier = Modifier.padding(padding),
                 )
                 is Destination.SourceFeed -> SourceFeedDestination(
-                    graph = graph,
+                    model = feedModel,
                     navigator = navigator,
                     sourceId = destination.sourceId,
                     modifier = Modifier.padding(padding),
                 )
                 is Destination.Details -> DetailsDestination(
                     graph = graph,
+                    navigator = navigator,
                     sourceId = destination.sourceId,
                     entryKey = destination.entryKey,
                     modifier = Modifier.padding(padding),
@@ -237,6 +295,11 @@ fun MikoApp(graph: MikoUiGraph) {
                     navigator = navigator,
                     modifier = Modifier.padding(padding),
                 )
+                is Destination.Reader -> ReaderDestination(
+                    graph = graph,
+                    destination = destination,
+                    modifier = Modifier.padding(padding),
+                )
             }
         }
     }
@@ -247,9 +310,67 @@ private fun screenTitle(destination: Destination): String = when (destination) {
     Destination.Browse -> stringResource(MR.strings.browse)
     Destination.Library -> stringResource(MR.strings.label_library)
     Destination.ExtensionRepos -> stringResource(MR.strings.label_extension_repos)
-    is Destination.SourceFeed -> stringResource(MR.strings.sources)
+    is Destination.SourceFeed -> destination.sourceName
     is Destination.GlobalSearch -> stringResource(MR.strings.action_search_hint)
-    is Destination.Details -> ""
+    is Destination.Details -> destination.title
+    is Destination.Reader -> destination.chapterUrl
+}
+
+/**
+ * Android's display-mode toolbar action: a ViewModule/ViewList icon that
+ * opens a dropdown of radio items (ComfortableGrid / CompactGrid / List).
+ */
+@Composable
+private fun FeedDisplayModeAction(
+    displayMode: LibraryDisplayMode,
+    onDisplayModeChange: (LibraryDisplayMode) -> Unit,
+) {
+    var selectingDisplayMode by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { selectingDisplayMode = true }) {
+            Icon(
+                imageVector = if (displayMode == LibraryDisplayMode.List) {
+                    Icons.AutoMirrored.Filled.ViewList
+                } else {
+                    Icons.Filled.ViewModule
+                },
+                contentDescription = stringResource(MR.strings.action_display_mode),
+            )
+        }
+        DropdownMenu(
+            expanded = selectingDisplayMode,
+            onDismissRequest = { selectingDisplayMode = false },
+        ) {
+            listOf(
+                MR.strings.action_display_comfortable_grid to LibraryDisplayMode.ComfortableGrid,
+                MR.strings.action_display_grid to LibraryDisplayMode.CompactGrid,
+                MR.strings.action_display_list to LibraryDisplayMode.List,
+            ).forEach { (labelRes, mode) ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(labelRes)) },
+                    onClick = {
+                        selectingDisplayMode = false
+                        onDisplayModeChange(mode)
+                    },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = if (displayMode == mode) {
+                                Icons.Outlined.RadioButtonChecked
+                            } else {
+                                Icons.Outlined.RadioButtonUnchecked
+                            },
+                            contentDescription = null,
+                            tint = if (displayMode == mode) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                LocalContentColor.current
+                            },
+                        )
+                    },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -300,7 +421,9 @@ private fun BrowseDestination(
         SourcesScreen(
             model = sourcesModel,
             extensionsModel = extensionsModel,
-            onSourceClick = { sourceId -> navigator.push(Destination.SourceFeed(sourceId)) },
+            onSourceClick = { sourceId, name ->
+                navigator.push(Destination.SourceFeed(sourceId, name))
+            },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -420,9 +543,11 @@ private fun GlobalSearchDestination(
     if (model != null) {
         GlobalNovelSearchScreen(
             model = model,
-            onSourceClick = { sourceId -> navigator.push(Destination.SourceFeed(sourceId)) },
-            onNovelClick = { sourceId, novelUrl ->
-                navigator.push(Destination.Details(sourceId, novelUrl))
+            onSourceClick = { sourceId, name ->
+                navigator.push(Destination.SourceFeed(sourceId, name))
+            },
+            onNovelClick = { sourceId, novelUrl, title ->
+                navigator.push(Destination.Details(sourceId, novelUrl, title))
             },
             modifier = modifier.fillMaxSize(),
         )
@@ -431,29 +556,26 @@ private fun GlobalSearchDestination(
 
 @Composable
 private fun SourceFeedDestination(
-    graph: MikoUiGraph,
+    model: SourceFeedScreenModel?,
     navigator: Navigator,
     sourceId: Long,
     modifier: Modifier = Modifier,
 ) {
-    val model = remember(sourceId) {
-        SourceFeedScreenModel(graph.novelSourceManager, sourceId)
+    if (model != null) {
+        SourceFeedScreen(
+            model = model,
+            onNovelClick = { novel ->
+                navigator.push(Destination.Details(sourceId, novel.url, novel.title))
+            },
+            modifier = modifier.fillMaxSize(),
+        )
     }
-    DisposableEffect(model) {
-        onDispose { model.dispose() }
-    }
-    SourceFeedScreen(
-        model = model,
-        onNovelClick = { novel ->
-            navigator.push(Destination.Details(sourceId, novel.url))
-        },
-        modifier = modifier.fillMaxSize(),
-    )
 }
 
 @Composable
 private fun DetailsDestination(
     graph: MikoUiGraph,
+    navigator: Navigator,
     sourceId: Long,
     entryKey: String,
     modifier: Modifier = Modifier,
@@ -466,8 +588,33 @@ private fun DetailsDestination(
     }
     NovelDetailsScreen(
         model = model,
+        onChapterClick = { chapter ->
+            navigator.push(Destination.Reader(sourceId, entryKey, chapter.url))
+        },
+        // Genre taps run the same search as Android's genre pill click.
+        onGenreClick = { genre -> navigator.push(Destination.GlobalSearch(genre)) },
         modifier = modifier.fillMaxSize(),
     )
+}
+
+@Composable
+private fun ReaderDestination(
+    graph: MikoUiGraph,
+    destination: Destination.Reader,
+    modifier: Modifier = Modifier,
+) {
+    val model = remember(destination.sourceId, destination.novelUrl) {
+        ReaderScreenModel(
+            graph = graph,
+            sourceId = destination.sourceId,
+            novelUrl = destination.novelUrl,
+            initialChapterUrl = destination.chapterUrl,
+        )
+    }
+    DisposableEffect(model) {
+        onDispose { model.dispose() }
+    }
+    ReaderScreen(model = model, modifier = modifier.fillMaxSize())
 }
 
 @Composable
@@ -483,7 +630,7 @@ private fun LibraryDestination(
     LibraryScreen(
         model = model,
         onNovelClick = { entry ->
-            navigator.push(Destination.Details(entry.novel.source, entry.novel.url))
+            navigator.push(Destination.Details(entry.novel.source, entry.novel.url, entry.novel.title))
         },
         modifier = modifier.fillMaxSize(),
     )

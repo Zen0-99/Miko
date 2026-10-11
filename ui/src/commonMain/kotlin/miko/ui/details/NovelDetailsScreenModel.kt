@@ -16,11 +16,12 @@ import miko.ui.MikoUiGraph
 import miko.ui.model.toDomainNovel
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.items.chapter.model.NovelChapter
+import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
 
 /**
  * Entry details: remote novel details + chapter list, local favorite state,
- * and the favorite toggle that materializes the entry (and its chapters)
- * into the database.
+ * local chapter read state, and the continue/mark-all affordances Android's
+ * `EntryContinueRow` drives off of.
  */
 class NovelDetailsScreenModel(
     private val graph: MikoUiGraph,
@@ -34,16 +35,29 @@ class NovelDetailsScreenModel(
         val novel: SNovel? = null,
         val local: Novel? = null,
         val chapters: List<SNovelChapter> = emptyList(),
+        val readUrls: Set<String> = emptySet(),
         val favorite: Boolean = false,
         val detailsLoading: Boolean = true,
         val chaptersLoading: Boolean = true,
         val error: String? = null,
-    )
+    ) {
+        /** First unread chapter — Android's `nextContinueChapter`. */
+        val nextChapter: SNovelChapter?
+            get() = chapters.firstOrNull { it.url !in readUrls }
+
+        val allChaptersRead: Boolean
+            get() = chapters.isNotEmpty() && chapters.all { it.url in readUrls }
+
+        val hasStarted: Boolean
+            get() = readUrls.isNotEmpty()
+    }
 
     private val scope = CoroutineScope(Job() + dispatcher)
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
+
+    private var chaptersJob: Job? = null
 
     private val source: NovelCatalogueSource?
         get() = graph.novelSourceManager.get(sourceId) as? NovelCatalogueSource
@@ -57,9 +71,24 @@ class NovelDetailsScreenModel(
                     local = local,
                     favorite = local?.favorite == true,
                 )
+                if (local != null) subscribeLocalChapters(local.id)
             }
         }
         refresh()
+    }
+
+    private fun subscribeLocalChapters(novelId: Long) {
+        if (chaptersJob != null) return
+        chaptersJob = scope.launch {
+            graph.novelChapterRepository
+                .getNovelChaptersByNovelIdAsFlow(novelId)
+                .collect { chapters ->
+                    _state.value = _state.value.copy(
+                        readUrls = chapters.filter { it.read }
+                            .mapTo(HashSet()) { it.url },
+                    )
+                }
+        }
     }
 
     fun refresh() {
@@ -110,6 +139,11 @@ class NovelDetailsScreenModel(
                     chapters = chapters,
                     chaptersLoading = false,
                 )
+                // Keep local rows in step with the remote list — the
+                // favorite-time seed misses chapters added afterwards.
+                _state.value.local?.let { local ->
+                    if (local.favorite) syncLocalChapters(local.id, chapters)
+                }
             },
             onFailure = {
                 _state.value = _state.value.copy(
@@ -120,6 +154,27 @@ class NovelDetailsScreenModel(
         )
     }
 
+    private suspend fun syncLocalChapters(novelId: Long, remote: List<SNovelChapter>) {
+        val existing = graph.getNovelChaptersByNovelId.await(novelId)
+        val existingUrls = existing.mapTo(HashSet()) { it.url }
+        val missing = remote.mapIndexedNotNull { index, ch ->
+            if (ch.url in existingUrls) {
+                null
+            } else {
+                NovelChapter.create().copy(
+                    novelId = novelId,
+                    url = ch.url,
+                    name = ch.name,
+                    dateUpload = ch.date_upload,
+                    chapterNumber = ch.chapter_number.toDouble(),
+                    scanlator = ch.scanlator,
+                    sourceOrder = index.toLong(),
+                )
+            }
+        }
+        if (missing.isNotEmpty()) graph.novelChapterRepository.addAllNovelChapters(missing)
+    }
+
     fun toggleFavorite() {
         scope.launch {
             val current = _state.value
@@ -128,27 +183,40 @@ class NovelDetailsScreenModel(
             val local = graph.networkToLocalNovel.await(snovel.toDomainNovel(sourceId))
             val target = !current.favorite
             graph.novelRepository.updateNovelFavorite(local.id, target)
-            if (target && current.chapters.isNotEmpty()) {
-                persistChapters(local.id, current.chapters)
+            if (target) {
+                syncLocalChapters(local.id, current.chapters)
             }
         }
     }
 
-    private suspend fun persistChapters(novelId: Long, chapters: List<SNovelChapter>) {
-        val existing = graph.getNovelChaptersByNovelId.await(novelId)
-        if (existing.isNotEmpty()) return
-        val rows = chapters.mapIndexed { index, ch ->
-            NovelChapter.create().copy(
-                novelId = novelId,
-                url = ch.url,
-                name = ch.name,
-                dateUpload = ch.date_upload,
-                chapterNumber = ch.chapter_number.toDouble(),
-                scanlator = ch.scanlator,
-                sourceOrder = index.toLong(),
+    /**
+     * Android's mark-all toggle — flips every chapter to read, or back to
+     * unread when [State.allChaptersRead]. Only meaningful once the novel is
+     * in the library (local rows exist).
+     */
+    fun toggleAllChaptersRead() {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            val target = !_state.value.allChaptersRead
+            val updates = graph.getNovelChaptersByNovelId.await(local.id)
+                .map { NovelChapterUpdate(id = it.id, read = target) }
+            if (updates.isNotEmpty()) {
+                graph.novelChapterRepository.updateAllNovelChapters(updates)
+            }
+        }
+    }
+
+    /** Mark a single chapter read/unread — the reader calls this on open. */
+    fun markChapter(chapterUrl: String, read: Boolean) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            val chapter = graph.getNovelChaptersByNovelId.await(local.id)
+                .firstOrNull { it.url == chapterUrl }
+                ?: return@launch
+            graph.novelChapterRepository.updateNovelChapter(
+                NovelChapterUpdate(id = chapter.id, read = read),
             )
         }
-        graph.novelChapterRepository.addAllNovelChapters(rows)
     }
 
     fun dispose() = scope.cancel()

@@ -48,6 +48,8 @@ kotlin {
                 implementation(project.dependencies.platform(libs.coil.bom))
                 implementation(libs.coil.compose)
                 implementation(libs.coil.network.ktor3)
+                // Chapter-reader HTML→text — same Ksoup pin source-js uses.
+                implementation("com.fleeksoft.ksoup:ksoup:0.2.5")
             }
         }
     }

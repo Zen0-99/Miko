@@ -1,24 +1,34 @@
 package miko.ui.feed
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,19 +37,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import miko.ui.components.CoverComfortableItem
+import miko.ui.components.CoverGridItem
+import miko.ui.components.CoverListItem
 import miko.ui.feed.SourceFeedScreenModel.Listing
+import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 
+/**
+ * Port of Android's `BrowseNovelSourceScreen` content: a FilterChip row
+ * (Popular / Latest / Filter) over a paged feed rendered in the user's
+ * display mode (compact grid / comfortable grid / list). Search lives in
+ * the top bar (Android's `SearchToolbar`), not on this screen.
+ */
 @Composable
 fun SourceFeedScreen(
     model: SourceFeedScreenModel,
@@ -47,7 +65,85 @@ fun SourceFeedScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // Android's chip row — horizontal scroll, small padding/spacing,
+        // divider beneath.
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val searching = state.query.isNotBlank()
+            FilterChip(
+                selected = !searching && state.listing == Listing.Popular,
+                onClick = { model.setListing(Listing.Popular) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Favorite,
+                        contentDescription = null,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize),
+                    )
+                },
+                label = { Text(text = stringResource(MR.strings.popular)) },
+            )
+            if (state.supportsLatest) {
+                FilterChip(
+                    selected = !searching && state.listing == Listing.Latest,
+                    onClick = { model.setListing(Listing.Latest) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.NewReleases,
+                            contentDescription = null,
+                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                        )
+                    },
+                    label = { Text(text = stringResource(MR.strings.latest)) },
+                )
+            }
+            if (state.hasFilters) {
+                FilterChip(
+                    selected = false,
+                    onClick = {},
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.FilterList,
+                            contentDescription = null,
+                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                        )
+                    },
+                    label = { Text(text = stringResource(MR.strings.action_filter)) },
+                )
+            }
+        }
+        HorizontalDivider()
+
+        when {
+            state.initialLoading -> LoadingScreen()
+            state.items.isEmpty() && state.error != null -> FeedError(
+                message = state.error ?: "",
+                onRetry = model::retry,
+            )
+            state.items.isEmpty() -> EmptyScreen(
+                stringRes = MR.strings.no_results_found,
+            )
+            else -> when (state.displayMode) {
+                LibraryDisplayMode.List -> FeedList(model = model, onNovelClick = onNovelClick)
+                else -> FeedGrid(model = model, onNovelClick = onNovelClick)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedGrid(
+    model: SourceFeedScreenModel,
+    onNovelClick: (SNovel) -> Unit,
+) {
+    val state by model.state.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
+    val compact = state.displayMode != LibraryDisplayMode.ComfortableGrid
 
     // Infinite scroll: kick the next page when the tail approaches.
     LaunchedEffect(gridState, model) {
@@ -61,99 +157,105 @@ fun SourceFeedScreen(
             .collect { nearEnd -> if (nearEnd) model.loadNext() }
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        OutlinedTextField(
-            value = state.query,
-            onValueChange = model::setQuery,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            placeholder = { Text(stringResource(MR.strings.action_search_hint)) },
-            singleLine = true,
-        )
-
-        if (state.supportsLatest) {
-            SecondaryTabRow(
-                selectedTabIndex = state.listing.ordinal,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Tab(
-                    selected = state.listing == Listing.Popular,
-                    onClick = { model.setListing(Listing.Popular) },
-                    text = { Text(stringResource(MR.strings.popular)) },
+    LazyVerticalGrid(
+        state = gridState,
+        columns = GridCells.Adaptive(minSize = 120.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        items(state.items, key = { it.url }) { novel ->
+            if (compact) {
+                CoverGridItem(
+                    title = novel.title,
+                    coverUrl = novel.thumbnail_url,
+                    onClick = { onNovelClick(novel) },
                 )
-                Tab(
-                    selected = state.listing == Listing.Latest,
-                    onClick = { model.setListing(Listing.Latest) },
-                    text = { Text(stringResource(MR.strings.latest)) },
+            } else {
+                CoverComfortableItem(
+                    title = novel.title,
+                    coverUrl = novel.thumbnail_url,
+                    onClick = { onNovelClick(novel) },
                 )
             }
         }
+        feedTailItems(state.isLoading, state.error, model::retry)
+    }
+}
 
-        when {
-            state.initialLoading -> LoadingScreen()
-            state.items.isEmpty() && state.error != null -> FeedError(
-                message = state.error ?: "",
-                onRetry = model::retry,
+@Composable
+private fun FeedList(
+    model: SourceFeedScreenModel,
+    onNovelClick: (SNovel) -> Unit,
+) {
+    val state by model.state.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(listState, model) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .map { lastVisible ->
+                lastVisible != null &&
+                    state.items.isNotEmpty() &&
+                    lastVisible >= state.items.lastIndex - 6
+            }
+            .distinctUntilChanged()
+            .collect { nearEnd -> if (nearEnd) model.loadNext() }
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 8.dp),
+    ) {
+        items(state.items, key = { it.url }) { novel ->
+            CoverListItem(
+                title = novel.title,
+                coverUrl = novel.thumbnail_url,
+                subtitle = novel.author,
+                onClick = { onNovelClick(novel) },
             )
-            state.items.isEmpty() -> EmptyScreen(
-                stringRes = MR.strings.no_results_found,
-            )
-            else -> LazyVerticalGrid(
-                state = gridState,
-                columns = GridCells.Adaptive(minSize = 120.dp),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(state.items, key = { it.url }) { novel ->
-                    NovelGridItem(novel = novel, onClick = { onNovelClick(novel) })
+        }
+        item {
+            when {
+                state.isLoading -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
                 }
-                if (state.isLoading) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                }
-                if (!state.isLoading && state.error != null) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        FeedError(message = state.error ?: "", onRetry = model::retry)
-                    }
-                }
+                state.error != null -> FeedError(
+                    message = state.error ?: "",
+                    onRetry = model::retry,
+                )
             }
         }
     }
 }
 
-@Composable
-private fun NovelGridItem(
-    novel: SNovel,
-    onClick: () -> Unit,
+private fun androidx.compose.foundation.lazy.grid.LazyGridScope.feedTailItems(
+    isLoading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        AsyncImage(
-            model = novel.thumbnail_url,
-            contentDescription = novel.title,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.7f),
-            contentScale = ContentScale.Crop,
-        )
-        Text(
-            text = novel.title,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            modifier = Modifier.padding(top = 4.dp),
-        )
+    if (isLoading) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+    }
+    if (!isLoading && error != null) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            FeedError(message = error, onRetry = onRetry)
+        }
     }
 }
 

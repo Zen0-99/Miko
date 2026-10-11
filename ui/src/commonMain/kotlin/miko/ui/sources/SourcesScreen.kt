@@ -41,7 +41,7 @@ import tachiyomi.presentation.core.screens.LoadingScreen
 fun SourcesScreen(
     model: SourcesScreenModel,
     extensionsModel: ExtensionsScreenModel,
-    onSourceClick: (Long) -> Unit,
+    onSourceClick: (Long, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -79,7 +79,7 @@ fun SourcesScreen(
                     }
                     is SourcesScreenModel.ListItem.Source -> SourceRow(
                         source = item.source,
-                        onClick = { onSourceClick(item.source.id) },
+                        onClick = { onSourceClick(item.source.id, item.source.name) },
                     )
                     is SourcesScreenModel.ListItem.JsExtension -> JsPluginRow(
                         plugin = item.plugin,

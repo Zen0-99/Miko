@@ -54,6 +54,15 @@ import tachiyomi.presentation.core.i18n.stringResource
  * renders below the bar in an AnimatedVisibility while search is active —
  * Android's BROWSE|EXTENSIONS toggle lives there.
  */
+/**
+ * How the closed bar presents search.
+ * [HintPill] — Android's `SearchFirstTopBarContent`: leading search icon +
+ * tappable hint pill (Browse tab).
+ * [TrailingIcon] — Android's `SearchToolbar`: plain title + trailing search
+ * icon before the actions (source feed, sub-screens).
+ */
+enum class MikoTopBarSearchStyle { HintPill, TrailingIcon }
+
 @Composable
 fun MikoTopBar(
     title: String,
@@ -65,6 +74,7 @@ fun MikoTopBar(
     navigateUp: (() -> Unit)?,
     actions: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    searchStyle: MikoTopBarSearchStyle = MikoTopBarSearchStyle.HintPill,
     pillContent: (@Composable () -> Unit)? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -81,7 +91,7 @@ fun MikoTopBar(
         ) {
             // Left slot (48dp): back arrow on sub-screens, search icon on
             // search-capable root destinations, empty otherwise.
-            if (hasNavigateUp || canSearch) {
+            if (hasNavigateUp || (canSearch && searchStyle == MikoTopBarSearchStyle.HintPill)) {
                 Box(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
@@ -156,7 +166,7 @@ fun MikoTopBar(
                             },
                         )
                     }
-                    canSearch -> {
+                    canSearch && searchStyle == MikoTopBarSearchStyle.HintPill -> {
                         // Tappable hint — activates search like the icon does.
                         var lastHint by remember { mutableStateOf(searchPlaceholderText) }
                         if (searchPlaceholderText != null) lastHint = searchPlaceholderText
@@ -192,12 +202,34 @@ fun MikoTopBar(
                 }
             }
 
-            // Right slot: action icons (hidden while searching) + X close.
+            // Right slot: trailing search icon (TrailingIcon style, closed),
+            // action icons (hidden while searching) + X.
             if (!isSearchActive) {
+                if (canSearch && searchStyle == MikoTopBarSearchStyle.TrailingIcon) {
+                    IconButton(onClick = { onSearchQueryChange("") }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = stringResource(MR.strings.action_search),
+                        )
+                    }
+                }
                 actions()
             }
             if (isSearchActive) {
-                IconButton(onClick = { onSearchQueryChange(null) }) {
+                IconButton(
+                    onClick = {
+                        // TrailingIcon mirrors Android's SearchToolbar X —
+                        // clears the query but keeps the field open. HintPill's
+                        // X closes search entirely (sharedSearchQuery = null).
+                        if (searchStyle == MikoTopBarSearchStyle.TrailingIcon &&
+                            !searchQuery.isNullOrEmpty()
+                        ) {
+                            onSearchQueryChange("")
+                        } else {
+                            onSearchQueryChange(null)
+                        }
+                    },
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = null,

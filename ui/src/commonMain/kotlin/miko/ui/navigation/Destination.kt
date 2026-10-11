@@ -13,10 +13,10 @@ sealed interface Destination {
     data object Browse : Destination
 
     /** Paged feed of entries served by a single source. */
-    data class SourceFeed(val sourceId: Long) : Destination
+    data class SourceFeed(val sourceId: Long, val sourceName: String) : Destination
 
     /** Details for one catalogue entry; [entryKey] is the source-local key. */
-    data class Details(val sourceId: Long, val entryKey: String) : Destination
+    data class Details(val sourceId: Long, val entryKey: String, val title: String) : Destination
 
     /** Saved entries (favorites) backed by the local database. */
     data object Library : Destination
@@ -26,4 +26,7 @@ sealed interface Destination {
 
     /** Cross-source novel search results — Android's GlobalNovelSearchScreen. */
     data class GlobalSearch(val query: String) : Destination
+
+    /** Chapter reader — [chapterUrl] identifies the open chapter. */
+    data class Reader(val sourceId: Long, val novelUrl: String, val chapterUrl: String) : Destination
 }
