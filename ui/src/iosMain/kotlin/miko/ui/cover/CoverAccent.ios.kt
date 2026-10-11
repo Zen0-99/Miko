@@ -14,6 +14,7 @@ import platform.CoreImage.CIContext
 import platform.CoreImage.CIImage
 import platform.CoreImage.kCIFormatRGBA8
 import platform.Foundation.NSData
+import platform.Foundation.create
 import kotlin.math.min
 
 /**
