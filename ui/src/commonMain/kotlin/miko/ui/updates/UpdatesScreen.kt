@@ -1,5 +1,6 @@
 package miko.ui.updates
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,15 +14,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -114,6 +124,46 @@ fun UpdatesScreen(
                     )
                 }
             }
+            // Android's History-toolbar wipe — History mode only.
+            if (state.mode == UpdatesScreenModel.Mode.History) {
+                var wipeOpen by remember { mutableStateOf(false) }
+                IconButton(onClick = { wipeOpen = true }) {
+                    Icon(
+                        Icons.Outlined.DeleteSweep,
+                        contentDescription = stringResource(
+                            MR.strings.action_remove_everything,
+                        ),
+                    )
+                }
+                if (wipeOpen) {
+                    AlertDialog(
+                        title = {
+                            Text(
+                                stringResource(MR.strings.action_remove_everything),
+                            )
+                        },
+                        text = {
+                            Text(
+                                stringResource(MR.strings.clear_history_confirmation),
+                            )
+                        },
+                        onDismissRequest = { wipeOpen = false },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                wipeOpen = false
+                                model.clearHistory()
+                            }) {
+                                Text(stringResource(MR.strings.action_ok))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { wipeOpen = false }) {
+                                Text(stringResource(MR.strings.action_cancel))
+                            }
+                        },
+                    )
+                }
+            }
         }
 
         when {
@@ -162,6 +212,8 @@ fun UpdatesScreen(
                         )
                         is UpdatesScreenModel.Row.History -> HistoryRow(
                             row = row,
+                            carrier = carrier,
+                            onDelete = { all -> model.removeHistory(row, all) },
                             onClick = {
                                 scope.launch {
                                     model.resolveTarget(row.entryId, row.itemId)
@@ -246,20 +298,94 @@ private fun UpcomingRow(
 @Composable
 private fun HistoryRow(
     row: UpdatesScreenModel.Row.History,
+    carrier: BrowseCarrier,
     onClick: () -> Unit,
     onCoverClick: () -> Unit,
+    onDelete: (all: Boolean) -> Unit,
 ) {
     val subtitle = buildString {
         append(row.itemName)
         row.readAt?.let { append("  ·  ${timeLabel(it)}") }
     }
+    var deleteOpen by remember { mutableStateOf(false) }
     CoverListItem(
         title = row.entryTitle,
         coverUrl = row.coverUrl,
         onClick = onClick,
         onLongClick = onCoverClick,
         subtitle = subtitle,
+        trailing = {
+            IconButton(onClick = { deleteOpen = true }) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = stringResource(MR.strings.action_remove),
+                )
+            }
+        },
     )
+    // Android's HistoryDeleteDialog — row remove, checkbox resets the
+    // whole entry's history.
+    if (deleteOpen) {
+        var removeAll by remember { mutableStateOf(false) }
+        AlertDialog(
+            title = { Text(stringResource(MR.strings.action_remove)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        stringResource(
+                            if (carrier == BrowseCarrier.SHOWS) {
+                                AYMR.strings
+                                    .dialog_with_checkbox_remove_description_anime
+                            } else {
+                                MR.strings.dialog_with_checkbox_remove_description
+                            },
+                        ),
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { removeAll = !removeAll },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = removeAll,
+                            onCheckedChange = { removeAll = it },
+                        )
+                        Text(
+                            text = stringResource(
+                                when (carrier) {
+                                    BrowseCarrier.SHOWS ->
+                                        AYMR.strings
+                                            .dialog_with_checkbox_reset_anime
+                                    BrowseCarrier.MANGA ->
+                                        AYMR.strings
+                                            .dialog_with_checkbox_reset
+                                    BrowseCarrier.BOOKS ->
+                                        MR.strings
+                                            .dialog_with_checkbox_reset
+                                },
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            },
+            onDismissRequest = { deleteOpen = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteOpen = false
+                    onDelete(removeAll)
+                }) {
+                    Text(stringResource(MR.strings.action_remove))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteOpen = false }) {
+                    Text(stringResource(MR.strings.action_cancel))
+                }
+            },
+        )
+    }
 }
 
 private fun timeLabel(epochMs: Long): String {

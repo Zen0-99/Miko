@@ -272,6 +272,15 @@ interface CarrierBinding {
      */
     suspend fun recordItemOpen(itemId: Long) = Unit
 
+    /** Android's RemoveXHistory.await(history) — resets one history row. */
+    suspend fun resetHistoryRow(historyId: Long) = Unit
+
+    /** Android's RemoveXHistory.await(entryId) — resets all rows for an entry. */
+    suspend fun resetEntryHistory(entryId: Long) = Unit
+
+    /** Android's RemoveXHistory.awaitAll — the history toolbar wipe. */
+    suspend fun clearHistory(): Boolean = false
+
     /**
      * Session close — accumulates read/watch duration into the history row
      * for carriers that track it (books/manga); a no-op elsewhere.

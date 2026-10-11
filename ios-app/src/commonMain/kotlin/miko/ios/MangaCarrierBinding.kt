@@ -334,6 +334,15 @@ class MangaCarrierBinding(
         )
     }
 
+    override suspend fun resetHistoryRow(historyId: Long) =
+        historyRepository.resetMangaHistory(historyId)
+
+    override suspend fun resetEntryHistory(entryId: Long) =
+        historyRepository.resetHistoryByMangaId(entryId)
+
+    override suspend fun clearHistory(): Boolean =
+        historyRepository.deleteAllMangaHistory()
+
     /** Chapter page images — the manga reader's page source. */
     override suspend fun pageList(sourceId: Long, chapterUrl: String): List<PageEntry> {
         val catalogue = sourceManager.get(sourceId) as? CatalogueSource

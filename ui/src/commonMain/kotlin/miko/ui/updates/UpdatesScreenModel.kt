@@ -295,6 +295,32 @@ class UpdatesScreenModel(
         }
     }
 
+    /**
+     * Android's HistoryDeleteDialog — [all] resets every history row for the
+     * entry ("Reset all chapters for this entry"), else just the one row.
+     */
+    fun removeHistory(row: Row.History, all: Boolean) {
+        scope.launch {
+            runCatching {
+                val binding = graph.binding(carrierFlow.value)
+                if (all) {
+                    binding.resetEntryHistory(row.entryId)
+                } else {
+                    binding.resetHistoryRow(row.id)
+                }
+            }
+        }
+    }
+
+    /** Android's HistoryDeleteAllDialog — the History-mode toolbar wipe. */
+    fun clearHistory() {
+        scope.launch {
+            runCatching {
+                graph.binding(carrierFlow.value).clearHistory()
+            }
+        }
+    }
+
     fun dispose() = scope.cancel()
 }
 

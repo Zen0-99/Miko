@@ -307,6 +307,15 @@ class AnimeCarrierBinding(
 
     // Anime history has no duration column — seenAt on open is the row.
 
+    override suspend fun resetHistoryRow(historyId: Long) =
+        historyRepository.resetAnimeHistory(historyId)
+
+    override suspend fun resetEntryHistory(entryId: Long) =
+        historyRepository.resetHistoryByAnimeId(entryId)
+
+    override suspend fun clearHistory(): Boolean =
+        historyRepository.deleteAllAnimeHistory()
+
     /** Episode stream hosts — resolved lazily the way Android's player does. */
     override suspend fun hosters(sourceId: Long, episodeUrl: String): List<HosterEntry> {
         val source = sourceManager.get(sourceId)

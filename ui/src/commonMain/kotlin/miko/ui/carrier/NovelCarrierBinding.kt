@@ -287,6 +287,15 @@ class NovelCarrierBinding(
         )
     }
 
+    override suspend fun resetHistoryRow(historyId: Long) =
+        historyRepository.resetNovelHistory(historyId)
+
+    override suspend fun resetEntryHistory(entryId: Long) =
+        historyRepository.resetHistoryByNovelId(entryId)
+
+    override suspend fun clearHistory(): Boolean =
+        historyRepository.deleteAllNovelHistory()
+
     /** Android's BasePreferences.incognitoMode — global history pause. */
     private fun incognitoMode(): Boolean =
         preferenceStore.getBoolean("__APP_STATE_incognito_mode", false).get()
