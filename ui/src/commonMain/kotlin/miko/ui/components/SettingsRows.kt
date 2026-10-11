@@ -30,6 +30,7 @@ fun SettingSlider(
     range: ClosedFloatingPointRange<Float>,
     onChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Column(modifier = modifier.padding(vertical = 4.dp)) {
         Text(
@@ -40,6 +41,7 @@ fun SettingSlider(
             value = value,
             onValueChange = onChange,
             valueRange = range,
+            enabled = enabled,
         )
     }
 }
@@ -52,13 +54,14 @@ fun <T> SettingDropdown(
     options: List<Pair<T, StringResource>>,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .clickable { expanded = true }
+            .clickable(enabled = enabled) { expanded = true }
             .padding(vertical = 10.dp),
     ) {
         Text(

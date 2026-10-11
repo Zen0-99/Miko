@@ -72,6 +72,7 @@ import androidx.compose.ui.util.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -109,74 +110,84 @@ fun MangaReaderScreen(
     // Android's fullscreen pref — system bars hidden while reading.
     HideSystemBars(state.fullscreen)
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(readerThemeBackground(state.readerTheme)),
-    ) {
-        when {
-            state.loading -> LoadingScreen(modifier = Modifier.weight(1f))
-            state.error != null -> Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    text = state.error ?: "",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(readerThemeBackground(state.readerTheme)),
+        ) {
+            when {
+                state.loading -> LoadingScreen(modifier = Modifier.weight(1f))
+                state.error != null -> Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = state.error ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    TextButton(onClick = { model.openChapter(state.chapterUrl) }) {
+                        Text(stringResource(MR.strings.action_retry))
+                    }
+                }
+                else -> PageViewer(
+                    state = state,
+                    onPageChange = model::savePageProgress,
+                    onCenterTap = model::toggleChrome,
+                    onPrevChapter = model::prevChapter,
+                    onNextChapter = model::nextChapter,
+                    modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = { model.openChapter(state.chapterUrl) }) {
-                    Text(stringResource(MR.strings.action_retry))
-                }
             }
-            else -> PageViewer(
-                state = state,
-                onPageChange = model::savePageProgress,
-                onCenterTap = model::toggleChrome,
-                onPrevChapter = model::prevChapter,
-                onNextChapter = model::nextChapter,
-                modifier = Modifier.weight(1f),
-            )
-        }
 
-        if (state.chromeVisible) {
-            HorizontalDivider()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    onClick = model::prevChapter,
-                    enabled = state.prevChapter != null,
+            if (state.chromeVisible) {
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(stringResource(MR.strings.action_previous_chapter))
-                }
-                IconButton(onClick = model::openChapterSheet) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.FormatListBulleted,
-                        contentDescription = stringResource(MR.strings.chapters),
-                    )
-                }
-                IconButton(onClick = model::openSettings) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = stringResource(MR.strings.pref_category_reading_mode),
-                    )
-                }
-                TextButton(
-                    onClick = model::nextChapter,
-                    enabled = state.nextChapter != null,
-                ) {
-                    Text(stringResource(MR.strings.action_next_chapter))
+                    TextButton(
+                        onClick = model::prevChapter,
+                        enabled = state.prevChapter != null,
+                    ) {
+                        Text(stringResource(MR.strings.action_previous_chapter))
+                    }
+                    IconButton(onClick = model::openChapterSheet) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.FormatListBulleted,
+                            contentDescription = stringResource(MR.strings.chapters),
+                        )
+                    }
+                    IconButton(onClick = model::openSettings) {
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = stringResource(MR.strings.pref_category_reading_mode),
+                        )
+                    }
+                    TextButton(
+                        onClick = model::nextChapter,
+                        enabled = state.nextChapter != null,
+                    ) {
+                        Text(stringResource(MR.strings.action_next_chapter))
+                    }
                 }
             }
+        }
+        // Android's DisplayRefreshHost overlay — e-ink flash on page change.
+        if (state.flashOnPageChange) {
+            ReaderFlashOverlay(
+                trigger = state.flashNow,
+                durationMillis = state.flashDurationMillis,
+                mode = state.flashColor,
+            )
         }
     }
 
@@ -203,6 +214,10 @@ fun MangaReaderScreen(
             onTappingInvertSelect = model::setTappingInverted,
             onSidePaddingChange = model::setWebtoonSidePadding,
             onNavigateToPanChange = model::setNavigateToPan,
+            onFlashToggle = model::setFlashOnPageChange,
+            onFlashDuration = model::setFlashDuration,
+            onFlashInterval = model::setFlashInterval,
+            onFlashColorSelect = model::setFlashColor,
             onDismiss = model::closeSettings,
         )
     }
@@ -847,6 +862,10 @@ private fun ReaderSettingsSheet(
     onTappingInvertSelect: (TappingInvertMode) -> Unit,
     onSidePaddingChange: (Int) -> Unit,
     onNavigateToPanChange: (Boolean) -> Unit,
+    onFlashToggle: (Boolean) -> Unit,
+    onFlashDuration: (Int) -> Unit,
+    onFlashInterval: (Int) -> Unit,
+    onFlashColorSelect: (ReaderFlashColor) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -936,6 +955,34 @@ private fun ReaderSettingsSheet(
                 checked = state.longTapScroll,
                 onChange = onLongTapChange,
             )
+            // Android's E-Ink group — sub-controls disabled until the
+            // master switch is on.
+            SettingSwitch(
+                labelRes = MR.strings.pref_flash_page,
+                checked = state.flashOnPageChange,
+                onChange = onFlashToggle,
+            )
+            SettingSlider(
+                labelRes = MR.strings.pref_flash_duration,
+                value = state.flashDurationMillis / 100f,
+                range = 1f..15f,
+                onChange = { onFlashDuration((it * 100).roundToInt()) },
+                enabled = state.flashOnPageChange,
+            )
+            SettingSlider(
+                labelRes = MR.strings.pref_flash_page_interval,
+                value = state.flashInterval.toFloat(),
+                range = 1f..10f,
+                onChange = { onFlashInterval(it.roundToInt()) },
+                enabled = state.flashOnPageChange,
+            )
+            SettingDropdown(
+                labelRes = MR.strings.pref_flash_with,
+                current = stringResource(state.flashColor.titleRes),
+                options = ReaderFlashColor.entries.map { it to it.titleRes },
+                onSelect = onFlashColorSelect,
+                enabled = state.flashOnPageChange,
+            )
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -1016,6 +1063,38 @@ private fun navRegions(mode: Int, invert: TappingInvertMode): List<NavRegion> {
             )
             else -> region
         }
+    }
+}
+
+/**
+ * Android's DisplayRefreshHost — a brief overlay on page change that
+ * clears e-ink ghosting. WHITE_BLACK flashes white then black; the other
+ * modes hold a single color for the whole duration.
+ */
+@Composable
+private fun ReaderFlashOverlay(
+    trigger: Int,
+    durationMillis: Int,
+    mode: ReaderFlashColor,
+) {
+    var currentColor by remember { mutableStateOf<Color?>(null) }
+    LaunchedEffect(trigger) {
+        if (trigger <= 0) return@LaunchedEffect
+        val half = (durationMillis / 2L).coerceAtLeast(1)
+        currentColor = if (mode == ReaderFlashColor.WHITE) Color.White else Color.Black
+        delay(half)
+        if (mode == ReaderFlashColor.WHITE_BLACK) {
+            currentColor = Color.Black
+        }
+        delay(half)
+        currentColor = null
+    }
+    currentColor?.let { color ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(color),
+        )
     }
 }
 

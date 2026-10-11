@@ -78,6 +78,13 @@ class MangaReaderScreenModel(
         val navigateToPan: Boolean = true,
         /** Android's reader_navigation_mode_pager — tap zone layout. */
         val navMode: Int = 0,
+        /** Android's E-Ink group — flash overlay on page change. */
+        val flashOnPageChange: Boolean = false,
+        val flashDurationMillis: Int = 100,
+        val flashInterval: Int = 1,
+        val flashColor: ReaderFlashColor = ReaderFlashColor.BLACK,
+        /** Increments when a flash should fire — screen watches this. */
+        val flashNow: Int = 0,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -165,6 +172,24 @@ class MangaReaderScreenModel(
         0,
     )
 
+    // Android's E-Ink prefs — same keys/defaults.
+    private val flashOnPageChangePref = preferenceStore.getBoolean(
+        "pref_reader_flash",
+        false,
+    )
+    private val flashDurationPref = preferenceStore.getInt(
+        "pref_reader_flash_duration",
+        100,
+    )
+    private val flashIntervalPref = preferenceStore.getInt(
+        "pref_reader_flash_interval",
+        1,
+    )
+    private val flashColorPref = preferenceStore.getEnum(
+        "pref_reader_flash_mode",
+        ReaderFlashColor.BLACK,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -234,6 +259,26 @@ class MangaReaderScreenModel(
                 _state.value = _state.value.copy(navMode = v)
             }
         }
+        scope.launch {
+            flashOnPageChangePref.changes().collect { v ->
+                _state.value = _state.value.copy(flashOnPageChange = v)
+            }
+        }
+        scope.launch {
+            flashDurationPref.changes().collect { v ->
+                _state.value = _state.value.copy(flashDurationMillis = v)
+            }
+        }
+        scope.launch {
+            flashIntervalPref.changes().collect { v ->
+                _state.value = _state.value.copy(flashInterval = v)
+            }
+        }
+        scope.launch {
+            flashColorPref.changes().collect { v ->
+                _state.value = _state.value.copy(flashColor = v)
+            }
+        }
     }
 
     private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
@@ -269,6 +314,14 @@ class MangaReaderScreenModel(
     fun setNavigateToPan(on: Boolean) = navigateToPanPref.set(on)
 
     fun setNavMode(mode: Int) = navModePref.set(mode)
+
+    fun setFlashOnPageChange(on: Boolean) = flashOnPageChangePref.set(on)
+
+    fun setFlashDuration(millis: Int) = flashDurationPref.set(millis)
+
+    fun setFlashInterval(pages: Int) = flashIntervalPref.set(pages)
+
+    fun setFlashColor(color: ReaderFlashColor) = flashColorPref.set(color)
 
     /**
      * Android's calculateChapterGap — floor(higher) − floor(lower) − 1;
@@ -419,8 +472,18 @@ class MangaReaderScreenModel(
     /** Chapter id with an open read session — closed on switch/dispose. */
     private var openItemId: Long? = null
 
+    private var flashCalls = 0
+
     /** Viewer page position — Android's `lastPageRead` write-through. */
     fun savePageProgress(page: Int) {
+        // Android's PageChanged event drives the e-ink flash host —
+        // every interval-th change fires one flash.
+        if (_state.value.flashOnPageChange) {
+            flashCalls += 1
+            if (flashCalls % _state.value.flashInterval.coerceAtLeast(1) == 0) {
+                _state.value = _state.value.copy(flashNow = _state.value.flashNow + 1)
+            }
+        }
         val itemId = openItemId ?: return
         scope.launch { binding.setItemPageProgress(itemId, page) }
     }

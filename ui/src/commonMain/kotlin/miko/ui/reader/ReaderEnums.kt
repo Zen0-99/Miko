@@ -38,6 +38,13 @@ enum class TappingInvertMode(
     ),
 }
 
+/** Mirror of Android's FlashColor — same names for getEnum round-trip. */
+enum class ReaderFlashColor(val titleRes: StringResource) {
+    BLACK(MR.strings.pref_flash_style_black),
+    WHITE(MR.strings.pref_flash_style_white),
+    WHITE_BLACK(MR.strings.pref_flash_style_white_black),
+}
+
 /** Chapter row for the in-reader chapter sheet — remote name + local done. */
 data class ChapterRow(
     val url: String,
