@@ -58,6 +58,8 @@ class ReaderScreenModel(
         val sidePadding: Int = 16,
         val keepScreenOn: Boolean = true,
         val showProgress: Boolean = true,
+        /** Android's pref_novel_fullscreen — system bars hidden while reading. */
+        val fullscreen: Boolean = false,
         /** 1-based chapter position within the entry — the progress label. */
         val chapterIndex: Int = 0,
         val chapterCount: Int = 0,
@@ -94,6 +96,8 @@ class ReaderScreenModel(
         preferenceStore.getBoolean("pref_novel_keep_screen_on", true)
     private val showProgressPref =
         preferenceStore.getBoolean("pref_novel_show_progress", true)
+    private val fullscreenPref =
+        preferenceStore.getBoolean("pref_novel_fullscreen", false)
 
     init {
         scope.launch {
@@ -146,6 +150,11 @@ class ReaderScreenModel(
                 _state.value = _state.value.copy(showProgress = v)
             }
         }
+        scope.launch {
+            fullscreenPref.changes().collect { v ->
+                _state.value = _state.value.copy(fullscreen = v)
+            }
+        }
     }
 
     fun setTextSize(size: Float) = textSizePref.set(size)
@@ -156,6 +165,7 @@ class ReaderScreenModel(
     fun setSidePadding(padding: Int) = sidePaddingPref.set(padding)
     fun setKeepScreenOn(on: Boolean) = keepScreenOnPref.set(on)
     fun setShowProgress(on: Boolean) = showProgressPref.set(on)
+    fun setFullscreen(on: Boolean) = fullscreenPref.set(on)
 
     private suspend fun loadItemList() {
         val src = source ?: return

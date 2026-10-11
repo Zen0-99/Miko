@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.debounce
 import miko.ui.components.SettingDropdown
 import miko.ui.components.SettingSlider
 import miko.ui.components.SettingSwitch
+import miko.ui.platform.HideSystemBars
 import miko.ui.platform.KeepScreenOn
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -65,6 +66,8 @@ fun ReaderScreen(
     var showSettings by remember { mutableStateOf(false) }
 
     KeepScreenOn(state.keepScreenOn)
+    // Android's pref_novel_fullscreen — system bars hidden while reading.
+    HideSystemBars(state.fullscreen)
 
     val (bgColor, textColor) = readerColors(state.backgroundColor)
     val contentColor = textColor ?: MaterialTheme.colorScheme.onBackground
@@ -308,6 +311,11 @@ private fun ReaderSettingsSheet(model: ReaderScreenModel) {
             labelRes = MR.strings.pref_novel_show_reading_progress,
             checked = state.showProgress,
             onChange = model::setShowProgress,
+        )
+        SettingSwitch(
+            labelRes = MR.strings.pref_fullscreen,
+            checked = state.fullscreen,
+            onChange = model::setFullscreen,
         )
         Spacer(Modifier.height(16.dp))
     }

@@ -60,6 +60,8 @@ class MangaReaderScreenModel(
         val showTransitions: Boolean = true,
         /** Android's pref_reader_theme_key — 0 white, 1 black, 2 gray, 3 auto. */
         val readerTheme: Int = 1,
+        /** Android's `fullscreen` pref — system bars hidden while reading. */
+        val fullscreen: Boolean = true,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -105,6 +107,12 @@ class MangaReaderScreenModel(
         1,
     )
 
+    // Android's readerPreferences.fullscreen — same global key/default.
+    private val fullscreenPref = preferenceStore.getBoolean(
+        "fullscreen",
+        true,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -139,6 +147,11 @@ class MangaReaderScreenModel(
                 _state.value = _state.value.copy(readerTheme = v)
             }
         }
+        scope.launch {
+            fullscreenPref.changes().collect { v ->
+                _state.value = _state.value.copy(fullscreen = v)
+            }
+        }
     }
 
     private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
@@ -160,6 +173,8 @@ class MangaReaderScreenModel(
     fun setShowTransitions(show: Boolean) = transitionsPref.set(show)
 
     fun setReaderTheme(theme: Int) = readerThemePref.set(theme)
+
+    fun setFullscreen(fullscreen: Boolean) = fullscreenPref.set(fullscreen)
 
     /**
      * Android's calculateChapterGap — floor(higher) − floor(lower) − 1;

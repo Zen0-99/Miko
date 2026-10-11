@@ -62,6 +62,7 @@ import kotlinx.io.readByteArray
 import miko.ui.components.SettingDropdown
 import miko.ui.components.SettingSwitch
 import miko.ui.download.DownloadManager
+import miko.ui.platform.HideSystemBars
 import miko.ui.platform.KeepScreenOn
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.pluralStringResource
@@ -84,6 +85,8 @@ fun MangaReaderScreen(
 
     // Android's reader keep-screen-on — idle timer off while reading.
     KeepScreenOn(state.keepScreenOn)
+    // Android's fullscreen pref — system bars hidden while reading.
+    HideSystemBars(state.fullscreen)
 
     Column(
         modifier = modifier
@@ -172,6 +175,7 @@ fun MangaReaderScreen(
             onPageNumberChange = model::setShowPageNumber,
             onTransitionsChange = model::setShowTransitions,
             onThemeSelect = model::setReaderTheme,
+            onFullscreenChange = model::setFullscreen,
             onDismiss = model::closeSettings,
         )
     }
@@ -618,6 +622,7 @@ private fun ReaderSettingsSheet(
     onPageNumberChange: (Boolean) -> Unit,
     onTransitionsChange: (Boolean) -> Unit,
     onThemeSelect: (Int) -> Unit,
+    onFullscreenChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -658,6 +663,11 @@ private fun ReaderSettingsSheet(
                 labelRes = MR.strings.pref_always_show_chapter_transition,
                 checked = state.showTransitions,
                 onChange = onTransitionsChange,
+            )
+            SettingSwitch(
+                labelRes = MR.strings.pref_fullscreen,
+                checked = state.fullscreen,
+                onChange = onFullscreenChange,
             )
             Spacer(Modifier.height(24.dp))
         }
