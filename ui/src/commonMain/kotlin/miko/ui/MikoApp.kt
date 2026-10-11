@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.components.LibrarySettingsSheet
 import miko.ui.details.EntryDetailsScreen
 import miko.ui.details.EntryDetailsScreenModel
 import miko.ui.extensions.ExtensionCatalog
@@ -448,16 +449,9 @@ fun MikoApp(graph: MikoUiGraph) {
                                 )
                             }
                             if (current == Destination.Library) {
-                                // Android's library display-mode sheet
-                                // (compact/comfortable/list) as a top-bar
-                                // action, same affordance as the feed.
-                                val libraryDisplayMode = libraryModel.state
-                                    .collectAsStateWithLifecycle()
-                                    .value.displayMode
-                                FeedDisplayModeAction(
-                                    displayMode = libraryDisplayMode,
-                                    onDisplayModeChange = libraryModel::setDisplayMode,
-                                )
+                                // Android's library settings action — the
+                                // display/sort sheet off the top-bar icon.
+                                LibrarySettingsAction(libraryModel)
                             }
                         },
                         pillContent = if (current == Destination.Browse) {
@@ -641,6 +635,35 @@ private fun screenTitle(destination: Destination): String = when (destination) {
     is Destination.Reader -> destination.chapterUrl
     is Destination.MangaReader -> destination.chapterUrl
     is Destination.EpisodePlayer -> destination.episodeUrl
+}
+
+/**
+ * Android's library settings toolbar action — the display-mode icon opens
+ * the Display/Sort sheet (grid modes + sort type/direction).
+ */
+@Composable
+private fun LibrarySettingsAction(model: LibraryScreenModel) {
+    val state by model.state.collectAsStateWithLifecycle()
+    var sheetOpen by remember { mutableStateOf(false) }
+    IconButton(onClick = { sheetOpen = true }) {
+        Icon(
+            imageVector = if (state.displayMode == LibraryDisplayMode.List) {
+                Icons.AutoMirrored.Filled.ViewList
+            } else {
+                Icons.Filled.ViewModule
+            },
+            contentDescription = stringResource(MR.strings.action_display_mode),
+        )
+    }
+    if (sheetOpen) {
+        LibrarySettingsSheet(
+            displayMode = state.displayMode,
+            sort = state.sort,
+            onDismissRequest = { sheetOpen = false },
+            onDisplayMode = model::setDisplayMode,
+            onSort = model::setSort,
+        )
+    }
 }
 
 /**
