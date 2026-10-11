@@ -23,9 +23,8 @@ import miko.ui.reader.ChapterRow
  * Episode player (shows carrier): resolves the episode's hosters to a flat
  * stream list via [CarrierBinding.hosters]/[CarrierBinding.videos], marks
  * the episode seen on open, and tracks prev/next episode navigation.
- * Playback itself is delegated to the platform — the screen opens streams
- * through [androidx.compose.ui.platform.LocalUriHandler] until an in-app
- * AVPlayer lands.
+ * Playback runs through the shared [VideoPlayer] expect/actual — Media3 on
+ * Android, AVPlayerViewController on iOS; the stream rows pick the url.
  */
 class EpisodePlayerScreenModel(
     private val binding: CarrierBinding,
@@ -39,6 +38,8 @@ class EpisodePlayerScreenModel(
         val episodeUrl: String = "",
         val episodeName: String = "",
         val videos: List<VideoEntry> = emptyList(),
+        /** Stream currently on the player surface — first quality by default. */
+        val playingUrl: String? = null,
         val loading: Boolean = true,
         val error: String? = null,
         val hasPrev: Boolean = false,
@@ -128,6 +129,7 @@ class EpisodePlayerScreenModel(
                 onSuccess = { videos ->
                     _state.value = _state.value.copy(
                         videos = videos,
+                        playingUrl = videos.firstOrNull()?.url,
                         loading = false,
                     )
                     markSeen(episodeUrl)
@@ -162,6 +164,11 @@ class EpisodePlayerScreenModel(
                 .awaitAll()
                 .flatten()
         }
+
+    /** Stream-row tap — Android's quality-source selection. */
+    fun playVideo(url: String) {
+        _state.value = _state.value.copy(playingUrl = url)
+    }
 
     fun prevEpisode() {
         val index = items.indexOfFirst { it.url == _state.value.episodeUrl }

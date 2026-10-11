@@ -1,11 +1,13 @@
 package miko.ui.player
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,7 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import miko.ui.reader.ChapterListSheet
@@ -35,10 +37,9 @@ import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 /**
- * Episode player surface: the resolved stream list rendered as tappable
- * quality rows. Streams open through the platform URI handler until an
- * in-app AVPlayer lands — same destination Android's player reaches after
- * hoster resolution.
+ * Episode player surface: the shared [VideoPlayer] renders the selected
+ * stream with native controls; the resolved stream list below it acts as
+ * Android's quality-source selection (first quality autoplays).
  */
 @Composable
 fun EpisodePlayerScreen(
@@ -46,9 +47,17 @@ fun EpisodePlayerScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
-    val uriHandler = LocalUriHandler.current
 
     Column(modifier = modifier.fillMaxSize()) {
+        state.playingUrl?.let { url ->
+            VideoPlayer(
+                url = url,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(Color.Black),
+            )
+        }
         when {
             state.loading -> LoadingScreen(modifier = Modifier.weight(1f))
             state.error != null -> Column(
@@ -84,21 +93,31 @@ fun EpisodePlayerScreen(
                     )
                 }
                 items(state.videos, key = { it.url }) { video ->
+                    val playing = video.url == state.playingUrl
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { uriHandler.openUri(video.url) }
+                            .clickable { model.playVideo(video.url) }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.PlayArrow,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (playing) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                         )
                         Text(
                             text = video.title.ifBlank { video.url },
                             style = MaterialTheme.typography.bodyLarge,
+                            color = if (playing) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
                             modifier = Modifier.padding(start = 12.dp),
                         )
                     }

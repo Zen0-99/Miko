@@ -53,6 +53,15 @@ kotlin {
                 implementation("com.fleeksoft.ksoup:ksoup:0.2.5")
             }
         }
+
+        val androidMain by getting {
+            dependencies {
+                // VideoPlayer.actual — Android's episode player surface.
+                implementation(libs.media3.exoplayer)
+                implementation(libs.media3.ui)
+                implementation(libs.media3.common)
+            }
+        }
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
