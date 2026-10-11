@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -88,12 +92,19 @@ fun MangaReaderScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(
                 onClick = model::prevChapter,
                 enabled = state.hasPrev,
             ) {
                 Text(stringResource(MR.strings.action_previous_chapter))
+            }
+            IconButton(onClick = model::openChapterSheet) {
+                Icon(
+                    Icons.AutoMirrored.Filled.FormatListBulleted,
+                    contentDescription = stringResource(MR.strings.chapters),
+                )
             }
             TextButton(
                 onClick = model::nextChapter,
@@ -102,5 +113,14 @@ fun MangaReaderScreen(
                 Text(stringResource(MR.strings.action_next_chapter))
             }
         }
+    }
+
+    if (state.showChapters) {
+        ChapterListSheet(
+            chapters = state.chapters,
+            currentUrl = state.chapterUrl,
+            onDismiss = model::closeChapterSheet,
+            onSelect = model::openChapter,
+        )
     }
 }

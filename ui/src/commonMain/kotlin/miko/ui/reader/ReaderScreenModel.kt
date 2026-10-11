@@ -41,6 +41,9 @@ class ReaderScreenModel(
         val error: String? = null,
         val hasPrev: Boolean = false,
         val hasNext: Boolean = false,
+        /** Chapter-sheet rows — remote item names with local read state. */
+        val chapters: List<ChapterRow> = emptyList(),
+        val showChapters: Boolean = false,
         val textSize: Float = 16f,
         val lineHeight: Float = 1.5f,
         val paragraphSpacing: Int = 16,
@@ -118,6 +121,31 @@ class ReaderScreenModel(
     private suspend fun loadItemList() {
         val src = source ?: return
         items = src.items(entryUrl)
+        val local = binding.localEntry(entryUrl, sourceId).first()
+        val doneUrls = local?.let { entry ->
+            binding.getLocalItems(entry.id)
+                .filter { it.done }
+                .map { it.url }
+                .toSet()
+        }.orEmpty()
+        _state.value = _state.value.copy(
+            chapters = items.map {
+                ChapterRow(
+                    url = it.url,
+                    name = it.name,
+                    number = it.number,
+                    done = it.url in doneUrls,
+                )
+            },
+        )
+    }
+
+    fun openChapterSheet() {
+        _state.value = _state.value.copy(showChapters = true)
+    }
+
+    fun closeChapterSheet() {
+        _state.value = _state.value.copy(showChapters = false)
     }
 
     fun openChapter(chapterUrl: String) {

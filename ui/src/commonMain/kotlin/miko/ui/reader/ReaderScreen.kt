@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -127,6 +128,12 @@ fun ReaderScreen(
                 Text(stringResource(MR.strings.action_previous_chapter))
             }
             Spacer(Modifier.weight(1f))
+            IconButton(onClick = model::openChapterSheet) {
+                Icon(
+                    Icons.AutoMirrored.Filled.FormatListBulleted,
+                    contentDescription = stringResource(MR.strings.chapters),
+                )
+            }
             IconButton(onClick = { showSettings = true }) {
                 Icon(
                     Icons.Filled.Settings,
@@ -147,6 +154,15 @@ fun ReaderScreen(
         ModalBottomSheet(onDismissRequest = { showSettings = false }) {
             ReaderSettingsSheet(model = model)
         }
+    }
+
+    if (state.showChapters) {
+        ChapterListSheet(
+            chapters = state.chapters,
+            currentUrl = state.chapterUrl,
+            onDismiss = model::closeChapterSheet,
+            onSelect = model::openChapter,
+        )
     }
 }
 

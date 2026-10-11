@@ -18,3 +18,11 @@ enum class NovelReaderBackgroundColor(val titleRes: StringResource) {
     SMART_THEME(MR.strings.theme_system),
     GRAY(MR.strings.gray_background),
 }
+
+/** Chapter row for the in-reader chapter sheet — remote name + local done. */
+data class ChapterRow(
+    val url: String,
+    val name: String,
+    val number: Double,
+    val done: Boolean,
+)
