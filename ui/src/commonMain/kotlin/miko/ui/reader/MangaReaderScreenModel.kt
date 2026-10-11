@@ -92,6 +92,12 @@ class MangaReaderScreenModel(
         val colorFilterMode: Int = 0,
         val grayscale: Boolean = false,
         val invertedColors: Boolean = false,
+        /**
+         * Android's pref_default_orientation_type_key — ReaderOrientation
+         * flagValue (0 default, 8 free, 0x10/0x18 portrait/landscape,
+         * 0x20/0x28 locked, 0x30 reverse portrait).
+         */
+        val orientation: Int = 8,
         /** Android's E-Ink group — flash overlay on page change. */
         val flashOnPageChange: Boolean = false,
         val flashDurationMillis: Int = 100,
@@ -222,6 +228,12 @@ class MangaReaderScreenModel(
         false,
     )
 
+    // Android's defaultOrientationType — same key/default (FREE=0x08).
+    private val orientationPref = preferenceStore.getInt(
+        "pref_default_orientation_type_key",
+        8,
+    )
+
     // Android's E-Ink prefs — same keys/defaults.
     private val flashOnPageChangePref = preferenceStore.getBoolean(
         "pref_reader_flash",
@@ -350,6 +362,11 @@ class MangaReaderScreenModel(
             }
         }
         scope.launch {
+            orientationPref.changes().collect { v ->
+                _state.value = _state.value.copy(orientation = v)
+            }
+        }
+        scope.launch {
             flashOnPageChangePref.changes().collect { v ->
                 _state.value = _state.value.copy(flashOnPageChange = v)
             }
@@ -420,6 +437,8 @@ class MangaReaderScreenModel(
     fun setGrayscale(on: Boolean) = grayscalePref.set(on)
 
     fun setInvertedColors(on: Boolean) = invertedColorsPref.set(on)
+
+    fun setOrientation(flagValue: Int) = orientationPref.set(flagValue)
 
     fun setFlashOnPageChange(on: Boolean) = flashOnPageChangePref.set(on)
 

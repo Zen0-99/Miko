@@ -91,6 +91,7 @@ import miko.ui.components.SettingSwitch
 import miko.ui.download.DownloadManager
 import miko.ui.platform.HideSystemBars
 import miko.ui.platform.KeepScreenOn
+import miko.ui.platform.SetReaderOrientation
 import miko.ui.platform.SetScreenBrightness
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.pluralStringResource
@@ -127,6 +128,8 @@ fun MangaReaderScreen(
             else -> 0.01f
         },
     )
+    // Android's pref_default_orientation_type_key — reader orientation lock.
+    SetReaderOrientation(state.orientation)
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -224,6 +227,7 @@ fun MangaReaderScreen(
         ReaderSettingsSheet(
             state = state,
             onModeSelect = model::setReadingMode,
+            onOrientationSelect = model::setOrientation,
             onPageNumberChange = model::setShowPageNumber,
             onTransitionsChange = model::setShowTransitions,
             onThemeSelect = model::setReaderTheme,
@@ -290,6 +294,17 @@ private val zoomStartOptions = listOf(
     MR.strings.zoom_start_left,
     MR.strings.zoom_start_right,
     MR.strings.zoom_start_center,
+)
+
+/** Android's ReaderOrientation entries — pref stores the flagValue. */
+private val orientationOptions = listOf(
+    MR.strings.label_default to 0x00,
+    MR.strings.rotation_free to 0x08,
+    MR.strings.rotation_portrait to 0x10,
+    MR.strings.rotation_landscape to 0x18,
+    MR.strings.rotation_force_portrait to 0x20,
+    MR.strings.rotation_force_landscape to 0x28,
+    MR.strings.rotation_reverse_portrait to 0x30,
 )
 
 /** Android's ColorFilterMode entries — pref value is the index. */
@@ -967,6 +982,7 @@ private fun transitionCardColors() = CardDefaults.outlinedCardColors(
 private fun ReaderSettingsSheet(
     state: MangaReaderScreenModel.State,
     onModeSelect: (MangaReadingMode) -> Unit,
+    onOrientationSelect: (Int) -> Unit,
     onPageNumberChange: (Boolean) -> Unit,
     onTransitionsChange: (Boolean) -> Unit,
     onThemeSelect: (Int) -> Unit,
@@ -1008,6 +1024,26 @@ private fun ReaderSettingsSheet(
                 options = MangaReadingMode.entries.map { it to it.titleRes },
                 onSelect = onModeSelect,
             )
+            // Android's rotation_type chips — flagValues match ReaderOrientation.
+            Text(
+                text = stringResource(MR.strings.rotation_type),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+            ) {
+                orientationOptions.forEach { (labelRes, value) ->
+                    FilterChip(
+                        selected = state.orientation == value,
+                        onClick = { onOrientationSelect(value) },
+                        label = { Text(stringResource(labelRes)) },
+                    )
+                }
+            }
             Text(
                 text = stringResource(MR.strings.pref_reader_theme),
                 style = MaterialTheme.typography.titleSmall,
