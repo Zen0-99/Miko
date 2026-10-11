@@ -1,7 +1,9 @@
 package miko.ui.reader
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,7 +85,11 @@ fun MangaReaderScreen(
     // Android's reader keep-screen-on — idle timer off while reading.
     KeepScreenOn(state.keepScreenOn)
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(readerThemeBackground(state.readerTheme)),
+    ) {
         when {
             state.loading -> LoadingScreen(modifier = Modifier.weight(1f))
             state.error != null -> Column(
@@ -164,10 +171,34 @@ fun MangaReaderScreen(
             onModeSelect = model::setReadingMode,
             onPageNumberChange = model::setShowPageNumber,
             onTransitionsChange = model::setShowTransitions,
+            onThemeSelect = model::setReaderTheme,
             onDismiss = model::closeSettings,
         )
     }
 }
+
+/**
+ * Android's reader background colors — white/black/gray follow the pref;
+ * automatic picks gray in dark mode and white in light (ReaderActivity's
+ * automaticBackgroundColor).
+ */
+@Composable
+private fun readerThemeBackground(theme: Int): Color = when (theme) {
+    0 -> Color.White
+    2 -> GrayReaderBackground
+    3 -> if (isSystemInDarkTheme()) GrayReaderBackground else Color.White
+    else -> Color.Black
+}
+
+private val GrayReaderBackground = Color(0xFF202125)
+
+/** Android's GeneralSettingsPage themes — same order and pref values. */
+private val readerThemeOptions = listOf(
+    MR.strings.black_background to 1,
+    MR.strings.gray_background to 2,
+    MR.strings.white_background to 0,
+    MR.strings.automatic_background to 3,
+)
 
 /** Dispatches to the paged or long-strip viewer per the resolved mode. */
 @Composable
@@ -586,6 +617,7 @@ private fun ReaderSettingsSheet(
     onModeSelect: (MangaReadingMode) -> Unit,
     onPageNumberChange: (Boolean) -> Unit,
     onTransitionsChange: (Boolean) -> Unit,
+    onThemeSelect: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -601,6 +633,22 @@ private fun ReaderSettingsSheet(
                 options = MangaReadingMode.entries.map { it to it.titleRes },
                 onSelect = onModeSelect,
             )
+            Text(
+                text = stringResource(MR.strings.pref_reader_theme),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                readerThemeOptions.forEach { (labelRes, value) ->
+                    FilterChip(
+                        selected = state.readerTheme == value,
+                        onClick = { onThemeSelect(value) },
+                        label = { Text(stringResource(labelRes)) },
+                    )
+                }
+            }
             SettingSwitch(
                 labelRes = MR.strings.pref_show_page_number,
                 checked = state.showPageNumber,

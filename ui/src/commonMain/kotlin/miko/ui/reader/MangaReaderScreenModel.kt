@@ -58,6 +58,8 @@ class MangaReaderScreenModel(
         val keepScreenOn: Boolean = true,
         /** Android's always_show_chapter_transition — end-of-chapter cards. */
         val showTransitions: Boolean = true,
+        /** Android's pref_reader_theme_key — 0 white, 1 black, 2 gray, 3 auto. */
+        val readerTheme: Int = 1,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -97,6 +99,12 @@ class MangaReaderScreenModel(
         true,
     )
 
+    // Android's readerPreferences.readerTheme — same global key/default.
+    private val readerThemePref = preferenceStore.getInt(
+        "pref_reader_theme_key",
+        1,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -126,6 +134,11 @@ class MangaReaderScreenModel(
                 _state.value = _state.value.copy(showTransitions = v)
             }
         }
+        scope.launch {
+            readerThemePref.changes().collect { v ->
+                _state.value = _state.value.copy(readerTheme = v)
+            }
+        }
     }
 
     private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
@@ -145,6 +158,8 @@ class MangaReaderScreenModel(
     fun setShowPageNumber(show: Boolean) = showPageNumberPref.set(show)
 
     fun setShowTransitions(show: Boolean) = transitionsPref.set(show)
+
+    fun setReaderTheme(theme: Int) = readerThemePref.set(theme)
 
     /**
      * Android's calculateChapterGap — floor(higher) − floor(lower) − 1;
