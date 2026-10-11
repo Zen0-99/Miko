@@ -41,8 +41,10 @@ actual fun VideoPlayer(
 
     LaunchedEffect(url) {
         pendingSeekSeconds[0] = initialPositionMs / 1000.0
-        controller.player = NSURL.URLWithString(url)?.let { AVPlayer(it) }
+        // Detach the observer from the outgoing player before swapping —
+        // removeTimeObserver must target the instance that owns it.
         timeObserver[0]?.let { controller.player?.removeTimeObserver(it) }
+        controller.player = NSURL.URLWithString(url)?.let { AVPlayer(it) }
         timeObserver[0] = controller.player?.addPeriodicTimeObserverForInterval(
             interval = CMTimeMake(1L, 2),
             queue = dispatch_get_main_queue(),
