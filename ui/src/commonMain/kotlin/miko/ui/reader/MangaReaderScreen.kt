@@ -1,6 +1,7 @@
 package miko.ui.reader
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,30 +12,40 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import miko.ui.components.SettingDropdown
+import miko.ui.components.SettingSwitch
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 
 /**
- * Manga reader — vertical continuous-scroll page images (Android's default
- * webtoon-ish strip for JS sources) with prev/next chapter navigation at
- * the bottom. Chapters mark themselves read on open.
+ * Manga reader — reading mode follows Android's `ReadingMode`: paged LTR /
+ * RTL / vertical via [HorizontalPager]/[VerticalPager], or the long-strip
+ * scroll for WEBTOON/CONTINUOUS_VERTICAL. Chapters mark themselves read on
+ * open; prev/next + the chapter list sit in the bottom bar.
  */
 @Composable
 fun MangaReaderScreen(
@@ -63,27 +74,10 @@ fun MangaReaderScreen(
                     Text(stringResource(MR.strings.action_retry))
                 }
             }
-            else -> LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 4.dp),
-            ) {
-                item {
-                    Text(
-                        text = state.chapterName,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
-                items(state.pages, key = { it.index }) { page ->
-                    AsyncImage(
-                        model = page.imageUrl ?: page.url,
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                item { Spacer(Modifier.height(16.dp)) }
-            }
+            else -> PageViewer(
+                state = state,
+                modifier = Modifier.weight(1f),
+            )
         }
 
         HorizontalDivider()
@@ -106,6 +100,12 @@ fun MangaReaderScreen(
                     contentDescription = stringResource(MR.strings.chapters),
                 )
             }
+            IconButton(onClick = model::openSettings) {
+                Icon(
+                    Icons.Filled.Settings,
+                    contentDescription = stringResource(MR.strings.pref_category_reading_mode),
+                )
+            }
             TextButton(
                 onClick = model::nextChapter,
                 enabled = state.hasNext,
@@ -122,5 +122,150 @@ fun MangaReaderScreen(
             onDismiss = model::closeChapterSheet,
             onSelect = model::openChapter,
         )
+    }
+
+    if (state.showSettings) {
+        ReaderSettingsSheet(
+            state = state,
+            onModeSelect = model::setReadingMode,
+            onPageNumberChange = model::setShowPageNumber,
+            onDismiss = model::closeSettings,
+        )
+    }
+}
+
+/** Dispatches to the paged or long-strip viewer per the resolved mode. */
+@Composable
+private fun PageViewer(
+    state: MangaReaderScreenModel.State,
+    modifier: Modifier = Modifier,
+) {
+    when (state.readingMode) {
+        MangaReadingMode.LEFT_TO_RIGHT,
+        MangaReadingMode.RIGHT_TO_LEFT,
+        MangaReadingMode.VERTICAL,
+        -> PagedViewer(state, modifier)
+        else -> WebtoonViewer(state, modifier)
+    }
+}
+
+/**
+ * Android's *PagerViewer: one page per screen, swipes advance. RTL renders
+ * the same page order with a reversed pager so swiping left moves forward.
+ */
+@Composable
+private fun PagedViewer(
+    state: MangaReaderScreenModel.State,
+    modifier: Modifier = Modifier,
+) {
+    // Reset page position whenever the chapter changes.
+    key(state.chapterUrl) {
+        val pagerState = rememberPagerState(pageCount = { state.pages.size })
+        Box(modifier = modifier.fillMaxSize()) {
+            if (state.readingMode == MangaReadingMode.VERTICAL) {
+                VerticalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { index ->
+                    PageImage(state.pages[index], Modifier.fillMaxSize(), ContentScale.Fit)
+                }
+            } else {
+                HorizontalPager(
+                    state = pagerState,
+                    reverseLayout = state.readingMode == MangaReadingMode.RIGHT_TO_LEFT,
+                    modifier = Modifier.fillMaxSize(),
+                ) { index ->
+                    PageImage(state.pages[index], Modifier.fillMaxSize(), ContentScale.Fit)
+                }
+            }
+            if (state.showPageNumber && state.pages.isNotEmpty()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 12.dp),
+                ) {
+                    Text(
+                        text = "${pagerState.currentPage + 1} / ${state.pages.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Android's WebtoonViewer: continuous vertical strip, full-width images.
+ * CONTINUOUS_VERTICAL shares the strip (the gap distinction between the
+ * two long-strip modes isn't meaningful without stitched transitions).
+ */
+@Composable
+private fun WebtoonViewer(
+    state: MangaReaderScreenModel.State,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 4.dp),
+    ) {
+        item {
+            Text(
+                text = state.chapterName,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        items(state.pages, key = { it.index }) { page ->
+            PageImage(page, Modifier.fillMaxWidth())
+        }
+        item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+@Composable
+private fun PageImage(
+    page: miko.ui.carrier.PageEntry,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.FillWidth,
+) {
+    AsyncImage(
+        model = page.imageUrl ?: page.url,
+        contentDescription = null,
+        contentScale = contentScale,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Android's in-reader settings (reduced): the per-manga reading mode picker
+ * and the page-number toggle.
+ */
+@Composable
+private fun ReaderSettingsSheet(
+    state: MangaReaderScreenModel.State,
+    onModeSelect: (MangaReadingMode) -> Unit,
+    onPageNumberChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(
+                text = stringResource(MR.strings.pref_category_reading_mode),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            SettingDropdown(
+                labelRes = MR.strings.pref_category_reading_mode,
+                current = stringResource(MangaReadingMode.fromFlag(state.viewerFlag).titleRes),
+                options = MangaReadingMode.entries.map { it to it.titleRes },
+                onSelect = onModeSelect,
+            )
+            SettingSwitch(
+                labelRes = MR.strings.pref_show_page_number,
+                checked = state.showPageNumber,
+                onChange = onPageNumberChange,
+            )
+            Spacer(Modifier.height(24.dp))
+        }
     }
 }

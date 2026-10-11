@@ -809,6 +809,7 @@ private fun MangaReaderDestination(
             sourceId = destination.sourceId,
             entryUrl = destination.mangaUrl,
             initialChapterUrl = destination.chapterUrl,
+            preferenceStore = graph.preferenceStore,
         )
     }
     DisposableEffect(model) {

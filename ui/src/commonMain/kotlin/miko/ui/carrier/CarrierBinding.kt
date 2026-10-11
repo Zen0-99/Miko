@@ -56,6 +56,8 @@ data class LocalEntry(
     /** Carrier chapterFlags/episodeFlags semantics — sort + unread filter. */
     val sortDescending: Boolean = false,
     val unreadOnly: Boolean = false,
+    /** Carrier viewer flag — manga reading mode 0..5; 0 = use pref default. */
+    val viewer: Int = 0,
 )
 
 /** Local chapter/episode row; [done] is read (books/manga) or seen (shows). */
@@ -164,6 +166,12 @@ interface CarrierBinding {
 
     /** Chapter-list unread filter — the entry's chapterFlags unread bits. */
     suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) = Unit
+
+    /**
+     * Per-entry reading mode — manga only; [flag] is the mode's flagValue
+     * (0 clears to the global pref). Other carriers no-op.
+     */
+    suspend fun setViewer(localId: Long, flag: Int) = Unit
 
     /** Chapter body text — books only; other carriers return "". */
     suspend fun itemText(sourceId: Long, itemUrl: String): String = ""

@@ -26,3 +26,27 @@ data class ChapterRow(
     val number: Double,
     val done: Boolean,
 )
+
+/**
+ * Mirror of Android's `ReadingMode` — same flagValues so a manga's
+ * `viewerFlags` low three bits carry identical semantics across platforms.
+ * DEFAULT resolves through `pref_default_reading_mode_key`.
+ */
+enum class MangaReadingMode(val flagValue: Int, val titleRes: StringResource) {
+    DEFAULT(0x00000000, MR.strings.label_default),
+    LEFT_TO_RIGHT(0x00000001, MR.strings.left_to_right_viewer),
+    RIGHT_TO_LEFT(0x00000002, MR.strings.right_to_left_viewer),
+    VERTICAL(0x00000003, MR.strings.vertical_viewer),
+    WEBTOON(0x00000004, MR.strings.webtoon_viewer),
+    CONTINUOUS_VERTICAL(0x00000005, MR.strings.vertical_plus_viewer),
+    ;
+
+    val isPager: Boolean
+        get() = this == LEFT_TO_RIGHT || this == RIGHT_TO_LEFT || this == VERTICAL
+
+    companion object {
+        const val MASK = 0x00000007
+        fun fromFlag(flag: Int): MangaReadingMode =
+            entries.firstOrNull { it.flagValue == flag } ?: DEFAULT
+    }
+}

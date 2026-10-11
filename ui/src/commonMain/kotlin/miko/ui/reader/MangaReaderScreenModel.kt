@@ -14,17 +14,21 @@ import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteItem
+import tachiyomi.core.common.preference.PreferenceStore
 
 /**
  * Manga image reader — mirrors [ReaderScreenModel]'s shape but loads page
  * images via [CarrierBinding.pageList] instead of chapter text. Marks the
  * local chapter read on open and tracks prev/next from the chapter list.
+ * Reading mode follows Android: the manga's viewerFlags override the
+ * global `pref_default_reading_mode_key`.
  */
 class MangaReaderScreenModel(
     private val binding: CarrierBinding,
     private val sourceId: Long,
     private val entryUrl: String,
     initialChapterUrl: String,
+    preferenceStore: PreferenceStore,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
@@ -39,6 +43,12 @@ class MangaReaderScreenModel(
         /** Chapter-sheet rows — remote item names with local read state. */
         val chapters: List<ChapterRow> = emptyList(),
         val showChapters: Boolean = false,
+        /** Resolved mode — entry viewerFlags or the global default pref. */
+        val readingMode: MangaReadingMode = MangaReadingMode.RIGHT_TO_LEFT,
+        /** The entry's own flag; 0 = inherit the global pref. */
+        val viewerFlag: Int = 0,
+        val showPageNumber: Boolean = true,
+        val showSettings: Boolean = false,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -47,9 +57,19 @@ class MangaReaderScreenModel(
     val state: StateFlow<State> = _state.asStateFlow()
 
     private var items: List<RemoteItem> = emptyList()
+    private var localId: Long? = null
 
     private val source
         get() = binding.source(sourceId)
+
+    private val defaultModePref = preferenceStore.getInt(
+        "pref_default_reading_mode_key",
+        MangaReadingMode.RIGHT_TO_LEFT.flagValue,
+    )
+    private val showPageNumberPref = preferenceStore.getBoolean(
+        "pref_show_page_number_key",
+        true,
+    )
 
     init {
         scope.launch {
@@ -60,11 +80,47 @@ class MangaReaderScreenModel(
                 }
             }
         }
+        scope.launch {
+            defaultModePref.changes().collect { flag ->
+                resolveMode(_state.value.viewerFlag, flag)
+            }
+        }
+        scope.launch {
+            showPageNumberPref.changes().collect { v ->
+                _state.value = _state.value.copy(showPageNumber = v)
+            }
+        }
+    }
+
+    private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
+        val mode = MangaReadingMode.fromFlag(
+            if (viewerFlag != MangaReadingMode.DEFAULT.flagValue) viewerFlag else defaultFlag,
+        )
+        _state.value = _state.value.copy(readingMode = mode, viewerFlag = viewerFlag)
+    }
+
+    /** Persist the mode onto the manga's viewerFlags (Android semantics). */
+    fun setReadingMode(mode: MangaReadingMode) {
+        resolveMode(mode.flagValue, defaultModePref.get())
+        val id = localId ?: return
+        scope.launch { binding.setViewer(id, mode.flagValue) }
+    }
+
+    fun setShowPageNumber(show: Boolean) = showPageNumberPref.set(show)
+
+    fun openSettings() {
+        _state.value = _state.value.copy(showSettings = true)
+    }
+
+    fun closeSettings() {
+        _state.value = _state.value.copy(showSettings = false)
     }
 
     private suspend fun loadItemList() {
         val src = source ?: return
         val local = binding.localEntry(entryUrl, sourceId).first()
+        localId = local?.id
+        resolveMode(local?.viewer ?: 0, defaultModePref.get())
         val remoteItems = src.items(entryUrl)
         // Android sorts the reader's chapter list by the entry's chapterFlags.
         items = if (local?.sortDescending == true) {

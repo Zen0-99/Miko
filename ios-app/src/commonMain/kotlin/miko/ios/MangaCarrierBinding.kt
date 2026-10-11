@@ -68,6 +68,7 @@ class MangaCarrierBinding(
         sourceId = source,
         sortDescending = sortDescending(),
         unreadOnly = unreadFilterRaw == Manga.CHAPTER_SHOW_UNREAD,
+        viewer = (viewerFlags and MANGA_READING_MODE_MASK).toInt(),
     )
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
@@ -107,6 +108,18 @@ class MangaCarrierBinding(
                 chapterFlags = manga.chapterFlags
                     .and(Manga.CHAPTER_UNREAD_MASK.inv())
                     .or(flag),
+            ),
+        )
+    }
+
+    override suspend fun setViewer(localId: Long, flag: Int) {
+        val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
+        mangaRepository.updateManga(
+            MangaUpdate(
+                id = localId,
+                viewerFlags = manga.viewerFlags
+                    .and(MANGA_READING_MODE_MASK.inv())
+                    .or(flag.toLong()),
             ),
         )
     }
@@ -286,4 +299,9 @@ private class MangaCarrierSource(
         dateUpload = date_upload,
         scanlator = scanlator,
     )
+
+    /** Android's `ReadingMode.MASK` — the viewerFlags' low three bits. */
+    private companion object {
+        const val MANGA_READING_MODE_MASK = 0x00000007L
+    }
 }
