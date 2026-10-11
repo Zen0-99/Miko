@@ -50,6 +50,12 @@ class ReaderScreenModel(
         val textAlignment: TextAlignment = TextAlignment.JUSTIFY,
         val backgroundColor: NovelReaderBackgroundColor =
             NovelReaderBackgroundColor.GRAY,
+        val sidePadding: Int = 16,
+        val keepScreenOn: Boolean = true,
+        val showProgress: Boolean = true,
+        /** 1-based chapter position within the entry — the progress label. */
+        val chapterIndex: Int = 0,
+        val chapterCount: Int = 0,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -73,6 +79,11 @@ class ReaderScreenModel(
         "pref_novel_bg_color_mode",
         NovelReaderBackgroundColor.GRAY,
     )
+    private val sidePaddingPref = preferenceStore.getInt("pref_novel_side_padding", 16)
+    private val keepScreenOnPref =
+        preferenceStore.getBoolean("pref_novel_keep_screen_on", true)
+    private val showProgressPref =
+        preferenceStore.getBoolean("pref_novel_show_progress", true)
 
     init {
         scope.launch {
@@ -110,6 +121,21 @@ class ReaderScreenModel(
                 _state.value = _state.value.copy(backgroundColor = v)
             }
         }
+        scope.launch {
+            sidePaddingPref.changes().collect { v ->
+                _state.value = _state.value.copy(sidePadding = v)
+            }
+        }
+        scope.launch {
+            keepScreenOnPref.changes().collect { v ->
+                _state.value = _state.value.copy(keepScreenOn = v)
+            }
+        }
+        scope.launch {
+            showProgressPref.changes().collect { v ->
+                _state.value = _state.value.copy(showProgress = v)
+            }
+        }
     }
 
     fun setTextSize(size: Float) = textSizePref.set(size)
@@ -117,6 +143,9 @@ class ReaderScreenModel(
     fun setParagraphSpacing(spacing: Int) = paragraphSpacingPref.set(spacing)
     fun setTextAlignment(alignment: TextAlignment) = textAlignmentPref.set(alignment)
     fun setBackgroundColor(color: NovelReaderBackgroundColor) = backgroundColorPref.set(color)
+    fun setSidePadding(padding: Int) = sidePaddingPref.set(padding)
+    fun setKeepScreenOn(on: Boolean) = keepScreenOnPref.set(on)
+    fun setShowProgress(on: Boolean) = showProgressPref.set(on)
 
     private suspend fun loadItemList() {
         val src = source ?: return
@@ -171,6 +200,8 @@ class ReaderScreenModel(
                 error = null,
                 hasPrev = index > 0,
                 hasNext = index >= 0 && index < items.lastIndex,
+                chapterIndex = if (index >= 0) index + 1 else 0,
+                chapterCount = items.size,
             )
             val result = runCatching { binding.itemText(src.id, chapterUrl) }
             result.fold(

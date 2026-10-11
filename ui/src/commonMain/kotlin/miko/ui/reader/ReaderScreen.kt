@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import miko.ui.components.SettingDropdown
 import miko.ui.components.SettingSlider
+import miko.ui.components.SettingSwitch
+import miko.ui.platform.KeepScreenOn
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
@@ -56,6 +58,8 @@ fun ReaderScreen(
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
+
+    KeepScreenOn(state.keepScreenOn)
 
     val (bgColor, textColor) = readerColors(state.backgroundColor)
     val contentColor = textColor ?: MaterialTheme.colorScheme.onBackground
@@ -87,7 +91,10 @@ fun ReaderScreen(
             else -> SelectionContainer(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    contentPadding = PaddingValues(
+                        horizontal = state.sidePadding.dp,
+                        vertical = 12.dp,
+                    ),
                 ) {
                     item {
                         Text(
@@ -128,6 +135,14 @@ fun ReaderScreen(
                 Text(stringResource(MR.strings.action_previous_chapter))
             }
             Spacer(Modifier.weight(1f))
+            // Android's reading-progress overlay — "chapter X / Y".
+            if (state.showProgress && state.chapterCount > 0) {
+                Text(
+                    text = "${state.chapterIndex} / ${state.chapterCount}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             IconButton(onClick = model::openChapterSheet) {
                 Icon(
                     Icons.AutoMirrored.Filled.FormatListBulleted,
@@ -222,6 +237,22 @@ private fun ReaderSettingsSheet(model: ReaderScreenModel) {
             current = stringResource(state.backgroundColor.titleRes),
             options = NovelReaderBackgroundColor.entries.map { it to it.titleRes },
             onSelect = model::setBackgroundColor,
+        )
+        SettingSlider(
+            labelRes = MR.strings.pref_webtoon_side_padding,
+            value = state.sidePadding.toFloat(),
+            range = 0f..48f,
+            onChange = { model.setSidePadding(it.toInt()) },
+        )
+        SettingSwitch(
+            labelRes = MR.strings.pref_keep_screen_on,
+            checked = state.keepScreenOn,
+            onChange = model::setKeepScreenOn,
+        )
+        SettingSwitch(
+            labelRes = MR.strings.pref_novel_show_reading_progress,
+            checked = state.showProgress,
+            onChange = model::setShowProgress,
         )
         Spacer(Modifier.height(16.dp))
     }
