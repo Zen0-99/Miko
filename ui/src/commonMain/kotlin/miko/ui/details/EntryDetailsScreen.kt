@@ -20,7 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
@@ -69,6 +68,7 @@ import coil3.compose.AsyncImage
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.RemoteItem
 import miko.ui.components.ChangeCollectionSheet
+import miko.ui.components.ChapterSettingsSheet
 import miko.ui.components.MigrateSourceSheet
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -206,14 +206,31 @@ fun EntryDetailsScreen(
             }
 
             item {
+                // Android's EntryChapterHeader — count + a single filter icon
+                // opening the chapter-settings sheet (Filter/Sort/Display).
+                var settingsOpen by remember { mutableStateOf(false) }
                 ChapterListHeader(
                     count = state.items.size,
-                    sortDescending = state.sortDescending,
-                    unreadOnly = state.unreadOnly,
+                    filtersActive = state.unreadOnly || state.bookmarkedOnly,
                     showActions = state.local != null,
-                    onSortClick = model::toggleSortDirection,
-                    onFilterClick = model::toggleUnreadFilter,
+                    onFilterClick = { settingsOpen = true },
                 )
+                if (settingsOpen) {
+                    ChapterSettingsSheet(
+                        carrier = carrier,
+                        unreadOnly = state.unreadOnly,
+                        bookmarkedOnly = state.bookmarkedOnly,
+                        sortMode = state.sortMode,
+                        sortDescending = state.sortDescending,
+                        displayByNumber = state.displayByNumber,
+                        onDismissRequest = { settingsOpen = false },
+                        onToggleUnread = model::toggleUnreadFilter,
+                        onToggleBookmarked = model::toggleBookmarkedFilter,
+                        onSortMode = model::setChapterSortMode,
+                        onToggleSortDirection = model::toggleSortDirection,
+                        onDisplayByNumber = model::setDisplayByNumber,
+                    )
+                }
             }
 
             when {
@@ -236,6 +253,7 @@ fun EntryDetailsScreen(
                                 item = item,
                                 numberPrefix = itemPrefix(carrier),
                                 done = itemDone,
+                                displayByNumber = state.displayByNumber,
                                 bookmarked = item.url in state.bookmarkedUrls,
                                 onClick = { onItemClick(item) },
                                 // Android's row long-press context actions —
@@ -663,17 +681,15 @@ private fun ExpandableDescription(
 private val whitespaceLineRegex = Regex("\\s*\n\\s*")
 
 /**
- * Android's `ChapterListHeader` (reduced): item count plus sort-direction and
- * unread-filter icons writing back to the entry's chapterFlags. Actions hide
- * until the entry has a local row to persist flags onto.
+ * Android's `EntryChapterHeader`: item count plus the filter icon that opens
+ * the chapter-settings sheet. Actions hide until the entry has a local row
+ * to persist flags onto.
  */
 @Composable
 private fun ChapterListHeader(
     count: Int,
-    sortDescending: Boolean,
-    unreadOnly: Boolean,
+    filtersActive: Boolean,
     showActions: Boolean,
-    onSortClick: () -> Unit,
     onFilterClick: () -> Unit,
 ) {
     Row(
@@ -692,22 +708,11 @@ private fun ChapterListHeader(
             modifier = Modifier.weight(1f),
         )
         if (showActions) {
-            IconButton(onClick = onSortClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Sort,
-                    contentDescription = null,
-                    tint = if (sortDescending) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
             IconButton(onClick = onFilterClick) {
                 Icon(
                     imageVector = Icons.Filled.FilterList,
                     contentDescription = null,
-                    tint = if (unreadOnly) {
+                    tint = if (filtersActive) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -726,6 +731,7 @@ private fun ItemRow(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     bookmarked: Boolean = false,
+    displayByNumber: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -735,7 +741,13 @@ private fun ItemRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = item.name,
+                // Android's displayMode flag — "Chapter 5" vs the source
+                // title as the row's primary text.
+                text = if (displayByNumber && item.number >= 0.0) {
+                    "$numberPrefix ${item.number}"
+                } else {
+                    item.name
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (done) {
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
@@ -753,7 +765,7 @@ private fun ItemRow(
                 )
             }
         }
-        if (item.number >= 0.0) {
+        if (item.number >= 0.0 && !displayByNumber) {
             Text(
                 text = "$numberPrefix ${item.number}",
                 style = MaterialTheme.typography.bodySmall,

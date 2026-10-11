@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
+import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.FeedEntry
 import miko.ui.carrier.FeedFilter
 import miko.ui.carrier.FeedPage
@@ -72,6 +73,14 @@ class AnimeCarrierBinding(
         url = url,
         sourceId = source,
         sortDescending = sortDescending(),
+        sortMode = when (sorting) {
+            Anime.EPISODE_SORTING_SOURCE -> ChapterSortMode.SOURCE
+            Anime.EPISODE_SORTING_UPLOAD_DATE -> ChapterSortMode.UPLOAD_DATE
+            Anime.EPISODE_SORTING_ALPHABET -> ChapterSortMode.ALPHABET
+            else -> ChapterSortMode.NUMBER
+        },
+        bookmarkedOnly = episodeFlags and Anime.EPISODE_SHOW_BOOKMARKED != 0L,
+        displayByNumber = displayMode == Anime.EPISODE_DISPLAY_NUMBER,
         unreadOnly = unseenFilterRaw == Anime.EPISODE_SHOW_UNSEEN,
     )
 
@@ -111,6 +120,50 @@ class AnimeCarrierBinding(
                 id = localId,
                 episodeFlags = anime.episodeFlags
                     .and(Anime.EPISODE_UNSEEN_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
+    override suspend fun setChapterSortMode(localId: Long, mode: ChapterSortMode) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
+        val bits = when (mode) {
+            ChapterSortMode.SOURCE -> Anime.EPISODE_SORTING_SOURCE
+            ChapterSortMode.UPLOAD_DATE -> Anime.EPISODE_SORTING_UPLOAD_DATE
+            ChapterSortMode.ALPHABET -> Anime.EPISODE_SORTING_ALPHABET
+            ChapterSortMode.NUMBER -> Anime.EPISODE_SORTING_NUMBER
+        }
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                episodeFlags = anime.episodeFlags
+                    .and(Anime.EPISODE_SORTING_MASK.inv())
+                    .or(bits),
+            ),
+        )
+    }
+
+    override suspend fun setChapterBookmarkedOnly(localId: Long, onlyBookmarked: Boolean) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
+        val flag = if (onlyBookmarked) Anime.EPISODE_SHOW_BOOKMARKED else 0L
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                episodeFlags = anime.episodeFlags
+                    .and(Anime.EPISODE_BOOKMARKED_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
+    override suspend fun setChapterDisplayByNumber(localId: Long, byNumber: Boolean) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
+        val flag = if (byNumber) Anime.EPISODE_DISPLAY_NUMBER else 0L
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                episodeFlags = anime.episodeFlags
+                    .and(Anime.EPISODE_DISPLAY_MASK.inv())
                     .or(flag),
             ),
         )

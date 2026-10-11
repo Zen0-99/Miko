@@ -12,9 +12,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
+import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
+import miko.ui.carrier.ordered
 import tachiyomi.domain.collection.model.Collection
 
 /**
@@ -42,9 +44,12 @@ class EntryDetailsScreenModel(
         val detailsLoading: Boolean = true,
         val itemsLoading: Boolean = true,
         val error: String? = null,
-        /** Entry chapterFlags semantics — sort direction + unread filter. */
+        /** Entry chapterFlags semantics — sort + filters + display mode. */
         val sortDescending: Boolean = false,
+        val sortMode: ChapterSortMode = ChapterSortMode.NUMBER,
         val unreadOnly: Boolean = false,
+        val bookmarkedOnly: Boolean = false,
+        val displayByNumber: Boolean = false,
         /** ChangeCollectionDialog — visible collections + this entry's ids. */
         val collectionSheetOpen: Boolean = false,
         val collections: List<Collection> = emptyList(),
@@ -61,16 +66,10 @@ class EntryDetailsScreenModel(
         /** Items after the entry's chapterFlags — what the list renders. */
         val displayItems: List<RemoteItem>
             get() {
-                val filtered = if (unreadOnly) {
-                    items.filter { it.url !in doneUrls }
-                } else {
-                    items
-                }
-                return if (sortDescending) {
-                    filtered.sortedByDescending { it.number }
-                } else {
-                    filtered.sortedBy { it.number }
-                }
+                var filtered = items
+                if (unreadOnly) filtered = filtered.filter { it.url !in doneUrls }
+                if (bookmarkedOnly) filtered = filtered.filter { it.url in bookmarkedUrls }
+                return sortMode.ordered(filtered, sortDescending)
             }
 
         val allItemsDone: Boolean
@@ -96,7 +95,10 @@ class EntryDetailsScreenModel(
                     local = local,
                     favorite = local?.favorite == true,
                     sortDescending = local?.sortDescending == true,
+                    sortMode = local?.sortMode ?: ChapterSortMode.NUMBER,
                     unreadOnly = local?.unreadOnly == true,
+                    bookmarkedOnly = local?.bookmarkedOnly == true,
+                    displayByNumber = local?.displayByNumber == true,
                 )
                 if (local != null) subscribeLocalItems(local.id)
             }
@@ -211,6 +213,30 @@ class EntryDetailsScreenModel(
         scope.launch {
             val local = _state.value.local ?: return@launch
             binding.setChapterUnreadOnly(local.id, !_state.value.unreadOnly)
+        }
+    }
+
+    /** Filter-sheet sort mode — writes the entry's chapterFlags sorting bits. */
+    fun setChapterSortMode(mode: ChapterSortMode) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setChapterSortMode(local.id, mode)
+        }
+    }
+
+    /** Filter-sheet bookmarked filter — chapterFlags bookmarked bits. */
+    fun toggleBookmarkedFilter() {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setChapterBookmarkedOnly(local.id, !_state.value.bookmarkedOnly)
+        }
+    }
+
+    /** Display tab — "Title" vs "Chapter number" row labels. */
+    fun setDisplayByNumber(byNumber: Boolean) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setChapterDisplayByNumber(local.id, byNumber)
         }
     }
 

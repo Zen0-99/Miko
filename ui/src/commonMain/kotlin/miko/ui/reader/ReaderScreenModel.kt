@@ -14,7 +14,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
+import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.RemoteItem
+import miko.ui.carrier.ordered
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
 
@@ -152,11 +154,8 @@ class ReaderScreenModel(
         val local = binding.localEntry(entryUrl, sourceId).first()
         val remoteItems = src.items(entryUrl)
         // Android sorts the reader's chapter list by the entry's chapterFlags.
-        items = if (local?.sortDescending == true) {
-            remoteItems.sortedByDescending { it.number }
-        } else {
-            remoteItems.sortedBy { it.number }
-        }
+        items = (local?.sortMode ?: ChapterSortMode.NUMBER)
+            .ordered(remoteItems, local?.sortDescending == true)
         val doneUrls = local?.let { entry ->
             binding.getLocalItems(entry.id)
                 .filter { it.done }

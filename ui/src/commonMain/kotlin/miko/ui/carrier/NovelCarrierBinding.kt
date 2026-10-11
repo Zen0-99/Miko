@@ -59,6 +59,14 @@ class NovelCarrierBinding(
         url = url,
         sourceId = source,
         sortDescending = sortDescending(),
+        sortMode = when (sorting) {
+            Novel.CHAPTER_SORTING_SOURCE -> ChapterSortMode.SOURCE
+            Novel.CHAPTER_SORTING_UPLOAD_DATE -> ChapterSortMode.UPLOAD_DATE
+            Novel.CHAPTER_SORTING_ALPHABET -> ChapterSortMode.ALPHABET
+            else -> ChapterSortMode.NUMBER
+        },
+        bookmarkedOnly = chapterFlags and Novel.CHAPTER_SHOW_BOOKMARKED != 0L,
+        displayByNumber = displayMode == Novel.CHAPTER_DISPLAY_NUMBER,
         unreadOnly = unreadFilterRaw == Novel.CHAPTER_SHOW_UNREAD,
     )
 
@@ -98,6 +106,50 @@ class NovelCarrierBinding(
                 id = localId,
                 chapterFlags = novel.chapterFlags
                     .and(Novel.CHAPTER_UNREAD_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
+    override suspend fun setChapterSortMode(localId: Long, mode: ChapterSortMode) {
+        val novel = runCatching { novelRepository.getNovelById(localId) }.getOrNull() ?: return
+        val bits = when (mode) {
+            ChapterSortMode.SOURCE -> Novel.CHAPTER_SORTING_SOURCE
+            ChapterSortMode.UPLOAD_DATE -> Novel.CHAPTER_SORTING_UPLOAD_DATE
+            ChapterSortMode.ALPHABET -> Novel.CHAPTER_SORTING_ALPHABET
+            ChapterSortMode.NUMBER -> Novel.CHAPTER_SORTING_NUMBER
+        }
+        novelRepository.updateNovel(
+            NovelUpdate(
+                id = localId,
+                chapterFlags = novel.chapterFlags
+                    .and(Novel.CHAPTER_SORTING_MASK.inv())
+                    .or(bits),
+            ),
+        )
+    }
+
+    override suspend fun setChapterBookmarkedOnly(localId: Long, onlyBookmarked: Boolean) {
+        val novel = runCatching { novelRepository.getNovelById(localId) }.getOrNull() ?: return
+        val flag = if (onlyBookmarked) Novel.CHAPTER_SHOW_BOOKMARKED else 0L
+        novelRepository.updateNovel(
+            NovelUpdate(
+                id = localId,
+                chapterFlags = novel.chapterFlags
+                    .and(Novel.CHAPTER_BOOKMARKED_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
+    override suspend fun setChapterDisplayByNumber(localId: Long, byNumber: Boolean) {
+        val novel = runCatching { novelRepository.getNovelById(localId) }.getOrNull() ?: return
+        val flag = if (byNumber) Novel.CHAPTER_DISPLAY_NUMBER else 0L
+        novelRepository.updateNovel(
+            NovelUpdate(
+                id = localId,
+                chapterFlags = novel.chapterFlags
+                    .and(Novel.CHAPTER_DISPLAY_MASK.inv())
                     .or(flag),
             ),
         )

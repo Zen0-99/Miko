@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
+import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.FeedEntry
 import miko.ui.carrier.FeedFilter
 import miko.ui.carrier.FeedPage
@@ -73,6 +74,14 @@ class MangaCarrierBinding(
         url = url,
         sourceId = source,
         sortDescending = sortDescending(),
+        sortMode = when (sorting) {
+            Manga.CHAPTER_SORTING_SOURCE -> ChapterSortMode.SOURCE
+            Manga.CHAPTER_SORTING_UPLOAD_DATE -> ChapterSortMode.UPLOAD_DATE
+            Manga.CHAPTER_SORTING_ALPHABET -> ChapterSortMode.ALPHABET
+            else -> ChapterSortMode.NUMBER
+        },
+        bookmarkedOnly = chapterFlags and Manga.CHAPTER_SHOW_BOOKMARKED != 0L,
+        displayByNumber = displayMode == Manga.CHAPTER_DISPLAY_NUMBER,
         unreadOnly = unreadFilterRaw == Manga.CHAPTER_SHOW_UNREAD,
         viewer = (viewerFlags and MANGA_READING_MODE_MASK).toInt(),
     )
@@ -113,6 +122,50 @@ class MangaCarrierBinding(
                 id = localId,
                 chapterFlags = manga.chapterFlags
                     .and(Manga.CHAPTER_UNREAD_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
+    override suspend fun setChapterSortMode(localId: Long, mode: ChapterSortMode) {
+        val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
+        val bits = when (mode) {
+            ChapterSortMode.SOURCE -> Manga.CHAPTER_SORTING_SOURCE
+            ChapterSortMode.UPLOAD_DATE -> Manga.CHAPTER_SORTING_UPLOAD_DATE
+            ChapterSortMode.ALPHABET -> Manga.CHAPTER_SORTING_ALPHABET
+            ChapterSortMode.NUMBER -> Manga.CHAPTER_SORTING_NUMBER
+        }
+        mangaRepository.updateManga(
+            MangaUpdate(
+                id = localId,
+                chapterFlags = manga.chapterFlags
+                    .and(Manga.CHAPTER_SORTING_MASK.inv())
+                    .or(bits),
+            ),
+        )
+    }
+
+    override suspend fun setChapterBookmarkedOnly(localId: Long, onlyBookmarked: Boolean) {
+        val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
+        val flag = if (onlyBookmarked) Manga.CHAPTER_SHOW_BOOKMARKED else 0L
+        mangaRepository.updateManga(
+            MangaUpdate(
+                id = localId,
+                chapterFlags = manga.chapterFlags
+                    .and(Manga.CHAPTER_BOOKMARKED_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
+    override suspend fun setChapterDisplayByNumber(localId: Long, byNumber: Boolean) {
+        val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
+        val flag = if (byNumber) Manga.CHAPTER_DISPLAY_NUMBER else 0L
+        mangaRepository.updateManga(
+            MangaUpdate(
+                id = localId,
+                chapterFlags = manga.chapterFlags
+                    .and(Manga.CHAPTER_DISPLAY_MASK.inv())
                     .or(flag),
             ),
         )

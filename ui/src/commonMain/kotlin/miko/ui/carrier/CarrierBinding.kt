@@ -57,10 +57,37 @@ data class LocalEntry(
     val sourceId: Long = 0,
     /** Carrier chapterFlags/episodeFlags semantics — sort + unread filter. */
     val sortDescending: Boolean = false,
+    /** chapterFlags sorting bits — Android's SOURCE/NUMBER/UPLOAD/ALPHA. */
+    val sortMode: ChapterSortMode = ChapterSortMode.NUMBER,
+    /** chapterFlags bookmarked filter — Android's SHOW_BOOKMARKED. */
+    val bookmarkedOnly: Boolean = false,
+    /** chapterFlags display bit — "Chapter N"/"Episode N" vs scanlator title. */
+    val displayByNumber: Boolean = false,
     val unreadOnly: Boolean = false,
     /** Carrier viewer flag — manga reading mode 0..5; 0 = use pref default. */
     val viewer: Int = 0,
 )
+
+/**
+ * Android's CHAPTER/EPISODE sorting-flag modes — carrier bindings map the
+ * enum onto each carrier's flag bits. SOURCE keeps the remote list order.
+ */
+enum class ChapterSortMode { SOURCE, NUMBER, UPLOAD_DATE, ALPHABET }
+
+/**
+ * Orders [items] per the mode, then applies [descending] — Android's
+ * sortDescending reverses even raw source order. Shared by the details list
+ * and every reader/player item list so all sites sort identically.
+ */
+fun ChapterSortMode.ordered(items: List<RemoteItem>, descending: Boolean): List<RemoteItem> {
+    val sorted = when (this) {
+        ChapterSortMode.SOURCE -> items
+        ChapterSortMode.UPLOAD_DATE -> items.sortedBy { it.dateUpload }
+        ChapterSortMode.ALPHABET -> items.sortedBy { it.name.lowercase() }
+        ChapterSortMode.NUMBER -> items.sortedBy { it.number }
+    }
+    return if (descending) sorted.asReversed() else sorted
+}
 
 /** Local chapter/episode row; [done] is read (books/manga) or seen (shows). */
 data class LocalItem(
@@ -208,6 +235,18 @@ interface CarrierBinding {
 
     /** Chapter-list unread filter — the entry's chapterFlags unread bits. */
     suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) = Unit
+
+    /** Chapter-list sort mode — the entry's chapterFlags sorting bits. */
+    suspend fun setChapterSortMode(localId: Long, mode: ChapterSortMode) = Unit
+
+    /** Chapter-list bookmarked filter — the chapterFlags bookmarked bits. */
+    suspend fun setChapterBookmarkedOnly(localId: Long, onlyBookmarked: Boolean) = Unit
+
+    /**
+     * Chapter-list display mode — the chapterFlags display bit; rows show
+     * "Chapter N"/"Episode N" instead of the source title when set.
+     */
+    suspend fun setChapterDisplayByNumber(localId: Long, byNumber: Boolean) = Unit
 
     /**
      * Per-entry reading mode — manga only; [flag] is the mode's flagValue

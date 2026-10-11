@@ -15,8 +15,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
+import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
+import miko.ui.carrier.ordered
 import miko.ui.reader.ChapterRow
 
 /**
@@ -75,11 +77,8 @@ class EpisodePlayerScreenModel(
         val local = binding.localEntry(entryUrl, sourceId).first()
         val remoteItems = src.items(entryUrl)
         // Android sorts the reader's episode list by the entry's episodeFlags.
-        items = if (local?.sortDescending == true) {
-            remoteItems.sortedByDescending { it.number }
-        } else {
-            remoteItems.sortedBy { it.number }
-        }
+        items = (local?.sortMode ?: ChapterSortMode.NUMBER)
+            .ordered(remoteItems, local?.sortDescending == true)
         val seenUrls = local?.let { entry ->
             binding.getLocalItems(entry.id)
                 .filter { it.done }
