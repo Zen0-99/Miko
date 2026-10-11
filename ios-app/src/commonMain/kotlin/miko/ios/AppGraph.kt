@@ -37,6 +37,9 @@ import mihon.domain.extensionrepo.novel.repository.NovelExtensionRepoRepository
 import mihon.domain.extensionrepo.service.ExtensionRepoService
 import mihon.domain.extensionrepo.service.IosExtensionRepoService
 import mihon.domain.extensionrepo.service.RepoHttpFetcher
+import mihon.domain.upcoming.manga.interactor.GetUpcomingManga
+import mihon.domain.upcoming.novel.interactor.GetUpcomingNovel
+import mihon.domain.upcoming.shows.interactor.GetUpcomingAnime
 import miko.jssource.IosJsRuntimeFactory
 import miko.ui.MikoUiGraph
 import platform.Foundation.NSApplicationSupportDirectory
@@ -329,6 +332,10 @@ class AppGraph {
     val getMangaUpdates = GetMangaUpdates(mangaUpdatesRepository)
     val getAnimeUpdates = GetAnimeUpdates(animeUpdatesRepository)
 
+    val getUpcomingNovel = GetUpcomingNovel(novelRepository)
+    val getUpcomingManga = GetUpcomingManga(mangaRepository)
+    val getUpcomingAnime = GetUpcomingAnime(animeRepository)
+
     val getNovelHistory = GetNovelHistory(novelHistoryRepository)
     val getMangaHistory = GetMangaHistory(mangaHistoryRepository)
     val getAnimeHistory = GetAnimeHistory(animeHistoryRepository)
@@ -394,6 +401,9 @@ class AppGraph {
         getNovelUpdates = getNovelUpdates,
         getMangaUpdates = getMangaUpdates,
         getAnimeUpdates = getAnimeUpdates,
+        getUpcomingNovel = getUpcomingNovel,
+        getUpcomingManga = getUpcomingManga,
+        getUpcomingAnime = getUpcomingAnime,
         getNovelHistory = getNovelHistory,
         getMangaHistory = getMangaHistory,
         getAnimeHistory = getAnimeHistory,

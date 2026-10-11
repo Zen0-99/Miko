@@ -94,6 +94,11 @@ fun UpdatesScreen(
                 onClick = { model.setMode(UpdatesScreenModel.Mode.History) },
                 label = { Text(stringResource(MR.strings.history)) },
             )
+            FilterChip(
+                selected = state.mode == UpdatesScreenModel.Mode.Upcoming,
+                onClick = { model.setMode(UpdatesScreenModel.Mode.Upcoming) },
+                label = { Text(stringResource(MR.strings.label_upcoming)) },
+            )
             // Manual refresh — Android's updates toolbar action.
             val refreshing by model.refreshing.collectAsStateWithLifecycle()
             IconButton(
@@ -129,6 +134,7 @@ fun UpdatesScreen(
                             is UpdatesScreenModel.Row.Header -> "h-${row.key}"
                             is UpdatesScreenModel.Row.Update -> "u-${row.itemId}"
                             is UpdatesScreenModel.Row.History -> "hist-${row.id}"
+                            is UpdatesScreenModel.Row.Upcoming -> "up-${row.entryId}"
                         }
                     },
                 ) { row ->
@@ -173,6 +179,12 @@ fun UpdatesScreen(
                                 }
                             },
                         )
+                        is UpdatesScreenModel.Row.Upcoming -> UpcomingRow(
+                            row = row,
+                            onClick = {
+                                onOpenEntry(row.sourceId, row.entryUrl, row.entryTitle)
+                            },
+                        )
                     }
                 }
             }
@@ -212,6 +224,22 @@ private fun UpdateRow(
                 )
             }
         },
+    )
+}
+
+@Composable
+private fun UpcomingRow(
+    row: UpdatesScreenModel.Row.Upcoming,
+    onClick: () -> Unit,
+) {
+    CoverListItem(
+        title = row.entryTitle,
+        coverUrl = row.coverUrl,
+        onClick = onClick,
+        subtitle = dateLabel(
+            kotlin.time.Instant.fromEpochMilliseconds(row.nextUpdate)
+                .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date,
+        ),
     )
 }
 

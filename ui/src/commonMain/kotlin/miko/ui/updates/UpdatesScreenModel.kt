@@ -6,10 +6,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
@@ -34,7 +37,7 @@ class UpdatesScreenModel(
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
-    enum class Mode { Updates, History }
+    enum class Mode { Updates, History, Upcoming }
 
     sealed interface Row {
         data class Header(val key: String, val label: String) : Row
@@ -57,6 +60,16 @@ class UpdatesScreenModel(
             val entryTitle: String,
             val itemName: String,
             val readAt: Long?,
+            val coverUrl: String?,
+        ) : Row
+
+        /** Android's Upcoming feed — favorites with a stamped next_update. */
+        data class Upcoming(
+            val entryId: Long,
+            val sourceId: Long,
+            val entryUrl: String,
+            val entryTitle: String,
+            val nextUpdate: Long,
             val coverUrl: String?,
         ) : Row
     }
@@ -123,6 +136,63 @@ class UpdatesScreenModel(
     private fun rowsFor(carrier: BrowseCarrier, mode: Mode, query: String) = when (mode) {
         Mode.Updates -> updatesRows(carrier)
         Mode.History -> historyRows(carrier, query)
+        Mode.Upcoming -> upcomingRows(carrier, query)
+    }
+
+    private fun upcomingRows(carrier: BrowseCarrier, query: String): Flow<List<Row>> {
+        // subscribe() is suspend on these interactors — emit the flow inline.
+        val upcoming = when (carrier) {
+            BrowseCarrier.SHOWS -> flow {
+                emitAll(graph.getUpcomingAnime.subscribe())
+            }.map { list ->
+                list.map {
+                    Row.Upcoming(
+                        entryId = it.id,
+                        sourceId = it.source,
+                        entryUrl = it.url,
+                        entryTitle = it.title,
+                        nextUpdate = it.nextUpdate,
+                        coverUrl = it.thumbnailUrl,
+                    )
+                }
+            }
+            BrowseCarrier.MANGA -> flow {
+                emitAll(graph.getUpcomingManga.subscribe())
+            }.map { list ->
+                list.map {
+                    Row.Upcoming(
+                        entryId = it.id,
+                        sourceId = it.source,
+                        entryUrl = it.url,
+                        entryTitle = it.title,
+                        nextUpdate = it.nextUpdate,
+                        coverUrl = it.thumbnailUrl,
+                    )
+                }
+            }
+            BrowseCarrier.BOOKS -> flow {
+                emitAll(graph.getUpcomingNovel.subscribe())
+            }.map { list ->
+                list.map {
+                    Row.Upcoming(
+                        entryId = it.id,
+                        sourceId = it.source,
+                        entryUrl = it.url,
+                        entryTitle = it.title,
+                        nextUpdate = it.nextUpdate,
+                        coverUrl = it.thumbnailUrl,
+                    )
+                }
+            }
+        }
+        return upcoming.map { list ->
+            list
+                .filter {
+                    query.isBlank() || it.entryTitle.contains(query, ignoreCase = true)
+                }
+                .sortedBy { it.nextUpdate }
+                .withUpcomingHeaders()
+        }
     }
 
     private fun updatesRows(carrier: BrowseCarrier) = when (carrier) {
@@ -243,6 +313,22 @@ private fun List<UpdatesScreenModel.Row.Update>.withDateHeaders(
                 key = "d$date",
                 label = dateLabel(date),
             )
+        }
+        rows += row
+    }
+    return rows
+}
+
+/** Same insertSeparators idiom for upcoming rows, bucketing on next_update. */
+private fun List<UpdatesScreenModel.Row.Upcoming>.withUpcomingHeaders(): List<UpdatesScreenModel.Row> {
+    val rows = mutableListOf<UpdatesScreenModel.Row>()
+    var lastDate: LocalDate? = null
+    for (row in this) {
+        val date = Instant.fromEpochMilliseconds(row.nextUpdate)
+            .toLocalDateTime(TimeZone.currentSystemDefault()).date
+        if (date != lastDate) {
+            lastDate = date
+            rows += UpdatesScreenModel.Row.Header(key = "u$date", label = dateLabel(date))
         }
         rows += row
     }

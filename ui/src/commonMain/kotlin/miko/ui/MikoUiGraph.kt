@@ -16,6 +16,9 @@ import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.ReplaceNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.UpdateNovelExtensionRepo
 import mihon.domain.extensionrepo.service.ExtensionRepoService
+import mihon.domain.upcoming.manga.interactor.GetUpcomingManga
+import mihon.domain.upcoming.novel.interactor.GetUpcomingNovel
+import mihon.domain.upcoming.shows.interactor.GetUpcomingAnime
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.NovelCarrierBinding
@@ -64,6 +67,9 @@ class MikoUiGraph(
     val getNovelUpdates: GetNovelUpdates,
     val getMangaUpdates: GetMangaUpdates,
     val getAnimeUpdates: GetAnimeUpdates,
+    val getUpcomingNovel: GetUpcomingNovel,
+    val getUpcomingManga: GetUpcomingManga,
+    val getUpcomingAnime: GetUpcomingAnime,
     val getNovelHistory: GetNovelHistory,
     val getMangaHistory: GetMangaHistory,
     val getAnimeHistory: GetAnimeHistory,
