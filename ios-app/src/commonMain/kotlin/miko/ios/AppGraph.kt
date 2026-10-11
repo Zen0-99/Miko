@@ -367,6 +367,7 @@ class AppGraph {
         chapterRepository = chapterRepository,
         historyRepository = mangaHistoryRepository,
         collectionRepository = mangaCollectionRepository,
+        databaseHandler = mangaHandler,
         preferenceStore = preferenceStore,
     )
 

@@ -55,6 +55,9 @@ fun ChapterSettingsSheet(
     onSortMode: (ChapterSortMode) -> Unit,
     onToggleSortDirection: () -> Unit,
     onDisplayByNumber: (Boolean) -> Unit,
+    /** Scanlator exclusion row (manga) — null hides it like Android. */
+    scanlatorFilterActive: Boolean = false,
+    onScanlatorFilterClick: (() -> Unit)? = null,
 ) {
     var page by remember { mutableIntStateOf(0) }
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
@@ -89,6 +92,26 @@ fun ChapterSettingsSheet(
                         checked = bookmarkedOnly,
                         onClick = onToggleBookmarked,
                     )
+                    // Android's scanlator-filter row at the bottom of the
+                    // Filter tab — primary-tinted while exclusions apply.
+                    if (onScanlatorFilterClick != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onScanlatorFilterClick)
+                                .padding(horizontal = 24.dp, vertical = 8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(MR.strings.exclude_scanlators),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (scanlatorFilterActive) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
+                    }
                 }
                 1 -> {
                     val numberRes = if (carrier == BrowseCarrier.SHOWS) {

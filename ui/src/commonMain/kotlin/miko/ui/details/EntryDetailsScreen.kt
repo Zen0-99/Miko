@@ -70,6 +70,7 @@ import miko.ui.carrier.RemoteItem
 import miko.ui.components.ChangeCollectionSheet
 import miko.ui.components.ChapterSettingsSheet
 import miko.ui.components.MigrateSourceSheet
+import miko.ui.components.ScanlatorFilterSheet
 import miko.ui.platform.rememberShareHandler
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -231,6 +232,24 @@ fun EntryDetailsScreen(
                         onSortMode = model::setChapterSortMode,
                         onToggleSortDirection = model::toggleSortDirection,
                         onDisplayByNumber = model::setDisplayByNumber,
+                        // Manga only — novel/anime have no exclusion
+                        // table, so the row hides like Android.
+                        scanlatorFilterActive = state.excludedScanlators.isNotEmpty(),
+                        onScanlatorFilterClick = if (
+                            carrier == BrowseCarrier.MANGA && state.local != null
+                        ) {
+                            model::showScanlatorSheet
+                        } else {
+                            null
+                        },
+                    )
+                }
+                if (state.scanlatorSheetOpen) {
+                    ScanlatorFilterSheet(
+                        scanlators = state.scanlatorNames,
+                        initialExcluded = state.excludedScanlators,
+                        onDismissRequest = model::dismissScanlatorSheet,
+                        onConfirm = model::confirmExcludedScanlators,
                     )
                 }
             }

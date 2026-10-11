@@ -58,6 +58,10 @@ class EntryDetailsScreenModel(
         val migrateSheetOpen: Boolean = false,
         val migrateSources: List<CarrierSource> = emptyList(),
         val migrating: Boolean = false,
+        /** Scanlator filter — Android's ScanlatorFilterDialog state. */
+        val scanlatorSheetOpen: Boolean = false,
+        val scanlatorNames: List<String> = emptyList(),
+        val excludedScanlators: Set<String> = emptySet(),
     ) {
         /** First undone item — Android's `nextContinueChapter`. */
         val nextItem: RemoteItem?
@@ -69,6 +73,9 @@ class EntryDetailsScreenModel(
                 var filtered = items
                 if (unreadOnly) filtered = filtered.filter { it.url !in doneUrls }
                 if (bookmarkedOnly) filtered = filtered.filter { it.url in bookmarkedUrls }
+                if (excludedScanlators.isNotEmpty()) {
+                    filtered = filtered.filter { it.scanlator !in excludedScanlators }
+                }
                 return sortMode.ordered(filtered, sortDescending)
             }
 
@@ -121,6 +128,13 @@ class EntryDetailsScreenModel(
                     bookmarkedUrls = items.filter { it.bookmarked }
                         .mapTo(HashSet()) { it.url },
                 )
+            }
+        }
+        // Android's scanlator exclusion — a view filter over the entry's
+        // chapters; the flow is live so dialog edits re-filter instantly.
+        scope.launch {
+            binding.excludedScanlators(localId).collect { excluded ->
+                _state.value = _state.value.copy(excludedScanlators = excluded)
             }
         }
     }
@@ -289,6 +303,35 @@ class EntryDetailsScreenModel(
                 ?: return@launch
             binding.setItemBookmark(item.id, !item.bookmarked)
         }
+    }
+
+    /**
+     * Android's ScanlatorFilterDialog — opens with the distinct scanlator
+     * names on the entry's items (local rows ∪ the remote list, so a not-
+     * yet-synced favorite still offers its groups). Local-only, like the
+     * rest of the per-entry exclusion state.
+     */
+    fun showScanlatorSheet() {
+        val local = _state.value.local ?: return
+        scope.launch {
+            val names = binding.getItemScanlators(local.id) +
+                _state.value.items.mapNotNull { it.scanlator }
+            _state.value = _state.value.copy(
+                scanlatorNames = names.distinct()
+                    .sortedWith(String.CASE_INSENSITIVE_ORDER),
+                scanlatorSheetOpen = true,
+            )
+        }
+    }
+
+    fun dismissScanlatorSheet() {
+        _state.value = _state.value.copy(scanlatorSheetOpen = false)
+    }
+
+    fun confirmExcludedScanlators(excluded: Set<String>) {
+        val local = _state.value.local ?: return
+        _state.value = _state.value.copy(scanlatorSheetOpen = false)
+        scope.launch { binding.setExcludedScanlators(local.id, excluded) }
     }
 
     /**

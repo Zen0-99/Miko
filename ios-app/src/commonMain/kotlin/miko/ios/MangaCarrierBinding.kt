@@ -23,6 +23,7 @@ import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
@@ -50,6 +51,7 @@ class MangaCarrierBinding(
     private val chapterRepository: ChapterRepository,
     private val historyRepository: MangaHistoryRepository,
     private val collectionRepository: MangaCollectionRepository,
+    private val databaseHandler: MangaDatabaseHandler,
     private val preferenceStore: PreferenceStore,
 ) : CarrierBinding {
 
@@ -185,8 +187,13 @@ class MangaCarrierBinding(
 
     override fun localItems(localId: Long): Flow<List<LocalItem>> = flow {
         // getChapterByMangaIdAsFlow is suspend (unlike the novel repo's).
+        // applyScanlatorFilter mirrors Android's chapter feed — excluded
+        // scanlators' rows never reach the UI's done/bookmark decoration.
         emitAll(
-            chapterRepository.getChapterByMangaIdAsFlow(localId).map { chapters ->
+            chapterRepository.getChapterByMangaIdAsFlow(
+                localId,
+                applyScanlatorFilter = true,
+            ).map { chapters ->
                 chapters.map {
                     LocalItem(
                         id = it.id,
@@ -267,6 +274,31 @@ class MangaCarrierBinding(
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
         chapterRepository.updateChapter(ChapterUpdate(id = itemId, bookmark = bookmarked))
+    }
+
+    /** Android's ScanlatorFilterDialog — per-entry exclusion list. */
+    override suspend fun getItemScanlators(localId: Long): Set<String> =
+        chapterRepository.getScanlatorsByMangaId(localId).toSet()
+
+    override fun excludedScanlators(localId: Long): Flow<Set<String>> =
+        databaseHandler.subscribeToList {
+            excluded_scanlatorsQueries.getExcludedScanlatorsByMangaId(localId)
+        }.map { it.toSet() }
+
+    /** Android's SetExcludedScanlators — diff insert/remove in one txn. */
+    override suspend fun setExcludedScanlators(localId: Long, excluded: Set<String>) {
+        databaseHandler.await(inTransaction = true) {
+            val current = databaseHandler.awaitList {
+                excluded_scanlatorsQueries.getExcludedScanlatorsByMangaId(localId)
+            }.toSet()
+            (excluded - current).forEach { scanlator ->
+                excluded_scanlatorsQueries.insert(localId, scanlator)
+            }
+            val removed = current - excluded
+            if (removed.isNotEmpty()) {
+                excluded_scanlatorsQueries.remove(localId, removed)
+            }
+        }
     }
 
     override fun collections() = collectionRepository.getAllVisibleMangaCollectionsAsFlow()

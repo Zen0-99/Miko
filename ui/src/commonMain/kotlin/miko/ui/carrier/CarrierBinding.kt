@@ -202,6 +202,16 @@ interface CarrierBinding {
     /** Android's per-item bookmark toggle. */
     suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) = Unit
 
+    /**
+     * Scanlator exclusion — Android's `ScanlatorFilterDialog` backing
+     * (manga only; other carriers report no scanlators). The local item
+     * flow is already exclusion-filtered; the details model applies the
+     * same set to remote items at display time.
+     */
+    suspend fun getItemScanlators(localId: Long): Set<String> = emptySet()
+    fun excludedScanlators(localId: Long): Flow<Set<String>> = flowOf(emptySet())
+    suspend fun setExcludedScanlators(localId: Long, excluded: Set<String>) = Unit
+
     /** Visible collections — Android's GetVisibleXCollections. */
     fun collections(): Flow<List<Collection>> = flowOf(emptyList())
 
