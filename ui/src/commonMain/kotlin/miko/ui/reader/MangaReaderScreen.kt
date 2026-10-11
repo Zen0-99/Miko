@@ -1,5 +1,7 @@
 package miko.ui.reader
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -46,21 +48,31 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.buffered
 import kotlinx.io.readByteArray
 import miko.ui.components.SettingDropdown
@@ -266,7 +278,10 @@ private fun PagedViewer(
             pageCount = { state.pages.size + transitions * 2 },
         )
         val scope = rememberCoroutineScope()
+        val zoom = remember { ReaderZoomState() }
         LaunchedEffect(pagerState.currentPage) {
+            // Android resets the zoom on page settle.
+            zoom.reset()
             onPageChange(
                 (pagerState.currentPage - transitions)
                     .coerceIn(0, state.pages.lastIndex.coerceAtLeast(0)),
@@ -305,6 +320,27 @@ private fun PagedViewer(
                         } else {
                             val up = waitForUpOrCancellation() ?: return@awaitEachGesture
                             if (up.isConsumed) return@awaitEachGesture
+                            // Android's onDoubleTap: a second tap inside the
+                            // double-tap window zooms at the tap point; the
+                            // tap zones only run once the window expires —
+                            // the same delay onSingleTapConfirmed pays.
+                            val secondDown = withTimeoutOrNull(
+                                viewConfiguration.doubleTapTimeoutMillis,
+                            ) {
+                                awaitFirstDown()
+                            }
+                            if (secondDown != null) {
+                                val secondUp = waitForUpOrCancellation()
+                                    ?: return@awaitEachGesture
+                                if (!secondUp.isConsumed) {
+                                    up.consume()
+                                    secondUp.consume()
+                                    scope.launch {
+                                        zoom.animateDoubleTap(up.position, size)
+                                    }
+                                }
+                                return@awaitEachGesture
+                            }
                             up.consume()
                             val offset = up.position
                             val target =
@@ -373,19 +409,93 @@ private fun PagedViewer(
                     )
                 }
             }
-            if (state.readingMode == MangaReadingMode.VERTICAL) {
-                VerticalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                    pageContent = pageContent,
-                )
-            } else {
-                HorizontalPager(
-                    state = pagerState,
-                    reverseLayout = state.readingMode == MangaReadingMode.RIGHT_TO_LEFT,
-                    modifier = Modifier.fillMaxSize(),
-                    pageContent = pageContent,
-                )
+            // Android's PagerPageHolder zoom: two-finger pinch scales at the
+            // centroid; while zoomed, single-finger drags pan instead of
+            // flipping pages. Unzoomed single-pointer gestures pass through
+            // untouched so swipes and tap zones keep working.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = zoom.scale
+                        scaleY = zoom.scale
+                        translationX = zoom.offset.x
+                        translationY = zoom.offset.y
+                    }
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val downPos = awaitFirstDown(requireUnconsumed = false).position
+                            var prevSpan = 0f
+                            var prevCentroid = Offset.Zero
+                            var pinchActive = false
+                            var panActive = false
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val pressed = event.changes.filter { it.pressed }
+                                if (pressed.isEmpty()) {
+                                    // Swallow the trailing ups of a zoom/pan
+                                    // gesture so the tap zones don't fire.
+                                    if (pinchActive || panActive) {
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                    break
+                                }
+                                if (pressed.size >= 2) {
+                                    pinchActive = true
+                                    val p1 = pressed[0].position
+                                    val p2 = pressed[1].position
+                                    val span = (p1 - p2).getDistance()
+                                    val centroid = (p1 + p2) / 2f
+                                    if (prevSpan > 0f && span > 0f) {
+                                        val oldScale = zoom.scale
+                                        val newScale = (oldScale * span / prevSpan)
+                                            .coerceIn(1f, MAX_ZOOM_SCALE)
+                                        val c = centroid - Offset(
+                                            size.width / 2f,
+                                            size.height / 2f,
+                                        )
+                                        zoom.offset = zoom.offset -
+                                            c * (newScale - oldScale) +
+                                            (centroid - prevCentroid)
+                                        zoom.scale = newScale
+                                        zoom.clamp(size)
+                                    }
+                                    prevSpan = span
+                                    prevCentroid = centroid
+                                    event.changes.forEach { it.consume() }
+                                } else if (pinchActive || zoom.scale > 1f) {
+                                    val change = pressed.first()
+                                    if (panActive || pinchActive ||
+                                        (change.position - downPos).getDistance() >
+                                        viewConfiguration.touchSlop
+                                    ) {
+                                        panActive = true
+                                        zoom.offset += change.position - change.previousPosition
+                                        zoom.clamp(size)
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                    prevSpan = 0f
+                                } else {
+                                    prevSpan = 0f
+                                }
+                            }
+                        }
+                    },
+            ) {
+                if (state.readingMode == MangaReadingMode.VERTICAL) {
+                    VerticalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        pageContent = pageContent,
+                    )
+                } else {
+                    HorizontalPager(
+                        state = pagerState,
+                        reverseLayout = state.readingMode == MangaReadingMode.RIGHT_TO_LEFT,
+                        modifier = Modifier.fillMaxSize(),
+                        pageContent = pageContent,
+                    )
+                }
             }
             if (state.showPageNumber && state.pages.isNotEmpty()) {
                 Surface(
@@ -715,5 +825,54 @@ private fun ReaderSettingsSheet(
             )
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+private const val MAX_ZOOM_SCALE = 3f
+private const val DOUBLE_TAP_ZOOM_SCALE = 2.5f
+
+/**
+ * Android's page zoom state (SubsamplingScaleImageView scale + pan vTranslate,
+ * center pivot). Resets to 1x whenever the pager settles on a new page.
+ */
+private class ReaderZoomState {
+    var scale by mutableFloatStateOf(1f)
+    var offset by mutableStateOf(Offset.Zero)
+
+    fun reset() {
+        scale = 1f
+        offset = Offset.Zero
+    }
+
+    fun clamp(viewSize: IntSize) {
+        val maxX = viewSize.width * (scale - 1f) / 2f
+        val maxY = viewSize.height * (scale - 1f) / 2f
+        offset = Offset(
+            offset.x.coerceIn(-maxX, maxX),
+            offset.y.coerceIn(-maxY, maxY),
+        )
+    }
+
+    /**
+     * Android's double-tap zoom: toggles between 1x and a fixed scale,
+     * keeping the tapped content point under the finger.
+     */
+    suspend fun animateDoubleTap(pos: Offset, viewSize: IntSize) {
+        val center = Offset(viewSize.width / 2f, viewSize.height / 2f)
+        val targetScale = if (scale > 1f) 1f else DOUBLE_TAP_ZOOM_SCALE
+        // With a center pivot, holding the tap point stationary means
+        // offset -= p * (newScale - oldScale), p in center-relative px.
+        val targetOffset = if (targetScale == 1f) {
+            Offset.Zero
+        } else {
+            offset - (pos - center) * (targetScale - scale)
+        }
+        val fromScale = scale
+        val fromOffset = offset
+        Animatable(0f).animateTo(1f, tween(300)) {
+            scale = lerp(fromScale, targetScale, value)
+            offset = lerp(fromOffset, targetOffset, value)
+        }
+        clamp(viewSize)
     }
 }
