@@ -186,7 +186,15 @@ fun EntryDetailsScreen(
                     favorite = state.favorite,
                     allRead = state.allItemsDone,
                     hasStarted = state.hasStarted,
-                    nextChapterName = state.nextItem?.name,
+                    // Android's displayMode flag — "Chapter 5" vs the
+                    // source name on the continue label.
+                    nextChapterName = state.nextItem?.let {
+                        if (state.displayByNumber && it.number >= 0.0) {
+                            "${itemPrefix(carrier)} ${formatItemNumber(it.number)}"
+                        } else {
+                            it.name
+                        }
+                    },
                     enabled = state.nextItem != null || state.allItemsDone,
                     onContinueClick = { state.nextItem?.let(onItemClick) },
                     onFavoriteClick = model::toggleFavorite,
@@ -839,7 +847,7 @@ private fun ItemRow(
                 // Android's displayMode flag — "Chapter 5" vs the source
                 // title as the row's primary text.
                 text = if (displayByNumber && item.number >= 0.0) {
-                    "$numberPrefix ${item.number}"
+                    "$numberPrefix ${formatItemNumber(item.number)}"
                 } else {
                     item.name
                 },
@@ -862,7 +870,7 @@ private fun ItemRow(
         }
         if (item.number >= 0.0 && !displayByNumber) {
             Text(
-                text = "$numberPrefix ${item.number}",
+                text = "$numberPrefix ${formatItemNumber(item.number)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
                     alpha = if (done) 0.5f else 1f,
@@ -900,3 +908,7 @@ private fun itemPrefix(carrier: BrowseCarrier): String = when (carrier) {
     BrowseCarrier.SHOWS -> "Ep."
     else -> "Ch."
 }
+
+/** "1" for whole numbers, "2.5" otherwise — Android's formatChapterNumber. */
+private fun formatItemNumber(value: Double): String =
+    if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
