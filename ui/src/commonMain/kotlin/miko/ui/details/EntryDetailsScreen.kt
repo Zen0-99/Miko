@@ -71,6 +71,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.LinkAnnotation
@@ -127,6 +128,9 @@ fun EntryDetailsScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+    // Cover-derived accent — Android's rememberEntryAccentColor; it tints
+    // the continue bar, favorite box, and the item carousel.
+    val accentColor = miko.ui.cover.rememberEntryAccentColor(state.details?.thumbnailUrl)
 
     if (state.collectionSheetOpen) {
         ChangeCollectionSheet(
@@ -226,6 +230,7 @@ fun EntryDetailsScreen(
                         onContinueClick = { state.nextItem?.let(onItemClick) },
                         onFavoriteClick = model::toggleFavorite,
                         onToggleDoneClick = model::toggleAllItemsDone,
+                        accentOverride = accentColor,
                     )
                 }
 
@@ -428,7 +433,9 @@ fun EntryDetailsScreen(
                         // Android's details item list is a horizontal
                         // snap carousel of 0.75×screen cards (the Nuvio
                         // episode-card styling), not a vertical list —
-                        // scrubber above when the row is ≥40 items.
+                        // scrubber above when the row is ≥40 items. The
+                        // accent comes from the cover's dominant edge
+                        // color (EntryCoverColorExtractor).
                         item(key = "item-carousel") {
                             val carouselState = rememberLazyListState(
                                 initialFirstVisibleItemIndex = rows
@@ -442,6 +449,7 @@ fun EntryDetailsScreen(
                                 ItemCarouselScrubber(
                                     listState = carouselState,
                                     itemCount = rows.size,
+                                    accentColor = accentColor,
                                 )
                                 LazyRow(
                                     state = carouselState,
@@ -471,6 +479,7 @@ fun EntryDetailsScreen(
                                                     carrier = carrier,
                                                     state = state,
                                                     selecting = selecting,
+                                                    accentColor = accentColor,
                                                     onItemClick = onItemClick,
                                                     onToggleSelect = model::toggleSelection,
                                                     onDownload = model::downloadItem,
@@ -623,9 +632,16 @@ private fun ContinueRow(
     onContinueClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onToggleDoneClick: () -> Unit,
+    accentOverride: Color? = null,
 ) {
-    val accent = MaterialTheme.colorScheme.primary
-    val onAccent = MaterialTheme.colorScheme.onPrimary
+    // The cover-derived accent replaces the theme primary once extracted —
+    // Android's EntryCoverColorExtractor + rememberOnAccentColor.
+    val accent = accentOverride ?: MaterialTheme.colorScheme.primary
+    val onAccent = if (accentOverride != null) {
+        if (accent.luminance() > 0.5f) Color.Black else Color.White
+    } else {
+        MaterialTheme.colorScheme.onPrimary
+    }
 
     val label = when {
         allRead -> stringResource(AYMR.strings.fetching_overlay_all_up_to_date)
@@ -983,6 +999,7 @@ private fun ItemCarouselCard(
     carrier: BrowseCarrier,
     state: EntryDetailsScreenModel.State,
     selecting: Boolean,
+    accentColor: Color?,
     onItemClick: (RemoteItem) -> Unit,
     onToggleSelect: (String) -> Unit,
     onDownload: (String) -> Unit,
@@ -1062,6 +1079,7 @@ private fun ItemCarouselCard(
             isNext = item.url == state.nextItem?.url,
             onLongClick = if (state.local != null) longClick else ({}),
             onClick = click,
+            accentColor = accentColor,
             trailing = downloadTrailing,
         )
     } else {
@@ -1076,6 +1094,7 @@ private fun ItemCarouselCard(
             isNext = item.url == state.nextItem?.url,
             onLongClick = if (state.local != null) longClick else ({}),
             onClick = click,
+            accentColor = accentColor,
             trailing = downloadTrailing,
         )
     }

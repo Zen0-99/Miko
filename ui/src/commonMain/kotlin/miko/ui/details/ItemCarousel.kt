@@ -60,6 +60,8 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import miko.ui.cover.hslToColor
+import miko.ui.cover.rgbToHsl
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -98,48 +100,6 @@ private fun accentTintedSurface(accent: Color, background: Color, dimmed: Boolea
 private const val TINTED_SURFACE_STEP = 0.075f
 private const val TINTED_SURFACE_DIMMED_DELTA = 0.035f
 private const val TINTED_SURFACE_SATURATION = 0.38f
-
-private fun rgbToHsl(argb: Int): FloatArray {
-    val r = ((argb shr 16) and 0xFF) / 255f
-    val g = ((argb shr 8) and 0xFF) / 255f
-    val b = (argb and 0xFF) / 255f
-    val max = maxOf(r, g, b)
-    val min = minOf(r, g, b)
-    var h = 0f
-    var s = 0f
-    val l = (max + min) / 2f
-    if (max != min) {
-        val d = max - min
-        s = if (l > 0.5f) d / (2f - max - min) else d / (max + min)
-        h = when (max) {
-            r -> (g - b) / d + (if (g < b) 6f else 0f)
-            g -> (b - r) / d + 2f
-            else -> (r - g) / d + 4f
-        }
-        h /= 6f
-    }
-    return floatArrayOf(h * 360f, s, l)
-}
-
-private fun hslToColor(h: Float, s: Float, l: Float): Color {
-    val c = (1f - kotlin.math.abs(2f * l - 1f)) * s
-    val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
-    val m = l - c / 2f
-    val (r, g, b) = when {
-        h < 60f -> Triple(c, x, 0f)
-        h < 120f -> Triple(x, c, 0f)
-        h < 180f -> Triple(0f, c, x)
-        h < 240f -> Triple(0f, x, c)
-        h < 300f -> Triple(x, 0f, c)
-        else -> Triple(c, 0f, x)
-    }
-    return Color(
-        (r + m).coerceIn(0f, 1f),
-        (g + m).coerceIn(0f, 1f),
-        (b + m).coerceIn(0f, 1f),
-        1f,
-    )
-}
 
 /**
  * Port of Android's `EntryChapterCarouselCard` — 0.75×screen tinted card:
