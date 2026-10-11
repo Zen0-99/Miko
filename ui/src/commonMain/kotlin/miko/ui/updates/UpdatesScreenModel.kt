@@ -20,7 +20,11 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import miko.ui.MikoUiGraph
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.CarrierBinding
+import miko.ui.carrier.LocalItem
 import miko.ui.carrier.NavTarget
+import miko.ui.download.DownloadManager
+import miko.ui.download.DownloadState
 import kotlin.time.Instant
 
 /**
@@ -48,6 +52,8 @@ class UpdatesScreenModel(
             val sourceId: Long,
             val entryTitle: String,
             val itemName: String,
+            val itemUrl: String,
+            val sourceName: String,
             val done: Boolean,
             val dateFetch: Long,
             val coverUrl: String?,
@@ -90,6 +96,10 @@ class UpdatesScreenModel(
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    /** Item-dir paths whose `.done` marker exists — update-row downloaded state. */
+    private val _downloadedDirs = MutableStateFlow<Set<String>>(emptySet())
+    val downloadedDirs: StateFlow<Set<String>> = _downloadedDirs.asStateFlow()
+
     // History-mode toolbar query — Android's HistoriesTab subscribe(query).
     private val historyQuery = MutableStateFlow("")
 
@@ -103,7 +113,77 @@ class UpdatesScreenModel(
                         }
                     }
                 }
-            }.collect { _state.value = it }
+            }.collect {
+                _state.value = it
+                rescanDownloads()
+            }
+        }
+        scope.launch {
+            // A download completing/removal flips row state without a DB write.
+            DownloadManager.changes.collect { rescanDownloads() }
+        }
+    }
+
+    private fun rescanDownloads() {
+        val carrier = carrierFlow.value
+        _downloadedDirs.value = _state.value.rows
+            .filterIsInstance<Row.Update>()
+            .filter { it.itemUrl.isNotBlank() && it.sourceName.isNotBlank() }
+            .mapNotNull { row ->
+                DownloadManager
+                    .itemDir(carrier, row.sourceName, row.entryTitle, row.itemName)
+                    .takeIf { DownloadManager.isDownloaded(it) }
+                    ?.toString()
+            }
+            .toSet()
+    }
+
+    /** The row's item-dir key into [downloadedDirs]. */
+    fun itemDirPath(row: Row.Update): String =
+        DownloadManager
+            .itemDir(carrierFlow.value, row.sourceName, row.entryTitle, row.itemName)
+            .toString()
+
+    /**
+     * Android's update-row download tap — the indicator cycles
+     * enqueue → cancel → delete (a downloaded item's tap removes it).
+     */
+    fun onDownloadClick(row: Row.Update) {
+        if (row.itemUrl.isBlank() || row.sourceName.isBlank()) return
+        scope.launch {
+            val carrier = carrierFlow.value
+            val dir = DownloadManager
+                .itemDir(carrier, row.sourceName, row.entryTitle, row.itemName)
+            when (DownloadManager.states.value[row.itemUrl]) {
+                DownloadState.QUEUED,
+                DownloadState.DOWNLOADING,
+                -> DownloadManager.cancel(row.itemUrl)
+                DownloadState.DOWNLOADED,
+                null,
+                -> if (DownloadManager.isDownloaded(dir)) {
+                    DownloadManager
+                        .delete(carrier, row.sourceName, row.entryTitle, row.itemName)
+                } else {
+                    val binding = graph.binding(carrier)
+                    DownloadManager.enqueue(
+                        carrier,
+                        row.sourceName,
+                        row.entryTitle,
+                        row.itemName,
+                        row.itemUrl,
+                    ) { binding.itemPayload(row.sourceId, row.itemUrl) }
+                }
+                DownloadState.ERROR ->
+                    DownloadManager.enqueue(
+                        carrier,
+                        row.sourceName,
+                        row.entryTitle,
+                        row.itemName,
+                        row.itemUrl,
+                    ) {
+                        graph.binding(carrier).itemPayload(row.sourceId, row.itemUrl)
+                    }
+            }
         }
     }
 
@@ -195,49 +275,76 @@ class UpdatesScreenModel(
         }
     }
 
-    private fun updatesRows(carrier: BrowseCarrier) = when (carrier) {
-        BrowseCarrier.SHOWS -> graph.getAnimeUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
-            list.map {
-                Row.Update(
-                    entryId = it.animeId,
-                    itemId = it.episodeId,
-                    sourceId = it.sourceId,
-                    entryTitle = it.animeTitle,
-                    itemName = it.episodeName,
-                    done = it.seen,
-                    dateFetch = it.dateFetch,
-                    coverUrl = it.coverData.url,
-                )
-            }.withDateHeaders { it.dateFetch }
+    private fun updatesRows(carrier: BrowseCarrier): Flow<List<Row>> {
+        val binding = graph.binding(carrier)
+        return when (carrier) {
+            BrowseCarrier.SHOWS -> graph.getAnimeUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
+                val itemsByEntry = localItemsByEntry(binding, list.map { it.animeId })
+                list.map {
+                    Row.Update(
+                        entryId = it.animeId,
+                        itemId = it.episodeId,
+                        sourceId = it.sourceId,
+                        entryTitle = it.animeTitle,
+                        itemName = it.episodeName,
+                        itemUrl = itemsByEntry[it.animeId]
+                            ?.firstOrNull { item -> item.id == it.episodeId }?.url ?: "",
+                        sourceName = binding.source(it.sourceId)?.name ?: "",
+                        done = it.seen,
+                        dateFetch = it.dateFetch,
+                        coverUrl = it.coverData.url,
+                    )
+                }.withDateHeaders { it.dateFetch }
+            }
+            BrowseCarrier.MANGA -> graph.getMangaUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
+                val itemsByEntry = localItemsByEntry(binding, list.map { it.mangaId })
+                list.map {
+                    Row.Update(
+                        entryId = it.mangaId,
+                        itemId = it.chapterId,
+                        sourceId = it.sourceId,
+                        entryTitle = it.mangaTitle,
+                        itemName = it.chapterName,
+                        itemUrl = itemsByEntry[it.mangaId]
+                            ?.firstOrNull { item -> item.id == it.chapterId }?.url ?: "",
+                        sourceName = binding.source(it.sourceId)?.name ?: "",
+                        done = it.read,
+                        dateFetch = it.dateFetch,
+                        coverUrl = it.coverData.url,
+                    )
+                }.withDateHeaders { it.dateFetch }
+            }
+            BrowseCarrier.BOOKS -> graph.getNovelUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
+                val itemsByEntry = localItemsByEntry(binding, list.map { it.novelId })
+                list.map {
+                    Row.Update(
+                        entryId = it.novelId,
+                        itemId = it.chapterId,
+                        sourceId = it.sourceId,
+                        entryTitle = it.novelTitle,
+                        itemName = it.chapterName,
+                        itemUrl = itemsByEntry[it.novelId]
+                            ?.firstOrNull { item -> item.id == it.chapterId }?.url ?: "",
+                        sourceName = binding.source(it.sourceId)?.name ?: "",
+                        done = it.read,
+                        dateFetch = it.dateFetch,
+                        coverUrl = it.coverData.url,
+                    )
+                }.withDateHeaders { it.dateFetch }
+            }
         }
-        BrowseCarrier.MANGA -> graph.getMangaUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
-            list.map {
-                Row.Update(
-                    entryId = it.mangaId,
-                    itemId = it.chapterId,
-                    sourceId = it.sourceId,
-                    entryTitle = it.mangaTitle,
-                    itemName = it.chapterName,
-                    done = it.read,
-                    dateFetch = it.dateFetch,
-                    coverUrl = it.coverData.url,
-                )
-            }.withDateHeaders { it.dateFetch }
+    }
+
+    /** One `getLocalItems` call per distinct entry — the row url lookup. */
+    private suspend fun localItemsByEntry(
+        binding: CarrierBinding,
+        entryIds: List<Long>,
+    ): Map<Long, List<LocalItem>> {
+        val result = HashMap<Long, List<LocalItem>>()
+        for (id in entryIds.toSet()) {
+            result[id] = runCatching { binding.getLocalItems(id) }.getOrDefault(emptyList())
         }
-        BrowseCarrier.BOOKS -> graph.getNovelUpdates.subscribe(Instant.DISTANT_PAST).map { list ->
-            list.map {
-                Row.Update(
-                    entryId = it.novelId,
-                    itemId = it.chapterId,
-                    sourceId = it.sourceId,
-                    entryTitle = it.novelTitle,
-                    itemName = it.chapterName,
-                    done = it.read,
-                    dateFetch = it.dateFetch,
-                    coverUrl = it.coverData.url,
-                )
-            }.withDateHeaders { it.dateFetch }
-        }
+        return result
     }
 
     private fun historyRows(carrier: BrowseCarrier, query: String) = when (carrier) {

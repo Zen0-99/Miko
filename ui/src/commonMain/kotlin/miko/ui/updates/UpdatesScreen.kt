@@ -12,10 +12,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +44,8 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.components.CoverListItem
+import miko.ui.download.DownloadManager
+import miko.ui.download.DownloadState
 import miko.ui.extensions.ExtensionHeader
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -67,6 +73,9 @@ fun UpdatesScreen(
     val state by model.state.collectAsStateWithLifecycle()
     val carrier by carrierFlow.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val downloadStates by DownloadManager.states.collectAsStateWithLifecycle()
+    val downloadProgress by DownloadManager.progress.collectAsStateWithLifecycle()
+    val downloadedDirs by model.downloadedDirs.collectAsStateWithLifecycle()
 
     Column(modifier = modifier.fillMaxSize()) {
         // Carrier + sub-tab selectors — same chip row idiom as Sources/Library.
@@ -192,6 +201,11 @@ fun UpdatesScreen(
                         is UpdatesScreenModel.Row.Header -> ExtensionHeader(row.label)
                         is UpdatesScreenModel.Row.Update -> UpdateRow(
                             row = row,
+                            carrier = carrier,
+                            downloadState = downloadStates[row.itemUrl],
+                            downloadProgress = downloadProgress[row.itemUrl] ?: 0f,
+                            downloaded = model.itemDirPath(row) in downloadedDirs,
+                            onDownloadClick = { model.onDownloadClick(row) },
                             onToggleDone = { model.markItemDone(row.itemId, !row.done) },
                             onClick = {
                                 scope.launch {
@@ -247,6 +261,11 @@ fun UpdatesScreen(
 @Composable
 private fun UpdateRow(
     row: UpdatesScreenModel.Row.Update,
+    carrier: BrowseCarrier,
+    downloadState: DownloadState?,
+    downloadProgress: Float,
+    downloaded: Boolean,
+    onDownloadClick: () -> Unit,
     onClick: () -> Unit,
     onCoverClick: () -> Unit,
     onToggleDone: () -> Unit,
@@ -260,20 +279,81 @@ private fun UpdateRow(
         subtitle = row.itemName,
         modifier = if (row.done) Modifier.secondaryItemAlpha() else Modifier,
         trailing = {
-            IconButton(onClick = onToggleDone) {
-                Icon(
-                    imageVector = if (row.done) {
-                        Icons.Filled.CheckCircle
-                    } else {
-                        Icons.Outlined.CheckCircle
-                    },
-                    contentDescription = stringResource(MR.strings.action_mark_as_read),
-                    tint = if (row.done) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+            if (carrier != BrowseCarrier.SHOWS) {
+                // Android's ChapterDownloadIndicator — cycles
+                // enqueue → cancel → delete on tap.
+                when {
+                    downloadState == DownloadState.DOWNLOADING -> {
+                        CircularProgressIndicator(
+                            progress = { downloadProgress },
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable(onClick = onDownloadClick),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                    downloadState == DownloadState.QUEUED -> {
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = stringResource(
+                                AYMR.strings.download_queue_status_queued,
+                            ),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable(onClick = onDownloadClick),
+                        )
+                    }
+                    downloadState == DownloadState.ERROR -> {
+                        Icon(
+                            imageVector = Icons.Outlined.ErrorOutline,
+                            contentDescription = stringResource(
+                                AYMR.strings.download_queue_status_failed,
+                            ),
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable(onClick = onDownloadClick),
+                        )
+                    }
+                    downloaded -> {
+                        Icon(
+                            imageVector = Icons.Filled.DownloadDone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable(onClick = onDownloadClick),
+                        )
+                    }
+                    else -> {
+                        IconButton(onClick = onDownloadClick) {
+                            Icon(
+                                imageVector = Icons.Outlined.Download,
+                                contentDescription = stringResource(
+                                    MR.strings.action_download,
+                                ),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            } else {
+                IconButton(onClick = onToggleDone) {
+                    Icon(
+                        imageVector = if (row.done) {
+                            Icons.Filled.CheckCircle
+                        } else {
+                            Icons.Outlined.CheckCircle
+                        },
+                        contentDescription = stringResource(MR.strings.action_mark_as_read),
+                        tint = if (row.done) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
             }
         },
     )
