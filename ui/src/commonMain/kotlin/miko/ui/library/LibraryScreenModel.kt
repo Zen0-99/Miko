@@ -305,6 +305,22 @@ class LibraryScreenModel(
         }
     }
 
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /** Android's library pull-to-refresh — the per-carrier update job. */
+    fun refresh() {
+        if (_refreshing.value) return
+        scope.launch {
+            _refreshing.value = true
+            try {
+                graph.binding(carrierFlow.value).refreshFavorites()
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
     private suspend fun applyFilters(
         entries: List<LibraryEntry>,
         query: String,
