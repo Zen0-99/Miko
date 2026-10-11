@@ -1,5 +1,6 @@
 package miko.ui.reader
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,12 +30,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.launch
 import miko.ui.components.SettingDropdown
 import miko.ui.components.SettingSwitch
 import tachiyomi.i18n.MR
@@ -161,7 +165,49 @@ private fun PagedViewer(
     // Reset page position whenever the chapter changes.
     key(state.chapterUrl) {
         val pagerState = rememberPagerState(pageCount = { state.pages.size })
-        Box(modifier = modifier.fillMaxSize()) {
+        val scope = rememberCoroutineScope()
+        val rtl = state.readingMode == MangaReadingMode.RIGHT_TO_LEFT
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                // Android's tap zones: outer thirds flip pages (mirrored in
+                // RTL); the center third is a no-op until an app-bar toggle
+                // lands. Swipes still go through — taps aren't consumed.
+                .pointerInput(state.readingMode) {
+                    detectTapGestures { offset ->
+                        val target = if (state.readingMode == MangaReadingMode.VERTICAL) {
+                            when {
+                                offset.y < size.height / 3 -> -1
+                                offset.y > size.height * 2 / 3 -> 1
+                                else -> 0
+                            }
+                        } else {
+                            val nextEdge = if (rtl) {
+                                offset.x < size.width / 3
+                            } else {
+                                offset.x > size.width * 2 / 3
+                            }
+                            val prevEdge = if (rtl) {
+                                offset.x > size.width * 2 / 3
+                            } else {
+                                offset.x < size.width / 3
+                            }
+                            when {
+                                nextEdge -> 1
+                                prevEdge -> -1
+                                else -> 0
+                            }
+                        }
+                        if (target != 0) {
+                            val page = (pagerState.currentPage + target)
+                                .coerceIn(0, state.pages.lastIndex)
+                            if (page != pagerState.currentPage) {
+                                scope.launch { pagerState.animateScrollToPage(page) }
+                            }
+                        }
+                    }
+                },
+        ) {
             if (state.readingMode == MangaReadingMode.VERTICAL) {
                 VerticalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { index ->
                     PageImage(state.pages[index], Modifier.fillMaxSize(), ContentScale.Fit)
