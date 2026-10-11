@@ -83,41 +83,44 @@ fun MangaReaderScreen(
             else -> PageViewer(
                 state = state,
                 onPageChange = model::savePageProgress,
+                onCenterTap = model::toggleChrome,
                 modifier = Modifier.weight(1f),
             )
         }
 
-        HorizontalDivider()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                onClick = model::prevChapter,
-                enabled = state.hasPrev,
+        if (state.chromeVisible) {
+            HorizontalDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(MR.strings.action_previous_chapter))
-            }
-            IconButton(onClick = model::openChapterSheet) {
-                Icon(
-                    Icons.AutoMirrored.Filled.FormatListBulleted,
-                    contentDescription = stringResource(MR.strings.chapters),
-                )
-            }
-            IconButton(onClick = model::openSettings) {
-                Icon(
-                    Icons.Filled.Settings,
-                    contentDescription = stringResource(MR.strings.pref_category_reading_mode),
-                )
-            }
-            TextButton(
-                onClick = model::nextChapter,
-                enabled = state.hasNext,
-            ) {
-                Text(stringResource(MR.strings.action_next_chapter))
+                TextButton(
+                    onClick = model::prevChapter,
+                    enabled = state.hasPrev,
+                ) {
+                    Text(stringResource(MR.strings.action_previous_chapter))
+                }
+                IconButton(onClick = model::openChapterSheet) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.FormatListBulleted,
+                        contentDescription = stringResource(MR.strings.chapters),
+                    )
+                }
+                IconButton(onClick = model::openSettings) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = stringResource(MR.strings.pref_category_reading_mode),
+                    )
+                }
+                TextButton(
+                    onClick = model::nextChapter,
+                    enabled = state.hasNext,
+                ) {
+                    Text(stringResource(MR.strings.action_next_chapter))
+                }
             }
         }
     }
@@ -146,14 +149,24 @@ fun MangaReaderScreen(
 private fun PageViewer(
     state: MangaReaderScreenModel.State,
     onPageChange: (Int) -> Unit,
+    onCenterTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (state.readingMode) {
         MangaReadingMode.LEFT_TO_RIGHT,
         MangaReadingMode.RIGHT_TO_LEFT,
         MangaReadingMode.VERTICAL,
-        -> PagedViewer(state, onPageChange, modifier)
-        else -> WebtoonViewer(state, onPageChange, modifier)
+        -> PagedViewer(state, onPageChange, onCenterTap, modifier)
+        else -> Box(
+            modifier = modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    // Android's webtoon viewer toggles the app bar on any tap.
+                    detectTapGestures { onCenterTap() }
+                },
+        ) {
+            WebtoonViewer(state, onPageChange, Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -165,6 +178,7 @@ private fun PageViewer(
 private fun PagedViewer(
     state: MangaReaderScreenModel.State,
     onPageChange: (Int) -> Unit,
+    onCenterTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Reset page position whenever the chapter changes; lastPageRead
@@ -216,6 +230,8 @@ private fun PagedViewer(
                             if (page != pagerState.currentPage) {
                                 scope.launch { pagerState.animateScrollToPage(page) }
                             }
+                        } else {
+                            onCenterTap()
                         }
                     }
                 },

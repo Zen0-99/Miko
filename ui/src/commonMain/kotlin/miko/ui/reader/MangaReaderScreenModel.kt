@@ -51,6 +51,8 @@ class MangaReaderScreenModel(
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
+        /** Center-tap immersive toggle — hides the bottom nav row. */
+        val chromeVisible: Boolean = true,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -109,6 +111,11 @@ class MangaReaderScreenModel(
     }
 
     fun setShowPageNumber(show: Boolean) = showPageNumberPref.set(show)
+
+    /** Android's center-tap app-bar toggle. */
+    fun toggleChrome() {
+        _state.value = _state.value.copy(chromeVisible = !_state.value.chromeVisible)
+    }
 
     fun openSettings() {
         _state.value = _state.value.copy(showSettings = true)
