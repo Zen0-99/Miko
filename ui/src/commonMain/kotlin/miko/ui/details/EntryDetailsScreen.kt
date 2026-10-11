@@ -55,8 +55,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -88,6 +91,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.ItemSwipeAction
 import miko.ui.carrier.RemoteItem
 import miko.ui.components.ChangeCollectionSheet
 import miko.ui.components.ChapterSettingsSheet
@@ -391,69 +395,106 @@ fun EntryDetailsScreen(
                             val selected = item.url in state.selectedUrls
                             val canDownload = carrier != BrowseCarrier.SHOWS &&
                                 state.local != null
-                            Column {
-                                ItemRow(
-                                    item = item,
-                                    numberPrefix = itemPrefix(carrier),
-                                    done = itemDone,
-                                    displayByNumber = state.displayByNumber,
-                                    bookmarked = item.url in state.bookmarkedUrls,
-                                    selected = selected,
-                                    showPreview = state.showPreviews,
-                                    showSummary = state.showSummaries,
-                                    downloadState = if (canDownload) {
-                                        state.downloadStates[item.url]
-                                    } else {
-                                        null
-                                    },
-                                    downloadProgress =
-                                    state.downloadProgress[item.url] ?: 0f,
-                                    downloaded = canDownload &&
-                                        DownloadManager.sanitizeName(item.name) in
-                                        state.downloadedNames,
-                                    onDownloadClick = if (
-                                        canDownload &&
-                                        state.downloadStates[item.url] == null
-                                    ) {
-                                        { model.downloadItem(item.url) }
-                                    } else {
-                                        null
-                                    },
-                                    onCancelClick = if (
-                                        canDownload &&
-                                        state.downloadStates[item.url] in
-                                        setOf(
-                                            DownloadState.QUEUED,
-                                            DownloadState.DOWNLOADING,
-                                        )
-                                    ) {
-                                        { model.cancelDownload(item.url) }
-                                    } else {
-                                        null
-                                    },
-                                    onDeleteClick = if (canDownload) {
-                                        { model.deleteDownload(item.url) }
-                                    } else {
-                                        null
-                                    },
-                                    onClick = {
-                                        if (selecting) {
-                                            model.toggleSelection(item.url)
+                            // Android's chapter/episode swipe actions —
+                            // the reveal triggers, then the row snaps back
+                            // (confirmValueChange returns false, never
+                            // Settled). Disabled in selection mode.
+                            val swipeEnabled = !selecting && state.local != null
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    val action = when (value) {
+                                        SwipeToDismissBoxValue.StartToEnd -> state.swipeStart
+                                        SwipeToDismissBoxValue.EndToStart -> state.swipeEnd
+                                        else -> ItemSwipeAction.Disabled
+                                    }
+                                    if (swipeEnabled && action != ItemSwipeAction.Disabled) {
+                                        model.performItemSwipe(item.url, action)
+                                    }
+                                    false
+                                },
+                            )
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = swipeEnabled &&
+                                    state.swipeStart != ItemSwipeAction.Disabled,
+                                enableDismissFromEndToStart = swipeEnabled &&
+                                    state.swipeEnd != ItemSwipeAction.Disabled,
+                                backgroundContent = {
+                                    val action = when (dismissState.dismissDirection) {
+                                        SwipeToDismissBoxValue.StartToEnd -> state.swipeStart
+                                        else -> state.swipeEnd
+                                    }
+                                    SwipeActionBackground(
+                                        action = action,
+                                        towardStart = dismissState.dismissDirection ==
+                                            SwipeToDismissBoxValue.StartToEnd,
+                                    )
+                                },
+                            ) {
+                                Column {
+                                    ItemRow(
+                                        item = item,
+                                        numberPrefix = itemPrefix(carrier),
+                                        done = itemDone,
+                                        displayByNumber = state.displayByNumber,
+                                        bookmarked = item.url in state.bookmarkedUrls,
+                                        selected = selected,
+                                        showPreview = state.showPreviews,
+                                        showSummary = state.showSummaries,
+                                        downloadState = if (canDownload) {
+                                            state.downloadStates[item.url]
                                         } else {
-                                            onItemClick(item)
-                                        }
-                                    },
-                                    // Android's action mode — long-press selects
-                                    // once the entry has a local row to mutate.
-                                    onLongClick = if (state.local != null) {
-                                        { model.toggleSelection(item.url) }
-                                    } else {
-                                        null
-                                    },
-                                )
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                )
+                                            null
+                                        },
+                                        downloadProgress =
+                                        state.downloadProgress[item.url] ?: 0f,
+                                        downloaded = canDownload &&
+                                            DownloadManager.sanitizeName(item.name) in
+                                            state.downloadedNames,
+                                        onDownloadClick = if (
+                                            canDownload &&
+                                            state.downloadStates[item.url] == null
+                                        ) {
+                                            { model.downloadItem(item.url) }
+                                        } else {
+                                            null
+                                        },
+                                        onCancelClick = if (
+                                            canDownload &&
+                                            state.downloadStates[item.url] in
+                                            setOf(
+                                                DownloadState.QUEUED,
+                                                DownloadState.DOWNLOADING,
+                                            )
+                                        ) {
+                                            { model.cancelDownload(item.url) }
+                                        } else {
+                                            null
+                                        },
+                                        onDeleteClick = if (canDownload) {
+                                            { model.deleteDownload(item.url) }
+                                        } else {
+                                            null
+                                        },
+                                        onClick = {
+                                            if (selecting) {
+                                                model.toggleSelection(item.url)
+                                            } else {
+                                                onItemClick(item)
+                                            }
+                                        },
+                                        // Android's action mode — long-press selects
+                                        // once the entry has a local row to mutate.
+                                        onLongClick = if (state.local != null) {
+                                            { model.toggleSelection(item.url) }
+                                        } else {
+                                            null
+                                        },
+                                    )
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -1297,6 +1338,38 @@ private fun RowScope.SelectionAction(
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * Android's swipe-reveal background — the action icon at the revealed edge
+ * on primaryContainer, mirroring saket.swipe's action layout.
+ */
+@Composable
+private fun SwipeActionBackground(
+    action: ItemSwipeAction,
+    /** True when the reveal is at the start edge (swipe right). */
+    towardStart: Boolean,
+) {
+    val icon = when (action) {
+        ItemSwipeAction.ToggleDone -> Icons.Filled.Visibility
+        ItemSwipeAction.ToggleBookmark -> Icons.Filled.Bookmark
+        ItemSwipeAction.ToggleFillermark -> Icons.Filled.Label
+        ItemSwipeAction.Download -> Icons.Outlined.FileDownload
+        ItemSwipeAction.Disabled -> Icons.Outlined.FileDownload
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = if (towardStart) Alignment.CenterStart else Alignment.CenterEnd,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.padding(horizontal = 24.dp),
         )
     }
 }

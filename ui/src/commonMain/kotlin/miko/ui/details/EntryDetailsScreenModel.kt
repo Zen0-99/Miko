@@ -14,6 +14,7 @@ import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.ChapterSortMode
+import miko.ui.carrier.ItemSwipeAction
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
@@ -62,6 +63,9 @@ class EntryDetailsScreenModel(
         val fillermarkedUrls: Set<String> = emptySet(),
         /** Android's action-mode selection — urls of the ticked rows. */
         val selectedUrls: Set<String> = emptySet(),
+        /** Android's row swipe prefs — (start-edge, end-edge) actions. */
+        val swipeStart: ItemSwipeAction = ItemSwipeAction.Disabled,
+        val swipeEnd: ItemSwipeAction = ItemSwipeAction.Disabled,
         /** Sanitized item names whose download dir holds the .done marker. */
         val downloadedNames: Set<String> = emptySet(),
         /** Live queue states keyed by item url — Android's DownloadState. */
@@ -166,6 +170,10 @@ class EntryDetailsScreenModel(
             DownloadManager.changes.collect { dir ->
                 if (dir == downloadEntryPath()) rescanDownloads()
             }
+        }
+        scope.launch {
+            val (start, end) = binding.swipeActions()
+            _state.value = _state.value.copy(swipeStart = start, swipeEnd = end)
         }
         refresh()
     }
@@ -385,6 +393,31 @@ class EntryDetailsScreenModel(
                 .firstOrNull { it.url == itemUrl }
                 ?: return@launch
             binding.setItemBookmark(item.id, !item.bookmarked)
+        }
+    }
+
+    /** Android's episode fillermark toggle (shows) — single-item variant. */
+    fun toggleItemFillermark(itemUrl: String) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            val item = binding.getLocalItems(local.id)
+                .firstOrNull { it.url == itemUrl }
+                ?: return@launch
+            binding.setItemFillermark(item.id, !item.fillermarked)
+        }
+    }
+
+    /**
+     * Android's chapterSwipe/episodeSwipe dispatch — the configured swipe
+     * action applied to one row.
+     */
+    fun performItemSwipe(itemUrl: String, action: ItemSwipeAction) {
+        when (action) {
+            ItemSwipeAction.ToggleDone -> markItem(itemUrl, itemUrl !in _state.value.doneUrls)
+            ItemSwipeAction.ToggleBookmark -> toggleItemBookmark(itemUrl)
+            ItemSwipeAction.ToggleFillermark -> toggleItemFillermark(itemUrl)
+            ItemSwipeAction.Download -> downloadItem(itemUrl)
+            ItemSwipeAction.Disabled -> Unit
         }
     }
 

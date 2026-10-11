@@ -18,6 +18,7 @@ import miko.ui.carrier.FeedEntry
 import miko.ui.carrier.FeedFilter
 import miko.ui.carrier.FeedPage
 import miko.ui.carrier.HosterEntry
+import miko.ui.carrier.ItemSwipeAction
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.LocalItem
 import miko.ui.carrier.RemoteDetails
@@ -313,6 +314,15 @@ class AnimeCarrierBinding(
         return fetched
     }
 
+    /**
+     * Android's episode swipe prefs — start edge =
+     * pref_episode_swipe_start_action (ToggleBookmark), end edge =
+     * pref_episode_swipe_end_action (ToggleSeen).
+     */
+    override suspend fun swipeActions(): Pair<ItemSwipeAction, ItemSwipeAction> =
+        libraryPreferences.swipeEpisodeEndAction().get().toItemSwipe() to
+            libraryPreferences.swipeEpisodeStartAction().get().toItemSwipe()
+
     override suspend fun setItemDone(itemId: Long, done: Boolean) {
         episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, seen = done))
     }
@@ -551,4 +561,12 @@ private class AnimeCarrierSource(
         summary = summary,
         previewUrl = preview_url,
     )
+}
+
+private fun LibraryPreferences.EpisodeSwipeAction.toItemSwipe() = when (this) {
+    LibraryPreferences.EpisodeSwipeAction.ToggleSeen -> ItemSwipeAction.ToggleDone
+    LibraryPreferences.EpisodeSwipeAction.ToggleBookmark -> ItemSwipeAction.ToggleBookmark
+    LibraryPreferences.EpisodeSwipeAction.ToggleFillermark -> ItemSwipeAction.ToggleFillermark
+    LibraryPreferences.EpisodeSwipeAction.Download -> ItemSwipeAction.Download
+    LibraryPreferences.EpisodeSwipeAction.Disabled -> ItemSwipeAction.Disabled
 }

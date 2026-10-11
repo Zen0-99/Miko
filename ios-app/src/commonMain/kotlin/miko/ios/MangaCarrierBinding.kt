@@ -17,6 +17,7 @@ import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.FeedEntry
 import miko.ui.carrier.FeedFilter
 import miko.ui.carrier.FeedPage
+import miko.ui.carrier.ItemSwipeAction
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.LocalItem
 import miko.ui.carrier.PageEntry
@@ -192,6 +193,16 @@ class MangaCarrierBinding(
             ),
         )
     }
+
+    /**
+     * Android's swipe prefs — the accessor names are swapped against the
+     * pref keys upstream (start reads _start_ after the double swap):
+     * start edge = pref_chapter_swipe_start_action (ToggleBookmark),
+     * end edge = pref_chapter_swipe_end_action (ToggleRead).
+     */
+    override suspend fun swipeActions(): Pair<ItemSwipeAction, ItemSwipeAction> =
+        libraryPreferences.swipeChapterEndAction().get().toItemSwipe() to
+            libraryPreferences.swipeChapterStartAction().get().toItemSwipe()
 
     override suspend fun setViewer(localId: Long, flag: Int) {
         val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
@@ -522,3 +533,10 @@ private class MangaCarrierSource(
 
 /** Android's `ReadingMode.MASK` — the viewerFlags' low three bits. */
 private const val MANGA_READING_MODE_MASK = 0x00000007L
+
+private fun LibraryPreferences.ChapterSwipeAction.toItemSwipe() = when (this) {
+    LibraryPreferences.ChapterSwipeAction.ToggleRead -> ItemSwipeAction.ToggleDone
+    LibraryPreferences.ChapterSwipeAction.ToggleBookmark -> ItemSwipeAction.ToggleBookmark
+    LibraryPreferences.ChapterSwipeAction.Download -> ItemSwipeAction.Download
+    LibraryPreferences.ChapterSwipeAction.Disabled -> ItemSwipeAction.Disabled
+}

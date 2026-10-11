@@ -251,6 +251,15 @@ class NovelCarrierBinding(
     }
 
     /** Novel resume position — Android's `lastCharRead`. */
+    /**
+     * Android's swipe prefs (novels share the chapter keys) — start edge =
+     * pref_chapter_swipe_start_action (ToggleBookmark), end edge =
+     * pref_chapter_swipe_end_action (ToggleRead).
+     */
+    override suspend fun swipeActions(): Pair<ItemSwipeAction, ItemSwipeAction> =
+        libraryPreferences.swipeChapterEndAction().get().toItemSwipe() to
+            libraryPreferences.swipeChapterStartAction().get().toItemSwipe()
+
     override suspend fun setItemPageProgress(itemId: Long, page: Int) {
         chapterRepository.updateNovelChapter(
             NovelChapterUpdate(id = itemId, lastCharRead = page.toLong()),
@@ -451,4 +460,11 @@ private class NovelCarrierSource(
         dateUpload = date_upload,
         scanlator = scanlator,
     )
+}
+
+private fun LibraryPreferences.ChapterSwipeAction.toItemSwipe() = when (this) {
+    LibraryPreferences.ChapterSwipeAction.ToggleRead -> ItemSwipeAction.ToggleDone
+    LibraryPreferences.ChapterSwipeAction.ToggleBookmark -> ItemSwipeAction.ToggleBookmark
+    LibraryPreferences.ChapterSwipeAction.Download -> ItemSwipeAction.Download
+    LibraryPreferences.ChapterSwipeAction.Disabled -> ItemSwipeAction.Disabled
 }

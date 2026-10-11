@@ -139,6 +139,13 @@ data class VideoEntry(
 /** Resolved navigation target for an id-keyed row — urls + owning source. */
 data class NavTarget(val sourceId: Long, val entryUrl: String, val itemUrl: String)
 
+/**
+ * Shared row-swipe vocabulary — domain ChapterSwipeAction maps
+ * ToggleRead→ToggleDone, EpisodeSwipeAction maps ToggleSeen→ToggleDone and
+ * keeps ToggleFillermark for shows.
+ */
+enum class ItemSwipeAction { ToggleDone, ToggleBookmark, ToggleFillermark, Download, Disabled }
+
 /** A catalogue source exposed uniformly — chapters, episodes, or volumes. */
 interface CarrierSource {
     val id: Long
@@ -305,6 +312,14 @@ interface CarrierBinding {
 
     /** Chapter body text — books only; other carriers return "". */
     suspend fun itemText(sourceId: Long, itemUrl: String): String = ""
+
+    /**
+     * Android's chapter/episode swipe prefs projected to a shared vocabulary —
+     * (start-edge, end-edge) actions. Start is the swipe-right reveal; the
+     * domain's EpisodeSwipeAction maps ToggleSeen→ToggleDone.
+     */
+    suspend fun swipeActions(): Pair<ItemSwipeAction, ItemSwipeAction> =
+        ItemSwipeAction.Disabled to ItemSwipeAction.Disabled
 
     /** Reader pages — manga only; other carriers return [emptyList]. */
     suspend fun pageList(sourceId: Long, itemUrl: String): List<PageEntry> = emptyList()
