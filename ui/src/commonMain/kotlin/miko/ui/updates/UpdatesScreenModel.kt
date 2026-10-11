@@ -76,12 +76,17 @@ class UpdatesScreenModel(
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    // History-mode toolbar query — Android's HistoriesTab subscribe(query).
+    private val historyQuery = MutableStateFlow("")
+
     init {
         scope.launch {
             carrierFlow.flatMapLatest { carrier ->
                 modeFlow.flatMapLatest { mode ->
-                    rowsFor(carrier, mode).map { rows ->
-                        State(mode = mode, initialized = true, rows = rows)
+                    historyQuery.flatMapLatest { query ->
+                        rowsFor(carrier, mode, query).map { rows ->
+                            State(mode = mode, initialized = true, rows = rows)
+                        }
                     }
                 }
             }.collect { _state.value = it }
@@ -90,6 +95,10 @@ class UpdatesScreenModel(
 
     fun setMode(mode: Mode) {
         modeFlow.value = mode
+    }
+
+    fun setHistoryQuery(query: String) {
+        historyQuery.value = query
     }
 
     /**
@@ -110,9 +119,9 @@ class UpdatesScreenModel(
         }
     }
 
-    private fun rowsFor(carrier: BrowseCarrier, mode: Mode) = when (mode) {
+    private fun rowsFor(carrier: BrowseCarrier, mode: Mode, query: String) = when (mode) {
         Mode.Updates -> updatesRows(carrier)
-        Mode.History -> historyRows(carrier)
+        Mode.History -> historyRows(carrier, query)
     }
 
     private fun updatesRows(carrier: BrowseCarrier) = when (carrier) {
@@ -160,8 +169,8 @@ class UpdatesScreenModel(
         }
     }
 
-    private fun historyRows(carrier: BrowseCarrier) = when (carrier) {
-        BrowseCarrier.SHOWS -> graph.getAnimeHistory.subscribe("").map { list ->
+    private fun historyRows(carrier: BrowseCarrier, query: String) = when (carrier) {
+        BrowseCarrier.SHOWS -> graph.getAnimeHistory.subscribe(query).map { list ->
             list.map {
                 Row.History(
                     id = it.id,
@@ -174,7 +183,7 @@ class UpdatesScreenModel(
                 )
             }
         }
-        BrowseCarrier.MANGA -> graph.getMangaHistory.subscribe("").map { list ->
+        BrowseCarrier.MANGA -> graph.getMangaHistory.subscribe(query).map { list ->
             list.map {
                 Row.History(
                     id = it.id,
@@ -187,7 +196,7 @@ class UpdatesScreenModel(
                 )
             }
         }
-        BrowseCarrier.BOOKS -> graph.getNovelHistory.subscribe("").map { list ->
+        BrowseCarrier.BOOKS -> graph.getNovelHistory.subscribe(query).map { list ->
             list.map {
                 Row.History(
                     id = it.id,

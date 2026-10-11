@@ -153,6 +153,11 @@ fun MikoApp(graph: MikoUiGraph) {
     val updatesModel = remember {
         UpdatesScreenModel(graph, browseCarrier)
     }
+    // Updates-toolbar search — Android's HistoriesTab subscribe(query).
+    var updatesSearchQuery by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(updatesSearchQuery) {
+        updatesModel.setHistoryQuery(updatesSearchQuery.orEmpty())
+    }
 
     MikoTheme {
         Scaffold(
@@ -220,9 +225,20 @@ fun MikoApp(graph: MikoUiGraph) {
                     }
                     else -> MikoTopBar(
                         title = screenTitle(current),
-                        canSearch = current == Destination.Browse,
-                        searchQuery = browseSearchQuery,
-                        onSearchQueryChange = { browseSearchQuery = it },
+                        canSearch = current == Destination.Browse ||
+                            current == Destination.Updates,
+                        searchQuery = if (current == Destination.Updates) {
+                            updatesSearchQuery
+                        } else {
+                            browseSearchQuery
+                        },
+                        onSearchQueryChange = { query ->
+                            if (current == Destination.Updates) {
+                                updatesSearchQuery = query
+                            } else {
+                                browseSearchQuery = query
+                            }
+                        },
                         onSearch = { query ->
                             if (browseMode == BrowseMode.BROWSE) {
                                 // Android pushes GlobalSearchScreen and
@@ -233,16 +249,25 @@ fun MikoApp(graph: MikoUiGraph) {
                                 browseSearchQuery = null
                             }
                         },
-                        searchPlaceholderText = if (current == Destination.Browse) {
-                            stringResource(
+                        searchPlaceholderText = when (current) {
+                            Destination.Browse -> stringResource(
                                 if (browseMode == BrowseMode.EXTENSIONS) {
                                     MR.strings.search_hint_extensions
                                 } else {
                                     MR.strings.search_hint_browse
                                 },
                             )
-                        } else {
-                            null
+                            Destination.Updates -> stringResource(
+                                if (updatesModel.state
+                                        .collectAsStateWithLifecycle().value.mode ==
+                                    UpdatesScreenModel.Mode.History
+                                ) {
+                                    MR.strings.search_hint_history
+                                } else {
+                                    MR.strings.search_hint_updates
+                                },
+                            )
+                            else -> null
                         },
                         navigateUp = null,
                         actions = {
