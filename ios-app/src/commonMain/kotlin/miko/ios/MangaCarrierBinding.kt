@@ -1,6 +1,7 @@
 package miko.ios
 
 import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -13,6 +14,7 @@ import kotlinx.datetime.TimeZone
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.FeedEntry
+import miko.ui.carrier.FeedFilter
 import miko.ui.carrier.FeedPage
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.LocalItem
@@ -199,11 +201,26 @@ private class MangaCarrierSource(
     override val lang: String = source.lang
     override val supportsLatest: Boolean = source.supportsLatest
 
+    private var activeFilters: FilterList? = null
+    private var feedFilters: List<FeedFilter>? = null
+
+    private fun activeFilters(): FilterList =
+        activeFilters ?: source.getFilterList().also { activeFilters = it }
+
+    override fun filters(): List<FeedFilter> =
+        feedFilters ?: FeedFilter.wrapAll(activeFilters().list).also { feedFilters = it }
+
+    override fun resetFilters(): List<FeedFilter> {
+        activeFilters = null
+        feedFilters = null
+        return filters()
+    }
+
     override suspend fun popular(page: Int) = source.getPopularManga(page).toFeedPage()
     override suspend fun latest(page: Int) = source.getLatestUpdates(page).toFeedPage()
 
     override suspend fun search(page: Int, query: String): FeedPage =
-        source.getSearchManga(page, query, source.getFilterList()).toFeedPage()
+        source.getSearchManga(page, query, activeFilters()).toFeedPage()
 
     override suspend fun details(entryUrl: String, stubTitle: String): RemoteDetails? {
         val stub = SManga.create().apply {

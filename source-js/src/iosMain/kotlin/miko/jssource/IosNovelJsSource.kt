@@ -1,7 +1,6 @@
 package miko.jssource
 
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
-import eu.kanade.tachiyomi.novelsource.model.NovelFilter
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.NovelsPage
 import eu.kanade.tachiyomi.novelsource.model.SNovel
@@ -79,13 +78,22 @@ class IosNovelJsSource(
         return parseNovelsPage(payload)
     }
 
+    override suspend fun getPopularNovels(page: Int, filters: NovelFilterList): NovelsPage {
+        val payload = mutex.withLock {
+            runtime.callPluginFunction(
+                "popularNovels",
+                listOf(page.toString(), optionsJson(false, novelFilterValuesJson(filters))),
+            )
+        }
+        return parseNovelsPage(payload)
+    }
+
     override suspend fun getSearchNovels(
         page: Int,
         query: String,
         filters: NovelFilterList,
     ): NovelsPage {
-        if (query.isBlank()) return getPopularNovels(page)
-        val filtersJson = if (filters.isEmpty()) "{}" else buildFiltersJson(filters)
+        val filtersJson = novelFilterValuesJson(filters)
         val payload = mutex.withLock {
             runtime.callPluginFunction(
                 "searchNovels",
@@ -107,6 +115,19 @@ class IosNovelJsSource(
         return parseNovelsPage(payload)
     }
 
+    override suspend fun getLatestUpdates(page: Int, filters: NovelFilterList): NovelsPage {
+        val payload = mutex.withLock {
+            val hasLatest = hasLatestListing ?: latestListingDetected().also { hasLatestListing = it }
+            val options = optionsJson(true, novelFilterValuesJson(filters))
+            if (hasLatest) {
+                runtime.callPluginFunction("latestNovels", listOf(page.toString(), options))
+            } else {
+                runtime.callPluginFunction("popularNovels", listOf(page.toString(), options))
+            }
+        }
+        return parseNovelsPage(payload)
+    }
+
     private fun latestListingDetected(): Boolean {
         val detected = runtime.evaluate(
             "typeof __plugin.latestNovels === \"function\"",
@@ -115,13 +136,21 @@ class IosNovelJsSource(
         return detected == true
     }
 
-    private fun optionsJson(showLatest: Boolean): String =
-        """{"showLatestNovels":$showLatest,"filters":{}}"""
+    private fun optionsJson(showLatest: Boolean, filtersJson: String = "{}"): String =
+        """{"showLatestNovels":$showLatest,"filters":$filtersJson}"""
 
     override fun getFilterList(): NovelFilterList {
-        // Filter schema parsing arrives with the filter UI (27-02); plugins
-        // without filters expose an empty list.
-        return NovelFilterList(emptyList())
+        // __plugin.filters is a static descriptor — a synchronous evaluate,
+        // no plugin-call round-trip. Parsed fresh each call like Android's
+        // getFilterList; the carrier source holds the single mutable list
+        // instance so edits persist across listing calls.
+        val payload = runCatching {
+            runtime.evaluate(
+                "JSON.stringify(__plugin && __plugin.filters ? __plugin.filters : {})",
+                "novel-plugin-filters.js",
+            ) as? String
+        }.getOrNull()
+        return jsDefsToNovelFilterList(parseJsFilterDefs(payload, json))
     }
 
     override suspend fun getNovelDetails(novel: SNovel): SNovel {
@@ -249,26 +278,6 @@ class IosNovelJsSource(
                     LocalDate.parse(value).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
                 }.getOrElse { 0L }
             }
-    }
-
-    private fun buildFiltersJson(filters: NovelFilterList): String {
-        // Minimal encoding: each filter contributes its state under its name —
-        // extended serialization lands with the filter UI.
-        val entries = filters.map { filter ->
-            val encoded = encodeFilterState(filter.state)
-            "\"${filter.name.replace("\"", "\\\"")}\":$encoded"
-        }
-        return entries.joinToString(prefix = "{", postfix = "}")
-    }
-
-    private fun encodeFilterState(state: Any?): String = when (state) {
-        null -> "null"
-        is String -> json.encodeToString(state)
-        is Boolean, is Int, is Long, is Double, is Float -> state.toString()
-        is NovelFilter.Sort.Selection ->
-            """{"index":${state.index},"ascending":${state.ascending}}"""
-        is List<*> -> state.joinToString(prefix = "[", postfix = "]") { encodeFilterState(it) }
-        else -> json.encodeToString(state.toString())
     }
 
     private fun String.toJsonObject(): JsonObject? =

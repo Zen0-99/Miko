@@ -1,6 +1,7 @@
 package miko.ios
 
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
@@ -13,6 +14,7 @@ import kotlinx.datetime.TimeZone
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.FeedEntry
+import miko.ui.carrier.FeedFilter
 import miko.ui.carrier.FeedPage
 import miko.ui.carrier.HosterEntry
 import miko.ui.carrier.LocalEntry
@@ -210,11 +212,26 @@ private class AnimeCarrierSource(
     override val lang: String = source.lang
     override val supportsLatest: Boolean = source.supportsLatest
 
+    private var activeFilters: AnimeFilterList? = null
+    private var feedFilters: List<FeedFilter>? = null
+
+    private fun activeFilters(): AnimeFilterList =
+        activeFilters ?: source.getFilterList().also { activeFilters = it }
+
+    override fun filters(): List<FeedFilter> =
+        feedFilters ?: FeedFilter.wrapAll(activeFilters().list).also { feedFilters = it }
+
+    override fun resetFilters(): List<FeedFilter> {
+        activeFilters = null
+        feedFilters = null
+        return filters()
+    }
+
     override suspend fun popular(page: Int) = source.getPopularAnime(page).toFeedPage()
     override suspend fun latest(page: Int) = source.getLatestUpdates(page).toFeedPage()
 
     override suspend fun search(page: Int, query: String): FeedPage =
-        source.getSearchAnime(page, query, source.getFilterList()).toFeedPage()
+        source.getSearchAnime(page, query, activeFilters()).toFeedPage()
 
     override suspend fun details(entryUrl: String, stubTitle: String): RemoteDetails? {
         val stub = SAnime.create().apply {

@@ -105,7 +105,7 @@ fun SourceFeedScreen(
             if (state.hasFilters) {
                 FilterChip(
                     selected = false,
-                    onClick = {},
+                    onClick = model::openFilterSheet,
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Outlined.FilterList,
@@ -133,6 +133,10 @@ fun SourceFeedScreen(
                 else -> FeedGrid(model = model, onEntryClick = onEntryClick)
             }
         }
+    }
+
+    if (state.showFilterSheet) {
+        SourceFilterSheet(model = model)
     }
 }
 

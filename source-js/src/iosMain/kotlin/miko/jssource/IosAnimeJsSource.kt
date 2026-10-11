@@ -76,11 +76,14 @@ class IosAnimeJsSource(
         query: String,
         filters: AnimeFilterList,
     ): AnimesPage {
-        if (query.isBlank()) return getPopularAnime(page)
         val payload = mutex.withLock {
             runtime.callPluginFunction(
                 "searchAnime",
-                listOf(json.encodeToString(query), page.toString(), "{}"),
+                listOf(
+                    json.encodeToString(query),
+                    page.toString(),
+                    animeFilterValuesJson(filters),
+                ),
             )
         }
         return parseAnimesPage(payload)
@@ -187,7 +190,16 @@ class IosAnimeJsSource(
         return parseVideoList(payload)
     }
 
-    override fun getFilterList(): AnimeFilterList = AnimeFilterList()
+    override fun getFilterList(): AnimeFilterList {
+        // Fresh parse per call; the carrier source holds the mutable list.
+        val payload = runCatching {
+            runtime.evaluate(
+                "JSON.stringify(__plugin && __plugin.filters ? __plugin.filters : {})",
+                "anime-plugin-filters.js",
+            ) as? String
+        }.getOrNull()
+        return jsDefsToAnimeFilterList(parseJsFilterDefs(payload, json))
+    }
 
     // ------------------------------------------------------------------
     // Payload parsing — same key variants as the novel bridge.

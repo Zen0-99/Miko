@@ -1,6 +1,7 @@
 package miko.ui.carrier
 
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
+import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import kotlinx.coroutines.flow.Flow
@@ -184,11 +185,32 @@ private class NovelCarrierSource(
     override val lang: String = source.lang
     override val supportsLatest: Boolean = source.supportsLatest
 
-    override suspend fun popular(page: Int) = source.getPopularNovels(page).toFeedPage()
-    override suspend fun latest(page: Int) = source.getLatestUpdates(page).toFeedPage()
+    // The single mutable filter list for this source session — FeedFilter
+    // edits write through to these objects and listing calls serialize
+    // them back. Re-fetching per call would silently discard edits.
+    private var activeFilters: NovelFilterList? = null
+    private var feedFilters: List<FeedFilter>? = null
+
+    private fun activeFilters(): NovelFilterList =
+        activeFilters ?: source.getFilterList().also { activeFilters = it }
+
+    override fun filters(): List<FeedFilter> =
+        feedFilters ?: FeedFilter.wrapAll(activeFilters().list).also { feedFilters = it }
+
+    override fun resetFilters(): List<FeedFilter> {
+        activeFilters = null
+        feedFilters = null
+        return filters()
+    }
+
+    override suspend fun popular(page: Int) =
+        source.getPopularNovels(page, activeFilters()).toFeedPage()
+
+    override suspend fun latest(page: Int) =
+        source.getLatestUpdates(page, activeFilters()).toFeedPage()
 
     override suspend fun search(page: Int, query: String): FeedPage =
-        source.getSearchNovels(page, query, source.getFilterList()).toFeedPage()
+        source.getSearchNovels(page, query, activeFilters()).toFeedPage()
 
     override suspend fun details(entryUrl: String, stubTitle: String): RemoteDetails? {
         val stub = SNovel.create().apply {

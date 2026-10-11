@@ -95,6 +95,20 @@ interface CarrierSource {
     val lang: String
     val supportsLatest: Boolean
 
+    /**
+     * The carrier's live filter list (NovelFilterList / FilterList /
+     * AnimeFilterList) wrapped per row for the feed UI, or empty when the
+     * source exposes none. Mutable — filter edits write through to the
+     * carrier objects so the next listing call picks them up.
+     */
+    fun filters(): List<FeedFilter> = emptyList()
+
+    /**
+     * Discards the active filter list and re-wraps a fresh one with
+     * descriptor defaults — the sheet's Reset action.
+     */
+    fun resetFilters(): List<FeedFilter> = filters()
+
     suspend fun popular(page: Int): FeedPage
     suspend fun latest(page: Int): FeedPage
     suspend fun search(page: Int, query: String): FeedPage

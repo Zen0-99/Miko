@@ -80,11 +80,14 @@ class IosMangaJsSource(
         query: String,
         filters: FilterList,
     ): MangasPage {
-        if (query.isBlank()) return getPopularManga(page)
         val payload = mutex.withLock {
             runtime.callPluginFunction(
                 "searchManga",
-                listOf(json.encodeToString(query), page.toString(), "{}"),
+                listOf(
+                    json.encodeToString(query),
+                    page.toString(),
+                    mangaFilterValuesJson(filters),
+                ),
             )
         }
         return parseMangasPage(payload)
@@ -157,7 +160,16 @@ class IosMangaJsSource(
         }
     }
 
-    override fun getFilterList(): FilterList = FilterList()
+    override fun getFilterList(): FilterList {
+        // Fresh parse per call; the carrier source holds the mutable list.
+        val payload = runCatching {
+            runtime.evaluate(
+                "JSON.stringify(__plugin && __plugin.filters ? __plugin.filters : {})",
+                "manga-plugin-filters.js",
+            ) as? String
+        }.getOrNull()
+        return jsDefsToMangaFilterList(parseJsFilterDefs(payload, json))
+    }
 
     // ------------------------------------------------------------------
     // Payload parsing — same key variants as the novel bridge.

@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.FeedEntry
+import miko.ui.carrier.FeedFilter
 import tachiyomi.domain.library.model.LibraryDisplayMode
 
 /**
@@ -40,6 +41,8 @@ class SourceFeedScreenModel(
         val error: String? = null,
         val displayMode: LibraryDisplayMode = LibraryDisplayMode.default,
         val hasFilters: Boolean = false,
+        val filters: List<FeedFilter> = emptyList(),
+        val showFilterSheet: Boolean = false,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -62,9 +65,12 @@ class SourceFeedScreenModel(
                 val src = source ?: return@collect
                 val retry = _state.value.error == "Source unavailable" &&
                     _state.value.items.isEmpty()
+                val filters = src.filters()
                 _state.value = _state.value.copy(
                     sourceName = src.name,
                     supportsLatest = src.supportsLatest,
+                    filters = filters,
+                    hasFilters = filters.isNotEmpty(),
                 )
                 if (retry) reset()
             }
@@ -80,6 +86,40 @@ class SourceFeedScreenModel(
 
     fun setDisplayMode(mode: LibraryDisplayMode) {
         _state.value = _state.value.copy(displayMode = mode)
+    }
+
+    fun openFilterSheet() {
+        if (_state.value.hasFilters) {
+            _state.value = _state.value.copy(showFilterSheet = true)
+        }
+    }
+
+    fun closeFilterSheet() {
+        _state.value = _state.value.copy(showFilterSheet = false)
+    }
+
+    // Android semantics: applying filters routes the feed through
+    // source.search(page, query, filters) even with a blank query —
+    // a filtered listing IS a search.
+    private var filtersApplied = false
+
+    /**
+     * Called after a FeedFilter mutation — the edit already wrote through
+     * to the carrier filter objects; the feed just needs a clean reload.
+     */
+    fun onFilterChanged() {
+        filtersApplied = true
+        reset()
+    }
+
+    /** Sheet's Reset action — fresh filter list with descriptor defaults. */
+    fun resetFilters() {
+        val src = source ?: return
+        val filters = src.resetFilters()
+        _state.value = _state.value.copy(
+            filters = filters,
+            hasFilters = filters.isNotEmpty(),
+        )
     }
 
     fun setListing(listing: Listing) {
@@ -119,7 +159,8 @@ class SourceFeedScreenModel(
                 val nextPage = page + 1
                 val result = runCatching {
                     when {
-                        current.query.isNotBlank() -> src.search(nextPage, current.query)
+                        current.query.isNotBlank() || filtersApplied ->
+                            src.search(nextPage, current.query)
                         current.listing == Listing.Latest -> src.latest(nextPage)
                         else -> src.popular(nextPage)
                     }
