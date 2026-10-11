@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.RemoteItem
+import miko.ui.components.ChangeCollectionSheet
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -87,9 +88,20 @@ fun EntryDetailsScreen(
     carrier: BrowseCarrier,
     onItemClick: (RemoteItem) -> Unit,
     onGenreClick: (String) -> Unit,
+    onEditCollections: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+
+    if (state.collectionSheetOpen) {
+        ChangeCollectionSheet(
+            collections = state.collections,
+            initialSelection = state.entryCollectionIds,
+            onDismissRequest = model::dismissCollectionSheet,
+            onEditCollections = onEditCollections,
+            onConfirm = model::confirmCollections,
+        )
+    }
 
     // Android's details swipe-refresh — reloads details + item list.
     var isRefreshing by remember { mutableStateOf(false) }

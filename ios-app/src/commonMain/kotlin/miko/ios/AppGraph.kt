@@ -55,6 +55,9 @@ import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.NovelUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
+import tachiyomi.data.collection.manga.MangaCollectionRepositoryImpl
+import tachiyomi.data.collection.novel.NovelCollectionRepositoryImpl
+import tachiyomi.data.collection.shows.AnimeCollectionRepositoryImpl
 import tachiyomi.data.entries.manga.MangaRepositoryImpl
 import tachiyomi.data.entries.novel.NovelRepositoryImpl
 import tachiyomi.data.entries.shows.AnimeRepositoryImpl
@@ -85,6 +88,9 @@ import tachiyomi.data.updates.manga.MangaUpdatesRepositoryImpl
 import tachiyomi.data.updates.novel.NovelUpdatesRepositoryImpl
 import tachiyomi.data.updates.shows.AnimeUpdatesRepositoryImpl
 import tachiyomi.db.achievement.AchievementsDatabase
+import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
+import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
+import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
@@ -344,6 +350,15 @@ class AppGraph {
 
     val networkToLocalAnime = NetworkToLocalAnime(animeRepository, animeSourceManager)
 
+    val mangaCollectionRepository: MangaCollectionRepository =
+        MangaCollectionRepositoryImpl(mangaHandler)
+
+    val animeCollectionRepository: AnimeCollectionRepository =
+        AnimeCollectionRepositoryImpl(animeHandler)
+
+    val novelCollectionRepository: NovelCollectionRepository =
+        NovelCollectionRepositoryImpl(novelHandler)
+
     val mangaBinding = MangaCarrierBinding(
         sourceManager = mangaSourceManager,
         getManga = getManga,
@@ -351,6 +366,7 @@ class AppGraph {
         mangaRepository = mangaRepository,
         chapterRepository = chapterRepository,
         historyRepository = mangaHistoryRepository,
+        collectionRepository = mangaCollectionRepository,
     )
 
     val animeBinding = AnimeCarrierBinding(
@@ -360,6 +376,7 @@ class AppGraph {
         animeRepository = animeRepository,
         episodeRepository = episodeRepository,
         historyRepository = animeHistoryRepository,
+        collectionRepository = animeCollectionRepository,
     )
 
     val novelRepository: NovelRepository = NovelRepositoryImpl(novelHandler)
@@ -399,6 +416,7 @@ class AppGraph {
         novelRepository = novelRepository,
         novelChapterRepository = novelChapterRepository,
         novelHistoryRepository = novelHistoryRepository,
+        novelCollectionRepository = novelCollectionRepository,
         getNovelUpdates = getNovelUpdates,
         getMangaUpdates = getMangaUpdates,
         getAnimeUpdates = getAnimeUpdates,

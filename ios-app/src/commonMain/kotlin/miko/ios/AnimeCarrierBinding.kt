@@ -22,6 +22,9 @@ import miko.ui.carrier.LocalItem
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
+import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.collection.model.CollectionUpdate
+import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
 import tachiyomi.domain.entries.shows.interactor.AnimeFetchInterval
 import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
@@ -45,6 +48,7 @@ class AnimeCarrierBinding(
     private val animeRepository: AnimeRepository,
     private val episodeRepository: EpisodeRepository,
     private val historyRepository: AnimeHistoryRepository,
+    private val collectionRepository: AnimeCollectionRepository,
 ) : CarrierBinding {
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
@@ -186,6 +190,44 @@ class AnimeCarrierBinding(
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
         episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, bookmark = bookmarked))
+    }
+
+    override fun collections() = collectionRepository.getAllVisibleAnimeCollectionsAsFlow()
+
+    override fun entryCollections(localId: Long) =
+        collectionRepository.getVisibleCollectionsByAnimeIdAsFlow(localId)
+
+    override suspend fun filterEntriesByCollection(
+        collectionId: Long,
+        entryIds: List<Long>,
+    ): Set<Long> = entryIds.filterTo(HashSet()) { id ->
+        collectionRepository.getCollectionsByAnimeId(id).any { it.id == collectionId }
+    }
+
+    override suspend fun setEntryCollections(localId: Long, collectionIds: List<Long>) {
+        animeRepository.setAnimeCollections(localId, collectionIds)
+    }
+
+    override suspend fun createCollection(name: String): Long {
+        val order = (
+            collectionRepository.getAllAnimeCollections()
+                .maxOfOrNull { it.order } ?: -1L
+            ) + 1
+        collectionRepository.insertAnimeCollection(
+            Collection(id = 0, name = name, order = order, flags = 0L, hidden = false),
+        )
+        return collectionRepository.getAllAnimeCollections()
+            .firstOrNull { it.name == name && it.order == order }?.id ?: -1L
+    }
+
+    override suspend fun renameCollection(collectionId: Long, name: String) {
+        collectionRepository.updatePartialAnimeCollection(
+            CollectionUpdate(id = collectionId, name = name),
+        )
+    }
+
+    override suspend fun deleteCollection(collectionId: Long) {
+        collectionRepository.deleteAnimeCollection(collectionId)
     }
 
     override suspend fun setAllItemsDone(localId: Long, done: Boolean) {

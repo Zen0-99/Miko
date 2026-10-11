@@ -47,6 +47,9 @@ sealed interface Destination {
     /** App preferences — pushed from More. */
     data object Settings : Destination
 
+    /** Collection management — Android's CollectionsTab, pushed from More/details. */
+    data object Collections : Destination
+
     /** Extension-repo management — consolidated per-type tabs + add/delete. */
     data object ExtensionRepos : Destination
 

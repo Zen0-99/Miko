@@ -21,6 +21,9 @@ import miko.ui.carrier.LocalItem
 import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
+import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
+import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.collection.model.CollectionUpdate
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.MangaFetchInterval
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
@@ -44,6 +47,7 @@ class MangaCarrierBinding(
     private val mangaRepository: MangaRepository,
     private val chapterRepository: ChapterRepository,
     private val historyRepository: MangaHistoryRepository,
+    private val collectionRepository: MangaCollectionRepository,
 ) : CarrierBinding {
 
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
@@ -206,6 +210,44 @@ class MangaCarrierBinding(
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
         chapterRepository.updateChapter(ChapterUpdate(id = itemId, bookmark = bookmarked))
+    }
+
+    override fun collections() = collectionRepository.getAllVisibleMangaCollectionsAsFlow()
+
+    override fun entryCollections(localId: Long) =
+        collectionRepository.getVisibleCollectionsByMangaIdAsFlow(localId)
+
+    override suspend fun filterEntriesByCollection(
+        collectionId: Long,
+        entryIds: List<Long>,
+    ): Set<Long> = collectionRepository.getMangaIdsByCollection(collectionId)
+        .toSet()
+        .intersect(entryIds.toSet())
+
+    override suspend fun setEntryCollections(localId: Long, collectionIds: List<Long>) {
+        mangaRepository.setMangaCollections(localId, collectionIds)
+    }
+
+    override suspend fun createCollection(name: String): Long {
+        val order = (
+            collectionRepository.getAllMangaCollections()
+                .maxOfOrNull { it.order } ?: -1L
+            ) + 1
+        collectionRepository.insertMangaCollection(
+            Collection(id = 0, name = name, order = order, flags = 0L, hidden = false),
+        )
+        return collectionRepository.getAllMangaCollections()
+            .firstOrNull { it.name == name && it.order == order }?.id ?: -1L
+    }
+
+    override suspend fun renameCollection(collectionId: Long, name: String) {
+        collectionRepository.updatePartialMangaCollection(
+            CollectionUpdate(id = collectionId, name = name),
+        )
+    }
+
+    override suspend fun deleteCollection(collectionId: Long) {
+        collectionRepository.deleteMangaCollection(collectionId)
     }
 
     override suspend fun setAllItemsDone(localId: Long, done: Boolean) {

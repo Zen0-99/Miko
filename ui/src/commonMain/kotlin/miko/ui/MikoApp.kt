@@ -59,6 +59,8 @@ import miko.ui.home.HomeScreen
 import miko.ui.home.HomeScreenModel
 import miko.ui.library.LibraryScreen
 import miko.ui.library.LibraryScreenModel
+import miko.ui.more.CollectionsScreen
+import miko.ui.more.CollectionsScreenModel
 import miko.ui.more.MoreScreen
 import miko.ui.navigation.Destination
 import miko.ui.navigation.Navigator
@@ -127,6 +129,19 @@ fun MikoApp(graph: MikoUiGraph) {
         onDispose { globalSearchModel?.dispose() }
     }
 
+    // Details model hoisted so the top bar's overflow can reach it —
+    // Android's entry toolbar owns the collection-overflow action; the
+    // shared shell hoists the model instead.
+    val detailsDest = navigator.current as? Destination.Details
+    val detailsModel = remember(detailsDest) {
+        detailsDest?.let {
+            EntryDetailsScreenModel(graph.binding(it.carrier), it.sourceId, it.entryKey)
+        }
+    }
+    DisposableEffect(detailsModel) {
+        onDispose { detailsModel?.dispose() }
+    }
+
     // Source-feed model + local search — hoisted so the top bar can reach it
     // (Android's BrowseSourceScreen owns its toolbar; the shared shell's
     // bar lives above the nav host instead).
@@ -177,6 +192,11 @@ fun MikoApp(graph: MikoUiGraph) {
     // scaffold, same lifetime argument as updatesModel.
     val libraryModel = remember {
         LibraryScreenModel(graph, browseCarrier)
+    }
+    // Collections manage screen — per-carrier stream, same app-scope
+    // lifetime as the library/updates models.
+    val collectionsModel = remember {
+        CollectionsScreenModel(graph, browseCarrier)
     }
     // Updates-toolbar search — Android's HistoriesTab subscribe(query).
     var updatesSearchQuery by remember { mutableStateOf<String?>(null) }
@@ -273,6 +293,46 @@ fun MikoApp(graph: MikoUiGraph) {
                                                 Icons.Outlined.Public,
                                                 contentDescription = null,
                                             )
+                                        }
+                                        // Android's entry-toolbar overflow —
+                                        // "Edit" (collections) is favorites-only.
+                                        val detailsState = detailsModel?.state
+                                            ?.collectAsStateWithLifecycle()?.value
+                                        if (detailsState?.favorite == true) {
+                                            var overflowOpen by remember {
+                                                mutableStateOf(false)
+                                            }
+                                            Box {
+                                                IconButton(onClick = {
+                                                    overflowOpen = true
+                                                }) {
+                                                    Icon(
+                                                        Icons.Filled.MoreVert,
+                                                        contentDescription = null,
+                                                    )
+                                                }
+                                                DropdownMenu(
+                                                    expanded = overflowOpen,
+                                                    onDismissRequest = {
+                                                        overflowOpen = false
+                                                    },
+                                                ) {
+                                                    DropdownMenuItem(
+                                                        text = {
+                                                            Text(
+                                                                stringResource(
+                                                                    MR.strings.action_edit,
+                                                                ),
+                                                            )
+                                                        },
+                                                        onClick = {
+                                                            overflowOpen = false
+                                                            detailsModel
+                                                                ?.showCollectionSheet()
+                                                        },
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 },
@@ -430,6 +490,7 @@ fun MikoApp(graph: MikoUiGraph) {
                     modifier = Modifier.padding(padding),
                 )
                 is Destination.Details -> DetailsDestination(
+                    model = detailsModel,
                     graph = graph,
                     navigator = navigator,
                     destination = destination,
@@ -463,6 +524,13 @@ fun MikoApp(graph: MikoUiGraph) {
                 Destination.More -> MoreScreen(
                     onClickStats = { navigator.push(Destination.Stats) },
                     onClickSettings = { navigator.push(Destination.Settings) },
+                    onClickCollections = {
+                        navigator.push(Destination.Collections)
+                    },
+                    modifier = Modifier.padding(padding),
+                )
+                Destination.Collections -> CollectionsDestination(
+                    model = collectionsModel,
                     modifier = Modifier.padding(padding),
                 )
                 Destination.Stats -> StatsDestination(
@@ -487,6 +555,7 @@ private fun screenTitle(destination: Destination): String = when (destination) {
     Destination.More -> stringResource(MR.strings.label_more)
     Destination.Stats -> stringResource(MR.strings.label_stats)
     Destination.Settings -> stringResource(MR.strings.label_settings)
+    Destination.Collections -> stringResource(MR.strings.collections)
     Destination.ExtensionRepos -> stringResource(MR.strings.label_extension_repos)
     is Destination.SourceFeed -> destination.sourceName
     is Destination.GlobalSearch -> stringResource(MR.strings.action_search_hint)
@@ -756,6 +825,7 @@ private fun SourceFeedDestination(
 
 @Composable
 private fun DetailsDestination(
+    model: EntryDetailsScreenModel?,
     graph: MikoUiGraph,
     navigator: Navigator,
     destination: Destination.Details,
@@ -764,12 +834,7 @@ private fun DetailsDestination(
     val sourceId = destination.sourceId
     val entryKey = destination.entryKey
     val carrier = destination.carrier
-    val model = remember(sourceId, entryKey, carrier) {
-        EntryDetailsScreenModel(graph.binding(carrier), sourceId, entryKey)
-    }
-    DisposableEffect(model) {
-        onDispose { model.dispose() }
-    }
+    if (model == null) return
     EntryDetailsScreen(
         model = model,
         carrier = carrier,
@@ -789,8 +854,21 @@ private fun DetailsDestination(
         onGenreClick = { genre ->
             navigator.push(Destination.GlobalSearch(genre, carrier))
         },
+        // The sheet's "Edit collections" button — Android pushes
+        // CollectionsTab.
+        onEditCollections = {
+            navigator.push(Destination.Collections)
+        },
         modifier = modifier.fillMaxSize(),
     )
+}
+
+@Composable
+private fun CollectionsDestination(
+    model: CollectionsScreenModel,
+    modifier: Modifier = Modifier,
+) {
+    CollectionsScreen(model = model, modifier = modifier.fillMaxSize())
 }
 
 @Composable

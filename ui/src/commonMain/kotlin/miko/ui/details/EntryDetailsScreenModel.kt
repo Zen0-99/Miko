@@ -8,11 +8,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
+import tachiyomi.domain.collection.model.Collection
 
 /**
  * Entry details — remote details + item list (chapters/episodes), local
@@ -42,6 +44,10 @@ class EntryDetailsScreenModel(
         /** Entry chapterFlags semantics — sort direction + unread filter. */
         val sortDescending: Boolean = false,
         val unreadOnly: Boolean = false,
+        /** ChangeCollectionDialog — visible collections + this entry's ids. */
+        val collectionSheetOpen: Boolean = false,
+        val collections: List<Collection> = emptyList(),
+        val entryCollectionIds: Set<Long> = emptySet(),
     ) {
         /** First undone item — Android's `nextContinueChapter`. */
         val nextItem: RemoteItem?
@@ -88,6 +94,11 @@ class EntryDetailsScreenModel(
                     unreadOnly = local?.unreadOnly == true,
                 )
                 if (local != null) subscribeLocalItems(local.id)
+            }
+        }
+        scope.launch {
+            binding.collections().collect { collections ->
+                _state.value = _state.value.copy(collections = collections)
             }
         }
         refresh()
@@ -228,6 +239,37 @@ class EntryDetailsScreenModel(
                 .firstOrNull { it.url == itemUrl }
                 ?: return@launch
             binding.setItemBookmark(item.id, !item.bookmarked)
+        }
+    }
+
+    /**
+     * Android's showChangeCollectionDialog — snapshots the entry's current
+     * memberships so the checkbox list opens pre-selected.
+     */
+    fun showCollectionSheet() {
+        val local = _state.value.local ?: return
+        scope.launch {
+            val entry = binding.entryCollections(local.id).first()
+            _state.value = _state.value.copy(
+                entryCollectionIds = entry.mapTo(HashSet()) { it.id },
+                collectionSheetOpen = true,
+            )
+        }
+    }
+
+    fun dismissCollectionSheet() {
+        _state.value = _state.value.copy(collectionSheetOpen = false)
+    }
+
+    /**
+     * Android's moveMangaToCollectionsAndAddToLibrary — replaces the entry's
+     * memberships with the confirmed selection.
+     */
+    fun confirmCollections(selectedIds: List<Long>) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setEntryCollections(local.id, selectedIds)
+            _state.value = _state.value.copy(collectionSheetOpen = false)
         }
     }
 

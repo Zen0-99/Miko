@@ -6,9 +6,11 @@ import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
 import miko.ui.model.toDomainNovel
+import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.interactor.NovelFetchInterval
@@ -31,6 +33,7 @@ class NovelCarrierBinding(
     private val novelRepository: NovelRepository,
     private val chapterRepository: NovelChapterRepository,
     private val historyRepository: NovelHistoryRepository,
+    private val collectionRepository: NovelCollectionRepository,
 ) : CarrierBinding {
 
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
@@ -169,6 +172,41 @@ class NovelCarrierBinding(
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
         chapterRepository.updateNovelChapter(NovelChapterUpdate(id = itemId, bookmark = bookmarked))
+    }
+
+    override fun collections() = collectionRepository.subscribeAllVisible()
+
+    override fun entryCollections(localId: Long) = flow {
+        emit(collectionRepository.getVisibleCollectionsByNovelId(localId))
+    }
+
+    override suspend fun filterEntriesByCollection(
+        collectionId: Long,
+        entryIds: List<Long>,
+    ): Set<Long> = entryIds.filterTo(HashSet()) { id ->
+        collectionRepository.getCollectionsByNovelId(id).any { it.id == collectionId }
+    }
+
+    override suspend fun setEntryCollections(localId: Long, collectionIds: List<Long>) {
+        novelRepository.setNovelCollections(localId, collectionIds)
+    }
+
+    override suspend fun createCollection(name: String): Long =
+        collectionRepository.insert(
+            name = name,
+            order = (
+                collectionRepository.getAllNovelCollections()
+                    .maxOfOrNull { it.order } ?: -1L
+                ) + 1,
+            flags = 0L,
+        ) ?: -1L
+
+    override suspend fun renameCollection(collectionId: Long, name: String) {
+        collectionRepository.update(collectionId, name, null, null, null)
+    }
+
+    override suspend fun deleteCollection(collectionId: Long) {
+        collectionRepository.delete(collectionId)
     }
 
     override suspend fun setAllItemsDone(localId: Long, done: Boolean) {

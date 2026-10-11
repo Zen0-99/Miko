@@ -1,5 +1,6 @@
 package miko.ui.library
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,6 +67,31 @@ fun LibraryScreen(
                     onClick = { onCarrierChange(option) },
                     label = { Text(stringResource(labelRes)) },
                 )
+            }
+        }
+
+        // Android's library collection tabs — "All" + the visible
+        // collections; hidden entirely when none exist.
+        if (state.collections.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = state.selectedCollectionId == null,
+                    onClick = { model.selectCollection(null) },
+                    label = { Text(stringResource(MR.strings.all)) },
+                )
+                state.collections.forEach { collection ->
+                    FilterChip(
+                        selected = state.selectedCollectionId == collection.id,
+                        onClick = { model.selectCollection(collection.id) },
+                        label = { Text(collection.name) },
+                    )
+                }
             }
         }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.HorizontalDivider
@@ -32,9 +33,15 @@ import tachiyomi.presentation.core.i18n.stringResource
 fun MoreScreen(
     onClickStats: () -> Unit,
     onClickSettings: () -> Unit,
+    onClickCollections: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
+        MoreRow(
+            titleRes = MR.strings.collections,
+            icon = Icons.AutoMirrored.Outlined.Label,
+            onClick = onClickCollections,
+        )
         MoreRow(
             titleRes = MR.strings.label_stats,
             icon = Icons.Outlined.QueryStats,

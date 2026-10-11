@@ -2,6 +2,8 @@ package miko.ui.carrier
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
+import tachiyomi.domain.collection.model.Collection
 
 /**
  * Carrier-agnostic catalogue + library surface the shared screens consume.
@@ -170,6 +172,34 @@ interface CarrierBinding {
 
     /** Android's per-item bookmark toggle. */
     suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) = Unit
+
+    /** Visible collections — Android's GetVisibleXCollections. */
+    fun collections(): Flow<List<Collection>> = flowOf(emptyList())
+
+    /** Collections the entry belongs to — Android's GetXCollections(entryId). */
+    fun entryCollections(localId: Long): Flow<List<Collection>> = flowOf(emptyList())
+
+    /**
+     * Which of [entryIds] belong to [collectionId] — the library's
+     * collection filter. Defaults to an all-pass so carriers without
+     * collections keep their grid unfiltered.
+     */
+    suspend fun filterEntriesByCollection(
+        collectionId: Long,
+        entryIds: List<Long>,
+    ): Set<Long> = entryIds.toSet()
+
+    /** Android's SetXCollections — replaces the entry's memberships. */
+    suspend fun setEntryCollections(localId: Long, collectionIds: List<Long>) = Unit
+
+    /** Android's CreateXCollectionWithName. Returns the new row id or -1. */
+    suspend fun createCollection(name: String): Long = -1L
+
+    /** Android's RenameXCollection — CollectionUpdate(name). */
+    suspend fun renameCollection(collectionId: Long, name: String) = Unit
+
+    /** Android's DeleteXCollection. */
+    suspend fun deleteCollection(collectionId: Long) = Unit
 
     /** Chapter-list sort direction — the entry's chapterFlags sort bit. */
     suspend fun setChapterSortDescending(localId: Long, descending: Boolean) = Unit

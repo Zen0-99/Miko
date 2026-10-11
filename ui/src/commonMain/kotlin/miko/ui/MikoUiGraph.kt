@@ -24,6 +24,7 @@ import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.NovelCarrierBinding
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
+import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovel
@@ -66,6 +67,7 @@ class MikoUiGraph(
     val novelRepository: NovelRepository,
     val novelChapterRepository: NovelChapterRepository,
     val novelHistoryRepository: NovelHistoryRepository,
+    val novelCollectionRepository: NovelCollectionRepository,
     val getNovelUpdates: GetNovelUpdates,
     val getMangaUpdates: GetMangaUpdates,
     val getAnimeUpdates: GetAnimeUpdates,
@@ -105,6 +107,7 @@ class MikoUiGraph(
         novelRepository = novelRepository,
         chapterRepository = novelChapterRepository,
         historyRepository = novelHistoryRepository,
+        collectionRepository = novelCollectionRepository,
     )
 
     fun binding(carrier: BrowseCarrier): CarrierBinding = when (carrier) {
