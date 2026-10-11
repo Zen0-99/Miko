@@ -5,6 +5,7 @@ import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.useContents
 import kotlinx.cinterop.usePinned
 import platform.CoreGraphics.CGAffineTransformMakeScale
 import platform.CoreGraphics.CGAffineTransformMakeTranslation
@@ -23,26 +24,25 @@ import kotlin.math.min
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun decodeCoverPixels(data: ByteArray): DecodedPixels? = memScoped {
     val nsData = data.usePinned {
-        NSData.dataWithBytes(bytes = it.addressOf(0), length = data.size.toULong())
+        NSData.create(bytes = it.addressOf(0), length = data.size.toULong())
     }
     val base = CIImage.imageWithData(nsData) ?: return null
     val extent0 = base.extent()
-    val w0 = extent0.size.width
-    val h0 = extent0.size.height
+    val w0 = extent0.useContents { size.width }
+    val h0 = extent0.useContents { size.height }
     if (w0 <= 0.0 || h0 <= 0.0) return null
 
     val s = min(1.0, 128.0 / maxOf(w0, h0))
+    val originX = extent0.useContents { origin.x }
+    val originY = extent0.useContents { origin.y }
     val scaled = base
         .imageByApplyingTransform(CGAffineTransformMakeScale(s, s))
         .imageByApplyingTransform(
-            CGAffineTransformMakeTranslation(
-                -extent0.origin.x * s,
-                -extent0.origin.y * s,
-            ),
+            CGAffineTransformMakeTranslation(-originX * s, -originY * s),
         )
     val extent = scaled.extent()
-    val w = extent.size.width.toInt().coerceAtLeast(1)
-    val h = extent.size.height.toInt().coerceAtLeast(1)
+    val w = extent.useContents { size.width.toInt() }.coerceAtLeast(1)
+    val h = extent.useContents { size.height.toInt() }.coerceAtLeast(1)
 
     val ctx = CIContext.contextWithOptions(null)
     val buf = allocArray<kotlinx.cinterop.ByteVar>(w * h * 4)
