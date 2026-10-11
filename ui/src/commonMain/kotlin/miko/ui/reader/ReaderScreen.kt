@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
@@ -25,10 +26,12 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import miko.ui.components.SettingDropdown
 import miko.ui.components.SettingSlider
 import miko.ui.components.SettingSwitch
@@ -50,7 +55,7 @@ import tachiyomi.presentation.core.screens.LoadingScreen
  * Display prefs (text size, line height, spacing, alignment, background)
  * share Android's pref_novel_* keys and apply live.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
 @Composable
 fun ReaderScreen(
     model: ReaderScreenModel,
@@ -89,7 +94,57 @@ fun ReaderScreen(
                 }
             }
             else -> SelectionContainer(modifier = Modifier.weight(1f)) {
+                val listState = rememberLazyListState()
+                // Char offset where each paragraph starts in the full text —
+                // maps between Android's `lastCharRead` and a list index.
+                val paragraphStarts = remember(state.paragraphs) {
+                    state.paragraphs
+                        .runningFold(0) { acc, p -> acc + p.length }
+                        .dropLast(1)
+                }
+
+                // Android's resume: scroll to the saved lastCharRead once the
+                // chapter's paragraphs are composed, then consume the flag.
+                LaunchedEffect(state.chapterUrl, state.paragraphs, state.restoreCharOffset) {
+                    if (state.restoreCharOffset >= 0 && state.paragraphs.isNotEmpty()) {
+                        val paragraph = paragraphStarts
+                            .indexOfLast { it <= state.restoreCharOffset }
+                            .coerceAtLeast(0)
+                        listState.scrollToItem(paragraph + 1) // +1 = name header
+                        model.consumeRestore()
+                    } else if (!state.loading && state.paragraphs.isNotEmpty()) {
+                        listState.scrollToItem(0)
+                    }
+                }
+
+                // lastCharRead write-through — debounced so fast scrolls
+                // don't churn the DB; the model flushes on switch/dispose.
+                LaunchedEffect(state.chapterUrl) {
+                    snapshotFlow {
+                        listState.firstVisibleItemIndex to
+                            listState.firstVisibleItemScrollOffset
+                    }
+                        .debounce(400)
+                        .collect { (index, offset) ->
+                            if (state.paragraphs.isEmpty()) return@collect
+                            val paragraph = (index - 1).coerceIn(0, state.paragraphs.lastIndex)
+                            val size = listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == index }
+                                ?.size ?: 0
+                            val fraction = if (size > 0) {
+                                offset.toFloat() / size
+                            } else {
+                                0f
+                            }
+                            model.saveCharPosition(
+                                paragraphStarts.getOrElse(paragraph) { 0 } +
+                                    (fraction * state.paragraphs[paragraph].length).toInt(),
+                            )
+                        }
+                }
+
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         horizontal = state.sidePadding.dp,

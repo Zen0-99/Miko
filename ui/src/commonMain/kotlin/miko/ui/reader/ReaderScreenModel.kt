@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.ChapterSortMode
+import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.ordered
 import tachiyomi.core.common.preference.PreferenceStore
@@ -58,6 +59,11 @@ class ReaderScreenModel(
         /** 1-based chapter position within the entry — the progress label. */
         val chapterIndex: Int = 0,
         val chapterCount: Int = 0,
+        /**
+         * Saved `lastCharRead` to restore on this chapter open; -1 once
+         * consumed or when there is no position to resume from.
+         */
+        val restoreCharOffset: Int = -1,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -205,11 +211,20 @@ class ReaderScreenModel(
             val result = runCatching { binding.itemText(src.id, chapterUrl) }
             result.fold(
                 onSuccess = { html ->
+                    val local = binding.localEntry(entryUrl, sourceId).first()
+                    val localItem = local?.let { entry ->
+                        binding.getLocalItems(entry.id)
+                            .firstOrNull { it.url == chapterUrl }
+                    }
                     _state.value = _state.value.copy(
                         paragraphs = htmlToParagraphs(html),
                         loading = false,
+                        restoreCharOffset = localItem
+                            ?.takeIf { it.lastPageRead > 0 }
+                            ?.lastPageRead
+                            ?: -1,
                     )
-                    markRead(chapterUrl)
+                    markRead(chapterUrl, local)
                 },
                 onFailure = {
                     _state.value = _state.value.copy(
@@ -234,29 +249,56 @@ class ReaderScreenModel(
     /** Chapter id with an open read session — closed on switch/dispose. */
     private var openItemId: Long? = null
 
+    /** Latest reported scroll position — flushed on switch/dispose. */
+    private var pendingCharOffset: Int = 0
+
     /**
      * Marks the local row read + records the history session — no-op for
      * non-library entries (no local rows). Re-reading an already-read
      * chapter still opens a history session, matching Android.
      */
-    private suspend fun markRead(chapterUrl: String) {
-        val local = binding.localEntry(entryUrl, sourceId).first() ?: return
+    private suspend fun markRead(chapterUrl: String, local: LocalEntry?) {
+        local ?: return
         val chapter = binding.getLocalItems(local.id)
             .firstOrNull { it.url == chapterUrl }
             ?: return
-        openItemId?.takeIf { it != chapter.id }?.let { binding.recordItemClose(it) }
+        openItemId?.takeIf { it != chapter.id }?.let { flushItemClose(it) }
         if (!chapter.done) binding.setItemDone(chapter.id, true)
         openItemId = chapter.id
+        pendingCharOffset = 0
         binding.recordItemOpen(chapter.id)
+    }
+
+    /** Android's `lastCharRead` write-through — debounced by the screen. */
+    fun saveCharPosition(offset: Int) {
+        pendingCharOffset = offset
+        val id = openItemId ?: return
+        scope.launch { binding.setItemPageProgress(id, offset) }
+    }
+
+    fun consumeRestore() {
+        _state.value = _state.value.copy(restoreCharOffset = -1)
+    }
+
+    /** Final position write + history-session close for a finished chapter. */
+    private suspend fun flushItemClose(itemId: Long) {
+        if (pendingCharOffset > 0) binding.setItemPageProgress(itemId, pendingCharOffset)
+        binding.recordItemClose(itemId)
     }
 
     fun dispose() {
         val open = openItemId
+        val offset = pendingCharOffset
         openItemId = null
         scope.cancel()
         // The reader scope is gone — close the session synchronously; the
         // upsert is a single-row write.
-        if (open != null) runBlocking { binding.recordItemClose(open) }
+        if (open != null) {
+            runBlocking {
+                if (offset > 0) binding.setItemPageProgress(open, offset)
+                binding.recordItemClose(open)
+            }
+        }
     }
 }
 

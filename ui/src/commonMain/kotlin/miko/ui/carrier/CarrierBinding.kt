@@ -97,7 +97,7 @@ data class LocalItem(
     /** chapterNumber/episodeNumber — migration state transfer matches on it. */
     val number: Double = -1.0,
     val done: Boolean,
-    /** Manga reader position — Android's `last_page_read`. */
+    /** In-item resume position — Android's `last_page_read` (manga) / `lastCharRead` (novel). */
     val lastPageRead: Int = 0,
     /** Android's per-item bookmark flag. */
     val bookmarked: Boolean = false,

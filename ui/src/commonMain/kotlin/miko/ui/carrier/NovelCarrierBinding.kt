@@ -162,6 +162,7 @@ class NovelCarrierBinding(
             name = chapter.name,
             number = chapter.chapterNumber,
             done = chapter.read,
+            lastPageRead = chapter.lastCharRead.toInt(),
             bookmarked = chapter.bookmark,
         )
 
@@ -227,6 +228,13 @@ class NovelCarrierBinding(
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
         chapterRepository.updateNovelChapter(NovelChapterUpdate(id = itemId, bookmark = bookmarked))
+    }
+
+    /** Novel resume position — Android's `lastCharRead`. */
+    override suspend fun setItemPageProgress(itemId: Long, page: Int) {
+        chapterRepository.updateNovelChapter(
+            NovelChapterUpdate(id = itemId, lastCharRead = page.toLong()),
+        )
     }
 
     override fun collections() = collectionRepository.subscribeAllVisible()
