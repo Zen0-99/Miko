@@ -177,3 +177,39 @@ internal fun List<ExtensionRepoExtensionJsonDto>.toEntries(repoUrl: String): Lis
             )
         }
 }
+
+/**
+ * Carrier types an APK index entry serves, from pkg/name heuristics — the
+ * single source used by both platform repo services' `probeRepoTypes`. A
+ * single extension can match multiple carriers.
+ */
+internal fun ExtensionIndexEntry.detectedRepoTypes(): Set<String> {
+    val types = mutableSetOf<String>()
+    val pkg = pkgName.lowercase()
+    val name = name.lowercase()
+    if (
+        pkg.contains(".novel.") ||
+        pkg.contains("yokai.extension.novel") ||
+        pkg.contains("tachiyomi.novel") ||
+        name.contains("novel")
+    ) {
+        types += "novel"
+    }
+    if (
+        pkg.contains(".anime.") ||
+        pkg.contains("animeextension") ||
+        pkg.contains("aniyomi") ||
+        pkg.contains("jmiri.anime") ||
+        name.contains("anime")
+    ) {
+        types += "anime"
+    }
+    if (
+        pkg.contains("tachiyomi.extension") ||
+        pkg.contains("tachiyomi.manga") ||
+        pkg.contains("keiyoushi")
+    ) {
+        types += "manga"
+    }
+    return types
+}

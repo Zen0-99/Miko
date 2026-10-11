@@ -167,32 +167,10 @@ class AndroidExtensionRepoService(
         }
 
         for (entry in entries) {
-            val pkg = entry.pkgName.lowercase()
-            val name = entry.name.lowercase()
             // A single extension can match multiple categories — check each
             // independently so repos serving multiple types (e.g. Keiyoushi
             // serving both manga and anime) are detected for all types.
-            if (pkg.contains(".novel.") ||
-                pkg.contains("yokai.extension.novel") ||
-                pkg.contains("tachiyomi.novel") ||
-                name.contains("novel")
-            ) {
-                types.add("novel")
-            }
-            if (pkg.contains(".anime.") ||
-                pkg.contains("animeextension") ||
-                pkg.contains("aniyomi") ||
-                pkg.contains("jmiri.anime") ||
-                name.contains("anime")
-            ) {
-                types.add("anime")
-            }
-            if (pkg.contains("tachiyomi.extension") ||
-                pkg.contains("tachiyomi.manga") ||
-                pkg.contains("keiyoushi")
-            ) {
-                types.add("manga")
-            }
+            types.addAll(entry.detectedRepoTypes())
         }
         return if (types.isEmpty()) setOf("manga") else types
     }

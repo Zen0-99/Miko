@@ -10,10 +10,11 @@ import tachiyomi.domain.extension.novel.api.JsPluginIndexFetcher
 import tachiyomi.domain.extension.novel.api.JsPluginIndexParser
 
 /**
- * iOS extension-repo transport. Only the JS plugin index is installable on
- * iOS — APK indexes (`index.pb`, `index.min.json` extension arrays) are never
- * consumed. `index.pb` is still parsed for repo *metadata* when `repo.json`
- * is absent, mirroring Android.
+ * iOS extension-repo transport. APK entries can't be installed on iOS — the
+ * installable set comes from the JS plugin index — but the APK index is still
+ * consulted for repo *metadata* (index.pb name/signingKey/contact) and for
+ * [probeRepoTypes], so a repo registers under its real carrier tabs exactly
+ * like Android.
  */
 class IosExtensionRepoService(
     private val fetcher: RepoHttpFetcher,
@@ -44,48 +45,90 @@ class IosExtensionRepoService(
      * fingerprint fallback then applies).
      */
     private suspend fun fetchRepoDetailsFromProto(repo: String): ExtensionRepo? {
+        val index = fetchProtoIndex(repo) ?: return null
+        return ExtensionRepo(
+            baseUrl = repo,
+            name = index.name.ifBlank { repo },
+            shortName = null,
+            website = index.contact?.website ?: "",
+            signingKeyFingerprint = index.signingKey,
+        )
+    }
+
+    /**
+     * Same lookup order as Android: protobuf index.pb first, then legacy
+     * index.min.json. iOS has no APK consumer — the entries feed
+     * [probeRepoTypes] and any future metadata use.
+     */
+    override suspend fun fetchExtensionIndex(repo: String): List<ExtensionIndexEntry>? {
+        val proto = fetchProtoIndex(repo)?.toEntries(repo)
+        if (proto != null) return proto
+        return try {
+            val body = fetcher.get("$repo/index.min.json") ?: return null
+            json.decodeFromString<List<ExtensionRepoExtensionJsonDto>>(body)
+                .toEntries(repo)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to fetch extension index from $repo" }
+            null
+        }
+    }
+
+    private suspend fun fetchProtoIndex(repo: String): IndexProto? {
         val bytes = fetcher.getBytes("$repo/index.pb") ?: return null
         if (bytes.size >= 2 && bytes[0] == 0x1F.toByte() && bytes[1] == 0x8B.toByte()) {
             logcat(LogPriority.WARN) { "index.pb for $repo is gzipped — unsupported on iOS" }
             return null
         }
         return try {
-            val index = ProtoBuf.decodeFromByteArray(IndexProto.serializer(), bytes)
-            ExtensionRepo(
-                baseUrl = repo,
-                name = index.name.ifBlank { repo },
-                shortName = null,
-                website = index.contact?.website ?: "",
-                signingKeyFingerprint = index.signingKey,
-            )
+            ProtoBuf.decodeFromByteArray(IndexProto.serializer(), bytes)
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "Failed to fetch repo details from $repo (repo.json and index.pb)" }
+            logcat(LogPriority.ERROR, e) { "Failed to parse index.pb from $repo" }
             null
         }
     }
 
-    // iOS has no APK consumer — the extensions list reads the JS plugin index
-    // via JsPluginApi instead.
-    override suspend fun fetchExtensionIndex(repo: String): List<ExtensionIndexEntry>? = null
-
     /**
-     * Probes the JS plugin index and maps each entry's `kind` to a repo type
-     * ("novel"/"manga"/"anime"). Kotlin-APK entries are ignored — nothing on
-     * iOS can install them. Entries without `kind` normalize to "novel" at
-     * parse, so a plain LNReader index probes {novel}.
+     * Mirrors Android's probe: JS plugin index kinds first (richer than
+     * Android's presence check — `kind` maps straight to carrier types),
+     * then APK-index pkg/name heuristics so APK-only repos like MikoDB still
+     * register under their real tabs. Empty result falls back to {manga}
+     * exactly like Android.
      */
     override suspend fun probeRepoTypes(repo: String): Set<String> {
-        return try {
-            val payload = indexFetcher.fetch(repo)
-            parser.parse(payload, repo)
+        val baseUrl = repo.trim().trimEnd('/')
+            .removeSuffix("/index.min.json")
+            .removeSuffix("/index.pb")
+            .removeSuffix("/index.pb.gz")
+            .removeSuffix("/repo.json")
+            .removeSuffix("/plugins.min.json")
+            .removeSuffix("/plugins.json")
+            .removeSuffix("/index.json")
+
+        val types = mutableSetOf<String>()
+
+        val jsIndexExists = try {
+            val jsPlugins = parser.parse(indexFetcher.fetch(baseUrl), baseUrl)
                 .filterNot { it.isKotlinExtension }
-                .map { it.kind }
-                .toSet()
+            jsPlugins.mapTo(types) { it.kind }
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logcat(LogPriority.ERROR, e) { "probeRepoTypes failed for $repo" }
-            emptySet()
+            logcat(LogPriority.DEBUG) { "no JS plugin index at $baseUrl" }
+            false
         }
+        // Android's presence check: a bare LNReader index means novel repo.
+        if (jsIndexExists && types.isEmpty()) types += "novel"
+
+        val entries = fetchExtensionIndex(baseUrl)
+        if (!entries.isNullOrEmpty()) {
+            for (entry in entries) {
+                types += entry.detectedRepoTypes()
+            }
+        }
+
+        return if (types.isEmpty()) setOf("manga") else types
     }
 }
