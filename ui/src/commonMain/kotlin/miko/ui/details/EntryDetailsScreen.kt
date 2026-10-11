@@ -3,6 +3,7 @@ package miko.ui.details
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -151,11 +152,19 @@ fun EntryDetailsScreen(
                 val items = state.displayItems
                 val doneUrls = state.doneUrls
                 items(items, key = { it.url }) { item ->
+                    val itemDone = item.url in doneUrls
                     ItemRow(
                         item = item,
                         numberPrefix = itemPrefix(carrier),
-                        done = item.url in doneUrls,
+                        done = itemDone,
                         onClick = { onItemClick(item) },
+                        // Android's row long-press → mark read/unread; only
+                        // persists once the entry has a local row.
+                        onLongClick = if (state.local != null) {
+                            { model.markItem(item.url, !itemDone) }
+                        } else {
+                            null
+                        },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
@@ -591,11 +600,12 @@ private fun ItemRow(
     numberPrefix: String,
     done: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Text(
