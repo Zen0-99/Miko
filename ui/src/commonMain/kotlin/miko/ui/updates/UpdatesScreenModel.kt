@@ -84,6 +84,10 @@ class UpdatesScreenModel(
         val mode: Mode = Mode.Updates,
         val initialized: Boolean = false,
         val rows: List<Row> = emptyList(),
+        /** Android's Upcoming calendar — date → entry count per day. */
+        val events: Map<LocalDate, Int> = emptyMap(),
+        /** Month the calendar renders (day-1 of the month), today by default. */
+        val calendarMonthStart: LocalDate = currentMonthStart(),
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -108,8 +112,13 @@ class UpdatesScreenModel(
             carrierFlow.flatMapLatest { carrier ->
                 modeFlow.flatMapLatest { mode ->
                     historyQuery.flatMapLatest { query ->
-                        rowsFor(carrier, mode, query).map { rows ->
-                            State(mode = mode, initialized = true, rows = rows)
+                        rowsFor(carrier, mode, query).map { (rows, events) ->
+                            _state.value.copy(
+                                mode = mode,
+                                initialized = true,
+                                rows = rows,
+                                events = events,
+                            )
                         }
                     }
                 }
@@ -214,12 +223,15 @@ class UpdatesScreenModel(
     }
 
     private fun rowsFor(carrier: BrowseCarrier, mode: Mode, query: String) = when (mode) {
-        Mode.Updates -> updatesRows(carrier)
-        Mode.History -> historyRows(carrier, query)
+        Mode.Updates -> updatesRows(carrier).map { it to emptyMap() }
+        Mode.History -> historyRows(carrier, query).map { it to emptyMap() }
         Mode.Upcoming -> upcomingRows(carrier, query)
     }
 
-    private fun upcomingRows(carrier: BrowseCarrier, query: String): Flow<List<Row>> {
+    private fun upcomingRows(
+        carrier: BrowseCarrier,
+        query: String,
+    ): Flow<Pair<List<Row>, Map<LocalDate, Int>>> {
         // subscribe() is suspend on these interactors — emit the flow inline.
         val upcoming = when (carrier) {
             BrowseCarrier.SHOWS -> flow {
@@ -266,13 +278,22 @@ class UpdatesScreenModel(
             }
         }
         return upcoming.map { list ->
-            list
+            val filtered = list
                 .filter {
                     query.isBlank() || it.entryTitle.contains(query, ignoreCase = true)
                 }
                 .sortedBy { it.nextUpdate }
-                .withUpcomingHeaders()
+            val events = filtered.groupingBy {
+                Instant.fromEpochMilliseconds(it.nextUpdate)
+                    .toLocalDateTime(TimeZone.currentSystemDefault()).date
+            }.eachCount()
+            filtered.withUpcomingHeaders() to events
         }
+    }
+
+    /** Android's calendar month arrows — [monthStart] stays at day-1. */
+    fun setCalendarMonth(monthStart: LocalDate) {
+        _state.value = _state.value.copy(calendarMonthStart = monthStart)
     }
 
     private fun updatesRows(carrier: BrowseCarrier): Flow<List<Row>> {
@@ -472,6 +493,32 @@ private val monthNames = listOf(
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
 )
+
+/** Day-1 of the current month — the calendar's initial page. */
+internal fun currentMonthStart(): LocalDate {
+    val today = Instant.fromEpochMilliseconds(kotlin.time.Clock.System.now().toEpochMilliseconds())
+        .toLocalDateTime(TimeZone.currentSystemDefault()).date
+    return LocalDate(today.year, today.month, 1)
+}
+
+/** "March 2026" — the calendar header's month label. */
+internal fun monthLabel(monthStart: LocalDate): String =
+    "${monthNames[monthStart.month.ordinal]} ${monthStart.year}"
+
+/** Month shift for the ‹ › header arrows. */
+internal fun LocalDate.shiftMonths(delta: Int): LocalDate {
+    var year = this.year
+    var month = this.monthNumber + delta
+    while (month > 12) {
+        month -= 12
+        year++
+    }
+    while (month < 1) {
+        month += 12
+        year--
+    }
+    return LocalDate(year, month, 1)
+}
 
 /** "1" for whole numbers, "2.5" otherwise — chapter/episode display. */
 private fun formatNumber(value: Double): String =

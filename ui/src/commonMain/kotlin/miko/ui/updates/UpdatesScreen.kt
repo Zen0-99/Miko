@@ -1,16 +1,24 @@
 package miko.ui.updates
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Refresh
@@ -37,10 +45,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.Month
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.components.CoverListItem
@@ -185,73 +200,240 @@ fun UpdatesScreen(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
-            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(
-                    state.rows,
-                    key = { row ->
-                        when (row) {
-                            is UpdatesScreenModel.Row.Header -> "h-${row.key}"
-                            is UpdatesScreenModel.Row.Update -> "u-${row.itemId}"
-                            is UpdatesScreenModel.Row.History -> "hist-${row.id}"
-                            is UpdatesScreenModel.Row.Upcoming -> "up-${row.entryId}"
+            else -> {
+                val listState = rememberLazyListState()
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    // Android's Calendar tab — month grid over the list;
+                    // day taps scroll to that date's header group.
+                    if (state.mode == UpdatesScreenModel.Mode.Upcoming) {
+                        item(key = "upcoming-calendar") {
+                            UpcomingCalendar(
+                                monthStart = state.calendarMonthStart,
+                                events = state.events,
+                                onMonthChange = model::setCalendarMonth,
+                                onDayClick = { date ->
+                                    val index = state.rows.indexOfFirst {
+                                        it is UpdatesScreenModel.Row.Header &&
+                                            it.key == "u$date"
+                                    }
+                                    if (index >= 0) {
+                                        scope.launch {
+                                            // +1 accounts for the calendar item itself.
+                                            listState.animateScrollToItem(index + 1)
+                                        }
+                                    }
+                                },
+                            )
                         }
-                    },
-                ) { row ->
-                    when (row) {
-                        is UpdatesScreenModel.Row.Header -> ExtensionHeader(row.label)
-                        is UpdatesScreenModel.Row.Update -> UpdateRow(
-                            row = row,
-                            carrier = carrier,
-                            downloadState = downloadStates[row.itemUrl],
-                            downloadProgress = downloadProgress[row.itemUrl] ?: 0f,
-                            downloaded = model.itemDirPath(row) in downloadedDirs,
-                            onDownloadClick = { model.onDownloadClick(row) },
-                            onToggleDone = { model.markItemDone(row.itemId, !row.done) },
-                            onClick = {
-                                scope.launch {
-                                    model.resolveTarget(row.entryId, row.itemId)
-                                        ?.let { t ->
-                                            onOpenItem(t.sourceId, t.entryUrl, t.itemUrl)
-                                        }
-                                }
-                            },
-                            onCoverClick = {
-                                scope.launch {
-                                    model.resolveTarget(row.entryId, row.itemId)
-                                        ?.let { t ->
-                                            onOpenEntry(t.sourceId, t.entryUrl, row.entryTitle)
-                                        }
-                                }
-                            },
-                        )
-                        is UpdatesScreenModel.Row.History -> HistoryRow(
-                            row = row,
-                            carrier = carrier,
-                            onDelete = { all -> model.removeHistory(row, all) },
-                            onClick = {
-                                scope.launch {
-                                    model.resolveTarget(row.entryId, row.itemId)
-                                        ?.let { t ->
-                                            onOpenItem(t.sourceId, t.entryUrl, t.itemUrl)
-                                        }
-                                }
-                            },
-                            onCoverClick = {
-                                scope.launch {
-                                    model.resolveTarget(row.entryId, row.itemId)
-                                        ?.let { t ->
-                                            onOpenEntry(t.sourceId, t.entryUrl, row.entryTitle)
-                                        }
-                                }
-                            },
-                        )
-                        is UpdatesScreenModel.Row.Upcoming -> UpcomingRow(
-                            row = row,
-                            onClick = {
-                                onOpenEntry(row.sourceId, row.entryUrl, row.entryTitle)
-                            },
+                    }
+                    items(
+                        state.rows,
+                        key = { row ->
+                            when (row) {
+                                is UpdatesScreenModel.Row.Header -> "h-${row.key}"
+                                is UpdatesScreenModel.Row.Update -> "u-${row.itemId}"
+                                is UpdatesScreenModel.Row.History -> "hist-${row.id}"
+                                is UpdatesScreenModel.Row.Upcoming -> "up-${row.entryId}"
+                            }
+                        },
+                    ) { row ->
+                        when (row) {
+                            is UpdatesScreenModel.Row.Header -> ExtensionHeader(row.label)
+                            is UpdatesScreenModel.Row.Update -> UpdateRow(
+                                row = row,
+                                carrier = carrier,
+                                downloadState = downloadStates[row.itemUrl],
+                                downloadProgress = downloadProgress[row.itemUrl] ?: 0f,
+                                downloaded = model.itemDirPath(row) in downloadedDirs,
+                                onDownloadClick = { model.onDownloadClick(row) },
+                                onToggleDone = { model.markItemDone(row.itemId, !row.done) },
+                                onClick = {
+                                    scope.launch {
+                                        model.resolveTarget(row.entryId, row.itemId)
+                                            ?.let { t ->
+                                                onOpenItem(t.sourceId, t.entryUrl, t.itemUrl)
+                                            }
+                                    }
+                                },
+                                onCoverClick = {
+                                    scope.launch {
+                                        model.resolveTarget(row.entryId, row.itemId)
+                                            ?.let { t ->
+                                                onOpenEntry(t.sourceId, t.entryUrl, row.entryTitle)
+                                            }
+                                    }
+                                },
+                            )
+                            is UpdatesScreenModel.Row.History -> HistoryRow(
+                                row = row,
+                                carrier = carrier,
+                                onDelete = { all -> model.removeHistory(row, all) },
+                                onClick = {
+                                    scope.launch {
+                                        model.resolveTarget(row.entryId, row.itemId)
+                                            ?.let { t ->
+                                                onOpenItem(t.sourceId, t.entryUrl, t.itemUrl)
+                                            }
+                                    }
+                                },
+                                onCoverClick = {
+                                    scope.launch {
+                                        model.resolveTarget(row.entryId, row.itemId)
+                                            ?.let { t ->
+                                                onOpenEntry(t.sourceId, t.entryUrl, row.entryTitle)
+                                            }
+                                    }
+                                },
+                            )
+                            is UpdatesScreenModel.Row.Upcoming -> UpcomingRow(
+                                row = row,
+                                onClick = {
+                                    onOpenEntry(row.sourceId, row.entryUrl, row.entryTitle)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Android's upcoming calendar — month header with ‹ › arrows and a
+ * 7-column day grid (Sunday-first). Days carry up to three event dots;
+ * today's cell gets a ring and past days render dimmed.
+ */
+@Composable
+private fun UpcomingCalendar(
+    monthStart: LocalDate,
+    events: Map<LocalDate, Int>,
+    onMonthChange: (LocalDate) -> Unit,
+    onDayClick: (LocalDate) -> Unit,
+) {
+    val today = remember {
+        Instant.fromEpochMilliseconds(kotlin.time.Clock.System.now().toEpochMilliseconds())
+            .toLocalDateTime(TimeZone.currentSystemDefault()).date
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = monthLabel(monthStart),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { onMonthChange(monthStart.shiftMonths(-1)) }) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = null,
+                )
+            }
+            IconButton(onClick = { onMonthChange(monthStart.shiftMonths(1)) }) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                )
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            calendarWeekdayInitials.forEach { initial ->
+                Text(
+                    text = initial,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        val daysInMonth = daysInMonth(monthStart.year, monthStart.month)
+        // Sunday-start grid — DayOfWeek ordinals are Mon=0..Sun=6.
+        val leading = (monthStart.dayOfWeek.ordinal + 1) % 7
+        val cells = List(leading) { 0 } + (1..daysInMonth).toList()
+        cells.chunked(7).forEach { week ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                week.forEach { day ->
+                    if (day == 0) {
+                        Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                    } else {
+                        val date = LocalDate(monthStart.year, monthStart.month, day)
+                        CalendarDayCell(
+                            day = day,
+                            events = events[date] ?: 0,
+                            isToday = date == today,
+                            isPast = date < today,
+                            onClick = { onDayClick(date) },
+                            modifier = Modifier.weight(1f),
                         )
                     }
+                }
+                // Partial last week — keep the grid's 7-column shape.
+                repeat(7 - week.size) {
+                    Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                }
+            }
+        }
+    }
+}
+
+private val calendarWeekdayInitials = listOf("S", "M", "T", "W", "T", "F", "S")
+
+private fun daysInMonth(year: Int, month: Month): Int = when (month) {
+    Month.FEBRUARY -> if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) 29 else 28
+    Month.APRIL, Month.JUNE, Month.SEPTEMBER, Month.NOVEMBER -> 30
+    else -> 31
+}
+
+/** One calendar cell — day number over up to three event dots. */
+@Composable
+private fun CalendarDayCell(
+    day: Int,
+    events: Int,
+    isToday: Boolean,
+    isPast: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .aspectRatio(1f)
+            .clip(CircleShape)
+            .then(
+                if (isToday) {
+                    Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.onBackground,
+                        CircleShape,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = day.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground.copy(
+                    alpha = if (isPast) 0.4f else 1f,
+                ),
+            )
+            Row {
+                repeat(events.coerceAtMost(3)) {
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
                 }
             }
         }
