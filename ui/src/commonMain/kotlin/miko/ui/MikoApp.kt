@@ -849,10 +849,12 @@ private fun LibrarySettingsAction(model: LibraryScreenModel) {
             displayMode = state.displayMode,
             sort = state.sort,
             filters = state.filters,
+            badges = state.badges,
             onDismissRequest = { sheetOpen = false },
             onDisplayMode = model::setDisplayMode,
             onSort = model::setSort,
             onToggleFilter = model::toggleFilter,
+            onToggleBadge = model::toggleBadge,
         )
     }
 }

@@ -43,6 +43,10 @@ class LibraryScreenModel(
         val title: String,
         val coverUrl: String?,
         val unreadCount: Long,
+        /** Source language — Android's LanguageBadge text (EN/JA/…). */
+        val sourceLanguage: String = "",
+        /** Android's isLocal — local-source entries show a folder badge. */
+        val isLocal: Boolean = false,
         /** Android's library filter fields — tri-state sheet criteria. */
         val hasStarted: Boolean = false,
         val hasBookmarks: Boolean = false,
@@ -126,9 +130,33 @@ class LibraryScreenModel(
         val filters: LibraryFilters = LibraryFilters(),
         /** Android's selection mode — ids of the selected entries. */
         val selected: Set<Long> = emptySet(),
+        /** Android's Badges-tab toggles — gate which cover badges render. */
+        val badges: LibraryBadges = LibraryBadges(),
+        /**
+         * Entry id → downloaded item count — populated only while the
+         * download badge pref is on (a filesystem scan per emission is
+         * too hot to run unconditionally, same as the downloaded filter).
+         */
+        val downloadCounts: Map<Long, Int> = emptyMap(),
         /** Active carrier — marks read vs seen + download-dir naming. */
         val carrier: BrowseCarrier = BrowseCarrier.MANGA,
     )
+
+    /** Android's display_*_badge pref set — the sheet's Badges tab. */
+    data class LibraryBadges(
+        val downloaded: Boolean = false,
+        val unread: Boolean = true,
+        val local: Boolean = true,
+        val language: Boolean = false,
+    )
+
+    /** Badge ids — `display_*_badge` pref keys match Android's. */
+    enum class LibraryBadgeId {
+        DOWNLOADED,
+        UNREAD,
+        LOCAL,
+        LANGUAGE,
+    }
 
     private val scope = CoroutineScope(Job() + dispatcher)
 
@@ -140,6 +168,7 @@ class LibraryScreenModel(
     init {
         scope.launch {
             carrierFlow.flatMapLatest { carrier ->
+                val binding = graph.binding(carrier)
                 when (carrier) {
                     BrowseCarrier.SHOWS -> graph.getLibraryAnime.subscribe().map { list ->
                         list.map {
@@ -150,6 +179,8 @@ class LibraryScreenModel(
                                 title = it.anime.title,
                                 coverUrl = it.anime.thumbnailUrl,
                                 unreadCount = it.unseenCount,
+                                sourceLanguage = binding
+                                    .source(it.anime.source)?.lang ?: "",
                                 hasStarted = it.hasStarted,
                                 hasBookmarks = it.hasBookmarks,
                                 completed = it.anime.status ==
@@ -172,6 +203,8 @@ class LibraryScreenModel(
                                 title = it.manga.title,
                                 coverUrl = it.manga.thumbnailUrl,
                                 unreadCount = it.unreadCount,
+                                sourceLanguage = binding
+                                    .source(it.manga.source)?.lang ?: "",
                                 hasStarted = it.hasStarted,
                                 hasBookmarks = it.hasBookmarks,
                                 completed = it.manga.status ==
@@ -194,6 +227,8 @@ class LibraryScreenModel(
                                 title = it.novel.title,
                                 coverUrl = it.novel.thumbnailUrl,
                                 unreadCount = it.unreadCount,
+                                sourceLanguage = binding
+                                    .source(it.novel.source)?.lang ?: "",
                                 hasStarted = it.hasStarted,
                                 hasBookmarks = it.hasBookmarks,
                                 completed = it.novel.status ==
@@ -227,6 +262,7 @@ class LibraryScreenModel(
                         _state.value.sort,
                     ),
                 )
+                rescanDownloadCounts()
             }
         }
         // Android's per-carrier library sort pref — each carrier keeps its
@@ -317,6 +353,52 @@ class LibraryScreenModel(
                     _state.value = _state.value.copy(displayMode = mode)
                 }
         }
+        // Android's getLibraryItemPreferencesFlow — the four display_*_badge
+        // prefs feed the cover badges; the download one also gates the
+        // per-entry directory scan.
+        scope.launch {
+            combine(
+                LibraryBadgeId.entries.map { id ->
+                    graph.preferenceStore
+                        .getBoolean(badgePrefKey(id), badgeDefault(id))
+                        .changes()
+                },
+            ) { values ->
+                LibraryBadges(
+                    downloaded = values[0],
+                    unread = values[1],
+                    local = values[2],
+                    language = values[3],
+                )
+            }.collect { badges ->
+                _state.value = _state.value.copy(badges = badges)
+                rescanDownloadCounts()
+            }
+        }
+        scope.launch {
+            // A finished/removed download flips the count without a DB write.
+            DownloadManager.changes.collect { rescanDownloadCounts() }
+        }
+    }
+
+    /** Android's DownloadCache-backed count — scanned per visible entry. */
+    private suspend fun rescanDownloadCounts() {
+        if (!_state.value.badges.downloaded) {
+            if (_state.value.downloadCounts.isNotEmpty()) {
+                _state.value = _state.value.copy(downloadCounts = emptyMap())
+            }
+            return
+        }
+        val carrier = carrierFlow.value
+        val binding = graph.binding(carrier)
+        val counts = rawEntries.mapNotNull { entry ->
+            val sourceName = binding.source(entry.sourceId)?.name
+                ?: return@mapNotNull null
+            val count = DownloadManager
+                .downloadedItemNames(carrier, sourceName, entry.title).size
+            if (count > 0) entry.id to count else null
+        }.toMap()
+        _state.value = _state.value.copy(downloadCounts = counts)
     }
 
     /** Android's display-mode sheet selection — writes the library pref. */
@@ -393,6 +475,29 @@ class LibraryScreenModel(
             LibraryFilterId.COMPLETED -> "completed_v2"
         }
         return "pref_filter_${infix}_$suffix"
+    }
+
+    private fun badgePrefKey(id: LibraryBadgeId) = when (id) {
+        LibraryBadgeId.DOWNLOADED -> "display_download_badge"
+        LibraryBadgeId.UNREAD -> "display_unread_badge"
+        LibraryBadgeId.LOCAL -> "display_local_badge"
+        LibraryBadgeId.LANGUAGE -> "display_language_badge"
+    }
+
+    private fun badgeDefault(id: LibraryBadgeId) = when (id) {
+        LibraryBadgeId.DOWNLOADED -> false
+        LibraryBadgeId.UNREAD -> true
+        LibraryBadgeId.LOCAL -> true
+        LibraryBadgeId.LANGUAGE -> false
+    }
+
+    /** Android's Badges-tab checkbox — flips the display_*_badge pref. */
+    fun toggleBadge(id: LibraryBadgeId) {
+        scope.launch {
+            val pref = graph.preferenceStore
+                .getBoolean(badgePrefKey(id), badgeDefault(id))
+            pref.set(!pref.get())
+        }
     }
 
     /** Android's toggleFilter — DISABLED → INCLUDE → EXCLUDE → off. */

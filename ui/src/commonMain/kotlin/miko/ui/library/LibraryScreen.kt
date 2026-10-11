@@ -23,10 +23,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +54,7 @@ import miko.ui.components.CoverListItem
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
+import tachiyomi.presentation.core.components.Badge
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -144,7 +145,8 @@ fun LibraryScreen(
                         stringRes = MR.strings.information_empty_library,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    // Android's display_mode LIST — 56dp EntryListItem rows.
+                    // Android's display_mode LIST — 56dp EntryListItem rows
+                    // with the trailing BadgeGroup (downloads/unviewed/lang).
                     state.displayMode == LibraryDisplayMode.List -> LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(8.dp),
@@ -156,10 +158,13 @@ fun LibraryScreen(
                                 onClick = { onCellClick(entry) },
                                 onLongClick = { model.toggleSelect(entry.id) },
                                 isSelected = entry.id in state.selected,
-                                trailing = if (entry.unreadCount > 0) {
-                                    { Badge { Text("${entry.unreadCount}") } }
-                                } else {
-                                    null
+                                badge = {
+                                    DownloadsBadge(downloadCount(state, entry.id))
+                                    UnviewedBadge(unviewedCount(state, entry))
+                                    LanguageBadge(
+                                        isLocal = state.badges.local && entry.isLocal,
+                                        sourceLanguage = languageTag(state, entry),
+                                    )
                                 },
                             )
                         }
@@ -181,10 +186,15 @@ fun LibraryScreen(
                                     onClick = { onCellClick(entry) },
                                     onLongClick = { model.toggleSelect(entry.id) },
                                     isSelected = entry.id in state.selected,
-                                    coverBadge = if (entry.unreadCount > 0) {
-                                        { Badge { Text("${entry.unreadCount}") } }
-                                    } else {
-                                        null
+                                    coverBadge = {
+                                        DownloadsBadge(downloadCount(state, entry.id))
+                                        UnviewedBadge(unviewedCount(state, entry))
+                                    },
+                                    coverBadgeEnd = {
+                                        LanguageBadge(
+                                            isLocal = state.badges.local && entry.isLocal,
+                                            sourceLanguage = languageTag(state, entry),
+                                        )
                                     },
                                 )
                             } else {
@@ -194,10 +204,15 @@ fun LibraryScreen(
                                     onClick = { onCellClick(entry) },
                                     onLongClick = { model.toggleSelect(entry.id) },
                                     isSelected = entry.id in state.selected,
-                                    topStartBadge = if (entry.unreadCount > 0) {
-                                        { Badge { Text("${entry.unreadCount}") } }
-                                    } else {
-                                        null
+                                    topStartBadge = {
+                                        DownloadsBadge(downloadCount(state, entry.id))
+                                        UnviewedBadge(unviewedCount(state, entry))
+                                    },
+                                    topEndBadge = {
+                                        LanguageBadge(
+                                            isLocal = state.badges.local && entry.isLocal,
+                                            sourceLanguage = languageTag(state, entry),
+                                        )
                                     },
                                 )
                             }
@@ -396,3 +411,67 @@ private fun DeleteLibraryEntriesDialog(
         },
     )
 }
+
+/** Android's DownloadsBadge — tertiary count, hidden at zero. */
+@Composable
+private fun DownloadsBadge(count: Long) {
+    if (count > 0) {
+        Badge(
+            text = "$count",
+            color = MaterialTheme.colorScheme.tertiary,
+            textColor = MaterialTheme.colorScheme.onTertiary,
+        )
+    }
+}
+
+/** Android's UnviewedBadge — secondary count, hidden at zero. */
+@Composable
+private fun UnviewedBadge(count: Long) {
+    if (count > 0) {
+        Badge(text = "$count")
+    }
+}
+
+/**
+ * Android's LanguageBadge — folder icon for local-source entries,
+ * else the uppercased source-language tag; hidden when both are absent.
+ */
+@Composable
+private fun LanguageBadge(
+    isLocal: Boolean,
+    sourceLanguage: String,
+) {
+    if (isLocal) {
+        Badge(
+            imageVector = Icons.Outlined.Folder,
+            color = MaterialTheme.colorScheme.tertiary,
+            iconColor = MaterialTheme.colorScheme.onTertiary,
+        )
+    } else if (sourceLanguage.isNotEmpty()) {
+        Badge(
+            text = sourceLanguage.uppercase(),
+            color = MaterialTheme.colorScheme.tertiary,
+            textColor = MaterialTheme.colorScheme.onTertiary,
+        )
+    }
+}
+
+/** Android's item field gating — badge prefs zero the rendered fields. */
+private fun downloadCount(
+    state: LibraryScreenModel.State,
+    entryId: Long,
+): Long = if (state.badges.downloaded) {
+    (state.downloadCounts[entryId] ?: 0).toLong()
+} else {
+    0
+}
+
+private fun unviewedCount(
+    state: LibraryScreenModel.State,
+    entry: LibraryScreenModel.LibraryEntry,
+): Long = if (state.badges.unread) entry.unreadCount else 0
+
+private fun languageTag(
+    state: LibraryScreenModel.State,
+    entry: LibraryScreenModel.LibraryEntry,
+): String = if (state.badges.language) entry.sourceLanguage else ""

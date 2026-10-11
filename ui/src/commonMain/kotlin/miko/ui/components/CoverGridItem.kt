@@ -6,6 +6,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import tachiyomi.presentation.core.components.Badge
+import tachiyomi.presentation.core.components.BadgeGroup
 import tachiyomi.presentation.core.util.selectedBackground
 
 private val CoverPlaceholderColor = Color(0x1F888888)
@@ -75,7 +77,8 @@ fun CoverComfortableItem(
     titleMaxLines: Int = 2,
     coverAlpha: Float = 1f,
     isSelected: Boolean = false,
-    coverBadge: (@Composable () -> Unit)? = null,
+    coverBadge: (@Composable RowScope.() -> Unit)? = null,
+    coverBadgeEnd: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -96,9 +99,20 @@ fun CoverComfortableItem(
                     .aspectRatio(COVER_RATIO),
             )
             if (coverBadge != null) {
-                Box(modifier = Modifier.align(Alignment.TopStart)) {
-                    coverBadge()
-                }
+                BadgeGroup(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .align(Alignment.TopStart),
+                    content = coverBadge,
+                )
+            }
+            if (coverBadgeEnd != null) {
+                BadgeGroup(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .align(Alignment.TopEnd),
+                    content = coverBadgeEnd,
+                )
             }
         }
         Text(
@@ -129,6 +143,7 @@ fun CoverListItem(
     isSelected: Boolean = false,
     coverAlpha: Float = 1f,
     onCoverClick: (() -> Unit)? = null,
+    badge: (@Composable RowScope.() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
@@ -181,6 +196,9 @@ fun CoverListItem(
                 )
             }
         }
+        if (badge != null) {
+            BadgeGroup(content = badge)
+        }
         trailing?.invoke()
     }
 }
@@ -199,7 +217,8 @@ fun CoverGridItem(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
     coverAlpha: Float = 1f,
-    topStartBadge: (@Composable () -> Unit)? = null,
+    topStartBadge: (@Composable RowScope.() -> Unit)? = null,
+    topEndBadge: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Box(
         modifier = modifier
@@ -219,9 +238,20 @@ fun CoverGridItem(
                 .aspectRatio(COVER_RATIO),
         )
         if (topStartBadge != null) {
-            Box(modifier = Modifier.align(Alignment.TopStart).padding(4.dp)) {
-                topStartBadge()
-            }
+            BadgeGroup(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp),
+                content = topStartBadge,
+            )
+        }
+        if (topEndBadge != null) {
+            BadgeGroup(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp),
+                content = topEndBadge,
+            )
         }
         if (title != null) {
             Box(

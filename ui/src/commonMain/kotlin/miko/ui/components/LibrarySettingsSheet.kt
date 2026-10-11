@@ -29,11 +29,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import miko.ui.library.LibraryScreenModel
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
@@ -47,10 +49,12 @@ fun LibrarySettingsSheet(
     displayMode: LibraryDisplayMode,
     sort: LibraryScreenModel.LibrarySort,
     filters: LibraryScreenModel.LibraryFilters,
+    badges: LibraryScreenModel.LibraryBadges,
     onDismissRequest: () -> Unit,
     onDisplayMode: (LibraryDisplayMode) -> Unit,
     onSort: (LibraryScreenModel.LibrarySort) -> Unit,
     onToggleFilter: (LibraryScreenModel.LibraryFilterId) -> Unit,
+    onToggleBadge: (LibraryScreenModel.LibraryBadgeId) -> Unit,
 ) {
     var page by remember { mutableIntStateOf(0) }
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
@@ -58,6 +62,7 @@ fun LibrarySettingsSheet(
             listOf(
                 MR.strings.action_filter,
                 MR.strings.action_display,
+                MR.strings.badges,
                 MR.strings.action_sort,
             ).forEachIndexed { index, res ->
                 Tab(
@@ -119,6 +124,39 @@ fun LibrarySettingsSheet(
                         selected = displayMode == mode,
                         onClick = { onDisplayMode(mode) },
                     )
+                }
+                2 -> {
+                    // Android's BadgesTab — "Cover badges" heading with the
+                    // four display_*_badge checkboxes.
+                    SheetHeading(stringResource(MR.strings.overlay_cover_badges))
+                    listOf(
+                        Triple(
+                            MR.strings.action_display_download_badge,
+                            LibraryScreenModel.LibraryBadgeId.DOWNLOADED,
+                            badges.downloaded,
+                        ),
+                        Triple(
+                            MR.strings.action_display_unread_badge,
+                            LibraryScreenModel.LibraryBadgeId.UNREAD,
+                            badges.unread,
+                        ),
+                        Triple(
+                            MR.strings.action_display_local_badge,
+                            LibraryScreenModel.LibraryBadgeId.LOCAL,
+                            badges.local,
+                        ),
+                        Triple(
+                            MR.strings.action_display_language_badge,
+                            LibraryScreenModel.LibraryBadgeId.LANGUAGE,
+                            badges.language,
+                        ),
+                    ).forEach { (res, id, checked) ->
+                        LabeledCheckbox(
+                            label = stringResource(res),
+                            checked = checked,
+                            onCheckedChange = { onToggleBadge(id) },
+                        )
+                    }
                 }
                 else -> listOf(
                     MR.strings.action_sort_alpha to LibraryScreenModel.SortType.ALPHABETICAL,
@@ -201,6 +239,19 @@ private fun LibraryTriStateRow(
             TriState.DISABLED -> Spacer(modifier = Modifier.size(24.dp))
         }
     }
+}
+
+/** Android's HeadingItem — bold titleSmall section header in the sheet. */
+@Composable
+private fun SheetHeading(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 4.dp),
+    )
 }
 
 @Composable
