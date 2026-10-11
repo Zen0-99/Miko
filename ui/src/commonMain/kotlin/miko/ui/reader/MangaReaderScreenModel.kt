@@ -98,6 +98,27 @@ class MangaReaderScreenModel(
          * 0x20/0x28 locked, 0x30 reverse portrait).
          */
         val orientation: Int = 8,
+        /**
+         * Android's landscape_zoom — wide (landscape) pages auto-zoom to
+         * fill when the scale type is Fit, anchored at the zoom-start
+         * edge. Default true, matching Android.
+         */
+        val landscapeZoom: Boolean = true,
+        /** Android's pref_enable_transitions_key — animated page flips. */
+        val pageTransitions: Boolean = true,
+        /**
+         * Android's dual-page family (paged + webtoon): wide pages
+         * (w>h) either split into two slots or rotate 90° to fit;
+         * inverts flip half order / rotation direction.
+         */
+        val dualPageSplit: Boolean = false,
+        val dualPageInvert: Boolean = false,
+        val dualPageRotate: Boolean = false,
+        val dualPageRotateInvert: Boolean = false,
+        val dualPageSplitWebtoon: Boolean = false,
+        val dualPageInvertWebtoon: Boolean = false,
+        val dualPageRotateWebtoon: Boolean = false,
+        val dualPageRotateInvertWebtoon: Boolean = false,
         /** Android's E-Ink group — flash overlay on page change. */
         val flashOnPageChange: Boolean = false,
         val flashDurationMillis: Int = 100,
@@ -234,6 +255,50 @@ class MangaReaderScreenModel(
         8,
     )
 
+    // Android's ReadingModePage pager prefs — same keys/defaults.
+    private val landscapeZoomPref = preferenceStore.getBoolean(
+        "landscape_zoom",
+        true,
+    )
+    private val pageTransitionsPref = preferenceStore.getBoolean(
+        "pref_enable_transitions_key",
+        true,
+    )
+
+    // Android's dual-page prefs — same keys/defaults (all false).
+    private val dualPageSplitPref = preferenceStore.getBoolean(
+        "pref_dual_page_split",
+        false,
+    )
+    private val dualPageInvertPref = preferenceStore.getBoolean(
+        "pref_dual_page_invert",
+        false,
+    )
+    private val dualPageRotatePref = preferenceStore.getBoolean(
+        "pref_dual_page_rotate",
+        false,
+    )
+    private val dualPageRotateInvertPref = preferenceStore.getBoolean(
+        "pref_dual_page_rotate_invert",
+        false,
+    )
+    private val dualPageSplitWebtoonPref = preferenceStore.getBoolean(
+        "pref_dual_page_split_webtoon",
+        false,
+    )
+    private val dualPageInvertWebtoonPref = preferenceStore.getBoolean(
+        "pref_dual_page_invert_webtoon",
+        false,
+    )
+    private val dualPageRotateWebtoonPref = preferenceStore.getBoolean(
+        "pref_dual_page_rotate_webtoon",
+        false,
+    )
+    private val dualPageRotateInvertWebtoonPref = preferenceStore.getBoolean(
+        "pref_dual_page_rotate_invert_webtoon",
+        false,
+    )
+
     // Android's E-Ink prefs — same keys/defaults.
     private val flashOnPageChangePref = preferenceStore.getBoolean(
         "pref_reader_flash",
@@ -367,6 +432,56 @@ class MangaReaderScreenModel(
             }
         }
         scope.launch {
+            landscapeZoomPref.changes().collect { v ->
+                _state.value = _state.value.copy(landscapeZoom = v)
+            }
+        }
+        scope.launch {
+            pageTransitionsPref.changes().collect { v ->
+                _state.value = _state.value.copy(pageTransitions = v)
+            }
+        }
+        scope.launch {
+            dualPageSplitPref.changes().collect { v ->
+                _state.value = _state.value.copy(dualPageSplit = v)
+            }
+        }
+        scope.launch {
+            dualPageInvertPref.changes().collect { v ->
+                _state.value = _state.value.copy(dualPageInvert = v)
+            }
+        }
+        scope.launch {
+            dualPageRotatePref.changes().collect { v ->
+                _state.value = _state.value.copy(dualPageRotate = v)
+            }
+        }
+        scope.launch {
+            dualPageRotateInvertPref.changes().collect { v ->
+                _state.value = _state.value.copy(dualPageRotateInvert = v)
+            }
+        }
+        scope.launch {
+            dualPageSplitWebtoonPref.changes().collect { v ->
+                _state.value = _state.value.copy(dualPageSplitWebtoon = v)
+            }
+        }
+        scope.launch {
+            dualPageInvertWebtoonPref.changes().collect { v ->
+                _state.value = _state.value.copy(dualPageInvertWebtoon = v)
+            }
+        }
+        scope.launch {
+            dualPageRotateWebtoonPref.changes().collect { v ->
+                _state.value = _state.value.copy(dualPageRotateWebtoon = v)
+            }
+        }
+        scope.launch {
+            dualPageRotateInvertWebtoonPref.changes().collect { v ->
+                _state.value = _state.value.copy(dualPageRotateInvertWebtoon = v)
+            }
+        }
+        scope.launch {
             flashOnPageChangePref.changes().collect { v ->
                 _state.value = _state.value.copy(flashOnPageChange = v)
             }
@@ -439,6 +554,26 @@ class MangaReaderScreenModel(
     fun setInvertedColors(on: Boolean) = invertedColorsPref.set(on)
 
     fun setOrientation(flagValue: Int) = orientationPref.set(flagValue)
+
+    fun setLandscapeZoom(on: Boolean) = landscapeZoomPref.set(on)
+
+    fun setPageTransitions(on: Boolean) = pageTransitionsPref.set(on)
+
+    fun setDualPageSplit(on: Boolean) = dualPageSplitPref.set(on)
+
+    fun setDualPageInvert(on: Boolean) = dualPageInvertPref.set(on)
+
+    fun setDualPageRotate(on: Boolean) = dualPageRotatePref.set(on)
+
+    fun setDualPageRotateInvert(on: Boolean) = dualPageRotateInvertPref.set(on)
+
+    fun setDualPageSplitWebtoon(on: Boolean) = dualPageSplitWebtoonPref.set(on)
+
+    fun setDualPageInvertWebtoon(on: Boolean) = dualPageInvertWebtoonPref.set(on)
+
+    fun setDualPageRotateWebtoon(on: Boolean) = dualPageRotateWebtoonPref.set(on)
+
+    fun setDualPageRotateInvertWebtoon(on: Boolean) = dualPageRotateInvertWebtoonPref.set(on)
 
     fun setFlashOnPageChange(on: Boolean) = flashOnPageChangePref.set(on)
 

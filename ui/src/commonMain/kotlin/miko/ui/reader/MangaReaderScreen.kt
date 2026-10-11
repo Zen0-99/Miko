@@ -19,10 +19,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -61,6 +66,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
@@ -238,6 +244,16 @@ fun MangaReaderScreen(
             onTappingInvertSelect = model::setTappingInverted,
             onSidePaddingChange = model::setWebtoonSidePadding,
             onNavigateToPanChange = model::setNavigateToPan,
+            onLandscapeZoomChange = model::setLandscapeZoom,
+            onPageTransitionsChange = model::setPageTransitions,
+            onDualPageSplitChange = model::setDualPageSplit,
+            onDualPageInvertChange = model::setDualPageInvert,
+            onDualPageRotateChange = model::setDualPageRotate,
+            onDualPageRotateInvertChange = model::setDualPageRotateInvert,
+            onDualPageSplitWebtoonChange = model::setDualPageSplitWebtoon,
+            onDualPageInvertWebtoonChange = model::setDualPageInvertWebtoon,
+            onDualPageRotateWebtoonChange = model::setDualPageRotateWebtoon,
+            onDualPageRotateInvertWebtoonChange = model::setDualPageRotateInvertWebtoon,
             onZoomStartSelect = model::setZoomStart,
             onCustomBrightnessChange = model::setCustomBrightness,
             onBrightnessValueChange = model::setCustomBrightnessValue,
@@ -374,13 +390,34 @@ private fun PagedViewer(
         // index 0 is the prev transition, pageCount-1 the next one, real
         // pages sit between them. Offsets below convert to page indices.
         val transitions = if (state.showTransitions) 1 else 0
+        // Android's dual-page split — a decoded-wide page emits a second
+        // slot (InsertPage); first half follows reading direction
+        // (L2R left, else right), invert flips. Discovery is lazy like
+        // Android's — slots grow as intrinsics arrive.
+        val widePages = remember { mutableStateMapOf<Int, Boolean>() }
+        val l2r = state.readingMode == MangaReadingMode.LEFT_TO_RIGHT
+        val slots = buildList<Pair<Int, Int?>> {
+            state.pages.forEachIndexed { i, _ ->
+                if (state.dualPageSplit && widePages[i] == true) {
+                    var first = if (l2r) 0 else 1
+                    if (state.dualPageInvert) first = 1 - first
+                    add(i to first)
+                    add(i to 1 - first)
+                } else {
+                    add(i to null as Int?)
+                }
+            }
+        }
         val pagerState = rememberPagerState(
-            initialPage = (state.initialPage + transitions)
+            initialPage = (
+                slots.indexOfFirst { it.first == state.initialPage }
+                    .coerceAtLeast(0) + transitions
+                )
                 .coerceIn(
                     transitions,
-                    (state.pages.lastIndex + transitions).coerceAtLeast(transitions),
+                    (slots.lastIndex + transitions).coerceAtLeast(transitions),
                 ),
-            pageCount = { state.pages.size + transitions * 2 },
+            pageCount = { slots.size + transitions * 2 },
         )
         val scope = rememberCoroutineScope()
         val zoom = remember { ReaderZoomState() }
@@ -388,8 +425,9 @@ private fun PagedViewer(
             // Android resets the zoom on page settle.
             zoom.reset()
             onPageChange(
-                (pagerState.currentPage - transitions)
-                    .coerceIn(0, state.pages.lastIndex.coerceAtLeast(0)),
+                slots.getOrNull(pagerState.currentPage - transitions)?.first
+                    ?.coerceIn(0, state.pages.lastIndex.coerceAtLeast(0))
+                    ?: 0,
             )
         }
         val rtl = state.readingMode == MangaReadingMode.RIGHT_TO_LEFT
@@ -411,8 +449,10 @@ private fun PagedViewer(
                                     (state.pages.size + transitions * 2 - 1).coerceAtLeast(0)
                                 val job = scope.launch {
                                     while (pagerState.currentPage < maxPage) {
-                                        pagerState.animateScrollToPage(
+                                        flipToPage(
+                                            pagerState,
                                             pagerState.currentPage + 1,
+                                            state.pageTransitions,
                                         )
                                     }
                                 }
@@ -471,7 +511,7 @@ private fun PagedViewer(
                                     )
                                 if (page != pagerState.currentPage) {
                                     scope.launch {
-                                        pagerState.animateScrollToPage(page)
+                                        flipToPage(pagerState, page, state.pageTransitions)
                                     }
                                 }
                             } else {
@@ -482,7 +522,7 @@ private fun PagedViewer(
                 },
         ) {
             val pageContent: @Composable PagerScope.(Int) -> Unit = { index ->
-                val pageIndex = index - transitions
+                val slot = slots.getOrNull(index - transitions)
                 when {
                     transitions == 1 && index == 0 -> ChapterTransitionBlock(
                         goingNext = false,
@@ -491,20 +531,28 @@ private fun PagedViewer(
                         onNavigate = onPrevChapter,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    transitions == 1 && index == state.pages.size + 1 -> ChapterTransitionBlock(
+                    transitions == 1 && index == slots.size + 1 -> ChapterTransitionBlock(
                         goingNext = true,
                         currentName = state.chapterName,
                         neighbor = state.nextChapter,
                         onNavigate = onNextChapter,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    else -> PageImage(
-                        state.pages[pageIndex],
+                    slot != null -> PageImage(
+                        state.pages[slot.first],
                         Modifier.fillMaxSize(),
                         scaleType = state.imageScaleType,
                         alignment = zoomStartAlignment(state.zoomStart, state.readingMode),
                         colorFilter = pageColorFilter(state.grayscale, state.invertedColors),
+                        landscapeZoom = state.landscapeZoom,
+                        cropHalf = slot.second,
+                        rotateToFit = state.dualPageRotate && !state.dualPageSplit,
+                        rotateInvert = state.dualPageRotateInvert,
+                        onIntrinsic = { size ->
+                            widePages[slot.first] = size.width > size.height
+                        },
                     )
+                    else -> Unit
                 }
             }
             // Android's PagerPageHolder zoom: two-finger pinch scales at the
@@ -596,7 +644,11 @@ private fun PagedViewer(
                                                         state.pages.size + transitions * 2 - 1,
                                                     )
                                                 scope.launch {
-                                                    pagerState.animateScrollToPage(page)
+                                                    flipToPage(
+                                                        pagerState,
+                                                        page,
+                                                        state.pageTransitions,
+                                                    )
                                                 }
                                                 // Drain the trailing ups so the
                                                 // tap zones don't also fire.
@@ -689,6 +741,9 @@ private fun WebtoonViewer(
     // horizontal margins on the strip (WebtoonPageHolder's margin calc).
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val sidePad = maxWidth * (state.webtoonSidePadding / 100f)
+        // Wide-page discovery for the webtoon dual-page prefs —
+        // splitAndMerge stacks halves (right on top; invert swaps).
+        val widePages = remember(state.chapterUrl) { mutableStateMapOf<Int, Boolean>() }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -715,12 +770,28 @@ private fun WebtoonViewer(
                 )
             }
             items(state.pages, key = { it.index }) { page ->
-                PageImage(
-                    page,
-                    Modifier.fillMaxWidth(),
-                    alignment = zoomStartAlignment(state.zoomStart, state.readingMode),
-                    colorFilter = pageColorFilter(state.grayscale, state.invertedColors),
-                )
+                val onIntrinsic: (Size) -> Unit = { size ->
+                    widePages[page.index] = size.width > size.height
+                }
+                if (state.dualPageSplitWebtoon && widePages[page.index] == true) {
+                    // Android's splitAndMerge — halves stacked, right on
+                    // top by default (invert swaps), each full width.
+                    val upper = if (state.dualPageInvertWebtoon) 0 else 1
+                    Column(Modifier.fillMaxWidth()) {
+                        PageImage(page, Modifier.fillMaxWidth(), cropHalf = upper, onIntrinsic = onIntrinsic)
+                        PageImage(page, Modifier.fillMaxWidth(), cropHalf = 1 - upper, onIntrinsic = onIntrinsic)
+                    }
+                } else {
+                    PageImage(
+                        page,
+                        Modifier.fillMaxWidth(),
+                        alignment = zoomStartAlignment(state.zoomStart, state.readingMode),
+                        colorFilter = pageColorFilter(state.grayscale, state.invertedColors),
+                        rotateToFit = state.dualPageRotateWebtoon && !state.dualPageSplitWebtoon,
+                        rotateInvert = state.dualPageRotateInvertWebtoon,
+                        onIntrinsic = onIntrinsic,
+                    )
+                }
             }
             item { Spacer(Modifier.height(16.dp)) }
             if (state.showTransitions) {
@@ -748,6 +819,11 @@ private fun PageImage(
     scaleType: Int = 0,
     alignment: Alignment = Alignment.TopCenter,
     colorFilter: ColorFilter? = null,
+    landscapeZoom: Boolean = false,
+    cropHalf: Int? = null,
+    rotateToFit: Boolean = false,
+    rotateInvert: Boolean = false,
+    onIntrinsic: (Size) -> Unit = {},
 ) {
     val src = page.imageUrl ?: page.url
     // Downloaded pages carry miko-file:// paths — read them off disk;
@@ -777,15 +853,93 @@ private fun PageImage(
         } ?: ContentScale.Fit
         else -> contentScale
     }
-    AsyncImage(
-        model = if (src.startsWith(DownloadManager.FILE_SCHEME)) fileBytes else src,
-        contentDescription = null,
-        contentScale = if (scaleType != 0) pagedScale else contentScale,
-        alignment = alignment,
-        colorFilter = colorFilter,
-        onSuccess = { intrinsic = it.painter.intrinsicSize },
-        modifier = modifier,
-    )
+    // Android's landscape_zoom — wide pages auto-zoom to fill when the
+    // scale type is Fit, anchored at the zoom-start edge via `alignment`.
+    val baseScale = if (scaleType != 0) pagedScale else contentScale
+    val effectiveScale = if (
+        landscapeZoom &&
+        baseScale == ContentScale.Fit &&
+        intrinsic?.let { it.width > it.height } == true
+    ) {
+        ContentScale.FillHeight
+    } else {
+        baseScale
+    }
+    val imageModel = if (src.startsWith(DownloadManager.FILE_SCHEME)) fileBytes else src
+    val intr = intrinsic
+    val isWide = intr?.let { it.width > it.height } == true
+    when {
+        // Android's splitInHalf — render one half of a wide page: the
+        // image lays out at 2x slot width, clipped, offset by a slot.
+        cropHalf != null -> BoxWithConstraints(modifier.clipToBounds()) {
+            AsyncImage(
+                model = imageModel,
+                contentDescription = null,
+                contentScale = effectiveScale,
+                alignment = alignment,
+                colorFilter = colorFilter,
+                onSuccess = {
+                    intrinsic = it.painter.intrinsicSize
+                    onIntrinsic(it.painter.intrinsicSize)
+                },
+                modifier = Modifier
+                    .requiredWidth(maxWidth * 2)
+                    .fillMaxHeight()
+                    .offset(x = if (cropHalf == 0) 0.dp else -maxWidth),
+            )
+        }
+        // Android's rotateDualPage — wide pages rotate 90° to fill a
+        // portrait viewport; the swapped-dims box makes the turn fill.
+        rotateToFit && isWide -> BoxWithConstraints(modifier) {
+            val bounded = constraints.maxHeight != Int.MAX_VALUE
+            // Rotated footprint = pre-rotation dims swapped. In the
+            // strip (unbounded height) claim w × w/aspect up front;
+            // in the bounded pager the slot swap covers it.
+            val aspect = intr!!.height / intr.width
+            val outerW = if (bounded) null else maxWidth
+            val outerH = if (bounded) null else maxWidth / aspect
+            val boxW = if (bounded) maxHeight else maxWidth / aspect
+            val boxH = maxWidth
+            Box(
+                modifier = if (bounded) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier.size(width = outerW!!, height = outerH!!)
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(width = boxW, height = boxH)
+                        .graphicsLayer { rotationZ = if (rotateInvert) -90f else 90f },
+                ) {
+                    AsyncImage(
+                        model = imageModel,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        colorFilter = colorFilter,
+                        onSuccess = {
+                            intrinsic = it.painter.intrinsicSize
+                            onIntrinsic(it.painter.intrinsicSize)
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+        else -> AsyncImage(
+            model = imageModel,
+            contentDescription = null,
+            contentScale = effectiveScale,
+            alignment = alignment,
+            colorFilter = colorFilter,
+            onSuccess = {
+                intrinsic = it.painter.intrinsicSize
+                onIntrinsic(it.painter.intrinsicSize)
+            },
+            modifier = modifier,
+        )
+    }
 }
 
 /**
@@ -993,6 +1147,16 @@ private fun ReaderSettingsSheet(
     onTappingInvertSelect: (TappingInvertMode) -> Unit,
     onSidePaddingChange: (Int) -> Unit,
     onNavigateToPanChange: (Boolean) -> Unit,
+    onLandscapeZoomChange: (Boolean) -> Unit,
+    onPageTransitionsChange: (Boolean) -> Unit,
+    onDualPageSplitChange: (Boolean) -> Unit,
+    onDualPageInvertChange: (Boolean) -> Unit,
+    onDualPageRotateChange: (Boolean) -> Unit,
+    onDualPageRotateInvertChange: (Boolean) -> Unit,
+    onDualPageSplitWebtoonChange: (Boolean) -> Unit,
+    onDualPageInvertWebtoonChange: (Boolean) -> Unit,
+    onDualPageRotateWebtoonChange: (Boolean) -> Unit,
+    onDualPageRotateInvertWebtoonChange: (Boolean) -> Unit,
     onZoomStartSelect: (Int) -> Unit,
     onCustomBrightnessChange: (Boolean) -> Unit,
     onBrightnessValueChange: (Int) -> Unit,
@@ -1102,10 +1266,70 @@ private fun ReaderSettingsSheet(
                 onChange = { onSidePaddingChange(it.roundToInt()) },
             )
             SettingSwitch(
+                labelRes = MR.strings.pref_landscape_zoom,
+                checked = state.landscapeZoom,
+                onChange = onLandscapeZoomChange,
+            )
+            SettingSwitch(
                 labelRes = MR.strings.pref_navigate_pan,
                 checked = state.navigateToPan,
                 onChange = onNavigateToPanChange,
             )
+            // Android's dual-page group — gated per viewer type like
+            // ReadingModePage (pager controls vs webtoon controls).
+            if (state.readingMode == MangaReadingMode.WEBTOON ||
+                state.readingMode == MangaReadingMode.CONTINUOUS_VERTICAL
+            ) {
+                SettingSwitch(
+                    labelRes = MR.strings.pref_dual_page_split,
+                    checked = state.dualPageSplitWebtoon,
+                    onChange = onDualPageSplitWebtoonChange,
+                )
+                if (state.dualPageSplitWebtoon) {
+                    SettingSwitch(
+                        labelRes = MR.strings.pref_dual_page_invert,
+                        checked = state.dualPageInvertWebtoon,
+                        onChange = onDualPageInvertWebtoonChange,
+                    )
+                }
+                SettingSwitch(
+                    labelRes = MR.strings.pref_page_rotate,
+                    checked = state.dualPageRotateWebtoon,
+                    onChange = onDualPageRotateWebtoonChange,
+                )
+                if (state.dualPageRotateWebtoon) {
+                    SettingSwitch(
+                        labelRes = MR.strings.pref_page_rotate_invert,
+                        checked = state.dualPageRotateInvertWebtoon,
+                        onChange = onDualPageRotateInvertWebtoonChange,
+                    )
+                }
+            } else {
+                SettingSwitch(
+                    labelRes = MR.strings.pref_dual_page_split,
+                    checked = state.dualPageSplit,
+                    onChange = onDualPageSplitChange,
+                )
+                if (state.dualPageSplit) {
+                    SettingSwitch(
+                        labelRes = MR.strings.pref_dual_page_invert,
+                        checked = state.dualPageInvert,
+                        onChange = onDualPageInvertChange,
+                    )
+                }
+                SettingSwitch(
+                    labelRes = MR.strings.pref_page_rotate,
+                    checked = state.dualPageRotate,
+                    onChange = onDualPageRotateChange,
+                )
+                if (state.dualPageRotate) {
+                    SettingSwitch(
+                        labelRes = MR.strings.pref_page_rotate_invert,
+                        checked = state.dualPageRotateInvert,
+                        onChange = onDualPageRotateInvertChange,
+                    )
+                }
+            }
             SettingSwitch(
                 labelRes = MR.strings.pref_show_page_number,
                 checked = state.showPageNumber,
@@ -1115,6 +1339,11 @@ private fun ReaderSettingsSheet(
                 labelRes = MR.strings.pref_always_show_chapter_transition,
                 checked = state.showTransitions,
                 onChange = onTransitionsChange,
+            )
+            SettingSwitch(
+                labelRes = MR.strings.pref_page_transitions,
+                checked = state.pageTransitions,
+                onChange = onPageTransitionsChange,
             )
             SettingSwitch(
                 labelRes = MR.strings.pref_fullscreen,
@@ -1258,6 +1487,22 @@ private fun ReaderSettingsSheet(
 
 private const val MAX_ZOOM_SCALE = 3f
 private const val DOUBLE_TAP_ZOOM_SCALE = 2.5f
+
+/**
+ * Android's usePageTransitions — pref off turns programmatic page
+ * flips (tap zones, long-tap scroll, edge pan) into instant snaps.
+ */
+private suspend fun flipToPage(
+    pagerState: androidx.compose.foundation.pager.PagerState,
+    page: Int,
+    animated: Boolean,
+) {
+    if (animated) {
+        pagerState.animateScrollToPage(page)
+    } else {
+        pagerState.scrollToPage(page)
+    }
+}
 
 /** Android's ViewerNavigation.NavigationRegion — LEFT/RIGHT are spatial. */
 private enum class NavZone(val delta: Int) {
