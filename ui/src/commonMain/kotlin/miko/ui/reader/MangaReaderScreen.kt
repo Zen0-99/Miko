@@ -49,6 +49,7 @@ import kotlinx.io.readByteArray
 import miko.ui.components.SettingDropdown
 import miko.ui.components.SettingSwitch
 import miko.ui.download.DownloadManager
+import miko.ui.platform.KeepScreenOn
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
@@ -65,6 +66,9 @@ fun MangaReaderScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+
+    // Android's reader keep-screen-on — idle timer off while reading.
+    KeepScreenOn(state.keepScreenOn)
 
     Column(modifier = modifier.fillMaxSize()) {
         when {

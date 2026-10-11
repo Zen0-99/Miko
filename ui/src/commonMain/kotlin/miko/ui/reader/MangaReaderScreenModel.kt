@@ -52,6 +52,8 @@ class MangaReaderScreenModel(
         /** The entry's own flag; 0 = inherit the global pref. */
         val viewerFlag: Int = 0,
         val showPageNumber: Boolean = true,
+        /** Android's readerPreferences.keepScreenOn — drives KeepScreenOn. */
+        val keepScreenOn: Boolean = true,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -79,6 +81,12 @@ class MangaReaderScreenModel(
         true,
     )
 
+    // Android's readerPreferences.keepScreenOn — same global key.
+    private val keepScreenOnPref = preferenceStore.getBoolean(
+        "pref_keep_screen_on_key",
+        true,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -96,6 +104,11 @@ class MangaReaderScreenModel(
         scope.launch {
             showPageNumberPref.changes().collect { v ->
                 _state.value = _state.value.copy(showPageNumber = v)
+            }
+        }
+        scope.launch {
+            keepScreenOnPref.changes().collect { v ->
+                _state.value = _state.value.copy(keepScreenOn = v)
             }
         }
     }

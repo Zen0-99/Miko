@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import miko.ui.platform.KeepScreenOn
 import miko.ui.reader.ChapterListSheet
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -47,6 +48,10 @@ fun EpisodePlayerScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+
+    // Android keeps the screen on while a stream is attached (its window
+    // flag follows playback; a loaded player is the closest surface state).
+    KeepScreenOn(state.playingUrl != null)
 
     Column(modifier = modifier.fillMaxSize()) {
         state.playingUrl?.let { url ->
