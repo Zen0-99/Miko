@@ -447,6 +447,18 @@ fun MikoApp(graph: MikoUiGraph) {
                                     },
                                 )
                             }
+                            if (current == Destination.Library) {
+                                // Android's library display-mode sheet
+                                // (compact/comfortable/list) as a top-bar
+                                // action, same affordance as the feed.
+                                val libraryDisplayMode = libraryModel.state
+                                    .collectAsStateWithLifecycle()
+                                    .value.displayMode
+                                FeedDisplayModeAction(
+                                    displayMode = libraryDisplayMode,
+                                    onDisplayModeChange = libraryModel::setDisplayMode,
+                                )
+                            }
                         },
                         pillContent = if (current == Destination.Browse) {
                             {

@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
@@ -28,7 +30,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.components.CoverComfortableItem
 import miko.ui.components.CoverGridItem
+import miko.ui.components.CoverListItem
+import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -101,6 +106,34 @@ fun LibraryScreen(
                 stringRes = MR.strings.information_empty_library,
                 modifier = Modifier.fillMaxSize(),
             )
+            // Android's display_mode LIST — 56dp EntryListItem rows.
+            state.displayMode == LibraryDisplayMode.List -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(8.dp),
+            ) {
+                items(state.entries, key = { it.id }) { entry ->
+                    var menuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        CoverListItem(
+                            title = entry.title,
+                            coverUrl = entry.coverUrl,
+                            onClick = { onEntryClick(entry) },
+                            onLongClick = { menuOpen = true },
+                            trailing = if (entry.unreadCount > 0) {
+                                { Badge { Text("${entry.unreadCount}") } }
+                            } else {
+                                null
+                            },
+                        )
+                        LibraryEntryMenu(
+                            menuOpen = menuOpen,
+                            onDismiss = { menuOpen = false },
+                            onMarkRead = { model.markAllDone(entry) },
+                            onRemove = { model.removeFromLibrary(entry) },
+                        )
+                    }
+                }
+            }
             else -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 120.dp),
                 modifier = Modifier.fillMaxSize(),
@@ -111,45 +144,78 @@ fun LibraryScreen(
                 items(state.entries, key = { it.id }) { entry ->
                     var menuOpen by remember { mutableStateOf(false) }
                     Box {
-                        CoverGridItem(
-                            title = if (state.showTitle) entry.title else null,
-                            coverUrl = entry.coverUrl,
-                            onClick = { onEntryClick(entry) },
-                            // Android's long-press selection menu (reduced —
-                            // mark read + remove until selection mode lands).
-                            onLongClick = { menuOpen = true },
-                            topStartBadge = if (entry.unreadCount > 0) {
-                                { Badge { Text("${entry.unreadCount}") } }
-                            } else {
-                                null
-                            },
-                        )
-                        DropdownMenu(
-                            expanded = menuOpen,
-                            onDismissRequest = { menuOpen = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(stringResource(MR.strings.action_mark_as_read))
-                                },
-                                onClick = {
-                                    menuOpen = false
-                                    model.markAllDone(entry)
+                        // ComfortableGrid puts the title below the cover;
+                        // Compact/CoverOnly overlay it on a scrim.
+                        if (state.displayMode == LibraryDisplayMode.ComfortableGrid) {
+                            CoverComfortableItem(
+                                title = entry.title,
+                                coverUrl = entry.coverUrl,
+                                onClick = { onEntryClick(entry) },
+                                onLongClick = { menuOpen = true },
+                                coverBadge = if (entry.unreadCount > 0) {
+                                    { Badge { Text("${entry.unreadCount}") } }
+                                } else {
+                                    null
                                 },
                             )
-                            DropdownMenuItem(
-                                text = {
-                                    Text(stringResource(MR.strings.remove_from_library))
-                                },
-                                onClick = {
-                                    menuOpen = false
-                                    model.removeFromLibrary(entry)
+                        } else {
+                            CoverGridItem(
+                                title = if (state.showTitle) entry.title else null,
+                                coverUrl = entry.coverUrl,
+                                onClick = { onEntryClick(entry) },
+                                // Android's long-press selection menu
+                                // (reduced — mark read + remove until
+                                // selection mode lands).
+                                onLongClick = { menuOpen = true },
+                                topStartBadge = if (entry.unreadCount > 0) {
+                                    { Badge { Text("${entry.unreadCount}") } }
+                                } else {
+                                    null
                                 },
                             )
                         }
+                        LibraryEntryMenu(
+                            menuOpen = menuOpen,
+                            onDismiss = { menuOpen = false },
+                            onMarkRead = { model.markAllDone(entry) },
+                            onRemove = { model.removeFromLibrary(entry) },
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+/** Long-press context menu shared by the grid and list cells. */
+@Composable
+private fun LibraryEntryMenu(
+    menuOpen: Boolean,
+    onDismiss: () -> Unit,
+    onMarkRead: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    DropdownMenu(
+        expanded = menuOpen,
+        onDismissRequest = onDismiss,
+    ) {
+        DropdownMenuItem(
+            text = {
+                Text(stringResource(MR.strings.action_mark_as_read))
+            },
+            onClick = {
+                onDismiss()
+                onMarkRead()
+            },
+        )
+        DropdownMenuItem(
+            text = {
+                Text(stringResource(MR.strings.remove_from_library))
+            },
+            onClick = {
+                onDismiss()
+                onRemove()
+            },
+        )
     }
 }

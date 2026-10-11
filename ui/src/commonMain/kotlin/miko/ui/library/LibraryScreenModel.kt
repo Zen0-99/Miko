@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import miko.ui.MikoUiGraph
 import miko.ui.carrier.BrowseCarrier
 import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.library.model.LibraryDisplayMode
 
 /**
  * Library favorites for the active carrier — re-emits on every DB write
@@ -47,6 +48,8 @@ class LibraryScreenModel(
         /** Android's library collection tabs — the chip row + selection. */
         val collections: List<Collection> = emptyList(),
         val selectedCollectionId: Long? = null,
+        /** Android's pref_display_mode_library — compact/comfortable/list. */
+        val displayMode: LibraryDisplayMode = LibraryDisplayMode.default,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -131,6 +134,33 @@ class LibraryScreenModel(
                 .getBoolean("display_library_title", true)
                 .changes()
                 .collect { show -> _state.value = _state.value.copy(showTitle = show) }
+        }
+        scope.launch {
+            graph.preferenceStore
+                .getObject(
+                    "pref_display_mode_library",
+                    LibraryDisplayMode.default,
+                    LibraryDisplayMode.Serializer::serialize,
+                    LibraryDisplayMode.Serializer::deserialize,
+                )
+                .changes()
+                .collect { mode ->
+                    _state.value = _state.value.copy(displayMode = mode)
+                }
+        }
+    }
+
+    /** Android's display-mode sheet selection — writes the library pref. */
+    fun setDisplayMode(mode: LibraryDisplayMode) {
+        scope.launch {
+            graph.preferenceStore
+                .getObject(
+                    "pref_display_mode_library",
+                    LibraryDisplayMode.default,
+                    LibraryDisplayMode.Serializer::serialize,
+                    LibraryDisplayMode.Serializer::deserialize,
+                )
+                .set(mode)
         }
     }
 
