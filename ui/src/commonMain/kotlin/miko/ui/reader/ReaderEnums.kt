@@ -19,6 +19,25 @@ enum class NovelReaderBackgroundColor(val titleRes: StringResource) {
     GRAY(MR.strings.gray_background),
 }
 
+/**
+ * Mirror of Android's `TappingInvertMode` — same names so the shared
+ * `reader_tapping_inverted` pref round-trips with the Android app's value.
+ */
+enum class TappingInvertMode(
+    val titleRes: StringResource,
+    val shouldInvertHorizontal: Boolean = false,
+    val shouldInvertVertical: Boolean = false,
+) {
+    NONE(MR.strings.tapping_inverted_none),
+    HORIZONTAL(MR.strings.tapping_inverted_horizontal, shouldInvertHorizontal = true),
+    VERTICAL(MR.strings.tapping_inverted_vertical, shouldInvertVertical = true),
+    BOTH(
+        MR.strings.tapping_inverted_both,
+        shouldInvertHorizontal = true,
+        shouldInvertVertical = true,
+    ),
+}
+
 /** Chapter row for the in-reader chapter sheet — remote name + local done. */
 data class ChapterRow(
     val url: String,

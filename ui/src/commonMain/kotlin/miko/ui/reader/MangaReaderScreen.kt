@@ -57,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -193,6 +194,8 @@ fun MangaReaderScreen(
             onThemeSelect = model::setReaderTheme,
             onFullscreenChange = model::setFullscreen,
             onLongTapChange = model::setLongTapScroll,
+            onScaleTypeSelect = model::setImageScaleType,
+            onTappingInvertSelect = model::setTappingInverted,
             onDismiss = model::closeSettings,
         )
     }
@@ -219,6 +222,16 @@ private val readerThemeOptions = listOf(
     MR.strings.gray_background to 2,
     MR.strings.white_background to 0,
     MR.strings.automatic_background to 3,
+)
+
+/** Android's ImageScaleType list — pref values are index + 1. */
+private val imageScaleOptions = listOf(
+    MR.strings.scale_type_fit_screen,
+    MR.strings.scale_type_stretch,
+    MR.strings.scale_type_fit_width,
+    MR.strings.scale_type_fit_height,
+    MR.strings.scale_type_original_size,
+    MR.strings.scale_type_smart_fit,
 )
 
 /** Dispatches to the paged or long-strip viewer per the resolved mode. */
@@ -343,7 +356,14 @@ private fun PagedViewer(
                             }
                             up.consume()
                             val offset = up.position
-                            val target =
+                            // Android's reader_tapping_inverted — flips the
+                            // zones on the axis the mode navigates by.
+                            val inverted = if (state.readingMode == MangaReadingMode.VERTICAL) {
+                                state.tappingInverted.shouldInvertVertical
+                            } else {
+                                state.tappingInverted.shouldInvertHorizontal
+                            }
+                            val rawTarget =
                                 if (state.readingMode == MangaReadingMode.VERTICAL) {
                                     when {
                                         offset.y < size.height / 3 -> -1
@@ -367,6 +387,7 @@ private fun PagedViewer(
                                         else -> 0
                                     }
                                 }
+                            val target = if (inverted) -rawTarget else rawTarget
                             if (target != 0) {
                                 val page = (pagerState.currentPage + target)
                                     .coerceIn(
@@ -405,7 +426,7 @@ private fun PagedViewer(
                     else -> PageImage(
                         state.pages[pageIndex],
                         Modifier.fillMaxSize(),
-                        ContentScale.Fit,
+                        scaleType = state.imageScaleType,
                     )
                 }
             }
@@ -465,7 +486,8 @@ private fun PagedViewer(
                                     event.changes.forEach { it.consume() }
                                 } else if (pinchActive || zoom.scale > 1f) {
                                     val change = pressed.first()
-                                    if (panActive || pinchActive ||
+                                    if (panActive ||
+                                        pinchActive ||
                                         (change.position - downPos).getDistance() >
                                         viewConfiguration.touchSlop
                                     ) {
@@ -599,6 +621,7 @@ private fun PageImage(
     page: miko.ui.carrier.PageEntry,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.FillWidth,
+    scaleType: Int = 0,
 ) {
     val src = page.imageUrl ?: page.url
     // Downloaded pages carry miko-file:// paths — read them off disk;
@@ -614,10 +637,25 @@ private fun PageImage(
             }
         }
     }
+    var intrinsic by remember(src) { mutableStateOf<Size?>(null) }
+    // Android's pref_image_scale_type_key — smart fit enlarges landscape
+    // pages (spreads) to fill the height; portrait pages fit whole.
+    val pagedScale = when (scaleType) {
+        1 -> ContentScale.Fit
+        2 -> ContentScale.FillBounds
+        3 -> ContentScale.FillWidth
+        4 -> ContentScale.FillHeight
+        5 -> ContentScale.None
+        6 -> intrinsic?.let {
+            if (it.width > it.height) ContentScale.FillHeight else ContentScale.Fit
+        } ?: ContentScale.Fit
+        else -> contentScale
+    }
     AsyncImage(
         model = if (src.startsWith(DownloadManager.FILE_SCHEME)) fileBytes else src,
         contentDescription = null,
-        contentScale = contentScale,
+        contentScale = if (scaleType != 0) pagedScale else contentScale,
+        onSuccess = { intrinsic = it.painter.intrinsicSize },
         modifier = modifier,
     )
 }
@@ -772,6 +810,8 @@ private fun ReaderSettingsSheet(
     onThemeSelect: (Int) -> Unit,
     onFullscreenChange: (Boolean) -> Unit,
     onLongTapChange: (Boolean) -> Unit,
+    onScaleTypeSelect: (Int) -> Unit,
+    onTappingInvertSelect: (TappingInvertMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -803,6 +843,22 @@ private fun ReaderSettingsSheet(
                     )
                 }
             }
+            SettingDropdown(
+                labelRes = MR.strings.pref_image_scale_type,
+                current = stringResource(
+                    imageScaleOptions[
+                        (state.imageScaleType - 1).coerceIn(imageScaleOptions.indices),
+                    ],
+                ),
+                options = imageScaleOptions.mapIndexed { i, res -> (i + 1) to res },
+                onSelect = onScaleTypeSelect,
+            )
+            SettingDropdown(
+                labelRes = MR.strings.pref_read_with_tapping_inverted,
+                current = stringResource(state.tappingInverted.titleRes),
+                options = TappingInvertMode.entries.map { it to it.titleRes },
+                onSelect = onTappingInvertSelect,
+            )
             SettingSwitch(
                 labelRes = MR.strings.pref_show_page_number,
                 checked = state.showPageNumber,

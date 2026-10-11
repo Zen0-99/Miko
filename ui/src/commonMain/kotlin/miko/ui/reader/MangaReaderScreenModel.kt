@@ -19,6 +19,7 @@ import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.ordered
 import miko.ui.download.DownloadManager
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.getEnum
 import kotlin.math.floor
 
 /**
@@ -64,6 +65,13 @@ class MangaReaderScreenModel(
         val fullscreen: Boolean = true,
         /** Android's reader_long_tap — hold a page edge to keep scrolling. */
         val longTapScroll: Boolean = true,
+        /**
+         * Android's pref_image_scale_type_key — 1 fit screen, 2 stretch,
+         * 3 fit width, 4 fit height, 5 original size, 6 smart fit.
+         */
+        val imageScaleType: Int = 1,
+        /** Android's reader_tapping_inverted — flips the tap zones. */
+        val tappingInverted: TappingInvertMode = TappingInvertMode.NONE,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -121,6 +129,18 @@ class MangaReaderScreenModel(
         true,
     )
 
+    // Android's readerPreferences.imageScaleType — same key/default.
+    private val imageScaleTypePref = preferenceStore.getInt(
+        "pref_image_scale_type_key",
+        1,
+    )
+
+    // Android's readerPreferences.pagerNavInverted — same key/default.
+    private val tappingInvertedPref = preferenceStore.getEnum(
+        "reader_tapping_inverted",
+        TappingInvertMode.NONE,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -165,6 +185,16 @@ class MangaReaderScreenModel(
                 _state.value = _state.value.copy(longTapScroll = v)
             }
         }
+        scope.launch {
+            imageScaleTypePref.changes().collect { v ->
+                _state.value = _state.value.copy(imageScaleType = v)
+            }
+        }
+        scope.launch {
+            tappingInvertedPref.changes().collect { v ->
+                _state.value = _state.value.copy(tappingInverted = v)
+            }
+        }
     }
 
     private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
@@ -190,6 +220,10 @@ class MangaReaderScreenModel(
     fun setFullscreen(fullscreen: Boolean) = fullscreenPref.set(fullscreen)
 
     fun setLongTapScroll(on: Boolean) = longTapPref.set(on)
+
+    fun setImageScaleType(type: Int) = imageScaleTypePref.set(type)
+
+    fun setTappingInverted(mode: TappingInvertMode) = tappingInvertedPref.set(mode)
 
     /**
      * Android's calculateChapterGap — floor(higher) − floor(lower) − 1;
