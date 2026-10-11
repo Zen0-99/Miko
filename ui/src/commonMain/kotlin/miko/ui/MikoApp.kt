@@ -101,6 +101,7 @@ fun MikoApp(graph: MikoUiGraph) {
     // non-null query = search open ("" = just opened). Reset when leaving
     // Browse, same as Android's per-tab resetSearch.
     var browseSearchQuery by remember { mutableStateOf<String?>(null) }
+    var librarySearchQuery by remember { mutableStateOf<String?>(null) }
     var browseMode by remember { mutableStateOf(BrowseMode.BROWSE) }
     // The app-wide content carrier — Android's contentMode: one selection
     // (shows/manga/books) drives the sources list, feed, details, search,
@@ -108,6 +109,7 @@ fun MikoApp(graph: MikoUiGraph) {
     val browseCarrier = remember { MutableStateFlow(BrowseCarrier.BOOKS) }
     LaunchedEffect(navigator.current) {
         if (navigator.current != Destination.Browse) browseSearchQuery = null
+        if (navigator.current != Destination.Library) librarySearchQuery = null
     }
 
     // The global-search screen's model lives at app scope so the top bar's
@@ -169,10 +171,19 @@ fun MikoApp(graph: MikoUiGraph) {
     val homeModel = remember {
         HomeScreenModel(graph, browseCarrier)
     }
+    // Library model at app scope — the toolbar search filters it from the
+    // scaffold, same lifetime argument as updatesModel.
+    val libraryModel = remember {
+        LibraryScreenModel(graph, browseCarrier)
+    }
     // Updates-toolbar search — Android's HistoriesTab subscribe(query).
     var updatesSearchQuery by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(updatesSearchQuery) {
         updatesModel.setHistoryQuery(updatesSearchQuery.orEmpty())
+    }
+    // Library-toolbar search — title-substring filter (Android parity).
+    LaunchedEffect(librarySearchQuery) {
+        libraryModel.setQuery(librarySearchQuery.orEmpty())
     }
 
     // Android's pref_theme_mode_key — shared via the injected store.
@@ -254,21 +265,26 @@ fun MikoApp(graph: MikoUiGraph) {
                     else -> MikoTopBar(
                         title = screenTitle(current),
                         canSearch = current == Destination.Browse ||
-                            current == Destination.Updates,
-                        searchQuery = if (current == Destination.Updates) {
-                            updatesSearchQuery
-                        } else {
-                            browseSearchQuery
+                            current == Destination.Updates ||
+                            current == Destination.Library,
+                        searchQuery = when (current) {
+                            Destination.Updates -> updatesSearchQuery
+                            Destination.Library -> librarySearchQuery
+                            else -> browseSearchQuery
                         },
                         onSearchQueryChange = { query ->
-                            if (current == Destination.Updates) {
-                                updatesSearchQuery = query
-                            } else {
-                                browseSearchQuery = query
+                            when (current) {
+                                Destination.Updates -> updatesSearchQuery = query
+                                Destination.Library -> librarySearchQuery = query
+                                else -> browseSearchQuery = query
                             }
                         },
                         onSearch = { query ->
-                            if (browseMode == BrowseMode.BROWSE) {
+                            // Only Browse submits anywhere — GlobalSearch.
+                            // Updates/Library filter their own lists live.
+                            if (current == Destination.Browse &&
+                                browseMode == BrowseMode.BROWSE
+                            ) {
                                 // Android pushes GlobalSearchScreen and
                                 // closes the browse search.
                                 navigator.push(
@@ -294,6 +310,9 @@ fun MikoApp(graph: MikoUiGraph) {
                                 } else {
                                     MR.strings.search_hint_updates
                                 },
+                            )
+                            Destination.Library -> stringResource(
+                                MR.strings.search_hint_library,
                             )
                             else -> null
                         },
@@ -375,7 +394,7 @@ fun MikoApp(graph: MikoUiGraph) {
                     modifier = Modifier.padding(padding),
                 )
                 Destination.Library -> LibraryDestination(
-                    graph = graph,
+                    model = libraryModel,
                     navigator = navigator,
                     carrierFlow = browseCarrier,
                     modifier = Modifier.padding(padding),
@@ -884,15 +903,11 @@ private fun UpdatesDestination(
 
 @Composable
 private fun LibraryDestination(
-    graph: MikoUiGraph,
+    model: LibraryScreenModel,
     navigator: Navigator,
     carrierFlow: MutableStateFlow<BrowseCarrier>,
     modifier: Modifier = Modifier,
 ) {
-    val model = remember { LibraryScreenModel(graph, carrierFlow) }
-    DisposableEffect(model) {
-        onDispose { model.dispose() }
-    }
     LibraryScreen(
         model = model,
         carrierFlow = carrierFlow,

@@ -41,12 +41,16 @@ class LibraryScreenModel(
         val entries: List<LibraryEntry> = emptyList(),
         /** Android's display_library_title — covers show title overlays. */
         val showTitle: Boolean = true,
+        /** Toolbar search filter — title substring, case-insensitive. */
+        val query: String = "",
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
+
+    private var rawEntries: List<LibraryEntry> = emptyList()
 
     init {
         scope.launch {
@@ -90,7 +94,11 @@ class LibraryScreenModel(
                     }
                 }
             }.collect { entries ->
-                _state.value = _state.value.copy(initialized = true, entries = entries)
+                rawEntries = entries
+                _state.value = _state.value.copy(
+                    initialized = true,
+                    entries = applyQuery(entries, _state.value.query),
+                )
             }
         }
         scope.launch {
@@ -99,6 +107,23 @@ class LibraryScreenModel(
                 .changes()
                 .collect { show -> _state.value = _state.value.copy(showTitle = show) }
         }
+    }
+
+    /** Android's library toolbar search — filters by title substring. */
+    fun setQuery(query: String) {
+        _state.value = _state.value.copy(
+            query = query,
+            entries = applyQuery(rawEntries, query),
+        )
+    }
+
+    private fun applyQuery(
+        entries: List<LibraryEntry>,
+        query: String,
+    ): List<LibraryEntry> {
+        val needle = query.trim()
+        if (needle.isEmpty()) return entries
+        return entries.filter { it.title.contains(needle, ignoreCase = true) }
     }
 
     fun dispose() = scope.cancel()
