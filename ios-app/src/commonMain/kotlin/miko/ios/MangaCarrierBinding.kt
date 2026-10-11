@@ -55,12 +55,25 @@ class MangaCarrierBinding(
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
         getManga.subscribe(url, sourceId).map { manga ->
-            manga?.let { LocalEntry(id = it.id, title = it.title, favorite = it.favorite) }
+            manga?.let {
+                LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
+            }
+        }
+
+    override suspend fun localEntryById(id: Long): LocalEntry? =
+        runCatching { mangaRepository.getMangaById(id) }.getOrNull()?.let {
+            LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
         }
 
     override suspend fun materialize(details: RemoteDetails, sourceId: Long): LocalEntry {
         val manga = networkToLocalManga.await(details.toDomainManga(sourceId))
-        return LocalEntry(id = manga.id, title = manga.title, favorite = manga.favorite)
+        return LocalEntry(
+            id = manga.id,
+            title = manga.title,
+            favorite = manga.favorite,
+            url = manga.url,
+            sourceId = manga.source,
+        )
     }
 
     override suspend fun setFavorite(localId: Long, favorite: Boolean) {

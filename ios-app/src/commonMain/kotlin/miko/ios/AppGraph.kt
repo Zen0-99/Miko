@@ -78,6 +78,9 @@ import tachiyomi.data.items.episode.EpisodeRepositoryImpl
 import tachiyomi.data.source.anime.AnimeStubSourceRepositoryImpl
 import tachiyomi.data.source.manga.MangaStubSourceRepositoryImpl
 import tachiyomi.data.source.novel.NovelStubSourceRepositoryImpl
+import tachiyomi.data.updates.manga.MangaUpdatesRepositoryImpl
+import tachiyomi.data.updates.novel.NovelUpdatesRepositoryImpl
+import tachiyomi.data.updates.shows.AnimeUpdatesRepositoryImpl
 import tachiyomi.db.achievement.AchievementsDatabase
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.manga.interactor.GetManga
@@ -96,8 +99,11 @@ import tachiyomi.domain.extension.novel.api.JsPluginApi
 import tachiyomi.domain.extension.novel.api.JsPluginIndexFetcher
 import tachiyomi.domain.extension.novel.api.JsPluginIndexParser
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
+import tachiyomi.domain.history.manga.interactor.GetMangaHistory
 import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
+import tachiyomi.domain.history.novel.interactor.GetNovelHistory
 import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
+import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
 import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
@@ -112,6 +118,9 @@ import tachiyomi.domain.source.manga.repository.MangaStubSourceRepository
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.repository.NovelStubSourceRepository
 import tachiyomi.domain.source.novel.service.NovelSourceManager
+import tachiyomi.domain.updates.manga.interactor.GetMangaUpdates
+import tachiyomi.domain.updates.novel.interactor.GetNovelUpdates
+import tachiyomi.domain.updates.shows.interactor.GetAnimeUpdates
 import tachiyomi.mi.data.AnimeDatabase
 import tachiyomi.novel.data.NovelDatabase
 
@@ -309,6 +318,21 @@ class AppGraph {
     val novelHistoryRepository: NovelHistoryRepository =
         NovelHistoryRepositoryImpl(novelHandler)
 
+    private val novelUpdatesRepository =
+        NovelUpdatesRepositoryImpl(novelHandler)
+    private val mangaUpdatesRepository =
+        MangaUpdatesRepositoryImpl(mangaHandler)
+    private val animeUpdatesRepository =
+        AnimeUpdatesRepositoryImpl(animeHandler)
+
+    val getNovelUpdates = GetNovelUpdates(novelUpdatesRepository)
+    val getMangaUpdates = GetMangaUpdates(mangaUpdatesRepository)
+    val getAnimeUpdates = GetAnimeUpdates(animeUpdatesRepository)
+
+    val getNovelHistory = GetNovelHistory(novelHistoryRepository)
+    val getMangaHistory = GetMangaHistory(mangaHistoryRepository)
+    val getAnimeHistory = GetAnimeHistory(animeHistoryRepository)
+
     val getManga = GetManga(mangaRepository)
 
     val getAnime = GetAnime(animeRepository)
@@ -367,6 +391,12 @@ class AppGraph {
         novelRepository = novelRepository,
         novelChapterRepository = novelChapterRepository,
         novelHistoryRepository = novelHistoryRepository,
+        getNovelUpdates = getNovelUpdates,
+        getMangaUpdates = getMangaUpdates,
+        getAnimeUpdates = getAnimeUpdates,
+        getNovelHistory = getNovelHistory,
+        getMangaHistory = getMangaHistory,
+        getAnimeHistory = getAnimeHistory,
         extensionRepoService = extensionRepoService,
         jsPluginApi = jsPluginApi,
         novelPluginRepository = novelPluginRepository,

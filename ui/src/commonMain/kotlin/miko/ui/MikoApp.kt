@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.outlined.RadioButtonChecked
@@ -66,6 +67,8 @@ import miko.ui.search.GlobalSearchScreen
 import miko.ui.search.GlobalSearchScreenModel
 import miko.ui.sources.SourcesScreen
 import miko.ui.sources.SourcesScreenModel
+import miko.ui.updates.UpdatesScreen
+import miko.ui.updates.UpdatesScreenModel
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -144,6 +147,11 @@ fun MikoApp(graph: MikoUiGraph) {
             installer = graph.novelPluginInstaller,
             carrierFlow = browseCarrier,
         )
+    }
+    // Updates tab model lives at app scope too — the feeds are long-lived
+    // DB subscriptions; recreating them per visit would flicker the list.
+    val updatesModel = remember {
+        UpdatesScreenModel(graph, browseCarrier)
     }
 
     MikoTheme {
@@ -261,18 +269,25 @@ fun MikoApp(graph: MikoUiGraph) {
             },
             bottomBar = {
                 if (!navigator.canPop) {
+                    // Android's nav tail order: Library | Updates | Browse.
                     NavigationBar {
-                        NavigationBarItem(
-                            selected = navigator.current == Destination.Browse,
-                            onClick = { navigator.replace(Destination.Browse) },
-                            icon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                            label = { Text(stringResource(MR.strings.browse)) },
-                        )
                         NavigationBarItem(
                             selected = navigator.current == Destination.Library,
                             onClick = { navigator.replace(Destination.Library) },
                             icon = { Icon(Icons.Filled.Favorite, contentDescription = null) },
                             label = { Text(stringResource(MR.strings.label_library)) },
+                        )
+                        NavigationBarItem(
+                            selected = navigator.current == Destination.Updates,
+                            onClick = { navigator.replace(Destination.Updates) },
+                            icon = { Icon(Icons.Filled.NewReleases, contentDescription = null) },
+                            label = { Text(stringResource(MR.strings.label_recent_updates)) },
+                        )
+                        NavigationBarItem(
+                            selected = navigator.current == Destination.Browse,
+                            onClick = { navigator.replace(Destination.Browse) },
+                            icon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                            label = { Text(stringResource(MR.strings.browse)) },
                         )
                     }
                 }
@@ -289,6 +304,12 @@ fun MikoApp(graph: MikoUiGraph) {
                 )
                 Destination.Library -> LibraryDestination(
                     graph = graph,
+                    navigator = navigator,
+                    carrierFlow = browseCarrier,
+                    modifier = Modifier.padding(padding),
+                )
+                Destination.Updates -> UpdatesDestination(
+                    model = updatesModel,
                     navigator = navigator,
                     carrierFlow = browseCarrier,
                     modifier = Modifier.padding(padding),
@@ -340,6 +361,7 @@ fun MikoApp(graph: MikoUiGraph) {
 private fun screenTitle(destination: Destination): String = when (destination) {
     Destination.Browse -> stringResource(MR.strings.browse)
     Destination.Library -> stringResource(MR.strings.label_library)
+    Destination.Updates -> stringResource(MR.strings.label_recent_updates)
     Destination.ExtensionRepos -> stringResource(MR.strings.label_extension_repos)
     is Destination.SourceFeed -> destination.sourceName
     is Destination.GlobalSearch -> stringResource(MR.strings.action_search_hint)
@@ -704,6 +726,38 @@ private fun EpisodePlayerDestination(
         onDispose { model.dispose() }
     }
     EpisodePlayerScreen(model = model, modifier = modifier.fillMaxSize())
+}
+
+@Composable
+private fun UpdatesDestination(
+    model: UpdatesScreenModel,
+    navigator: Navigator,
+    carrierFlow: MutableStateFlow<BrowseCarrier>,
+    modifier: Modifier = Modifier,
+) {
+    UpdatesScreen(
+        model = model,
+        carrierFlow = carrierFlow,
+        onCarrierChange = { carrierFlow.value = it },
+        onOpenItem = { sourceId, entryUrl, itemUrl ->
+            navigator.push(
+                when (carrierFlow.value) {
+                    BrowseCarrier.SHOWS ->
+                        Destination.EpisodePlayer(sourceId, entryUrl, itemUrl)
+                    BrowseCarrier.MANGA ->
+                        Destination.MangaReader(sourceId, entryUrl, itemUrl)
+                    BrowseCarrier.BOOKS ->
+                        Destination.Reader(sourceId, entryUrl, itemUrl)
+                },
+            )
+        },
+        onOpenEntry = { sourceId, entryUrl, entryTitle ->
+            navigator.push(
+                Destination.Details(sourceId, entryUrl, entryTitle, carrierFlow.value),
+            )
+        },
+        modifier = modifier.fillMaxSize(),
+    )
 }
 
 @Composable

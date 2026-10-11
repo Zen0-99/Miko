@@ -28,12 +28,18 @@ import tachiyomi.domain.entries.novel.repository.NovelRepository
 import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
 import tachiyomi.domain.extension.novel.api.JsPluginApiFacade
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
+import tachiyomi.domain.history.manga.interactor.GetMangaHistory
+import tachiyomi.domain.history.novel.interactor.GetNovelHistory
 import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
+import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.service.NovelSourceManager
+import tachiyomi.domain.updates.manga.interactor.GetMangaUpdates
+import tachiyomi.domain.updates.novel.interactor.GetNovelUpdates
+import tachiyomi.domain.updates.shows.interactor.GetAnimeUpdates
 
 /**
  * The dependency surface shared screens consume. Each platform's composition
@@ -55,6 +61,12 @@ class MikoUiGraph(
     val novelRepository: NovelRepository,
     val novelChapterRepository: NovelChapterRepository,
     val novelHistoryRepository: NovelHistoryRepository,
+    val getNovelUpdates: GetNovelUpdates,
+    val getMangaUpdates: GetMangaUpdates,
+    val getAnimeUpdates: GetAnimeUpdates,
+    val getNovelHistory: GetNovelHistory,
+    val getMangaHistory: GetMangaHistory,
+    val getAnimeHistory: GetAnimeHistory,
     val extensionRepoService: ExtensionRepoService,
     val jsPluginApi: JsPluginApiFacade,
     val novelPluginRepository: NovelPluginRepository,

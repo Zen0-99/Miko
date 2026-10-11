@@ -41,6 +41,7 @@ kotlin {
 
                 implementation(kotlinx.coroutines.core)
                 implementation(kotlinx.immutables)
+                implementation(libs.kotlinx.datetime)
                 implementation(libs.paging.common)
                 implementation(libs.sqldelight.coroutines.kmp)
                 // project.dependencies.platform — bare platform() is a

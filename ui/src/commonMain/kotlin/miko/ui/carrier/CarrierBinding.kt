@@ -51,6 +51,8 @@ data class LocalEntry(
     val id: Long,
     val title: String,
     val favorite: Boolean,
+    val url: String = "",
+    val sourceId: Long = 0,
 )
 
 /** Local chapter/episode row; [done] is read (books/manga) or seen (shows). */
@@ -104,6 +106,7 @@ interface CarrierBinding {
     fun source(sourceId: Long): CarrierSource?
 
     fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?>
+    suspend fun localEntryById(id: Long): LocalEntry? = null
     suspend fun materialize(details: RemoteDetails, sourceId: Long): LocalEntry
     suspend fun setFavorite(localId: Long, favorite: Boolean)
 

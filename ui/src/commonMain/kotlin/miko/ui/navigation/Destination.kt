@@ -32,6 +32,9 @@ sealed interface Destination {
     /** Saved entries (favorites) backed by the local database. */
     data object Library : Destination
 
+    /** Recent chapter/episode updates + read/watch history — Android's UpdatesTab. */
+    data object Updates : Destination
+
     /** Extension-repo management — consolidated per-type tabs + add/delete. */
     data object ExtensionRepos : Destination
 

@@ -43,12 +43,25 @@ class NovelCarrierBinding(
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
         getNovel.subscribe(url, sourceId).map { novel ->
-            novel?.let { LocalEntry(id = it.id, title = it.title, favorite = it.favorite) }
+            novel?.let {
+                LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
+            }
+        }
+
+    override suspend fun localEntryById(id: Long): LocalEntry? =
+        runCatching { novelRepository.getNovelById(id) }.getOrNull()?.let {
+            LocalEntry(id = it.id, title = it.title, favorite = it.favorite, url = it.url, sourceId = it.source)
         }
 
     override suspend fun materialize(details: RemoteDetails, sourceId: Long): LocalEntry {
         val novel = networkToLocalNovel.await(details.toSNovel().toDomainNovel(sourceId))
-        return LocalEntry(id = novel.id, title = novel.title, favorite = novel.favorite)
+        return LocalEntry(
+            id = novel.id,
+            title = novel.title,
+            favorite = novel.favorite,
+            url = novel.url,
+            sourceId = novel.source,
+        )
     }
 
     override suspend fun setFavorite(localId: Long, favorite: Boolean) {
