@@ -2,6 +2,7 @@ package miko.ui.reader
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -9,6 +10,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +31,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerScope
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Settings
@@ -60,7 +64,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -84,6 +91,7 @@ import miko.ui.components.SettingSwitch
 import miko.ui.download.DownloadManager
 import miko.ui.platform.HideSystemBars
 import miko.ui.platform.KeepScreenOn
+import miko.ui.platform.SetScreenBrightness
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
@@ -109,6 +117,16 @@ fun MangaReaderScreen(
     KeepScreenOn(state.keepScreenOn)
     // Android's fullscreen pref — system bars hidden while reading.
     HideSystemBars(state.fullscreen)
+    // Android's pref_custom_brightness_key — positive values drive the
+    // platform screen brightness; zero disables. Negatives are handled
+    // by the shared black overlay below (Android's ReaderContentOverlay).
+    SetScreenBrightness(
+        when {
+            !state.customBrightness || state.customBrightnessValue == 0 -> null
+            state.customBrightnessValue > 0 -> state.customBrightnessValue / 100f
+            else -> 0.01f
+        },
+    )
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -189,6 +207,8 @@ fun MangaReaderScreen(
                 mode = state.flashColor,
             )
         }
+        // Android's ReaderContentOverlay — darkening + color-filter rects.
+        ReaderFilterOverlay(state)
     }
 
     if (state.showChapters) {
@@ -214,6 +234,14 @@ fun MangaReaderScreen(
             onTappingInvertSelect = model::setTappingInverted,
             onSidePaddingChange = model::setWebtoonSidePadding,
             onNavigateToPanChange = model::setNavigateToPan,
+            onZoomStartSelect = model::setZoomStart,
+            onCustomBrightnessChange = model::setCustomBrightness,
+            onBrightnessValueChange = model::setCustomBrightnessValue,
+            onColorFilterChange = model::setColorFilterEnabled,
+            onColorValueChange = model::setColorFilterValue,
+            onColorModeSelect = model::setColorFilterMode,
+            onGrayscaleChange = model::setGrayscale,
+            onInvertedColorsChange = model::setInvertedColors,
             onFlashToggle = model::setFlashOnPageChange,
             onFlashDuration = model::setFlashDuration,
             onFlashInterval = model::setFlashInterval,
@@ -255,6 +283,33 @@ private val imageScaleOptions = listOf(
     MR.strings.scale_type_original_size,
     MR.strings.scale_type_smart_fit,
 )
+
+/** Android's ZoomStart list — pref values match the index. */
+private val zoomStartOptions = listOf(
+    MR.strings.zoom_start_automatic,
+    MR.strings.zoom_start_left,
+    MR.strings.zoom_start_right,
+    MR.strings.zoom_start_center,
+)
+
+/** Android's ColorFilterMode entries — pref value is the index. */
+private val colorFilterModeOptions = listOf(
+    MR.strings.label_default to 0,
+    MR.strings.filter_mode_multiply to 1,
+    MR.strings.filter_mode_screen to 2,
+    MR.strings.filter_mode_overlay to 3,
+    MR.strings.filter_mode_lighten to 4,
+    MR.strings.filter_mode_darken to 5,
+)
+
+/**
+ * Android's ColorFilterPage channel sliders — writes one RGBA byte of the
+ * packed int (shift 24=A,16=R,8=G,0=B) leaving the other bytes untouched.
+ */
+private fun packChannel(packed: Int, shift: Int, channel: Int): Int {
+    val mask = (0xFFL shl shift).inv().toInt()
+    return (packed and mask) or (channel.coerceIn(0, 255) shl shift)
+}
 
 /** Dispatches to the paged or long-strip viewer per the resolved mode. */
 @Composable
@@ -432,6 +487,8 @@ private fun PagedViewer(
                         state.pages[pageIndex],
                         Modifier.fillMaxSize(),
                         scaleType = state.imageScaleType,
+                        alignment = zoomStartAlignment(state.zoomStart, state.readingMode),
+                        colorFilter = pageColorFilter(state.grayscale, state.invertedColors),
                     )
                 }
             }
@@ -643,7 +700,12 @@ private fun WebtoonViewer(
                 )
             }
             items(state.pages, key = { it.index }) { page ->
-                PageImage(page, Modifier.fillMaxWidth())
+                PageImage(
+                    page,
+                    Modifier.fillMaxWidth(),
+                    alignment = zoomStartAlignment(state.zoomStart, state.readingMode),
+                    colorFilter = pageColorFilter(state.grayscale, state.invertedColors),
+                )
             }
             item { Spacer(Modifier.height(16.dp)) }
             if (state.showTransitions) {
@@ -669,6 +731,8 @@ private fun PageImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.FillWidth,
     scaleType: Int = 0,
+    alignment: Alignment = Alignment.TopCenter,
+    colorFilter: ColorFilter? = null,
 ) {
     val src = page.imageUrl ?: page.url
     // Downloaded pages carry miko-file:// paths — read them off disk;
@@ -702,9 +766,60 @@ private fun PageImage(
         model = if (src.startsWith(DownloadManager.FILE_SCHEME)) fileBytes else src,
         contentDescription = null,
         contentScale = if (scaleType != 0) pagedScale else contentScale,
+        alignment = alignment,
+        colorFilter = colorFilter,
         onSuccess = { intrinsic = it.painter.intrinsicSize },
         modifier = modifier,
     )
+}
+
+/**
+ * Android's grayscale/inverted-colors layer paint — one combined
+ * ColorMatrix over each page (NTSC luminance for grayscale, the -1/255
+ * inversion matrix; both = invert×gray, matching Android's postConcat).
+ */
+private fun pageColorFilter(grayscale: Boolean, inverted: Boolean): ColorFilter? {
+    val values = when {
+        grayscale && inverted -> floatArrayOf(
+            -0.213f, -0.715f, -0.072f, 0f, 255f,
+            -0.213f, -0.715f, -0.072f, 0f, 255f,
+            -0.213f, -0.715f, -0.072f, 0f, 255f,
+            0f, 0f, 0f, 1f, 0f,
+        )
+        grayscale -> floatArrayOf(
+            0.213f, 0.715f, 0.072f, 0f, 0f,
+            0.213f, 0.715f, 0.072f, 0f, 0f,
+            0.213f, 0.715f, 0.072f, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f,
+        )
+        inverted -> floatArrayOf(
+            -1f, 0f, 0f, 0f, 255f,
+            0f, -1f, 0f, 0f, 255f,
+            0f, 0f, -1f, 0f, 255f,
+            0f, 0f, 0f, 1f, 0f,
+        )
+        else -> return null
+    }
+    return ColorFilter.colorMatrix(ColorMatrix(values))
+}
+
+/**
+ * Android's pref_zoom_start_key — the alignment a wider-than-viewport
+ * page pins to. 1 auto resolves by reading direction (L2R left, R2L
+ * right, vertical/webtoon center); 2 left, 3 right, else center.
+ */
+private fun zoomStartAlignment(
+    zoomStart: Int,
+    readingMode: MangaReadingMode,
+): Alignment = when (zoomStart) {
+    1 -> when (readingMode) {
+        MangaReadingMode.LEFT_TO_RIGHT -> Alignment.TopStart
+        MangaReadingMode.RIGHT_TO_LEFT -> Alignment.TopEnd
+        else -> Alignment.TopCenter
+    }
+    2 -> Alignment.TopStart
+    3 -> Alignment.TopEnd
+    else -> Alignment.TopCenter
 }
 
 /**
@@ -862,6 +977,14 @@ private fun ReaderSettingsSheet(
     onTappingInvertSelect: (TappingInvertMode) -> Unit,
     onSidePaddingChange: (Int) -> Unit,
     onNavigateToPanChange: (Boolean) -> Unit,
+    onZoomStartSelect: (Int) -> Unit,
+    onCustomBrightnessChange: (Boolean) -> Unit,
+    onBrightnessValueChange: (Int) -> Unit,
+    onColorFilterChange: (Boolean) -> Unit,
+    onColorValueChange: (Int) -> Unit,
+    onColorModeSelect: (Int) -> Unit,
+    onGrayscaleChange: (Boolean) -> Unit,
+    onInvertedColorsChange: (Boolean) -> Unit,
     onFlashToggle: (Boolean) -> Unit,
     onFlashDuration: (Int) -> Unit,
     onFlashInterval: (Int) -> Unit,
@@ -869,7 +992,11 @@ private fun ReaderSettingsSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
             Text(
                 text = stringResource(MR.strings.pref_category_reading_mode),
                 style = MaterialTheme.typography.titleMedium,
@@ -906,6 +1033,14 @@ private fun ReaderSettingsSheet(
                 ),
                 options = imageScaleOptions.mapIndexed { i, res -> (i + 1) to res },
                 onSelect = onScaleTypeSelect,
+            )
+            SettingDropdown(
+                labelRes = MR.strings.pref_zoom_start,
+                current = stringResource(
+                    zoomStartOptions[state.zoomStart.coerceIn(zoomStartOptions.indices)],
+                ),
+                options = zoomStartOptions.mapIndexed { i, res -> i to res },
+                onSelect = onZoomStartSelect,
             )
             SettingDropdown(
                 labelRes = MR.strings.pref_viewer_nav,
@@ -982,6 +1117,103 @@ private fun ReaderSettingsSheet(
                 options = ReaderFlashColor.entries.map { it to it.titleRes },
                 onSelect = onFlashColorSelect,
                 enabled = state.flashOnPageChange,
+            )
+            // Android's Color Filter tab — darkening/color overlays plus
+            // page color matrices, in Android's row order.
+            Text(
+                text = stringResource(MR.strings.pref_custom_color_filter),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            SettingSwitch(
+                labelRes = MR.strings.pref_custom_brightness,
+                checked = state.customBrightness,
+                onChange = onCustomBrightnessChange,
+            )
+            // Android shows the sub-rows only while their toggle is on.
+            if (state.customBrightness) {
+                SettingSlider(
+                    labelRes = MR.strings.pref_custom_brightness,
+                    value = state.customBrightnessValue.toFloat(),
+                    range = -75f..100f,
+                    onChange = { onBrightnessValueChange(it.roundToInt()) },
+                )
+            }
+            SettingSwitch(
+                labelRes = MR.strings.pref_custom_color_filter,
+                checked = state.colorFilterEnabled,
+                onChange = onColorFilterChange,
+            )
+            if (state.colorFilterEnabled) {
+                SettingSlider(
+                    labelRes = MR.strings.color_filter_r_value,
+                    value = ((state.colorFilterValue shr 16) and 0xFF).toFloat(),
+                    range = 0f..255f,
+                    onChange = {
+                        onColorValueChange(
+                            packChannel(state.colorFilterValue, 16, it.roundToInt()),
+                        )
+                    },
+                )
+                SettingSlider(
+                    labelRes = MR.strings.color_filter_g_value,
+                    value = ((state.colorFilterValue shr 8) and 0xFF).toFloat(),
+                    range = 0f..255f,
+                    onChange = {
+                        onColorValueChange(
+                            packChannel(state.colorFilterValue, 8, it.roundToInt()),
+                        )
+                    },
+                )
+                SettingSlider(
+                    labelRes = MR.strings.color_filter_b_value,
+                    value = (state.colorFilterValue and 0xFF).toFloat(),
+                    range = 0f..255f,
+                    onChange = {
+                        onColorValueChange(
+                            packChannel(state.colorFilterValue, 0, it.roundToInt()),
+                        )
+                    },
+                )
+                SettingSlider(
+                    labelRes = MR.strings.color_filter_a_value,
+                    value = ((state.colorFilterValue ushr 24) and 0xFF).toFloat(),
+                    range = 0f..255f,
+                    onChange = {
+                        onColorValueChange(
+                            packChannel(state.colorFilterValue, 24, it.roundToInt()),
+                        )
+                    },
+                )
+                Text(
+                    text = stringResource(MR.strings.pref_color_filter_mode),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp),
+                ) {
+                    colorFilterModeOptions.forEach { (labelRes, value) ->
+                        FilterChip(
+                            selected = state.colorFilterMode == value,
+                            onClick = { onColorModeSelect(value) },
+                            label = { Text(stringResource(labelRes)) },
+                        )
+                    }
+                }
+            }
+            SettingSwitch(
+                labelRes = MR.strings.pref_grayscale,
+                checked = state.grayscale,
+                onChange = onGrayscaleChange,
+            )
+            SettingSwitch(
+                labelRes = MR.strings.pref_inverted_colors,
+                checked = state.invertedColors,
+                onChange = onInvertedColorsChange,
             )
             Spacer(Modifier.height(24.dp))
         }
@@ -1151,5 +1383,39 @@ private class ReaderZoomState {
             offset = lerp(fromOffset, targetOffset, value)
         }
         clamp(viewSize)
+    }
+}
+
+/**
+ * Android's ReaderContentOverlay — a single Canvas over the page layer.
+ * First rect darkens for negative custom brightness; second paints the
+ * packed-ARGB filter color with the chosen blend mode.
+ */
+@Composable
+private fun ReaderFilterOverlay(state: MangaReaderScreenModel.State) {
+    val darkAlpha = if (state.customBrightness && state.customBrightnessValue < 0) {
+        kotlin.math.abs(state.customBrightnessValue) / 100f
+    } else {
+        0f
+    }
+    val overlayColor = if (state.colorFilterEnabled) {
+        Color(state.colorFilterValue)
+    } else {
+        Color.Transparent
+    }
+    val blendMode = when (state.colorFilterMode) {
+        1 -> BlendMode.Modulate
+        2 -> BlendMode.Screen
+        3 -> BlendMode.Overlay
+        4 -> BlendMode.Lighten
+        5 -> BlendMode.Darken
+        else -> BlendMode.SrcOver
+    }
+    if (darkAlpha == 0f && overlayColor == Color.Transparent) return
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        if (darkAlpha > 0f) {
+            drawRect(Color.Black.copy(alpha = darkAlpha))
+        }
+        drawRect(overlayColor, blendMode = blendMode)
     }
 }

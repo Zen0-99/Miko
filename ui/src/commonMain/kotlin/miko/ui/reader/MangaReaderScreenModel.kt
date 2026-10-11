@@ -78,6 +78,20 @@ class MangaReaderScreenModel(
         val navigateToPan: Boolean = true,
         /** Android's reader_navigation_mode_pager — tap zone layout. */
         val navMode: Int = 0,
+        /**
+         * Android's pref_zoom_start_key — 1 auto (start edge per reading
+         * direction, center for vertical), 2 left, 3 right, else center.
+         * Aligns pages wider than the viewport (fill-height/original).
+         */
+        val zoomStart: Int = 1,
+        /** Android's ColorFilter page — overlay + matrix + brightness. */
+        val customBrightness: Boolean = false,
+        val customBrightnessValue: Int = 0,
+        val colorFilterEnabled: Boolean = false,
+        val colorFilterValue: Int = 0,
+        val colorFilterMode: Int = 0,
+        val grayscale: Boolean = false,
+        val invertedColors: Boolean = false,
         /** Android's E-Ink group — flash overlay on page change. */
         val flashOnPageChange: Boolean = false,
         val flashDurationMillis: Int = 100,
@@ -172,6 +186,42 @@ class MangaReaderScreenModel(
         0,
     )
 
+    // Android's readerPreferences.zoomStart — same key/default.
+    private val zoomStartPref = preferenceStore.getInt(
+        "pref_zoom_start_key",
+        1,
+    )
+
+    // Android's ColorFilter-page prefs — same keys/defaults.
+    private val customBrightnessPref = preferenceStore.getBoolean(
+        "pref_custom_brightness_key",
+        false,
+    )
+    private val customBrightnessValuePref = preferenceStore.getInt(
+        "custom_brightness_value",
+        0,
+    )
+    private val colorFilterPref = preferenceStore.getBoolean(
+        "pref_color_filter_key",
+        false,
+    )
+    private val colorFilterValuePref = preferenceStore.getInt(
+        "color_filter_value",
+        0,
+    )
+    private val colorFilterModePref = preferenceStore.getInt(
+        "color_filter_mode",
+        0,
+    )
+    private val grayscalePref = preferenceStore.getBoolean(
+        "pref_grayscale",
+        false,
+    )
+    private val invertedColorsPref = preferenceStore.getBoolean(
+        "pref_inverted_colors",
+        false,
+    )
+
     // Android's E-Ink prefs — same keys/defaults.
     private val flashOnPageChangePref = preferenceStore.getBoolean(
         "pref_reader_flash",
@@ -260,6 +310,46 @@ class MangaReaderScreenModel(
             }
         }
         scope.launch {
+            zoomStartPref.changes().collect { v ->
+                _state.value = _state.value.copy(zoomStart = v)
+            }
+        }
+        scope.launch {
+            customBrightnessPref.changes().collect { v ->
+                _state.value = _state.value.copy(customBrightness = v)
+            }
+        }
+        scope.launch {
+            customBrightnessValuePref.changes().collect { v ->
+                _state.value = _state.value.copy(customBrightnessValue = v)
+            }
+        }
+        scope.launch {
+            colorFilterPref.changes().collect { v ->
+                _state.value = _state.value.copy(colorFilterEnabled = v)
+            }
+        }
+        scope.launch {
+            colorFilterValuePref.changes().collect { v ->
+                _state.value = _state.value.copy(colorFilterValue = v)
+            }
+        }
+        scope.launch {
+            colorFilterModePref.changes().collect { v ->
+                _state.value = _state.value.copy(colorFilterMode = v)
+            }
+        }
+        scope.launch {
+            grayscalePref.changes().collect { v ->
+                _state.value = _state.value.copy(grayscale = v)
+            }
+        }
+        scope.launch {
+            invertedColorsPref.changes().collect { v ->
+                _state.value = _state.value.copy(invertedColors = v)
+            }
+        }
+        scope.launch {
             flashOnPageChangePref.changes().collect { v ->
                 _state.value = _state.value.copy(flashOnPageChange = v)
             }
@@ -314,6 +404,22 @@ class MangaReaderScreenModel(
     fun setNavigateToPan(on: Boolean) = navigateToPanPref.set(on)
 
     fun setNavMode(mode: Int) = navModePref.set(mode)
+
+    fun setZoomStart(value: Int) = zoomStartPref.set(value)
+
+    fun setCustomBrightness(on: Boolean) = customBrightnessPref.set(on)
+
+    fun setCustomBrightnessValue(value: Int) = customBrightnessValuePref.set(value)
+
+    fun setColorFilterEnabled(on: Boolean) = colorFilterPref.set(on)
+
+    fun setColorFilterValue(value: Int) = colorFilterValuePref.set(value)
+
+    fun setColorFilterMode(value: Int) = colorFilterModePref.set(value)
+
+    fun setGrayscale(on: Boolean) = grayscalePref.set(on)
+
+    fun setInvertedColors(on: Boolean) = invertedColorsPref.set(on)
 
     fun setFlashOnPageChange(on: Boolean) = flashOnPageChangePref.set(on)
 
