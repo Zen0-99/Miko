@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.RadioButtonChecked
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -463,7 +465,26 @@ fun MikoApp(graph: MikoUiGraph) {
                         NavigationBarItem(
                             selected = navigator.current == Destination.Updates,
                             onClick = { navigator.replace(Destination.Updates) },
-                            icon = { Icon(Icons.Filled.NewReleases, contentDescription = null) },
+                            icon = {
+                                // Android's Updates-tab badge — unread new
+                                // chapters across the carrier.
+                                val updateCount = updatesModel.state
+                                    .collectAsStateWithLifecycle().value.rows
+                                    .filterIsInstance<UpdatesScreenModel.Row.Update>()
+                                    .count { !it.done }
+                                BadgedBox(
+                                    badge = {
+                                        if (updateCount > 0) {
+                                            Badge { Text("$updateCount") }
+                                        }
+                                    },
+                                ) {
+                                    Icon(
+                                        Icons.Filled.NewReleases,
+                                        contentDescription = null,
+                                    )
+                                }
+                            },
                             label = { Text(stringResource(MR.strings.label_recent_updates)) },
                         )
                         NavigationBarItem(
