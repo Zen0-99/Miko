@@ -769,6 +769,7 @@ private fun ReaderDestination(
             sourceId = destination.sourceId,
             entryUrl = destination.novelUrl,
             initialChapterUrl = destination.chapterUrl,
+            preferenceStore = graph.preferenceStore,
         )
     }
     DisposableEffect(model) {

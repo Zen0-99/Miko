@@ -23,7 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.icerock.moko.resources.StringResource
+import miko.ui.components.SettingDropdown
+import miko.ui.components.SettingSlider
 import miko.ui.extensions.ExtensionHeader
+import miko.ui.reader.NovelReaderBackgroundColor
+import miko.ui.reader.TextAlignment
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -54,6 +58,43 @@ fun SettingsScreen(
             titleRes = MR.strings.action_display_show_library_title,
             checked = state.showLibraryTitle,
             onChange = model::setShowLibraryTitle,
+        )
+
+        ExtensionHeader(stringResource(MR.strings.pref_category_reader))
+        SettingSlider(
+            labelRes = MR.strings.text_size,
+            value = state.readerTextSize,
+            range = 10f..30f,
+            onChange = model::setReaderTextSize,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        SettingSlider(
+            labelRes = MR.strings.line_height,
+            value = state.readerLineHeight,
+            range = 1f..2.5f,
+            onChange = model::setReaderLineHeight,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        SettingSlider(
+            labelRes = MR.strings.paragraph_spacing,
+            value = state.readerParagraphSpacing.toFloat(),
+            range = 0f..40f,
+            onChange = { model.setReaderParagraphSpacing(it.toInt()) },
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        SettingDropdown(
+            labelRes = MR.strings.text_alignment,
+            current = stringResource(state.readerTextAlignment.titleRes),
+            options = TextAlignment.entries.map { it to it.titleRes },
+            onSelect = model::setReaderTextAlignment,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        SettingDropdown(
+            labelRes = MR.strings.pref_reader_theme,
+            current = stringResource(state.readerBackgroundColor.titleRes),
+            options = NovelReaderBackgroundColor.entries.map { it to it.titleRes },
+            onSelect = model::setReaderBackgroundColor,
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
     }
 }

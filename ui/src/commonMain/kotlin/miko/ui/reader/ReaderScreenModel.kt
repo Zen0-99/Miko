@@ -15,17 +15,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.RemoteItem
+import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.getEnum
 
 /**
  * Chapter reader (books carrier): fetches `itemText` for the open chapter,
  * converts the HTML payload to plain paragraphs, marks the local chapter
  * read on open, and tracks prev/next from the source's chapter list.
+ * Display prefs share Android's pref_novel_* keys.
  */
 class ReaderScreenModel(
     private val binding: CarrierBinding,
     private val sourceId: Long,
     private val entryUrl: String,
     initialChapterUrl: String,
+    preferenceStore: PreferenceStore,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
@@ -37,6 +41,12 @@ class ReaderScreenModel(
         val error: String? = null,
         val hasPrev: Boolean = false,
         val hasNext: Boolean = false,
+        val textSize: Float = 16f,
+        val lineHeight: Float = 1.5f,
+        val paragraphSpacing: Int = 16,
+        val textAlignment: TextAlignment = TextAlignment.JUSTIFY,
+        val backgroundColor: NovelReaderBackgroundColor =
+            NovelReaderBackgroundColor.GRAY,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -49,6 +59,18 @@ class ReaderScreenModel(
     private val source
         get() = binding.source(sourceId)
 
+    private val textSizePref = preferenceStore.getFloat("pref_novel_text_size", 16f)
+    private val lineHeightPref = preferenceStore.getFloat("pref_novel_line_height", 1.5f)
+    private val paragraphSpacingPref = preferenceStore.getInt("pref_novel_paragraph_spacing", 16)
+    private val textAlignmentPref = preferenceStore.getEnum(
+        "pref_novel_text_alignment",
+        TextAlignment.JUSTIFY,
+    )
+    private val backgroundColorPref = preferenceStore.getEnum(
+        "pref_novel_bg_color_mode",
+        NovelReaderBackgroundColor.GRAY,
+    )
+
     init {
         scope.launch {
             // Wait for the source registry before the first fetch — the
@@ -60,7 +82,38 @@ class ReaderScreenModel(
                 }
             }
         }
+        scope.launch {
+            textSizePref.changes().collect { v ->
+                _state.value = _state.value.copy(textSize = v)
+            }
+        }
+        scope.launch {
+            lineHeightPref.changes().collect { v ->
+                _state.value = _state.value.copy(lineHeight = v)
+            }
+        }
+        scope.launch {
+            paragraphSpacingPref.changes().collect { v ->
+                _state.value = _state.value.copy(paragraphSpacing = v)
+            }
+        }
+        scope.launch {
+            textAlignmentPref.changes().collect { v ->
+                _state.value = _state.value.copy(textAlignment = v)
+            }
+        }
+        scope.launch {
+            backgroundColorPref.changes().collect { v ->
+                _state.value = _state.value.copy(backgroundColor = v)
+            }
+        }
     }
+
+    fun setTextSize(size: Float) = textSizePref.set(size)
+    fun setLineHeight(height: Float) = lineHeightPref.set(height)
+    fun setParagraphSpacing(spacing: Int) = paragraphSpacingPref.set(spacing)
+    fun setTextAlignment(alignment: TextAlignment) = textAlignmentPref.set(alignment)
+    fun setBackgroundColor(color: NovelReaderBackgroundColor) = backgroundColorPref.set(color)
 
     private suspend fun loadItemList() {
         val src = source ?: return
