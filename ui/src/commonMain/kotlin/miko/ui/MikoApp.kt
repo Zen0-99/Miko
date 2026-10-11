@@ -820,9 +820,11 @@ private fun LibrarySettingsAction(model: LibraryScreenModel) {
         LibrarySettingsSheet(
             displayMode = state.displayMode,
             sort = state.sort,
+            filters = state.filters,
             onDismissRequest = { sheetOpen = false },
             onDisplayMode = model::setDisplayMode,
             onSort = model::setSort,
+            onToggleFilter = model::toggleFilter,
         )
     }
 }

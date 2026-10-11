@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -29,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import miko.ui.library.LibraryScreenModel
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -43,14 +46,17 @@ import tachiyomi.presentation.core.i18n.stringResource
 fun LibrarySettingsSheet(
     displayMode: LibraryDisplayMode,
     sort: LibraryScreenModel.LibrarySort,
+    filters: LibraryScreenModel.LibraryFilters,
     onDismissRequest: () -> Unit,
     onDisplayMode: (LibraryDisplayMode) -> Unit,
     onSort: (LibraryScreenModel.LibrarySort) -> Unit,
+    onToggleFilter: (LibraryScreenModel.LibraryFilterId) -> Unit,
 ) {
     var page by remember { mutableIntStateOf(0) }
     ModalBottomSheet(onDismissRequest = onDismissRequest) {
         TabRow(selectedTabIndex = page) {
             listOf(
+                MR.strings.action_filter,
                 MR.strings.action_display,
                 MR.strings.action_sort,
             ).forEachIndexed { index, res ->
@@ -69,6 +75,41 @@ fun LibrarySettingsSheet(
         ) {
             when (page) {
                 0 -> listOf(
+                    Triple(
+                        MR.strings.label_downloaded_only,
+                        LibraryScreenModel.LibraryFilterId.DOWNLOADED,
+                        filters.downloaded,
+                    ),
+                    Triple(
+                        MR.strings.action_filter_unread,
+                        LibraryScreenModel.LibraryFilterId.UNREAD,
+                        filters.unread,
+                    ),
+                    Triple(
+                        MR.strings.label_started,
+                        LibraryScreenModel.LibraryFilterId.STARTED,
+                        filters.started,
+                    ),
+                    Triple(
+                        MR.strings.action_filter_bookmarked,
+                        LibraryScreenModel.LibraryFilterId.BOOKMARKED,
+                        filters.bookmarked,
+                    ),
+                    Triple(
+                        MR.strings.completed,
+                        LibraryScreenModel.LibraryFilterId.COMPLETED,
+                        filters.completed,
+                    ),
+                ).forEach { (res, id, state) ->
+                    // Android's TriStateItem — tap cycles off → include
+                    // → exclude → off.
+                    LibraryTriStateRow(
+                        label = stringResource(res),
+                        state = state,
+                        onClick = { onToggleFilter(id) },
+                    )
+                }
+                1 -> listOf(
                     MR.strings.action_display_comfortable_grid to LibraryDisplayMode.ComfortableGrid,
                     MR.strings.action_display_grid to LibraryDisplayMode.CompactGrid,
                     MR.strings.action_display_list to LibraryDisplayMode.List,
@@ -132,6 +173,33 @@ private fun LibraryRowBase(
             modifier = Modifier.weight(1f),
         )
         widget()
+    }
+}
+
+/**
+ * Android's TriStateItem — DISABLED shows an empty box, ENABLED_IS a
+ * check, ENABLED_NOT a cross; tap cycles through the three states.
+ */
+@Composable
+private fun LibraryTriStateRow(
+    label: String,
+    state: TriState,
+    onClick: () -> Unit,
+) {
+    LibraryRowBase(label = label, onClick = onClick) {
+        when (state) {
+            TriState.ENABLED_IS -> Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            TriState.ENABLED_NOT -> Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            TriState.DISABLED -> Spacer(modifier = Modifier.size(24.dp))
+        }
     }
 }
 

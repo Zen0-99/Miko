@@ -1,5 +1,8 @@
 package miko.ui.library
 
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.novelsource.model.SNovel
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,12 +12,15 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import miko.ui.MikoUiGraph
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.download.DownloadManager
+import tachiyomi.core.common.preference.TriState
+import tachiyomi.core.common.preference.getEnum
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.model.LibraryDisplayMode
 
@@ -37,6 +43,10 @@ class LibraryScreenModel(
         val title: String,
         val coverUrl: String?,
         val unreadCount: Long,
+        /** Android's library filter fields — tri-state sheet criteria. */
+        val hasStarted: Boolean = false,
+        val hasBookmarks: Boolean = false,
+        val completed: Boolean = false,
         /** LibraryX sort fields — Android's library sort criteria. */
         val totalCount: Long = 0,
         val latestUpload: Long = 0,
@@ -60,6 +70,25 @@ class LibraryScreenModel(
         LATEST_CHAPTER,
         CHAPTER_FETCH_DATE,
         DATE_ADDED,
+    }
+
+    /** Android's per-carrier tri-state filter set (tracked + custom
+     *  interval stay deferred with tracker infra). */
+    data class LibraryFilters(
+        val downloaded: TriState = TriState.DISABLED,
+        val unread: TriState = TriState.DISABLED,
+        val started: TriState = TriState.DISABLED,
+        val bookmarked: TriState = TriState.DISABLED,
+        val completed: TriState = TriState.DISABLED,
+    )
+
+    /** Filter ids — per-carrier `pref_filter_*` keys match Android's. */
+    enum class LibraryFilterId {
+        DOWNLOADED,
+        UNREAD,
+        STARTED,
+        BOOKMARKED,
+        COMPLETED,
     }
 
     data class LibrarySort(
@@ -93,6 +122,8 @@ class LibraryScreenModel(
         val displayMode: LibraryDisplayMode = LibraryDisplayMode.default,
         /** Android's per-carrier library sort — the settings sheet's Sort tab. */
         val sort: LibrarySort = LibrarySort(),
+        /** Android's tri-state library filters — the sheet's Filter tab. */
+        val filters: LibraryFilters = LibraryFilters(),
         /** Android's selection mode — ids of the selected entries. */
         val selected: Set<Long> = emptySet(),
         /** Active carrier — marks read vs seen + download-dir naming. */
@@ -119,6 +150,10 @@ class LibraryScreenModel(
                                 title = it.anime.title,
                                 coverUrl = it.anime.thumbnailUrl,
                                 unreadCount = it.unseenCount,
+                                hasStarted = it.hasStarted,
+                                hasBookmarks = it.hasBookmarks,
+                                completed = it.anime.status ==
+                                    SAnime.COMPLETED.toLong(),
                                 totalCount = it.totalCount,
                                 latestUpload = it.latestUpload,
                                 chapterFetchedAt = it.episodeFetchedAt,
@@ -137,6 +172,10 @@ class LibraryScreenModel(
                                 title = it.manga.title,
                                 coverUrl = it.manga.thumbnailUrl,
                                 unreadCount = it.unreadCount,
+                                hasStarted = it.hasStarted,
+                                hasBookmarks = it.hasBookmarks,
+                                completed = it.manga.status ==
+                                    SManga.COMPLETED.toLong(),
                                 totalCount = it.totalChapters,
                                 latestUpload = it.latestUpload,
                                 chapterFetchedAt = it.chapterFetchedAt,
@@ -155,6 +194,10 @@ class LibraryScreenModel(
                                 title = it.novel.title,
                                 coverUrl = it.novel.thumbnailUrl,
                                 unreadCount = it.unreadCount,
+                                hasStarted = it.hasStarted,
+                                hasBookmarks = it.hasBookmarks,
+                                completed = it.novel.status ==
+                                    SNovel.COMPLETED.toLong(),
                                 totalCount = it.totalChapters,
                                 latestUpload = it.latestUpload,
                                 chapterFetchedAt = it.chapterFetchedAt,
@@ -202,6 +245,37 @@ class LibraryScreenModel(
                         _state.value.query,
                         _state.value.selectedCollectionId,
                         sort,
+                    ),
+                )
+            }
+        }
+        // Android's per-carrier filter prefs — each emits a refreshed
+        // LibraryFilters; re-applying uses the same pipeline as search.
+        scope.launch {
+            carrierFlow.flatMapLatest { carrier ->
+                combine(
+                    LibraryFilterId.entries.map { id ->
+                        graph.preferenceStore
+                            .getEnum(filterPrefKey(id, carrier), TriState.DISABLED)
+                            .changes()
+                    },
+                ) { values ->
+                    LibraryFilters(
+                        downloaded = values[0],
+                        unread = values[1],
+                        started = values[2],
+                        bookmarked = values[3],
+                        completed = values[4],
+                    )
+                }
+            }.collect { filters ->
+                _state.value = _state.value.copy(
+                    filters = filters,
+                    entries = applyFilters(
+                        rawEntries,
+                        _state.value.query,
+                        _state.value.selectedCollectionId,
+                        _state.value.sort,
                     ),
                 )
             }
@@ -302,6 +376,34 @@ class LibraryScreenModel(
         BrowseCarrier.SHOWS -> "animelib_sorting_mode"
         BrowseCarrier.MANGA -> "library_sorting_mode"
         BrowseCarrier.BOOKS -> "novellib_sorting_mode"
+    }
+
+    /** Android's LibraryPreferences pref_filter_* keys — same names. */
+    private fun filterPrefKey(id: LibraryFilterId, carrier: BrowseCarrier): String {
+        val infix = when (carrier) {
+            BrowseCarrier.SHOWS -> "animelib"
+            BrowseCarrier.MANGA -> "library"
+            BrowseCarrier.BOOKS -> "novellib"
+        }
+        val suffix = when (id) {
+            LibraryFilterId.DOWNLOADED -> "downloaded_v2"
+            LibraryFilterId.UNREAD -> "unread_v2"
+            LibraryFilterId.STARTED -> "started_v2"
+            LibraryFilterId.BOOKMARKED -> "bookmarked_v2"
+            LibraryFilterId.COMPLETED -> "completed_v2"
+        }
+        return "pref_filter_${infix}_$suffix"
+    }
+
+    /** Android's toggleFilter — DISABLED → INCLUDE → EXCLUDE → off. */
+    fun toggleFilter(id: LibraryFilterId) {
+        scope.launch {
+            val pref = graph.preferenceStore.getEnum(
+                filterPrefKey(id, carrierFlow.value),
+                TriState.DISABLED,
+            )
+            pref.set(pref.get().next())
+        }
     }
 
     /** Android's long-press entry — toggles the entry's selection. */
@@ -415,6 +517,34 @@ class LibraryScreenModel(
                 .filterEntriesByCollection(collectionId, filtered.map { it.id })
             filtered = filtered.filter { it.id in memberIds }
         }
+        // Android's tri-state filters — the downloaded one resolves item
+        // dirs on disk only while enabled (a filesystem scan per library
+        // emission is too hot to run unconditionally).
+        val filters = _state.value.filters
+        val carrier = carrierFlow.value
+        if (filters != LibraryFilters()) {
+            val binding = graph.binding(carrier)
+            val downloadedIds = if (filters.downloaded != TriState.DISABLED) {
+                filtered.mapNotNull { entry ->
+                    val sourceName = binding.source(entry.sourceId)?.name
+                        ?: return@mapNotNull null
+                    entry.id.takeIf {
+                        DownloadManager
+                            .downloadedItemNames(carrier, sourceName, entry.title)
+                            .isNotEmpty()
+                    }
+                }.toSet()
+            } else {
+                emptySet()
+            }
+            filtered = filtered.filter { entry ->
+                triStateMatch(filters.downloaded, entry.id in downloadedIds) &&
+                    triStateMatch(filters.unread, entry.unreadCount > 0) &&
+                    triStateMatch(filters.started, entry.hasStarted) &&
+                    triStateMatch(filters.bookmarked, entry.hasBookmarks) &&
+                    triStateMatch(filters.completed, entry.completed)
+            }
+        }
         val sorted = when (sort.type) {
             SortType.ALPHABETICAL -> filtered.sortedBy { it.title.lowercase() }
             SortType.LAST_READ -> filtered.sortedBy { it.lastRead }
@@ -426,6 +556,12 @@ class LibraryScreenModel(
             SortType.DATE_ADDED -> filtered.sortedBy { it.dateAdded }
         }
         return if (sort.ascending) sorted else sorted.asReversed()
+    }
+
+    private fun triStateMatch(state: TriState, matches: Boolean) = when (state) {
+        TriState.DISABLED -> true
+        TriState.ENABLED_IS -> matches
+        TriState.ENABLED_NOT -> !matches
     }
 
     fun dispose() = scope.cancel()
