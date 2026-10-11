@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
+import miko.ui.download.ItemPayload
 import miko.ui.model.toDomainNovel
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
@@ -350,6 +351,16 @@ class NovelCarrierBinding(
             ?: return ""
         val chapter = SNovelChapter.create().apply { url = itemUrl }
         return catalogue.getChapterText(chapter)
+    }
+
+    /** Chapter download payload — the rendered chapter text. */
+    override suspend fun itemPayload(
+        sourceId: Long,
+        itemUrl: String,
+    ): ItemPayload? {
+        val text = itemText(sourceId, itemUrl)
+        if (text.isBlank()) return null
+        return ItemPayload(text = "content.txt" to text)
     }
 
     private fun RemoteDetails.toSNovel(): SNovel = SNovel.create().also {

@@ -13,11 +13,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.ordered
+import miko.ui.download.DownloadManager
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
 
@@ -198,6 +200,9 @@ class ReaderScreenModel(
                 return@launch
             }
             val index = items.indexOfFirst { it.url == chapterUrl }
+            val local = runCatching {
+                binding.localEntry(entryUrl, sourceId).first()
+            }.getOrNull()
             _state.value = _state.value.copy(
                 chapterUrl = chapterUrl,
                 chapterName = items.getOrNull(index)?.name ?: "",
@@ -208,10 +213,29 @@ class ReaderScreenModel(
                 chapterIndex = if (index >= 0) index + 1 else 0,
                 chapterCount = items.size,
             )
-            val result = runCatching { binding.itemText(src.id, chapterUrl) }
+            // Offline path — serve the downloaded chapter text when its
+            // download dir holds the .done marker (Android parity).
+            val downloadDir = local?.let { entry ->
+                items.getOrNull(index)?.let { item ->
+                    DownloadManager.itemDir(
+                        BrowseCarrier.BOOKS,
+                        src.name,
+                        entry.title,
+                        item.name,
+                    )
+                }
+            }
+            val result = runCatching {
+                if (downloadDir != null && DownloadManager.isDownloaded(downloadDir)) {
+                    DownloadManager.readFile(downloadDir, "content.txt")
+                        ?.decodeToString()
+                        ?: binding.itemText(src.id, chapterUrl)
+                } else {
+                    binding.itemText(src.id, chapterUrl)
+                }
+            }
             result.fold(
                 onSuccess = { html ->
-                    val local = binding.localEntry(entryUrl, sourceId).first()
                     val localItem = local?.let { entry ->
                         binding.getLocalItems(entry.id)
                             .firstOrNull { it.url == chapterUrl }

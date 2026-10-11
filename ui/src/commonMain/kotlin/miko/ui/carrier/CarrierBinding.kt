@@ -309,6 +309,17 @@ interface CarrierBinding {
     /** Reader pages — manga only; other carriers return [emptyList]. */
     suspend fun pageList(sourceId: Long, itemUrl: String): List<PageEntry> = emptyList()
 
+    /**
+     * Payload descriptor for an item download — what the DownloadManager
+     * should write into the item's download dir. Manga maps pageList to
+     * numbered image files, novels write the chapter text; shows return
+     * null (hoster streams can't file-download).
+     */
+    suspend fun itemPayload(
+        sourceId: Long,
+        itemUrl: String,
+    ): miko.ui.download.ItemPayload? = null
+
     /** Episode hosters — shows only; other carriers return [emptyList]. */
     suspend fun hosters(sourceId: Long, itemUrl: String): List<HosterEntry> = emptyList()
 

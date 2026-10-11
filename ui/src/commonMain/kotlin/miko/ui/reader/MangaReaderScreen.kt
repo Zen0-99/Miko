@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,9 +41,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.io.buffered
+import kotlinx.io.readByteArray
 import miko.ui.components.SettingDropdown
 import miko.ui.components.SettingSwitch
+import miko.ui.download.DownloadManager
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
@@ -313,8 +319,22 @@ private fun PageImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.FillWidth,
 ) {
+    val src = page.imageUrl ?: page.url
+    // Downloaded pages carry miko-file:// paths — read them off disk;
+    // remote urls go straight to Coil like before.
+    val fileBytes by produceState<ByteArray?>(initialValue = null, src) {
+        if (src.startsWith(DownloadManager.FILE_SCHEME)) {
+            value = withContext(Dispatchers.Default) {
+                runCatching {
+                    kotlinx.io.files.SystemFileSystem
+                        .source(kotlinx.io.files.Path(src.removePrefix(DownloadManager.FILE_SCHEME)))
+                        .buffered().use { it.readByteArray() }
+                }.getOrNull()
+            }
+        }
+    }
     AsyncImage(
-        model = page.imageUrl ?: page.url,
+        model = if (src.startsWith(DownloadManager.FILE_SCHEME)) fileBytes else src,
         contentDescription = null,
         contentScale = contentScale,
         modifier = modifier,

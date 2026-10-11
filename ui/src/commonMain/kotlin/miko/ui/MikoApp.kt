@@ -53,6 +53,7 @@ import miko.ui.carrier.BrowseCarrier
 import miko.ui.components.LibrarySettingsSheet
 import miko.ui.details.EntryDetailsScreen
 import miko.ui.details.EntryDetailsScreenModel
+import miko.ui.download.downloadsInitHook
 import miko.ui.extensions.ExtensionCatalog
 import miko.ui.extensions.ExtensionsScreen
 import miko.ui.extensions.ExtensionsScreenModel
@@ -103,6 +104,7 @@ enum class BrowseMode { BROWSE, EXTENSIONS }
 
 @Composable
 fun MikoApp(graph: MikoUiGraph) {
+    downloadsInitHook()
     val navigator = rememberNavigator(Destination.Home)
 
     // Browse-tab search state — mirrors Android's SharedTopBarState fields:
@@ -139,7 +141,7 @@ fun MikoApp(graph: MikoUiGraph) {
     val detailsDest = navigator.current as? Destination.Details
     val detailsModel = remember(detailsDest) {
         detailsDest?.let {
-            EntryDetailsScreenModel(graph.binding(it.carrier), it.sourceId, it.entryKey)
+            EntryDetailsScreenModel(graph.binding(it.carrier), it.sourceId, it.entryKey, it.carrier)
         }
     }
     DisposableEffect(detailsModel) {

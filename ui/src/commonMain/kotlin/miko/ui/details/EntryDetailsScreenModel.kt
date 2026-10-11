@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.ChapterSortMode
@@ -17,6 +18,8 @@ import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.ordered
+import miko.ui.download.DownloadManager
+import miko.ui.download.DownloadState
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.collection.model.Collection
 
@@ -30,6 +33,7 @@ class EntryDetailsScreenModel(
     private val binding: CarrierBinding,
     private val sourceId: Long,
     private val entryUrl: String,
+    private val carrier: BrowseCarrier = BrowseCarrier.BOOKS,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
@@ -58,6 +62,11 @@ class EntryDetailsScreenModel(
         val fillermarkedUrls: Set<String> = emptySet(),
         /** Android's action-mode selection — urls of the ticked rows. */
         val selectedUrls: Set<String> = emptySet(),
+        /** Sanitized item names whose download dir holds the .done marker. */
+        val downloadedNames: Set<String> = emptySet(),
+        /** Live queue states keyed by item url — Android's DownloadState. */
+        val downloadStates: Map<String, DownloadState> = emptyMap(),
+        val downloadProgress: Map<String, Float> = emptyMap(),
         /** ChangeCollectionDialog — visible collections + this entry's ids. */
         val collectionSheetOpen: Boolean = false,
         val collections: List<Collection> = emptyList(),
@@ -132,11 +141,30 @@ class EntryDetailsScreenModel(
                     showSummaries = local?.showSummaries != false,
                 )
                 if (local != null) subscribeLocalItems(local.id)
+                rescanDownloads()
             }
         }
         scope.launch {
             binding.collections().collect { collections ->
                 _state.value = _state.value.copy(collections = collections)
+            }
+        }
+        // Android's DownloadCache semantics — downloaded names rescan on any
+        // queue change touching this entry's dir; live queue states tracked
+        // for the row indicators.
+        scope.launch {
+            DownloadManager.states.collect { s ->
+                _state.value = _state.value.copy(downloadStates = s)
+            }
+        }
+        scope.launch {
+            DownloadManager.progress.collect { p ->
+                _state.value = _state.value.copy(downloadProgress = p)
+            }
+        }
+        scope.launch {
+            DownloadManager.changes.collect { dir ->
+                if (dir == downloadEntryPath()) rescanDownloads()
             }
         }
         refresh()
@@ -185,6 +213,7 @@ class EntryDetailsScreenModel(
         result.fold(
             onSuccess = { details ->
                 _state.value = _state.value.copy(details = details, detailsLoading = false)
+                rescanDownloads()
             },
             onFailure = {
                 _state.value = _state.value.copy(
@@ -429,6 +458,104 @@ class EntryDetailsScreenModel(
                 .forEach { binding.setItemFillermark(it.id, fillermarked) }
             clearSelection()
         }
+    }
+
+    // ---- Downloads (manga/novel; shows return null payloads) -----------------
+
+    private fun downloadEntryPath(): String? {
+        val s = _state.value
+        val title = s.details?.title ?: s.local?.title ?: return null
+        if (s.sourceName.isBlank()) return null
+        return DownloadManager.entryDir(carrier, sourceName(), title).toString()
+    }
+
+    private fun sourceName(): String = _state.value.sourceName
+
+    /** Rescan the entry's download dirs into [State.downloadedNames]. */
+    private fun rescanDownloads() {
+        val s = _state.value
+        val title = s.details?.title ?: s.local?.title ?: return
+        if (s.sourceName.isBlank()) return
+        _state.value = _state.value.copy(
+            downloadedNames = DownloadManager.downloadedItemNames(
+                carrier,
+                s.sourceName,
+                title,
+            ),
+        )
+    }
+
+    /** Android's per-row download button — queues one item. */
+    fun downloadItem(itemUrl: String) {
+        scope.launch {
+            val s = _state.value
+            val title = s.details?.title ?: s.local?.title ?: return@launch
+            val item = s.items.firstOrNull { it.url == itemUrl } ?: return@launch
+            val dir = DownloadManager.itemDir(carrier, s.sourceName, title, item.name)
+            if (DownloadManager.isDownloaded(dir)) return@launch
+            DownloadManager.enqueue(
+                carrier,
+                s.sourceName,
+                title,
+                item.name,
+                item.url,
+            ) { binding.itemPayload(sourceId, itemUrl) }
+        }
+    }
+
+    /**
+     * Android's download dropdown — NEXT_n takes the first n unread items in
+     * reading order; UNVIEWED takes all unread. Downloaded/queued items are
+     * skipped by the manager's state check.
+     */
+    fun downloadNext(count: Int?) {
+        scope.launch {
+            val s = _state.value
+            val unread = s.sortMode
+                .ordered(s.items, descending = false)
+                .filter { it.url !in s.doneUrls }
+            val targets = if (count == null) unread else unread.take(count)
+            targets.forEach { item ->
+                DownloadManager.enqueue(
+                    carrier,
+                    s.sourceName,
+                    s.details?.title ?: s.local?.title ?: entryUrl,
+                    item.name,
+                    item.url,
+                ) { binding.itemPayload(sourceId, item.url) }
+            }
+        }
+    }
+
+    /** Android's delete-download — removes the item's download dir. */
+    fun deleteDownload(itemUrl: String) {
+        val s = _state.value
+        val title = s.details?.title ?: s.local?.title ?: return
+        val item = s.items.firstOrNull { it.url == itemUrl } ?: return
+        DownloadManager.delete(carrier, s.sourceName, title, item.name)
+    }
+
+    /** Cancel a queued/running download — Android's queue cancel. */
+    fun cancelDownload(itemUrl: String) = DownloadManager.cancel(itemUrl)
+
+    /**
+     * Android's selection-menu Delete — drops download dirs for the
+     * downloaded subset of the selection, then clears it.
+     */
+    fun deleteSelectedDownloads() {
+        val s = _state.value
+        val title = s.details?.title ?: s.local?.title ?: return
+        val selected = s.items.filter { it.url in s.selectedUrls }
+        selected.forEach { item ->
+            if (s.downloadedNames.contains(
+                    DownloadManager.sanitizeName(item.name),
+                )
+            ) {
+                DownloadManager.delete(carrier, s.sourceName, title, item.name)
+            }
+            DownloadManager.cancel(item.url)
+        }
+        clearSelection()
     }
 
     /**

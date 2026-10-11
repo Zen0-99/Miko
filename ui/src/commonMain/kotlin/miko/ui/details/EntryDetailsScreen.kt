@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -37,11 +38,18 @@ import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,6 +93,8 @@ import miko.ui.components.ChangeCollectionSheet
 import miko.ui.components.ChapterSettingsSheet
 import miko.ui.components.MigrateSourceSheet
 import miko.ui.components.ScanlatorFilterSheet
+import miko.ui.download.DownloadManager
+import miko.ui.download.DownloadState
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -234,20 +244,68 @@ fun EntryDetailsScreen(
                     // Android's EntryChapterHeader — count + a single filter icon
                     // opening the chapter-settings sheet (Filter/Sort/Display).
                     var settingsOpen by remember { mutableStateOf(false) }
-                    ChapterListHeader(
-                        count = state.items.size,
-                        filtersActive = state.unreadFilter != TriState.DISABLED ||
-                            state.bookmarkedFilter != TriState.DISABLED ||
-                            state.fillermarkedFilter != TriState.DISABLED,
-                        showActions = state.local != null,
-                        onFilterClick = { settingsOpen = true },
-                        // Android's toolbar action mode — count + close /
-                        // select-all / invert while rows are ticked.
-                        selectedCount = state.selectedUrls.size,
-                        onCancelSelection = model::clearSelection,
-                        onSelectAll = model::selectAll,
-                        onInvertSelection = model::invertSelection,
-                    )
+                    var downloadMenuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        ChapterListHeader(
+                            count = state.items.size,
+                            filtersActive = state.unreadFilter != TriState.DISABLED ||
+                                state.bookmarkedFilter != TriState.DISABLED ||
+                                state.fillermarkedFilter != TriState.DISABLED,
+                            showActions = state.local != null,
+                            onFilterClick = { settingsOpen = true },
+                            // Android's toolbar action mode — count + close /
+                            // select-all / invert while rows are ticked.
+                            selectedCount = state.selectedUrls.size,
+                            onCancelSelection = model::clearSelection,
+                            onSelectAll = model::selectAll,
+                            onInvertSelection = model::invertSelection,
+                            // Android's toolbar download dropdown — manga and
+                            // books only; shows streams can't file-download.
+                            onDownloadMenuClick = if (
+                                carrier != BrowseCarrier.SHOWS &&
+                                state.local != null
+                            ) {
+                                { downloadMenuOpen = true }
+                            } else {
+                                null
+                            },
+                        )
+                        // Android's EntryDownloadDropdownMenu — "Download
+                        // next 1/5/10/25" plus the unread set.
+                        DropdownMenu(
+                            expanded = downloadMenuOpen,
+                            onDismissRequest = { downloadMenuOpen = false },
+                        ) {
+                            listOf(1, 5, 10, 25).forEach { n ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("Download next $n")
+                                    },
+                                    onClick = {
+                                        downloadMenuOpen = false
+                                        model.downloadNext(n)
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(
+                                            if (carrier == BrowseCarrier.SHOWS) {
+                                                AYMR.strings.download_unseen
+                                            } else {
+                                                MR.strings.download_unread
+                                            },
+                                        ),
+                                    )
+                                },
+                                onClick = {
+                                    downloadMenuOpen = false
+                                    model.downloadNext(null)
+                                },
+                            )
+                        }
+                    }
                     if (settingsOpen) {
                         ChapterSettingsSheet(
                             carrier = carrier,
@@ -331,6 +389,8 @@ fun EntryDetailsScreen(
                         items(items, key = { it.url }) { item ->
                             val itemDone = item.url in doneUrls
                             val selected = item.url in state.selectedUrls
+                            val canDownload = carrier != BrowseCarrier.SHOWS &&
+                                state.local != null
                             Column {
                                 ItemRow(
                                     item = item,
@@ -341,6 +401,41 @@ fun EntryDetailsScreen(
                                     selected = selected,
                                     showPreview = state.showPreviews,
                                     showSummary = state.showSummaries,
+                                    downloadState = if (canDownload) {
+                                        state.downloadStates[item.url]
+                                    } else {
+                                        null
+                                    },
+                                    downloadProgress =
+                                    state.downloadProgress[item.url] ?: 0f,
+                                    downloaded = canDownload &&
+                                        DownloadManager.sanitizeName(item.name) in
+                                        state.downloadedNames,
+                                    onDownloadClick = if (
+                                        canDownload &&
+                                        state.downloadStates[item.url] == null
+                                    ) {
+                                        { model.downloadItem(item.url) }
+                                    } else {
+                                        null
+                                    },
+                                    onCancelClick = if (
+                                        canDownload &&
+                                        state.downloadStates[item.url] in
+                                        setOf(
+                                            DownloadState.QUEUED,
+                                            DownloadState.DOWNLOADING,
+                                        )
+                                    ) {
+                                        { model.cancelDownload(item.url) }
+                                    } else {
+                                        null
+                                    },
+                                    onDeleteClick = if (canDownload) {
+                                        { model.deleteDownload(item.url) }
+                                    } else {
+                                        null
+                                    },
                                     onClick = {
                                         if (selecting) {
                                             model.toggleSelection(item.url)
@@ -380,6 +475,12 @@ fun EntryDetailsScreen(
             allFillermarked = selectedUrls.isNotEmpty() &&
                 selectedUrls.all { it in state.fillermarkedUrls },
             singleSelected = selectedUrls.size == 1,
+            anyDownloaded = selectedUrls.any { url ->
+                state.items.firstOrNull { it.url == url }?.let {
+                    DownloadManager.sanitizeName(it.name) in state.downloadedNames
+                } == true
+            },
+            onDeleteDownloads = model::deleteSelectedDownloads,
             onMarkDone = { model.markSelected(done = true) },
             onMarkUndone = { model.markSelected(done = false) },
             onBookmark = { model.bookmarkSelected(bookmarked = true) },
@@ -775,6 +876,8 @@ private fun ChapterListHeader(
     onCancelSelection: () -> Unit = {},
     onSelectAll: () -> Unit = {},
     onInvertSelection: () -> Unit = {},
+    /** Android's toolbar download dropdown — non-null shows the icon. */
+    onDownloadMenuClick: (() -> Unit)? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -818,6 +921,15 @@ private fun ChapterListHeader(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.weight(1f),
         )
+        if (onDownloadMenuClick != null) {
+            IconButton(onClick = onDownloadMenuClick) {
+                Icon(
+                    imageVector = Icons.Outlined.FileDownload,
+                    contentDescription = stringResource(MR.strings.action_download),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         if (showActions) {
             IconButton(onClick = onFilterClick) {
                 Icon(
@@ -846,6 +958,15 @@ private fun ItemRow(
     selected: Boolean = false,
     showPreview: Boolean = true,
     showSummary: Boolean = true,
+    /** Android's ChapterDownloadIndicator — null hides it (shows/remote-only). */
+    downloadState: DownloadState? = null,
+    downloadProgress: Float = 0f,
+    downloaded: Boolean = false,
+    onDownloadClick: (() -> Unit)? = null,
+    /** Tap while queued/downloading cancels — Android's indicator behavior. */
+    onCancelClick: (() -> Unit)? = null,
+    /** Tap while downloaded deletes the files — Android's indicator behavior. */
+    onDeleteClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -897,6 +1018,79 @@ private fun ItemRow(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp),
                 )
+            }
+            // Android's ChapterDownloadIndicator — icon state mirrors
+            // queued / downloading (progress ring) / downloaded / error.
+            when {
+                downloadState == DownloadState.DOWNLOADING -> {
+                    CircularProgressIndicator(
+                        progress = { downloadProgress },
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(16.dp)
+                            .then(
+                                if (onCancelClick != null) {
+                                    Modifier.clickable(onClick = onCancelClick)
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                        strokeWidth = 2.dp,
+                    )
+                }
+                downloadState == DownloadState.QUEUED -> {
+                    Icon(
+                        imageVector = Icons.Outlined.Schedule,
+                        contentDescription = "Queued for download",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(16.dp)
+                            .then(
+                                if (onCancelClick != null) {
+                                    Modifier.clickable(onClick = onCancelClick)
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    )
+                }
+                downloadState == DownloadState.ERROR -> {
+                    Icon(
+                        imageVector = Icons.Outlined.ErrorOutline,
+                        contentDescription = "Download failed",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 8.dp).size(18.dp),
+                    )
+                }
+                downloaded -> {
+                    Icon(
+                        imageVector = Icons.Filled.DownloadDone,
+                        contentDescription = "Downloaded",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(18.dp)
+                            .then(
+                                if (onDeleteClick != null) {
+                                    Modifier.clickable(onClick = onDeleteClick)
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    )
+                }
+                onDownloadClick != null -> {
+                    Icon(
+                        imageVector = Icons.Outlined.FileDownload,
+                        contentDescription = "Download",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(18.dp)
+                            .clickable(onClick = onDownloadClick),
+                    )
+                }
             }
         }
         if (item.number >= 0.0 && !displayByNumber) {
@@ -961,6 +1155,8 @@ private fun SelectionActionMenu(
     anyUnfillermarked: Boolean,
     allFillermarked: Boolean,
     singleSelected: Boolean,
+    anyDownloaded: Boolean,
+    onDeleteDownloads: () -> Unit,
     onMarkDone: () -> Unit,
     onMarkUndone: () -> Unit,
     onBookmark: () -> Unit,
@@ -1065,6 +1261,15 @@ private fun SelectionActionMenu(
                         ),
                         icon = Icons.Filled.CheckCircle,
                         onClick = onMarkPrevious,
+                    )
+                }
+                // Android's delete-download action — appears whenever any
+                // selected item is downloaded (shows excluded upstream).
+                if (!isShows && anyDownloaded) {
+                    SelectionAction(
+                        label = stringResource(MR.strings.action_delete),
+                        icon = Icons.Outlined.Delete,
+                        onClick = onDeleteDownloads,
                     )
                 }
             }

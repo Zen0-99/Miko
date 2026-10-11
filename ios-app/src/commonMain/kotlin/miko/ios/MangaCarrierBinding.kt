@@ -22,6 +22,7 @@ import miko.ui.carrier.LocalItem
 import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
+import miko.ui.download.ItemPayload
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
@@ -39,9 +40,9 @@ import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.history.manga.model.MangaHistoryUpdate
 import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
 import tachiyomi.domain.items.chapter.interactor.GetChaptersByMangaId
+import tachiyomi.domain.items.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.items.chapter.model.Chapter
 import tachiyomi.domain.items.chapter.model.ChapterUpdate
-import tachiyomi.domain.items.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.manga.service.MangaSourceManager
@@ -417,6 +418,20 @@ class MangaCarrierBinding(
         return catalogue.getPageList(chapter).map {
             PageEntry(index = it.index, url = it.url, imageUrl = it.imageUrl)
         }
+    }
+
+    /** Chapter download payload — numbered image files per page. */
+    override suspend fun itemPayload(
+        sourceId: Long,
+        itemUrl: String,
+    ): ItemPayload? {
+        val pages = pageList(sourceId, itemUrl)
+        if (pages.isEmpty()) return null
+        return ItemPayload(
+            files = pages.map { page ->
+                "%03d.img".format(page.index) to (page.imageUrl ?: page.url)
+            },
+        )
     }
 
     private fun RemoteDetails.toDomainManga(sourceId: Long) =

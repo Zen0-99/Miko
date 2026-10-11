@@ -51,6 +51,9 @@ kotlin {
                 implementation(libs.coil.network.ktor3)
                 // Chapter-reader HTML→text — same Ksoup pin source-js uses.
                 implementation("com.fleeksoft.ksoup:ksoup:0.2.5")
+                // DownloadManager — shared fs + http for item downloads.
+                implementation(libs.kotlinx.io.core)
+                implementation(libs.ktor.client.core)
             }
         }
 
@@ -60,6 +63,13 @@ kotlin {
                 implementation(libs.media3.exoplayer)
                 implementation(libs.media3.ui)
                 implementation(libs.media3.common)
+                implementation(libs.ktor.client.okhttp)
+            }
+        }
+
+        val iosMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.darwin)
             }
         }
     }

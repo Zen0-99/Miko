@@ -11,11 +11,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.ordered
+import miko.ui.download.DownloadManager
 import tachiyomi.core.common.preference.PreferenceStore
 
 /**
@@ -174,10 +176,15 @@ class MangaReaderScreenModel(
             val index = items.indexOfFirst { it.url == chapterUrl }
             // lastPageRead is resolved before the viewer composes so
             // key(chapterUrl) seeds the pager/list at the saved page.
-            val localItem = runCatching {
-                val local = binding.localEntry(entryUrl, sourceId).first() ?: return@runCatching null
-                binding.getLocalItems(local.id).firstOrNull { it.url == chapterUrl }
+            val local = runCatching {
+                binding.localEntry(entryUrl, sourceId).first()
             }.getOrNull()
+            val localItem = local?.let { entry ->
+                runCatching {
+                    binding.getLocalItems(entry.id)
+                        .firstOrNull { it.url == chapterUrl }
+                }.getOrNull()
+            }
             _state.value = _state.value.copy(
                 chapterUrl = chapterUrl,
                 chapterName = items.getOrNull(index)?.name ?: "",
@@ -187,7 +194,27 @@ class MangaReaderScreenModel(
                 hasNext = index >= 0 && index < items.lastIndex,
                 initialPage = localItem?.lastPageRead ?: 0,
             )
-            val result = runCatching { binding.pageList(src.id, chapterUrl) }
+            // Offline path — serve the downloaded pages when the chapter's
+            // download dir holds the .done marker (Android parity).
+            val downloadDir = local?.let { entry ->
+                items.getOrNull(index)?.let { item ->
+                    DownloadManager.itemDir(
+                        BrowseCarrier.MANGA,
+                        src.name,
+                        entry.title,
+                        item.name,
+                    )
+                }
+            }
+            val result = runCatching {
+                if (downloadDir != null && DownloadManager.isDownloaded(downloadDir)) {
+                    DownloadManager.downloadedPages(downloadDir).map { (i, p) ->
+                        PageEntry(index = i, url = p, imageUrl = p)
+                    }
+                } else {
+                    binding.pageList(src.id, chapterUrl)
+                }
+            }
             result.fold(
                 onSuccess = { pages ->
                     _state.value = _state.value.copy(
