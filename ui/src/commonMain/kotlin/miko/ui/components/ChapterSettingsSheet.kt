@@ -69,6 +69,11 @@ fun ChapterSettingsSheet(
     onSortMode: (ChapterSortMode) -> Unit,
     onToggleSortDirection: () -> Unit,
     onDisplayByNumber: (Boolean) -> Unit,
+    /** Episode previews/summaries (shows) — null callbacks hide the rows. */
+    showPreviews: Boolean = true,
+    showSummaries: Boolean = true,
+    onShowPreviews: ((Boolean) -> Unit)? = null,
+    onShowSummaries: ((Boolean) -> Unit)? = null,
     /** Scanlator exclusion row (manga) — null hides it like Android. */
     scanlatorFilterActive: Boolean = false,
     onScanlatorFilterClick: (() -> Unit)? = null,
@@ -242,6 +247,20 @@ fun ChapterSettingsSheet(
                         selected = displayByNumber,
                         onClick = { onDisplayByNumber(true) },
                     )
+                    if (onShowPreviews != null) {
+                        SheetCheckRow(
+                            label = stringResource(AYMR.strings.show_episode_previews),
+                            checked = showPreviews,
+                            onClick = { onShowPreviews(!showPreviews) },
+                        )
+                    }
+                    if (onShowSummaries != null) {
+                        SheetCheckRow(
+                            label = stringResource(AYMR.strings.show_episode_summaries),
+                            checked = showSummaries,
+                            onClick = { onShowSummaries(!showSummaries) },
+                        )
+                    }
                 }
             }
         }

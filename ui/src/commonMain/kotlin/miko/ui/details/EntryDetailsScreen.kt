@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -237,6 +238,23 @@ fun EntryDetailsScreen(
                         onSortMode = model::setChapterSortMode,
                         onToggleSortDirection = model::toggleSortDirection,
                         onDisplayByNumber = model::setDisplayByNumber,
+                        // Shows only — episodeFlags preview/summary bits.
+                        showPreviews = state.showPreviews,
+                        showSummaries = state.showSummaries,
+                        onShowPreviews = if (
+                            carrier == BrowseCarrier.SHOWS && state.local != null
+                        ) {
+                            model::setShowPreviews
+                        } else {
+                            null
+                        },
+                        onShowSummaries = if (
+                            carrier == BrowseCarrier.SHOWS && state.local != null
+                        ) {
+                            model::setShowSummaries
+                        } else {
+                            null
+                        },
                         // Manga only — novel/anime have no exclusion
                         // table, so the row hides like Android.
                         scanlatorFilterActive = state.excludedScanlators.isNotEmpty(),
@@ -293,6 +311,8 @@ fun EntryDetailsScreen(
                                 done = itemDone,
                                 displayByNumber = state.displayByNumber,
                                 bookmarked = item.url in state.bookmarkedUrls,
+                                showPreview = state.showPreviews,
+                                showSummary = state.showSummaries,
                                 onClick = { onItemClick(item) },
                                 // Android's row long-press context actions —
                                 // only persist once the entry has a local row.
@@ -793,6 +813,8 @@ private fun ItemRow(
     onLongClick: (() -> Unit)? = null,
     bookmarked: Boolean = false,
     displayByNumber: Boolean = false,
+    showPreview: Boolean = true,
+    showSummary: Boolean = true,
 ) {
     Column(
         modifier = Modifier
@@ -800,6 +822,18 @@ private fun ItemRow(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
+        if (showPreview && !item.previewUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = item.previewUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .clip(MaterialTheme.shapes.small),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 // Android's displayMode flag — "Chapter 5" vs the source
@@ -830,6 +864,17 @@ private fun ItemRow(
             Text(
                 text = "$numberPrefix ${item.number}",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                    alpha = if (done) 0.5f else 1f,
+                ),
+            )
+        }
+        if (showSummary && !item.summary.isNullOrBlank()) {
+            Text(
+                text = item.summary,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
                     alpha = if (done) 0.5f else 1f,
                 ),

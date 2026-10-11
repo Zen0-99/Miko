@@ -68,6 +68,9 @@ data class LocalEntry(
     val unreadFilter: TriState = TriState.DISABLED,
     /** episodeFlags fillermarked filter (shows) — Android's TriState. */
     val fillermarkedFilter: TriState = TriState.DISABLED,
+    /** episodeFlags display bits (shows) — preview thumbs + summaries, default-on. */
+    val showPreviews: Boolean = true,
+    val showSummaries: Boolean = true,
     /** Carrier viewer flag — manga reading mode 0..5; 0 = use pref default. */
     val viewer: Int = 0,
 )
@@ -270,6 +273,12 @@ interface CarrierBinding {
 
     /** Episode-list fillermarked filter (shows) — the episodeFlags filler bits. */
     suspend fun setChapterFillermarkedFilter(localId: Long, state: TriState) = Unit
+
+    /** Episode-list preview thumbnails (shows) — the episodeFlags previews bit. */
+    suspend fun setChapterShowPreviews(localId: Long, show: Boolean) = Unit
+
+    /** Episode-list summary blurbs (shows) — the episodeFlags summaries bit. */
+    suspend fun setChapterShowSummaries(localId: Long, show: Boolean) = Unit
 
     /**
      * Chapter-list display mode — the chapterFlags display bit; rows show

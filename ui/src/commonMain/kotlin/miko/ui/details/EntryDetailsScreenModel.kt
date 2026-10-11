@@ -52,6 +52,8 @@ class EntryDetailsScreenModel(
         val bookmarkedFilter: TriState = TriState.DISABLED,
         val fillermarkedFilter: TriState = TriState.DISABLED,
         val displayByNumber: Boolean = false,
+        val showPreviews: Boolean = true,
+        val showSummaries: Boolean = true,
         /** Filler episode urls (shows) — decorates the filler filter. */
         val fillermarkedUrls: Set<String> = emptySet(),
         /** ChangeCollectionDialog — visible collections + this entry's ids. */
@@ -124,6 +126,8 @@ class EntryDetailsScreenModel(
                     bookmarkedFilter = local?.bookmarkedFilter ?: TriState.DISABLED,
                     fillermarkedFilter = local?.fillermarkedFilter ?: TriState.DISABLED,
                     displayByNumber = local?.displayByNumber == true,
+                    showPreviews = local?.showPreviews != false,
+                    showSummaries = local?.showSummaries != false,
                 )
                 if (local != null) subscribeLocalItems(local.id)
             }
@@ -274,6 +278,22 @@ class EntryDetailsScreenModel(
                 local.id,
                 _state.value.fillermarkedFilter.next(),
             )
+        }
+    }
+
+    /** Display tab (shows) — episode preview thumbnails. */
+    fun setShowPreviews(show: Boolean) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setChapterShowPreviews(local.id, show)
+        }
+    }
+
+    /** Display tab (shows) — episode summary blurbs. */
+    fun setShowSummaries(show: Boolean) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setChapterShowSummaries(local.id, show)
         }
     }
 

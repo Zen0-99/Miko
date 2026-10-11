@@ -94,6 +94,8 @@ class AnimeCarrierBinding(
         displayByNumber = displayMode == Anime.EPISODE_DISPLAY_NUMBER,
         unreadFilter = unseenFilter,
         fillermarkedFilter = fillermarkedFilter,
+        showPreviews = showPreviews(),
+        showSummaries = showSummaries(),
     )
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
@@ -184,6 +186,34 @@ class AnimeCarrierBinding(
                 id = localId,
                 episodeFlags = anime.episodeFlags
                     .and(Anime.EPISODE_DISPLAY_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
+    /** Android's showPreviews bit — inverted flag (SHOW = 0, NOT = bit). */
+    override suspend fun setChapterShowPreviews(localId: Long, show: Boolean) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
+        val flag = if (show) Anime.EPISODE_SHOW_PREVIEWS else Anime.EPISODE_SHOW_NOT_PREVIEWS
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                episodeFlags = anime.episodeFlags
+                    .and(Anime.EPISODE_PREVIEWS_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
+    /** Android's showSummaries bit — same inverted-flag shape. */
+    override suspend fun setChapterShowSummaries(localId: Long, show: Boolean) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
+        val flag = if (show) Anime.EPISODE_SHOW_SUMMARIES else Anime.EPISODE_SHOW_NOT_SUMMARIES
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                episodeFlags = anime.episodeFlags
+                    .and(Anime.EPISODE_SUMMARIES_MASK.inv())
                     .or(flag),
             ),
         )
