@@ -558,6 +558,37 @@ class EntryDetailsScreenModel(
         clearSelection()
     }
 
+    /** Android's overflow "Remove downloads → All" — the whole entry dir. */
+    fun removeAllDownloads() {
+        val s = _state.value
+        val title = s.details?.title ?: s.local?.title ?: return
+        DownloadManager.deleteEntry(carrier, s.sourceName, title)
+    }
+
+    /**
+     * Android's "All but bookmarked chapters" — drops downloads for items
+     * whose url isn't in the bookmarked set.
+     */
+    fun removeNonBookmarkedDownloads() {
+        removeDownloadsWhere { item, s -> item.url !in s.bookmarkedUrls }
+    }
+
+    /** Android's "All read chapters" — drops downloads for done items. */
+    fun removeReadDownloads() {
+        removeDownloadsWhere { item, s -> item.url in s.doneUrls }
+    }
+
+    private fun removeDownloadsWhere(predicate: (RemoteItem, State) -> Boolean) {
+        val s = _state.value
+        val title = s.details?.title ?: s.local?.title ?: return
+        s.items
+            .filter {
+                predicate(it, s) &&
+                    DownloadManager.sanitizeName(it.name) in s.downloadedNames
+            }
+            .forEach { DownloadManager.delete(carrier, s.sourceName, title, it.name) }
+    }
+
     /**
      * Android's ScanlatorFilterDialog — opens with the distinct scanlator
      * names on the entry's items (local rows ∪ the remote list, so a not-

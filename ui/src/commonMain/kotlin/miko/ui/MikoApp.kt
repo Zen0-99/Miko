@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
@@ -379,6 +380,100 @@ fun MikoApp(graph: MikoUiGraph) {
                                                                 ?.showMigrateSheet()
                                                         },
                                                     )
+                                                }
+                                                // Android's nested
+                                                // "Remove downloads" group —
+                                                // shown once the entry has
+                                                // any downloaded items.
+                                                if (
+                                                    detailsModel != null &&
+                                                    detailsDest?.carrier !=
+                                                    BrowseCarrier.SHOWS &&
+                                                    detailsState
+                                                        ?.downloadedNames
+                                                        ?.isNotEmpty() == true
+                                                ) {
+                                                    var removeOpen by remember {
+                                                        mutableStateOf(false)
+                                                    }
+                                                    Box {
+                                                        DropdownMenuItem(
+                                                            text = {
+                                                                Text(
+                                                                    stringResource(
+                                                                        MR.strings
+                                                                            .action_remove_downloads,
+                                                                    ),
+                                                                )
+                                                            },
+                                                            trailingIcon = {
+                                                                Icon(
+                                                                    Icons.AutoMirrored
+                                                                        .Filled
+                                                                        .KeyboardArrowRight,
+                                                                    contentDescription = null,
+                                                                )
+                                                            },
+                                                            onClick = {
+                                                                removeOpen = true
+                                                            },
+                                                        )
+                                                        DropdownMenu(
+                                                            expanded = removeOpen,
+                                                            onDismissRequest = {
+                                                                removeOpen = false
+                                                            },
+                                                        ) {
+                                                            DropdownMenuItem(
+                                                                text = {
+                                                                    Text(
+                                                                        stringResource(
+                                                                            MR.strings
+                                                                                .action_remove_all_downloads,
+                                                                        ),
+                                                                    )
+                                                                },
+                                                                onClick = {
+                                                                    removeOpen = false
+                                                                    overflowOpen = false
+                                                                    detailsModel
+                                                                        .removeAllDownloads()
+                                                                },
+                                                            )
+                                                            DropdownMenuItem(
+                                                                text = {
+                                                                    Text(
+                                                                        stringResource(
+                                                                            MR.strings
+                                                                                .action_remove_non_bookmarked_downloads,
+                                                                        ),
+                                                                    )
+                                                                },
+                                                                onClick = {
+                                                                    removeOpen = false
+                                                                    overflowOpen = false
+                                                                    detailsModel
+                                                                        .removeNonBookmarkedDownloads()
+                                                                },
+                                                            )
+                                                            DropdownMenuItem(
+                                                                text = {
+                                                                    Text(
+                                                                        stringResource(
+                                                                            MR.strings
+                                                                                .action_remove_read_downloads,
+                                                                        ),
+                                                                    )
+                                                                },
+                                                                onClick = {
+                                                                    removeOpen = false
+                                                                    overflowOpen = false
+                                                                    detailsModel
+                                                                        .removeReadDownloads()
+                                                                },
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

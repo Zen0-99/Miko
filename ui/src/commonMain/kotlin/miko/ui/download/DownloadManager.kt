@@ -215,6 +215,12 @@ object DownloadManager {
         _changes.tryEmit(entryDir(carrier, sourceName, entryTitle).toString())
     }
 
+    /** Android's deleteManga/deleteEntry — drops the whole entry dir. */
+    fun deleteEntry(carrier: BrowseCarrier, sourceName: String, entryTitle: String) {
+        deleteRecursively(entryDir(carrier, sourceName, entryTitle))
+        _changes.tryEmit(entryDir(carrier, sourceName, entryTitle).toString())
+    }
+
     /** kotlinx-io deletes only empty dirs — children first, then the dir. */
     private fun deleteRecursively(dir: Path) {
         if (!SystemFileSystem.exists(dir)) return
