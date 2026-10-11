@@ -106,6 +106,8 @@ import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
+import tachiyomi.presentation.core.util.secondaryItemAlpha
+import kotlin.math.floor
 
 private const val HERO_HEIGHT = 380
 
@@ -390,7 +392,54 @@ fun EntryDetailsScreen(
                         val items = state.displayItems
                         val doneUrls = state.doneUrls
                         val selecting = state.selectedUrls.isNotEmpty()
-                        items(items, key = { it.url }) { item ->
+                        // Android's insertSeparators — "Missing N items"
+                        // pseudo-rows where consecutive numbers gap >1
+                        // (head check ascending only); negative numbers are
+                        // unrecognized and never gap.
+                        val rows = buildList<ItemRowEntry> {
+                            var prev: RemoteItem? = null
+                            items.forEach { item ->
+                                val gap = if (prev == null) {
+                                    if (state.sortDescending) {
+                                        -1
+                                    } else {
+                                        floor(item.number).toInt() - 1
+                                    }
+                                } else {
+                                    val lo = minOf(prev!!.number, item.number)
+                                    val hi = maxOf(prev!!.number, item.number)
+                                    if (lo < 0.0) {
+                                        -1
+                                    } else {
+                                        floor(hi).toInt() - floor(lo).toInt() - 1
+                                    }
+                                }
+                                if (gap > 0) {
+                                    add(
+                                        ItemRowEntry.MissingCount(
+                                            "${prev?.url ?: "head"}-${item.url}",
+                                            gap,
+                                        ),
+                                    )
+                                }
+                                add(ItemRowEntry.ChapterRow(item))
+                                prev = item
+                            }
+                        }
+                        items(
+                            rows,
+                            key = {
+                                when (it) {
+                                    is ItemRowEntry.ChapterRow -> it.item.url
+                                    is ItemRowEntry.MissingCount -> it.key
+                                }
+                            },
+                        ) { row ->
+                            if (row is ItemRowEntry.MissingCount) {
+                                MissingItemRow(row.count)
+                                return@items
+                            }
+                            val item = (row as ItemRowEntry.ChapterRow).item
                             val itemDone = item.url in doneUrls
                             val selected = item.url in state.selectedUrls
                             val canDownload = carrier != BrowseCarrier.SHOWS &&
@@ -1371,5 +1420,30 @@ private fun SwipeActionBackground(
             tint = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.padding(horizontal = 24.dp),
         )
+    }
+}
+
+/** Row model for the items list — chapters/episodes or a missing-count separator. */
+private sealed interface ItemRowEntry {
+    data class ChapterRow(val item: RemoteItem) : ItemRowEntry
+    data class MissingCount(val key: String, val count: Int) : ItemRowEntry
+}
+
+/** Android's MissingItemCountListItem — flanking dividers + dimmed label. */
+@Composable
+private fun MissingItemRow(count: Int) {
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .secondaryItemAlpha(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f))
+        Text(
+            text = pluralStringResource(AYMR.plurals.missing_items, count, count),
+            style = MaterialTheme.typography.labelMedium,
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f))
     }
 }
