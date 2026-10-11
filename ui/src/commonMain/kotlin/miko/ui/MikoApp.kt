@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Search
@@ -50,6 +51,8 @@ import miko.ui.extensions.ExtensionsScreen
 import miko.ui.extensions.ExtensionsScreenModel
 import miko.ui.feed.SourceFeedScreen
 import miko.ui.feed.SourceFeedScreenModel
+import miko.ui.home.HomeScreen
+import miko.ui.home.HomeScreenModel
 import miko.ui.library.LibraryScreen
 import miko.ui.library.LibraryScreenModel
 import miko.ui.navigation.Destination
@@ -71,6 +74,7 @@ import miko.ui.updates.UpdatesScreen
 import miko.ui.updates.UpdatesScreenModel
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
@@ -152,6 +156,9 @@ fun MikoApp(graph: MikoUiGraph) {
     // DB subscriptions; recreating them per visit would flicker the list.
     val updatesModel = remember {
         UpdatesScreenModel(graph, browseCarrier)
+    }
+    val homeModel = remember {
+        HomeScreenModel(graph, browseCarrier)
     }
     // Updates-toolbar search — Android's HistoriesTab subscribe(query).
     var updatesSearchQuery by remember { mutableStateOf<String?>(null) }
@@ -294,8 +301,15 @@ fun MikoApp(graph: MikoUiGraph) {
             },
             bottomBar = {
                 if (!navigator.canPop) {
-                    // Android's nav tail order: Library | Updates | Browse.
+                    // Android's nav order minus Discovery: Home | Library |
+                    // Updates | Browse.
                     NavigationBar {
+                        NavigationBarItem(
+                            selected = navigator.current == Destination.Home,
+                            onClick = { navigator.replace(Destination.Home) },
+                            icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                            label = { Text(stringResource(AYMR.strings.label_home)) },
+                        )
                         NavigationBarItem(
                             selected = navigator.current == Destination.Library,
                             onClick = { navigator.replace(Destination.Library) },
@@ -319,6 +333,12 @@ fun MikoApp(graph: MikoUiGraph) {
             },
         ) { padding ->
             when (val destination = navigator.current) {
+                Destination.Home -> HomeDestination(
+                    model = homeModel,
+                    navigator = navigator,
+                    carrierFlow = browseCarrier,
+                    modifier = Modifier.padding(padding),
+                )
                 Destination.Browse -> BrowseDestination(
                     navigator = navigator,
                     sourcesModel = sourcesModel,
@@ -384,6 +404,7 @@ fun MikoApp(graph: MikoUiGraph) {
 
 @Composable
 private fun screenTitle(destination: Destination): String = when (destination) {
+    Destination.Home -> stringResource(AYMR.strings.label_home)
     Destination.Browse -> stringResource(MR.strings.browse)
     Destination.Library -> stringResource(MR.strings.label_library)
     Destination.Updates -> stringResource(MR.strings.label_recent_updates)
@@ -751,6 +772,38 @@ private fun EpisodePlayerDestination(
         onDispose { model.dispose() }
     }
     EpisodePlayerScreen(model = model, modifier = modifier.fillMaxSize())
+}
+
+@Composable
+private fun HomeDestination(
+    model: HomeScreenModel,
+    navigator: Navigator,
+    carrierFlow: MutableStateFlow<BrowseCarrier>,
+    modifier: Modifier = Modifier,
+) {
+    HomeScreen(
+        model = model,
+        carrierFlow = carrierFlow,
+        onCarrierChange = { carrierFlow.value = it },
+        onResume = { sourceId, entryUrl, itemUrl ->
+            navigator.push(
+                when (carrierFlow.value) {
+                    BrowseCarrier.SHOWS ->
+                        Destination.EpisodePlayer(sourceId, entryUrl, itemUrl)
+                    BrowseCarrier.MANGA ->
+                        Destination.MangaReader(sourceId, entryUrl, itemUrl)
+                    BrowseCarrier.BOOKS ->
+                        Destination.Reader(sourceId, entryUrl, itemUrl)
+                },
+            )
+        },
+        onOpenEntry = { sourceId, entryUrl, entryTitle ->
+            navigator.push(
+                Destination.Details(sourceId, entryUrl, entryTitle, carrierFlow.value),
+            )
+        },
+        modifier = modifier.fillMaxSize(),
+    )
 }
 
 @Composable

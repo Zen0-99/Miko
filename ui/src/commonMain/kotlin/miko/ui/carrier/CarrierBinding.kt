@@ -85,6 +85,9 @@ data class VideoEntry(
     val title: String,
 )
 
+/** Resolved navigation target for an id-keyed row — urls + owning source. */
+data class NavTarget(val sourceId: Long, val entryUrl: String, val itemUrl: String)
+
 /** A catalogue source exposed uniformly — chapters, episodes, or volumes. */
 interface CarrierSource {
     val id: Long
@@ -107,6 +110,18 @@ interface CarrierBinding {
 
     fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?>
     suspend fun localEntryById(id: Long): LocalEntry? = null
+
+    /**
+     * Maps an update/history row's entry+item ids to urls for navigation —
+     * feed rows carry ids while details/reader destinations are url-keyed.
+     * The source id comes from the local entry (history rows don't carry it).
+     */
+    suspend fun resolveNavTarget(entryId: Long, itemId: Long): NavTarget? {
+        val local = localEntryById(entryId) ?: return null
+        val item = getLocalItems(local.id).firstOrNull { it.id == itemId }
+            ?: return null
+        return NavTarget(local.sourceId, local.url, item.url)
+    }
     suspend fun materialize(details: RemoteDetails, sourceId: Long): LocalEntry
     suspend fun setFavorite(localId: Long, favorite: Boolean)
 

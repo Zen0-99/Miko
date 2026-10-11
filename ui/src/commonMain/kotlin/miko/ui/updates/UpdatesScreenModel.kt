@@ -17,6 +17,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import miko.ui.MikoUiGraph
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.NavTarget
 import kotlin.time.Instant
 
 /**
@@ -211,22 +212,9 @@ class UpdatesScreenModel(
         }
     }
 
-    /** Resolved navigation target for a row — ids mapped to urls + source. */
-    data class NavTarget(val sourceId: Long, val entryUrl: String, val itemUrl: String)
-
-    /**
-     * Resolves an update/history row to urls for navigation — the feed rows
-     * carry ids, and details/reader destinations are url-keyed. The source
-     * id comes from the local entry (history rows don't carry it).
-     */
-    suspend fun resolveTarget(entryId: Long, itemId: Long): NavTarget? {
-        val binding = graph.binding(carrierFlow.value)
-        val local = binding.localEntryById(entryId) ?: return null
-        val item = binding.getLocalItems(local.id)
-            .firstOrNull { it.id == itemId }
-            ?: return null
-        return NavTarget(local.sourceId, local.url, item.url)
-    }
+    /** Delegates to [CarrierBinding.resolveNavTarget] for the active carrier. */
+    suspend fun resolveTarget(entryId: Long, itemId: Long): NavTarget? =
+        graph.binding(carrierFlow.value).resolveNavTarget(entryId, itemId)
 
     fun dispose() = scope.cancel()
 }

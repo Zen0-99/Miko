@@ -11,6 +11,9 @@ import miko.ui.carrier.BrowseCarrier
  */
 sealed interface Destination {
 
+    /** Landing tab — greeting + continue rail (Android's HomeHub, scoped). */
+    data object Home : Destination
+
     /** List of installed sources the user can browse. */
     data object Browse : Destination
 
