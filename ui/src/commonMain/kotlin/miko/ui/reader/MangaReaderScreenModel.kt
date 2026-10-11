@@ -122,6 +122,15 @@ class MangaReaderScreenModel(
         /** Android's crop_borders / crop_borders_webtoon — margin crop per viewer. */
         val cropBorders: Boolean = false,
         val cropBordersWebtoon: Boolean = false,
+        /**
+         * Android's webtoon zoom prefs: min strip scale 1.0 when zoom-out is
+         * disabled else 0.5; double-tap toggles 1x↔2x at the tap point.
+         * `doubleTapAnimSpeed` is the shared double-tap zoom duration in ms
+         * (Android uses 1 for "no animation").
+         */
+        val webtoonDisableZoomOut: Boolean = false,
+        val webtoonDoubleTapZoom: Boolean = true,
+        val doubleTapAnimSpeed: Int = 500,
         /** Android's E-Ink group — flash overlay on page change. */
         val flashOnPageChange: Boolean = false,
         val flashDurationMillis: Int = 100,
@@ -310,6 +319,21 @@ class MangaReaderScreenModel(
     private val cropBordersWebtoonPref = preferenceStore.getBoolean(
         "crop_borders_webtoon",
         false,
+    )
+
+    // Android's webtoon zoom prefs + global double-tap anim speed — same
+    // keys/defaults.
+    private val webtoonDisableZoomOutPref = preferenceStore.getBoolean(
+        "webtoon_disable_zoom_out",
+        false,
+    )
+    private val webtoonDoubleTapZoomPref = preferenceStore.getBoolean(
+        "pref_enable_double_tap_zoom_webtoon",
+        true,
+    )
+    private val doubleTapAnimSpeedPref = preferenceStore.getInt(
+        "pref_double_tap_anim_speed",
+        500,
     )
 
     // Android's E-Ink prefs — same keys/defaults.
@@ -505,6 +529,21 @@ class MangaReaderScreenModel(
             }
         }
         scope.launch {
+            webtoonDisableZoomOutPref.changes().collect { v ->
+                _state.value = _state.value.copy(webtoonDisableZoomOut = v)
+            }
+        }
+        scope.launch {
+            webtoonDoubleTapZoomPref.changes().collect { v ->
+                _state.value = _state.value.copy(webtoonDoubleTapZoom = v)
+            }
+        }
+        scope.launch {
+            doubleTapAnimSpeedPref.changes().collect { v ->
+                _state.value = _state.value.copy(doubleTapAnimSpeed = v)
+            }
+        }
+        scope.launch {
             flashOnPageChangePref.changes().collect { v ->
                 _state.value = _state.value.copy(flashOnPageChange = v)
             }
@@ -601,6 +640,12 @@ class MangaReaderScreenModel(
     fun setCropBorders(on: Boolean) = cropBordersPref.set(on)
 
     fun setCropBordersWebtoon(on: Boolean) = cropBordersWebtoonPref.set(on)
+
+    fun setWebtoonDisableZoomOut(on: Boolean) = webtoonDisableZoomOutPref.set(on)
+
+    fun setWebtoonDoubleTapZoom(on: Boolean) = webtoonDoubleTapZoomPref.set(on)
+
+    fun setDoubleTapAnimSpeed(ms: Int) = doubleTapAnimSpeedPref.set(ms)
 
     fun setFlashOnPageChange(on: Boolean) = flashOnPageChangePref.set(on)
 

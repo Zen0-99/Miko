@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -258,6 +259,9 @@ fun MangaReaderScreen(
             onDualPageRotateInvertWebtoonChange = model::setDualPageRotateInvertWebtoon,
             onCropBordersChange = model::setCropBorders,
             onCropBordersWebtoonChange = model::setCropBordersWebtoon,
+            onWebtoonDisableZoomOutChange = model::setWebtoonDisableZoomOut,
+            onWebtoonDoubleTapZoomChange = model::setWebtoonDoubleTapZoom,
+            onDoubleTapAnimSpeedSelect = model::setDoubleTapAnimSpeed,
             onZoomStartSelect = model::setZoomStart,
             onCustomBrightnessChange = model::setCustomBrightness,
             onBrightnessValueChange = model::setCustomBrightnessValue,
@@ -485,7 +489,11 @@ private fun PagedViewer(
                                     up.consume()
                                     secondUp.consume()
                                     scope.launch {
-                                        zoom.animateDoubleTap(up.position, size)
+                                        zoom.animateDoubleTap(
+                                            up.position,
+                                            size,
+                                            state.doubleTapAnimSpeed,
+                                        )
                                     }
                                 }
                                 return@awaitEachGesture
@@ -749,80 +757,176 @@ private fun WebtoonViewer(
         // Wide-page discovery for the webtoon dual-page prefs —
         // splitAndMerge stacks halves (right on top; invert swaps).
         val widePages = remember(state.chapterUrl) { mutableStateMapOf<Int, Boolean>() }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = sidePad, vertical = 4.dp),
+        // Android's webtoon zoom (WebtoonRecyclerView): pinch scales the
+        // whole strip about the centroid; while zoomed, single-finger drags
+        // pan; a pinch ending below minScale bounces back (0.5 when zoom-out
+        // is allowed, else 1.0); double-tap toggles 1x↔2x at the tap point.
+        val zoom = remember { ReaderZoomState() }
+        val minScale = if (state.webtoonDisableZoomOut) 1f else WEBTOON_MIN_SCALE
+        val scope = rememberCoroutineScope()
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(state.webtoonDisableZoomOut) {
+                    val minLive = if (state.webtoonDisableZoomOut) {
+                        1f
+                    } else {
+                        WEBTOON_MIN_SCALE - 0.1f
+                    }
+                    awaitEachGesture {
+                        var prevSpan = 0f
+                        var prevCentroid = Offset.Zero
+                        var pinchActive = false
+                        var panActive = false
+                        while (true) {
+                            // Initial pass: parent consumes before the
+                            // LazyColumn's scroller sees multi-pointer or
+                            // zoomed drags.
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val pressed = event.changes.filter { it.pressed }
+                            if (pressed.isEmpty()) {
+                                if (pinchActive) {
+                                    scope.launch { zoom.settleTo(minScale, size) }
+                                }
+                                break
+                            }
+                            if (pressed.size >= 2) {
+                                pinchActive = true
+                                val p1 = pressed[0].position
+                                val p2 = pressed[1].position
+                                val span = (p1 - p2).getDistance()
+                                val centroid = (p1 + p2) / 2f
+                                if (prevSpan > 0f && span > 0f) {
+                                    val oldScale = zoom.scale
+                                    val newScale = (oldScale * span / prevSpan)
+                                        .coerceIn(minLive, MAX_ZOOM_SCALE)
+                                    val c = centroid - Offset(
+                                        size.width / 2f,
+                                        size.height / 2f,
+                                    )
+                                    zoom.offset = zoom.offset -
+                                        c * (newScale - oldScale) +
+                                        (centroid - prevCentroid)
+                                    zoom.scale = newScale
+                                    zoom.clamp(size)
+                                }
+                                prevSpan = span
+                                prevCentroid = centroid
+                                event.changes.forEach { it.consume() }
+                            } else if (pinchActive || zoom.scale > 1f) {
+                                val change = pressed.first()
+                                if (panActive ||
+                                    pinchActive ||
+                                    change.position != change.previousPosition
+                                ) {
+                                    panActive = true
+                                    zoom.offset += change.position - change.previousPosition
+                                    zoom.clamp(size)
+                                    event.changes.forEach { it.consume() }
+                                }
+                            }
+                        }
+                    }
+                }
+                .pointerInput(state.webtoonDoubleTapZoom) {
+                    detectTapGestures(
+                        onDoubleTap = { pos ->
+                            if (state.webtoonDoubleTapZoom) {
+                                scope.launch {
+                                    zoom.animateDoubleTap(
+                                        pos,
+                                        size,
+                                        state.doubleTapAnimSpeed,
+                                        WEBTOON_DOUBLE_TAP_SCALE,
+                                    )
+                                }
+                            }
+                        },
+                    )
+                },
         ) {
-            if (state.showTransitions) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = zoom.scale
+                        scaleY = zoom.scale
+                        translationX = zoom.offset.x
+                        translationY = zoom.offset.y
+                    },
+                contentPadding = PaddingValues(horizontal = sidePad, vertical = 4.dp),
+            ) {
+                if (state.showTransitions) {
+                    item {
+                        ChapterTransitionBlock(
+                            goingNext = false,
+                            currentName = state.chapterName,
+                            neighbor = state.prevChapter,
+                            onNavigate = onPrevChapter,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 24.dp),
+                        )
+                    }
+                }
                 item {
-                    ChapterTransitionBlock(
-                        goingNext = false,
-                        currentName = state.chapterName,
-                        neighbor = state.prevChapter,
-                        onNavigate = onPrevChapter,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 24.dp),
+                    Text(
+                        text = state.chapterName,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
-            }
-            item {
-                Text(
-                    text = state.chapterName,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-            items(state.pages, key = { it.index }) { page ->
-                val onIntrinsic: (Size) -> Unit = { size ->
-                    widePages[page.index] = size.width > size.height
-                }
-                if (state.dualPageSplitWebtoon && widePages[page.index] == true) {
-                    // Android's splitAndMerge — halves stacked, right on
-                    // top by default (invert swaps), each full width.
-                    val upper = if (state.dualPageInvertWebtoon) 0 else 1
-                    Column(Modifier.fillMaxWidth()) {
+                items(state.pages, key = { it.index }) { page ->
+                    val onIntrinsic: (Size) -> Unit = { size ->
+                        widePages[page.index] = size.width > size.height
+                    }
+                    if (state.dualPageSplitWebtoon && widePages[page.index] == true) {
+                        // Android's splitAndMerge — halves stacked, right on
+                        // top by default (invert swaps), each full width.
+                        val upper = if (state.dualPageInvertWebtoon) 0 else 1
+                        Column(Modifier.fillMaxWidth()) {
+                            PageImage(
+                                page,
+                                Modifier.fillMaxWidth(),
+                                cropHalf = upper,
+                                cropBorders = state.cropBordersWebtoon,
+                                onIntrinsic = onIntrinsic,
+                            )
+                            PageImage(
+                                page,
+                                Modifier.fillMaxWidth(),
+                                cropHalf = 1 - upper,
+                                cropBorders = state.cropBordersWebtoon,
+                                onIntrinsic = onIntrinsic,
+                            )
+                        }
+                    } else {
                         PageImage(
                             page,
                             Modifier.fillMaxWidth(),
-                            cropHalf = upper,
-                            cropBorders = state.cropBordersWebtoon,
-                            onIntrinsic = onIntrinsic,
-                        )
-                        PageImage(
-                            page,
-                            Modifier.fillMaxWidth(),
-                            cropHalf = 1 - upper,
+                            alignment = zoomStartAlignment(state.zoomStart, state.readingMode),
+                            colorFilter = pageColorFilter(state.grayscale, state.invertedColors),
+                            rotateToFit = state.dualPageRotateWebtoon && !state.dualPageSplitWebtoon,
+                            rotateInvert = state.dualPageRotateInvertWebtoon,
                             cropBorders = state.cropBordersWebtoon,
                             onIntrinsic = onIntrinsic,
                         )
                     }
-                } else {
-                    PageImage(
-                        page,
-                        Modifier.fillMaxWidth(),
-                        alignment = zoomStartAlignment(state.zoomStart, state.readingMode),
-                        colorFilter = pageColorFilter(state.grayscale, state.invertedColors),
-                        rotateToFit = state.dualPageRotateWebtoon && !state.dualPageSplitWebtoon,
-                        rotateInvert = state.dualPageRotateInvertWebtoon,
-                        cropBorders = state.cropBordersWebtoon,
-                        onIntrinsic = onIntrinsic,
-                    )
                 }
-            }
-            item { Spacer(Modifier.height(16.dp)) }
-            if (state.showTransitions) {
-                item {
-                    ChapterTransitionBlock(
-                        goingNext = true,
-                        currentName = state.chapterName,
-                        neighbor = state.nextChapter,
-                        onNavigate = onNextChapter,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 24.dp),
-                    )
+                item { Spacer(Modifier.height(16.dp)) }
+                if (state.showTransitions) {
+                    item {
+                        ChapterTransitionBlock(
+                            goingNext = true,
+                            currentName = state.chapterName,
+                            neighbor = state.nextChapter,
+                            onNavigate = onNextChapter,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 24.dp),
+                        )
+                    }
                 }
             }
         }
@@ -1192,6 +1296,9 @@ private fun ReaderSettingsSheet(
     onDualPageRotateInvertWebtoonChange: (Boolean) -> Unit,
     onCropBordersChange: (Boolean) -> Unit,
     onCropBordersWebtoonChange: (Boolean) -> Unit,
+    onWebtoonDisableZoomOutChange: (Boolean) -> Unit,
+    onWebtoonDoubleTapZoomChange: (Boolean) -> Unit,
+    onDoubleTapAnimSpeedSelect: (Int) -> Unit,
     onZoomStartSelect: (Int) -> Unit,
     onCustomBrightnessChange: (Boolean) -> Unit,
     onBrightnessValueChange: (Int) -> Unit,
@@ -1321,6 +1428,16 @@ private fun ReaderSettingsSheet(
                     onChange = onCropBordersWebtoonChange,
                 )
                 SettingSwitch(
+                    labelRes = MR.strings.pref_webtoon_disable_zoom_out,
+                    checked = state.webtoonDisableZoomOut,
+                    onChange = onWebtoonDisableZoomOutChange,
+                )
+                SettingSwitch(
+                    labelRes = MR.strings.pref_double_tap_zoom,
+                    checked = state.webtoonDoubleTapZoom,
+                    onChange = onWebtoonDoubleTapZoomChange,
+                )
+                SettingSwitch(
                     labelRes = MR.strings.pref_dual_page_split,
                     checked = state.dualPageSplitWebtoon,
                     onChange = onDualPageSplitWebtoonChange,
@@ -1389,6 +1506,23 @@ private fun ReaderSettingsSheet(
                 labelRes = MR.strings.pref_page_transitions,
                 checked = state.pageTransitions,
                 onChange = onPageTransitionsChange,
+            )
+            // Android's SettingsReaderScreen — 1ms is the "no animation" value.
+            SettingDropdown(
+                labelRes = MR.strings.pref_double_tap_anim_speed,
+                current = stringResource(
+                    when (state.doubleTapAnimSpeed) {
+                        1 -> MR.strings.double_tap_anim_speed_0
+                        250 -> MR.strings.double_tap_anim_speed_fast
+                        else -> MR.strings.double_tap_anim_speed_normal
+                    },
+                ),
+                options = listOf(
+                    1 to MR.strings.double_tap_anim_speed_0,
+                    500 to MR.strings.double_tap_anim_speed_normal,
+                    250 to MR.strings.double_tap_anim_speed_fast,
+                ),
+                onSelect = onDoubleTapAnimSpeedSelect,
             )
             SettingSwitch(
                 labelRes = MR.strings.pref_fullscreen,
@@ -1532,6 +1666,10 @@ private fun ReaderSettingsSheet(
 
 private const val MAX_ZOOM_SCALE = 3f
 private const val DOUBLE_TAP_ZOOM_SCALE = 2.5f
+
+// Android's WebtoonRecyclerView — zoom-out floor and 2x double-tap target.
+private const val WEBTOON_MIN_SCALE = 0.5f
+private const val WEBTOON_DOUBLE_TAP_SCALE = 2f
 
 /**
  * Android's usePageTransitions — pref off turns programmatic page
@@ -1680,8 +1818,9 @@ private class ReaderZoomState {
     }
 
     fun clamp(viewSize: IntSize) {
-        val maxX = viewSize.width * (scale - 1f) / 2f
-        val maxY = viewSize.height * (scale - 1f) / 2f
+        // Below 1x there's no pan headroom — negative maxima would throw.
+        val maxX = (viewSize.width * (scale - 1f) / 2f).coerceAtLeast(0f)
+        val maxY = (viewSize.height * (scale - 1f) / 2f).coerceAtLeast(0f)
         offset = Offset(
             offset.x.coerceIn(-maxX, maxX),
             offset.y.coerceIn(-maxY, maxY),
@@ -1692,9 +1831,14 @@ private class ReaderZoomState {
      * Android's double-tap zoom: toggles between 1x and a fixed scale,
      * keeping the tapped content point under the finger.
      */
-    suspend fun animateDoubleTap(pos: Offset, viewSize: IntSize) {
+    suspend fun animateDoubleTap(
+        pos: Offset,
+        viewSize: IntSize,
+        animMs: Int,
+        zoomScale: Float = DOUBLE_TAP_ZOOM_SCALE,
+    ) {
         val center = Offset(viewSize.width / 2f, viewSize.height / 2f)
-        val targetScale = if (scale > 1f) 1f else DOUBLE_TAP_ZOOM_SCALE
+        val targetScale = if (scale > 1f) 1f else zoomScale
         // With a center pivot, holding the tap point stationary means
         // offset -= p * (newScale - oldScale), p in center-relative px.
         val targetOffset = if (targetScale == 1f) {
@@ -1704,9 +1848,24 @@ private class ReaderZoomState {
         }
         val fromScale = scale
         val fromOffset = offset
-        Animatable(0f).animateTo(1f, tween(300)) {
+        Animatable(0f).animateTo(1f, tween(animMs)) {
             scale = lerp(fromScale, targetScale, value)
             offset = lerp(fromOffset, targetOffset, value)
+        }
+        clamp(viewSize)
+    }
+
+    /**
+     * Android's WebtoonRecyclerView.onScaleEnd — a pinch that leaves the
+     * scale below the minimum bounces back to it.
+     */
+    suspend fun settleTo(minScale: Float, viewSize: IntSize) {
+        if (scale >= minScale) return
+        val fromScale = scale
+        val fromOffset = offset
+        Animatable(0f).animateTo(1f, tween(200)) {
+            scale = lerp(fromScale, minScale, value)
+            offset = lerp(fromOffset, Offset.Zero, value)
         }
         clamp(viewSize)
     }
