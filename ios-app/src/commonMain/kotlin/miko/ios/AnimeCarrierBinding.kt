@@ -319,6 +319,11 @@ class AnimeCarrierBinding(
         episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, bookmark = bookmarked))
     }
 
+    /** Android's multi-fillermark — the episode's own flag (canonical unaffected). */
+    override suspend fun setItemFillermark(itemId: Long, fillermarked: Boolean) {
+        episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, fillermark = fillermarked))
+    }
+
     /** Android's setCurrentSettingsAsDefault — entry flags → default prefs. */
     override suspend fun setEntryFlagsAsDefault(localId: Long) {
         getAnime.await(localId)?.let {

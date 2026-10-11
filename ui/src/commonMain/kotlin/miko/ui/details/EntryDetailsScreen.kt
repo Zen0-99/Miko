@@ -1,5 +1,8 @@
 package miko.ui.details
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,22 +22,31 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -72,7 +85,6 @@ import miko.ui.components.ChangeCollectionSheet
 import miko.ui.components.ChapterSettingsSheet
 import miko.ui.components.MigrateSourceSheet
 import miko.ui.components.ScanlatorFilterSheet
-import miko.ui.platform.rememberShareHandler
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -100,7 +112,6 @@ fun EntryDetailsScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
-    val share = rememberShareHandler()
 
     if (state.collectionSheetOpen) {
         ChangeCollectionSheet(
@@ -159,245 +170,225 @@ fun EntryDetailsScreen(
         if (!state.detailsLoading && !state.itemsLoading) isRefreshing = false
     }
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = {
-            isRefreshing = true
-            model.refresh()
-        },
-        modifier = modifier.fillMaxSize(),
-    ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item {
-                NovelHero(
-                    coverUrl = state.details?.thumbnailUrl,
-                    onCoverClick = { coverExpanded = true },
-                    title = state.details?.title ?: state.local?.title ?: "",
-                    metaItems = listOfNotNull(
-                        state.details?.author,
-                        state.details?.status?.let { statusLabel(it) },
-                        state.sourceName.ifBlank { null },
-                    ),
-                )
-            }
-
-            item {
-                ContinueRow(
-                    favorite = state.favorite,
-                    allRead = state.allItemsDone,
-                    hasStarted = state.hasStarted,
-                    // Android's displayMode flag — "Chapter 5" vs the
-                    // source name on the continue label.
-                    nextChapterName = state.nextItem?.let {
-                        if (state.displayByNumber && it.number >= 0.0) {
-                            "${itemPrefix(carrier)} ${formatItemNumber(it.number)}"
-                        } else {
-                            it.name
-                        }
-                    },
-                    enabled = state.nextItem != null || state.allItemsDone,
-                    onContinueClick = { state.nextItem?.let(onItemClick) },
-                    onFavoriteClick = model::toggleFavorite,
-                    onToggleDoneClick = model::toggleAllItemsDone,
-                )
-            }
-
-            state.details?.genre?.takeIf { it.isNotEmpty() }?.let { genres ->
+    Box(modifier = modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                model.refresh()
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
                 item {
-                    GenreRow(
-                        genres = genres,
-                        onGenreClick = onGenreClick,
-                        modifier = Modifier.padding(vertical = 4.dp),
+                    NovelHero(
+                        coverUrl = state.details?.thumbnailUrl,
+                        onCoverClick = { coverExpanded = true },
+                        title = state.details?.title ?: state.local?.title ?: "",
+                        metaItems = listOfNotNull(
+                            state.details?.author,
+                            state.details?.status?.let { statusLabel(it) },
+                            state.sourceName.ifBlank { null },
+                        ),
                     )
                 }
-            }
 
-            state.details?.description?.takeIf { it.isNotBlank() }?.let { description ->
                 item {
-                    ExpandableDescription(description = description)
+                    ContinueRow(
+                        favorite = state.favorite,
+                        allRead = state.allItemsDone,
+                        hasStarted = state.hasStarted,
+                        // Android's displayMode flag — "Chapter 5" vs the
+                        // source name on the continue label.
+                        nextChapterName = state.nextItem?.let {
+                            if (state.displayByNumber && it.number >= 0.0) {
+                                "${itemPrefix(carrier)} ${formatItemNumber(it.number)}"
+                            } else {
+                                it.name
+                            }
+                        },
+                        enabled = state.nextItem != null || state.allItemsDone,
+                        onContinueClick = { state.nextItem?.let(onItemClick) },
+                        onFavoriteClick = model::toggleFavorite,
+                        onToggleDoneClick = model::toggleAllItemsDone,
+                    )
                 }
-            }
 
-            item {
-                // Android's EntryChapterHeader — count + a single filter icon
-                // opening the chapter-settings sheet (Filter/Sort/Display).
-                var settingsOpen by remember { mutableStateOf(false) }
-                ChapterListHeader(
-                    count = state.items.size,
-                    filtersActive = state.unreadFilter != TriState.DISABLED ||
-                        state.bookmarkedFilter != TriState.DISABLED ||
-                        state.fillermarkedFilter != TriState.DISABLED,
-                    showActions = state.local != null,
-                    onFilterClick = { settingsOpen = true },
-                )
-                if (settingsOpen) {
-                    ChapterSettingsSheet(
-                        carrier = carrier,
-                        unreadFilter = state.unreadFilter,
-                        bookmarkedFilter = state.bookmarkedFilter,
-                        fillermarkedFilter = state.fillermarkedFilter,
-                        sortMode = state.sortMode,
-                        sortDescending = state.sortDescending,
-                        displayByNumber = state.displayByNumber,
-                        onDismissRequest = { settingsOpen = false },
-                        onCycleUnread = model::cycleUnreadFilter,
-                        onCycleBookmarked = model::cycleBookmarkedFilter,
-                        onCycleFillermarked = model::cycleFillermarkedFilter,
-                        onSortMode = model::setChapterSortMode,
-                        onToggleSortDirection = model::toggleSortDirection,
-                        onDisplayByNumber = model::setDisplayByNumber,
-                        // Shows only — episodeFlags preview/summary bits.
-                        showPreviews = state.showPreviews,
-                        showSummaries = state.showSummaries,
-                        onShowPreviews = if (
-                            carrier == BrowseCarrier.SHOWS && state.local != null
-                        ) {
-                            model::setShowPreviews
-                        } else {
-                            null
-                        },
-                        onShowSummaries = if (
-                            carrier == BrowseCarrier.SHOWS && state.local != null
-                        ) {
-                            model::setShowSummaries
-                        } else {
-                            null
-                        },
-                        // Manga only — novel/anime have no exclusion
-                        // table, so the row hides like Android.
-                        scanlatorFilterActive = state.excludedScanlators.isNotEmpty(),
-                        onScanlatorFilterClick = if (
-                            carrier == BrowseCarrier.MANGA && state.local != null
-                        ) {
-                            model::showScanlatorSheet
-                        } else {
-                            null
-                        },
-                        // Android's tab overflow — defaults live on
-                        // materialized entries only.
-                        onSetAsDefault = if (state.local != null) {
-                            model::setFlagsAsDefault
-                        } else {
-                            null
-                        },
-                        onResetToDefault = if (state.local != null) {
-                            model::resetFlagsToDefault
-                        } else {
-                            null
-                        },
-                    )
+                state.details?.genre?.takeIf { it.isNotEmpty() }?.let { genres ->
+                    item {
+                        GenreRow(
+                            genres = genres,
+                            onGenreClick = onGenreClick,
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
                 }
-                if (state.scanlatorSheetOpen) {
-                    ScanlatorFilterSheet(
-                        scanlators = state.scanlatorNames,
-                        initialExcluded = state.excludedScanlators,
-                        onDismissRequest = model::dismissScanlatorSheet,
-                        onConfirm = model::confirmExcludedScanlators,
-                    )
-                }
-            }
 
-            when {
-                state.itemsLoading -> item { LoadingScreen() }
-                state.items.isEmpty() -> item {
-                    Text(
-                        text = stringResource(MR.strings.no_results_found),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
+                state.details?.description?.takeIf { it.isNotBlank() }?.let { description ->
+                    item {
+                        ExpandableDescription(description = description)
+                    }
                 }
-                else -> {
-                    val items = state.displayItems
-                    val doneUrls = state.doneUrls
-                    items(items, key = { it.url }) { item ->
-                        val itemDone = item.url in doneUrls
-                        var rowMenuOpen by remember(item.url) { mutableStateOf(false) }
-                        Box {
-                            ItemRow(
-                                item = item,
-                                numberPrefix = itemPrefix(carrier),
-                                done = itemDone,
-                                displayByNumber = state.displayByNumber,
-                                bookmarked = item.url in state.bookmarkedUrls,
-                                showPreview = state.showPreviews,
-                                showSummary = state.showSummaries,
-                                onClick = { onItemClick(item) },
-                                // Android's row long-press context actions —
-                                // only persist once the entry has a local row.
-                                onLongClick = if (state.local != null) {
-                                    { rowMenuOpen = true }
-                                } else {
-                                    null
-                                },
-                            )
-                            DropdownMenu(
-                                expanded = rowMenuOpen,
-                                onDismissRequest = { rowMenuOpen = false },
+
+                item {
+                    // Android's EntryChapterHeader — count + a single filter icon
+                    // opening the chapter-settings sheet (Filter/Sort/Display).
+                    var settingsOpen by remember { mutableStateOf(false) }
+                    ChapterListHeader(
+                        count = state.items.size,
+                        filtersActive = state.unreadFilter != TriState.DISABLED ||
+                            state.bookmarkedFilter != TriState.DISABLED ||
+                            state.fillermarkedFilter != TriState.DISABLED,
+                        showActions = state.local != null,
+                        onFilterClick = { settingsOpen = true },
+                        // Android's toolbar action mode — count + close /
+                        // select-all / invert while rows are ticked.
+                        selectedCount = state.selectedUrls.size,
+                        onCancelSelection = model::clearSelection,
+                        onSelectAll = model::selectAll,
+                        onInvertSelection = model::invertSelection,
+                    )
+                    if (settingsOpen) {
+                        ChapterSettingsSheet(
+                            carrier = carrier,
+                            unreadFilter = state.unreadFilter,
+                            bookmarkedFilter = state.bookmarkedFilter,
+                            fillermarkedFilter = state.fillermarkedFilter,
+                            sortMode = state.sortMode,
+                            sortDescending = state.sortDescending,
+                            displayByNumber = state.displayByNumber,
+                            onDismissRequest = { settingsOpen = false },
+                            onCycleUnread = model::cycleUnreadFilter,
+                            onCycleBookmarked = model::cycleBookmarkedFilter,
+                            onCycleFillermarked = model::cycleFillermarkedFilter,
+                            onSortMode = model::setChapterSortMode,
+                            onToggleSortDirection = model::toggleSortDirection,
+                            onDisplayByNumber = model::setDisplayByNumber,
+                            // Shows only — episodeFlags preview/summary bits.
+                            showPreviews = state.showPreviews,
+                            showSummaries = state.showSummaries,
+                            onShowPreviews = if (
+                                carrier == BrowseCarrier.SHOWS && state.local != null
                             ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            stringResource(
-                                                if (itemDone) {
-                                                    MR.strings.action_mark_as_unread
-                                                } else {
-                                                    MR.strings.action_mark_as_read
-                                                },
-                                            ),
-                                        )
-                                    },
+                                model::setShowPreviews
+                            } else {
+                                null
+                            },
+                            onShowSummaries = if (
+                                carrier == BrowseCarrier.SHOWS && state.local != null
+                            ) {
+                                model::setShowSummaries
+                            } else {
+                                null
+                            },
+                            // Manga only — novel/anime have no exclusion
+                            // table, so the row hides like Android.
+                            scanlatorFilterActive = state.excludedScanlators.isNotEmpty(),
+                            onScanlatorFilterClick = if (
+                                carrier == BrowseCarrier.MANGA && state.local != null
+                            ) {
+                                model::showScanlatorSheet
+                            } else {
+                                null
+                            },
+                            // Android's tab overflow — defaults live on
+                            // materialized entries only.
+                            onSetAsDefault = if (state.local != null) {
+                                model::setFlagsAsDefault
+                            } else {
+                                null
+                            },
+                            onResetToDefault = if (state.local != null) {
+                                model::resetFlagsToDefault
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                    if (state.scanlatorSheetOpen) {
+                        ScanlatorFilterSheet(
+                            scanlators = state.scanlatorNames,
+                            initialExcluded = state.excludedScanlators,
+                            onDismissRequest = model::dismissScanlatorSheet,
+                            onConfirm = model::confirmExcludedScanlators,
+                        )
+                    }
+                }
+
+                when {
+                    state.itemsLoading -> item { LoadingScreen() }
+                    state.items.isEmpty() -> item {
+                        Text(
+                            text = stringResource(MR.strings.no_results_found),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                    else -> {
+                        val items = state.displayItems
+                        val doneUrls = state.doneUrls
+                        val selecting = state.selectedUrls.isNotEmpty()
+                        items(items, key = { it.url }) { item ->
+                            val itemDone = item.url in doneUrls
+                            val selected = item.url in state.selectedUrls
+                            Column {
+                                ItemRow(
+                                    item = item,
+                                    numberPrefix = itemPrefix(carrier),
+                                    done = itemDone,
+                                    displayByNumber = state.displayByNumber,
+                                    bookmarked = item.url in state.bookmarkedUrls,
+                                    selected = selected,
+                                    showPreview = state.showPreviews,
+                                    showSummary = state.showSummaries,
                                     onClick = {
-                                        rowMenuOpen = false
-                                        model.markItem(item.url, !itemDone)
+                                        if (selecting) {
+                                            model.toggleSelection(item.url)
+                                        } else {
+                                            onItemClick(item)
+                                        }
+                                    },
+                                    // Android's action mode — long-press selects
+                                    // once the entry has a local row to mutate.
+                                    onLongClick = if (state.local != null) {
+                                        { model.toggleSelection(item.url) }
+                                    } else {
+                                        null
                                     },
                                 )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            stringResource(
-                                                if (item.url in state.bookmarkedUrls) {
-                                                    MR.strings.action_remove_bookmark
-                                                } else {
-                                                    MR.strings.action_bookmark
-                                                },
-                                            ),
-                                        )
-                                    },
-                                    onClick = {
-                                        rowMenuOpen = false
-                                        model.toggleItemBookmark(item.url)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            stringResource(
-                                                MR.strings
-                                                    .action_mark_previous_as_read,
-                                            ),
-                                        )
-                                    },
-                                    onClick = {
-                                        rowMenuOpen = false
-                                        model.markPreviousDone(item.url)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(stringResource(MR.strings.action_share))
-                                    },
-                                    onClick = {
-                                        rowMenuOpen = false
-                                        share(item.url)
-                                    },
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
                                 )
                             }
                         }
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     }
                 }
             }
         }
+
+        // Android's EntryBottomActionMenu — slides up while rows are selected.
+        val selectedUrls = state.selectedUrls
+        SelectionActionMenu(
+            carrier = carrier,
+            visible = selectedUrls.isNotEmpty(),
+            anyUndone = selectedUrls.any { it !in state.doneUrls },
+            anyDone = selectedUrls.any { it in state.doneUrls },
+            anyUnbookmarked = selectedUrls.any { it !in state.bookmarkedUrls },
+            allBookmarked = selectedUrls.isNotEmpty() &&
+                selectedUrls.all { it in state.bookmarkedUrls },
+            anyUnfillermarked = selectedUrls.any { it !in state.fillermarkedUrls },
+            allFillermarked = selectedUrls.isNotEmpty() &&
+                selectedUrls.all { it in state.fillermarkedUrls },
+            singleSelected = selectedUrls.size == 1,
+            onMarkDone = { model.markSelected(done = true) },
+            onMarkUndone = { model.markSelected(done = false) },
+            onBookmark = { model.bookmarkSelected(bookmarked = true) },
+            onUnbookmark = { model.bookmarkSelected(bookmarked = false) },
+            onFillermark = { model.fillermarkSelected(fillermarked = true) },
+            onUnfillermark = { model.fillermarkSelected(fillermarked = false) },
+            onMarkPrevious = { model.markPreviousDone(selectedUrls.first()) },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
@@ -780,6 +771,10 @@ private fun ChapterListHeader(
     filtersActive: Boolean,
     showActions: Boolean,
     onFilterClick: () -> Unit,
+    selectedCount: Int = 0,
+    onCancelSelection: () -> Unit = {},
+    onSelectAll: () -> Unit = {},
+    onInvertSelection: () -> Unit = {},
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -787,6 +782,33 @@ private fun ChapterListHeader(
             .fillMaxWidth()
             .padding(start = 16.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
     ) {
+        if (selectedCount > 0) {
+            // Android's action mode — count title + close/select-all/invert.
+            IconButton(onClick = onCancelSelection) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(MR.strings.action_cancel),
+                )
+            }
+            Text(
+                text = "$selectedCount",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
+            )
+            IconButton(onClick = onSelectAll) {
+                Icon(
+                    imageVector = Icons.Outlined.SelectAll,
+                    contentDescription = stringResource(MR.strings.action_select_all),
+                )
+            }
+            IconButton(onClick = onInvertSelection) {
+                Icon(
+                    imageVector = Icons.Outlined.FlipToBack,
+                    contentDescription = stringResource(MR.strings.action_select_inverse),
+                )
+            }
+            return@Row
+        }
         Text(
             text = pluralStringResource(
                 MR.plurals.manga_num_chapters,
@@ -821,12 +843,21 @@ private fun ItemRow(
     onLongClick: (() -> Unit)? = null,
     bookmarked: Boolean = false,
     displayByNumber: Boolean = false,
+    selected: Boolean = false,
     showPreview: Boolean = true,
     showSummary: Boolean = true,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .background(
+                if (selected) {
+                    // Android's action-mode row highlight.
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    Color.Transparent
+                },
+            )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
@@ -912,3 +943,155 @@ private fun itemPrefix(carrier: BrowseCarrier): String = when (carrier) {
 /** "1" for whole numbers, "2.5" otherwise — Android's formatChapterNumber. */
 private fun formatItemNumber(value: Double): String =
     if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
+
+/**
+ * Android's `EntryBottomActionMenu`: a bottom-anchored row of icon-over-label
+ * actions shown while the item selection is non-empty. Each action appears
+ * only when it would do something (any-unbookmarked shows Bookmark, and so
+ * on), matching the upstream visibility gates.
+ */
+@Composable
+private fun SelectionActionMenu(
+    carrier: BrowseCarrier,
+    visible: Boolean,
+    anyUndone: Boolean,
+    anyDone: Boolean,
+    anyUnbookmarked: Boolean,
+    allBookmarked: Boolean,
+    anyUnfillermarked: Boolean,
+    allFillermarked: Boolean,
+    singleSelected: Boolean,
+    onMarkDone: () -> Unit,
+    onMarkUndone: () -> Unit,
+    onBookmark: () -> Unit,
+    onUnbookmark: () -> Unit,
+    onFillermark: () -> Unit,
+    onUnfillermark: () -> Unit,
+    onMarkPrevious: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isShows = carrier == BrowseCarrier.SHOWS
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically(expandFrom = Alignment.Bottom),
+        exit = shrinkVertically(shrinkTowards = Alignment.Bottom),
+        modifier = modifier,
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = MaterialTheme.shapes.large.copy(
+                bottomStart = CornerSize(0.dp),
+                bottomEnd = CornerSize(0.dp),
+            ),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+            ) {
+                if (anyUnbookmarked) {
+                    SelectionAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_bookmark_episode
+                            } else {
+                                MR.strings.action_bookmark
+                            },
+                        ),
+                        icon = Icons.Outlined.BookmarkBorder,
+                        onClick = onBookmark,
+                    )
+                }
+                if (allBookmarked) {
+                    SelectionAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_remove_bookmark_episode
+                            } else {
+                                MR.strings.action_remove_bookmark
+                            },
+                        ),
+                        icon = Icons.Filled.BookmarkRemove,
+                        onClick = onUnbookmark,
+                    )
+                }
+                if (isShows && anyUnfillermarked) {
+                    SelectionAction(
+                        label = stringResource(AYMR.strings.action_fillermark_episode),
+                        icon = Icons.Filled.Label,
+                        onClick = onFillermark,
+                    )
+                }
+                if (isShows && allFillermarked) {
+                    SelectionAction(
+                        label = stringResource(AYMR.strings.action_remove_fillermark_episode),
+                        icon = Icons.Outlined.Label,
+                        onClick = onUnfillermark,
+                    )
+                }
+                if (anyUndone) {
+                    SelectionAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_mark_as_seen
+                            } else {
+                                MR.strings.action_mark_as_read
+                            },
+                        ),
+                        icon = Icons.Filled.Visibility,
+                        onClick = onMarkDone,
+                    )
+                }
+                if (anyDone) {
+                    SelectionAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_mark_as_unseen
+                            } else {
+                                MR.strings.action_mark_as_unread
+                            },
+                        ),
+                        icon = Icons.Outlined.VisibilityOff,
+                        onClick = onMarkUndone,
+                    )
+                }
+                if (singleSelected) {
+                    SelectionAction(
+                        label = stringResource(
+                            if (isShows) {
+                                AYMR.strings.action_mark_previous_as_seen
+                            } else {
+                                MR.strings.action_mark_previous_as_read
+                            },
+                        ),
+                        icon = Icons.Filled.CheckCircle,
+                        onClick = onMarkPrevious,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.SelectionAction(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .weight(1f)
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+    ) {
+        Icon(imageVector = icon, contentDescription = null)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}

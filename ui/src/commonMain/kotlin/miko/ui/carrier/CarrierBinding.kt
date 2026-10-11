@@ -211,6 +211,9 @@ interface CarrierBinding {
     /** Android's per-item bookmark toggle. */
     suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) = Unit
 
+    /** Episode filler flag (shows) — `EpisodeUpdate.fillermark`. */
+    suspend fun setItemFillermark(itemId: Long, fillermarked: Boolean) = Unit
+
     /**
      * Scanlator exclusion — Android's `ScanlatorFilterDialog` backing
      * (manga only; other carriers report no scanlators). The local item

@@ -56,6 +56,8 @@ class EntryDetailsScreenModel(
         val showSummaries: Boolean = true,
         /** Filler episode urls (shows) — decorates the filler filter. */
         val fillermarkedUrls: Set<String> = emptySet(),
+        /** Android's action-mode selection — urls of the ticked rows. */
+        val selectedUrls: Set<String> = emptySet(),
         /** ChangeCollectionDialog — visible collections + this entry's ids. */
         val collectionSheetOpen: Boolean = false,
         val collections: List<Collection> = emptyList(),
@@ -342,6 +344,7 @@ class EntryDetailsScreenModel(
             binding.getLocalItems(local.id)
                 .filter { it.url in previousUrls && !it.done }
                 .forEach { binding.setItemDone(it.id, true) }
+            clearSelection()
         }
     }
 
@@ -353,6 +356,78 @@ class EntryDetailsScreenModel(
                 .firstOrNull { it.url == itemUrl }
                 ?: return@launch
             binding.setItemBookmark(item.id, !item.bookmarked)
+        }
+    }
+
+    /** Android's action mode — long-press selects, taps toggle membership. */
+    fun toggleSelection(itemUrl: String) {
+        if (_state.value.local == null) return
+        val selected = _state.value.selectedUrls
+        _state.value = _state.value.copy(
+            selectedUrls = if (itemUrl in selected) selected - itemUrl else selected + itemUrl,
+        )
+    }
+
+    fun clearSelection() {
+        _state.value = _state.value.copy(selectedUrls = emptySet())
+    }
+
+    /** Android's toolbar select-all — every item in the displayed list. */
+    fun selectAll() {
+        if (_state.value.local == null) return
+        _state.value = _state.value.copy(
+            selectedUrls = _state.value.displayItems.mapTo(HashSet()) { it.url },
+        )
+    }
+
+    /** Android's toolbar invert — selection becomes its complement. */
+    fun invertSelection() {
+        if (_state.value.local == null) return
+        val shown = _state.value.displayItems.mapTo(HashSet()) { it.url }
+        _state.value = _state.value.copy(
+            selectedUrls = shown - _state.value.selectedUrls,
+        )
+    }
+
+    /**
+     * Bulk mark done/undone — Android's bottom-menu action; the selection
+     * clears after the op like the upstream action mode.
+     */
+    fun markSelected(done: Boolean) {
+        val urls = _state.value.selectedUrls
+        if (urls.isEmpty()) return
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.getLocalItems(local.id)
+                .filter { it.url in urls && it.done != done }
+                .forEach { binding.setItemDone(it.id, done) }
+            clearSelection()
+        }
+    }
+
+    /** Bulk bookmark/unbookmark — Android's bottom-menu action. */
+    fun bookmarkSelected(bookmarked: Boolean) {
+        val urls = _state.value.selectedUrls
+        if (urls.isEmpty()) return
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.getLocalItems(local.id)
+                .filter { it.url in urls && it.bookmarked != bookmarked }
+                .forEach { binding.setItemBookmark(it.id, bookmarked) }
+            clearSelection()
+        }
+    }
+
+    /** Bulk fillermark (shows) — Android's bottom-menu action. */
+    fun fillermarkSelected(fillermarked: Boolean) {
+        val urls = _state.value.selectedUrls
+        if (urls.isEmpty()) return
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.getLocalItems(local.id)
+                .filter { it.url in urls && it.fillermarked != fillermarked }
+                .forEach { binding.setItemFillermark(it.id, fillermarked) }
+            clearSelection()
         }
     }
 
