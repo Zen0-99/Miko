@@ -3,27 +3,42 @@ package miko.ui.library
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
-import tachiyomi.domain.library.novel.LibraryNovel
+import miko.ui.MikoUiGraph
+import miko.ui.carrier.BrowseCarrier
 
 /**
- * Library favorites backed by `getLibraryNovels.subscribe()` — re-emits on
- * every DB write (favorite toggles, chapter sync, read marks).
+ * Library favorites for the active carrier — re-emits on every DB write
+ * (favorite toggles, item sync, read/seen marks). A flattened
+ * [LibraryEntry] keeps the grid carrier-agnostic.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryScreenModel(
-    private val getLibraryNovels: GetLibraryNovels,
+    graph: MikoUiGraph,
+    carrierFlow: StateFlow<BrowseCarrier>,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
+    data class LibraryEntry(
+        val id: Long,
+        val sourceId: Long,
+        val url: String,
+        val title: String,
+        val coverUrl: String?,
+        val unreadCount: Long,
+    )
+
     data class State(
         val initialized: Boolean = false,
-        val entries: List<LibraryNovel> = emptyList(),
+        val entries: List<LibraryEntry> = emptyList(),
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -33,7 +48,46 @@ class LibraryScreenModel(
 
     init {
         scope.launch {
-            getLibraryNovels.subscribe().collect { entries ->
+            carrierFlow.flatMapLatest { carrier ->
+                when (carrier) {
+                    BrowseCarrier.SHOWS -> graph.getLibraryAnime.subscribe().map { list ->
+                        list.map {
+                            LibraryEntry(
+                                id = it.id,
+                                sourceId = it.anime.source,
+                                url = it.anime.url,
+                                title = it.anime.title,
+                                coverUrl = it.anime.thumbnailUrl,
+                                unreadCount = it.unseenCount,
+                            )
+                        }
+                    }
+                    BrowseCarrier.MANGA -> graph.getLibraryManga.subscribe().map { list ->
+                        list.map {
+                            LibraryEntry(
+                                id = it.id,
+                                sourceId = it.manga.source,
+                                url = it.manga.url,
+                                title = it.manga.title,
+                                coverUrl = it.manga.thumbnailUrl,
+                                unreadCount = it.unreadCount,
+                            )
+                        }
+                    }
+                    BrowseCarrier.BOOKS -> graph.getLibraryNovels.subscribe().map { list ->
+                        list.map {
+                            LibraryEntry(
+                                id = it.id,
+                                sourceId = it.novel.source,
+                                url = it.novel.url,
+                                title = it.novel.title,
+                                coverUrl = it.novel.thumbnailUrl,
+                                unreadCount = it.unreadCount,
+                            )
+                        }
+                    }
+                }
+            }.collect { entries ->
                 _state.value = State(initialized = true, entries = entries)
             }
         }

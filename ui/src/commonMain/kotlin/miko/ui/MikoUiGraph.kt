@@ -16,15 +16,22 @@ import mihon.domain.extensionrepo.novel.interactor.GetNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.ReplaceNovelExtensionRepo
 import mihon.domain.extensionrepo.novel.interactor.UpdateNovelExtensionRepo
 import mihon.domain.extensionrepo.service.ExtensionRepoService
+import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.CarrierBinding
+import miko.ui.carrier.NovelCarrierBinding
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
+import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.repository.NovelRepository
+import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
 import tachiyomi.domain.extension.novel.api.JsPluginApiFacade
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
+import tachiyomi.domain.source.anime.service.AnimeSourceManager
+import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 
 /**
@@ -34,7 +41,13 @@ import tachiyomi.domain.source.novel.service.NovelSourceManager
  */
 class MikoUiGraph(
     val novelSourceManager: NovelSourceManager,
+    val mangaSourceManager: MangaSourceManager,
+    val animeSourceManager: AnimeSourceManager,
+    val mangaBinding: CarrierBinding,
+    val animeBinding: CarrierBinding,
     val getLibraryNovels: GetLibraryNovels,
+    val getLibraryManga: GetLibraryManga,
+    val getLibraryAnime: GetLibraryAnime,
     val getNovel: GetNovel,
     val getNovelChaptersByNovelId: GetNovelChaptersByNovelId,
     val networkToLocalNovel: NetworkToLocalNovel,
@@ -59,4 +72,21 @@ class MikoUiGraph(
     val updateAnimeExtensionRepo: UpdateAnimeExtensionRepo,
     val updateMangaExtensionRepo: UpdateMangaExtensionRepo,
     val updateNovelExtensionRepo: UpdateNovelExtensionRepo,
-)
+) {
+
+    /** Books carrier — built in-module; manga/anime inject theirs (they
+     * wrap platform-actual source contracts commonMain can't see). */
+    val novelBinding: CarrierBinding = NovelCarrierBinding(
+        sourceManager = novelSourceManager,
+        getNovel = getNovel,
+        networkToLocalNovel = networkToLocalNovel,
+        novelRepository = novelRepository,
+        chapterRepository = novelChapterRepository,
+    )
+
+    fun binding(carrier: BrowseCarrier): CarrierBinding = when (carrier) {
+        BrowseCarrier.SHOWS -> animeBinding
+        BrowseCarrier.MANGA -> mangaBinding
+        BrowseCarrier.BOOKS -> novelBinding
+    }
+}

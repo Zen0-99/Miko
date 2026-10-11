@@ -32,8 +32,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
-import eu.kanade.tachiyomi.novelsource.model.SNovel
+import miko.ui.carrier.CarrierSource
+import miko.ui.carrier.FeedEntry
 import miko.ui.components.CoverComfortableItem
 import tachiyomi.domain.extension.novel.langDisplayName
 import tachiyomi.i18n.MR
@@ -48,10 +48,10 @@ import tachiyomi.presentation.core.screens.LoadingScreen
  * of comfortable cover cards.
  */
 @Composable
-fun GlobalNovelSearchScreen(
-    model: GlobalNovelSearchScreenModel,
+fun GlobalSearchScreen(
+    model: GlobalSearchScreenModel,
     onSourceClick: (Long, String) -> Unit,
-    onNovelClick: (Long, String, String) -> Unit,
+    onEntryClick: (Long, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -72,7 +72,7 @@ fun GlobalNovelSearchScreen(
                         source = source,
                         result = result,
                         onClickSource = { onSourceClick(source.id, source.name) },
-                        onClickItem = { novel -> onNovelClick(source.id, novel.url, novel.title) },
+                        onClickItem = { entry -> onEntryClick(source.id, entry.url, entry.title) },
                     )
                 }
             }
@@ -82,14 +82,14 @@ fun GlobalNovelSearchScreen(
 
 @Composable
 private fun GlobalSearchResultItem(
-    source: NovelCatalogueSource,
-    result: GlobalNovelSearchScreenModel.SearchItemResult,
+    source: CarrierSource,
+    result: GlobalSearchScreenModel.SearchItemResult,
     onClickSource: () -> Unit,
-    onClickItem: (SNovel) -> Unit,
+    onClickItem: (FeedEntry) -> Unit,
 ) {
-    val isLoading = result is GlobalNovelSearchScreenModel.SearchItemResult.Loading
-    val hasResults = result !is GlobalNovelSearchScreenModel.SearchItemResult.Success ||
-        result.novels.isNotEmpty()
+    val isLoading = result is GlobalSearchScreenModel.SearchItemResult.Loading
+    val hasResults = result !is GlobalSearchScreenModel.SearchItemResult.Success ||
+        result.entries.isNotEmpty()
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -136,7 +136,7 @@ private fun GlobalSearchResultItem(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                hasResults && result !is GlobalNovelSearchScreenModel.SearchItemResult.Error -> {
+                hasResults && result !is GlobalSearchScreenModel.SearchItemResult.Error -> {
                     IconButton(onClick = onClickSource) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
@@ -148,7 +148,7 @@ private fun GlobalSearchResultItem(
         }
 
         when (result) {
-            is GlobalNovelSearchScreenModel.SearchItemResult.Loading -> {
+            is GlobalSearchScreenModel.SearchItemResult.Loading -> {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -162,7 +162,7 @@ private fun GlobalSearchResultItem(
                     )
                 }
             }
-            is GlobalNovelSearchScreenModel.SearchItemResult.Error -> {
+            is GlobalSearchScreenModel.SearchItemResult.Error -> {
                 Column(
                     modifier = Modifier
                         .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -178,19 +178,19 @@ private fun GlobalSearchResultItem(
                     )
                 }
             }
-            is GlobalNovelSearchScreenModel.SearchItemResult.Success -> {
-                if (result.novels.isNotEmpty()) {
+            is GlobalSearchScreenModel.SearchItemResult.Success -> {
+                if (result.entries.isNotEmpty()) {
                     LazyRow(
                         contentPadding = PaddingValues(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        items(result.novels, key = { it.url }) { novel ->
+                        items(result.entries, key = { it.url }) { entry ->
                             Box(modifier = Modifier.width(96.dp)) {
                                 CoverComfortableItem(
-                                    title = novel.title,
-                                    coverUrl = novel.thumbnail_url,
+                                    title = entry.title,
+                                    coverUrl = entry.coverUrl,
                                     titleMaxLines = 3,
-                                    onClick = { onClickItem(novel) },
+                                    onClick = { onClickItem(entry) },
                                 )
                             }
                         }

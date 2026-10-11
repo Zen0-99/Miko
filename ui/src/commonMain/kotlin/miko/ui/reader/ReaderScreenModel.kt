@@ -2,9 +2,6 @@ package miko.ui.reader
 
 import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Document
-import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
-import eu.kanade.tachiyomi.novelsource.model.SNovel
-import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,19 +10,20 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import miko.ui.MikoUiGraph
-import tachiyomi.domain.items.chapter.model.NovelChapterUpdate
+import miko.ui.carrier.CarrierBinding
+import miko.ui.carrier.RemoteItem
 
 /**
- * Chapter reader: fetches `getChapterText` for the open chapter, converts the
- * HTML payload to plain paragraphs, marks the local chapter read on open, and
- * tracks prev/next from the source's chapter list.
+ * Chapter reader (books carrier): fetches `itemText` for the open chapter,
+ * converts the HTML payload to plain paragraphs, marks the local chapter
+ * read on open, and tracks prev/next from the source's chapter list.
  */
 class ReaderScreenModel(
-    private val graph: MikoUiGraph,
+    private val binding: CarrierBinding,
     private val sourceId: Long,
-    private val novelUrl: String,
+    private val entryUrl: String,
     initialChapterUrl: String,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
@@ -45,31 +43,27 @@ class ReaderScreenModel(
     private val _state = MutableStateFlow(State(chapterUrl = initialChapterUrl))
     val state: StateFlow<State> = _state.asStateFlow()
 
-    private var chapters: List<SNovelChapter> = emptyList()
+    private var items: List<RemoteItem> = emptyList()
 
-    private val source: NovelCatalogueSource?
-        get() = graph.novelSourceManager.get(sourceId) as? NovelCatalogueSource
+    private val source
+        get() = binding.source(sourceId)
 
     init {
         scope.launch {
             // Wait for the source registry before the first fetch — the
             // reader can be reached while sources are still initializing.
-            graph.novelSourceManager.isInitialized.collect { initialized ->
-                if (initialized && chapters.isEmpty()) {
-                    runCatching { loadChapterList() }
+            binding.isInitialized.collect { initialized ->
+                if (initialized && items.isEmpty()) {
+                    runCatching { loadItemList() }
                     openChapter(_state.value.chapterUrl)
                 }
             }
         }
     }
 
-    private suspend fun loadChapterList() {
+    private suspend fun loadItemList() {
         val src = source ?: return
-        val stub = SNovel.create().apply {
-            url = novelUrl
-            title = novelUrl
-        }
-        chapters = src.getChapterList(stub)
+        items = src.items(entryUrl)
     }
 
     fun openChapter(chapterUrl: String) {
@@ -81,20 +75,16 @@ class ReaderScreenModel(
                 )
                 return@launch
             }
-            val index = chapters.indexOfFirst { it.url == chapterUrl }
+            val index = items.indexOfFirst { it.url == chapterUrl }
             _state.value = _state.value.copy(
                 chapterUrl = chapterUrl,
-                chapterName = chapters.getOrNull(index)?.name ?: "",
+                chapterName = items.getOrNull(index)?.name ?: "",
                 loading = true,
                 error = null,
                 hasPrev = index > 0,
-                hasNext = index >= 0 && index < chapters.lastIndex,
+                hasNext = index >= 0 && index < items.lastIndex,
             )
-            val result = runCatching {
-                src.getChapterText(
-                    SNovelChapter.create().apply { url = chapterUrl },
-                )
-            }
+            val result = runCatching { binding.itemText(src.id, chapterUrl) }
             result.fold(
                 onSuccess = { html ->
                     _state.value = _state.value.copy(
@@ -114,25 +104,23 @@ class ReaderScreenModel(
     }
 
     fun prevChapter() {
-        val index = chapters.indexOfFirst { it.url == _state.value.chapterUrl }
-        chapters.getOrNull(index - 1)?.let { openChapter(it.url) }
+        val index = items.indexOfFirst { it.url == _state.value.chapterUrl }
+        items.getOrNull(index - 1)?.let { openChapter(it.url) }
     }
 
     fun nextChapter() {
-        val index = chapters.indexOfFirst { it.url == _state.value.chapterUrl }
-        chapters.getOrNull(index + 1)?.let { openChapter(it.url) }
+        val index = items.indexOfFirst { it.url == _state.value.chapterUrl }
+        items.getOrNull(index + 1)?.let { openChapter(it.url) }
     }
 
-    /** Marks the local row read — no-op for non-library novels (no local rows). */
+    /** Marks the local row read — no-op for non-library entries (no local rows). */
     private suspend fun markRead(chapterUrl: String) {
-        val local = graph.novelRepository.getNovelByUrlAndSourceId(novelUrl, sourceId) ?: return
-        val chapter = graph.getNovelChaptersByNovelId.await(local.id)
+        val local = binding.localEntry(entryUrl, sourceId).first() ?: return
+        val chapter = binding.getLocalItems(local.id)
             .firstOrNull { it.url == chapterUrl }
             ?: return
-        if (chapter.read) return
-        graph.novelChapterRepository.updateNovelChapter(
-            NovelChapterUpdate(id = chapter.id, read = true),
-        )
+        if (chapter.done) return
+        binding.setItemDone(chapter.id, true)
     }
 
     fun dispose() = scope.cancel()

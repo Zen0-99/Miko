@@ -1,7 +1,5 @@
 package miko.ui.feed
 
-import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
-import eu.kanade.tachiyomi.novelsource.model.SNovel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,15 +11,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import miko.ui.carrier.CarrierBinding
+import miko.ui.carrier.FeedEntry
 import tachiyomi.domain.library.model.LibraryDisplayMode
-import tachiyomi.domain.source.novel.service.NovelSourceManager
 
 /**
- * Paged source feed (popular / latest / search). Plain StateFlow model;
- * pages append on [loadNext], and listing/query changes restart at page 1.
+ * Paged source feed (popular / latest / search) — carrier-agnostic: the
+ * [binding] resolves the source and maps entries to [FeedEntry], so the
+ * same model drives books, manga, and shows feeds.
  */
 class SourceFeedScreenModel(
-    private val novelSourceManager: NovelSourceManager,
+    private val binding: CarrierBinding,
     private val sourceId: Long,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
@@ -33,7 +33,7 @@ class SourceFeedScreenModel(
         val supportsLatest: Boolean = false,
         val listing: Listing = Listing.Popular,
         val query: String = "",
-        val items: List<SNovel> = emptyList(),
+        val items: List<FeedEntry> = emptyList(),
         val hasNextPage: Boolean = true,
         val isLoading: Boolean = false,
         val initialLoading: Boolean = true,
@@ -50,20 +50,19 @@ class SourceFeedScreenModel(
 
     private var page = 0
 
-    private val source: NovelCatalogueSource?
-        get() = novelSourceManager.get(sourceId) as? NovelCatalogueSource
+    private val source
+        get() = binding.source(sourceId)
 
     init {
         scope.launch {
             // Sources finish initializing asynchronously — wait for the map to
             // contain our source before the first page load.
-            novelSourceManager.isInitialized.collect { initialized ->
+            binding.isInitialized.collect { initialized ->
                 if (initialized && source == null) return@collect
                 if (initialized) {
                     _state.value = _state.value.copy(
                         sourceName = source?.name.orEmpty(),
                         supportsLatest = source?.supportsLatest == true,
-                        hasFilters = source?.getFilterList()?.isNotEmpty() == true,
                     )
                 }
             }
@@ -118,22 +117,18 @@ class SourceFeedScreenModel(
                 val nextPage = page + 1
                 val result = runCatching {
                     when {
-                        current.query.isNotBlank() -> src.getSearchNovels(
-                            nextPage,
-                            current.query,
-                            src.getFilterList(),
-                        )
-                        current.listing == Listing.Latest -> src.getLatestUpdates(nextPage)
-                        else -> src.getPopularNovels(nextPage)
+                        current.query.isNotBlank() -> src.search(nextPage, current.query)
+                        current.listing == Listing.Latest -> src.latest(nextPage)
+                        else -> src.popular(nextPage)
                     }
                 }
                 result.fold(
-                    onSuccess = { novelsPage ->
+                    onSuccess = { feedPage ->
                         page = nextPage
                         _state.value = _state.value.copy(
-                            items = (_state.value.items + novelsPage.novels)
+                            items = (_state.value.items + feedPage.entries)
                                 .distinctBy { it.url },
-                            hasNextPage = novelsPage.hasNextPage,
+                            hasNextPage = feedPage.hasNextPage,
                             isLoading = false,
                             initialLoading = false,
                         )

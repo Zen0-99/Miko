@@ -1,49 +1,64 @@
 package miko.ui.sources
 
-import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import mihon.domain.extensionrepo.service.ExtensionIndexEntry
+import mihon.domain.extensionrepo.service.detectedRepoTypes
+import miko.ui.MikoUiGraph
+import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.CarrierSource
 import miko.ui.extensions.ExtensionCatalog
 import tachiyomi.domain.extension.novel.langDisplayName
 import tachiyomi.domain.extension.novel.model.NovelPlugin
-import tachiyomi.domain.source.novel.service.NovelSourceManager
 
 /**
- * Browse-tab sources list — Android's NovelSourcesScreenModel shape:
- * an "Installed" section (installed sources grouped by language), then a
+ * Browse-tab sources list — Android's SourcesScreenModel shape: an
+ * "Installed" section (installed sources grouped by language), then a
  * collapsible "Not Installed" section (repo APK entries + available JS
  * plugins, minus the ones already installed — also grouped by language).
+ * The [carrier] flow switches which carrier binding feeds Installed and
+ * filters Not-Installed by plugin kind/APK-carrier heuristics.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SourcesScreenModel(
-    private val novelSourceManager: NovelSourceManager,
+    private val graph: MikoUiGraph,
     private val catalog: ExtensionCatalog,
+    private val carrierFlow: MutableStateFlow<BrowseCarrier>,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
     sealed interface ListItem {
         data class Header(val key: String, val title: String, val section: String?) : ListItem
-        data class Source(val source: NovelCatalogueSource) : ListItem
+        data class Source(val source: CarrierSource) : ListItem
         data class JsExtension(val plugin: NovelPlugin.Available) : ListItem
         data class ApkExtension(val entry: ExtensionIndexEntry) : ListItem
     }
 
     data class State(
         val isInitialized: Boolean = false,
-        val installedSources: List<NovelCatalogueSource> = emptyList(),
+        val carrier: BrowseCarrier = BrowseCarrier.BOOKS,
+        val installedSources: List<CarrierSource> = emptyList(),
         val items: List<ListItem> = emptyList(),
         val notInstalledExpanded: Boolean = true,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
+
+    val carrier: StateFlow<BrowseCarrier> = carrierFlow
+
+    fun setCarrier(value: BrowseCarrier) {
+        carrierFlow.value = value
+    }
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
@@ -52,16 +67,22 @@ class SourcesScreenModel(
 
     init {
         scope.launch {
-            combine(
-                novelSourceManager.isInitialized,
-                novelSourceManager.catalogueSources,
-                catalog.state,
-                expandedFlow,
-            ) { initialized, sources, catalogState, expanded ->
+            val bundleFlow = carrierFlow.flatMapLatest { carrier ->
+                val binding = graph.binding(carrier)
+                combine(binding.isInitialized, binding.catalogueSources) { init, sources ->
+                    Triple(carrier, init, sources)
+                }
+            }
+            combine(bundleFlow, catalog.state, expandedFlow) {
+                    (carrier, initialized, sources),
+                    catalogState,
+                    expanded,
+                ->
                 State(
                     isInitialized = initialized,
+                    carrier = carrier,
                     installedSources = sources,
-                    items = buildItems(sources, catalogState, expanded),
+                    items = buildItems(carrier, sources, catalogState, expanded),
                     notInstalledExpanded = expanded,
                 )
             }.collect { _state.value = it }
@@ -73,7 +94,8 @@ class SourcesScreenModel(
     }
 
     private fun buildItems(
-        sources: List<NovelCatalogueSource>,
+        carrier: BrowseCarrier,
+        sources: List<CarrierSource>,
         catalog: ExtensionCatalog.State,
         expanded: Boolean,
     ): List<ListItem> {
@@ -92,18 +114,23 @@ class SourcesScreenModel(
                 }
         }
 
-        // Not Installed — APK index rows then JS plugins per language,
-        // excluding anything already installed.
+        // Not Installed — APK index rows matching this carrier + JS plugins
+        // of this kind per language, excluding anything already installed.
         val installedIds = catalog.installed.map { it.id }.toSet()
         val jsNotInstalled = catalog.available
             .filterNot { it.isKotlinExtension }
+            .filter { it.kind == carrier.kind }
             .filterNot { it.id in installedIds }
-        val notInstalledCount = catalog.repoExtensions.size + jsNotInstalled.size
+        val apkForCarrier = catalog.repoExtensions.filter { entry ->
+            val types = entry.detectedRepoTypes()
+            if (types.isEmpty()) carrier == BrowseCarrier.MANGA else carrier.kind in types
+        }
+        val notInstalledCount = apkForCarrier.size + jsNotInstalled.size
         if (notInstalledCount > 0) {
             items += ListItem.Header(NOT_INSTALLED_KEY, "", null)
             if (expanded) {
                 val groups = mutableMapOf<String, MutableList<ListItem>>()
-                catalog.repoExtensions.forEach { entry ->
+                apkForCarrier.forEach { entry ->
                     groups.getOrPut(entry.lang.ifBlank { "all" }) { mutableListOf() }
                         .add(ListItem.ApkExtension(entry))
                 }

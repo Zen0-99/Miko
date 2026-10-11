@@ -40,8 +40,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import miko.ui.details.NovelDetailsScreen
-import miko.ui.details.NovelDetailsScreenModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import miko.ui.carrier.BrowseCarrier
+import miko.ui.details.EntryDetailsScreen
+import miko.ui.details.EntryDetailsScreenModel
 import miko.ui.extensions.ExtensionCatalog
 import miko.ui.extensions.ExtensionsScreen
 import miko.ui.extensions.ExtensionsScreenModel
@@ -52,12 +54,16 @@ import miko.ui.library.LibraryScreenModel
 import miko.ui.navigation.Destination
 import miko.ui.navigation.Navigator
 import miko.ui.navigation.rememberNavigator
+import miko.ui.player.EpisodePlayerScreen
+import miko.ui.player.EpisodePlayerScreenModel
+import miko.ui.reader.MangaReaderScreen
+import miko.ui.reader.MangaReaderScreenModel
 import miko.ui.reader.ReaderScreen
 import miko.ui.reader.ReaderScreenModel
 import miko.ui.repos.ExtensionReposScreen
 import miko.ui.repos.ExtensionReposScreenModel
-import miko.ui.search.GlobalNovelSearchScreen
-import miko.ui.search.GlobalNovelSearchScreenModel
+import miko.ui.search.GlobalSearchScreen
+import miko.ui.search.GlobalSearchScreenModel
 import miko.ui.sources.SourcesScreen
 import miko.ui.sources.SourcesScreenModel
 import tachiyomi.domain.library.model.LibraryDisplayMode
@@ -80,6 +86,10 @@ fun MikoApp(graph: MikoUiGraph) {
     // Browse, same as Android's per-tab resetSearch.
     var browseSearchQuery by remember { mutableStateOf<String?>(null) }
     var browseMode by remember { mutableStateOf(BrowseMode.BROWSE) }
+    // The app-wide content carrier — Android's contentMode: one selection
+    // (shows/manga/books) drives the sources list, feed, details, search,
+    // and library. Shared across tabs like Android's Home switch.
+    val browseCarrier = remember { MutableStateFlow(BrowseCarrier.BOOKS) }
     LaunchedEffect(navigator.current) {
         if (navigator.current != Destination.Browse) browseSearchQuery = null
     }
@@ -88,19 +98,23 @@ fun MikoApp(graph: MikoUiGraph) {
     // search field can submit into it (Android embeds the toolbar in the
     // screen's own Scaffold; the shared shell hoists it instead).
     val globalSearchDest = navigator.current as? Destination.GlobalSearch
-    val globalSearchModel = remember(globalSearchDest?.query) {
-        globalSearchDest?.let { GlobalNovelSearchScreenModel(graph.novelSourceManager, it.query) }
+    val globalSearchModel = remember(globalSearchDest) {
+        globalSearchDest?.let {
+            GlobalSearchScreenModel(graph.binding(it.carrier), it.query)
+        }
     }
     DisposableEffect(globalSearchModel) {
         onDispose { globalSearchModel?.dispose() }
     }
 
     // Source-feed model + local search — hoisted so the top bar can reach it
-    // (Android's BrowseNovelSourceScreen owns its toolbar; the shared shell's
+    // (Android's BrowseSourceScreen owns its toolbar; the shared shell's
     // bar lives above the nav host instead).
     val feedDest = navigator.current as? Destination.SourceFeed
     val feedModel = remember(feedDest) {
-        feedDest?.let { SourceFeedScreenModel(graph.novelSourceManager, it.sourceId) }
+        feedDest?.let {
+            SourceFeedScreenModel(graph.binding(it.carrier), it.sourceId)
+        }
     }
     DisposableEffect(feedModel) {
         onDispose { feedModel?.dispose() }
@@ -121,11 +135,14 @@ fun MikoApp(graph: MikoUiGraph) {
             pluginRepository = graph.novelPluginRepository,
         )
     }
-    val sourcesModel = remember { SourcesScreenModel(graph.novelSourceManager, browseCatalog) }
+    val sourcesModel = remember {
+        SourcesScreenModel(graph, browseCatalog, browseCarrier)
+    }
     val extensionsModel = remember {
         ExtensionsScreenModel(
             catalog = browseCatalog,
             installer = graph.novelPluginInstaller,
+            carrierFlow = browseCarrier,
         )
     }
 
@@ -200,9 +217,11 @@ fun MikoApp(graph: MikoUiGraph) {
                         onSearchQueryChange = { browseSearchQuery = it },
                         onSearch = { query ->
                             if (browseMode == BrowseMode.BROWSE) {
-                                // Android pushes GlobalNovelSearchScreen and
+                                // Android pushes GlobalSearchScreen and
                                 // closes the browse search.
-                                navigator.push(Destination.GlobalSearch(query))
+                                navigator.push(
+                                    Destination.GlobalSearch(query, browseCarrier.value),
+                                )
                                 browseSearchQuery = null
                             }
                         },
@@ -271,19 +290,20 @@ fun MikoApp(graph: MikoUiGraph) {
                 Destination.Library -> LibraryDestination(
                     graph = graph,
                     navigator = navigator,
+                    carrierFlow = browseCarrier,
                     modifier = Modifier.padding(padding),
                 )
                 is Destination.SourceFeed -> SourceFeedDestination(
                     model = feedModel,
                     navigator = navigator,
                     sourceId = destination.sourceId,
+                    carrier = destination.carrier,
                     modifier = Modifier.padding(padding),
                 )
                 is Destination.Details -> DetailsDestination(
                     graph = graph,
                     navigator = navigator,
-                    sourceId = destination.sourceId,
-                    entryKey = destination.entryKey,
+                    destination = destination,
                     modifier = Modifier.padding(padding),
                 )
                 Destination.ExtensionRepos -> ExtensionReposDestination(
@@ -293,9 +313,20 @@ fun MikoApp(graph: MikoUiGraph) {
                 is Destination.GlobalSearch -> GlobalSearchDestination(
                     model = globalSearchModel,
                     navigator = navigator,
+                    carrier = destination.carrier,
                     modifier = Modifier.padding(padding),
                 )
                 is Destination.Reader -> ReaderDestination(
+                    graph = graph,
+                    destination = destination,
+                    modifier = Modifier.padding(padding),
+                )
+                is Destination.MangaReader -> MangaReaderDestination(
+                    graph = graph,
+                    destination = destination,
+                    modifier = Modifier.padding(padding),
+                )
+                is Destination.EpisodePlayer -> EpisodePlayerDestination(
                     graph = graph,
                     destination = destination,
                     modifier = Modifier.padding(padding),
@@ -314,6 +345,8 @@ private fun screenTitle(destination: Destination): String = when (destination) {
     is Destination.GlobalSearch -> stringResource(MR.strings.action_search_hint)
     is Destination.Details -> destination.title
     is Destination.Reader -> destination.chapterUrl
+    is Destination.MangaReader -> destination.chapterUrl
+    is Destination.EpisodePlayer -> destination.episodeUrl
 }
 
 /**
@@ -421,8 +454,8 @@ private fun BrowseDestination(
         SourcesScreen(
             model = sourcesModel,
             extensionsModel = extensionsModel,
-            onSourceClick = { sourceId, name ->
-                navigator.push(Destination.SourceFeed(sourceId, name))
+            onSourceClick = { sourceId, name, carrier ->
+                navigator.push(Destination.SourceFeed(sourceId, name, carrier))
             },
             modifier = Modifier.fillMaxSize(),
         )
@@ -536,18 +569,19 @@ private fun ExtensionReposDestination(
 
 @Composable
 private fun GlobalSearchDestination(
-    model: GlobalNovelSearchScreenModel?,
+    model: GlobalSearchScreenModel?,
     navigator: Navigator,
+    carrier: BrowseCarrier,
     modifier: Modifier = Modifier,
 ) {
     if (model != null) {
-        GlobalNovelSearchScreen(
+        GlobalSearchScreen(
             model = model,
             onSourceClick = { sourceId, name ->
-                navigator.push(Destination.SourceFeed(sourceId, name))
+                navigator.push(Destination.SourceFeed(sourceId, name, carrier))
             },
-            onNovelClick = { sourceId, novelUrl, title ->
-                navigator.push(Destination.Details(sourceId, novelUrl, title))
+            onEntryClick = { sourceId, entryUrl, title ->
+                navigator.push(Destination.Details(sourceId, entryUrl, title, carrier))
             },
             modifier = modifier.fillMaxSize(),
         )
@@ -559,13 +593,14 @@ private fun SourceFeedDestination(
     model: SourceFeedScreenModel?,
     navigator: Navigator,
     sourceId: Long,
+    carrier: BrowseCarrier,
     modifier: Modifier = Modifier,
 ) {
     if (model != null) {
         SourceFeedScreen(
             model = model,
-            onNovelClick = { novel ->
-                navigator.push(Destination.Details(sourceId, novel.url, novel.title))
+            onEntryClick = { entry ->
+                navigator.push(Destination.Details(sourceId, entry.url, entry.title, carrier))
             },
             modifier = modifier.fillMaxSize(),
         )
@@ -576,23 +611,37 @@ private fun SourceFeedDestination(
 private fun DetailsDestination(
     graph: MikoUiGraph,
     navigator: Navigator,
-    sourceId: Long,
-    entryKey: String,
+    destination: Destination.Details,
     modifier: Modifier = Modifier,
 ) {
-    val model = remember(sourceId, entryKey) {
-        NovelDetailsScreenModel(graph, sourceId, entryKey)
+    val sourceId = destination.sourceId
+    val entryKey = destination.entryKey
+    val carrier = destination.carrier
+    val model = remember(sourceId, entryKey, carrier) {
+        EntryDetailsScreenModel(graph.binding(carrier), sourceId, entryKey)
     }
     DisposableEffect(model) {
         onDispose { model.dispose() }
     }
-    NovelDetailsScreen(
+    EntryDetailsScreen(
         model = model,
-        onChapterClick = { chapter ->
-            navigator.push(Destination.Reader(sourceId, entryKey, chapter.url))
+        carrier = carrier,
+        onItemClick = { item ->
+            navigator.push(
+                when (carrier) {
+                    BrowseCarrier.SHOWS ->
+                        Destination.EpisodePlayer(sourceId, entryKey, item.url)
+                    BrowseCarrier.MANGA ->
+                        Destination.MangaReader(sourceId, entryKey, item.url)
+                    BrowseCarrier.BOOKS ->
+                        Destination.Reader(sourceId, entryKey, item.url)
+                },
+            )
         },
         // Genre taps run the same search as Android's genre pill click.
-        onGenreClick = { genre -> navigator.push(Destination.GlobalSearch(genre)) },
+        onGenreClick = { genre ->
+            navigator.push(Destination.GlobalSearch(genre, carrier))
+        },
         modifier = modifier.fillMaxSize(),
     )
 }
@@ -605,9 +654,9 @@ private fun ReaderDestination(
 ) {
     val model = remember(destination.sourceId, destination.novelUrl) {
         ReaderScreenModel(
-            graph = graph,
+            binding = graph.novelBinding,
             sourceId = destination.sourceId,
-            novelUrl = destination.novelUrl,
+            entryUrl = destination.novelUrl,
             initialChapterUrl = destination.chapterUrl,
         )
     }
@@ -618,19 +667,69 @@ private fun ReaderDestination(
 }
 
 @Composable
+private fun MangaReaderDestination(
+    graph: MikoUiGraph,
+    destination: Destination.MangaReader,
+    modifier: Modifier = Modifier,
+) {
+    val model = remember(destination.sourceId, destination.mangaUrl) {
+        MangaReaderScreenModel(
+            binding = graph.mangaBinding,
+            sourceId = destination.sourceId,
+            entryUrl = destination.mangaUrl,
+            initialChapterUrl = destination.chapterUrl,
+        )
+    }
+    DisposableEffect(model) {
+        onDispose { model.dispose() }
+    }
+    MangaReaderScreen(model = model, modifier = modifier.fillMaxSize())
+}
+
+@Composable
+private fun EpisodePlayerDestination(
+    graph: MikoUiGraph,
+    destination: Destination.EpisodePlayer,
+    modifier: Modifier = Modifier,
+) {
+    val model = remember(destination.sourceId, destination.episodeUrl) {
+        EpisodePlayerScreenModel(
+            binding = graph.animeBinding,
+            sourceId = destination.sourceId,
+            entryUrl = destination.entryUrl,
+            initialEpisodeUrl = destination.episodeUrl,
+        )
+    }
+    DisposableEffect(model) {
+        onDispose { model.dispose() }
+    }
+    EpisodePlayerScreen(model = model, modifier = modifier.fillMaxSize())
+}
+
+@Composable
 private fun LibraryDestination(
     graph: MikoUiGraph,
     navigator: Navigator,
+    carrierFlow: MutableStateFlow<BrowseCarrier>,
     modifier: Modifier = Modifier,
 ) {
-    val model = remember { LibraryScreenModel(graph.getLibraryNovels) }
+    val model = remember { LibraryScreenModel(graph, carrierFlow) }
     DisposableEffect(model) {
         onDispose { model.dispose() }
     }
     LibraryScreen(
         model = model,
-        onNovelClick = { entry ->
-            navigator.push(Destination.Details(entry.novel.source, entry.novel.url, entry.novel.title))
+        carrierFlow = carrierFlow,
+        onCarrierChange = { carrierFlow.value = it },
+        onEntryClick = { entry ->
+            navigator.push(
+                Destination.Details(
+                    entry.sourceId,
+                    entry.url,
+                    entry.title,
+                    carrierFlow.value,
+                ),
+            )
         },
         modifier = modifier.fillMaxSize(),
     )

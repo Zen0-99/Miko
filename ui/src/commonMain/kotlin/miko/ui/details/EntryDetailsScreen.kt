@@ -55,8 +55,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import eu.kanade.tachiyomi.novelsource.model.SNovel
-import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
+import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.RemoteItem
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -73,9 +73,10 @@ private const val HERO_HEIGHT = 380
  * description, and read-state-aware chapter rows.
  */
 @Composable
-fun NovelDetailsScreen(
-    model: NovelDetailsScreenModel,
-    onChapterClick: (SNovelChapter) -> Unit,
+fun EntryDetailsScreen(
+    model: EntryDetailsScreenModel,
+    carrier: BrowseCarrier,
+    onItemClick: (RemoteItem) -> Unit,
     onGenreClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -84,11 +85,11 @@ fun NovelDetailsScreen(
     LazyColumn(modifier = modifier.fillMaxSize()) {
         item {
             NovelHero(
-                coverUrl = state.novel?.thumbnail_url,
-                title = state.novel?.title ?: state.local?.title ?: "",
+                coverUrl = state.details?.thumbnailUrl,
+                title = state.details?.title ?: state.local?.title ?: "",
                 metaItems = listOfNotNull(
-                    state.novel?.author,
-                    state.novel?.status?.let { statusLabel(it) },
+                    state.details?.author,
+                    state.details?.status?.let { statusLabel(it) },
                     state.sourceName.ifBlank { null },
                 ),
             )
@@ -97,17 +98,17 @@ fun NovelDetailsScreen(
         item {
             ContinueRow(
                 favorite = state.favorite,
-                allRead = state.allChaptersRead,
+                allRead = state.allItemsDone,
                 hasStarted = state.hasStarted,
-                nextChapterName = state.nextChapter?.name,
-                enabled = state.nextChapter != null || state.allChaptersRead,
-                onContinueClick = { state.nextChapter?.let(onChapterClick) },
+                nextChapterName = state.nextItem?.name,
+                enabled = state.nextItem != null || state.allItemsDone,
+                onContinueClick = { state.nextItem?.let(onItemClick) },
                 onFavoriteClick = model::toggleFavorite,
-                onToggleDoneClick = model::toggleAllChaptersRead,
+                onToggleDoneClick = model::toggleAllItemsDone,
             )
         }
 
-        state.novel?.getGenres()?.takeIf { it.isNotEmpty() }?.let { genres ->
+        state.details?.genre?.takeIf { it.isNotEmpty() }?.let { genres ->
             item {
                 GenreRow(
                     genres = genres,
@@ -117,7 +118,7 @@ fun NovelDetailsScreen(
             }
         }
 
-        state.novel?.description?.takeIf { it.isNotBlank() }?.let { description ->
+        state.details?.description?.takeIf { it.isNotBlank() }?.let { description ->
             item {
                 ExpandableDescription(description = description)
             }
@@ -127,8 +128,8 @@ fun NovelDetailsScreen(
             Text(
                 text = pluralStringResource(
                     MR.plurals.manga_num_chapters,
-                    count = state.chapters.size,
-                    state.chapters.size,
+                    count = state.items.size,
+                    state.items.size,
                 ),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -136,8 +137,8 @@ fun NovelDetailsScreen(
         }
 
         when {
-            state.chaptersLoading -> item { LoadingScreen() }
-            state.chapters.isEmpty() -> item {
+            state.itemsLoading -> item { LoadingScreen() }
+            state.items.isEmpty() -> item {
                 Text(
                     text = stringResource(MR.strings.no_results_found),
                     style = MaterialTheme.typography.bodyMedium,
@@ -145,13 +146,14 @@ fun NovelDetailsScreen(
                 )
             }
             else -> {
-                val chapters = state.chapters
-                val readUrls = state.readUrls
-                items(chapters, key = { it.url }) { chapter ->
-                    ChapterRow(
-                        chapter = chapter,
-                        read = chapter.url in readUrls,
-                        onClick = { onChapterClick(chapter) },
+                val items = state.items
+                val doneUrls = state.doneUrls
+                items(items, key = { it.url }) { item ->
+                    ItemRow(
+                        item = item,
+                        numberPrefix = itemPrefix(carrier),
+                        done = item.url in doneUrls,
+                        onClick = { onItemClick(item) },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
@@ -526,9 +528,10 @@ private fun ExpandableDescription(
 private val whitespaceLineRegex = Regex("\\s*\n\\s*")
 
 @Composable
-private fun ChapterRow(
-    chapter: SNovelChapter,
-    read: Boolean,
+private fun ItemRow(
+    item: RemoteItem,
+    numberPrefix: String,
+    done: Boolean,
     onClick: () -> Unit,
 ) {
     Column(
@@ -538,20 +541,20 @@ private fun ChapterRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Text(
-            text = chapter.name,
+            text = item.name,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (read) {
+            color = if (done) {
                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             } else {
                 MaterialTheme.colorScheme.onSurface
             },
         )
-        if (chapter.chapter_number >= 0f) {
+        if (item.number >= 0.0) {
             Text(
-                text = "Ch. ${chapter.chapter_number}",
+                text = "$numberPrefix ${item.number}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                    alpha = if (read) 0.5f else 1f,
+                    alpha = if (done) 0.5f else 1f,
                 ),
             )
         }
@@ -561,12 +564,17 @@ private fun ChapterRow(
 @Composable
 private fun statusLabel(status: Int): String = stringResource(
     when (status) {
-        SNovel.ONGOING -> AYMR.strings.status_ongoing
-        SNovel.COMPLETED -> AYMR.strings.status_completed
-        SNovel.LICENSED -> AYMR.strings.status_licensed
-        SNovel.PUBLISHING_FINISHED -> AYMR.strings.status_publishing_finished
-        SNovel.CANCELLED -> AYMR.strings.status_cancelled
-        SNovel.ON_HIATUS -> AYMR.strings.status_on_hiatus
+        1 -> AYMR.strings.status_ongoing
+        2 -> AYMR.strings.status_completed
+        3 -> AYMR.strings.status_licensed
+        4 -> AYMR.strings.status_publishing_finished
+        5 -> AYMR.strings.status_cancelled
+        6 -> AYMR.strings.status_on_hiatus
         else -> AYMR.strings.status_unknown
     },
 )
+
+private fun itemPrefix(carrier: BrowseCarrier): String = when (carrier) {
+    BrowseCarrier.SHOWS -> "Ep."
+    else -> "Ch."
+}

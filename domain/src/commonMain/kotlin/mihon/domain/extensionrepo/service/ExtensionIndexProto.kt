@@ -183,7 +183,7 @@ internal fun List<ExtensionRepoExtensionJsonDto>.toEntries(repoUrl: String): Lis
  * single source used by both platform repo services' `probeRepoTypes`. A
  * single extension can match multiple carriers.
  */
-internal fun ExtensionIndexEntry.detectedRepoTypes(): Set<String> {
+fun ExtensionIndexEntry.detectedRepoTypes(): Set<String> {
     val types = mutableSetOf<String>()
     val pkg = pkgName.lowercase()
     val name = name.lowercase()

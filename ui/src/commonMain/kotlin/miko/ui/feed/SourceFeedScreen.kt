@@ -39,9 +39,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import eu.kanade.tachiyomi.novelsource.model.SNovel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import miko.ui.carrier.FeedEntry
 import miko.ui.components.CoverComfortableItem
 import miko.ui.components.CoverGridItem
 import miko.ui.components.CoverListItem
@@ -61,7 +61,7 @@ import tachiyomi.presentation.core.screens.LoadingScreen
 @Composable
 fun SourceFeedScreen(
     model: SourceFeedScreenModel,
-    onNovelClick: (SNovel) -> Unit,
+    onEntryClick: (FeedEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -129,8 +129,8 @@ fun SourceFeedScreen(
                 stringRes = MR.strings.no_results_found,
             )
             else -> when (state.displayMode) {
-                LibraryDisplayMode.List -> FeedList(model = model, onNovelClick = onNovelClick)
-                else -> FeedGrid(model = model, onNovelClick = onNovelClick)
+                LibraryDisplayMode.List -> FeedList(model = model, onEntryClick = onEntryClick)
+                else -> FeedGrid(model = model, onEntryClick = onEntryClick)
             }
         }
     }
@@ -139,7 +139,7 @@ fun SourceFeedScreen(
 @Composable
 private fun FeedGrid(
     model: SourceFeedScreenModel,
-    onNovelClick: (SNovel) -> Unit,
+    onEntryClick: (FeedEntry) -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
@@ -165,18 +165,18 @@ private fun FeedGrid(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        items(state.items, key = { it.url }) { novel ->
+        items(state.items, key = { it.url }) { entry ->
             if (compact) {
                 CoverGridItem(
-                    title = novel.title,
-                    coverUrl = novel.thumbnail_url,
-                    onClick = { onNovelClick(novel) },
+                    title = entry.title,
+                    coverUrl = entry.coverUrl,
+                    onClick = { onEntryClick(entry) },
                 )
             } else {
                 CoverComfortableItem(
-                    title = novel.title,
-                    coverUrl = novel.thumbnail_url,
-                    onClick = { onNovelClick(novel) },
+                    title = entry.title,
+                    coverUrl = entry.coverUrl,
+                    onClick = { onEntryClick(entry) },
                 )
             }
         }
@@ -187,7 +187,7 @@ private fun FeedGrid(
 @Composable
 private fun FeedList(
     model: SourceFeedScreenModel,
-    onNovelClick: (SNovel) -> Unit,
+    onEntryClick: (FeedEntry) -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -208,12 +208,12 @@ private fun FeedList(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
-        items(state.items, key = { it.url }) { novel ->
+        items(state.items, key = { it.url }) { entry ->
             CoverListItem(
-                title = novel.title,
-                coverUrl = novel.thumbnail_url,
-                subtitle = novel.author,
-                onClick = { onNovelClick(novel) },
+                title = entry.title,
+                coverUrl = entry.coverUrl,
+                subtitle = entry.subtitle,
+                onClick = { onEntryClick(entry) },
             )
         }
         item {

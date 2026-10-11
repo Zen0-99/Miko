@@ -8,10 +8,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import mihon.domain.extensionrepo.service.ExtensionIndexEntry
+import mihon.domain.extensionrepo.service.detectedRepoTypes
+import miko.ui.carrier.BrowseCarrier
 import tachiyomi.core.common.util.system.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
@@ -28,6 +31,7 @@ import tachiyomi.domain.extension.novel.model.NovelPlugin
 class ExtensionsScreenModel(
     private val catalog: ExtensionCatalog,
     private val installer: NovelPluginInstallerFacade,
+    private val carrierFlow: StateFlow<BrowseCarrier>,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
@@ -49,15 +53,26 @@ class ExtensionsScreenModel(
 
     init {
         scope.launch {
-            catalog.state.collect { c ->
-                _state.value = _state.value.copy(
-                    installed = c.installed,
-                    available = c.available,
-                    repoExtensions = c.repoExtensions,
+            combine(catalog.state, carrierFlow) { c, carrier ->
+                // Per-carrier lists — Android shows each carrier's own
+                // extensions screen; the same filter applies here.
+                State(
+                    installed = c.installed.filter { it.kind == carrier.kind },
+                    available = c.available.filter { it.kind == carrier.kind },
+                    repoExtensions = c.repoExtensions.filter { entry ->
+                        val types = entry.detectedRepoTypes()
+                        if (types.isEmpty()) {
+                            carrier == BrowseCarrier.MANGA
+                        } else {
+                            carrier.kind in types
+                        }
+                    },
+                    installingIds = _state.value.installingIds,
+                    searchQuery = _state.value.searchQuery,
                     availableLoaded = c.loaded,
                     availableError = c.error,
                 )
-            }
+            }.collect { _state.value = it }
         }
     }
 

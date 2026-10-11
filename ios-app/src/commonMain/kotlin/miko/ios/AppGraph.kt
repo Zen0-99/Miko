@@ -67,23 +67,43 @@ import tachiyomi.data.handlers.manga.IosMangaDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.data.handlers.novel.IosNovelDatabaseHandler
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
+import tachiyomi.data.entries.manga.MangaRepositoryImpl
+import tachiyomi.data.entries.shows.AnimeRepositoryImpl
+import tachiyomi.data.items.chapter.ChapterRepositoryImpl
 import tachiyomi.data.items.chapter.NovelChapterRepositoryImpl
+import tachiyomi.data.items.episode.EpisodeRepositoryImpl
+import tachiyomi.data.source.anime.AnimeStubSourceRepositoryImpl
+import tachiyomi.data.source.manga.MangaStubSourceRepositoryImpl
 import tachiyomi.data.source.novel.NovelStubSourceRepositoryImpl
 import tachiyomi.db.achievement.AchievementsDatabase
+import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
+import tachiyomi.domain.entries.manga.interactor.GetManga
+import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
+import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.NetworkToLocalNovel
 import tachiyomi.domain.entries.novel.repository.NovelRepository
+import tachiyomi.domain.entries.shows.interactor.GetAnime
+import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
+import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
+import tachiyomi.domain.entries.shows.repository.AnimeRepository
 import tachiyomi.domain.extension.novel.api.CombinedJsPluginRepoProvider
 import tachiyomi.domain.extension.novel.api.JsPluginApi
 import tachiyomi.domain.extension.novel.api.JsPluginIndexFetcher
 import tachiyomi.domain.extension.novel.api.JsPluginIndexParser
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
+import tachiyomi.domain.items.chapter.repository.ChapterRepository
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
+import tachiyomi.domain.items.episode.repository.EpisodeRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.model.Release
 import tachiyomi.domain.release.service.ReleaseService
+import tachiyomi.domain.source.anime.repository.AnimeStubSourceRepository
+import tachiyomi.domain.source.anime.service.AnimeSourceManager
+import tachiyomi.domain.source.manga.repository.MangaStubSourceRepository
+import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.repository.NovelStubSourceRepository
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.mi.data.AnimeDatabase
@@ -182,6 +202,12 @@ class AppGraph {
     val novelStubSourceRepository: NovelStubSourceRepository =
         NovelStubSourceRepositoryImpl(novelHandler)
 
+    val mangaStubSourceRepository: MangaStubSourceRepository =
+        MangaStubSourceRepositoryImpl(mangaHandler)
+
+    val animeStubSourceRepository: AnimeStubSourceRepository =
+        AnimeStubSourceRepositoryImpl(animeHandler)
+
     val novelExtensionRepoRepository: NovelExtensionRepoRepository =
         NovelExtensionRepoRepositoryImpl(novelHandler)
 
@@ -242,6 +268,56 @@ class AppGraph {
         json = json,
     )
 
+    val mangaSourceManager: MangaSourceManager = IosMangaSourceManager(
+        pluginRepository = novelPluginRepository,
+        pluginStorage = novelPluginStorage,
+        sourceRepository = mangaStubSourceRepository,
+        runtimeFactory = jsRuntimeFactory,
+        httpClient = httpClient,
+        json = json,
+    )
+
+    val animeSourceManager: AnimeSourceManager = IosAnimeSourceManager(
+        pluginRepository = novelPluginRepository,
+        pluginStorage = novelPluginStorage,
+        sourceRepository = animeStubSourceRepository,
+        runtimeFactory = jsRuntimeFactory,
+        httpClient = httpClient,
+        json = json,
+    )
+
+    val mangaRepository: MangaRepository = MangaRepositoryImpl(mangaHandler)
+
+    val animeRepository: AnimeRepository = AnimeRepositoryImpl(animeHandler)
+
+    val chapterRepository: ChapterRepository = ChapterRepositoryImpl(mangaHandler)
+
+    val episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(animeHandler)
+
+    val getManga = GetManga(mangaRepository)
+
+    val getAnime = GetAnime(animeRepository)
+
+    val networkToLocalManga = NetworkToLocalManga(mangaRepository)
+
+    val networkToLocalAnime = NetworkToLocalAnime(animeRepository, animeSourceManager)
+
+    val mangaBinding = MangaCarrierBinding(
+        sourceManager = mangaSourceManager,
+        getManga = getManga,
+        networkToLocalManga = networkToLocalManga,
+        mangaRepository = mangaRepository,
+        chapterRepository = chapterRepository,
+    )
+
+    val animeBinding = AnimeCarrierBinding(
+        sourceManager = animeSourceManager,
+        getAnime = getAnime,
+        networkToLocalAnime = networkToLocalAnime,
+        animeRepository = animeRepository,
+        episodeRepository = episodeRepository,
+    )
+
     val novelRepository: NovelRepository = NovelRepositoryImpl(novelHandler)
 
     val novelChapterRepository: NovelChapterRepository =
@@ -251,13 +327,23 @@ class AppGraph {
 
     val getLibraryNovels = GetLibraryNovels(novelRepository)
 
+    val getLibraryManga = GetLibraryManga(mangaRepository)
+
+    val getLibraryAnime = GetLibraryAnime(animeRepository)
+
     val getNovelChaptersByNovelId = GetNovelChaptersByNovelId(novelChapterRepository)
 
     val networkToLocalNovel = NetworkToLocalNovel(novelRepository)
 
     val uiGraph = MikoUiGraph(
         novelSourceManager = novelSourceManager,
+        mangaSourceManager = mangaSourceManager,
+        animeSourceManager = animeSourceManager,
+        mangaBinding = mangaBinding,
+        animeBinding = animeBinding,
         getLibraryNovels = getLibraryNovels,
+        getLibraryManga = getLibraryManga,
+        getLibraryAnime = getLibraryAnime,
         getNovel = getNovel,
         getNovelChaptersByNovelId = getNovelChaptersByNovelId,
         networkToLocalNovel = networkToLocalNovel,
