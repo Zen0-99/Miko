@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -126,25 +129,60 @@ fun HomeScreen(
                 )
             }
             else -> {
-                val hero = state.recents.first()
-                HeroCard(
-                    item = hero,
-                    carrier = carrier,
-                    onResume = {
-                        scope.launch {
-                            model.resolveTarget(hero.entryId, hero.itemId)?.let { t ->
-                                onResume(t.sourceId, t.entryUrl, t.itemUrl)
+                // Android's hero is a swipeable carousel over the most
+                // recently consumed entries — same card, paged.
+                val heroes = state.recents.take(HERO_PAGE_LIMIT)
+                val pagerState = rememberPagerState { heroes.size }
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { page ->
+                    val hero = heroes[page]
+                    HeroCard(
+                        item = hero,
+                        carrier = carrier,
+                        onResume = {
+                            scope.launch {
+                                model.resolveTarget(hero.entryId, hero.itemId)?.let { t ->
+                                    onResume(t.sourceId, t.entryUrl, t.itemUrl)
+                                }
                             }
-                        }
-                    },
-                    onOpenEntry = {
-                        scope.launch {
-                            model.resolveTarget(hero.entryId, hero.itemId)?.let { t ->
-                                onOpenEntry(t.sourceId, t.entryUrl, hero.entryTitle)
+                        },
+                        onOpenEntry = {
+                            scope.launch {
+                                model.resolveTarget(hero.entryId, hero.itemId)?.let { t ->
+                                    onOpenEntry(t.sourceId, t.entryUrl, hero.entryTitle)
+                                }
                             }
+                        },
+                    )
+                }
+                if (heroes.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        repeat(heroes.size) { page ->
+                            val selected = pagerState.currentPage == page
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 3.dp)
+                                    .size(if (selected) 7.dp else 5.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        if (selected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme
+                                                .onSurfaceVariant.copy(alpha = 0.4f)
+                                        },
+                                    ),
+                            )
                         }
-                    },
-                )
+                    }
+                }
 
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -176,6 +214,10 @@ fun HomeScreen(
         }
     }
 }
+
+/** Pages the hero carousel offers — Android pages its whole `heroes`
+ *  list; we cap at the same slice the recents feed keeps fresh. */
+private const val HERO_PAGE_LIMIT = 5
 
 /**
  * Hero "continue" card — cover backdrop with a bottom scrim, entry title,
