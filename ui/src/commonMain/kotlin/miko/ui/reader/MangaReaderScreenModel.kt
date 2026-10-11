@@ -62,6 +62,8 @@ class MangaReaderScreenModel(
         val readerTheme: Int = 1,
         /** Android's `fullscreen` pref — system bars hidden while reading. */
         val fullscreen: Boolean = true,
+        /** Android's reader_long_tap — hold a page edge to keep scrolling. */
+        val longTapScroll: Boolean = true,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -113,6 +115,12 @@ class MangaReaderScreenModel(
         true,
     )
 
+    // Android's readerPreferences.readWithLongTap — same key/default.
+    private val longTapPref = preferenceStore.getBoolean(
+        "reader_long_tap",
+        true,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -152,6 +160,11 @@ class MangaReaderScreenModel(
                 _state.value = _state.value.copy(fullscreen = v)
             }
         }
+        scope.launch {
+            longTapPref.changes().collect { v ->
+                _state.value = _state.value.copy(longTapScroll = v)
+            }
+        }
     }
 
     private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
@@ -175,6 +188,8 @@ class MangaReaderScreenModel(
     fun setReaderTheme(theme: Int) = readerThemePref.set(theme)
 
     fun setFullscreen(fullscreen: Boolean) = fullscreenPref.set(fullscreen)
+
+    fun setLongTapScroll(on: Boolean) = longTapPref.set(on)
 
     /**
      * Android's calculateChapterGap — floor(higher) − floor(lower) − 1;

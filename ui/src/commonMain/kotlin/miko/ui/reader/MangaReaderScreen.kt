@@ -2,7 +2,11 @@ package miko.ui.reader
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -176,6 +180,7 @@ fun MangaReaderScreen(
             onTransitionsChange = model::setShowTransitions,
             onThemeSelect = model::setReaderTheme,
             onFullscreenChange = model::setFullscreen,
+            onLongTapChange = model::setLongTapScroll,
             onDismiss = model::closeSettings,
         )
     }
@@ -272,41 +277,74 @@ private fun PagedViewer(
             modifier = modifier
                 .fillMaxSize()
                 // Android's tap zones: outer thirds flip pages (mirrored in
-                // RTL); the center third is a no-op until an app-bar toggle
-                // lands. Swipes still go through — taps aren't consumed.
-                .pointerInput(state.readingMode) {
-                    detectTapGestures { offset ->
-                        val target = if (state.readingMode == MangaReadingMode.VERTICAL) {
-                            when {
-                                offset.y < size.height / 3 -> -1
-                                offset.y > size.height * 2 / 3 -> 1
-                                else -> 0
-                            }
-                        } else {
-                            val nextEdge = if (rtl) {
-                                offset.x < size.width / 3
+                // RTL); the center third toggles chrome. Swipes still go
+                // through — the pager consumes drags before we see them.
+                // reader_long_tap: holding an edge keeps scrolling until
+                // release (the long-press consumes the up, so no tap fires).
+                .pointerInput(state.readingMode, state.longTapScroll) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        val longPress = awaitLongPressOrCancellation(down.id)
+                        if (longPress != null) {
+                            if (state.longTapScroll) {
+                                val maxPage =
+                                    (state.pages.size + transitions * 2 - 1).coerceAtLeast(0)
+                                val job = scope.launch {
+                                    while (pagerState.currentPage < maxPage) {
+                                        pagerState.animateScrollToPage(
+                                            pagerState.currentPage + 1,
+                                        )
+                                    }
+                                }
+                                waitForUpOrCancellation()
+                                job.cancel()
                             } else {
-                                offset.x > size.width * 2 / 3
+                                waitForUpOrCancellation()
                             }
-                            val prevEdge = if (rtl) {
-                                offset.x > size.width * 2 / 3
-                            } else {
-                                offset.x < size.width / 3
-                            }
-                            when {
-                                nextEdge -> 1
-                                prevEdge -> -1
-                                else -> 0
-                            }
-                        }
-                        if (target != 0) {
-                            val page = (pagerState.currentPage + target)
-                                .coerceIn(0, state.pages.size + transitions * 2 - 1)
-                            if (page != pagerState.currentPage) {
-                                scope.launch { pagerState.animateScrollToPage(page) }
-                            }
+                            longPress.consume()
                         } else {
-                            onCenterTap()
+                            val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                            if (up.isConsumed) return@awaitEachGesture
+                            up.consume()
+                            val offset = up.position
+                            val target =
+                                if (state.readingMode == MangaReadingMode.VERTICAL) {
+                                    when {
+                                        offset.y < size.height / 3 -> -1
+                                        offset.y > size.height * 2 / 3 -> 1
+                                        else -> 0
+                                    }
+                                } else {
+                                    val nextEdge = if (rtl) {
+                                        offset.x < size.width / 3
+                                    } else {
+                                        offset.x > size.width * 2 / 3
+                                    }
+                                    val prevEdge = if (rtl) {
+                                        offset.x > size.width * 2 / 3
+                                    } else {
+                                        offset.x < size.width / 3
+                                    }
+                                    when {
+                                        nextEdge -> 1
+                                        prevEdge -> -1
+                                        else -> 0
+                                    }
+                                }
+                            if (target != 0) {
+                                val page = (pagerState.currentPage + target)
+                                    .coerceIn(
+                                        0,
+                                        state.pages.size + transitions * 2 - 1,
+                                    )
+                                if (page != pagerState.currentPage) {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(page)
+                                    }
+                                }
+                            } else {
+                                onCenterTap()
+                            }
                         }
                     }
                 },
@@ -623,6 +661,7 @@ private fun ReaderSettingsSheet(
     onTransitionsChange: (Boolean) -> Unit,
     onThemeSelect: (Int) -> Unit,
     onFullscreenChange: (Boolean) -> Unit,
+    onLongTapChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -668,6 +707,11 @@ private fun ReaderSettingsSheet(
                 labelRes = MR.strings.pref_fullscreen,
                 checked = state.fullscreen,
                 onChange = onFullscreenChange,
+            )
+            SettingSwitch(
+                labelRes = MR.strings.pref_read_with_long_tap,
+                checked = state.longTapScroll,
+                onChange = onLongTapChange,
             )
             Spacer(Modifier.height(24.dp))
         }
