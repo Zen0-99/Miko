@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -20,9 +22,11 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.RadioButtonChecked
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
@@ -482,86 +486,125 @@ fun MikoApp(graph: MikoUiGraph) {
                             )
                         }
                     }
-                    else -> MikoTopBar(
-                        title = screenTitle(current),
-                        canSearch = current == Destination.Browse ||
-                            current == Destination.Updates ||
-                            current == Destination.Library,
-                        searchQuery = when (current) {
-                            Destination.Updates -> updatesSearchQuery
-                            Destination.Library -> librarySearchQuery
-                            else -> browseSearchQuery
-                        },
-                        onSearchQueryChange = { query ->
-                            when (current) {
-                                Destination.Updates -> updatesSearchQuery = query
-                                Destination.Library -> librarySearchQuery = query
-                                else -> browseSearchQuery = query
-                            }
-                        },
-                        onSearch = { query ->
-                            // Only Browse submits anywhere — GlobalSearch.
-                            // Updates/Library filter their own lists live.
-                            if (current == Destination.Browse &&
-                                browseMode == BrowseMode.BROWSE
-                            ) {
-                                // Android pushes GlobalSearchScreen and
-                                // closes the browse search.
-                                navigator.push(
-                                    Destination.GlobalSearch(query, browseCarrier.value),
-                                )
-                                browseSearchQuery = null
-                            }
-                        },
-                        searchPlaceholderText = when (current) {
-                            Destination.Browse -> stringResource(
-                                if (browseMode == BrowseMode.EXTENSIONS) {
-                                    MR.strings.search_hint_extensions
-                                } else {
-                                    MR.strings.search_hint_browse
-                                },
-                            )
-                            Destination.Updates -> stringResource(
-                                if (updatesModel.state
-                                        .collectAsStateWithLifecycle().value.mode ==
-                                    UpdatesScreenModel.Mode.History
+                    else -> {
+                        // Android's LibrarySelectionToolbar — selection mode
+                        // swaps the whole bar: count title, close, select-all,
+                        // invert. The shared bar is param-driven, so this is a
+                        // value swap rather than a separate composable.
+                        val librarySelected = libraryModel.state
+                            .collectAsStateWithLifecycle().value.selected
+                        val librarySelecting =
+                            current == Destination.Library && librarySelected.isNotEmpty()
+                        MikoTopBar(
+                            title = if (librarySelecting) "${librarySelected.size}" else screenTitle(current),
+                            canSearch = !librarySelecting &&
+                                (
+                                    current == Destination.Browse ||
+                                        current == Destination.Updates ||
+                                        current == Destination.Library
+                                    ),
+                            searchQuery = when (current) {
+                                Destination.Updates -> updatesSearchQuery
+                                Destination.Library -> librarySearchQuery
+                                else -> browseSearchQuery
+                            },
+                            onSearchQueryChange = { query ->
+                                when (current) {
+                                    Destination.Updates -> updatesSearchQuery = query
+                                    Destination.Library -> librarySearchQuery = query
+                                    else -> browseSearchQuery = query
+                                }
+                            },
+                            onSearch = { query ->
+                                // Only Browse submits anywhere — GlobalSearch.
+                                // Updates/Library filter their own lists live.
+                                if (current == Destination.Browse &&
+                                    browseMode == BrowseMode.BROWSE
                                 ) {
-                                    MR.strings.search_hint_history
-                                } else {
-                                    MR.strings.search_hint_updates
-                                },
-                            )
-                            Destination.Library -> stringResource(
-                                MR.strings.search_hint_library,
-                            )
-                            else -> null
-                        },
-                        navigateUp = null,
-                        actions = {
-                            if (current == Destination.Browse) {
-                                BrowseOverflowMenu(
-                                    onOpenExtensionRepos = {
-                                        navigator.push(Destination.ExtensionRepos)
+                                    // Android pushes GlobalSearchScreen and
+                                    // closes the browse search.
+                                    navigator.push(
+                                        Destination.GlobalSearch(query, browseCarrier.value),
+                                    )
+                                    browseSearchQuery = null
+                                }
+                            },
+                            searchPlaceholderText = when (current) {
+                                Destination.Browse -> stringResource(
+                                    if (browseMode == BrowseMode.EXTENSIONS) {
+                                        MR.strings.search_hint_extensions
+                                    } else {
+                                        MR.strings.search_hint_browse
                                     },
                                 )
-                            }
-                            if (current == Destination.Library) {
-                                // Android's library settings action — the
-                                // display/sort sheet off the top-bar icon.
-                                LibrarySettingsAction(libraryModel)
-                            }
-                        },
-                        pillContent = if (current == Destination.Browse) {
-                            {
-                                BrowseModePill(
-                                    browseMode = browseMode,
-                                    onModeChange = { browseMode = it },
+                                Destination.Updates -> stringResource(
+                                    if (updatesModel.state
+                                            .collectAsStateWithLifecycle().value.mode ==
+                                        UpdatesScreenModel.Mode.History
+                                    ) {
+                                        MR.strings.search_hint_history
+                                    } else {
+                                        MR.strings.search_hint_updates
+                                    },
                                 )
-                            }
-                        } else {
-                            null
-                        },
-                    )
+                                Destination.Library -> stringResource(
+                                    MR.strings.search_hint_library,
+                                )
+                                else -> null
+                            },
+                            navigateUp = if (librarySelecting) {
+                                { libraryModel.clearSelection() }
+                            } else {
+                                null
+                            },
+                            navigateUpIcon = if (librarySelecting) {
+                                Icons.Filled.Close
+                            } else {
+                                Icons.AutoMirrored.Outlined.ArrowBack
+                            },
+                            actions = {
+                                if (librarySelecting) {
+                                    // Android's LibrarySelectionToolbar —
+                                    // select-all + invert-selection.
+                                    IconButton(onClick = libraryModel::selectAll) {
+                                        Icon(
+                                            Icons.Outlined.SelectAll,
+                                            contentDescription = stringResource(MR.strings.action_select_all),
+                                        )
+                                    }
+                                    IconButton(onClick = libraryModel::invertSelection) {
+                                        Icon(
+                                            Icons.Outlined.FlipToBack,
+                                            contentDescription = stringResource(MR.strings.action_select_inverse),
+                                        )
+                                    }
+                                } else {
+                                    if (current == Destination.Browse) {
+                                        BrowseOverflowMenu(
+                                            onOpenExtensionRepos = {
+                                                navigator.push(Destination.ExtensionRepos)
+                                            },
+                                        )
+                                    }
+                                    if (current == Destination.Library) {
+                                        // Android's library settings action — the
+                                        // display/sort sheet off the top-bar icon.
+                                        LibrarySettingsAction(libraryModel)
+                                    }
+                                }
+                            },
+                            pillContent = if (current == Destination.Browse) {
+                                {
+                                    BrowseModePill(
+                                        browseMode = browseMode,
+                                        onModeChange = { browseMode = it },
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                        )
+                    }
                 }
             },
             bottomBar = {
@@ -1221,6 +1264,12 @@ private fun LibraryDestination(
                     carrierFlow.value,
                 ),
             )
+        },
+        // Android's "Edit collections" shortcut off the change-collection
+        // sheet — pushes the manage screen and exits action mode.
+        onManageCollections = {
+            model.clearSelection()
+            navigator.push(Destination.Collections)
         },
         modifier = modifier.fillMaxSize(),
     )

@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -76,6 +77,7 @@ fun MikoTopBar(
     modifier: Modifier = Modifier,
     searchStyle: MikoTopBarSearchStyle = MikoTopBarSearchStyle.HintPill,
     pillContent: (@Composable () -> Unit)? = null,
+    navigateUpIcon: ImageVector = Icons.AutoMirrored.Outlined.ArrowBack,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isSearchActive = canSearch && searchQuery != null
@@ -99,7 +101,7 @@ fun MikoTopBar(
                     if (hasNavigateUp) {
                         IconButton(onClick = { navigateUp?.invoke() }) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                                imageVector = navigateUpIcon,
                                 contentDescription = null,
                             )
                         }

@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -27,13 +28,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import tachiyomi.presentation.core.util.selectedBackground
 
 private val CoverPlaceholderColor = Color(0x1F888888)
 private const val COVER_RATIO = 2f / 3f
 
+/** Android's GRID_SELECTED_COVER_ALPHA — covers dim in selection mode. */
+private const val SELECTED_COVER_ALPHA = 0.76f
+
+/** Android's GridItemSelectable outline — secondary fill behind the cell. */
+private fun Modifier.selectedOutline(isSelected: Boolean, color: Color) = drawBehind {
+    if (isSelected) drawRect(color)
+}
+
 /**
  * Port of Android's `EntryComfortableGridItem` — cover with the title in a
- * column *below* it (used by the global-search card rows).
+ * column *below* it (used by the global-search card rows). [isSelected]
+ * applies Android's GridItemSelectable chrome: a secondary outline behind
+ * the 4dp-padded cell with the cover dimmed.
  */
 @Composable
 fun CoverComfortableItem(
@@ -44,12 +56,15 @@ fun CoverComfortableItem(
     modifier: Modifier = Modifier,
     titleMaxLines: Int = 2,
     coverAlpha: Float = 1f,
+    isSelected: Boolean = false,
     coverBadge: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
             .clip(MaterialTheme.shapes.extraSmall)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .selectedOutline(isSelected, MaterialTheme.colorScheme.secondary)
+            .padding(4.dp),
     ) {
         Box {
             AsyncImage(
@@ -57,7 +72,7 @@ fun CoverComfortableItem(
                 placeholder = ColorPainter(CoverPlaceholderColor),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                alpha = coverAlpha,
+                alpha = if (isSelected) SELECTED_COVER_ALPHA else coverAlpha,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(COVER_RATIO),
@@ -93,11 +108,13 @@ fun CoverListItem(
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    isSelected: Boolean = false,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .selectedBackground(isSelected)
             .height(56.dp)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 3.dp),
@@ -150,18 +167,22 @@ fun CoverGridItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
     topStartBadge: (@Composable () -> Unit)? = null,
 ) {
     Box(
         modifier = modifier
             .clip(MaterialTheme.shapes.extraSmall)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .selectedOutline(isSelected, MaterialTheme.colorScheme.secondary)
+            .padding(4.dp),
     ) {
         AsyncImage(
             model = coverUrl,
             placeholder = ColorPainter(CoverPlaceholderColor),
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            alpha = if (isSelected) SELECTED_COVER_ALPHA else 1f,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(COVER_RATIO),

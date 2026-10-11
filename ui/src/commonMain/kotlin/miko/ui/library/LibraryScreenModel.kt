@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import miko.ui.MikoUiGraph
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.download.DownloadManager
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.library.model.LibraryDisplayMode
 
@@ -92,6 +93,10 @@ class LibraryScreenModel(
         val displayMode: LibraryDisplayMode = LibraryDisplayMode.default,
         /** Android's per-carrier library sort — the settings sheet's Sort tab. */
         val sort: LibrarySort = LibrarySort(),
+        /** Android's selection mode — ids of the selected entries. */
+        val selected: Set<Long> = emptySet(),
+        /** Active carrier — marks read vs seen + download-dir naming. */
+        val carrier: BrowseCarrier = BrowseCarrier.MANGA,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -164,6 +169,14 @@ class LibraryScreenModel(
                 rawEntries = entries
                 _state.value = _state.value.copy(
                     initialized = true,
+                    carrier = carrierFlow.value,
+                    // Carrier switches drop the selection — ids are
+                    // carrier-scoped like Android's per-tab models.
+                    selected = if (_state.value.carrier == carrierFlow.value) {
+                        _state.value.selected
+                    } else {
+                        emptySet()
+                    },
                     entries = applyFilters(
                         entries,
                         _state.value.query,
@@ -291,17 +304,81 @@ class LibraryScreenModel(
         BrowseCarrier.BOOKS -> "novellib_sorting_mode"
     }
 
-    /** Android's selection action — unfavorites the entry. */
-    fun removeFromLibrary(entry: LibraryEntry) {
+    /** Android's long-press entry — toggles the entry's selection. */
+    fun toggleSelect(entryId: Long) {
+        val current = _state.value.selected
+        _state.value = _state.value.copy(
+            selected = if (entryId in current) current - entryId else current + entryId,
+        )
+    }
+
+    /** Android's select-all toolbar action — every displayed entry. */
+    fun selectAll() {
+        _state.value = _state.value.copy(
+            selected = _state.value.entries.map { it.id }.toSet(),
+        )
+    }
+
+    /** Android's invert-selection toolbar action. */
+    fun invertSelection() {
+        val current = _state.value.selected
+        _state.value = _state.value.copy(
+            selected = _state.value.entries.map { it.id }.toSet() - current,
+        )
+    }
+
+    fun clearSelection() {
+        _state.value = _state.value.copy(selected = emptySet())
+    }
+
+    /**
+     * Android's selection action — marks every item read/seen (or
+     * unread/unseen) on each selected entry, then exits action mode.
+     */
+    fun markSelectedDone(done: Boolean) {
+        val ids = _state.value.selected
+        clearSelection()
         scope.launch {
-            graph.binding(carrierFlow.value).setFavorite(entry.id, false)
+            val binding = graph.binding(carrierFlow.value)
+            ids.forEach { binding.setAllItemsDone(it, done) }
         }
     }
 
-    /** Android's selection action — marks every item read/seen. */
-    fun markAllDone(entry: LibraryEntry) {
+    /**
+     * Android's ChangeCollectionDialog confirm — replaces each selected
+     * entry's memberships with the checked set.
+     */
+    fun setSelectedCollections(collectionIds: List<Long>) {
+        val ids = _state.value.selected
+        clearSelection()
         scope.launch {
-            graph.binding(carrierFlow.value).setAllItemsDone(entry.id, true)
+            val binding = graph.binding(carrierFlow.value)
+            ids.forEach { binding.setEntryCollections(it, collectionIds) }
+        }
+    }
+
+    /**
+     * Android's DeleteLibraryEntryDialog confirm — unfavorites the
+     * selection and/or deletes downloaded items. A selection stays in the
+     * library when only downloads are removed.
+     */
+    fun removeSelected(fromLibrary: Boolean, deleteDownloads: Boolean) {
+        // Resolve from rawEntries, not the displayed list — a selected
+        // entry filtered out of view still gets removed.
+        val entries = rawEntries.filter { it.id in _state.value.selected }
+        clearSelection()
+        if (!fromLibrary && !deleteDownloads) return
+        scope.launch {
+            val carrier = carrierFlow.value
+            val binding = graph.binding(carrier)
+            entries.forEach { entry ->
+                if (deleteDownloads) {
+                    binding.source(entry.sourceId)?.name?.let { sourceName ->
+                        DownloadManager.deleteEntry(carrier, sourceName, entry.title)
+                    }
+                }
+                if (fromLibrary) binding.setFavorite(entry.id, false)
+            }
         }
     }
 
