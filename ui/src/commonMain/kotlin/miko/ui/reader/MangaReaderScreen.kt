@@ -88,6 +88,7 @@ import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.secondaryItemAlpha
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -200,6 +201,7 @@ fun MangaReaderScreen(
             onScaleTypeSelect = model::setImageScaleType,
             onTappingInvertSelect = model::setTappingInverted,
             onSidePaddingChange = model::setWebtoonSidePadding,
+            onNavigateToPanChange = model::setNavigateToPan,
             onDismiss = model::closeSettings,
         )
     }
@@ -447,13 +449,15 @@ private fun PagedViewer(
                         translationX = zoom.offset.x
                         translationY = zoom.offset.y
                     }
-                    .pointerInput(Unit) {
+                    .pointerInput(state.navigateToPan) {
+                        val panNavThreshold = 64.dp.toPx()
                         awaitEachGesture {
                             val downPos = awaitFirstDown(requireUnconsumed = false).position
                             var prevSpan = 0f
                             var prevCentroid = Offset.Zero
                             var pinchActive = false
                             var panActive = false
+                            var overscroll = 0f
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val pressed = event.changes.filter { it.pressed }
@@ -498,6 +502,41 @@ private fun PagedViewer(
                                         panActive = true
                                         zoom.offset += change.position - change.previousPosition
                                         zoom.clamp(size)
+                                        // Android's navigate_pan — pushing a
+                                        // zoomed page past its horizontal edge
+                                        // flips to the adjacent page.
+                                        if (state.navigateToPan) {
+                                            val maxX = size.width * (zoom.scale - 1f) / 2f
+                                            val dx = change.position.x - change.previousPosition.x
+                                            overscroll = when {
+                                                dx > 0f && zoom.offset.x >= maxX - 1f -> {
+                                                    overscroll + dx
+                                                }
+                                                dx < 0f && zoom.offset.x <= -maxX + 1f -> {
+                                                    overscroll + dx
+                                                }
+                                                else -> 0f
+                                            }
+                                            if (abs(overscroll) > panNavThreshold) {
+                                                val dir = if (overscroll < 0f) 1 else -1
+                                                val page = (pagerState.currentPage + dir)
+                                                    .coerceIn(
+                                                        0,
+                                                        state.pages.size + transitions * 2 - 1,
+                                                    )
+                                                scope.launch {
+                                                    pagerState.animateScrollToPage(page)
+                                                }
+                                                // Drain the trailing ups so the
+                                                // tap zones don't also fire.
+                                                while (true) {
+                                                    val e = awaitPointerEvent()
+                                                    e.changes.forEach { it.consume() }
+                                                    if (e.changes.none { it.pressed }) break
+                                                }
+                                                break
+                                            }
+                                        }
                                         event.changes.forEach { it.consume() }
                                     }
                                     prevSpan = 0f
@@ -822,6 +861,7 @@ private fun ReaderSettingsSheet(
     onScaleTypeSelect: (Int) -> Unit,
     onTappingInvertSelect: (TappingInvertMode) -> Unit,
     onSidePaddingChange: (Int) -> Unit,
+    onNavigateToPanChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -874,6 +914,11 @@ private fun ReaderSettingsSheet(
                 value = state.webtoonSidePadding.toFloat(),
                 range = 0f..25f,
                 onChange = { onSidePaddingChange(it.roundToInt()) },
+            )
+            SettingSwitch(
+                labelRes = MR.strings.pref_navigate_pan,
+                checked = state.navigateToPan,
+                onChange = onNavigateToPanChange,
             )
             SettingSwitch(
                 labelRes = MR.strings.pref_show_page_number,
