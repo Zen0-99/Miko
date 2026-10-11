@@ -22,8 +22,8 @@ import miko.ui.carrier.BrowseCarrier
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryScreenModel(
-    graph: MikoUiGraph,
-    carrierFlow: StateFlow<BrowseCarrier>,
+    private val graph: MikoUiGraph,
+    private val carrierFlow: StateFlow<BrowseCarrier>,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
@@ -115,6 +115,20 @@ class LibraryScreenModel(
             query = query,
             entries = applyQuery(rawEntries, query),
         )
+    }
+
+    /** Android's selection action — unfavorites the entry. */
+    fun removeFromLibrary(entry: LibraryEntry) {
+        scope.launch {
+            graph.binding(carrierFlow.value).setFavorite(entry.id, false)
+        }
+    }
+
+    /** Android's selection action — marks every item read/seen. */
+    fun markAllDone(entry: LibraryEntry) {
+        scope.launch {
+            graph.binding(carrierFlow.value).setAllItemsDone(entry.id, true)
+        }
     }
 
     private fun applyQuery(

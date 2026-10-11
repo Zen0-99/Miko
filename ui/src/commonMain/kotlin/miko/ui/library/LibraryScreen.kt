@@ -1,6 +1,7 @@
 package miko.ui.library
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,10 +12,15 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Badge
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,16 +82,45 @@ fun LibraryScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 items(state.entries, key = { it.id }) { entry ->
-                    CoverGridItem(
-                        title = if (state.showTitle) entry.title else null,
-                        coverUrl = entry.coverUrl,
-                        onClick = { onEntryClick(entry) },
-                        topStartBadge = if (entry.unreadCount > 0) {
-                            { Badge { Text("${entry.unreadCount}") } }
-                        } else {
-                            null
-                        },
-                    )
+                    var menuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        CoverGridItem(
+                            title = if (state.showTitle) entry.title else null,
+                            coverUrl = entry.coverUrl,
+                            onClick = { onEntryClick(entry) },
+                            // Android's long-press selection menu (reduced —
+                            // mark read + remove until selection mode lands).
+                            onLongClick = { menuOpen = true },
+                            topStartBadge = if (entry.unreadCount > 0) {
+                                { Badge { Text("${entry.unreadCount}") } }
+                            } else {
+                                null
+                            },
+                        )
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(stringResource(MR.strings.action_mark_as_read))
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    model.markAllDone(entry)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(stringResource(MR.strings.remove_from_library))
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    model.removeFromLibrary(entry)
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
