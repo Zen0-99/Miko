@@ -72,6 +72,8 @@ class MangaReaderScreenModel(
         val imageScaleType: Int = 1,
         /** Android's reader_tapping_inverted — flips the tap zones. */
         val tappingInverted: TappingInvertMode = TappingInvertMode.NONE,
+        /** Android's webtoon_side_padding — percent margins on the strip. */
+        val webtoonSidePadding: Int = 0,
         val showSettings: Boolean = false,
         /** Android's lastPageRead restore — page to open the viewer at. */
         val initialPage: Int = 0,
@@ -141,6 +143,12 @@ class MangaReaderScreenModel(
         TappingInvertMode.NONE,
     )
 
+    // Android's readerPreferences.webtoonSidePadding — same key/default.
+    private val webtoonSidePaddingPref = preferenceStore.getInt(
+        "webtoon_side_padding",
+        0,
+    )
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -195,6 +203,11 @@ class MangaReaderScreenModel(
                 _state.value = _state.value.copy(tappingInverted = v)
             }
         }
+        scope.launch {
+            webtoonSidePaddingPref.changes().collect { v ->
+                _state.value = _state.value.copy(webtoonSidePadding = v)
+            }
+        }
     }
 
     private fun resolveMode(viewerFlag: Int, defaultFlag: Int) {
@@ -224,6 +237,8 @@ class MangaReaderScreenModel(
     fun setImageScaleType(type: Int) = imageScaleTypePref.set(type)
 
     fun setTappingInverted(mode: TappingInvertMode) = tappingInvertedPref.set(mode)
+
+    fun setWebtoonSidePadding(pct: Int) = webtoonSidePaddingPref.set(pct)
 
     /**
      * Android's calculateChapterGap — floor(higher) − floor(lower) − 1;

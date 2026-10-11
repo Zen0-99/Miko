@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -77,6 +78,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.buffered
 import kotlinx.io.readByteArray
 import miko.ui.components.SettingDropdown
+import miko.ui.components.SettingSlider
 import miko.ui.components.SettingSwitch
 import miko.ui.download.DownloadManager
 import miko.ui.platform.HideSystemBars
@@ -86,6 +88,7 @@ import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.secondaryItemAlpha
+import kotlin.math.roundToInt
 
 /**
  * Manga reader — reading mode follows Android's `ReadingMode`: paged LTR /
@@ -196,6 +199,7 @@ fun MangaReaderScreen(
             onLongTapChange = model::setLongTapScroll,
             onScaleTypeSelect = model::setImageScaleType,
             onTappingInvertSelect = model::setTappingInverted,
+            onSidePaddingChange = model::setWebtoonSidePadding,
             onDismiss = model::closeSettings,
         )
     }
@@ -571,46 +575,51 @@ private fun WebtoonViewer(
                 .coerceIn(0, state.pages.lastIndex.coerceAtLeast(0)),
         )
     }
-    LazyColumn(
-        state = listState,
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 4.dp),
-    ) {
-        if (state.showTransitions) {
+    // Android's webtoon_side_padding — percent of viewport width as
+    // horizontal margins on the strip (WebtoonPageHolder's margin calc).
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val sidePad = maxWidth * (state.webtoonSidePadding / 100f)
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = sidePad, vertical = 4.dp),
+        ) {
+            if (state.showTransitions) {
+                item {
+                    ChapterTransitionBlock(
+                        goingNext = false,
+                        currentName = state.chapterName,
+                        neighbor = state.prevChapter,
+                        onNavigate = onPrevChapter,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 24.dp),
+                    )
+                }
+            }
             item {
-                ChapterTransitionBlock(
-                    goingNext = false,
-                    currentName = state.chapterName,
-                    neighbor = state.prevChapter,
-                    onNavigate = onPrevChapter,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                Text(
+                    text = state.chapterName,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
-        }
-        item {
-            Text(
-                text = state.chapterName,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-        items(state.pages, key = { it.index }) { page ->
-            PageImage(page, Modifier.fillMaxWidth())
-        }
-        item { Spacer(Modifier.height(16.dp)) }
-        if (state.showTransitions) {
-            item {
-                ChapterTransitionBlock(
-                    goingNext = true,
-                    currentName = state.chapterName,
-                    neighbor = state.nextChapter,
-                    onNavigate = onNextChapter,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
-                )
+            items(state.pages, key = { it.index }) { page ->
+                PageImage(page, Modifier.fillMaxWidth())
+            }
+            item { Spacer(Modifier.height(16.dp)) }
+            if (state.showTransitions) {
+                item {
+                    ChapterTransitionBlock(
+                        goingNext = true,
+                        currentName = state.chapterName,
+                        neighbor = state.nextChapter,
+                        onNavigate = onNextChapter,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 24.dp),
+                    )
+                }
             }
         }
     }
@@ -812,6 +821,7 @@ private fun ReaderSettingsSheet(
     onLongTapChange: (Boolean) -> Unit,
     onScaleTypeSelect: (Int) -> Unit,
     onTappingInvertSelect: (TappingInvertMode) -> Unit,
+    onSidePaddingChange: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -858,6 +868,12 @@ private fun ReaderSettingsSheet(
                 current = stringResource(state.tappingInverted.titleRes),
                 options = TappingInvertMode.entries.map { it to it.titleRes },
                 onSelect = onTappingInvertSelect,
+            )
+            SettingSlider(
+                labelRes = MR.strings.pref_webtoon_side_padding,
+                value = state.webtoonSidePadding.toFloat(),
+                range = 0f..25f,
+                onChange = { onSidePaddingChange(it.roundToInt()) },
             )
             SettingSwitch(
                 labelRes = MR.strings.pref_show_page_number,
