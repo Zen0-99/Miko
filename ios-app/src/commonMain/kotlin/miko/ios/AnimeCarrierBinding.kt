@@ -115,7 +115,13 @@ class AnimeCarrierBinding(
         emitAll(
             episodeRepository.getEpisodeByAnimeIdAsFlow(localId).map { episodes ->
                 episodes.map {
-                    LocalItem(id = it.id, url = it.url, name = it.name, done = it.seen)
+                    LocalItem(
+                        id = it.id,
+                        url = it.url,
+                        name = it.name,
+                        done = it.seen,
+                        bookmarked = it.bookmark,
+                    )
                 }
             },
         )
@@ -123,7 +129,13 @@ class AnimeCarrierBinding(
 
     override suspend fun getLocalItems(localId: Long): List<LocalItem> =
         episodeRepository.getEpisodeByAnimeId(localId).map {
-            LocalItem(id = it.id, url = it.url, name = it.name, done = it.seen)
+            LocalItem(
+                id = it.id,
+                url = it.url,
+                name = it.name,
+                done = it.seen,
+                bookmarked = it.bookmark,
+            )
         }
 
     override suspend fun addMissingItems(localId: Long, remote: List<RemoteItem>) {
@@ -170,6 +182,10 @@ class AnimeCarrierBinding(
 
     override suspend fun setItemDone(itemId: Long, done: Boolean) {
         episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, seen = done))
+    }
+
+    override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
+        episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, bookmark = bookmarked))
     }
 
     override suspend fun setAllItemsDone(localId: Long, done: Boolean) {

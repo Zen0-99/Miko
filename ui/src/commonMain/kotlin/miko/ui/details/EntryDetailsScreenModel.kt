@@ -33,6 +33,8 @@ class EntryDetailsScreenModel(
         val local: LocalEntry? = null,
         val items: List<RemoteItem> = emptyList(),
         val doneUrls: Set<String> = emptySet(),
+        /** Bookmarked item urls — Android's chapter bookmark badges. */
+        val bookmarkedUrls: Set<String> = emptySet(),
         val favorite: Boolean = false,
         val detailsLoading: Boolean = true,
         val itemsLoading: Boolean = true,
@@ -97,6 +99,8 @@ class EntryDetailsScreenModel(
             binding.localItems(localId).collect { items ->
                 _state.value = _state.value.copy(
                     doneUrls = items.filter { it.done }
+                        .mapTo(HashSet()) { it.url },
+                    bookmarkedUrls = items.filter { it.bookmarked }
                         .mapTo(HashSet()) { it.url },
                 )
             }
@@ -213,6 +217,17 @@ class EntryDetailsScreenModel(
                 .firstOrNull { it.url == itemUrl }
                 ?: return@launch
             binding.setItemDone(item.id, done)
+        }
+    }
+
+    /** Android's chapter bookmark toggle — row long-press action. */
+    fun toggleItemBookmark(itemUrl: String) {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            val item = binding.getLocalItems(local.id)
+                .firstOrNull { it.url == itemUrl }
+                ?: return@launch
+            binding.setItemBookmark(item.id, !item.bookmarked)
         }
     }
 

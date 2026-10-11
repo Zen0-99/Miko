@@ -21,12 +21,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -169,19 +172,62 @@ fun EntryDetailsScreen(
                     val doneUrls = state.doneUrls
                     items(items, key = { it.url }) { item ->
                         val itemDone = item.url in doneUrls
-                        ItemRow(
-                            item = item,
-                            numberPrefix = itemPrefix(carrier),
-                            done = itemDone,
-                            onClick = { onItemClick(item) },
-                            // Android's row long-press → mark read/unread; only
-                            // persists once the entry has a local row.
-                            onLongClick = if (state.local != null) {
-                                { model.markItem(item.url, !itemDone) }
-                            } else {
-                                null
-                            },
-                        )
+                        var rowMenuOpen by remember(item.url) { mutableStateOf(false) }
+                        Box {
+                            ItemRow(
+                                item = item,
+                                numberPrefix = itemPrefix(carrier),
+                                done = itemDone,
+                                bookmarked = item.url in state.bookmarkedUrls,
+                                onClick = { onItemClick(item) },
+                                // Android's row long-press context actions —
+                                // only persist once the entry has a local row.
+                                onLongClick = if (state.local != null) {
+                                    { rowMenuOpen = true }
+                                } else {
+                                    null
+                                },
+                            )
+                            DropdownMenu(
+                                expanded = rowMenuOpen,
+                                onDismissRequest = { rowMenuOpen = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(
+                                                if (itemDone) {
+                                                    MR.strings.action_mark_as_unread
+                                                } else {
+                                                    MR.strings.action_mark_as_read
+                                                },
+                                            ),
+                                        )
+                                    },
+                                    onClick = {
+                                        rowMenuOpen = false
+                                        model.markItem(item.url, !itemDone)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(
+                                                if (item.url in state.bookmarkedUrls) {
+                                                    MR.strings.action_remove_bookmark
+                                                } else {
+                                                    MR.strings.action_bookmark
+                                                },
+                                            ),
+                                        )
+                                    },
+                                    onClick = {
+                                        rowMenuOpen = false
+                                        model.toggleItemBookmark(item.url)
+                                    },
+                                )
+                            }
+                        }
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     }
                 }
@@ -618,6 +664,7 @@ private fun ItemRow(
     done: Boolean,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    bookmarked: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -625,15 +672,26 @@ private fun ItemRow(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        Text(
-            text = item.name,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (done) {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (done) {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.weight(1f),
+            )
+            if (bookmarked) {
+                Icon(
+                    imageVector = Icons.Filled.Bookmark,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
         if (item.number >= 0.0) {
             Text(
                 text = "$numberPrefix ${item.number}",

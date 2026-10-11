@@ -68,6 +68,8 @@ data class LocalItem(
     val done: Boolean,
     /** Manga reader position — Android's `last_page_read`. */
     val lastPageRead: Int = 0,
+    /** Android's per-item bookmark flag. */
+    val bookmarked: Boolean = false,
 )
 
 /** A manga reader page. */
@@ -165,6 +167,9 @@ interface CarrierBinding {
 
     /** Manga reader position — Android's `last_page_read` write. */
     suspend fun setItemPageProgress(itemId: Long, page: Int) = Unit
+
+    /** Android's per-item bookmark toggle. */
+    suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) = Unit
 
     /** Chapter-list sort direction — the entry's chapterFlags sort bit. */
     suspend fun setChapterSortDescending(localId: Long, descending: Boolean) = Unit

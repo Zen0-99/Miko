@@ -135,6 +135,7 @@ class MangaCarrierBinding(
                         name = it.name,
                         done = it.read,
                         lastPageRead = it.lastPageRead.toInt(),
+                        bookmarked = it.bookmark,
                     )
                 }
             },
@@ -149,6 +150,7 @@ class MangaCarrierBinding(
                 name = it.name,
                 done = it.read,
                 lastPageRead = it.lastPageRead.toInt(),
+                bookmarked = it.bookmark,
             )
         }
 
@@ -200,6 +202,10 @@ class MangaCarrierBinding(
         chapterRepository.updateChapter(
             ChapterUpdate(id = itemId, lastPageRead = page.toLong()),
         )
+    }
+
+    override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
+        chapterRepository.updateChapter(ChapterUpdate(id = itemId, bookmark = bookmarked))
     }
 
     override suspend fun setAllItemsDone(localId: Long, done: Boolean) {

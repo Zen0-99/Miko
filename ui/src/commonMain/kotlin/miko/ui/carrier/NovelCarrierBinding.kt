@@ -98,15 +98,22 @@ class NovelCarrierBinding(
         )
     }
 
+    private fun toLocalItem(chapter: tachiyomi.domain.items.chapter.model.NovelChapter) =
+        LocalItem(
+            id = chapter.id,
+            url = chapter.url,
+            name = chapter.name,
+            done = chapter.read,
+            bookmarked = chapter.bookmark,
+        )
+
     override fun localItems(localId: Long): Flow<List<LocalItem>> =
         chapterRepository.getNovelChaptersByNovelIdAsFlow(localId).map { chapters ->
-            chapters.map { LocalItem(id = it.id, url = it.url, name = it.name, done = it.read) }
+            chapters.map(::toLocalItem)
         }
 
     override suspend fun getLocalItems(localId: Long): List<LocalItem> =
-        chapterRepository.getNovelChaptersByNovelId(localId).map {
-            LocalItem(id = it.id, url = it.url, name = it.name, done = it.read)
-        }
+        chapterRepository.getNovelChaptersByNovelId(localId).map(::toLocalItem)
 
     override suspend fun addMissingItems(localId: Long, remote: List<RemoteItem>) {
         val existing = getLocalItems(localId).mapTo(HashSet()) { it.url }
@@ -158,6 +165,10 @@ class NovelCarrierBinding(
 
     override suspend fun setItemDone(itemId: Long, done: Boolean) {
         chapterRepository.updateNovelChapter(NovelChapterUpdate(id = itemId, read = done))
+    }
+
+    override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
+        chapterRepository.updateNovelChapter(NovelChapterUpdate(id = itemId, bookmark = bookmarked))
     }
 
     override suspend fun setAllItemsDone(localId: Long, done: Boolean) {
