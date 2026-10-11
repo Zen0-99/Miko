@@ -23,6 +23,7 @@ import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
 import tachiyomi.domain.collection.model.Collection
@@ -92,9 +93,9 @@ class MangaCarrierBinding(
             Manga.CHAPTER_SORTING_ALPHABET -> ChapterSortMode.ALPHABET
             else -> ChapterSortMode.NUMBER
         },
-        bookmarkedOnly = chapterFlags and Manga.CHAPTER_SHOW_BOOKMARKED != 0L,
+        bookmarkedFilter = bookmarkedFilter,
         displayByNumber = displayMode == Manga.CHAPTER_DISPLAY_NUMBER,
-        unreadOnly = unreadFilterRaw == Manga.CHAPTER_SHOW_UNREAD,
+        unreadFilter = unreadFilter,
         viewer = (viewerFlags and MANGA_READING_MODE_MASK).toInt(),
     )
 
@@ -126,9 +127,13 @@ class MangaCarrierBinding(
         )
     }
 
-    override suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) {
+    override suspend fun setChapterUnreadFilter(localId: Long, state: TriState) {
         val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
-        val flag = if (onlyUnread) Manga.CHAPTER_SHOW_UNREAD else 0L
+        val flag = when (state) {
+            TriState.ENABLED_IS -> Manga.CHAPTER_SHOW_UNREAD
+            TriState.ENABLED_NOT -> Manga.CHAPTER_SHOW_READ
+            TriState.DISABLED -> 0L
+        }
         mangaRepository.updateManga(
             MangaUpdate(
                 id = localId,
@@ -157,9 +162,13 @@ class MangaCarrierBinding(
         )
     }
 
-    override suspend fun setChapterBookmarkedOnly(localId: Long, onlyBookmarked: Boolean) {
+    override suspend fun setChapterBookmarkedFilter(localId: Long, state: TriState) {
         val manga = runCatching { mangaRepository.getMangaById(localId) }.getOrNull() ?: return
-        val flag = if (onlyBookmarked) Manga.CHAPTER_SHOW_BOOKMARKED else 0L
+        val flag = when (state) {
+            TriState.ENABLED_IS -> Manga.CHAPTER_SHOW_BOOKMARKED
+            TriState.ENABLED_NOT -> Manga.CHAPTER_SHOW_NOT_BOOKMARKED
+            TriState.DISABLED -> 0L
+        }
         mangaRepository.updateManga(
             MangaUpdate(
                 id = localId,

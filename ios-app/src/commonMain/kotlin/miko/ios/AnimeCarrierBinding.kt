@@ -24,6 +24,7 @@ import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
 import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
@@ -89,9 +90,10 @@ class AnimeCarrierBinding(
             Anime.EPISODE_SORTING_ALPHABET -> ChapterSortMode.ALPHABET
             else -> ChapterSortMode.NUMBER
         },
-        bookmarkedOnly = episodeFlags and Anime.EPISODE_SHOW_BOOKMARKED != 0L,
+        bookmarkedFilter = bookmarkedFilter,
         displayByNumber = displayMode == Anime.EPISODE_DISPLAY_NUMBER,
-        unreadOnly = unseenFilterRaw == Anime.EPISODE_SHOW_UNSEEN,
+        unreadFilter = unseenFilter,
+        fillermarkedFilter = fillermarkedFilter,
     )
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
@@ -122,9 +124,13 @@ class AnimeCarrierBinding(
         )
     }
 
-    override suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) {
+    override suspend fun setChapterUnreadFilter(localId: Long, state: TriState) {
         val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
-        val flag = if (onlyUnread) Anime.EPISODE_SHOW_UNSEEN else 0L
+        val flag = when (state) {
+            TriState.ENABLED_IS -> Anime.EPISODE_SHOW_UNSEEN
+            TriState.ENABLED_NOT -> Anime.EPISODE_SHOW_SEEN
+            TriState.DISABLED -> 0L
+        }
         animeRepository.updateAnime(
             AnimeUpdate(
                 id = localId,
@@ -153,9 +159,13 @@ class AnimeCarrierBinding(
         )
     }
 
-    override suspend fun setChapterBookmarkedOnly(localId: Long, onlyBookmarked: Boolean) {
+    override suspend fun setChapterBookmarkedFilter(localId: Long, state: TriState) {
         val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
-        val flag = if (onlyBookmarked) Anime.EPISODE_SHOW_BOOKMARKED else 0L
+        val flag = when (state) {
+            TriState.ENABLED_IS -> Anime.EPISODE_SHOW_BOOKMARKED
+            TriState.ENABLED_NOT -> Anime.EPISODE_SHOW_NOT_BOOKMARKED
+            TriState.DISABLED -> 0L
+        }
         animeRepository.updateAnime(
             AnimeUpdate(
                 id = localId,
@@ -179,6 +189,24 @@ class AnimeCarrierBinding(
         )
     }
 
+    /** Android's fillermarkedFilter — the episodeFlags filler bits. */
+    override suspend fun setChapterFillermarkedFilter(localId: Long, state: TriState) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }.getOrNull() ?: return
+        val flag = when (state) {
+            TriState.ENABLED_IS -> Anime.EPISODE_SHOW_FILLERMARKED
+            TriState.ENABLED_NOT -> Anime.EPISODE_SHOW_NOT_FILLERMARKED
+            TriState.DISABLED -> 0L
+        }
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                episodeFlags = anime.episodeFlags
+                    .and(Anime.EPISODE_FILLERMARKED_MASK.inv())
+                    .or(flag),
+            ),
+        )
+    }
+
     override fun localItems(localId: Long): Flow<List<LocalItem>> = flow {
         // getEpisodeByAnimeIdAsFlow is suspend (unlike the novel repo's).
         emitAll(
@@ -191,6 +219,7 @@ class AnimeCarrierBinding(
                         number = it.episodeNumber,
                         done = it.seen,
                         bookmarked = it.bookmark,
+                        fillermarked = it.fillermark || it.canonicalFiller == true,
                     )
                 }
             },
@@ -206,6 +235,7 @@ class AnimeCarrierBinding(
                 number = it.episodeNumber,
                 done = it.seen,
                 bookmarked = it.bookmark,
+                fillermarked = it.fillermark || it.canonicalFiller == true,
             )
         }
 

@@ -72,6 +72,7 @@ import miko.ui.components.ChapterSettingsSheet
 import miko.ui.components.MigrateSourceSheet
 import miko.ui.components.ScanlatorFilterSheet
 import miko.ui.platform.rememberShareHandler
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -214,21 +215,25 @@ fun EntryDetailsScreen(
                 var settingsOpen by remember { mutableStateOf(false) }
                 ChapterListHeader(
                     count = state.items.size,
-                    filtersActive = state.unreadOnly || state.bookmarkedOnly,
+                    filtersActive = state.unreadFilter != TriState.DISABLED ||
+                        state.bookmarkedFilter != TriState.DISABLED ||
+                        state.fillermarkedFilter != TriState.DISABLED,
                     showActions = state.local != null,
                     onFilterClick = { settingsOpen = true },
                 )
                 if (settingsOpen) {
                     ChapterSettingsSheet(
                         carrier = carrier,
-                        unreadOnly = state.unreadOnly,
-                        bookmarkedOnly = state.bookmarkedOnly,
+                        unreadFilter = state.unreadFilter,
+                        bookmarkedFilter = state.bookmarkedFilter,
+                        fillermarkedFilter = state.fillermarkedFilter,
                         sortMode = state.sortMode,
                         sortDescending = state.sortDescending,
                         displayByNumber = state.displayByNumber,
                         onDismissRequest = { settingsOpen = false },
-                        onToggleUnread = model::toggleUnreadFilter,
-                        onToggleBookmarked = model::toggleBookmarkedFilter,
+                        onCycleUnread = model::cycleUnreadFilter,
+                        onCycleBookmarked = model::cycleBookmarkedFilter,
+                        onCycleFillermarked = model::cycleFillermarkedFilter,
                         onSortMode = model::setChapterSortMode,
                         onToggleSortDirection = model::toggleSortDirection,
                         onDisplayByNumber = model::setDisplayByNumber,

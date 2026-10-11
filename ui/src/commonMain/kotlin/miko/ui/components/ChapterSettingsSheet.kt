@@ -15,6 +15,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.CheckBox
+import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
+import androidx.compose.material.icons.rounded.DisabledByDefault
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -39,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.ChapterSortMode
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -52,14 +56,16 @@ import tachiyomi.presentation.core.i18n.stringResource
 @Composable
 fun ChapterSettingsSheet(
     carrier: BrowseCarrier,
-    unreadOnly: Boolean,
-    bookmarkedOnly: Boolean,
+    unreadFilter: TriState,
+    bookmarkedFilter: TriState,
+    fillermarkedFilter: TriState,
     sortMode: ChapterSortMode,
     sortDescending: Boolean,
     displayByNumber: Boolean,
     onDismissRequest: () -> Unit,
-    onToggleUnread: () -> Unit,
-    onToggleBookmarked: () -> Unit,
+    onCycleUnread: () -> Unit,
+    onCycleBookmarked: () -> Unit,
+    onCycleFillermarked: () -> Unit,
     onSortMode: (ChapterSortMode) -> Unit,
     onToggleSortDirection: () -> Unit,
     onDisplayByNumber: (Boolean) -> Unit,
@@ -151,16 +157,29 @@ fun ChapterSettingsSheet(
         ) {
             when (page) {
                 0 -> {
-                    SheetCheckRow(
-                        label = stringResource(MR.strings.action_filter_unread),
-                        checked = unreadOnly,
-                        onClick = onToggleUnread,
+                    // Android's TriStateItems — DISABLED → IS → NOT cycle.
+                    val unreadRes = if (carrier == BrowseCarrier.SHOWS) {
+                        AYMR.strings.action_filter_unseen
+                    } else {
+                        MR.strings.action_filter_unread
+                    }
+                    SheetTriStateRow(
+                        label = stringResource(unreadRes),
+                        state = unreadFilter,
+                        onClick = onCycleUnread,
                     )
-                    SheetCheckRow(
+                    SheetTriStateRow(
                         label = stringResource(MR.strings.action_filter_bookmarked),
-                        checked = bookmarkedOnly,
-                        onClick = onToggleBookmarked,
+                        state = bookmarkedFilter,
+                        onClick = onCycleBookmarked,
                     )
+                    if (carrier == BrowseCarrier.SHOWS) {
+                        SheetTriStateRow(
+                            label = stringResource(AYMR.strings.action_filter_fillermarked),
+                            state = fillermarkedFilter,
+                            onClick = onCycleFillermarked,
+                        )
+                    }
                     // Android's scanlator-filter row at the bottom of the
                     // Filter tab — primary-tinted while exclusions apply.
                     if (onScanlatorFilterClick != null) {
@@ -256,6 +275,42 @@ private fun SheetRowBase(
 private fun SheetCheckRow(label: String, checked: Boolean, onClick: () -> Unit) {
     SheetRowBase(label = label, onClick = onClick) {
         Checkbox(checked = checked, onCheckedChange = null)
+    }
+}
+
+/**
+ * Android's `TriStateItem` — a leading state icon (blank / checked /
+ * disabled-by-default, primary-tinted when engaged) instead of a trailing
+ * checkbox. The click handler cycles DISABLED → IS → NOT.
+ */
+@Composable
+private fun SheetTriStateRow(label: String, state: TriState, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        Icon(
+            imageVector = when (state) {
+                TriState.DISABLED -> Icons.Rounded.CheckBoxOutlineBlank
+                TriState.ENABLED_IS -> Icons.Rounded.CheckBox
+                TriState.ENABLED_NOT -> Icons.Rounded.DisabledByDefault
+            },
+            contentDescription = null,
+            tint = if (state == TriState.DISABLED) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

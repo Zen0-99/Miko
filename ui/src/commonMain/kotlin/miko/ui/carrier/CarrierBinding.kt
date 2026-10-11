@@ -3,6 +3,7 @@ package miko.ui.carrier
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.collection.model.Collection
 
 /**
@@ -59,11 +60,14 @@ data class LocalEntry(
     val sortDescending: Boolean = false,
     /** chapterFlags sorting bits — Android's SOURCE/NUMBER/UPLOAD/ALPHA. */
     val sortMode: ChapterSortMode = ChapterSortMode.NUMBER,
-    /** chapterFlags bookmarked filter — Android's SHOW_BOOKMARKED. */
-    val bookmarkedOnly: Boolean = false,
+    /** chapterFlags bookmarked filter — Android's TriState. */
+    val bookmarkedFilter: TriState = TriState.DISABLED,
     /** chapterFlags display bit — "Chapter N"/"Episode N" vs scanlator title. */
     val displayByNumber: Boolean = false,
-    val unreadOnly: Boolean = false,
+    /** chapterFlags unread filter — Android's TriState. */
+    val unreadFilter: TriState = TriState.DISABLED,
+    /** episodeFlags fillermarked filter (shows) — Android's TriState. */
+    val fillermarkedFilter: TriState = TriState.DISABLED,
     /** Carrier viewer flag — manga reading mode 0..5; 0 = use pref default. */
     val viewer: Int = 0,
 )
@@ -101,6 +105,8 @@ data class LocalItem(
     val lastPageRead: Int = 0,
     /** Android's per-item bookmark flag. */
     val bookmarked: Boolean = false,
+    /** Episode filler flag (shows) — `fillermark || canonicalFiller`. */
+    val fillermarked: Boolean = false,
 )
 
 /** A manga reader page. */
@@ -254,13 +260,16 @@ interface CarrierBinding {
     suspend fun setChapterSortDescending(localId: Long, descending: Boolean) = Unit
 
     /** Chapter-list unread filter — the entry's chapterFlags unread bits. */
-    suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) = Unit
+    suspend fun setChapterUnreadFilter(localId: Long, state: TriState) = Unit
 
     /** Chapter-list sort mode — the entry's chapterFlags sorting bits. */
     suspend fun setChapterSortMode(localId: Long, mode: ChapterSortMode) = Unit
 
     /** Chapter-list bookmarked filter — the chapterFlags bookmarked bits. */
-    suspend fun setChapterBookmarkedOnly(localId: Long, onlyBookmarked: Boolean) = Unit
+    suspend fun setChapterBookmarkedFilter(localId: Long, state: TriState) = Unit
+
+    /** Episode-list fillermarked filter (shows) — the episodeFlags filler bits. */
+    suspend fun setChapterFillermarkedFilter(localId: Long, state: TriState) = Unit
 
     /**
      * Chapter-list display mode — the chapterFlags display bit; rows show

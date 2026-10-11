@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
 import miko.ui.model.toDomainNovel
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
@@ -75,9 +76,9 @@ class NovelCarrierBinding(
             Novel.CHAPTER_SORTING_ALPHABET -> ChapterSortMode.ALPHABET
             else -> ChapterSortMode.NUMBER
         },
-        bookmarkedOnly = chapterFlags and Novel.CHAPTER_SHOW_BOOKMARKED != 0L,
+        bookmarkedFilter = bookmarkedFilter,
         displayByNumber = displayMode == Novel.CHAPTER_DISPLAY_NUMBER,
-        unreadOnly = unreadFilterRaw == Novel.CHAPTER_SHOW_UNREAD,
+        unreadFilter = unreadFilter,
     )
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
@@ -108,9 +109,13 @@ class NovelCarrierBinding(
         )
     }
 
-    override suspend fun setChapterUnreadOnly(localId: Long, onlyUnread: Boolean) {
+    override suspend fun setChapterUnreadFilter(localId: Long, state: TriState) {
         val novel = runCatching { novelRepository.getNovelById(localId) }.getOrNull() ?: return
-        val flag = if (onlyUnread) Novel.CHAPTER_SHOW_UNREAD else 0L
+        val flag = when (state) {
+            TriState.ENABLED_IS -> Novel.CHAPTER_SHOW_UNREAD
+            TriState.ENABLED_NOT -> Novel.CHAPTER_SHOW_READ
+            TriState.DISABLED -> 0L
+        }
         novelRepository.updateNovel(
             NovelUpdate(
                 id = localId,
@@ -139,9 +144,13 @@ class NovelCarrierBinding(
         )
     }
 
-    override suspend fun setChapterBookmarkedOnly(localId: Long, onlyBookmarked: Boolean) {
+    override suspend fun setChapterBookmarkedFilter(localId: Long, state: TriState) {
         val novel = runCatching { novelRepository.getNovelById(localId) }.getOrNull() ?: return
-        val flag = if (onlyBookmarked) Novel.CHAPTER_SHOW_BOOKMARKED else 0L
+        val flag = when (state) {
+            TriState.ENABLED_IS -> Novel.CHAPTER_SHOW_BOOKMARKED
+            TriState.ENABLED_NOT -> Novel.CHAPTER_SHOW_NOT_BOOKMARKED
+            TriState.DISABLED -> 0L
+        }
         novelRepository.updateNovel(
             NovelUpdate(
                 id = localId,

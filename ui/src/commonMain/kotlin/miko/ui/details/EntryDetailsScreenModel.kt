@@ -17,6 +17,7 @@ import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.ordered
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.collection.model.Collection
 
 /**
@@ -47,9 +48,12 @@ class EntryDetailsScreenModel(
         /** Entry chapterFlags semantics — sort + filters + display mode. */
         val sortDescending: Boolean = false,
         val sortMode: ChapterSortMode = ChapterSortMode.NUMBER,
-        val unreadOnly: Boolean = false,
-        val bookmarkedOnly: Boolean = false,
+        val unreadFilter: TriState = TriState.DISABLED,
+        val bookmarkedFilter: TriState = TriState.DISABLED,
+        val fillermarkedFilter: TriState = TriState.DISABLED,
         val displayByNumber: Boolean = false,
+        /** Filler episode urls (shows) — decorates the filler filter. */
+        val fillermarkedUrls: Set<String> = emptySet(),
         /** ChangeCollectionDialog — visible collections + this entry's ids. */
         val collectionSheetOpen: Boolean = false,
         val collections: List<Collection> = emptyList(),
@@ -71,8 +75,21 @@ class EntryDetailsScreenModel(
         val displayItems: List<RemoteItem>
             get() {
                 var filtered = items
-                if (unreadOnly) filtered = filtered.filter { it.url !in doneUrls }
-                if (bookmarkedOnly) filtered = filtered.filter { it.url in bookmarkedUrls }
+                filtered = when (unreadFilter) {
+                    TriState.ENABLED_IS -> filtered.filter { it.url !in doneUrls }
+                    TriState.ENABLED_NOT -> filtered.filter { it.url in doneUrls }
+                    TriState.DISABLED -> filtered
+                }
+                filtered = when (bookmarkedFilter) {
+                    TriState.ENABLED_IS -> filtered.filter { it.url in bookmarkedUrls }
+                    TriState.ENABLED_NOT -> filtered.filter { it.url !in bookmarkedUrls }
+                    TriState.DISABLED -> filtered
+                }
+                filtered = when (fillermarkedFilter) {
+                    TriState.ENABLED_IS -> filtered.filter { it.url in fillermarkedUrls }
+                    TriState.ENABLED_NOT -> filtered.filter { it.url !in fillermarkedUrls }
+                    TriState.DISABLED -> filtered
+                }
                 if (excludedScanlators.isNotEmpty()) {
                     filtered = filtered.filter { it.scanlator !in excludedScanlators }
                 }
@@ -103,8 +120,9 @@ class EntryDetailsScreenModel(
                     favorite = local?.favorite == true,
                     sortDescending = local?.sortDescending == true,
                     sortMode = local?.sortMode ?: ChapterSortMode.NUMBER,
-                    unreadOnly = local?.unreadOnly == true,
-                    bookmarkedOnly = local?.bookmarkedOnly == true,
+                    unreadFilter = local?.unreadFilter ?: TriState.DISABLED,
+                    bookmarkedFilter = local?.bookmarkedFilter ?: TriState.DISABLED,
+                    fillermarkedFilter = local?.fillermarkedFilter ?: TriState.DISABLED,
                     displayByNumber = local?.displayByNumber == true,
                 )
                 if (local != null) subscribeLocalItems(local.id)
@@ -126,6 +144,8 @@ class EntryDetailsScreenModel(
                     doneUrls = items.filter { it.done }
                         .mapTo(HashSet()) { it.url },
                     bookmarkedUrls = items.filter { it.bookmarked }
+                        .mapTo(HashSet()) { it.url },
+                    fillermarkedUrls = items.filter { it.fillermarked }
                         .mapTo(HashSet()) { it.url },
                 )
             }
@@ -223,10 +243,10 @@ class EntryDetailsScreenModel(
     }
 
     /** Chapter-header unread filter — writes the entry's chapterFlags bits. */
-    fun toggleUnreadFilter() {
+    fun cycleUnreadFilter() {
         scope.launch {
             val local = _state.value.local ?: return@launch
-            binding.setChapterUnreadOnly(local.id, !_state.value.unreadOnly)
+            binding.setChapterUnreadFilter(local.id, _state.value.unreadFilter.next())
         }
     }
 
@@ -239,10 +259,21 @@ class EntryDetailsScreenModel(
     }
 
     /** Filter-sheet bookmarked filter — chapterFlags bookmarked bits. */
-    fun toggleBookmarkedFilter() {
+    fun cycleBookmarkedFilter() {
         scope.launch {
             val local = _state.value.local ?: return@launch
-            binding.setChapterBookmarkedOnly(local.id, !_state.value.bookmarkedOnly)
+            binding.setChapterBookmarkedFilter(local.id, _state.value.bookmarkedFilter.next())
+        }
+    }
+
+    /** Filter-sheet fillermarked filter (shows) — episodeFlags filler bits. */
+    fun cycleFillermarkedFilter() {
+        scope.launch {
+            val local = _state.value.local ?: return@launch
+            binding.setChapterFillermarkedFilter(
+                local.id,
+                _state.value.fillermarkedFilter.next(),
+            )
         }
     }
 
