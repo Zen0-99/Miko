@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -84,6 +85,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -500,46 +502,58 @@ fun EntryDetailsScreen(
                                     onGroupSelected = { groupOverride = it },
                                     accentColor = accentColor,
                                 )
-                                ItemCarouselScrubber(
-                                    listState = carouselState,
-                                    itemCount = rows.size,
-                                    accentColor = accentColor,
-                                )
-                                LazyRow(
-                                    state = carouselState,
-                                    flingBehavior = rememberSnapFlingBehavior(
-                                        lazyListState = carouselState,
-                                    ),
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement =
-                                    Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                ) {
-                                    items(
-                                        rows,
-                                        key = {
-                                            when (it) {
-                                                is ItemRowEntry.ChapterRow -> it.item.url
-                                                is ItemRowEntry.MissingCount -> it.key
+                                BoxWithConstraints {
+                                    // Cards are 0.75× the row's viewport —
+                                    // LocalConfiguration doesn't exist on iOS.
+                                    val cardWidth = maxWidth * CARD_WIDTH_FRACTION
+                                    Column {
+                                        ItemCarouselScrubber(
+                                            listState = carouselState,
+                                            itemCount = rows.size,
+                                            cardWidth = cardWidth,
+                                            accentColor = accentColor,
+                                        )
+                                        LazyRow(
+                                            state = carouselState,
+                                            flingBehavior = rememberSnapFlingBehavior(
+                                                lazyListState = carouselState,
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 16.dp),
+                                            horizontalArrangement =
+                                            Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                        ) {
+                                            items(
+                                                rows,
+                                                key = {
+                                                    when (it) {
+                                                        is ItemRowEntry.ChapterRow -> it.item.url
+                                                        is ItemRowEntry.MissingCount -> it.key
+                                                    }
+                                                },
+                                            ) { row ->
+                                                when (row) {
+                                                    is ItemRowEntry.MissingCount ->
+                                                        MissingCountCarouselCard(
+                                                            row.count,
+                                                            cardWidth,
+                                                        )
+                                                    is ItemRowEntry.ChapterRow ->
+                                                        ItemCarouselCard(
+                                                            item = row.item,
+                                                            carrier = carrier,
+                                                            state = state,
+                                                            selecting = selecting,
+                                                            accentColor = accentColor,
+                                                            cardWidth = cardWidth,
+                                                            onItemClick = onItemClick,
+                                                            onToggleSelect = model::toggleSelection,
+                                                            onDownload = model::downloadItem,
+                                                            onCancelDownload = model::cancelDownload,
+                                                            onDeleteDownload = model::deleteDownload,
+                                                        )
+                                                }
                                             }
-                                        },
-                                    ) { row ->
-                                        when (row) {
-                                            is ItemRowEntry.MissingCount ->
-                                                MissingCountCarouselCard(row.count)
-                                            is ItemRowEntry.ChapterRow ->
-                                                ItemCarouselCard(
-                                                    item = row.item,
-                                                    carrier = carrier,
-                                                    state = state,
-                                                    selecting = selecting,
-                                                    accentColor = accentColor,
-                                                    onItemClick = onItemClick,
-                                                    onToggleSelect = model::toggleSelection,
-                                                    onDownload = model::downloadItem,
-                                                    onCancelDownload = model::cancelDownload,
-                                                    onDeleteDownload = model::deleteDownload,
-                                                )
                                         }
                                     }
                                 }
@@ -1082,6 +1096,7 @@ private fun ItemCarouselCard(
     state: EntryDetailsScreenModel.State,
     selecting: Boolean,
     accentColor: Color?,
+    cardWidth: Dp,
     onItemClick: (RemoteItem) -> Unit,
     onToggleSelect: (String) -> Unit,
     onDownload: (String) -> Unit,
@@ -1161,6 +1176,7 @@ private fun ItemCarouselCard(
             isNext = item.url == state.nextItem?.url,
             onLongClick = if (state.local != null) longClick else ({}),
             onClick = click,
+            cardWidth = cardWidth,
             accentColor = accentColor,
             trailing = downloadTrailing,
         )
@@ -1176,6 +1192,7 @@ private fun ItemCarouselCard(
             isNext = item.url == state.nextItem?.url,
             onLongClick = if (state.local != null) longClick else ({}),
             onClick = click,
+            cardWidth = cardWidth,
             accentColor = accentColor,
             trailing = downloadTrailing,
         )

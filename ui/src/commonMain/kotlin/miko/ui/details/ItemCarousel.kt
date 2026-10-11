@@ -53,11 +53,11 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,7 +82,8 @@ import kotlin.math.roundToInt
  * upstream too (they fight the row scroll).
  */
 
-private const val CARD_WIDTH_FRACTION = 0.75f
+/** Card width = 0.75× the carousel viewport — Android's fraction. */
+const val CARD_WIDTH_FRACTION = 0.75f
 
 /** Accent-hue surface — Android's `accentTintedSurface` (pure-Kotlin HSL). */
 private fun accentTintedSurface(accent: Color, background: Color, dimmed: Boolean): Color {
@@ -123,12 +124,12 @@ fun ChapterCarouselCard(
     isNext: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
+    cardWidth: Dp,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
     trailing: (@Composable (tint: Color) -> Unit)? = null,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
-    val cardWidth = LocalConfiguration.current.screenWidthDp.dp * CARD_WIDTH_FRACTION
     val cardColor = accentTintedSurface(
         accent = accent,
         background = MaterialTheme.colorScheme.background,
@@ -300,12 +301,12 @@ fun EpisodeStillCard(
     isNext: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
+    cardWidth: Dp,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
     trailing: (@Composable (tint: Color) -> Unit)? = null,
 ) {
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
-    val cardWidth = LocalConfiguration.current.screenWidthDp.dp * CARD_WIDTH_FRACTION
     val metaAlpha = if (seen) 0.45f else 1f
     // Without a still-luminance probe the indicator gets a scrim chip —
     // legible on any image (Android probes the still's corner pixels).
@@ -646,13 +647,14 @@ fun ChapterGroupPillRow(
 @Composable
 fun MissingCountCarouselCard(
     count: Int,
+    cardWidth: Dp,
     modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
-            .width(LocalConfiguration.current.screenWidthDp.dp * CARD_WIDTH_FRACTION)
+            .width(cardWidth)
             .height(132.dp),
     ) {
         HorizontalDivider(modifier = Modifier.weight(1f))
@@ -678,6 +680,7 @@ fun MissingCountCarouselCard(
 fun ItemCarouselScrubber(
     listState: LazyListState,
     itemCount: Int,
+    cardWidth: Dp,
     modifier: Modifier = Modifier,
     accentColor: Color? = null,
 ) {
@@ -685,9 +688,7 @@ fun ItemCarouselScrubber(
 
     val scope = rememberCoroutineScope()
     val accent = accentColor ?: MaterialTheme.colorScheme.primary
-    val stridePx = with(LocalDensity.current) {
-        (LocalConfiguration.current.screenWidthDp.dp * CARD_WIDTH_FRACTION + 12.dp).toPx()
-    }
+    val stridePx = with(LocalDensity.current) { (cardWidth + 12.dp).toPx() }
     val maxScrollPx = stridePx * (itemCount - 1).coerceAtLeast(1)
     var dragFraction by remember { mutableStateOf(-1f) }
     val listFraction by remember {
