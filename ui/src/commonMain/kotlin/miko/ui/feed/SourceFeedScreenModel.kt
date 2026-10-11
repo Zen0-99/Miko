@@ -55,16 +55,18 @@ class SourceFeedScreenModel(
 
     init {
         scope.launch {
-            // Sources finish initializing asynchronously — wait for the map to
-            // contain our source before the first page load.
-            binding.isInitialized.collect { initialized ->
-                if (initialized && source == null) return@collect
-                if (initialized) {
-                    _state.value = _state.value.copy(
-                        sourceName = source?.name.orEmpty(),
-                        supportsLatest = source?.supportsLatest == true,
-                    )
-                }
+            // Plugin sources register asynchronously after isInitialized —
+            // collect the map so a late-arriving source still fills the bar
+            // and retries a load that failed with "Source unavailable".
+            binding.catalogueSources.collect {
+                val src = source ?: return@collect
+                val retry = _state.value.error == "Source unavailable" &&
+                    _state.value.items.isEmpty()
+                _state.value = _state.value.copy(
+                    sourceName = src.name,
+                    supportsLatest = src.supportsLatest,
+                )
+                if (retry) reset()
             }
         }
         loadNext()
