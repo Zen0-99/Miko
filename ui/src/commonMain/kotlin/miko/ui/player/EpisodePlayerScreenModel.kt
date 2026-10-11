@@ -17,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
+import miko.ui.reader.ChapterRow
 
 /**
  * Episode player (shows carrier): resolves the episode's hosters to a flat
@@ -42,6 +43,9 @@ class EpisodePlayerScreenModel(
         val error: String? = null,
         val hasPrev: Boolean = false,
         val hasNext: Boolean = false,
+        /** Episode-sheet rows — remote item names with local seen state. */
+        val episodes: List<ChapterRow> = emptyList(),
+        val showEpisodes: Boolean = false,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -67,7 +71,38 @@ class EpisodePlayerScreenModel(
 
     private suspend fun loadItemList() {
         val src = source ?: return
-        items = src.items(entryUrl)
+        val local = binding.localEntry(entryUrl, sourceId).first()
+        val remoteItems = src.items(entryUrl)
+        // Android sorts the reader's episode list by the entry's episodeFlags.
+        items = if (local?.sortDescending == true) {
+            remoteItems.sortedByDescending { it.number }
+        } else {
+            remoteItems.sortedBy { it.number }
+        }
+        val seenUrls = local?.let { entry ->
+            binding.getLocalItems(entry.id)
+                .filter { it.done }
+                .map { it.url }
+                .toSet()
+        }.orEmpty()
+        _state.value = _state.value.copy(
+            episodes = items.map {
+                ChapterRow(
+                    url = it.url,
+                    name = it.name,
+                    number = it.number,
+                    done = it.url in seenUrls,
+                )
+            },
+        )
+    }
+
+    fun openEpisodeSheet() {
+        _state.value = _state.value.copy(showEpisodes = true)
+    }
+
+    fun closeEpisodeSheet() {
+        _state.value = _state.value.copy(showEpisodes = false)
     }
 
     fun openEpisode(episodeUrl: String) {

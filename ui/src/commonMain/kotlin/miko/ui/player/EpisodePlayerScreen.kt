@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import miko.ui.reader.ChapterListSheet
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -111,12 +114,19 @@ fun EpisodePlayerScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(
                 onClick = model::prevEpisode,
                 enabled = state.hasPrev,
             ) {
                 Text(stringResource(MR.strings.action_previous_chapter))
+            }
+            IconButton(onClick = model::openEpisodeSheet) {
+                Icon(
+                    Icons.AutoMirrored.Filled.FormatListBulleted,
+                    contentDescription = stringResource(MR.strings.chapters),
+                )
             }
             TextButton(
                 onClick = model::nextEpisode,
@@ -125,5 +135,14 @@ fun EpisodePlayerScreen(
                 Text(stringResource(MR.strings.action_next_chapter))
             }
         }
+    }
+
+    if (state.showEpisodes) {
+        ChapterListSheet(
+            chapters = state.episodes,
+            currentUrl = state.episodeUrl,
+            onDismiss = model::closeEpisodeSheet,
+            onSelect = model::openEpisode,
+        )
     }
 }
