@@ -317,9 +317,7 @@ private class MangaCarrierSource(
         dateUpload = date_upload,
         scanlator = scanlator,
     )
-
-    /** Android's `ReadingMode.MASK` — the viewerFlags' low three bits. */
-    private companion object {
-        const val MANGA_READING_MODE_MASK = 0x00000007L
-    }
 }
+
+/** Android's `ReadingMode.MASK` — the viewerFlags' low three bits. */
+private const val MANGA_READING_MODE_MASK = 0x00000007L
