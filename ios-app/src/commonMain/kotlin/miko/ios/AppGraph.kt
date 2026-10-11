@@ -52,7 +52,9 @@ import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.NovelUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
+import tachiyomi.data.entries.manga.MangaRepositoryImpl
 import tachiyomi.data.entries.novel.NovelRepositoryImpl
+import tachiyomi.data.entries.shows.AnimeRepositoryImpl
 import tachiyomi.data.extension.novel.DefaultNovelPluginStorage
 import tachiyomi.data.extension.novel.IosNovelPluginKeyValueStore
 import tachiyomi.data.extension.novel.KtorJsIndexFetcher
@@ -67,8 +69,6 @@ import tachiyomi.data.handlers.manga.IosMangaDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.data.handlers.novel.IosNovelDatabaseHandler
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
-import tachiyomi.data.entries.manga.MangaRepositoryImpl
-import tachiyomi.data.entries.shows.AnimeRepositoryImpl
 import tachiyomi.data.items.chapter.ChapterRepositoryImpl
 import tachiyomi.data.items.chapter.NovelChapterRepositoryImpl
 import tachiyomi.data.items.episode.EpisodeRepositoryImpl

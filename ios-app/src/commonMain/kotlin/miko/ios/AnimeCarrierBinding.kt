@@ -1,5 +1,12 @@
 package miko.ios
 
+import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.animesource.model.SEpisode
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.FeedEntry
@@ -10,14 +17,6 @@ import miko.ui.carrier.LocalItem
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
-
-import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
-import eu.kanade.tachiyomi.animesource.model.AnimesPage
-import eu.kanade.tachiyomi.animesource.model.SAnime
-import eu.kanade.tachiyomi.animesource.model.SEpisode
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate

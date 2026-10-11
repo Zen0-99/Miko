@@ -1,5 +1,12 @@
 package miko.ios
 
+import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.FeedEntry
@@ -9,14 +16,6 @@ import miko.ui.carrier.LocalItem
 import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
-
-import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import tachiyomi.domain.entries.manga.interactor.GetManga
 import tachiyomi.domain.entries.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.entries.manga.model.MangaUpdate
