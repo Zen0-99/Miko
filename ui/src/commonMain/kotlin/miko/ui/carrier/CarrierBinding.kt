@@ -67,6 +67,8 @@ data class LocalItem(
     val id: Long,
     val url: String,
     val name: String,
+    /** chapterNumber/episodeNumber — migration state transfer matches on it. */
+    val number: Double = -1.0,
     val done: Boolean,
     /** Manga reader position — Android's `last_page_read`. */
     val lastPageRead: Int = 0,

@@ -360,6 +360,22 @@ fun MikoApp(graph: MikoUiGraph) {
                                                                 ?.showCollectionSheet()
                                                         },
                                                     )
+                                                    // Android's Migrate —
+                                                    // favorites only.
+                                                    DropdownMenuItem(
+                                                        text = {
+                                                            Text(
+                                                                stringResource(
+                                                                    MR.strings.action_migrate,
+                                                                ),
+                                                            )
+                                                        },
+                                                        onClick = {
+                                                            overflowOpen = false
+                                                            detailsModel
+                                                                ?.showMigrateSheet()
+                                                        },
+                                                    )
                                                 }
                                             }
                                         }
@@ -908,6 +924,12 @@ private fun DetailsDestination(
         // CollectionsTab.
         onEditCollections = {
             navigator.push(Destination.Collections)
+        },
+        // Android's migrate flow lands on the new entry's screen.
+        onMigrated = { newSourceId, newEntryUrl, newTitle ->
+            navigator.replace(
+                Destination.Details(newSourceId, newEntryUrl, newTitle, carrier),
+            )
         },
         modifier = modifier.fillMaxSize(),
     )

@@ -108,6 +108,7 @@ class NovelCarrierBinding(
             id = chapter.id,
             url = chapter.url,
             name = chapter.name,
+            number = chapter.chapterNumber,
             done = chapter.read,
             bookmarked = chapter.bookmark,
         )

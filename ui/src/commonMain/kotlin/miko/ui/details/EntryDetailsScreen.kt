@@ -69,6 +69,7 @@ import coil3.compose.AsyncImage
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.RemoteItem
 import miko.ui.components.ChangeCollectionSheet
+import miko.ui.components.MigrateSourceSheet
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -91,6 +92,7 @@ fun EntryDetailsScreen(
     onItemClick: (RemoteItem) -> Unit,
     onGenreClick: (String) -> Unit,
     onEditCollections: () -> Unit,
+    onMigrated: (sourceId: Long, entryUrl: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -103,6 +105,23 @@ fun EntryDetailsScreen(
             onEditCollections = onEditCollections,
             onConfirm = model::confirmCollections,
         )
+    }
+
+    if (state.migrateSheetOpen) {
+        MigrateSourceSheet(
+            sources = state.migrateSources,
+            onDismissRequest = model::dismissMigrateSheet,
+            onSourceSelected = { source ->
+                model.migrateTo(source.id, onMigrated)
+            },
+        )
+    }
+
+    // Migration in flight — Android's migrate screen shows a spinner while
+    // the entry copies across.
+    if (state.migrating) {
+        LoadingScreen()
+        return
     }
 
     // Android's NovelCoverDialog/MangaCoverDialog — tap the hero cover for

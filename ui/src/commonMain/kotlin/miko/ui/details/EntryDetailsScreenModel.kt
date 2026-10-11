@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import miko.ui.carrier.CarrierBinding
+import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
@@ -48,6 +49,10 @@ class EntryDetailsScreenModel(
         val collectionSheetOpen: Boolean = false,
         val collections: List<Collection> = emptyList(),
         val entryCollectionIds: Set<Long> = emptySet(),
+        /** Migrate — target-source picker + in-flight flag. */
+        val migrateSheetOpen: Boolean = false,
+        val migrateSources: List<CarrierSource> = emptyList(),
+        val migrating: Boolean = false,
     ) {
         /** First undone item — Android's `nextContinueChapter`. */
         val nextItem: RemoteItem?
@@ -259,6 +264,84 @@ class EntryDetailsScreenModel(
 
     fun dismissCollectionSheet() {
         _state.value = _state.value.copy(collectionSheetOpen = false)
+    }
+
+    /**
+     * Android's MigrateSourceScreen — catalogue sources for this carrier
+     * minus the current one.
+     */
+    fun showMigrateSheet() {
+        val local = _state.value.local ?: return
+        if (!local.favorite) return
+        scope.launch {
+            val sources = binding.catalogueSources.first()
+                .filter { it.id != sourceId }
+            _state.value = _state.value.copy(
+                migrateSources = sources,
+                migrateSheetOpen = true,
+            )
+        }
+    }
+
+    fun dismissMigrateSheet() {
+        _state.value = _state.value.copy(migrateSheetOpen = false)
+    }
+
+    /**
+     * Bounded Android migrate: searches [targetSourceId] for this entry's
+     * title, favorites the first match, copies its item list, transfers
+     * done/bookmark flags by item-number match, then unfavorites the
+     * original. [onDone] runs on success with the new entry's nav args.
+     */
+    fun migrateTo(
+        targetSourceId: Long,
+        onDone: (sourceId: Long, entryUrl: String, title: String) -> Unit,
+    ) {
+        val old = _state.value.local ?: return
+        val title = _state.value.details?.title ?: old.title
+        _state.value = _state.value.copy(migrateSheetOpen = false, migrating = true)
+        scope.launch {
+            val result = runCatching {
+                val target = binding.source(targetSourceId)
+                    ?: error("Source unavailable")
+                val match = target.search(1, title).entries.firstOrNull()
+                    ?: error("No match on ${target.name}")
+                val details = target.details(match.url, match.title)
+                    ?: error("Details unavailable on ${target.name}")
+                val newLocal = binding.materialize(details, targetSourceId)
+                binding.setFavorite(newLocal.id, true)
+                binding.addMissingItems(newLocal.id, target.items(match.url))
+
+                // Progress transfer — Android matches chapters by number.
+                val oldItems = binding.getLocalItems(old.id)
+                val doneNumbers = oldItems.filter { it.done }
+                    .mapTo(HashSet()) { it.number }
+                val bookmarkNumbers = oldItems.filter { it.bookmarked }
+                    .mapTo(HashSet()) { it.number }
+                binding.getLocalItems(newLocal.id).forEach { item ->
+                    if (item.number in doneNumbers) {
+                        binding.setItemDone(item.id, true)
+                    }
+                    if (item.number in bookmarkNumbers) {
+                        binding.setItemBookmark(item.id, true)
+                    }
+                }
+
+                binding.setFavorite(old.id, false)
+                Triple(targetSourceId, match.url, details.title)
+            }
+            _state.value = _state.value.copy(migrating = false)
+            result.fold(
+                onSuccess = { (newSourceId, newUrl, newTitle) ->
+                    onDone(newSourceId, newUrl, newTitle)
+                },
+                onFailure = {
+                    _state.value = _state.value.copy(
+                        error = it.message ?: "Migration failed",
+                    )
+                },
+            )
+        }
     }
 
     /**

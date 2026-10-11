@@ -125,6 +125,7 @@ class AnimeCarrierBinding(
                         id = it.id,
                         url = it.url,
                         name = it.name,
+                        number = it.episodeNumber,
                         done = it.seen,
                         bookmarked = it.bookmark,
                     )
@@ -139,6 +140,7 @@ class AnimeCarrierBinding(
                 id = it.id,
                 url = it.url,
                 name = it.name,
+                number = it.episodeNumber,
                 done = it.seen,
                 bookmarked = it.bookmark,
             )
