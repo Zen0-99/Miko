@@ -36,6 +36,15 @@ data class ItemPayload(
 
 enum class DownloadState { QUEUED, DOWNLOADING, DOWNLOADED, ERROR }
 
+/** One row in the queue screen — display metadata for a queued task. */
+data class QueueRow(
+    val key: String,
+    val carrier: BrowseCarrier,
+    val sourceName: String,
+    val entryTitle: String,
+    val itemName: String,
+)
+
 /**
  * Android's `DownloadManager` + `DownloadCache` flattened: a sequential
  * worker writing payloads into `<downloads>/<carrier>/<source>/<entry>/<item>/`
@@ -52,6 +61,10 @@ object DownloadManager {
 
     private val _states = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     val states: StateFlow<Map<String, DownloadState>> = _states.asStateFlow()
+
+    /** Pending + failed queue rows for the Download Queue screen. */
+    private val _queueRows = MutableStateFlow<List<QueueRow>>(emptyList())
+    val queueRows: StateFlow<List<QueueRow>> = _queueRows.asStateFlow()
 
     private val _progress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val progress: StateFlow<Map<String, Float>> = _progress.asStateFlow()
@@ -153,6 +166,8 @@ object DownloadManager {
         val dir = itemDir(carrier, sourceName, entryTitle, itemName)
         val entryPath = entryDir(carrier, sourceName, entryTitle).toString()
         _states.value = _states.value + (key to DownloadState.QUEUED)
+        _queueRows.value = _queueRows.value.filterNot { it.key == key } +
+            QueueRow(key, carrier, sourceName, entryTitle, itemName)
         queue.trySend(
             QueuedTask(key) {
                 _states.value = _states.value + (key to DownloadState.DOWNLOADING)
@@ -163,6 +178,7 @@ object DownloadManager {
                         // Carrier can't file-download (shows) or fetch failed
                         // upstream — don't leave a false .done marker.
                         _states.value = _states.value - key
+                        _queueRows.value = _queueRows.value.filterNot { it.key == key }
                         return@QueuedTask
                     }
                     SystemFileSystem.createDirectories(dir)
@@ -184,6 +200,7 @@ object DownloadManager {
                         .buffered()
                         .use { it.write(ByteArray(0)) }
                     _states.value = _states.value + (key to DownloadState.DOWNLOADED)
+                    _queueRows.value = _queueRows.value.filterNot { it.key == key }
                     _changes.tryEmit(entryPath)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
@@ -201,6 +218,12 @@ object DownloadManager {
         jobs.remove(key)?.cancel()
         _states.value = _states.value - key
         _progress.value = _progress.value - key
+        _queueRows.value = _queueRows.value.filterNot { it.key == key }
+    }
+
+    /** Cancel every pending/failed task — the queue screen's clear action. */
+    fun clearQueue() {
+        _queueRows.value.forEach { cancel(it.key) }
     }
 
     /** Delete an item's download dir — Android's per-item delete. */

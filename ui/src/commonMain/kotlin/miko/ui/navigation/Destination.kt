@@ -50,6 +50,9 @@ sealed interface Destination {
     /** Collection management — Android's CollectionsTab, pushed from More/details. */
     data object Collections : Destination
 
+    /** Pending/failed item downloads — Android's DownloadQueue, pushed from More. */
+    data object DownloadQueue : Destination
+
     /** Extension-repo management — consolidated per-type tabs + add/delete. */
     data object ExtensionRepos : Destination
 

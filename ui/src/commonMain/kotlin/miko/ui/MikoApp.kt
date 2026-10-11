@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.RadioButtonChecked
@@ -58,6 +59,8 @@ import miko.ui.carrier.BrowseCarrier
 import miko.ui.components.LibrarySettingsSheet
 import miko.ui.details.EntryDetailsScreen
 import miko.ui.details.EntryDetailsScreenModel
+import miko.ui.download.DownloadManager
+import miko.ui.download.DownloadQueueScreen
 import miko.ui.download.downloadsInitHook
 import miko.ui.extensions.ExtensionCatalog
 import miko.ui.extensions.ExtensionsScreen
@@ -591,6 +594,17 @@ fun MikoApp(graph: MikoUiGraph) {
                                         // display/sort sheet off the top-bar icon.
                                         LibrarySettingsAction(libraryModel)
                                     }
+                                    if (current == Destination.DownloadQueue) {
+                                        // Android's queue "clear all" action.
+                                        IconButton(onClick = DownloadManager::clearQueue) {
+                                            Icon(
+                                                Icons.Outlined.DeleteSweep,
+                                                contentDescription = stringResource(
+                                                    MR.strings.action_cancel_all,
+                                                ),
+                                            )
+                                        }
+                                    }
                                 }
                             },
                             pillContent = if (current == Destination.Browse) {
@@ -737,8 +751,14 @@ fun MikoApp(graph: MikoUiGraph) {
                     onClickCollections = {
                         navigator.push(Destination.Collections)
                     },
+                    onClickDownloadQueue = {
+                        navigator.push(Destination.DownloadQueue)
+                    },
                     incognitoMode = incognitoMode,
                     onIncognitoModeChange = { incognitoPref.set(it) },
+                    modifier = Modifier.padding(padding),
+                )
+                Destination.DownloadQueue -> DownloadQueueScreen(
                     modifier = Modifier.padding(padding),
                 )
                 Destination.Collections -> CollectionsDestination(
@@ -768,6 +788,7 @@ private fun screenTitle(destination: Destination): String = when (destination) {
     Destination.Stats -> stringResource(MR.strings.label_stats)
     Destination.Settings -> stringResource(MR.strings.label_settings)
     Destination.Collections -> stringResource(MR.strings.collections)
+    Destination.DownloadQueue -> stringResource(MR.strings.label_download_queue)
     Destination.ExtensionRepos -> stringResource(MR.strings.label_extension_repos)
     is Destination.SourceFeed -> destination.sourceName
     is Destination.GlobalSearch -> stringResource(MR.strings.action_search_hint)

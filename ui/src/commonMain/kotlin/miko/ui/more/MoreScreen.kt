@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -18,28 +19,34 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.icerock.moko.resources.StringResource
+import miko.ui.download.DownloadManager
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
- * Android's MoreTab — the catch-all list of utility destinations. Scoped to
- * what has an iOS backing feature today (Stats + Settings); download queue
- * and collections join once their infra lands.
+ * Android's MoreTab — the catch-all list of utility destinations (download
+ * queue with live pending count, collections, stats, settings + the
+ * incognito switch).
  */
 @Composable
 fun MoreScreen(
     onClickStats: () -> Unit,
     onClickSettings: () -> Unit,
     onClickCollections: () -> Unit,
+    onClickDownloadQueue: () -> Unit,
     incognitoMode: Boolean,
     onIncognitoModeChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val queueRows by DownloadManager.queueRows.collectAsStateWithLifecycle()
     Column(modifier = modifier.fillMaxSize()) {
         // Android's incognito switch — pauses history writes globally.
         Row(
@@ -75,6 +82,14 @@ fun MoreScreen(
             )
         }
         MoreRow(
+            titleRes = MR.strings.label_download_queue,
+            subtitle = queueRows.size.takeIf { it > 0 }?.let {
+                pluralStringResource(MR.plurals.download_queue_summary, it, it)
+            },
+            icon = Icons.Outlined.Download,
+            onClick = onClickDownloadQueue,
+        )
+        MoreRow(
             titleRes = MR.strings.collections,
             icon = Icons.AutoMirrored.Outlined.Label,
             onClick = onClickCollections,
@@ -98,6 +113,7 @@ private fun MoreRow(
     titleRes: StringResource,
     icon: ImageVector,
     onClick: () -> Unit,
+    subtitle: String? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -111,13 +127,23 @@ private fun MoreRow(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            text = stringResource(titleRes),
-            style = MaterialTheme.typography.bodyLarge,
+        Column(
             modifier = Modifier
                 .padding(start = 16.dp)
                 .weight(1f),
-        )
+        ) {
+            Text(
+                text = stringResource(titleRes),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
             contentDescription = null,
