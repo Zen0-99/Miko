@@ -52,6 +52,8 @@ fun EpisodePlayerScreen(
         state.playingUrl?.let { url ->
             VideoPlayer(
                 url = url,
+                initialPositionMs = state.resumePositionMs,
+                onPosition = model::onPlaybackPosition,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)

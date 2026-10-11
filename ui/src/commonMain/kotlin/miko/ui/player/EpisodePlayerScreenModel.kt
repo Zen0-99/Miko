@@ -42,6 +42,12 @@ class EpisodePlayerScreenModel(
         val videos: List<VideoEntry> = emptyList(),
         /** Stream currently on the player surface — first quality by default. */
         val playingUrl: String? = null,
+        /**
+         * Seek target for the player — Android's `lastSecondSeen` resume on
+         * open, and the live position when a stream swap re-prepares the
+         * surface.
+         */
+        val resumePositionMs: Long = 0L,
         val loading: Boolean = true,
         val error: String? = null,
         val hasPrev: Boolean = false,
@@ -107,6 +113,7 @@ class EpisodePlayerScreenModel(
 
     fun openEpisode(episodeUrl: String) {
         scope.launch {
+            flushPlayback()
             val src = source ?: run {
                 _state.value = _state.value.copy(
                     loading = false,
@@ -191,12 +198,44 @@ class EpisodePlayerScreenModel(
         if (!episode.done) binding.setItemDone(episode.id, true)
         openItemId = episode.id
         binding.recordItemOpen(episode.id)
+        // Android's resume — seed the seek target from lastSecondSeen.
+        _state.value = _state.value.copy(resumePositionMs = episode.lastSecondSeen * 1000)
+        pendingPositionSec = -1
+        lastWrittenPositionSec = episode.lastSecondSeen
+    }
+
+    /** Latest reported position — flushed to `lastSecondSeen` periodically. */
+    private var pendingPositionSec: Long = -1
+    private var pendingTotalSec: Long = 0
+    private var lastWrittenPositionSec: Long = 0
+
+    /** Player progress callback — updates the live position and persists it. */
+    fun onPlaybackPosition(positionMs: Long, durationMs: Long) {
+        _state.value = _state.value.copy(resumePositionMs = positionMs)
+        pendingPositionSec = positionMs / 1000
+        pendingTotalSec = durationMs / 1000
+        // Throttled write — the observer ticks twice a second; persist
+        // every ~10s of drift or on flush.
+        if (pendingPositionSec - lastWrittenPositionSec >= 10) {
+            scope.launch { flushPlayback() }
+        }
+    }
+
+    private suspend fun flushPlayback() {
+        val itemId = openItemId ?: return
+        val pos = pendingPositionSec
+        if (pos < 0 || pos == lastWrittenPositionSec) return
+        lastWrittenPositionSec = pos
+        binding.setItemPlayback(itemId, pos, pendingTotalSec)
     }
 
     fun dispose() {
         val open = openItemId
         openItemId = null
+        runBlocking {
+            flushPlayback()
+            if (open != null) binding.recordItemClose(open)
+        }
         scope.cancel()
-        if (open != null) runBlocking { binding.recordItemClose(open) }
     }
 }

@@ -6,27 +6,65 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.UIKitView
+import kotlinx.cinterop.ExperimentalForeignApi
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.pause
 import platform.AVFoundation.play
+import platform.AVFoundation.removeTimeObserver
+import platform.AVFoundation.seekToTime
 import platform.AVKit.AVPlayerViewController
+import platform.CoreMedia.CMTimeGetSeconds
+import platform.CoreMedia.CMTimeMake
+import platform.CoreMedia.CMTimeMakeWithSeconds
 import platform.Foundation.NSURL
+import platform.darwin.dispatch_get_main_queue
 
 /**
  * AVPlayerViewController-backed player — the controller is remembered so
  * [url] changes swap the AVPlayer underneath the same view.
+ *
+ * [initialPositionMs] becomes a pending seek applied once the player item is
+ * attached — AVPlayer ignores seeks issued before the asset loads. The same
+ * periodic observer reports progress for `lastSecondSeen` persistence.
  */
+@OptIn(ExperimentalForeignApi::class)
 @Composable
-actual fun VideoPlayer(url: String, modifier: Modifier) {
+actual fun VideoPlayer(
+    url: String,
+    modifier: Modifier,
+    initialPositionMs: Long,
+    onPosition: ((positionMs: Long, durationMs: Long) -> Unit)?,
+) {
     val controller = remember { AVPlayerViewController() }
+    val pendingSeekSeconds = remember { arrayOf(Double.NaN) }
+    val timeObserver = remember { arrayOf<Any?>(null) }
 
     LaunchedEffect(url) {
+        pendingSeekSeconds[0] = initialPositionMs / 1000.0
         controller.player = NSURL.URLWithString(url)?.let { AVPlayer(it) }
+        timeObserver[0]?.let { controller.player?.removeTimeObserver(it) }
+        timeObserver[0] = controller.player?.addPeriodicTimeObserverForInterval(
+            interval = CMTimeMake(1L, 2),
+            queue = dispatch_get_main_queue(),
+        ) { time ->
+            val player = controller.player ?: return@addPeriodicTimeObserverForInterval
+            val pending = pendingSeekSeconds[0]
+            if (!pending.isNaN() && player.currentItem != null) {
+                player.seekToTime(CMTimeMakeWithSeconds(pending, 600))
+                pendingSeekSeconds[0] = Double.NaN
+            }
+            val seconds = CMTimeGetSeconds(time)
+            val duration = player.currentItem?.duration?.let { CMTimeGetSeconds(it) } ?: 0.0
+            if (!seconds.isNaN() && !duration.isNaN() && duration > 0) {
+                onPosition?.invoke((seconds * 1000).toLong(), (duration * 1000).toLong())
+            }
+        }
         controller.player?.play()
     }
 
     DisposableEffect(controller) {
         onDispose {
+            timeObserver[0]?.let { controller.player?.removeTimeObserver(it) }
             controller.player?.pause()
             controller.player = null
         }

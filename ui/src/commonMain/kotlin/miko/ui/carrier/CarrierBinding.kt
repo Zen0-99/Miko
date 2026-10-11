@@ -106,6 +106,8 @@ data class LocalItem(
     val done: Boolean,
     /** In-item resume position — Android's `last_page_read` (manga) / `lastCharRead` (novel). */
     val lastPageRead: Int = 0,
+    /** Playback resume position (shows) — Android's `lastSecondSeen`. */
+    val lastSecondSeen: Long = 0,
     /** Android's per-item bookmark flag. */
     val bookmarked: Boolean = false,
     /** Episode filler flag (shows) — `fillermark || canonicalFiller`. */
@@ -207,6 +209,12 @@ interface CarrierBinding {
 
     /** Manga reader position — Android's `last_page_read` write. */
     suspend fun setItemPageProgress(itemId: Long, page: Int) = Unit
+
+    /**
+     * Playback position write (shows) — Android's
+     * `EpisodeUpdate(lastSecondSeen, totalSeconds)`.
+     */
+    suspend fun setItemPlayback(itemId: Long, positionSeconds: Long, totalSeconds: Long) = Unit
 
     /** Android's per-item bookmark toggle. */
     suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) = Unit

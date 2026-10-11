@@ -249,6 +249,7 @@ class AnimeCarrierBinding(
                         number = it.episodeNumber,
                         done = it.seen,
                         bookmarked = it.bookmark,
+                        lastSecondSeen = it.lastSecondSeen,
                         fillermarked = it.fillermark || it.canonicalFiller == true,
                     )
                 }
@@ -265,6 +266,7 @@ class AnimeCarrierBinding(
                 number = it.episodeNumber,
                 done = it.seen,
                 bookmarked = it.bookmark,
+                lastSecondSeen = it.lastSecondSeen,
                 fillermarked = it.fillermark || it.canonicalFiller == true,
             )
         }
@@ -317,6 +319,21 @@ class AnimeCarrierBinding(
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
         episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, bookmark = bookmarked))
+    }
+
+    /** Playback position write — Android's lastSecondSeen + totalSeconds. */
+    override suspend fun setItemPlayback(
+        itemId: Long,
+        positionSeconds: Long,
+        totalSeconds: Long,
+    ) {
+        episodeRepository.updateEpisode(
+            EpisodeUpdate(
+                id = itemId,
+                lastSecondSeen = positionSeconds,
+                totalSeconds = totalSeconds,
+            ),
+        )
     }
 
     /** Android's multi-fillermark — the episode's own flag (canonical unaffected). */
