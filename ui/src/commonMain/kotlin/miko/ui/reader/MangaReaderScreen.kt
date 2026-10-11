@@ -84,6 +84,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -254,6 +256,8 @@ fun MangaReaderScreen(
             onDualPageInvertWebtoonChange = model::setDualPageInvertWebtoon,
             onDualPageRotateWebtoonChange = model::setDualPageRotateWebtoon,
             onDualPageRotateInvertWebtoonChange = model::setDualPageRotateInvertWebtoon,
+            onCropBordersChange = model::setCropBorders,
+            onCropBordersWebtoonChange = model::setCropBordersWebtoon,
             onZoomStartSelect = model::setZoomStart,
             onCustomBrightnessChange = model::setCustomBrightness,
             onBrightnessValueChange = model::setCustomBrightnessValue,
@@ -548,6 +552,7 @@ private fun PagedViewer(
                         cropHalf = slot.second,
                         rotateToFit = state.dualPageRotate && !state.dualPageSplit,
                         rotateInvert = state.dualPageRotateInvert,
+                        cropBorders = state.cropBorders,
                         onIntrinsic = { size ->
                             widePages[slot.first] = size.width > size.height
                         },
@@ -778,8 +783,20 @@ private fun WebtoonViewer(
                     // top by default (invert swaps), each full width.
                     val upper = if (state.dualPageInvertWebtoon) 0 else 1
                     Column(Modifier.fillMaxWidth()) {
-                        PageImage(page, Modifier.fillMaxWidth(), cropHalf = upper, onIntrinsic = onIntrinsic)
-                        PageImage(page, Modifier.fillMaxWidth(), cropHalf = 1 - upper, onIntrinsic = onIntrinsic)
+                        PageImage(
+                            page,
+                            Modifier.fillMaxWidth(),
+                            cropHalf = upper,
+                            cropBorders = state.cropBordersWebtoon,
+                            onIntrinsic = onIntrinsic,
+                        )
+                        PageImage(
+                            page,
+                            Modifier.fillMaxWidth(),
+                            cropHalf = 1 - upper,
+                            cropBorders = state.cropBordersWebtoon,
+                            onIntrinsic = onIntrinsic,
+                        )
                     }
                 } else {
                     PageImage(
@@ -789,6 +806,7 @@ private fun WebtoonViewer(
                         colorFilter = pageColorFilter(state.grayscale, state.invertedColors),
                         rotateToFit = state.dualPageRotateWebtoon && !state.dualPageSplitWebtoon,
                         rotateInvert = state.dualPageRotateInvertWebtoon,
+                        cropBorders = state.cropBordersWebtoon,
                         onIntrinsic = onIntrinsic,
                     )
                 }
@@ -823,6 +841,7 @@ private fun PageImage(
     cropHalf: Int? = null,
     rotateToFit: Boolean = false,
     rotateInvert: Boolean = false,
+    cropBorders: Boolean = false,
     onIntrinsic: (Size) -> Unit = {},
 ) {
     val src = page.imageUrl ?: page.url
@@ -866,6 +885,20 @@ private fun PageImage(
         baseScale
     }
     val imageModel = if (src.startsWith(DownloadManager.FILE_SCHEME)) fileBytes else src
+    // Android's crop_borders — decoder-side crop; our request-scoped decoder
+    // crops the decoded bitmap once so every consumer sees post-crop dims.
+    val platformContext = LocalPlatformContext.current
+    val request = remember(imageModel, cropBorders) {
+        if (cropBorders) {
+            ImageRequest.Builder(platformContext)
+                .data(imageModel)
+                .decoderFactory(BorderCropDecoderFactory)
+                .build()
+        } else {
+            null
+        }
+    }
+    val model = request ?: imageModel
     val intr = intrinsic
     val isWide = intr?.let { it.width > it.height } == true
     when {
@@ -1157,6 +1190,8 @@ private fun ReaderSettingsSheet(
     onDualPageInvertWebtoonChange: (Boolean) -> Unit,
     onDualPageRotateWebtoonChange: (Boolean) -> Unit,
     onDualPageRotateInvertWebtoonChange: (Boolean) -> Unit,
+    onCropBordersChange: (Boolean) -> Unit,
+    onCropBordersWebtoonChange: (Boolean) -> Unit,
     onZoomStartSelect: (Int) -> Unit,
     onCustomBrightnessChange: (Boolean) -> Unit,
     onBrightnessValueChange: (Int) -> Unit,
@@ -1281,6 +1316,11 @@ private fun ReaderSettingsSheet(
                 state.readingMode == MangaReadingMode.CONTINUOUS_VERTICAL
             ) {
                 SettingSwitch(
+                    labelRes = MR.strings.pref_crop_borders,
+                    checked = state.cropBordersWebtoon,
+                    onChange = onCropBordersWebtoonChange,
+                )
+                SettingSwitch(
                     labelRes = MR.strings.pref_dual_page_split,
                     checked = state.dualPageSplitWebtoon,
                     onChange = onDualPageSplitWebtoonChange,
@@ -1305,6 +1345,11 @@ private fun ReaderSettingsSheet(
                     )
                 }
             } else {
+                SettingSwitch(
+                    labelRes = MR.strings.pref_crop_borders,
+                    checked = state.cropBorders,
+                    onChange = onCropBordersChange,
+                )
                 SettingSwitch(
                     labelRes = MR.strings.pref_dual_page_split,
                     checked = state.dualPageSplit,

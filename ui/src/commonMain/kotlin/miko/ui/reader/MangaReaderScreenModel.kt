@@ -119,6 +119,9 @@ class MangaReaderScreenModel(
         val dualPageInvertWebtoon: Boolean = false,
         val dualPageRotateWebtoon: Boolean = false,
         val dualPageRotateInvertWebtoon: Boolean = false,
+        /** Android's crop_borders / crop_borders_webtoon — margin crop per viewer. */
+        val cropBorders: Boolean = false,
+        val cropBordersWebtoon: Boolean = false,
         /** Android's E-Ink group — flash overlay on page change. */
         val flashOnPageChange: Boolean = false,
         val flashDurationMillis: Int = 100,
@@ -296,6 +299,16 @@ class MangaReaderScreenModel(
     )
     private val dualPageRotateInvertWebtoonPref = preferenceStore.getBoolean(
         "pref_dual_page_rotate_invert_webtoon",
+        false,
+    )
+
+    // Android's crop_borders / crop_borders_webtoon — same keys/defaults.
+    private val cropBordersPref = preferenceStore.getBoolean(
+        "crop_borders",
+        false,
+    )
+    private val cropBordersWebtoonPref = preferenceStore.getBoolean(
+        "crop_borders_webtoon",
         false,
     )
 
@@ -482,6 +495,16 @@ class MangaReaderScreenModel(
             }
         }
         scope.launch {
+            cropBordersPref.changes().collect { v ->
+                _state.value = _state.value.copy(cropBorders = v)
+            }
+        }
+        scope.launch {
+            cropBordersWebtoonPref.changes().collect { v ->
+                _state.value = _state.value.copy(cropBordersWebtoon = v)
+            }
+        }
+        scope.launch {
             flashOnPageChangePref.changes().collect { v ->
                 _state.value = _state.value.copy(flashOnPageChange = v)
             }
@@ -574,6 +597,10 @@ class MangaReaderScreenModel(
     fun setDualPageRotateWebtoon(on: Boolean) = dualPageRotateWebtoonPref.set(on)
 
     fun setDualPageRotateInvertWebtoon(on: Boolean) = dualPageRotateInvertWebtoonPref.set(on)
+
+    fun setCropBorders(on: Boolean) = cropBordersPref.set(on)
+
+    fun setCropBordersWebtoon(on: Boolean) = cropBordersWebtoonPref.set(on)
 
     fun setFlashOnPageChange(on: Boolean) = flashOnPageChangePref.set(on)
 
