@@ -440,7 +440,8 @@ class MangaCarrierBinding(
         if (pages.isEmpty()) return null
         return ItemPayload(
             files = pages.map { page ->
-                "%03d.img".format(page.index) to (page.imageUrl ?: page.url)
+                // String.format is JVM-only — padStart works on K/N too.
+                page.index.toString().padStart(3, '0') + ".img" to (page.imageUrl ?: page.url)
             },
         )
     }
