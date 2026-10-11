@@ -93,6 +93,7 @@ fun CoverListItem(
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -133,6 +134,7 @@ fun CoverListItem(
                 )
             }
         }
+        trailing?.invoke()
     }
 }
 

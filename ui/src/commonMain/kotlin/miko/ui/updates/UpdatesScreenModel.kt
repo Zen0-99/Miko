@@ -216,6 +216,15 @@ class UpdatesScreenModel(
     suspend fun resolveTarget(entryId: Long, itemId: Long): NavTarget? =
         graph.binding(carrierFlow.value).resolveNavTarget(entryId, itemId)
 
+    /** Android's checkmark action — toggles read/seen on the chapter/episode. */
+    fun markItemDone(itemId: Long, done: Boolean) {
+        scope.launch {
+            runCatching {
+                graph.binding(carrierFlow.value).setItemDone(itemId, done)
+            }
+        }
+    }
+
     fun dispose() = scope.cancel()
 }
 

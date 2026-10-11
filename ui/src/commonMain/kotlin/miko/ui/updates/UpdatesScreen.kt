@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -133,6 +136,7 @@ fun UpdatesScreen(
                         is UpdatesScreenModel.Row.Header -> ExtensionHeader(row.label)
                         is UpdatesScreenModel.Row.Update -> UpdateRow(
                             row = row,
+                            onToggleDone = { model.markItemDone(row.itemId, !row.done) },
                             onClick = {
                                 scope.launch {
                                     model.resolveTarget(row.entryId, row.itemId)
@@ -181,8 +185,9 @@ private fun UpdateRow(
     row: UpdatesScreenModel.Row.Update,
     onClick: () -> Unit,
     onCoverClick: () -> Unit,
+    onToggleDone: () -> Unit,
 ) {
-    // Read items dim like Android's read-state rows.
+    // Read items dim like Android's read-state rows; trailing check toggles.
     CoverListItem(
         title = row.entryTitle,
         coverUrl = row.coverUrl,
@@ -190,6 +195,23 @@ private fun UpdateRow(
         onLongClick = onCoverClick,
         subtitle = row.itemName,
         modifier = if (row.done) Modifier.secondaryItemAlpha() else Modifier,
+        trailing = {
+            IconButton(onClick = onToggleDone) {
+                Icon(
+                    imageVector = if (row.done) {
+                        Icons.Filled.CheckCircle
+                    } else {
+                        Icons.Outlined.CheckCircle
+                    },
+                    contentDescription = stringResource(MR.strings.action_mark_as_read),
+                    tint = if (row.done) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        },
     )
 }
 
