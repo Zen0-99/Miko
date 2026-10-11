@@ -176,7 +176,8 @@ class IosCarrierJsSourceTest {
     fun mangaDetailsAndChaptersParse() = runBlocking {
         val source = mangaSource(mangaPlugin)
         try {
-            val stub = SManga.create().apply { url = "/m/one" }
+            // Listing objects always carry url+title — copy() reads both.
+            val stub = SManga.create().apply { url = "/m/one"; title = "One" }
             val details = source.getMangaDetails(stub)
             assertEquals("Parsed /m/one", details.title)
             assertEquals("the summary", details.description)
@@ -303,7 +304,7 @@ class IosCarrierJsSourceTest {
         val source = animeSource(animePlugin)
         try {
             val stub = eu.kanade.tachiyomi.animesource.model.SAnime.create()
-                .apply { url = "/a/one" }
+                .apply { url = "/a/one"; title = "One" }
             val details = source.getAnimeDetails(stub)
             assertEquals("Anime /a/one", details.title)
             assertEquals("Action, Sci-Fi", details.genre)
