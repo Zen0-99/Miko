@@ -32,7 +32,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,87 +88,102 @@ fun EntryDetailsScreen(
 ) {
     val state by model.state.collectAsStateWithLifecycle()
 
-    LazyColumn(modifier = modifier.fillMaxSize()) {
-        item {
-            NovelHero(
-                coverUrl = state.details?.thumbnailUrl,
-                title = state.details?.title ?: state.local?.title ?: "",
-                metaItems = listOfNotNull(
-                    state.details?.author,
-                    state.details?.status?.let { statusLabel(it) },
-                    state.sourceName.ifBlank { null },
-                ),
-            )
-        }
+    // Android's details swipe-refresh — reloads details + item list.
+    var isRefreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(state.detailsLoading, state.itemsLoading) {
+        if (!state.detailsLoading && !state.itemsLoading) isRefreshing = false
+    }
 
-        item {
-            ContinueRow(
-                favorite = state.favorite,
-                allRead = state.allItemsDone,
-                hasStarted = state.hasStarted,
-                nextChapterName = state.nextItem?.name,
-                enabled = state.nextItem != null || state.allItemsDone,
-                onContinueClick = { state.nextItem?.let(onItemClick) },
-                onFavoriteClick = model::toggleFavorite,
-                onToggleDoneClick = model::toggleAllItemsDone,
-            )
-        }
-
-        state.details?.genre?.takeIf { it.isNotEmpty() }?.let { genres ->
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            model.refresh()
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
             item {
-                GenreRow(
-                    genres = genres,
-                    onGenreClick = onGenreClick,
-                    modifier = Modifier.padding(vertical = 4.dp),
+                NovelHero(
+                    coverUrl = state.details?.thumbnailUrl,
+                    title = state.details?.title ?: state.local?.title ?: "",
+                    metaItems = listOfNotNull(
+                        state.details?.author,
+                        state.details?.status?.let { statusLabel(it) },
+                        state.sourceName.ifBlank { null },
+                    ),
                 )
             }
-        }
 
-        state.details?.description?.takeIf { it.isNotBlank() }?.let { description ->
             item {
-                ExpandableDescription(description = description)
-            }
-        }
-
-        item {
-            ChapterListHeader(
-                count = state.items.size,
-                sortDescending = state.sortDescending,
-                unreadOnly = state.unreadOnly,
-                showActions = state.local != null,
-                onSortClick = model::toggleSortDirection,
-                onFilterClick = model::toggleUnreadFilter,
-            )
-        }
-
-        when {
-            state.itemsLoading -> item { LoadingScreen() }
-            state.items.isEmpty() -> item {
-                Text(
-                    text = stringResource(MR.strings.no_results_found),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                ContinueRow(
+                    favorite = state.favorite,
+                    allRead = state.allItemsDone,
+                    hasStarted = state.hasStarted,
+                    nextChapterName = state.nextItem?.name,
+                    enabled = state.nextItem != null || state.allItemsDone,
+                    onContinueClick = { state.nextItem?.let(onItemClick) },
+                    onFavoriteClick = model::toggleFavorite,
+                    onToggleDoneClick = model::toggleAllItemsDone,
                 )
             }
-            else -> {
-                val items = state.displayItems
-                val doneUrls = state.doneUrls
-                items(items, key = { it.url }) { item ->
-                    val itemDone = item.url in doneUrls
-                    ItemRow(
-                        item = item,
-                        numberPrefix = itemPrefix(carrier),
-                        done = itemDone,
-                        onClick = { onItemClick(item) },
-                        // Android's row long-press → mark read/unread; only
-                        // persists once the entry has a local row.
-                        onLongClick = if (state.local != null) {
-                            { model.markItem(item.url, !itemDone) }
-                        } else {
-                            null
-                        },
+
+            state.details?.genre?.takeIf { it.isNotEmpty() }?.let { genres ->
+                item {
+                    GenreRow(
+                        genres = genres,
+                        onGenreClick = onGenreClick,
+                        modifier = Modifier.padding(vertical = 4.dp),
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                }
+            }
+
+            state.details?.description?.takeIf { it.isNotBlank() }?.let { description ->
+                item {
+                    ExpandableDescription(description = description)
+                }
+            }
+
+            item {
+                ChapterListHeader(
+                    count = state.items.size,
+                    sortDescending = state.sortDescending,
+                    unreadOnly = state.unreadOnly,
+                    showActions = state.local != null,
+                    onSortClick = model::toggleSortDirection,
+                    onFilterClick = model::toggleUnreadFilter,
+                )
+            }
+
+            when {
+                state.itemsLoading -> item { LoadingScreen() }
+                state.items.isEmpty() -> item {
+                    Text(
+                        text = stringResource(MR.strings.no_results_found),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                else -> {
+                    val items = state.displayItems
+                    val doneUrls = state.doneUrls
+                    items(items, key = { it.url }) { item ->
+                        val itemDone = item.url in doneUrls
+                        ItemRow(
+                            item = item,
+                            numberPrefix = itemPrefix(carrier),
+                            done = itemDone,
+                            onClick = { onItemClick(item) },
+                            // Android's row long-press → mark read/unread; only
+                            // persists once the entry has a local row.
+                            onLongClick = if (state.local != null) {
+                                { model.markItem(item.url, !itemDone) }
+                            } else {
+                                null
+                            },
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    }
                 }
             }
         }

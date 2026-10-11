@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.RadioButtonChecked
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -258,7 +260,22 @@ fun MikoApp(graph: MikoUiGraph) {
                                 onSearch = {},
                                 searchPlaceholderText = null,
                                 navigateUp = { navigator.pop() },
-                                actions = {},
+                                actions = {
+                                    if (current is Destination.Details) {
+                                        // Android's onClickWebView — opens the
+                                        // entry's source page in the system
+                                        // browser.
+                                        val uriHandler = LocalUriHandler.current
+                                        IconButton(onClick = {
+                                            uriHandler.openUri(current.entryKey)
+                                        }) {
+                                            Icon(
+                                                Icons.Outlined.Public,
+                                                contentDescription = null,
+                                            )
+                                        }
+                                    }
+                                },
                             )
                         }
                     }
