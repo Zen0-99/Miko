@@ -11,6 +11,7 @@ import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
 import platform.AVFoundation.addPeriodicTimeObserverForInterval
+import platform.AVFoundation.duration
 import platform.AVFoundation.pause
 import platform.AVFoundation.play
 import platform.AVFoundation.removeTimeObserver
