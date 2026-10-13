@@ -6,6 +6,9 @@ import platform.Foundation.NSDateComponents
 import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSLocale
 import platform.Foundation.NSTimeZone
+import platform.Foundation.currentLocale
+import platform.Foundation.dateWithTimeIntervalSince1970
+import platform.Foundation.localTimeZone
 import tachiyomi.domain.achievement.model.YearMonth
 
 private fun nsDateFor(month: YearMonth): NSDate {

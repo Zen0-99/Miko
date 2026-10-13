@@ -48,6 +48,7 @@ import platform.Foundation.NSLocale
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.NSUserDomainMask
+import platform.Foundation.currentLocale
 import tachiyomi.core.common.preference.IosPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.AnimeUpdateStrategyColumnAdapter
