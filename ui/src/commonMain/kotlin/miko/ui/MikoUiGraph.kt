@@ -55,11 +55,17 @@ import tachiyomi.domain.entries.shows.interactor.GetLibraryAnime
 import tachiyomi.domain.extension.novel.api.JsPluginApiFacade
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
 import tachiyomi.domain.history.manga.interactor.GetMangaHistory
+import tachiyomi.domain.history.manga.interactor.GetTotalReadDuration
 import tachiyomi.domain.history.novel.interactor.GetNovelHistory
+import tachiyomi.domain.history.novel.interactor.GetTotalNovelReadDuration
 import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
 import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
+import tachiyomi.domain.items.chapter.interactor.BackfillNovelCharCounts
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
+import tachiyomi.domain.items.chapter.interactor.GetTotalReadNovelCharCount
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
+import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.service.NovelSourceManager
@@ -125,7 +131,17 @@ class MikoUiGraph(
     val achievementRepository: AchievementRepository,
     val activityDataRepository: ActivityDataRepository,
     val achievementPointsManager: PointsManager,
+    // Sectioned Stats surface — Android's per-carrier stats models.
+    val getEpisodesByAnimeId: GetEpisodesByAnimeId,
+    val getTotalMangaReadDuration: GetTotalReadDuration,
+    val getTotalNovelReadDuration: GetTotalNovelReadDuration,
+    val getTotalReadNovelCharCount: GetTotalReadNovelCharCount,
+    val backfillNovelCharCounts: BackfillNovelCharCounts,
 ) {
+
+    /** Shared prefs facade (library update collections/restrictions) — the
+     *  stats global-update count honors the same include/exclude sets. */
+    val libraryPreferences: LibraryPreferences by lazy { LibraryPreferences(preferenceStore) }
 
     /** Home catalog rows — persisted spec store + resolver, built in-module
      *  like [novelBinding] (pref store + interactors are already here).

@@ -128,6 +128,28 @@ object DownloadManager {
     fun isDownloaded(dir: Path): Boolean =
         SystemFileSystem.exists(Path(dir.toString(), DONE_MARKER))
 
+    /** Total downloaded item dirs across the carrier — Android's
+     *  `getTotalDownloadCount` (counts `.miko_done` dirs at
+     *  downloads/<carrier>/<source>/<entry>/<item>). */
+    fun downloadCount(carrier: BrowseCarrier): Int {
+        val carrierDir = Path(downloadsRoot(), "downloads", carrier.name.lowercase())
+        if (!SystemFileSystem.exists(carrierDir)) return 0
+        var count = 0
+        fun children(dir: Path): Collection<Path> = runCatching {
+            SystemFileSystem.list(dir)
+        }.getOrDefault(emptyList())
+        for (sourceDir in children(carrierDir)) {
+            for (entryDir in children(sourceDir)) {
+                for (itemDir in children(entryDir)) {
+                    if (SystemFileSystem.exists(Path(itemDir.toString(), DONE_MARKER))) {
+                        count++
+                    }
+                }
+            }
+        }
+        return count
+    }
+
     /** Names of downloaded item dirs under the entry — Android's DownloadCache scan. */
     fun downloadedItemNames(
         carrier: BrowseCarrier,

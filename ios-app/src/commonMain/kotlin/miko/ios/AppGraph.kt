@@ -134,14 +134,19 @@ import tachiyomi.domain.extension.novel.api.JsPluginIndexFetcher
 import tachiyomi.domain.extension.novel.api.JsPluginIndexParser
 import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
 import tachiyomi.domain.history.manga.interactor.GetMangaHistory
+import tachiyomi.domain.history.manga.interactor.GetTotalReadDuration
 import tachiyomi.domain.history.manga.repository.MangaHistoryRepository
 import tachiyomi.domain.history.novel.interactor.GetNovelHistory
+import tachiyomi.domain.history.novel.interactor.GetTotalNovelReadDuration
 import tachiyomi.domain.history.novel.repository.NovelHistoryRepository
 import tachiyomi.domain.history.shows.interactor.GetAnimeHistory
 import tachiyomi.domain.history.shows.repository.AnimeHistoryRepository
+import tachiyomi.domain.items.chapter.interactor.BackfillNovelCharCounts
 import tachiyomi.domain.items.chapter.interactor.GetNovelChaptersByNovelId
+import tachiyomi.domain.items.chapter.interactor.GetTotalReadNovelCharCount
 import tachiyomi.domain.items.chapter.repository.ChapterRepository
 import tachiyomi.domain.items.chapter.repository.NovelChapterRepository
+import tachiyomi.domain.items.episode.interactor.GetEpisodesByAnimeId
 import tachiyomi.domain.items.episode.repository.EpisodeRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.model.Release
@@ -577,6 +582,12 @@ class AppGraph {
         achievementRepository = achievementRepository,
         activityDataRepository = activityDataRepository,
         achievementPointsManager = pointsManager,
+        // Sectioned Stats surface — same interactors Android's stats models use.
+        getEpisodesByAnimeId = GetEpisodesByAnimeId(episodeRepository),
+        getTotalMangaReadDuration = GetTotalReadDuration(mangaHistoryRepository),
+        getTotalNovelReadDuration = GetTotalNovelReadDuration(novelHistoryRepository),
+        getTotalReadNovelCharCount = GetTotalReadNovelCharCount(novelChapterRepository),
+        backfillNovelCharCounts = BackfillNovelCharCounts(novelChapterRepository),
     )
 
     private fun newDriver(

@@ -182,7 +182,7 @@ class SharedAchievementLoader(
         versionStore.getInt(KEY_TREASURY_RECONCILIATION_VERSION, 0).set(version)
     }
 
-    private suspend fun loadDefinitions(): AchievementDefinitions = withContext(Dispatchers.IO) {
+    private suspend fun loadDefinitions(): AchievementDefinitions = withContext(Dispatchers.Default) {
         val jsonString = jsonText()
         val normalizedJson = jsonString.trimStart('﻿')
         json.decodeFromString<AchievementDefinitions>(normalizedJson)
