@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -149,6 +152,16 @@ fun SettingsScreen(
             checked = state.disableAniSkipOnChapters,
             onChange = model::setDisableAniSkipOnChapters,
         )
+
+        // Android's Settings → Advanced BYOK row (pref_tmdb_api_key) —
+        // Discovery facet filters use it when set.
+        ExtensionHeader(stringResource(MR.strings.pref_category_advanced))
+        EditTextRow(
+            titleRes = AYMR.strings.pref_tmdb_api_key,
+            subtitleRes = AYMR.strings.pref_tmdb_api_key_summary,
+            value = state.tmdbApiKey,
+            onChange = model::setTmdbApiKey,
+        )
     }
 }
 
@@ -186,6 +199,61 @@ private fun ThemeModeRow(
                 )
             }
         }
+    }
+}
+
+/** Row + edit dialog — Android's `EditTextPreference` shape. */
+@Composable
+private fun EditTextRow(
+    titleRes: StringResource,
+    subtitleRes: StringResource,
+    value: String,
+    onChange: (String) -> Unit,
+) {
+    var editing by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { editing = true }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = stringResource(titleRes),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Text(
+            text = stringResource(subtitleRes),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (editing) {
+        var draft by remember(value) { mutableStateOf(value) }
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text(stringResource(titleRes)) },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onChange(draft)
+                    editing = false
+                }) {
+                    Text(stringResource(MR.strings.action_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editing = false }) {
+                    Text(stringResource(AYMR.strings.action_cancel))
+                }
+            },
+        )
     }
 }
 

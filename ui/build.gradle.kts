@@ -56,6 +56,8 @@ kotlin {
                 // DownloadManager — shared fs + http for item downloads.
                 implementation(libs.kotlinx.io.core)
                 implementation(libs.ktor.client.core)
+                // Manage-catalogs drag reorder — KMP since 2.x.
+                implementation(libs.reorderable)
             }
         }
 

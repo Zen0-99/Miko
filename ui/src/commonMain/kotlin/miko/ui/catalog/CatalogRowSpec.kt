@@ -57,16 +57,18 @@ data class CatalogRowSpec(
             }
         }
         val facets = buildList {
+            genreIds.mapNotNullTo(this) { TmdbGenres.nameForId(it) }
             addAll(genreNames)
-            keywordIds.mapTo(this) { lookup.keywordNames[it] ?: "#$it" }
+            keywordIds.mapNotNullTo(this) { TmdbSubGenreKeywords.nameForKeyword(it) }
             watchProviderIds.mapTo(this) { lookup.providerNames[it] ?: "#$it" }
             if (yearFrom != null || yearTo != null) {
                 add("${yearFrom ?: "…"}–${yearTo ?: "…"}")
             }
         }
-        val mediumLabel = when (medium) {
-            MEDIUM_SHOWS -> "Series"
-            MEDIUM_MANGA -> "Manga"
+        val mediumLabel = when {
+            feed is Feed.Tmdb && feed.tmdbMediaType() == TmdbGenres.MediaType.MOVIE -> "Movies"
+            medium == MEDIUM_SHOWS -> "Series"
+            medium == MEDIUM_MANGA -> "Manga"
             else -> "Books"
         }
         return buildString {
@@ -90,7 +92,6 @@ data class CatalogRowSpec(
  */
 class CatalogTitleLookup(
     val providerNames: Map<Int, String> = emptyMap(),
-    val keywordNames: Map<Int, String> = emptyMap(),
     val sourceName: String? = null,
 )
 
@@ -113,9 +114,13 @@ sealed interface Feed {
     @Serializable
     @SerialName("tmdb")
     data class Tmdb(
-        /** `"MOVIE"` | `"TV"`. */
+        /** [TmdbGenres.MediaType] name — `"MOVIE"` | `"TV"`. */
         val mediaType: String,
-    ) : Feed
+    ) : Feed {
+        fun tmdbMediaType(): TmdbGenres.MediaType =
+            runCatching { TmdbGenres.MediaType.valueOf(mediaType) }
+                .getOrDefault(TmdbGenres.MediaType.TV)
+    }
 
     @Serializable
     @SerialName("cinemeta")

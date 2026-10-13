@@ -612,6 +612,61 @@ fun MikoApp(graph: MikoUiGraph) {
                                         )
                                     }
                                 } else {
+                                    if (current == Destination.Home) {
+                                        // Android's globalOverflowActions on
+                                        // HomeHub — "Manage catalogs" prepends
+                                        // Settings.
+                                        var homeOverflowOpen by remember {
+                                            mutableStateOf(false)
+                                        }
+                                        Box {
+                                            IconButton(onClick = {
+                                                homeOverflowOpen = true
+                                            }) {
+                                                Icon(
+                                                    Icons.Filled.MoreVert,
+                                                    contentDescription = null,
+                                                )
+                                            }
+                                            DropdownMenu(
+                                                expanded = homeOverflowOpen,
+                                                onDismissRequest = {
+                                                    homeOverflowOpen = false
+                                                },
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Text(
+                                                            stringResource(
+                                                                AYMR.strings
+                                                                    .action_manage_catalogs,
+                                                            ),
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        homeOverflowOpen = false
+                                                        homeModel.setDialog(
+                                                            HomeScreenModel.HomeDialog
+                                                                .ManageCatalogs,
+                                                        )
+                                                    },
+                                                )
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Text(
+                                                            stringResource(
+                                                                MR.strings.label_settings,
+                                                            ),
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        homeOverflowOpen = false
+                                                        navigator.push(Destination.Settings)
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
                                     if (current == Destination.Browse) {
                                         BrowseOverflowMenu(
                                             onOpenExtensionRepos = {

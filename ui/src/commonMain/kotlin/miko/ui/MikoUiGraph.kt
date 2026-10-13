@@ -1,5 +1,6 @@
 package miko.ui
 
+import eu.kanade.tachiyomi.network.NetworkPreferences
 import kotlinx.serialization.json.Json
 import mihon.domain.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
 import mihon.domain.extensionrepo.anime.interactor.DeleteAnimeExtensionRepo
@@ -25,6 +26,10 @@ import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.NovelCarrierBinding
 import miko.ui.catalog.CatalogRowResolver
 import miko.ui.catalog.CatalogRowStore
+import miko.ui.catalog.CinemetaCatalogFeed
+import miko.ui.catalog.MikoAddonClient
+import miko.ui.catalog.TmdbDiscover
+import miko.ui.catalog.TmdbKeyProvider
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
@@ -108,6 +113,27 @@ class MikoUiGraph(
         CatalogRowStore(preferenceStore, Json { ignoreUnknownKeys = true })
     }
     val catalogRowResolver: CatalogRowResolver by lazy { CatalogRowResolver(this) }
+
+    /** TMDB BYOK discovery — key provider reads the `pref_tmdb_api_key`
+     *  pref (no bundled fallback on iOS); the discover client serves
+     *  `Feed.Tmdb` rows and the builder's facet options. */
+    val tmdbKeyProvider: TmdbKeyProvider by lazy {
+        TmdbKeyProvider(NetworkPreferences(preferenceStore))
+    }
+    val tmdbDiscover: TmdbDiscover by lazy { TmdbDiscover(keyProvider = tmdbKeyProvider) }
+
+    /** Cinemeta addon client + catalog feed — serves `Feed.Cinemeta`
+     *  rows (metadata renders; meta→entry materialization rides the
+     *  deferred canonical-shows infra, so card taps stay inert). */
+    val cinemetaAddon: MikoAddonClient by lazy {
+        MikoAddonClient(
+            manifestUrl = CinemetaCatalogFeed.CINEMETA_MANIFEST_URL,
+            json = Json { ignoreUnknownKeys = true },
+        )
+    }
+    val cinemetaCatalogFeed: CinemetaCatalogFeed by lazy {
+        CinemetaCatalogFeed(cinemetaAddon)
+    }
 
     /** Books carrier — built in-module; manga/anime inject theirs (they
      * wrap platform-actual source contracts commonMain can't see). */

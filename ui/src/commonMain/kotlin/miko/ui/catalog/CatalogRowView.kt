@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,14 +49,14 @@ import tachiyomi.presentation.core.i18n.stringResource
 /**
  * Android's `CatalogRow` — section header plus a `LazyRow` of
  * gradient-scrim cover cards. History rows keep the localized recents
- * labels; other feeds resolve through the screen model (dynamic source
- * names).
+ * labels; other feeds resolve through [resolveTitle] (watch providers,
+ * extension source names) inside a `produceState`.
  */
 @Composable
 fun CatalogRow(
     spec: CatalogRowSpec,
     rowState: CatalogRowState?,
-    title: String,
+    resolveTitle: suspend (CatalogRowSpec) -> String,
     openItem: (RowItem) -> Unit,
 ) {
     // A history row with nothing consumed yet renders nothing — an
@@ -66,6 +67,17 @@ fun CatalogRow(
         rowState.items.isEmpty()
     ) {
         return
+    }
+
+    // History headers keep the localized recents labels; other feeds go
+    // through the screen model for dynamic names.
+    val title = if (spec.feed is Feed.History) {
+        historyRowTitle(spec.medium)
+    } else {
+        val resolved by produceState(initialValue = spec.displayTitle(), spec) {
+            value = resolveTitle(spec)
+        }
+        resolved
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {

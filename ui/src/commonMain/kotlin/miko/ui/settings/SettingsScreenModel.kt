@@ -48,6 +48,8 @@ class SettingsScreenModel(
         val waitingTimeSkip: Int = 5,
         val aniSkipEnabled: Boolean = false,
         val disableAniSkipOnChapters: Boolean = true,
+        /** TMDB BYOK (`pref_tmdb_api_key`) — Discovery facet filters. */
+        val tmdbApiKey: String = "",
     )
 
     private val themeModePref = preferenceStore.getEnum(
@@ -104,6 +106,9 @@ class SettingsScreenModel(
         "pref_disabled_ani_skip_chapters",
         true,
     )
+
+    // Android's NetworkPreferences BYOK slot (Settings → Advanced).
+    private val tmdbApiKeyPref = preferenceStore.getString("pref_tmdb_api_key", "")
 
     private val scope = CoroutineScope(Job() + dispatcher)
 
@@ -176,6 +181,11 @@ class SettingsScreenModel(
                 _state.value = _state.value.copy(disableAniSkipOnChapters = v)
             }
         }
+        scope.launch {
+            tmdbApiKeyPref.changes().collect { v ->
+                _state.value = _state.value.copy(tmdbApiKey = v)
+            }
+        }
     }
 
     fun setThemeMode(mode: ThemeMode) = themeModePref.set(mode)
@@ -204,6 +214,8 @@ class SettingsScreenModel(
     fun setAniSkipEnabled(v: Boolean) = aniSkipEnabledPref.set(v)
 
     fun setDisableAniSkipOnChapters(v: Boolean) = disableAniSkipChaptersPref.set(v)
+
+    fun setTmdbApiKey(key: String) = tmdbApiKeyPref.set(key.trim())
 
     fun dispose() = scope.cancel()
 }

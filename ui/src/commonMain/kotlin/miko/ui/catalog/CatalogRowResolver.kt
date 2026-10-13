@@ -1,5 +1,6 @@
 package miko.ui.catalog
 
+import eu.kanade.tachiyomi.metadata.miko.dto.MikoMetaShort
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import miko.ui.MikoUiGraph
@@ -51,15 +52,90 @@ class CatalogRowResolver(
     suspend fun resolve(spec: CatalogRowSpec): List<RowItem> = when (val feed = spec.feed) {
         is Feed.Extension -> resolveExtension(spec, feed)
         is Feed.Library -> resolveLibrary(spec)
+        is Feed.Tmdb -> resolveTmdb(spec, feed)
+        is Feed.Cinemeta -> resolveCinemeta(feed)
         // Worker `/v1/works/browse` — needs the mikoDB work-materialize
         // tap path to open entries; honest "unsupported" until it lands.
         is Feed.Canonical -> throw FeedNotImplementedException(feed)
-        is Feed.Tmdb -> throw TmdbKeyMissingException()
-        is Feed.Cinemeta -> throw FeedNotImplementedException(feed)
         // Served live from screen-model state — matches Android: an
         // escaped spec resolves empty and the row hides itself.
         Feed.History -> emptyList()
     }
+
+    /**
+     * TMDB `discover` — the facet-complete backend: genres, sub-genre
+     * keywords, streaming services, year window, rating floor, sort.
+     * `spec.sort` defaults to `"default"`, which is NOT a
+     * [DiscoverySort] member — unparseable values fall back to
+     * [DiscoverySort.POPULARITY] instead of erroring the row.
+     *
+     * Row items resolve fully (BYOK); the `CanonicalShows` tap path —
+     * `external_ids` → IMDB → Cinemeta meta → local entry — is part of
+     * the deferred canonical-shows infra, so taps on these cards are
+     * inert until that lands.
+     */
+    private suspend fun resolveTmdb(spec: CatalogRowSpec, feed: Feed.Tmdb): List<RowItem> {
+        val tmdbDiscover = graph.tmdbDiscover
+        if (!tmdbDiscover.hasKey()) throw TmdbKeyMissingException()
+        val type = feed.tmdbMediaType()
+        val sort = runCatching { DiscoverySort.valueOf(spec.sort) }
+            .getOrDefault(DiscoverySort.POPULARITY)
+        val query = TmdbDiscover.DiscoverQuery(
+            withGenres = spec.genreIds,
+            withoutGenres = spec.excludedGenreIds,
+            withKeywords = spec.keywordIds,
+            withoutKeywords = spec.excludedKeywordIds,
+            withWatchProviders = spec.watchProviderIds,
+            yearGte = spec.yearFrom,
+            yearLte = spec.yearTo,
+            voteAverageGte = spec.voteAverageGte,
+            voteCountGte = spec.voteCountGte,
+            sortBy = sort.param(type),
+        )
+        val page = tmdbDiscover.discover(type, query, page = 1)
+            ?: throw CatalogFetchException("tmdb discover returned null")
+        return page.items.map { it.toRowItem() }
+    }
+
+    private fun TmdbDiscover.Item.toRowItem(): RowItem = RowItem(
+        title = title,
+        coverUrl = posterUrl,
+        subtitle = listOfNotNull(
+            year?.toString(),
+            voteAverage?.let { "★ ${formatOneDecimal(it)}" },
+        ).joinToString(" · ").takeIf { it.isNotEmpty() },
+        target = RowTarget.CanonicalShows(tmdbId = id, mediaType = mediaType),
+        releaseInfo = year?.toString(),
+        imdbRating = voteAverage?.toString(),
+        mintKey = "tmdb:$mediaType:$id",
+        key = "tmdb:${mediaType.name}:$id",
+    )
+
+    /**
+     * Cinemeta catalog — the catalog pick IS the facet surface; items
+     * resolve to metas whose materialization (Cinemeta-entry → local
+     * anime) rides the deferred canonical-shows infra.
+     */
+    private suspend fun resolveCinemeta(feed: Feed.Cinemeta): List<RowItem> {
+        val cinemetaCatalogFeed = graph.cinemetaCatalogFeed
+        val result = runCatching {
+            cinemetaCatalogFeed.fetchCatalog(feed.cinemetaType, feed.catalogId)
+        }.getOrElse { throw CatalogFetchException("cinemeta fetch failed", it) }
+        return cinemetaCatalogFeed.dedupeMetas(result.metas).map { it.toRowItem() }
+    }
+
+    private fun MikoMetaShort.toRowItem(): RowItem = RowItem(
+        title = name,
+        coverUrl = poster,
+        subtitle = listOfNotNull(
+            releaseInfo,
+            imdbRating?.let { "★ $it" },
+        ).joinToString(" · ").takeIf { it.isNotEmpty() },
+        target = RowTarget.CinemetaEntry(this),
+        releaseInfo = releaseInfo,
+        imdbRating = imdbRating,
+        key = "cinemeta:$type:$id",
+    )
 
     // --- Extension feed ---
 
@@ -84,7 +160,8 @@ class CatalogRowResolver(
         }
         val keywords = feed.kindKeywords()
         val constraints = keywords != null ||
-            spec.genreNames.isNotEmpty() || spec.excludedGenreNames.isNotEmpty()
+            spec.genreNames.isNotEmpty() ||
+            spec.excludedGenreNames.isNotEmpty()
         val filters = if (constraints) source.filters() else emptyList()
         val kindApplied = applyKindFilter(filters, keywords)
         if (!kindApplied && keywords != null && feed.kindStrict) {
@@ -224,12 +301,19 @@ class CatalogRowResolver(
 /**
  * One rendered card inside a catalog row — the feed-agnostic shape the
  * home UI binds directly.
+ *
+ * [releaseInfo]/[imdbRating] carry the TMDB fields needed to rebuild a
+ * meta at tap time (the discovery tap-path precedent). [mintKey] dedupes
+ * the mint-on-browse resolve per session.
  */
 data class RowItem(
     val title: String,
     val coverUrl: String?,
     val subtitle: String? = null,
     val target: RowTarget,
+    val releaseInfo: String? = null,
+    val imdbRating: String? = null,
+    val mintKey: String? = null,
     /** Stable lazy-row key — a bare title isn't unique (the same work can
      *  appear in several rows, feeds repeat). Defaults to title+index. */
     val key: String? = null,
@@ -238,6 +322,9 @@ data class RowItem(
 /**
  * Where tapping a [RowItem] lands.
  *
+ * - [CanonicalShows] — a TMDB-discovered show/movie; Android's tap does
+ *   the `external_ids` → IMDB → Cinemeta meta → local-entry hop
+ *   (mikoDB-deferred on iOS — resolves to null until it lands).
  * - [ExtensionEntry] — source listing entry; materializes to a local
  *   entry at tap (Android's `networkToLocal*` hop — our details screen
  *   does the same on open).
@@ -246,6 +333,8 @@ data class RowItem(
  *   nav-target resolution (entryId+itemId → urls).
  */
 sealed interface RowTarget {
+    data class CanonicalShows(val tmdbId: Long, val mediaType: TmdbGenres.MediaType) : RowTarget
+    data class CinemetaEntry(val meta: MikoMetaShort) : RowTarget
     data class ExtensionEntry(val sourceId: Long, val url: String, val medium: String) : RowTarget
     data class LibraryEntry(val entryId: Long, val medium: String) : RowTarget
     data class HistoryEntry(val entryId: Long, val itemId: Long, val medium: String) : RowTarget
@@ -265,6 +354,12 @@ private fun matchesKeyword(label: String, keywords: List<String>): Boolean =
 
 private fun matchesName(label: String, wanted: List<String>): Boolean =
     wanted.any { label.equals(it, ignoreCase = true) || label.contains(it, ignoreCase = true) }
+
+/** `7.5` — commonMain has no `String.format` (Android's `%.1f`). */
+private fun formatOneDecimal(value: Double): String {
+    val rounded = kotlin.math.round(value * 10).toInt()
+    return "${rounded / 10}.${kotlin.math.abs(rounded % 10)}"
+}
 
 /** `genreNames` contains-match on an entry's genre CSV — legacy fallback
  *  for items whose source has no genre filter to apply. */

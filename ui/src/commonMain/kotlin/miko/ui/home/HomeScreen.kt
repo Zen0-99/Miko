@@ -40,9 +40,11 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.catalog.CatalogBuilderSheet
 import miko.ui.catalog.CatalogRow
+import miko.ui.catalog.CatalogRowSpec
 import miko.ui.catalog.Feed
-import miko.ui.catalog.historyRowTitle
+import miko.ui.catalog.ManageCatalogsSheet
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -179,10 +181,11 @@ fun HomeScreen(
                 // resolve through the resolver. A totally empty home
                 // shows the no-history placeholder instead.
                 val visibleSpecs = state.catalogSpecs.filter { it.visible }
-                val nothingAnywhere = state.recents.isEmpty() && visibleSpecs.all { spec ->
-                    spec.feed is Feed.History &&
-                        (state.catalogRows[spec.id]?.items?.isEmpty() != false)
-                }
+                val nothingAnywhere = state.recents.isEmpty() &&
+                    visibleSpecs.all { spec ->
+                        spec.feed is Feed.History &&
+                            (state.catalogRows[spec.id]?.items?.isEmpty() != false)
+                    }
                 if (nothingAnywhere) {
                     Box(
                         modifier = Modifier
@@ -196,15 +199,10 @@ fun HomeScreen(
                 }
                 visibleSpecs.forEach { spec ->
                     val rowState = state.catalogRows[spec.id]
-                    val title = if (spec.feed is Feed.History) {
-                        historyRowTitle(spec.medium)
-                    } else {
-                        model.catalogRowTitle(spec)
-                    }
                     CatalogRow(
                         spec = spec,
                         rowState = rowState,
-                        title = title,
+                        resolveTitle = model::resolveCatalogRowTitle,
                         openItem = { item ->
                             scope.launch {
                                 model.openRowItem(item)?.let { t ->
@@ -223,6 +221,64 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    // Android's Manage/Build sheets — the overflow action sets the
+    // model's dialog slot; the sheets write back through the store.
+    when (val dialog = state.dialog) {
+        HomeScreenModel.HomeDialog.ManageCatalogs -> ManageCatalogsSheet(
+            specs = state.catalogSpecs,
+            currentMedium = when (carrier) {
+                BrowseCarrier.SHOWS -> CatalogRowSpec.MEDIUM_SHOWS
+                BrowseCarrier.MANGA -> CatalogRowSpec.MEDIUM_MANGA
+                BrowseCarrier.BOOKS -> CatalogRowSpec.MEDIUM_BOOKS
+            },
+            resolveTitle = model::resolveCatalogRowTitle,
+            onReorder = model::reorderCatalogSpecs,
+            onSetVisible = model::setCatalogSpecVisible,
+            onEdit = { spec ->
+                model.setDialog(HomeScreenModel.HomeDialog.BuildCatalog(spec, null))
+            },
+            onDelete = model::deleteCatalogSpec,
+            onMediumPicked = { medium ->
+                onCarrierChange(
+                    when (medium) {
+                        CatalogRowSpec.MEDIUM_SHOWS -> BrowseCarrier.SHOWS
+                        CatalogRowSpec.MEDIUM_MANGA -> BrowseCarrier.MANGA
+                        else -> BrowseCarrier.BOOKS
+                    },
+                )
+            },
+            onAddNew = { medium ->
+                model.setDialog(
+                    HomeScreenModel.HomeDialog.BuildCatalog(null, medium),
+                )
+            },
+            onDismissRequest = { model.setDialog(null) },
+        )
+        is HomeScreenModel.HomeDialog.BuildCatalog -> CatalogBuilderSheet(
+            existing = dialog.existing,
+            lockedMedium = dialog.lockedMedium,
+            loadFeedOptions = model::catalogFeedOptions,
+            loadWatchProviders = model::catalogWatchProviders,
+            loadExtensionGenreOptions = model::catalogExtensionGenreOptions,
+            loadLibraryGenreOptions = model::catalogLibraryGenreOptions,
+            onMediumPicked = { medium ->
+                onCarrierChange(
+                    when (medium) {
+                        CatalogRowSpec.MEDIUM_SHOWS -> BrowseCarrier.SHOWS
+                        CatalogRowSpec.MEDIUM_MANGA -> BrowseCarrier.MANGA
+                        else -> BrowseCarrier.BOOKS
+                    },
+                )
+            },
+            onCommit = { spec ->
+                model.upsertCatalogSpec(spec)
+                model.setDialog(null)
+            },
+            onDismissRequest = { model.setDialog(null) },
+        )
+        null -> Unit
     }
 }
 
