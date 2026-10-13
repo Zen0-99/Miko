@@ -1,8 +1,10 @@
 package miko.ui.carrier
 
+import eu.kanade.tachiyomi.animesource.model.FetchType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
+import miko.domain.shows.SeasonDisplayMode
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.collection.model.Collection
 
@@ -36,6 +38,12 @@ data class RemoteDetails(
     val status: Int,
     val thumbnailUrl: String?,
     val backgroundUrl: String? = null,
+    /**
+     * Shows — the source's declared fetch shape (Android's
+     * `SAnime.fetch_type`): `Seasons` entries only call getSeasonList,
+     * season/flat rows only getEpisodeList. Null on other carriers.
+     */
+    val fetchType: FetchType? = null,
 )
 
 /** Remote chapter/episode. */
@@ -47,6 +55,14 @@ data class RemoteItem(
     val scanlator: String?,
     val summary: String? = null,
     val previewUrl: String? = null,
+    /**
+     * Android's season model — the SAnime season row's url (identity for
+     * the child-row upsert) and display number; null/-1 on flat sources.
+     */
+    val seasonUrl: String? = null,
+    val seasonNumber: Double = -1.0,
+    /** Season row's source title — feeds SeasonRecognition + child-row title. */
+    val seasonTitle: String? = null,
 )
 
 /** Local library row — flattened across Novel/Manga/Anime. */
@@ -75,6 +91,29 @@ data class LocalEntry(
     val viewer: Int = 0,
     /** Manga viewerFlags 0x38 bits — ReaderOrientation flag; 0 = use pref default. */
     val viewerOrientation: Int = 0,
+    /**
+     * Shows — decoded `seasonFlags` (Android's `anime.season*` accessors),
+     * powering the season list's filters, sort, display mode, and badges.
+     */
+    val seasonDownloadedFilter: TriState = TriState.DISABLED,
+    val seasonUnseenFilter: TriState = TriState.DISABLED,
+    val seasonStartedFilter: TriState = TriState.DISABLED,
+    val seasonCompletedFilter: TriState = TriState.DISABLED,
+    val seasonBookmarkedFilter: TriState = TriState.DISABLED,
+    val seasonFillermarkedFilter: TriState = TriState.DISABLED,
+    /** Raw sort bits — `Anime.SEASON_SORT_*`; ui maps to the comparator. */
+    val seasonSorting: Long = 0,
+    val seasonSortDescending: Boolean = false,
+    val seasonDisplayGridMode: SeasonDisplayMode = SeasonDisplayMode.CompactGrid,
+    /** Grid columns / list rows — 0 = auto. */
+    val seasonDisplayGridSize: Int = 0,
+    val seasonDownloadedOverlay: Boolean = false,
+    val seasonUnseenOverlay: Boolean = true,
+    val seasonLocalOverlay: Boolean = true,
+    val seasonLangOverlay: Boolean = false,
+    val seasonContinueOverlay: Boolean = true,
+    /** `Anime.SEASON_DISPLAY_MODE_*` — source title vs "Season N". */
+    val seasonDisplayMode: Long = 0,
 )
 
 /**
@@ -121,6 +160,8 @@ data class LocalItem(
     val totalChars: Long = 0,
     /** Playback resume position (shows) — Android's `lastSecondSeen`. */
     val lastSecondSeen: Long = 0,
+    /** Season row's display number (shows) — -1 for flat sources. */
+    val seasonNumber: Double = -1.0,
     /** Stream duration (shows) — drives the episode progress bar fraction. */
     val totalSeconds: Long = 0,
     /** Android's per-item bookmark flag. */
@@ -128,6 +169,57 @@ data class LocalItem(
     /** Episode filler flag (shows) — `fillermark || canonicalFiller`. */
     val fillermarked: Boolean = false,
 )
+
+/**
+ * A season row on a shows entry — Android's `SeasonAnime` aggregate
+ * (child `Anime` row + per-season episode stats) flattened for the UI.
+ */
+data class LocalSeason(
+    /** Child row id — the drill-in entry id. */
+    val id: Long,
+    val url: String,
+    val title: String,
+    val seasonNumber: Double,
+    val sourceOrder: Long,
+    val thumbnailUrl: String?,
+    /** SAnime status int — Android's completed filter compares to COMPLETED. */
+    val status: Int,
+    /** Every episode seen — the pill's check / the seen filter. */
+    val seen: Boolean,
+    val unseenCount: Long,
+    val hasStarted: Boolean,
+    val hasBookmarks: Boolean,
+    val hasFillermarks: Boolean,
+    /** Sort keys — Android's SeasonSorter fields. */
+    val latestUpload: Long,
+    val fetchedAt: Long,
+    val lastSeen: Long,
+    /** Source language tag — Android's LanguageBadge on season covers. */
+    val sourceLanguage: String = "",
+)
+
+/**
+ * Android's `SetAnimeSeasonFlags` operations — the ui computes raw flag
+ * values from `Anime.SEASON_*` constants; the binding persists via the
+ * shared interactor so flag math stays in one place.
+ */
+sealed interface SeasonFlagOp {
+    data class DownloadedFilter(val flag: Long) : SeasonFlagOp
+    data class UnseenFilter(val flag: Long) : SeasonFlagOp
+    data class StartedFilter(val flag: Long) : SeasonFlagOp
+    data class CompletedFilter(val flag: Long) : SeasonFlagOp
+    data class BookmarkedFilter(val flag: Long) : SeasonFlagOp
+    data class FillermarkedFilter(val flag: Long) : SeasonFlagOp
+    data class SortModeOrFlip(val flag: Long) : SeasonFlagOp
+    data class GridMode(val mode: SeasonDisplayMode) : SeasonFlagOp
+    data class GridSize(val size: Int) : SeasonFlagOp
+    data class DownloadedOverlay(val on: Boolean) : SeasonFlagOp
+    data class UnseenOverlay(val on: Boolean) : SeasonFlagOp
+    data class LocalOverlay(val on: Boolean) : SeasonFlagOp
+    data class LangOverlay(val on: Boolean) : SeasonFlagOp
+    data class ContinueOverlay(val on: Boolean) : SeasonFlagOp
+    data class DisplayMode(val flag: Long) : SeasonFlagOp
+}
 
 /** A manga reader page. */
 data class PageEntry(
@@ -288,6 +380,26 @@ interface CarrierBinding {
     suspend fun getItemScanlators(localId: Long): Set<String> = emptySet()
     fun excludedScanlators(localId: Long): Flow<Set<String>> = flowOf(emptySet())
     suspend fun setExcludedScanlators(localId: Long, excluded: Set<String>) = Unit
+
+    /**
+     * Season rows + aggregates (shows) — Android's
+     * `getAnimeSeasonsByIdAsFlow`; empty for flat sources and other
+     * carriers.
+     */
+    fun localSeasons(localId: Long): Flow<List<LocalSeason>> = flowOf(emptyList())
+
+    /** Seeds `seasonFlags` from the shared defaults when still 0 — Android's `seasonFlags == 0L` guard. */
+    suspend fun ensureSeasonDefaults(localId: Long) = Unit
+
+    /** Single season-flag write — Android's `SetAnimeSeasonFlags` op. */
+    suspend fun applySeasonFlag(localId: Long, op: SeasonFlagOp) = Unit
+
+    /**
+     * Android's "Set season settings as default" — copies this entry's
+     * seasonFlags into the shared default prefs; [applyToExisting]
+     * rewrites every favorite's flags (SetAnimeDefaultSeasonFlags.awaitAll).
+     */
+    suspend fun setSeasonSettingsAsDefault(localId: Long, applyToExisting: Boolean) = Unit
 
     /**
      * Android's chapter-settings overflow actions — "Set as default"

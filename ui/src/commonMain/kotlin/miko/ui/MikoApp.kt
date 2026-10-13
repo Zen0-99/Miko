@@ -46,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.components.LibrarySettingsSheet
 import miko.ui.details.EntryDetailsScreen
@@ -1128,6 +1130,7 @@ private fun DetailsDestination(
     val sourceId = destination.sourceId
     val entryKey = destination.entryKey
     val carrier = destination.carrier
+    val scope = rememberCoroutineScope()
     if (model == null) return
     EntryDetailsScreen(
         model = model,
@@ -1158,6 +1161,28 @@ private fun DetailsDestination(
             navigator.replace(
                 Destination.Details(newSourceId, newEntryUrl, newTitle, carrier),
             )
+        },
+        // Season cards drill into the season row's own details page —
+        // Android's `navigator.push(ShowsScreen(it.id))`.
+        onSeasonClick = { season ->
+            navigator.push(
+                Destination.Details(sourceId, season.url, season.title, carrier),
+            )
+        },
+        // Continue overlay — the season's next unseen episode, played
+        // in the season row's context like Android's openEpisode.
+        onSeasonContinue = { season ->
+            scope.launch {
+                model.seasonContinueTarget(season)?.let { target ->
+                    navigator.push(
+                        Destination.EpisodePlayer(
+                            target.sourceId,
+                            target.entryUrl,
+                            target.itemUrl,
+                        ),
+                    )
+                }
+            }
         },
         modifier = modifier.fillMaxSize(),
     )

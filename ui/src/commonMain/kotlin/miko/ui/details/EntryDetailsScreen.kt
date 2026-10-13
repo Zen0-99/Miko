@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -93,17 +94,25 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import miko.domain.shows.SeasonDisplayMode
 import miko.ui.carrier.BrowseCarrier
+import miko.ui.carrier.LocalSeason
 import miko.ui.carrier.RemoteItem
 import miko.ui.components.ChangeCollectionSheet
 import miko.ui.components.ChapterSettingsSheet
+import miko.ui.components.CoverComfortableItem
+import miko.ui.components.CoverGridItem
+import miko.ui.components.CoverListItem
 import miko.ui.components.MigrateSourceSheet
 import miko.ui.components.ScanlatorFilterSheet
+import miko.ui.components.SeasonSettingsSheet
 import miko.ui.download.DownloadManager
 import miko.ui.download.DownloadState
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
+import tachiyomi.presentation.core.components.Badge
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
@@ -129,11 +138,21 @@ fun EntryDetailsScreen(
     onEditCollections: () -> Unit,
     onMigrated: (sourceId: Long, entryUrl: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Season card tap — Android pushes ShowsScreen(season.id); url-keyed here. */
+    onSeasonClick: (LocalSeason) -> Unit = {},
+    /** Season continue overlay — resumes at the season's next unseen episode. */
+    onSeasonContinue: (LocalSeason) -> Unit = {},
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     // Cover-derived accent — Android's rememberEntryAccentColor; it tints
     // the continue bar, favorite box, and the item carousel.
     val accentColor = miko.ui.cover.rememberEntryAccentColor(state.details?.thumbnailUrl)
+
+    // Structured shows swap the episode carousel for Android's
+    // FetchType.Seasons surface — season cells, the season settings
+    // sheet, and "N seasons" counts.
+    val seasonMode = carrier == BrowseCarrier.SHOWS && state.isSeasonEntry
+    val seasonLocal = state.local
 
     if (state.collectionSheetOpen) {
         ChangeCollectionSheet(
@@ -151,6 +170,51 @@ fun EntryDetailsScreen(
             onDismissRequest = model::dismissMigrateSheet,
             onSourceSelected = { source ->
                 model.migrateTo(source.id, onMigrated)
+            },
+        )
+    }
+
+    if (state.seasonSettingsOpen) {
+        val local = state.local
+        SeasonSettingsSheet(
+            downloadedFilter = local?.seasonDownloadedFilter ?: TriState.DISABLED,
+            unseenFilter = local?.seasonUnseenFilter ?: TriState.DISABLED,
+            startedFilter = local?.seasonStartedFilter ?: TriState.DISABLED,
+            completedFilter = local?.seasonCompletedFilter ?: TriState.DISABLED,
+            bookmarkedFilter = local?.seasonBookmarkedFilter ?: TriState.DISABLED,
+            fillermarkedFilter = local?.seasonFillermarkedFilter ?: TriState.DISABLED,
+            sortingMode = local?.seasonSorting ?: 0L,
+            sortDescending = local?.seasonSortDescending == true,
+            displayGridMode = local?.seasonDisplayGridMode
+                ?: SeasonDisplayMode.CompactGrid,
+            displayGridSize = local?.seasonDisplayGridSize ?: 0,
+            overlayDownloaded = local?.seasonDownloadedOverlay == true,
+            overlayUnseen = local?.seasonUnseenOverlay != false,
+            overlayLocal = local?.seasonLocalOverlay != false,
+            overlayLang = local?.seasonLangOverlay == true,
+            overlayContinue = local?.seasonContinueOverlay != false,
+            displayMode = local?.seasonDisplayMode ?: 0L,
+            onDismissRequest = model::dismissSeasonSettings,
+            onDownloadedFilter = model::setSeasonDownloadedFilter,
+            onUnseenFilter = model::setSeasonUnseenFilter,
+            onStartedFilter = model::setSeasonStartedFilter,
+            onCompletedFilter = model::setSeasonCompletedFilter,
+            onBookmarkedFilter = model::setSeasonBookmarkedFilter,
+            onFillermarkedFilter = model::setSeasonFillermarkedFilter,
+            onSortMode = model::setSeasonSortMode,
+            onDisplayGridMode = model::setSeasonGridMode,
+            onDisplayGridSize = model::setSeasonGridSize,
+            onOverlayDownloaded = model::setSeasonDownloadedOverlay,
+            onOverlayUnseen = model::setSeasonUnseenOverlay,
+            onOverlayLocal = model::setSeasonLocalOverlay,
+            onOverlayLang = model::setSeasonLangOverlay,
+            onOverlayContinue = model::setSeasonContinueOverlay,
+            onDisplayMode = model::setSeasonDisplayMode,
+            // Android's tab overflow — materialized entries only.
+            onSetAsDefault = if (local != null) {
+                model::setSeasonSettingsAsDefault
+            } else {
+                null
             },
         )
     }
@@ -300,12 +364,40 @@ fun EntryDetailsScreen(
                     var downloadMenuOpen by remember { mutableStateOf(false) }
                     Box {
                         ChapterListHeader(
-                            count = state.items.size,
-                            filtersActive = state.unreadFilter != TriState.DISABLED ||
-                                state.bookmarkedFilter != TriState.DISABLED ||
-                                state.fillermarkedFilter != TriState.DISABLED,
-                            showActions = state.local != null,
-                            onFilterClick = { settingsOpen = true },
+                            count = if (seasonMode) {
+                                state.displaySeasons.size
+                            } else {
+                                state.items.size
+                            },
+                            filtersActive = if (seasonMode) {
+                                seasonLocal?.let {
+                                    it.seasonUnseenFilter != TriState.DISABLED ||
+                                        it.seasonStartedFilter != TriState.DISABLED ||
+                                        it.seasonCompletedFilter != TriState.DISABLED ||
+                                        it.seasonBookmarkedFilter != TriState.DISABLED ||
+                                        it.seasonFillermarkedFilter != TriState.DISABLED ||
+                                        it.seasonDownloadedFilter != TriState.DISABLED
+                                } == true
+                            } else {
+                                state.unreadFilter != TriState.DISABLED ||
+                                    state.bookmarkedFilter != TriState.DISABLED ||
+                                    state.fillermarkedFilter != TriState.DISABLED
+                            },
+                            showActions = state.local != null || seasonMode,
+                            onFilterClick = if (seasonMode) {
+                                model::openSeasonSettings
+                            } else {
+                                { settingsOpen = true }
+                            },
+                            countLabel = if (seasonMode) {
+                                pluralStringResource(
+                                    AYMR.plurals.anime_num_seasons,
+                                    count = state.displaySeasons.size,
+                                    state.displaySeasons.size,
+                                )
+                            } else {
+                                null
+                            },
                             // Android's toolbar action mode — count + close /
                             // select-all / invert while rows are ticked.
                             selectedCount = state.selectedUrls.size,
@@ -428,6 +520,84 @@ fun EntryDetailsScreen(
 
                 when {
                     state.itemsLoading -> item { LoadingScreen() }
+                    seasonMode -> {
+                        // Android's FetchType.Seasons surface — the item
+                        // list is season cells, not episode cards. Grid
+                        // modes chunk into columns; List stacks rows.
+                        val displaySeasons = state.displaySeasons
+                        if (displaySeasons.isEmpty()) {
+                            item {
+                                Text(
+                                    text = stringResource(MR.strings.no_results_found),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(
+                                        horizontal = 16.dp,
+                                        vertical = 8.dp,
+                                    ),
+                                )
+                            }
+                        } else {
+                            val gridMode = seasonLocal?.seasonDisplayGridMode
+                                ?: SeasonDisplayMode.CompactGrid
+                            if (gridMode == SeasonDisplayMode.List) {
+                                items(
+                                    displaySeasons,
+                                    key = { it.url },
+                                ) { season ->
+                                    SeasonListRow(
+                                        season = season,
+                                        displayMode = seasonLocal?.seasonDisplayMode
+                                            ?: 0L,
+                                        unseenOverlay = seasonLocal?.seasonUnseenOverlay != false,
+                                        langOverlay = seasonLocal?.seasonLangOverlay == true,
+                                        continueOverlay =
+                                        seasonLocal?.seasonContinueOverlay != false,
+                                        onClick = { onSeasonClick(season) },
+                                        onContinue = { onSeasonContinue(season) },
+                                    )
+                                }
+                            } else {
+                                val columns =
+                                    (seasonLocal?.seasonDisplayGridSize ?: 0)
+                                        .takeIf { it > 0 } ?: 3
+                                items(
+                                    displaySeasons.chunked(columns),
+                                    key = { row -> row.first().url },
+                                ) { row ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp),
+                                    ) {
+                                        row.forEach { season ->
+                                            SeasonGridCell(
+                                                season = season,
+                                                displayMode =
+                                                seasonLocal?.seasonDisplayMode
+                                                    ?: 0L,
+                                                gridMode = gridMode,
+                                                unseenOverlay =
+                                                seasonLocal?.seasonUnseenOverlay != false,
+                                                langOverlay =
+                                                seasonLocal?.seasonLangOverlay == true,
+                                                continueOverlay =
+                                                seasonLocal?.seasonContinueOverlay
+                                                    != false,
+                                                onClick = { onSeasonClick(season) },
+                                                onContinue = {
+                                                    onSeasonContinue(season)
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                        repeat(columns - row.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     state.items.isEmpty() -> item {
                         Text(
                             text = stringResource(MR.strings.no_results_found),
@@ -1016,6 +1186,8 @@ private fun ChapterListHeader(
     onInvertSelection: () -> Unit = {},
     /** Android's toolbar download dropdown — non-null shows the icon. */
     onDownloadMenuClick: (() -> Unit)? = null,
+    /** Count text — chapters plural by default; "N seasons" on shows. */
+    countLabel: String? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1051,7 +1223,7 @@ private fun ChapterListHeader(
             return@Row
         }
         Text(
-            text = pluralStringResource(
+            text = countLabel ?: pluralStringResource(
                 MR.plurals.manga_num_chapters,
                 count = count,
                 count,
@@ -1293,6 +1465,121 @@ private fun itemPrefix(carrier: BrowseCarrier): String = when (carrier) {
 }
 
 /** "1" for whole numbers, "2.5" otherwise — Android's formatChapterNumber. */
+/** Android's season title rule — `SEASON_DISPLAY_MODE_NUMBER` → "Season N". */
+@Composable
+private fun seasonTitle(season: LocalSeason, displayMode: Long): String =
+    if (displayMode == Anime.SEASON_DISPLAY_MODE_NUMBER) {
+        stringResource(
+            AYMR.strings.display_mode_season,
+            formatItemNumber(season.seasonNumber),
+        )
+    } else {
+        season.title
+    }
+
+/** Android's UnviewedBadge — secondary count, hidden at zero/off. */
+@Composable
+private fun SeasonUnseenBadge(count: Long) {
+    if (count > 0) Badge(text = "$count")
+}
+
+/** Android's LanguageBadge — uppercased source tag when the overlay's on. */
+@Composable
+private fun SeasonLangBadge(enabled: Boolean, sourceLanguage: String) {
+    if (enabled && sourceLanguage.isNotEmpty()) {
+        Badge(
+            text = sourceLanguage.uppercase(),
+            color = MaterialTheme.colorScheme.tertiary,
+            textColor = MaterialTheme.colorScheme.onTertiary,
+        )
+    }
+}
+
+/**
+ * Android's `ShowsSeasonListItem` grid modes — CompactGrid and
+ * CoverOnlyGrid share the scrim cell (CoverOnly drops the title),
+ * ComfortableGrid puts the title below the cover.
+ */
+@Composable
+private fun SeasonGridCell(
+    season: LocalSeason,
+    displayMode: Long,
+    gridMode: SeasonDisplayMode,
+    unseenOverlay: Boolean,
+    langOverlay: Boolean,
+    continueOverlay: Boolean,
+    onClick: () -> Unit,
+    onContinue: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val title = seasonTitle(season, displayMode)
+    val unseen = if (unseenOverlay) season.unseenCount else 0L
+    // Android's continue overlay — only when the season has unseen eps
+    // and a real local row to resolve (remote-derived rows can't).
+    val continueClick = if (
+        continueOverlay && season.unseenCount > 0 && season.id >= 0
+    ) {
+        onContinue
+    } else {
+        null
+    }
+    when (gridMode) {
+        SeasonDisplayMode.ComfortableGrid -> CoverComfortableItem(
+            title = title,
+            coverUrl = season.thumbnailUrl,
+            onClick = onClick,
+            onLongClick = onClick,
+            coverBadge = { SeasonUnseenBadge(unseen) },
+            coverBadgeEnd = { SeasonLangBadge(langOverlay, season.sourceLanguage) },
+            onClickContinueViewing = continueClick,
+            modifier = modifier,
+        )
+        else -> CoverGridItem(
+            title = title.takeIf { gridMode == SeasonDisplayMode.CompactGrid },
+            coverUrl = season.thumbnailUrl,
+            onClick = onClick,
+            onLongClick = onClick,
+            topStartBadge = { SeasonUnseenBadge(unseen) },
+            topEndBadge = { SeasonLangBadge(langOverlay, season.sourceLanguage) },
+            onClickContinueViewing = continueClick,
+            modifier = modifier,
+        )
+    }
+}
+
+/** Android's `ShowsSeasonListItem` list mode — the 56dp cover row. */
+@Composable
+private fun SeasonListRow(
+    season: LocalSeason,
+    displayMode: Long,
+    unseenOverlay: Boolean,
+    langOverlay: Boolean,
+    continueOverlay: Boolean,
+    onClick: () -> Unit,
+    onContinue: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val unseen = if (unseenOverlay) season.unseenCount else 0L
+    CoverListItem(
+        title = seasonTitle(season, displayMode),
+        coverUrl = season.thumbnailUrl,
+        onClick = onClick,
+        onLongClick = onClick,
+        badge = {
+            SeasonUnseenBadge(unseen)
+            SeasonLangBadge(langOverlay, season.sourceLanguage)
+        },
+        onClickContinueViewing = if (
+            continueOverlay && season.unseenCount > 0 && season.id >= 0
+        ) {
+            onContinue
+        } else {
+            null
+        },
+        modifier = modifier,
+    )
+}
+
 private fun formatItemNumber(value: Double): String =
     if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
 

@@ -1,5 +1,6 @@
 package miko.ui.details
 
+import eu.kanade.tachiyomi.animesource.model.SAnime
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -10,19 +11,24 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import miko.domain.shows.SeasonDisplayMode
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.ChapterSortMode
 import miko.ui.carrier.ItemSwipeAction
 import miko.ui.carrier.LocalEntry
+import miko.ui.carrier.LocalSeason
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
+import miko.ui.carrier.SeasonFlagOp
 import miko.ui.carrier.ordered
+import miko.ui.carrier.triStateMatch
 import miko.ui.download.DownloadManager
 import miko.ui.download.DownloadState
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.collection.model.Collection
+import tachiyomi.domain.entries.shows.model.Anime
 
 /**
  * Entry details — remote details + item list (chapters/episodes), local
@@ -88,6 +94,13 @@ class EntryDetailsScreenModel(
         val scanlatorSheetOpen: Boolean = false,
         val scanlatorNames: List<String> = emptyList(),
         val excludedScanlators: Set<String> = emptySet(),
+        /**
+         * Shows — season rows + aggregates (Android's `processedSeasons`
+         * source). Non-empty only on structured (FetchType.Seasons) entries.
+         */
+        val seasons: List<LocalSeason> = emptyList(),
+        /** Android's SeasonSettingsSheet dialog flag. */
+        val seasonSettingsOpen: Boolean = false,
     ) {
         /** First undone item — Android's `nextContinueChapter`. */
         val nextItem: RemoteItem?
@@ -123,6 +136,103 @@ class EntryDetailsScreenModel(
 
         val hasStarted: Boolean
             get() = doneUrls.isNotEmpty()
+
+        /**
+         * Seasons grouped from the remote item list — Android surfaces
+         * structured entries pre-favorite too (its open-time materialize
+         * writes season rows); unfavorited entries fall back to this so
+         * the season surface still renders. Aggregates derive from the
+         * entry's local url sets when absent.
+         */
+        private val remoteSeasons: List<LocalSeason>
+            get() = items
+                .mapIndexedNotNull { index, item ->
+                    item.seasonUrl?.let { Triple(index, it, item) }
+                }
+                .groupBy({ it.second }, { it.third to it.first })
+                .map { (url, eps) ->
+                    val first = eps.first().first
+                    LocalSeason(
+                        // No local row — drill-in is url-keyed; mark ops
+                        // guard on a real id.
+                        id = -1L,
+                        url = url,
+                        title = first.seasonTitle ?: url,
+                        seasonNumber = first.seasonNumber,
+                        sourceOrder = eps.minOf { it.second }.toLong(),
+                        thumbnailUrl = null,
+                        status = 0,
+                        seen = eps.isNotEmpty() && eps.all { it.first.url in doneUrls },
+                        unseenCount = eps.count { it.first.url !in doneUrls }.toLong(),
+                        hasStarted = eps.any { it.first.url in doneUrls },
+                        hasBookmarks = eps.any { it.first.url in bookmarkedUrls },
+                        hasFillermarks = eps.any { it.first.url in fillermarkedUrls },
+                        latestUpload = eps.maxOf { it.first.dateUpload },
+                        fetchedAt = 0L,
+                        lastSeen = 0L,
+                    )
+                }
+
+        /** Local season rows when materialized; remote-derived otherwise. */
+        private val seasonSurface: List<LocalSeason>
+            get() = seasons.ifEmpty { remoteSeasons }
+
+        /**
+         * Android's `processedSeasons` — `applySeasonFilters` + the
+         * seasonFlags comparator (descending reverses the mode sort,
+         * then an always-ascending alphabetical tiebreak).
+         */
+        val displaySeasons: List<LocalSeason>
+            get() {
+                val local = local ?: return seasonSurface
+                val filtered = seasonSurface
+                    .filter { triStateMatch(local.seasonUnseenFilter, !it.seen) }
+                    .filter { triStateMatch(local.seasonStartedFilter, it.hasStarted) }
+                    .filter {
+                        triStateMatch(
+                            local.seasonCompletedFilter,
+                            it.status == SAnime.COMPLETED,
+                        )
+                    }
+                    .filter { triStateMatch(local.seasonBookmarkedFilter, it.hasBookmarks) }
+                    .filter {
+                        triStateMatch(local.seasonFillermarkedFilter, it.hasFillermarks)
+                    }
+                    .filter {
+                        // Shows have no local/downloaded rows — the filter
+                        // still cycles; IS matches nothing, NOT matches all.
+                        triStateMatch(local.seasonDownloadedFilter, false)
+                    }
+                val comparator = Comparator<LocalSeason> { s1, s2 ->
+                    when (local.seasonSorting) {
+                        Anime.SEASON_SORT_SEASON ->
+                            s1.seasonNumber.compareTo(s2.seasonNumber)
+                        Anime.SEASON_SORT_UPLOAD ->
+                            s1.latestUpload.compareTo(s2.latestUpload)
+                        Anime.SEASON_SORT_ALPHABET ->
+                            s1.title.compareTo(s2.title, ignoreCase = true)
+                        Anime.SEASON_SORT_COUNT ->
+                            s1.unseenCount.compareTo(s2.unseenCount)
+                        Anime.SEASON_SORT_LAST_SEEN ->
+                            s1.lastSeen.compareTo(s2.lastSeen)
+                        Anime.SEASON_SORT_FETCHED ->
+                            s1.fetchedAt.compareTo(s2.fetchedAt)
+                        else -> s1.sourceOrder.compareTo(s2.sourceOrder)
+                    }
+                }
+                // Android: mode comparator (descending reverses it), then
+                // an always-ascending alphabetical tiebreak.
+                val mode = if (local.seasonSortDescending) {
+                    comparator.reversed()
+                } else {
+                    comparator
+                }
+                return filtered.sortedWith(mode.thenComparing { it.title.lowercase() })
+            }
+
+        /** Structured shows render the season surface instead of items. */
+        val isSeasonEntry: Boolean
+            get() = seasonSurface.isNotEmpty()
     }
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -214,6 +324,17 @@ class EntryDetailsScreenModel(
         scope.launch {
             binding.excludedScanlators(localId).collect { excluded ->
                 _state.value = _state.value.copy(excludedScanlators = excluded)
+            }
+        }
+        // Shows — Android's getAnimeSeasonsByIdAsFlow; empty unless the
+        // source is season-structured. Flag defaults seed once per entry
+        // (Android's `seasonFlags == 0L` load-time guard).
+        if (carrier == BrowseCarrier.SHOWS) {
+            scope.launch {
+                binding.ensureSeasonDefaults(localId)
+                binding.localSeasons(localId).collect { seasons ->
+                    _state.value = _state.value.copy(seasons = seasons)
+                }
             }
         }
     }
@@ -682,6 +803,135 @@ class EntryDetailsScreenModel(
         val local = _state.value.local ?: return
         scope.launch { binding.resetEntryFlagsToDefault(local.id) }
     }
+
+    // ---- Season surface (shows) — Android's SeasonSettingsSheet + flags ----
+
+    fun openSeasonSettings() {
+        _state.value = _state.value.copy(seasonSettingsOpen = true)
+    }
+
+    fun dismissSeasonSettings() {
+        _state.value = _state.value.copy(seasonSettingsOpen = false)
+    }
+
+    private fun applySeasonFlag(op: SeasonFlagOp) {
+        scope.launch {
+            // Android materializes the entry row on open — flag writes
+            // work pre-favorite. Materialize on first write to match.
+            val local = _state.value.local
+                ?: _state.value.details?.let { binding.materialize(it, sourceId) }
+                ?: return@launch
+            binding.applySeasonFlag(local.id, op)
+        }
+    }
+
+    private fun seasonFlag(state: TriState, isFlag: Long, notFlag: Long) = when (state) {
+        TriState.DISABLED -> Anime.SHOW_ALL
+        TriState.ENABLED_IS -> isFlag
+        TriState.ENABLED_NOT -> notFlag
+    }
+
+    fun setSeasonDownloadedFilter(state: TriState) =
+        applySeasonFlag(
+            SeasonFlagOp.DownloadedFilter(
+                seasonFlag(state, Anime.SEASON_SHOW_DOWNLOADED, Anime.SEASON_SHOW_NOT_DOWNLOADED),
+            ),
+        )
+
+    fun setSeasonUnseenFilter(state: TriState) =
+        applySeasonFlag(
+            SeasonFlagOp.UnseenFilter(
+                seasonFlag(state, Anime.SEASON_SHOW_UNSEEN, Anime.SEASON_SHOW_SEEN),
+            ),
+        )
+
+    fun setSeasonStartedFilter(state: TriState) =
+        applySeasonFlag(
+            SeasonFlagOp.StartedFilter(
+                seasonFlag(state, Anime.SEASON_SHOW_STARTED, Anime.SEASON_SHOW_NOT_STARTED),
+            ),
+        )
+
+    fun setSeasonCompletedFilter(state: TriState) =
+        applySeasonFlag(
+            SeasonFlagOp.CompletedFilter(
+                seasonFlag(state, Anime.SEASON_SHOW_COMPLETED, Anime.SEASON_SHOW_NOT_COMPLETED),
+            ),
+        )
+
+    fun setSeasonBookmarkedFilter(state: TriState) =
+        applySeasonFlag(
+            SeasonFlagOp.BookmarkedFilter(
+                seasonFlag(state, Anime.SEASON_SHOW_BOOKMARKED, Anime.SEASON_SHOW_NOT_BOOKMARKED),
+            ),
+        )
+
+    fun setSeasonFillermarkedFilter(state: TriState) =
+        applySeasonFlag(
+            SeasonFlagOp.FillermarkedFilter(
+                seasonFlag(
+                    state,
+                    Anime.SEASON_SHOW_FILLERMARKED,
+                    Anime.SEASON_SHOW_NOT_FILLERMARKED,
+                ),
+            ),
+        )
+
+    /** Android's onSeasonSortModeChanged — same-mode re-pick flips direction. */
+    fun setSeasonSortMode(mode: Long) =
+        applySeasonFlag(SeasonFlagOp.SortModeOrFlip(mode))
+
+    fun setSeasonGridMode(mode: SeasonDisplayMode) =
+        applySeasonFlag(SeasonFlagOp.GridMode(mode))
+
+    fun setSeasonGridSize(size: Int) =
+        applySeasonFlag(SeasonFlagOp.GridSize(size))
+
+    fun setSeasonDownloadedOverlay(on: Boolean) =
+        applySeasonFlag(SeasonFlagOp.DownloadedOverlay(on))
+
+    fun setSeasonUnseenOverlay(on: Boolean) =
+        applySeasonFlag(SeasonFlagOp.UnseenOverlay(on))
+
+    fun setSeasonLocalOverlay(on: Boolean) =
+        applySeasonFlag(SeasonFlagOp.LocalOverlay(on))
+
+    fun setSeasonLangOverlay(on: Boolean) =
+        applySeasonFlag(SeasonFlagOp.LangOverlay(on))
+
+    fun setSeasonContinueOverlay(on: Boolean) =
+        applySeasonFlag(SeasonFlagOp.ContinueOverlay(on))
+
+    fun setSeasonDisplayMode(mode: Long) =
+        applySeasonFlag(SeasonFlagOp.DisplayMode(mode))
+
+    /** Android's setSeasonCurrentSettingsAsDefault + optional applyToExisting. */
+    fun setSeasonSettingsAsDefault(applyToExisting: Boolean) {
+        scope.launch {
+            val local = _state.value.local
+                ?: _state.value.details?.let { binding.materialize(it, sourceId) }
+                ?: return@launch
+            binding.setSeasonSettingsAsDefault(local.id, applyToExisting)
+        }
+    }
+
+    /**
+     * Android's onMultiMarkAsSeen for a season — seen unless every
+     * episode already is. The binding owns the child row's item writes;
+     * remote-derived rows (id -1, unfavorited) have nothing to write.
+     */
+    fun markSeasonSeen(season: LocalSeason) {
+        if (season.id < 0) return
+        scope.launch { binding.setAllItemsDone(season.id, !season.seen) }
+    }
+
+    /**
+     * Android's onContinueWatching(seasonAnime) — the season's next
+     * unseen episode as a player nav target; null when none remains or
+     * the row isn't materialized yet.
+     */
+    suspend fun seasonContinueTarget(season: LocalSeason) =
+        if (season.id >= 0) binding.nextUndoneItem(season.id) else null
 
     /**
      * Android's showChangeCollectionDialog — snapshots the entry's current

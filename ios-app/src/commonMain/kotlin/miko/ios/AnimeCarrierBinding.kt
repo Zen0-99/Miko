@@ -3,14 +3,16 @@ package miko.ios
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
+import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
+import miko.domain.shows.SeasonAnime
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.CarrierSource
 import miko.ui.carrier.ChapterSortMode
@@ -21,8 +23,10 @@ import miko.ui.carrier.HosterEntry
 import miko.ui.carrier.ItemSwipeAction
 import miko.ui.carrier.LocalEntry
 import miko.ui.carrier.LocalItem
+import miko.ui.carrier.LocalSeason
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
+import miko.ui.carrier.SeasonFlagOp
 import miko.ui.carrier.VideoEntry
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
@@ -34,6 +38,7 @@ import tachiyomi.domain.entries.shows.interactor.GetAnime
 import tachiyomi.domain.entries.shows.interactor.GetAnimeFavorites
 import tachiyomi.domain.entries.shows.interactor.NetworkToLocalAnime
 import tachiyomi.domain.entries.shows.interactor.SetAnimeEpisodeFlags
+import tachiyomi.domain.entries.shows.interactor.SetAnimeSeasonFlags
 import tachiyomi.domain.entries.shows.model.Anime
 import tachiyomi.domain.entries.shows.model.AnimeUpdate
 import tachiyomi.domain.entries.shows.repository.AnimeRepository
@@ -44,6 +49,8 @@ import tachiyomi.domain.items.episode.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.items.episode.model.EpisodeUpdate
 import tachiyomi.domain.items.episode.repository.EpisodeRepository
+import tachiyomi.domain.items.season.interactor.SetAnimeDefaultSeasonFlags
+import tachiyomi.domain.items.season.service.SeasonRecognition
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import kotlin.time.Clock
@@ -67,6 +74,12 @@ class AnimeCarrierBinding(
     private val setDefaultFlags = SetAnimeDefaultEpisodeFlags(
         libraryPreferences,
         SetAnimeEpisodeFlags(animeRepository),
+        GetAnimeFavorites(animeRepository),
+    )
+    private val setSeasonFlags = SetAnimeSeasonFlags(animeRepository)
+    private val setSeasonDefaults = SetAnimeDefaultSeasonFlags(
+        libraryPreferences,
+        setSeasonFlags,
         GetAnimeFavorites(animeRepository),
     )
 
@@ -97,6 +110,22 @@ class AnimeCarrierBinding(
         fillermarkedFilter = fillermarkedFilter,
         showPreviews = showPreviews(),
         showSummaries = showSummaries(),
+        seasonDownloadedFilter = seasonDownloadedFilter,
+        seasonUnseenFilter = seasonUnseenFilter,
+        seasonStartedFilter = seasonStartedFilter,
+        seasonCompletedFilter = seasonCompletedFilter,
+        seasonBookmarkedFilter = seasonBookmarkedFilter,
+        seasonFillermarkedFilter = seasonFillermarkedFilter,
+        seasonSorting = seasonSorting,
+        seasonSortDescending = seasonSortDescending(),
+        seasonDisplayGridMode = seasonDisplayGridMode,
+        seasonDisplayGridSize = seasonDisplayGridSize,
+        seasonDownloadedOverlay = seasonDownloadedOverlay,
+        seasonUnseenOverlay = seasonUnseenOverlay,
+        seasonLocalOverlay = seasonLocalOverlay,
+        seasonLangOverlay = seasonLangOverlay,
+        seasonContinueOverlay = seasonContinueOverlay,
+        seasonDisplayMode = seasonDisplayMode,
     )
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
@@ -243,53 +272,134 @@ class AnimeCarrierBinding(
         )
     }
 
-    override fun localItems(localId: Long): Flow<List<LocalItem>> = flow {
-        // getEpisodeByAnimeIdAsFlow is suspend (unlike the novel repo's).
-        emitAll(
-            episodeRepository.getEpisodeByAnimeIdAsFlow(localId).map { episodes ->
-                episodes.map {
-                    LocalItem(
-                        id = it.id,
-                        url = it.url,
-                        name = it.name,
-                        number = it.episodeNumber,
-                        dateUpload = it.dateUpload,
-                        done = it.seen,
-                        bookmarked = it.bookmark,
-                        lastSecondSeen = it.lastSecondSeen,
-                        totalSeconds = it.totalSeconds,
-                        fillermarked = it.fillermark || it.canonicalFiller == true,
-                    )
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    override fun localItems(localId: Long): Flow<List<LocalItem>> =
+        // Android's season model — episodes live on the parent row's
+        // child season rows; merge each season's episodes tagged with
+        // its seasonNumber (parent's own rows stay flat, -1).
+        animeRepository.getAnimeSeasonsByIdAsFlow(localId).flatMapLatest { seasons ->
+            val own = episodeRepository.getEpisodeByAnimeIdAsFlow(localId)
+                .map { eps -> eps.map { it.toLocalItem() } }
+            if (seasons.isEmpty()) {
+                own
+            } else {
+                val perSeason = seasons.map { season ->
+                    episodeRepository.getEpisodeByAnimeIdAsFlow(season.anime.id)
+                        .map { eps -> eps.map { it.toLocalItem(season.anime.seasonNumber) } }
                 }
-            },
-        )
-    }
-
-    override suspend fun getLocalItems(localId: Long): List<LocalItem> =
-        episodeRepository.getEpisodeByAnimeId(localId).map {
-            LocalItem(
-                id = it.id,
-                url = it.url,
-                name = it.name,
-                number = it.episodeNumber,
-                dateUpload = it.dateUpload,
-                done = it.seen,
-                bookmarked = it.bookmark,
-                lastSecondSeen = it.lastSecondSeen,
-                totalSeconds = it.totalSeconds,
-                fillermarked = it.fillermark || it.canonicalFiller == true,
-            )
+                combine(own, *perSeason.toTypedArray()) { lists ->
+                    lists.flatMap { it }
+                }
+            }
         }
 
+    override suspend fun getLocalItems(localId: Long): List<LocalItem> {
+        val own = episodeRepository.getEpisodeByAnimeId(localId)
+            .map { it.toLocalItem() }
+        val seasonal = animeRepository.getAnimeSeasonsById(localId).flatMap { season ->
+            episodeRepository.getEpisodeByAnimeId(season.anime.id)
+                .map { it.toLocalItem(season.anime.seasonNumber) }
+        }
+        return own + seasonal
+    }
+
+    /**
+     * Android's SyncSeasonsWithSource — upsert one child Anime row per
+     * source season url, stamping parentId/seasonNumber/sourceOrder.
+     * Returns season url → row so episodes attach to their season.
+     */
+    private suspend fun syncSeasonRows(
+        parent: Anime,
+        remote: List<RemoteItem>,
+    ): Map<String, Anime> {
+        val keyed = remote.mapNotNull { item ->
+            item.seasonUrl?.let { Triple(it, item.seasonTitle, item.seasonNumber) }
+        }.distinctBy { it.first }
+        if (keyed.isEmpty()) return emptyMap()
+        val localId = parent.id
+        val rows = keyed.mapIndexed { index, (url, title, number) ->
+            val seasonNumber = SeasonRecognition.parseSeasonNumber(
+                parent.title,
+                title.orEmpty(),
+                number.takeIf { it >= 0.0 },
+            )
+            val row = networkToLocalAnime.await(
+                Anime.create().copy(
+                    url = url,
+                    title = title ?: url,
+                    source = parent.source,
+                    fetchType = FetchType.Episodes,
+                ),
+            )
+            if (row.parentId != localId ||
+                row.seasonNumber != seasonNumber ||
+                row.seasonSourceOrder != index.toLong() ||
+                row.title != (title ?: url)
+            ) {
+                animeRepository.updateAnime(
+                    AnimeUpdate(
+                        id = row.id,
+                        title = title ?: url,
+                        parentId = localId,
+                        seasonNumber = seasonNumber,
+                        seasonSourceOrder = index.toLong(),
+                        fetchType = FetchType.Episodes,
+                    ),
+                )
+            }
+            url to row
+        }.toMap()
+        // Android detaches seasons the source no longer returns
+        // (removeParentIdByIds — keep the row, drop the linkage).
+        val stale = animeRepository.getAnimeSeasonsById(localId)
+            .map { it.anime }
+            .filter { it.url !in rows.keys }
+            .map { it.id }
+        if (stale.isNotEmpty()) animeRepository.removeParentIdByIds(stale)
+        return rows
+    }
+
     override suspend fun addMissingItems(localId: Long, remote: List<RemoteItem>) {
+        val local = runCatching { animeRepository.getAnimeById(localId) }
+            .getOrNull() ?: return
+        // Season rows are FetchType.Episodes — they never grow children,
+        // and a season page's remote list may span sibling seasons when
+        // the source re-echoes the parent's season list, so scope it.
+        val isSeasonRow = local.parentId != null
+        val seasonRows = if (isSeasonRow) {
+            emptyMap()
+        } else {
+            syncSeasonRows(local, remote)
+        }
+        val scoped = if (isSeasonRow) {
+            remote.filter { it.seasonUrl == null || it.seasonUrl == local.url }
+        } else {
+            remote
+        }
+        // Pre-season-model installs stored every episode on the parent
+        // row — move those to their season rows so progress survives.
+        if (seasonRows.isNotEmpty()) {
+            val ownByUrl = episodeRepository.getEpisodeByAnimeId(localId)
+                .associateBy { it.url }
+            if (ownByUrl.isNotEmpty()) {
+                val reparent = scoped.mapNotNull { item ->
+                    val seasonId = item.seasonUrl?.let { seasonRows[it]?.id }
+                        ?: return@mapNotNull null
+                    ownByUrl[item.url]?.let {
+                        EpisodeUpdate(id = it.id, animeId = seasonId)
+                    }
+                }
+                if (reparent.isNotEmpty()) episodeRepository.updateAllEpisodes(reparent)
+            }
+        }
         val existing = getLocalItems(localId).mapTo(HashSet()) { it.url }
         val now = Clock.System.now().toEpochMilliseconds()
-        val missing = remote.mapIndexedNotNull { index, item ->
+        val missing = scoped.mapIndexedNotNull { index, item ->
             if (item.url in existing) {
                 null
             } else {
                 Episode.create().copy(
-                    animeId = localId,
+                    animeId = seasonRows[item.seasonUrl]?.id ?: localId,
                     url = item.url,
                     name = item.name,
                     dateUpload = item.dateUpload,
@@ -375,6 +485,79 @@ class AnimeCarrierBinding(
     /** SetAsDefaultDialog's applyToExisting — defaults → every favorite. */
     override suspend fun applyDefaultFlagsToAll() {
         setDefaultFlags.awaitAll()
+    }
+
+    private fun SeasonAnime.toLocalSeason() = LocalSeason(
+        id = anime.id,
+        url = anime.url,
+        title = anime.title,
+        seasonNumber = anime.seasonNumber,
+        sourceOrder = anime.seasonSourceOrder,
+        thumbnailUrl = anime.thumbnailUrl,
+        status = anime.status.toInt(),
+        seen = seen,
+        unseenCount = unseenCount,
+        hasStarted = hasStarted,
+        hasBookmarks = hasBookmarks,
+        hasFillermarks = hasFillermarks,
+        latestUpload = latestUpload,
+        fetchedAt = fetchedAt,
+        lastSeen = lastSeen,
+        sourceLanguage = sourceManager.getOrStub(anime.source).lang,
+    )
+
+    override fun localSeasons(localId: Long): Flow<List<LocalSeason>> =
+        animeRepository.getAnimeSeasonsByIdAsFlow(localId).map { seasons ->
+            seasons.map { it.toLocalSeason() }
+        }
+
+    /** Android's `seasonFlags == 0L` load-time guard — defaults once. */
+    override suspend fun ensureSeasonDefaults(localId: Long) {
+        val anime = getAnime.await(localId) ?: return
+        if (anime.seasonFlags == 0L) setSeasonDefaults.await(anime)
+    }
+
+    override suspend fun applySeasonFlag(localId: Long, op: SeasonFlagOp) {
+        val anime = getAnime.await(localId) ?: return
+        when (op) {
+            is SeasonFlagOp.DownloadedFilter ->
+                setSeasonFlags.awaitSetDownloadedFilter(anime, op.flag)
+            is SeasonFlagOp.UnseenFilter ->
+                setSeasonFlags.awaitSetUnseenFilter(anime, op.flag)
+            is SeasonFlagOp.StartedFilter ->
+                setSeasonFlags.awaitSetStartedFilter(anime, op.flag)
+            is SeasonFlagOp.CompletedFilter ->
+                setSeasonFlags.awaitSetCompletedFilter(anime, op.flag)
+            is SeasonFlagOp.BookmarkedFilter ->
+                setSeasonFlags.awaitSetBookmarkedFilter(anime, op.flag)
+            is SeasonFlagOp.FillermarkedFilter ->
+                setSeasonFlags.awaitSetFillermarkedFilter(anime, op.flag)
+            is SeasonFlagOp.SortModeOrFlip ->
+                setSeasonFlags.awaitSetSortingModeOrFlipOrder(anime, op.flag)
+            is SeasonFlagOp.GridMode ->
+                setSeasonFlags.awaitSetGridMode(anime, op.mode)
+            is SeasonFlagOp.GridSize ->
+                setSeasonFlags.awaitSetGridSize(anime, op.size)
+            is SeasonFlagOp.DownloadedOverlay ->
+                setSeasonFlags.awaitSetDownloadedOverlay(anime, op.on)
+            is SeasonFlagOp.UnseenOverlay ->
+                setSeasonFlags.awaitSetUnseenOverlay(anime, op.on)
+            is SeasonFlagOp.LocalOverlay ->
+                setSeasonFlags.awaitSetLocalOverlay(anime, op.on)
+            is SeasonFlagOp.LangOverlay ->
+                setSeasonFlags.awaitSetLangOverlay(anime, op.on)
+            is SeasonFlagOp.ContinueOverlay ->
+                setSeasonFlags.awaitSetContinueOverlay(anime, op.on)
+            is SeasonFlagOp.DisplayMode ->
+                setSeasonFlags.awaitSetDisplayMode(anime, op.flag)
+        }
+    }
+
+    /** Android's setSeasonCurrentSettingsAsDefault — flags → season prefs. */
+    override suspend fun setSeasonSettingsAsDefault(localId: Long, applyToExisting: Boolean) {
+        val anime = getAnime.await(localId) ?: return
+        libraryPreferences.setSeasonSettingsDefault(anime)
+        if (applyToExisting) setSeasonDefaults.awaitAll()
     }
 
     override fun collections() = collectionRepository.getAllVisibleAnimeCollectionsAsFlow()
@@ -483,6 +666,7 @@ class AnimeCarrierBinding(
             backgroundUrl = backgroundUrl,
             initialized = true,
             source = sourceId,
+            fetchType = fetchType ?: FetchType.Episodes,
         )
 }
 
@@ -532,6 +716,7 @@ private class AnimeCarrierSource(
             status = anime.status,
             thumbnailUrl = anime.thumbnail_url,
             backgroundUrl = anime.background_url,
+            fetchType = anime.fetch_type,
         )
     }
 
@@ -551,7 +736,13 @@ private class AnimeCarrierSource(
         return seasons.flatMap { season ->
             runCatching { source.getEpisodeList(season) }
                 .getOrDefault(emptyList())
-                .map { it.toRemoteItem() }
+                .map {
+                    it.toRemoteItem(
+                        seasonUrl = season.url,
+                        seasonNumber = season.season_number,
+                        seasonTitle = season.title,
+                    )
+                }
         }
     }
 
@@ -561,7 +752,25 @@ private class AnimeCarrierSource(
             hasNextPage = hasNextPage,
         )
 
-    private fun SEpisode.toRemoteItem() = RemoteItem(
+    private fun Episode.toLocalItem(seasonNumber: Double = -1.0) = LocalItem(
+        id = id,
+        url = url,
+        name = name,
+        number = episodeNumber,
+        dateUpload = dateUpload,
+        done = seen,
+        bookmarked = bookmark,
+        lastSecondSeen = lastSecondSeen,
+        totalSeconds = totalSeconds,
+        fillermarked = fillermark || canonicalFiller == true,
+        seasonNumber = seasonNumber,
+    )
+
+    private fun SEpisode.toRemoteItem(
+        seasonUrl: String? = null,
+        seasonNumber: Double = -1.0,
+        seasonTitle: String? = null,
+    ) = RemoteItem(
         url = url,
         name = name,
         number = episode_number.toDouble(),
@@ -569,6 +778,9 @@ private class AnimeCarrierSource(
         scanlator = scanlator,
         summary = summary,
         previewUrl = preview_url,
+        seasonUrl = seasonUrl,
+        seasonNumber = seasonNumber,
+        seasonTitle = seasonTitle,
     )
 }
 
