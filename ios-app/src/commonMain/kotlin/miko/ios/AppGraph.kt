@@ -464,7 +464,9 @@ class AppGraph {
     val userProfileManager = UserProfileManager(userProfileRepository)
 
     val unlockableManager = UnlockableManager(
-        IosPreferenceStore(NSUserDefaults(suiteName = "achievement_unlockables")),
+        IosPreferenceStore(
+            checkNotNull(NSUserDefaults(suiteName = "achievement_unlockables")),
+        ),
         userProfileManager,
     )
 
@@ -528,7 +530,9 @@ class AppGraph {
         textResolver = AchievementTextResolver { json ->
             AchievementLocalizedText(title = json.title, description = json.description)
         },
-        versionStore = IosPreferenceStore(NSUserDefaults(suiteName = "achievement_loader")),
+        versionStore = IosPreferenceStore(
+            checkNotNull(NSUserDefaults(suiteName = "achievement_loader")),
+        ),
         localeTag = { NSLocale.currentLocale.localeIdentifier.replace("_", "-") },
         calculator = achievementCalculator,
     )
