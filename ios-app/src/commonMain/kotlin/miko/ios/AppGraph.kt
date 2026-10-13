@@ -44,7 +44,9 @@ import miko.jssource.IosJsRuntimeFactory
 import miko.ui.MikoUiGraph
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSLocale
 import platform.Foundation.NSURL
+import platform.Foundation.NSUserDefaults
 import platform.Foundation.NSUserDomainMask
 import tachiyomi.core.common.preference.IosPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
@@ -55,6 +57,25 @@ import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.NovelUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
+import tachiyomi.data.achievement.ActivityDataRepositoryImpl
+import tachiyomi.data.achievement.UnlockableManager
+import tachiyomi.data.achievement.UserProfileManager
+import tachiyomi.data.achievement.UserProfileRepositoryImpl
+import tachiyomi.data.achievement.handler.AchievementCalculator
+import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.data.achievement.handler.AchievementHandler
+import tachiyomi.data.achievement.handler.AchievementRuleRegistry
+import tachiyomi.data.achievement.handler.FeatureUsageCollector
+import tachiyomi.data.achievement.handler.PointsManager
+import tachiyomi.data.achievement.handler.SessionManager
+import tachiyomi.data.achievement.handler.checkers.DiversityAchievementChecker
+import tachiyomi.data.achievement.handler.checkers.FeatureBasedAchievementChecker
+import tachiyomi.data.achievement.handler.checkers.StreakAchievementChecker
+import tachiyomi.data.achievement.handler.checkers.TimeBasedAchievementChecker
+import tachiyomi.data.achievement.loader.SharedAchievementLoader
+import tachiyomi.data.achievement.localization.AchievementLocalizedText
+import tachiyomi.data.achievement.localization.AchievementTextResolver
+import tachiyomi.data.achievement.repository.AchievementRepositoryImpl
 import tachiyomi.data.collection.manga.MangaCollectionRepositoryImpl
 import tachiyomi.data.collection.novel.NovelCollectionRepositoryImpl
 import tachiyomi.data.collection.shows.AnimeCollectionRepositoryImpl
@@ -89,6 +110,9 @@ import tachiyomi.data.updates.manga.MangaUpdatesRepositoryImpl
 import tachiyomi.data.updates.novel.NovelUpdatesRepositoryImpl
 import tachiyomi.data.updates.shows.AnimeUpdatesRepositoryImpl
 import tachiyomi.db.achievement.AchievementsDatabase
+import tachiyomi.domain.achievement.repository.AchievementRepository
+import tachiyomi.domain.achievement.repository.ActivityDataRepository
+import tachiyomi.domain.achievement.repository.UserProfileRepository
 import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
@@ -360,6 +384,10 @@ class AppGraph {
     val novelCollectionRepository: NovelCollectionRepository =
         NovelCollectionRepositoryImpl(novelHandler)
 
+    // Achievement event bus — declared ahead of the bindings since their
+    // mark-read/mark-seen ops emit consumption events into it (Phase 30-03).
+    val achievementEventBus = AchievementEventBus()
+
     val mangaBinding = MangaCarrierBinding(
         sourceManager = mangaSourceManager,
         getManga = getManga,
@@ -370,6 +398,7 @@ class AppGraph {
         collectionRepository = mangaCollectionRepository,
         databaseHandler = mangaHandler,
         preferenceStore = preferenceStore,
+        achievementEventBus = achievementEventBus,
     )
 
     val animeBinding = AnimeCarrierBinding(
@@ -383,6 +412,7 @@ class AppGraph {
         preferenceStore = preferenceStore,
         trackRepository = AnimeTrackRepositoryImpl(animeHandler),
         aniSkip = AniSkipApi(httpClient),
+        achievementEventBus = achievementEventBus,
     )
 
     val novelRepository: NovelRepository = NovelRepositoryImpl(novelHandler)
@@ -405,6 +435,95 @@ class AppGraph {
     val getNovelChaptersByNovelId = GetNovelChaptersByNovelId(novelChapterRepository)
 
     val networkToLocalNovel = NetworkToLocalNovel(novelRepository)
+
+    // --- Achievement system (Phase 30-03) — the shared data/commonMain
+    // stack, matching Android's AppModule wiring 1:1. ---
+    val achievementRepository: AchievementRepository =
+        AchievementRepositoryImpl(achievementsDatabase)
+
+    val activityDataRepository: ActivityDataRepository =
+        ActivityDataRepositoryImpl(achievementsDatabase)
+
+    val userProfileRepository: UserProfileRepository =
+        UserProfileRepositoryImpl(achievementsDatabase)
+
+    val featureUsageCollector = FeatureUsageCollector(achievementEventBus)
+
+    val sessionManager = SessionManager(achievementEventBus, featureUsageCollector)
+
+    val pointsManager = PointsManager(achievementsDatabase)
+
+    val userProfileManager = UserProfileManager(userProfileRepository)
+
+    val unlockableManager = UnlockableManager(
+        IosPreferenceStore(NSUserDefaults(suiteName = "achievement_unlockables")),
+        userProfileManager,
+    )
+
+    val diversityChecker =
+        DiversityAchievementChecker(mangaRepository, animeRepository, novelRepository)
+
+    val streakChecker = StreakAchievementChecker(achievementsDatabase)
+
+    val timeBasedChecker = TimeBasedAchievementChecker(achievementEventBus, featureUsageCollector)
+
+    val featureBasedChecker = FeatureBasedAchievementChecker(achievementEventBus, featureUsageCollector)
+
+    val achievementRuleRegistry = AchievementRuleRegistry(mangaRepository, animeRepository, novelRepository)
+
+    val achievementCalculator = AchievementCalculator(
+        repository = achievementRepository,
+        mangaHandler = mangaHandler,
+        animeHandler = animeHandler,
+        novelHandler = novelHandler,
+        diversityChecker = diversityChecker,
+        streakChecker = streakChecker,
+        achievementsDatabase = achievementsDatabase,
+        ruleRegistry = achievementRuleRegistry,
+        featureCollector = featureUsageCollector,
+        pointsManager = pointsManager,
+        mangaRepository = mangaRepository,
+        animeRepository = animeRepository,
+        novelRepository = novelRepository,
+        unlockableManager = unlockableManager,
+        userProfileManager = userProfileManager,
+        activityDataRepository = activityDataRepository,
+    )
+
+    val achievementHandler = AchievementHandler(
+        eventBus = achievementEventBus,
+        repository = achievementRepository,
+        diversityChecker = diversityChecker,
+        streakChecker = streakChecker,
+        timeBasedChecker = timeBasedChecker,
+        featureBasedChecker = featureBasedChecker,
+        featureCollector = featureUsageCollector,
+        pointsManager = pointsManager,
+        unlockableManager = unlockableManager,
+        mangaHandler = mangaHandler,
+        animeHandler = animeHandler,
+        novelHandler = novelHandler,
+        mangaRepository = mangaRepository,
+        animeRepository = animeRepository,
+        novelRepository = novelRepository,
+        userProfileManager = userProfileManager,
+        activityDataRepository = activityDataRepository,
+        ruleRegistry = achievementRuleRegistry,
+    )
+
+    // Text resolution is deferred to display time on iOS — the composables
+    // resolve AYMR refs per achievement id, so the loader persists the raw
+    // JSON text (same net strings the Android resolver would write).
+    val achievementLoader = SharedAchievementLoader(
+        jsonText = { miko.ios.MR.files.achievements_json.readText() },
+        repository = achievementRepository,
+        textResolver = AchievementTextResolver { json ->
+            AchievementLocalizedText(title = json.title, description = json.description)
+        },
+        versionStore = IosPreferenceStore(NSUserDefaults(suiteName = "achievement_loader")),
+        localeTag = { NSLocale.currentLocale.localeIdentifier.replace("_", "-") },
+        calculator = achievementCalculator,
+    )
 
     val uiGraph = MikoUiGraph(
         novelSourceManager = novelSourceManager,
@@ -451,6 +570,13 @@ class AppGraph {
         updateAnimeExtensionRepo = updateAnimeExtensionRepo,
         updateMangaExtensionRepo = updateMangaExtensionRepo,
         updateNovelExtensionRepo = updateNovelExtensionRepo,
+        achievementEventBus = achievementEventBus,
+        achievementHandler = achievementHandler,
+        achievementLoader = achievementLoader,
+        achievementSessionManager = sessionManager,
+        achievementRepository = achievementRepository,
+        activityDataRepository = activityDataRepository,
+        achievementPointsManager = pointsManager,
     )
 
     private fun newDriver(

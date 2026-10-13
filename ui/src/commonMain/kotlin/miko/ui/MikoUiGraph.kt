@@ -1,6 +1,8 @@
 package miko.ui
 
 import eu.kanade.tachiyomi.network.NetworkPreferences
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.Json
 import mihon.domain.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
 import mihon.domain.extensionrepo.anime.interactor.DeleteAnimeExtensionRepo
@@ -21,6 +23,8 @@ import mihon.domain.extensionrepo.service.ExtensionRepoService
 import mihon.domain.upcoming.manga.interactor.GetUpcomingManga
 import mihon.domain.upcoming.novel.interactor.GetUpcomingNovel
 import mihon.domain.upcoming.shows.interactor.GetUpcomingAnime
+import miko.ui.achievements.AchievementBannerManager
+import miko.ui.achievements.AchievementSessionTracker
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.NovelCarrierBinding
@@ -31,7 +35,16 @@ import miko.ui.catalog.MikoAddonClient
 import miko.ui.catalog.TmdbDiscover
 import miko.ui.catalog.TmdbKeyProvider
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.data.achievement.handler.AchievementHandler
+import tachiyomi.data.achievement.handler.PointsManager
+import tachiyomi.data.achievement.handler.SessionManager
+import tachiyomi.data.achievement.loader.SharedAchievementLoader
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
+import tachiyomi.domain.achievement.model.Achievement
+import tachiyomi.domain.achievement.model.AchievementEvent
+import tachiyomi.domain.achievement.repository.AchievementRepository
+import tachiyomi.domain.achievement.repository.ActivityDataRepository
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovels
@@ -53,6 +66,7 @@ import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.updates.manga.interactor.GetMangaUpdates
 import tachiyomi.domain.updates.novel.interactor.GetNovelUpdates
 import tachiyomi.domain.updates.shows.interactor.GetAnimeUpdates
+import kotlin.time.Clock
 
 /**
  * The dependency surface shared screens consume. Each platform's composition
@@ -104,6 +118,13 @@ class MikoUiGraph(
     val updateAnimeExtensionRepo: UpdateAnimeExtensionRepo,
     val updateMangaExtensionRepo: UpdateMangaExtensionRepo,
     val updateNovelExtensionRepo: UpdateNovelExtensionRepo,
+    val achievementEventBus: AchievementEventBus,
+    val achievementHandler: AchievementHandler,
+    val achievementLoader: SharedAchievementLoader,
+    val achievementSessionManager: SessionManager,
+    val achievementRepository: AchievementRepository,
+    val activityDataRepository: ActivityDataRepository,
+    val achievementPointsManager: PointsManager,
 ) {
 
     /** Home catalog rows — persisted spec store + resolver, built in-module
@@ -135,6 +156,38 @@ class MikoUiGraph(
         CinemetaCatalogFeed(cinemetaAddon)
     }
 
+    /** Foreground-time accounting — mirrors Android's App onStart/onStop
+     *  block (session rows, 60s flush, SessionEnd event). Driven by the
+     *  app shell's lifecycle observer. */
+    val achievementSessionTracker: AchievementSessionTracker by lazy {
+        AchievementSessionTracker(
+            eventBus = achievementEventBus,
+            sessionManager = achievementSessionManager,
+            activityDataRepository = activityDataRepository,
+        )
+    }
+
+    /**
+     * Android's App onCreate block: load definition rows, start the event
+     * handler so emitted events (chapter read, etc.) are processed, hook
+     * unlock banners, and fire the AppStart event.
+     */
+    suspend fun startAchievements() {
+        runCatching { achievementLoader.loadAchievements() }
+        runCatching {
+            achievementHandler.unlockCallback =
+                object : AchievementHandler.AchievementUnlockCallback {
+                    override fun onAchievementUnlocked(achievement: Achievement) {
+                        AchievementBannerManager.showAchievement(achievement)
+                    }
+                }
+            achievementHandler.start()
+        }
+        val hourOfDay = Clock.System.now()
+            .toLocalDateTime(TimeZone.currentSystemDefault()).hour
+        achievementEventBus.tryEmit(AchievementEvent.AppStart(hourOfDay = hourOfDay))
+    }
+
     /** Books carrier — built in-module; manga/anime inject theirs (they
      * wrap platform-actual source contracts commonMain can't see). */
     val novelBinding: CarrierBinding = NovelCarrierBinding(
@@ -146,6 +199,7 @@ class MikoUiGraph(
         historyRepository = novelHistoryRepository,
         collectionRepository = novelCollectionRepository,
         preferenceStore = preferenceStore,
+        achievementEventBus = achievementEventBus,
     )
 
     fun binding(carrier: BrowseCarrier): CarrierBinding = when (carrier) {

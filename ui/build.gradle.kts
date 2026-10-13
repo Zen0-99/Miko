@@ -58,6 +58,8 @@ kotlin {
                 implementation(libs.ktor.client.core)
                 // Manage-catalogs drag reorder — KMP since 2.x.
                 implementation(libs.reorderable)
+                // Achievement hexagon glyphs — same icon pack Android uses.
+                implementation(libs.compose.tabler.icons)
             }
         }
 

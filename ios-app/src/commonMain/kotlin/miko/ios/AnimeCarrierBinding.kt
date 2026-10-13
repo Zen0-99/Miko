@@ -30,6 +30,8 @@ import miko.ui.carrier.SeasonFlagOp
 import miko.ui.carrier.VideoEntry
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
 import tachiyomi.domain.collection.shows.repository.AnimeCollectionRepository
@@ -68,6 +70,7 @@ class AnimeCarrierBinding(
     private val preferenceStore: PreferenceStore,
     private val trackRepository: AnimeTrackRepository,
     private val aniSkip: AniSkipApi,
+    private val achievementEventBus: AchievementEventBus? = null,
 ) : CarrierBinding {
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
@@ -449,6 +452,23 @@ class AnimeCarrierBinding(
 
     override suspend fun setItemDone(itemId: Long, done: Boolean) {
         episodeRepository.updateEpisode(EpisodeUpdate(id = itemId, seen = done))
+        // Android's SetSeenStatus — watch events feed the achievement bus.
+        if (done && achievementEventBus != null) {
+            episodeRepository.getEpisodeById(itemId)?.let { episode ->
+                achievementEventBus.tryEmit(
+                    AchievementEvent.EpisodeWatched(
+                        animeId = episode.animeId,
+                        episodeNumber = episode.episodeNumber.toInt(),
+                    ),
+                )
+                val allEpisodes = episodeRepository.getEpisodeByAnimeId(episode.animeId)
+                if (allEpisodes.isNotEmpty() && allEpisodes.all { it.seen }) {
+                    achievementEventBus.tryEmit(
+                        AchievementEvent.AnimeCompleted(animeId = episode.animeId),
+                    )
+                }
+            }
+        }
     }
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {

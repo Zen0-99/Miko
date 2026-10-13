@@ -26,7 +26,9 @@ import miko.ui.carrier.RemoteItem
 import miko.ui.download.ItemPayload
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.data.achievement.handler.AchievementEventBus
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.collection.manga.repository.MangaCollectionRepository
 import tachiyomi.domain.collection.model.Collection
 import tachiyomi.domain.collection.model.CollectionUpdate
@@ -60,6 +62,7 @@ class MangaCarrierBinding(
     private val collectionRepository: MangaCollectionRepository,
     private val databaseHandler: MangaDatabaseHandler,
     private val preferenceStore: PreferenceStore,
+    private val achievementEventBus: AchievementEventBus? = null,
 ) : CarrierBinding {
 
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
@@ -315,6 +318,23 @@ class MangaCarrierBinding(
 
     override suspend fun setItemDone(itemId: Long, done: Boolean) {
         chapterRepository.updateChapter(ChapterUpdate(id = itemId, read = done))
+        // Android's SetReadStatus — read events feed the achievement bus.
+        if (done && achievementEventBus != null) {
+            chapterRepository.getChapterById(itemId)?.let { chapter ->
+                achievementEventBus.tryEmit(
+                    AchievementEvent.ChapterRead(
+                        mangaId = chapter.mangaId,
+                        chapterNumber = chapter.chapterNumber.toInt(),
+                    ),
+                )
+                val allChapters = chapterRepository.getChapterByMangaId(chapter.mangaId)
+                if (allChapters.isNotEmpty() && allChapters.all { it.read }) {
+                    achievementEventBus.tryEmit(
+                        AchievementEvent.MangaCompleted(mangaId = chapter.mangaId),
+                    )
+                }
+            }
+        }
     }
 
     override suspend fun setItemPageProgress(itemId: Long, page: Int) {

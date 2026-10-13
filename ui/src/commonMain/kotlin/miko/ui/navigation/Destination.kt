@@ -44,6 +44,9 @@ sealed interface Destination {
     /** Per-carrier library/reading stats — pushed from More. */
     data object Stats : Destination
 
+    /** Achievement list + activity stats — Android's AchievementScreenVoyager. */
+    data object Achievements : Destination
+
     /** App preferences — pushed from More. */
     data object Settings : Destination
 

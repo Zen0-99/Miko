@@ -6,9 +6,12 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.Public
@@ -54,9 +58,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import miko.ui.achievements.AchievementBannerManager
+import miko.ui.achievements.AchievementGroupNotification
+import miko.ui.achievements.AchievementScreen
+import miko.ui.achievements.AchievementScreenModel
+import miko.ui.achievements.AchievementUnlockBanner
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.components.LibrarySettingsSheet
 import miko.ui.details.EntryDetailsScreen
@@ -100,6 +112,10 @@ import miko.ui.stats.StatsScreenModel
 import miko.ui.updates.UpdatesScreen
 import miko.ui.updates.UpdatesScreenModel
 import tachiyomi.core.common.preference.getEnum
+import tachiyomi.domain.achievement.model.Achievement
+import tachiyomi.domain.achievement.model.AchievementCategory
+import tachiyomi.domain.achievement.model.AchievementRarity
+import tachiyomi.domain.achievement.model.AchievementType
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -116,6 +132,24 @@ enum class BrowseMode { BROWSE, EXTENSIONS }
 fun MikoApp(graph: MikoUiGraph) {
     downloadsInitHook()
     val navigator = rememberNavigator(Destination.Home)
+
+    // Achievement system boot — Android's App.onCreate block (load
+    // definitions, start the event handler, fire AppStart) plus the
+    // ProcessLifecycleOwner foreground-time accounting.
+    LaunchedEffect(Unit) { graph.startAchievements() }
+    val achievementLifecycle = LocalLifecycleOwner.current
+    DisposableEffect(achievementLifecycle) {
+        val tracker = graph.achievementSessionTracker
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> tracker.onAppStart()
+                Lifecycle.Event.ON_STOP -> tracker.onAppStop()
+                else -> Unit
+            }
+        }
+        achievementLifecycle.lifecycle.addObserver(observer)
+        onDispose { achievementLifecycle.lifecycle.removeObserver(observer) }
+    }
 
     // Browse-tab search state — mirrors Android's SharedTopBarState fields:
     // non-null query = search open ("" = just opened). Reset when leaving
@@ -229,6 +263,17 @@ fun MikoApp(graph: MikoUiGraph) {
     // Library-toolbar search — title-substring filter (Android parity).
     LaunchedEffect(librarySearchQuery) {
         libraryModel.setQuery(librarySearchQuery.orEmpty())
+    }
+
+    // Android's reader/player banner deferral — ReaderActivity/PlayerActivity
+    // call setInReaderOrPlayer(true) on enter, false on destroy; exiting
+    // flushes pending unlocks into the group notification.
+    LaunchedEffect(navigator.current) {
+        AchievementBannerManager.setInReaderOrPlayer(
+            navigator.current is Destination.Reader ||
+                navigator.current is Destination.MangaReader ||
+                navigator.current is Destination.EpisodePlayer,
+        )
     }
 
     // Android's pref_theme_mode_key — shared via the injected store.
@@ -485,6 +530,30 @@ fun MikoApp(graph: MikoUiGraph) {
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+                                    if (current == Destination.Achievements) {
+                                        // Android's debug test-achievement
+                                        // action on AchievementScreen's bar.
+                                        IconButton(onClick = {
+                                            AchievementBannerManager.showAchievement(
+                                                Achievement(
+                                                    id = "test_popup",
+                                                    type = AchievementType.FEATURE_BASED,
+                                                    category = AchievementCategory.SECRET,
+                                                    points = 25,
+                                                    title = "Test Achievement",
+                                                    description = "This is a fake achievement for visual testing.",
+                                                    badgeIcon = "ic_badge_default",
+                                                    rarity = AchievementRarity.RARE,
+                                                ),
+                                            )
+                                        }) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.BugReport,
+                                                contentDescription = "Test achievement popup",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                            )
                                         }
                                     }
                                 },
@@ -764,99 +833,125 @@ fun MikoApp(graph: MikoUiGraph) {
                 }
             },
         ) { padding ->
-            when (val destination = navigator.current) {
-                Destination.Home -> HomeDestination(
-                    model = homeModel,
-                    navigator = navigator,
-                    carrierFlow = browseCarrier,
-                    modifier = Modifier.padding(padding),
+            Box {
+                when (val destination = navigator.current) {
+                    Destination.Home -> HomeDestination(
+                        model = homeModel,
+                        navigator = navigator,
+                        carrierFlow = browseCarrier,
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.Browse -> BrowseDestination(
+                        navigator = navigator,
+                        sourcesModel = sourcesModel,
+                        extensionsModel = extensionsModel,
+                        browseMode = browseMode,
+                        searchQuery = browseSearchQuery,
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.Library -> LibraryDestination(
+                        model = libraryModel,
+                        navigator = navigator,
+                        carrierFlow = browseCarrier,
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.Updates -> UpdatesDestination(
+                        model = updatesModel,
+                        navigator = navigator,
+                        carrierFlow = browseCarrier,
+                        modifier = Modifier.padding(padding),
+                    )
+                    is Destination.SourceFeed -> SourceFeedDestination(
+                        model = feedModel,
+                        navigator = navigator,
+                        sourceId = destination.sourceId,
+                        carrier = destination.carrier,
+                        modifier = Modifier.padding(padding),
+                    )
+                    is Destination.Details -> DetailsDestination(
+                        model = detailsModel,
+                        graph = graph,
+                        navigator = navigator,
+                        destination = destination,
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.ExtensionRepos -> ExtensionReposDestination(
+                        graph = graph,
+                        modifier = Modifier.padding(padding),
+                    )
+                    is Destination.GlobalSearch -> GlobalSearchDestination(
+                        model = globalSearchModel,
+                        navigator = navigator,
+                        carrier = destination.carrier,
+                        modifier = Modifier.padding(padding),
+                    )
+                    is Destination.Reader -> ReaderDestination(
+                        graph = graph,
+                        destination = destination,
+                        modifier = Modifier.padding(padding),
+                    )
+                    is Destination.MangaReader -> MangaReaderDestination(
+                        graph = graph,
+                        destination = destination,
+                        modifier = Modifier.padding(padding),
+                    )
+                    is Destination.EpisodePlayer -> EpisodePlayerDestination(
+                        graph = graph,
+                        destination = destination,
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.More -> MoreScreen(
+                        onClickStats = { navigator.push(Destination.Stats) },
+                        onClickSettings = { navigator.push(Destination.Settings) },
+                        onClickCollections = {
+                            navigator.push(Destination.Collections)
+                        },
+                        onClickDownloadQueue = {
+                            navigator.push(Destination.DownloadQueue)
+                        },
+                        incognitoMode = incognitoMode,
+                        onIncognitoModeChange = { incognitoPref.set(it) },
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.DownloadQueue -> DownloadQueueScreen(
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.Collections -> CollectionsDestination(
+                        model = collectionsModel,
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.Stats -> StatsDestination(
+                        graph = graph,
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.Achievements -> AchievementsDestination(
+                        graph = graph,
+                        modifier = Modifier.padding(padding),
+                    )
+                    Destination.Settings -> SettingsDestination(
+                        graph = graph,
+                        onOpenAchievements = {
+                            navigator.push(Destination.Achievements)
+                        },
+                        modifier = Modifier.padding(padding),
+                    )
+                }
+
+                // Android's MainActivity root overlays — unlock banners sit on
+                // top center below the status bar; the group notification pushes
+                // the achievements screen on "view all".
+                AchievementUnlockBanner(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .windowInsetsPadding(WindowInsets.statusBars),
                 )
-                Destination.Browse -> BrowseDestination(
-                    navigator = navigator,
-                    sourcesModel = sourcesModel,
-                    extensionsModel = extensionsModel,
-                    browseMode = browseMode,
-                    searchQuery = browseSearchQuery,
-                    modifier = Modifier.padding(padding),
-                )
-                Destination.Library -> LibraryDestination(
-                    model = libraryModel,
-                    navigator = navigator,
-                    carrierFlow = browseCarrier,
-                    modifier = Modifier.padding(padding),
-                )
-                Destination.Updates -> UpdatesDestination(
-                    model = updatesModel,
-                    navigator = navigator,
-                    carrierFlow = browseCarrier,
-                    modifier = Modifier.padding(padding),
-                )
-                is Destination.SourceFeed -> SourceFeedDestination(
-                    model = feedModel,
-                    navigator = navigator,
-                    sourceId = destination.sourceId,
-                    carrier = destination.carrier,
-                    modifier = Modifier.padding(padding),
-                )
-                is Destination.Details -> DetailsDestination(
-                    model = detailsModel,
-                    graph = graph,
-                    navigator = navigator,
-                    destination = destination,
-                    modifier = Modifier.padding(padding),
-                )
-                Destination.ExtensionRepos -> ExtensionReposDestination(
-                    graph = graph,
-                    modifier = Modifier.padding(padding),
-                )
-                is Destination.GlobalSearch -> GlobalSearchDestination(
-                    model = globalSearchModel,
-                    navigator = navigator,
-                    carrier = destination.carrier,
-                    modifier = Modifier.padding(padding),
-                )
-                is Destination.Reader -> ReaderDestination(
-                    graph = graph,
-                    destination = destination,
-                    modifier = Modifier.padding(padding),
-                )
-                is Destination.MangaReader -> MangaReaderDestination(
-                    graph = graph,
-                    destination = destination,
-                    modifier = Modifier.padding(padding),
-                )
-                is Destination.EpisodePlayer -> EpisodePlayerDestination(
-                    graph = graph,
-                    destination = destination,
-                    modifier = Modifier.padding(padding),
-                )
-                Destination.More -> MoreScreen(
-                    onClickStats = { navigator.push(Destination.Stats) },
-                    onClickSettings = { navigator.push(Destination.Settings) },
-                    onClickCollections = {
-                        navigator.push(Destination.Collections)
+                AchievementGroupNotification(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .windowInsetsPadding(WindowInsets.statusBars),
+                    onViewAll = {
+                        navigator.push(Destination.Achievements)
                     },
-                    onClickDownloadQueue = {
-                        navigator.push(Destination.DownloadQueue)
-                    },
-                    incognitoMode = incognitoMode,
-                    onIncognitoModeChange = { incognitoPref.set(it) },
-                    modifier = Modifier.padding(padding),
-                )
-                Destination.DownloadQueue -> DownloadQueueScreen(
-                    modifier = Modifier.padding(padding),
-                )
-                Destination.Collections -> CollectionsDestination(
-                    model = collectionsModel,
-                    modifier = Modifier.padding(padding),
-                )
-                Destination.Stats -> StatsDestination(
-                    graph = graph,
-                    modifier = Modifier.padding(padding),
-                )
-                Destination.Settings -> SettingsDestination(
-                    graph = graph,
-                    modifier = Modifier.padding(padding),
                 )
             }
         }
@@ -871,6 +966,7 @@ private fun screenTitle(destination: Destination): String = when (destination) {
     Destination.Updates -> stringResource(MR.strings.label_recent_updates)
     Destination.More -> stringResource(MR.strings.label_more)
     Destination.Stats -> stringResource(MR.strings.label_stats)
+    Destination.Achievements -> stringResource(AYMR.strings.label_achievements)
     Destination.Settings -> stringResource(MR.strings.label_settings)
     Destination.Collections -> stringResource(MR.strings.collections)
     Destination.DownloadQueue -> stringResource(MR.strings.label_download_queue)
@@ -1436,13 +1532,47 @@ private fun StatsDestination(
 }
 
 @Composable
+private fun AchievementsDestination(
+    graph: MikoUiGraph,
+    modifier: Modifier = Modifier,
+) {
+    val model = remember {
+        AchievementScreenModel(
+            repository = graph.achievementRepository,
+            loader = graph.achievementLoader,
+            pointsManager = graph.achievementPointsManager,
+            activityDataRepository = graph.activityDataRepository,
+        )
+    }
+    DisposableEffect(model) {
+        onDispose { model.dispose() }
+    }
+    val state by model.state.collectAsStateWithLifecycle()
+    AchievementScreen(
+        state = state,
+        onCategoryChanged = model::onCategoryChanged,
+        onAchievementClick = model::onAchievementClick,
+        onDialogDismiss = model::onDialogDismiss,
+        // Android re-loads definitions on locale change; the loader's own
+        // locale gate no-ops when nothing changed.
+        onLocaleChanged = model::refreshAchievements,
+        modifier = modifier.fillMaxSize(),
+    )
+}
+
+@Composable
 private fun SettingsDestination(
     graph: MikoUiGraph,
+    onOpenAchievements: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val model = remember { SettingsScreenModel(graph.preferenceStore) }
     DisposableEffect(model) {
         onDispose { model.dispose() }
     }
-    SettingsScreen(model = model, modifier = modifier.fillMaxSize())
+    SettingsScreen(
+        model = model,
+        onOpenAchievements = onOpenAchievements,
+        modifier = modifier.fillMaxSize(),
+    )
 }

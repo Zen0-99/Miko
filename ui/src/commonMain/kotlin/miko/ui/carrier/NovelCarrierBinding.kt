@@ -13,6 +13,8 @@ import miko.ui.download.ItemPayload
 import miko.ui.model.toDomainNovel
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.data.achievement.handler.AchievementEventBus
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.interactor.GetNovelFavorites
@@ -42,6 +44,7 @@ class NovelCarrierBinding(
     private val historyRepository: NovelHistoryRepository,
     private val collectionRepository: NovelCollectionRepository,
     private val preferenceStore: PreferenceStore,
+    private val achievementEventBus: AchievementEventBus? = null,
 ) : CarrierBinding {
 
     /** chapterId → open timestamp (ms) — feeds sessionReadDuration on close. */
@@ -251,6 +254,23 @@ class NovelCarrierBinding(
 
     override suspend fun setItemDone(itemId: Long, done: Boolean) {
         chapterRepository.updateNovelChapter(NovelChapterUpdate(id = itemId, read = done))
+        // Android's SetNovelReadStatus — read events feed the achievement bus.
+        if (done && achievementEventBus != null) {
+            chapterRepository.getNovelChapterById(itemId)?.let { chapter ->
+                achievementEventBus.tryEmit(
+                    AchievementEvent.NovelChapterRead(
+                        novelId = chapter.novelId,
+                        chapterNumber = chapter.chapterNumber.toInt(),
+                    ),
+                )
+                val allChapters = chapterRepository.getNovelChaptersByNovelId(chapter.novelId)
+                if (allChapters.isNotEmpty() && allChapters.all { it.read }) {
+                    achievementEventBus.tryEmit(
+                        AchievementEvent.NovelCompleted(novelId = chapter.novelId),
+                    )
+                }
+            }
+        }
     }
 
     override suspend fun setItemBookmark(itemId: Long, bookmarked: Boolean) {
