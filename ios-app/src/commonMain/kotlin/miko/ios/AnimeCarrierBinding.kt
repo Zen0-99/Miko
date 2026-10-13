@@ -767,6 +767,20 @@ class AnimeCarrierBinding(
             source = sourceId,
             fetchType = fetchType ?: FetchType.Episodes,
         )
+
+    private fun Episode.toLocalItem(seasonNumber: Double = -1.0) = LocalItem(
+        id = id,
+        url = url,
+        name = name,
+        number = episodeNumber,
+        dateUpload = dateUpload,
+        done = seen,
+        bookmarked = bookmark,
+        lastSecondSeen = lastSecondSeen,
+        totalSeconds = totalSeconds,
+        fillermarked = fillermark || canonicalFiller == true,
+        seasonNumber = seasonNumber,
+    )
 }
 
 private class AnimeCarrierSource(
@@ -850,20 +864,6 @@ private class AnimeCarrierSource(
             entries = animes.map { FeedEntry(it.url, it.title, it.thumbnail_url, it.author, it.genre) },
             hasNextPage = hasNextPage,
         )
-
-    private fun Episode.toLocalItem(seasonNumber: Double = -1.0) = LocalItem(
-        id = id,
-        url = url,
-        name = name,
-        number = episodeNumber,
-        dateUpload = dateUpload,
-        done = seen,
-        bookmarked = bookmark,
-        lastSecondSeen = lastSecondSeen,
-        totalSeconds = totalSeconds,
-        fillermarked = fillermark || canonicalFiller == true,
-        seasonNumber = seasonNumber,
-    )
 
     private fun SEpisode.toRemoteItem(
         seasonUrl: String? = null,
