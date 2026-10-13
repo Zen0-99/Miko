@@ -905,6 +905,15 @@ class EntryDetailsScreenModel(
     fun setSeasonDisplayMode(mode: Long) =
         applySeasonFlag(SeasonFlagOp.DisplayMode(mode))
 
+    /**
+     * Android's `awaitSetSkipIntroLength` — the entry's intro seconds;
+     * 0 also writes the disable bit (hides the player's skip control).
+     */
+    fun setSkipIntroLength(seconds: Int) {
+        val local = _state.value.local ?: return
+        scope.launch { binding.setSkipIntroLength(local.id, seconds) }
+    }
+
     /** Android's setSeasonCurrentSettingsAsDefault + optional applyToExisting. */
     fun setSeasonSettingsAsDefault(applyToExisting: Boolean) {
         scope.launch {

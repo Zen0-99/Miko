@@ -12,6 +12,10 @@ import androidx.compose.ui.Modifier
  * [initialPositionMs] seeds Android's resume — seek before play when the
  * episode has a saved `lastSecondSeen`. [onPosition] reports playback
  * progress every few seconds so the model can persist it.
+ *
+ * [seekToMs] is a one-shot imperative seek (skip-intro/auto-skip) — the
+ * player performs it then calls [onSeekHandled] so the model can clear
+ * the request and identical targets still fire.
  */
 @Composable
 expect fun VideoPlayer(
@@ -19,4 +23,6 @@ expect fun VideoPlayer(
     modifier: Modifier = Modifier,
     initialPositionMs: Long = 0L,
     onPosition: ((positionMs: Long, durationMs: Long) -> Unit)? = null,
+    seekToMs: Long? = null,
+    onSeekHandled: (() -> Unit)? = null,
 )

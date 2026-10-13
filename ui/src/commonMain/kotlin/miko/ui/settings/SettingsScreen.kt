@@ -29,6 +29,7 @@ import miko.ui.extensions.ExtensionHeader
 import miko.ui.reader.NovelReaderBackgroundColor
 import miko.ui.reader.TextAlignment
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
 /**
@@ -95,6 +96,58 @@ fun SettingsScreen(
             options = NovelReaderBackgroundColor.entries.map { it to it.titleRes },
             onSelect = model::setReaderBackgroundColor,
             modifier = Modifier.padding(horizontal = 16.dp),
+        )
+
+        // Android's PlayerSettings skip block — same keys/defaults; the
+        // countdown timeout only matters with Netflix style enabled.
+        ExtensionHeader(stringResource(AYMR.strings.label_player))
+        SwitchRow(
+            titleRes = AYMR.strings.pref_enable_intro_skip,
+            checked = state.enableSkipIntro,
+            onChange = model::setEnableSkipIntro,
+        )
+        SwitchRow(
+            titleRes = AYMR.strings.pref_enable_auto_skip_ani_skip,
+            checked = state.autoSkipIntro,
+            onChange = model::setAutoSkipIntro,
+        )
+        SwitchRow(
+            titleRes = AYMR.strings.pref_enable_netflix_style_aniskip,
+            checked = state.netflixStyleSkip,
+            onChange = model::setNetflixStyleSkip,
+        )
+        SettingDropdown(
+            labelRes = AYMR.strings.pref_waiting_time_aniskip,
+            current = stringResource(MR.strings.seconds_short, state.waitingTimeSkip),
+            options = (5..10).map {
+                it to when (it) {
+                    5 -> AYMR.strings.pref_waiting_time_aniskip_5
+                    6 -> AYMR.strings.pref_waiting_time_aniskip_6
+                    7 -> AYMR.strings.pref_waiting_time_aniskip_7
+                    8 -> AYMR.strings.pref_waiting_time_aniskip_8
+                    9 -> AYMR.strings.pref_waiting_time_aniskip_9
+                    else -> AYMR.strings.pref_waiting_time_aniskip_10
+                }
+            },
+            onSelect = model::setWaitingTimeSkip,
+            modifier = Modifier.padding(horizontal = 16.dp),
+            enabled = state.netflixStyleSkip,
+        )
+        SwitchRow(
+            titleRes = AYMR.strings.pref_enable_aniskip,
+            checked = state.aniSkipEnabled,
+            onChange = model::setAniSkipEnabled,
+        )
+        Text(
+            text = stringResource(AYMR.strings.pref_category_player_aniskip_info),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        SwitchRow(
+            titleRes = AYMR.strings.pref_disable_aniskip_chapter,
+            checked = state.disableAniSkipOnChapters,
+            onChange = model::setDisableAniSkipOnChapters,
         )
     }
 }

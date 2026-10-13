@@ -1250,6 +1250,7 @@ private fun EpisodePlayerDestination(
             sourceId = destination.sourceId,
             entryUrl = destination.entryUrl,
             initialEpisodeUrl = destination.episodeUrl,
+            preferenceStore = graph.preferenceStore,
         )
     }
     DisposableEffect(model) {

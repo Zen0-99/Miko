@@ -126,6 +126,8 @@ class AnimeCarrierBinding(
         seasonLangOverlay = seasonLangOverlay,
         seasonContinueOverlay = seasonContinueOverlay,
         seasonDisplayMode = seasonDisplayMode,
+        skipIntroLength = skipIntroLength,
+        skipIntroDisable = skipIntroDisable,
     )
 
     override fun localEntry(url: String, sourceId: Long): Flow<LocalEntry?> =
@@ -639,7 +641,7 @@ class AnimeCarrierBinding(
                 internalData = hoster.internalData,
                 lazy = hoster.lazy,
                 videos = hoster.videoList?.map {
-                    VideoEntry(url = it.videoUrl, title = it.videoTitle)
+                    VideoEntry(url = it.videoUrl, title = it.videoTitle, timestamps = it.timestamps)
                 },
             )
         }
@@ -650,7 +652,36 @@ class AnimeCarrierBinding(
         val source = sourceManager.get(sourceId)
             ?: return emptyList()
         return source.getVideoList(eu.kanade.tachiyomi.animesource.model.Hoster(internalData = target))
-            .map { VideoEntry(url = it.videoUrl, title = it.videoTitle) }
+            .map {
+                VideoEntry(url = it.videoUrl, title = it.videoTitle, timestamps = it.timestamps)
+            }
+    }
+
+    /**
+     * Android's `SetAnimeViewerFlags.awaitSetSkipIntroLength` — length
+     * goes into ANIME_INTRO_MASK; 0 also sets ANIME_INTRO_DISABLE_MASK
+     * (which is how Android expresses "intro disabled for this entry").
+     */
+    override suspend fun setSkipIntroLength(localId: Long, seconds: Int) {
+        val anime = runCatching { animeRepository.getAnimeById(localId) }
+            .getOrNull() ?: return
+        val flag = seconds.toLong()
+        animeRepository.updateAnime(
+            AnimeUpdate(
+                id = localId,
+                viewerFlags = anime.viewerFlags
+                    .and(Anime.ANIME_INTRO_MASK.inv())
+                    .or(flag and Anime.ANIME_INTRO_MASK)
+                    .let { flags ->
+                        // (flag == 0).toLong().addHexZeros(14)
+                        if (flag == 0L) {
+                            flags or Anime.ANIME_INTRO_DISABLE_MASK
+                        } else {
+                            flags and Anime.ANIME_INTRO_DISABLE_MASK.inv()
+                        }
+                    },
+            ),
+        )
     }
 
     private fun RemoteDetails.toDomainAnime(sourceId: Long) =

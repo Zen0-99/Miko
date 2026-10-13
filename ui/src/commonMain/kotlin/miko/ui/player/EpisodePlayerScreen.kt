@@ -3,6 +3,7 @@ package miko.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -30,9 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import eu.kanade.tachiyomi.animesource.model.ChapterType
 import miko.ui.platform.KeepScreenOn
 import miko.ui.reader.ChapterListSheet
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
@@ -55,15 +58,41 @@ fun EpisodePlayerScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         state.playingUrl?.let { url ->
-            VideoPlayer(
-                url = url,
-                initialPositionMs = state.resumePositionMs,
-                onPosition = model::onPlaybackPosition,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
                     .background(Color.Black),
-            )
+            ) {
+                VideoPlayer(
+                    url = url,
+                    initialPositionMs = state.resumePositionMs,
+                    onPosition = model::onPlaybackPosition,
+                    seekToMs = state.seekToMs,
+                    onSeekHandled = model::onSeekHandled,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                // Android's BottomRightPlayerControls — the skip button
+                // overlays the video's bottom-right while a marked
+                // segment plays; tap skips (or cancels the countdown).
+                state.skipButton?.let { skip ->
+                    TextButton(
+                        onClick = model::onSkipIntro,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+                                MaterialTheme.shapes.small,
+                            ),
+                    ) {
+                        Text(
+                            text = skipLabel(skip),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
         }
         when {
             state.loading -> LoadingScreen(modifier = Modifier.weight(1f))
@@ -171,4 +200,25 @@ fun EpisodePlayerScreen(
             onSelect = model::openEpisode,
         )
     }
+}
+
+/**
+ * Android's skip button labels — a live countdown reads the
+ * "Skipping %s in %d seconds" toast string; otherwise "Skip {type}"
+ * (`player_skip_action` + the chapter-type label).
+ */
+@Composable
+private fun skipLabel(skip: EpisodePlayerScreenModel.SkipButton): String {
+    val typeName = stringResource(
+        when (skip.type) {
+            ChapterType.Opening -> AYMR.strings.player_chapter_type_opening
+            ChapterType.Ending -> AYMR.strings.player_chapter_type_ending
+            ChapterType.Recap -> AYMR.strings.player_chapter_type_recap
+            ChapterType.MixedOp -> AYMR.strings.player_chapter_type_mixedop
+            ChapterType.Other -> AYMR.strings.player_chapter_type_opening
+        },
+    )
+    return skip.countdownSec?.let {
+        stringResource(AYMR.strings.player_aniskip_dontskip_toast, skip.name, it)
+    } ?: stringResource(AYMR.strings.player_skip_action, typeName)
 }

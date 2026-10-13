@@ -1,5 +1,7 @@
 package miko.ui.player
 
+import eu.kanade.tachiyomi.animesource.model.ChapterType
+import eu.kanade.tachiyomi.animesource.model.TimeStamp
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -8,10 +10,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import miko.ui.carrier.CarrierBinding
@@ -20,6 +24,7 @@ import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.VideoEntry
 import miko.ui.carrier.ordered
 import miko.ui.reader.ChapterRow
+import tachiyomi.core.common.preference.PreferenceStore
 
 /**
  * Episode player (shows carrier): resolves the episode's hosters to a flat
@@ -33,8 +38,20 @@ class EpisodePlayerScreenModel(
     private val sourceId: Long,
     private val entryUrl: String,
     initialEpisodeUrl: String,
+    private val preferenceStore: PreferenceStore,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
+
+    /**
+     * Android's skip-intro button state — the segment type under the
+     * playhead, its display name, and a live "Don't skip" countdown when
+     * Netflix-style is on. Null = no skip control.
+     */
+    data class SkipButton(
+        val type: ChapterType,
+        val name: String,
+        val countdownSec: Int?,
+    )
 
     data class State(
         val episodeUrl: String = "",
@@ -55,6 +72,14 @@ class EpisodePlayerScreenModel(
         /** Episode-sheet rows — remote item names with local seen state. */
         val episodes: List<ChapterRow> = emptyList(),
         val showEpisodes: Boolean = false,
+        /** Android's `skipIntroText` — the skip overlay's visible state. */
+        val skipButton: SkipButton? = null,
+        /**
+         * One-shot seek request (auto-skip / button seek) — the player
+         * consumes it then calls [onSeekHandled] so identical targets
+         * still fire.
+         */
+        val seekToMs: Long? = null,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -67,6 +92,42 @@ class EpisodePlayerScreenModel(
     private val source
         get() = binding.source(sourceId)
 
+    // Android's PlayerPreferences skip block — same keys/defaults.
+    private val enableSkipIntroPref = preferenceStore.getBoolean(
+        "pref_enable_skip_intro",
+        true,
+    )
+    private val autoSkipIntroPref = preferenceStore.getBoolean(
+        "pref_enable_auto_skip_ani_skip",
+        false,
+    )
+    private val netflixStylePref = preferenceStore.getBoolean(
+        "pref_enable_netflixStyle_aniskip",
+        false,
+    )
+    private val waitingTimePref = preferenceStore.getInt(
+        "pref_waiting_time_aniskip",
+        5,
+    )
+
+    /** Merged segment list — Android's `chapters` StateFlow. */
+    private var segments: List<SkipSegment> = emptyList()
+
+    /**
+     * Stamps awaiting a known duration — Android merges on `fileLoaded`
+     * once `player.duration` resolves; ours arrives via position ticks.
+     */
+    private var pendingStamps: List<TimeStamp> = emptyList()
+    private var stampsPending = false
+    private var durationSec = 0.0
+
+    /** Per-entry disable bit — `Anime.skipIntroDisable` via viewerFlags. */
+    private var entrySkipDisable = false
+
+    /** Netflix countdown — Android's `waitingSkipIntro`. */
+    private var waitingSkipIntro = -1
+    private var countdownJob: Job? = null
+
     init {
         scope.launch {
             binding.isInitialized.collect { initialized ->
@@ -74,6 +135,11 @@ class EpisodePlayerScreenModel(
                     runCatching { loadItemList() }
                     openEpisode(_state.value.episodeUrl)
                 }
+            }
+        }
+        scope.launch {
+            binding.localEntry(entryUrl, sourceId).collect { local ->
+                entrySkipDisable = local?.skipIntroDisable == true
             }
         }
     }
@@ -129,7 +195,15 @@ class EpisodePlayerScreenModel(
                 error = null,
                 hasPrev = index > 0,
                 hasNext = index >= 0 && index < items.lastIndex,
+                skipButton = null,
             )
+            // New file — Android rebuilds its chapter list on fileLoaded.
+            segments = emptyList()
+            pendingStamps = emptyList()
+            stampsPending = false
+            waitingSkipIntro = waitingTimePref.get()
+            countdownJob?.cancel()
+            countdownJob = null
             val result = runCatching { resolveVideos(src.id, episodeUrl) }
             result.fold(
                 onSuccess = { videos ->
@@ -138,6 +212,10 @@ class EpisodePlayerScreenModel(
                         playingUrl = videos.firstOrNull()?.url,
                         loading = false,
                     )
+                    // The playing stream's timestamps merge once duration
+                    // resolves — Android's setupChapters on fileLoaded.
+                    pendingStamps = videos.firstOrNull()?.timestamps.orEmpty()
+                    stampsPending = pendingStamps.isNotEmpty()
                     markSeen(episodeUrl)
                 },
                 onFailure = {
@@ -174,6 +252,15 @@ class EpisodePlayerScreenModel(
     /** Stream-row tap — Android's quality-source selection. */
     fun playVideo(url: String) {
         _state.value = _state.value.copy(playingUrl = url)
+        // Quality swap — merge the new stream's stamps into the current
+        // segment list like Android's second setupChapters pass.
+        val stamps = _state.value.videos.firstOrNull { it.url == url }
+            ?.timestamps.orEmpty()
+        if (stamps.isNotEmpty()) {
+            pendingStamps = stamps
+            stampsPending = true
+            mergePendingStamps()
+        }
     }
 
     fun prevEpisode() {
@@ -219,6 +306,141 @@ class EpisodePlayerScreenModel(
         if (pendingPositionSec - lastWrittenPositionSec >= 10) {
             scope.launch { flushPlayback() }
         }
+        if (durationMs > 0) {
+            durationSec = durationMs / 1000.0
+            mergePendingStamps()
+        }
+        updateSkip(positionMs / 1000f)
+    }
+
+    /**
+     * Android's setupChapters/aniSkip merge — folds pending stamps into
+     * the segment list once the duration is known (merge needs it for
+     * end-of-file adjacency).
+     */
+    private fun mergePendingStamps() {
+        if (!stampsPending || durationSec <= 0.0) return
+        stampsPending = false
+        segments = mergeSkipSegments(
+            current = segments,
+            stamps = pendingStamps,
+            durationSec = durationSec,
+        )
+    }
+
+    /**
+     * Android's `setChapter` — the position-driven skip state machine.
+     * `ChapterType.Other` segments (and the per-entry disable bit) hide
+     * the control; inside a marked segment the pref picks manual button,
+     * auto-skip, or Netflix countdown.
+     */
+    private fun updateSkip(positionSec: Float) {
+        if (!enableSkipIntroPref.get() || entrySkipDisable) {
+            if (_state.value.skipButton != null) {
+                _state.value = _state.value.copy(skipButton = null)
+            }
+            countdownJob?.cancel()
+            countdownJob = null
+            return
+        }
+        val current = segments.withIndex()
+            .filter { it.value.startSec <= positionSec }
+            .maxByOrNull { it.value.startSec }
+            ?: return
+        val segment = current.value
+        if (segment.type == ChapterType.Other) {
+            _state.value = _state.value.copy(skipButton = null)
+            waitingSkipIntro = waitingTimePref.get()
+            countdownJob?.cancel()
+            countdownJob = null
+            return
+        }
+        val nextSegmentStart = segments.getOrNull(current.index + 1)
+            ?.startSec ?: positionSec
+        when {
+            netflixStylePref.get() -> {
+                if (countdownJob == null) {
+                    waitingSkipIntro = waitingTimePref.get()
+                    countdownJob = scope.launch {
+                        while (isActive && waitingSkipIntro > 0) {
+                            delay(1_000)
+                            waitingSkipIntro--
+                            _state.value.skipButton?.let { button ->
+                                _state.value = _state.value.copy(
+                                    skipButton = button.copy(
+                                        countdownSec = waitingSkipIntro.coerceAtLeast(0),
+                                    ),
+                                )
+                            }
+                        }
+                        if (waitingSkipIntro == 0) {
+                            _state.value = _state.value.copy(
+                                seekToMs = (nextSegmentStart * 1000).toLong(),
+                                skipButton = null,
+                            )
+                        }
+                        countdownJob = null
+                    }
+                }
+                _state.value = _state.value.copy(
+                    skipButton = SkipButton(
+                        type = segment.type,
+                        name = segment.name,
+                        countdownSec = waitingSkipIntro.coerceAtLeast(0),
+                    ),
+                )
+            }
+            autoSkipIntroPref.get() -> {
+                // Seek past the segment — position lands in the next one
+                // and Other clears the button (Android's seekToWithText).
+                _state.value = _state.value.copy(
+                    seekToMs = (nextSegmentStart * 1000).toLong(),
+                    skipButton = null,
+                )
+            }
+            else -> {
+                _state.value = _state.value.copy(
+                    skipButton = SkipButton(
+                        type = segment.type,
+                        name = segment.name,
+                        countdownSec = null,
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
+     * Android's `onSkipIntro` — a countdown tap cancels the auto-skip
+     * (button becomes "Skip {type}"); otherwise seek to the segment end.
+     */
+    fun onSkipIntro() {
+        val current = segments.withIndex()
+            .filter { it.value.startSec <= pendingPositionSec.toFloat() }
+            .maxByOrNull { it.value.startSec } ?: return
+        val button = _state.value.skipButton ?: return
+        if (button.countdownSec != null) {
+            countdownJob?.cancel()
+            countdownJob = null
+            waitingSkipIntro = -1
+            _state.value = _state.value.copy(
+                skipButton = button.copy(countdownSec = null),
+            )
+            return
+        }
+        val nextStart = segments.getOrNull(current.index + 1)?.startSec
+            ?: pendingPositionSec.toFloat()
+        _state.value = _state.value.copy(
+            seekToMs = (nextStart * 1000).toLong(),
+            skipButton = null,
+        )
+    }
+
+    /** Player consumed the seek — clear so an identical target refires. */
+    fun onSeekHandled() {
+        if (_state.value.seekToMs != null) {
+            _state.value = _state.value.copy(seekToMs = null)
+        }
     }
 
     private suspend fun flushPlayback() {
@@ -230,6 +452,7 @@ class EpisodePlayerScreenModel(
     }
 
     fun dispose() {
+        countdownJob?.cancel()
         val open = openItemId
         openItemId = null
         runBlocking {

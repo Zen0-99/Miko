@@ -1,6 +1,7 @@
 package miko.ui.carrier
 
 import eu.kanade.tachiyomi.animesource.model.FetchType
+import eu.kanade.tachiyomi.animesource.model.TimeStamp
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -114,6 +115,13 @@ data class LocalEntry(
     val seasonContinueOverlay: Boolean = true,
     /** `Anime.SEASON_DISPLAY_MODE_*` — source title vs "Season N". */
     val seasonDisplayMode: Long = 0,
+    /**
+     * Shows — `viewerFlags` ANIME_INTRO_MASK/`ANIME_INTRO_DISABLE_MASK`
+     * accessors. 0 length = the `defaultIntroLength` pref; the disable
+     * bit hides the player's skip-intro control for this entry.
+     */
+    val skipIntroLength: Int = 0,
+    val skipIntroDisable: Boolean = false,
 )
 
 /**
@@ -237,10 +245,15 @@ data class HosterEntry(
     val videos: List<VideoEntry>? = null,
 )
 
-/** A resolved video stream. */
+/**
+ * A resolved video stream. [timestamps] are the extension's chapter
+ * markers (`Video.timestamps`) — Android merges them into the player's
+ * segment list that drives the skip-intro button and auto-skip.
+ */
 data class VideoEntry(
     val url: String,
     val title: String,
+    val timestamps: List<TimeStamp> = emptyList(),
 )
 
 /** Resolved navigation target for an id-keyed row — urls + owning source. */
@@ -509,6 +522,14 @@ interface CarrierBinding {
 
     /** Resolved streams for a hoster target — shows only. */
     suspend fun videos(sourceId: Long, target: String): List<VideoEntry> = emptyList()
+
+    /**
+     * Android's `SetAnimeViewerFlags.awaitSetSkipIntroLength` — writes the
+     * per-entry intro length (seconds) into viewerFlags; 0 restores the
+     * `defaultIntroLength` pref and also clears the disable bit.
+     * Shows only; other carriers no-op.
+     */
+    suspend fun setSkipIntroLength(localId: Long, seconds: Int) = Unit
 
     /**
      * History row — recorded when an item opens for reading/watching

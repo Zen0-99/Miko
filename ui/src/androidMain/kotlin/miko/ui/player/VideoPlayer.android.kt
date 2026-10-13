@@ -23,6 +23,8 @@ actual fun VideoPlayer(
     modifier: Modifier,
     initialPositionMs: Long,
     onPosition: ((positionMs: Long, durationMs: Long) -> Unit)?,
+    seekToMs: Long?,
+    onSeekHandled: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     val player = remember { ExoPlayer.Builder(context).build() }
@@ -34,12 +36,19 @@ actual fun VideoPlayer(
         player.playWhenReady = true
     }
 
+    LaunchedEffect(seekToMs) {
+        if (seekToMs != null) {
+            player.seekTo(seekToMs)
+            onSeekHandled?.invoke()
+        }
+    }
+
     LaunchedEffect(onPosition) {
         if (onPosition == null) return@LaunchedEffect
         while (isActive) {
             val duration = player.duration
             if (duration > 0) onPosition(player.currentPosition, duration)
-            delay(5_000)
+            delay(1_000)
         }
     }
 

@@ -27,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -77,18 +78,36 @@ fun ChapterSettingsSheet(
     /** Scanlator exclusion row (manga) — null hides it like Android. */
     scanlatorFilterActive: Boolean = false,
     onScanlatorFilterClick: (() -> Unit)? = null,
+    /**
+     * Per-entry intro length (shows) — Android's "Change intro length"
+     * toolbar overflow; 0s restores the default and disables skipping.
+     * Null callback hides the row.
+     */
+    skipIntroLength: Int = 0,
+    onSkipIntroLength: ((Int) -> Unit)? = null,
     /** Android's tab overflow — SetAsDefaultDialog + reset. */
     onSetAsDefault: ((Boolean) -> Unit)? = null,
     onResetToDefault: (() -> Unit)? = null,
 ) {
     var page by remember { mutableIntStateOf(0) }
     var defaultDialogOpen by remember { mutableStateOf(false) }
+    var skipDialogOpen by remember { mutableStateOf(false) }
     if (defaultDialogOpen) {
         SetAsDefaultDialog(
             onDismissRequest = { defaultDialogOpen = false },
             onConfirm = { applyToExisting ->
                 defaultDialogOpen = false
                 onSetAsDefault?.invoke(applyToExisting)
+            },
+        )
+    }
+    if (skipDialogOpen && onSkipIntroLength != null) {
+        SkipIntroLengthDialog(
+            initialSeconds = skipIntroLength,
+            onDismissRequest = { skipDialogOpen = false },
+            onConfirm = { seconds ->
+                skipDialogOpen = false
+                onSkipIntroLength(seconds)
             },
         )
     }
@@ -261,6 +280,28 @@ fun ChapterSettingsSheet(
                             onClick = { onShowSummaries(!showSummaries) },
                         )
                     }
+                    // Android's "Change intro length" toolbar overflow —
+                    // per-entry seconds; 0 disables skipping for the entry.
+                    if (onSkipIntroLength != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { skipDialogOpen = true }
+                                .padding(horizontal = 24.dp, vertical = 8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(AYMR.strings.action_change_intro_length),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = stringResource(MR.strings.seconds_short, skipIntroLength),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -377,6 +418,47 @@ private fun SetAsDefaultDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(applyToExisting) }) {
+                Text(stringResource(MR.strings.action_ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(stringResource(MR.strings.action_cancel))
+            }
+        },
+    )
+}
+
+/**
+ * Android's `SkipIntroLengthDialog` — a 0-255s picker for the entry's
+ * intro length; ours is a slider (no wheel-picker component in the
+ * shared kit) with the same range and OK/cancel semantics.
+ */
+@Composable
+private fun SkipIntroLengthDialog(
+    initialSeconds: Int,
+    onDismissRequest: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var seconds by remember { mutableIntStateOf(initialSeconds) }
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text(stringResource(AYMR.strings.pref_intro_length)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(MR.strings.seconds_short, seconds),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Slider(
+                    value = seconds.toFloat(),
+                    onValueChange = { seconds = it.toInt() },
+                    valueRange = 0f..255f,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(seconds) }) {
                 Text(stringResource(MR.strings.action_ok))
             }
         },

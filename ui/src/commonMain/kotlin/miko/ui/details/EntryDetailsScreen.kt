@@ -494,6 +494,16 @@ fun EntryDetailsScreen(
                             } else {
                                 null
                             },
+                            // Shows only — Android's "Change intro length"
+                            // toolbar overflow writes viewerFlags bits.
+                            skipIntroLength = state.local?.skipIntroLength ?: 0,
+                            onSkipIntroLength = if (
+                                carrier == BrowseCarrier.SHOWS && state.local != null
+                            ) {
+                                model::setSkipIntroLength
+                            } else {
+                                null
+                            },
                             // Android's tab overflow — defaults live on
                             // materialized entries only.
                             onSetAsDefault = if (state.local != null) {

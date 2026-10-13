@@ -38,6 +38,8 @@ actual fun VideoPlayer(
     modifier: Modifier,
     initialPositionMs: Long,
     onPosition: ((positionMs: Long, durationMs: Long) -> Unit)?,
+    seekToMs: Long?,
+    onSeekHandled: (() -> Unit)?,
 ) {
     val controller = remember { AVPlayerViewController() }
     val pendingSeekSeconds = remember { arrayOf(Double.NaN) }
@@ -45,6 +47,15 @@ actual fun VideoPlayer(
     // Item ref — duration/status read off it (AVPlayer.currentItem isn't
     // reachable through this K/N platform def, so keep our own handle).
     val playerItem = remember { arrayOf<AVPlayerItem?>(null) }
+
+    LaunchedEffect(seekToMs) {
+        if (seekToMs != null) {
+            controller.player?.seekToTime(
+                CMTimeMakeWithSeconds(seekToMs / 1000.0, 600),
+            )
+            onSeekHandled?.invoke()
+        }
+    }
 
     LaunchedEffect(url) {
         pendingSeekSeconds[0] = initialPositionMs / 1000.0

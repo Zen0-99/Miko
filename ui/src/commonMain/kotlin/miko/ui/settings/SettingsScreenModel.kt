@@ -41,6 +41,13 @@ class SettingsScreenModel(
         val readerTextAlignment: TextAlignment = TextAlignment.JUSTIFY,
         val readerBackgroundColor: NovelReaderBackgroundColor =
             NovelReaderBackgroundColor.GRAY,
+        // Android's PlayerPreferences skip block — same keys/defaults.
+        val enableSkipIntro: Boolean = true,
+        val autoSkipIntro: Boolean = false,
+        val netflixStyleSkip: Boolean = false,
+        val waitingTimeSkip: Int = 5,
+        val aniSkipEnabled: Boolean = false,
+        val disableAniSkipOnChapters: Boolean = true,
     )
 
     private val themeModePref = preferenceStore.getEnum(
@@ -70,6 +77,32 @@ class SettingsScreenModel(
     private val readerBackgroundColorPref = preferenceStore.getEnum(
         "pref_novel_bg_color_mode",
         NovelReaderBackgroundColor.GRAY,
+    )
+
+    // Android's PlayerPreferences skip block — same keys/defaults.
+    private val enableSkipIntroPref = preferenceStore.getBoolean(
+        "pref_enable_skip_intro",
+        true,
+    )
+    private val autoSkipIntroPref = preferenceStore.getBoolean(
+        "pref_enable_auto_skip_ani_skip",
+        false,
+    )
+    private val netflixStylePref = preferenceStore.getBoolean(
+        "pref_enable_netflixStyle_aniskip",
+        false,
+    )
+    private val waitingTimePref = preferenceStore.getInt(
+        "pref_waiting_time_aniskip",
+        5,
+    )
+    private val aniSkipEnabledPref = preferenceStore.getBoolean(
+        "pref_enable_ani_skip",
+        false,
+    )
+    private val disableAniSkipChaptersPref = preferenceStore.getBoolean(
+        "pref_disabled_ani_skip_chapters",
+        true,
     )
 
     private val scope = CoroutineScope(Job() + dispatcher)
@@ -113,6 +146,36 @@ class SettingsScreenModel(
                 _state.value = _state.value.copy(readerBackgroundColor = v)
             }
         }
+        scope.launch {
+            enableSkipIntroPref.changes().collect { v ->
+                _state.value = _state.value.copy(enableSkipIntro = v)
+            }
+        }
+        scope.launch {
+            autoSkipIntroPref.changes().collect { v ->
+                _state.value = _state.value.copy(autoSkipIntro = v)
+            }
+        }
+        scope.launch {
+            netflixStylePref.changes().collect { v ->
+                _state.value = _state.value.copy(netflixStyleSkip = v)
+            }
+        }
+        scope.launch {
+            waitingTimePref.changes().collect { v ->
+                _state.value = _state.value.copy(waitingTimeSkip = v)
+            }
+        }
+        scope.launch {
+            aniSkipEnabledPref.changes().collect { v ->
+                _state.value = _state.value.copy(aniSkipEnabled = v)
+            }
+        }
+        scope.launch {
+            disableAniSkipChaptersPref.changes().collect { v ->
+                _state.value = _state.value.copy(disableAniSkipOnChapters = v)
+            }
+        }
     }
 
     fun setThemeMode(mode: ThemeMode) = themeModePref.set(mode)
@@ -129,6 +192,18 @@ class SettingsScreenModel(
 
     fun setReaderBackgroundColor(color: NovelReaderBackgroundColor) =
         readerBackgroundColorPref.set(color)
+
+    fun setEnableSkipIntro(v: Boolean) = enableSkipIntroPref.set(v)
+
+    fun setAutoSkipIntro(v: Boolean) = autoSkipIntroPref.set(v)
+
+    fun setNetflixStyleSkip(v: Boolean) = netflixStylePref.set(v)
+
+    fun setWaitingTimeSkip(seconds: Int) = waitingTimePref.set(seconds)
+
+    fun setAniSkipEnabled(v: Boolean) = aniSkipEnabledPref.set(v)
+
+    fun setDisableAniSkipOnChapters(v: Boolean) = disableAniSkipChaptersPref.set(v)
 
     fun dispose() = scope.cancel()
 }
