@@ -90,6 +90,13 @@ data class Anime(
             else -> TriState.DISABLED
         }
 
+    val downloadedFilter: TriState
+        get() = when (downloadedFilterRaw) {
+            EPISODE_SHOW_DOWNLOADED -> TriState.ENABLED_IS
+            EPISODE_SHOW_NOT_DOWNLOADED -> TriState.ENABLED_NOT
+            else -> TriState.DISABLED
+        }
+
     val bookmarkedFilter: TriState
         get() = when (bookmarkedFilterRaw) {
             EPISODE_SHOW_BOOKMARKED -> TriState.ENABLED_IS
@@ -139,6 +146,13 @@ data class Anime(
 
     val seasonFillermarkedFilterRaw: Long
         get() = seasonFlags and SEASON_FILLERMARKED_MASK
+
+    val seasonDownloadedFilter: TriState
+        get() = when (seasonDownloadedFilterRaw) {
+            SEASON_SHOW_DOWNLOADED -> TriState.ENABLED_IS
+            SEASON_SHOW_NOT_DOWNLOADED -> TriState.ENABLED_NOT
+            else -> TriState.DISABLED
+        }
 
     val seasonUnseenFilter: TriState
         get() = when (seasonUnseenFilterRaw) {
