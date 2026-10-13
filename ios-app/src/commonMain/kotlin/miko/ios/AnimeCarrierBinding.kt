@@ -810,7 +810,7 @@ private class AnimeCarrierSource(
 
     private fun AnimesPage.toFeedPage() =
         FeedPage(
-            entries = animes.map { FeedEntry(it.url, it.title, it.thumbnail_url, it.author) },
+            entries = animes.map { FeedEntry(it.url, it.title, it.thumbnail_url, it.author, it.genre) },
             hasNextPage = hasNextPage,
         )
 

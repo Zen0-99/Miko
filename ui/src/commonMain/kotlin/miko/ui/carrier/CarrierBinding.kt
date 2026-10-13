@@ -21,6 +21,8 @@ data class FeedEntry(
     val title: String,
     val coverUrl: String?,
     val subtitle: String? = null,
+    /** Source listing genre CSV — feeds catalog-row facet matching. */
+    val genre: String? = null,
 )
 
 data class FeedPage(

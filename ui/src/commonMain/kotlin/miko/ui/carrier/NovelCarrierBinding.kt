@@ -456,7 +456,7 @@ private class NovelCarrierSource(
 
     private fun eu.kanade.tachiyomi.novelsource.model.NovelsPage.toFeedPage() =
         FeedPage(
-            entries = novels.map { FeedEntry(it.url, it.title, it.thumbnail_url, it.author) },
+            entries = novels.map { FeedEntry(it.url, it.title, it.thumbnail_url, it.author, it.genre) },
             hasNextPage = hasNextPage,
         )
 

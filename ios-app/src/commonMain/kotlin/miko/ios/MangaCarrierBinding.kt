@@ -539,7 +539,7 @@ private class MangaCarrierSource(
 
     private fun MangasPage.toFeedPage() =
         FeedPage(
-            entries = mangas.map { FeedEntry(it.url, it.title, it.thumbnail_url, it.author) },
+            entries = mangas.map { FeedEntry(it.url, it.title, it.thumbnail_url, it.author, it.genre) },
             hasNextPage = hasNextPage,
         )
 

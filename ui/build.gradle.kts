@@ -4,6 +4,7 @@ plugins {
     id("mihon.library")
     id("mihon.library.compose")
     kotlin("multiplatform")
+    kotlin("plugin.serialization")
 }
 
 val cmpVersion = "1.8.2" // JetBrains Compose Multiplatform — matches presentation-core/ios-app
@@ -41,6 +42,7 @@ kotlin {
 
                 implementation(kotlinx.coroutines.core)
                 implementation(kotlinx.immutables)
+                implementation(kotlinx.serialization.json)
                 implementation(libs.kotlinx.datetime)
                 implementation(libs.paging.common)
                 implementation(libs.sqldelight.coroutines.kmp)

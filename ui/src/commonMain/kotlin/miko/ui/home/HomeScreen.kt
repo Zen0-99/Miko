@@ -5,16 +5,12 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +21,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -43,7 +40,9 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import miko.ui.carrier.BrowseCarrier
-import miko.ui.components.CoverGridItem
+import miko.ui.catalog.CatalogRow
+import miko.ui.catalog.Feed
+import miko.ui.catalog.historyRowTitle
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -117,97 +116,109 @@ fun HomeScreen(
             ) {
                 LoadingScreen()
             }
-            state.recents.isEmpty() -> Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(360.dp),
-            ) {
-                // fillMaxSize/verticalScroll children must stay bounded —
-                // this Column is itself vertically scrollable.
-                EmptyScreen(
-                    stringRes = AYMR.strings.information_no_home_history,
-                )
-            }
             else -> {
                 // Android's hero is a swipeable carousel over the most
                 // recently consumed entries — same card, paged.
                 val heroes = state.recents.take(HERO_PAGE_LIMIT)
-                val pagerState = rememberPagerState { heroes.size }
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { page ->
-                    val hero = heroes[page]
-                    HeroCard(
-                        item = hero,
-                        carrier = carrier,
-                        onResume = {
-                            scope.launch {
-                                model.resolveTarget(hero.entryId, hero.itemId)?.let { t ->
-                                    onResume(t.sourceId, t.entryUrl, t.itemUrl)
+                if (heroes.isNotEmpty()) {
+                    val pagerState = rememberPagerState { heroes.size }
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { page ->
+                        val hero = heroes[page]
+                        HeroCard(
+                            item = hero,
+                            carrier = carrier,
+                            onResume = {
+                                scope.launch {
+                                    model.resolveTarget(hero.entryId, hero.itemId)?.let { t ->
+                                        onResume(t.sourceId, t.entryUrl, t.itemUrl)
+                                    }
                                 }
-                            }
-                        },
-                        onOpenEntry = {
-                            scope.launch {
-                                model.resolveTarget(hero.entryId, hero.itemId)?.let { t ->
-                                    onOpenEntry(t.sourceId, t.entryUrl, hero.entryTitle)
+                            },
+                            onOpenEntry = {
+                                scope.launch {
+                                    model.resolveTarget(hero.entryId, hero.itemId)?.let { t ->
+                                        onOpenEntry(t.sourceId, t.entryUrl, hero.entryTitle)
+                                    }
                                 }
+                            },
+                        )
+                    }
+                    if (heroes.size > 1) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            repeat(heroes.size) { page ->
+                                val selected = pagerState.currentPage == page
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 3.dp)
+                                        .size(if (selected) 7.dp else 5.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(
+                                            if (selected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme
+                                                    .onSurfaceVariant.copy(alpha = 0.4f)
+                                            },
+                                        ),
+                                )
                             }
-                        },
-                    )
-                }
-                if (heroes.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        repeat(heroes.size) { page ->
-                            val selected = pagerState.currentPage == page
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 3.dp)
-                                    .size(if (selected) 7.dp else 5.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(
-                                        if (selected) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme
-                                                .onSurfaceVariant.copy(alpha = 0.4f)
-                                        },
-                                    ),
-                            )
                         }
                     }
                 }
 
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(state.recents.drop(1), key = { it.entryId }) { item ->
-                        CoverGridItem(
-                            title = item.entryTitle,
-                            coverUrl = item.coverUrl,
-                            onClick = {
-                                scope.launch {
-                                    model.resolveTarget(item.entryId, item.itemId)
-                                        ?.let { t -> onResume(t.sourceId, t.entryUrl, t.itemUrl) }
-                                }
-                            },
-                            onLongClick = {
-                                scope.launch {
-                                    model.resolveTarget(item.entryId, item.itemId)
-                                        ?.let { t ->
-                                            onOpenEntry(t.sourceId, t.entryUrl, item.entryTitle)
-                                        }
-                                }
-                            },
-                            modifier = Modifier.width(100.dp),
+                // Catalog rows — the persisted spec rows; History specs
+                // are the recents rows (one per medium), other feeds
+                // resolve through the resolver. A totally empty home
+                // shows the no-history placeholder instead.
+                val visibleSpecs = state.catalogSpecs.filter { it.visible }
+                val nothingAnywhere = state.recents.isEmpty() && visibleSpecs.all { spec ->
+                    spec.feed is Feed.History &&
+                        (state.catalogRows[spec.id]?.items?.isEmpty() != false)
+                }
+                if (nothingAnywhere) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(360.dp),
+                    ) {
+                        EmptyScreen(
+                            stringRes = AYMR.strings.information_no_home_history,
                         )
+                    }
+                }
+                visibleSpecs.forEach { spec ->
+                    val rowState = state.catalogRows[spec.id]
+                    val title = if (spec.feed is Feed.History) {
+                        historyRowTitle(spec.medium)
+                    } else {
+                        model.catalogRowTitle(spec)
+                    }
+                    CatalogRow(
+                        spec = spec,
+                        rowState = rowState,
+                        title = title,
+                        openItem = { item ->
+                            scope.launch {
+                                model.openRowItem(item)?.let { t ->
+                                    if (t.itemUrl.isEmpty()) {
+                                        onOpenEntry(t.sourceId, t.entryUrl, item.title)
+                                    } else {
+                                        onResume(t.sourceId, t.entryUrl, t.itemUrl)
+                                    }
+                                }
+                            }
+                        },
+                    )
+                    LaunchedEffect(spec.id, model.rowFetchKey(spec)) {
+                        model.onRowVisible(spec)
                     }
                 }
             }

@@ -1,5 +1,6 @@
 package miko.ui
 
+import kotlinx.serialization.json.Json
 import mihon.domain.extensionrepo.anime.interactor.CreateAnimeExtensionRepo
 import mihon.domain.extensionrepo.anime.interactor.DeleteAnimeExtensionRepo
 import mihon.domain.extensionrepo.anime.interactor.GetAnimeExtensionRepo
@@ -22,6 +23,8 @@ import mihon.domain.upcoming.shows.interactor.GetUpcomingAnime
 import miko.ui.carrier.BrowseCarrier
 import miko.ui.carrier.CarrierBinding
 import miko.ui.carrier.NovelCarrierBinding
+import miko.ui.catalog.CatalogRowResolver
+import miko.ui.catalog.CatalogRowStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.extension.novel.NovelPluginInstallerFacade
 import tachiyomi.domain.collection.novel.repository.NovelCollectionRepository
@@ -97,6 +100,14 @@ class MikoUiGraph(
     val updateMangaExtensionRepo: UpdateMangaExtensionRepo,
     val updateNovelExtensionRepo: UpdateNovelExtensionRepo,
 ) {
+
+    /** Home catalog rows — persisted spec store + resolver, built in-module
+     *  like [novelBinding] (pref store + interactors are already here).
+     *  `ignoreUnknownKeys` tolerates spec schema drift across versions. */
+    val catalogRowStore: CatalogRowStore by lazy {
+        CatalogRowStore(preferenceStore, Json { ignoreUnknownKeys = true })
+    }
+    val catalogRowResolver: CatalogRowResolver by lazy { CatalogRowResolver(this) }
 
     /** Books carrier — built in-module; manga/anime inject theirs (they
      * wrap platform-actual source contracts commonMain can't see). */
