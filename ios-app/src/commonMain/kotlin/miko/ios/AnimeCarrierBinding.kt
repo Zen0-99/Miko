@@ -53,6 +53,7 @@ import tachiyomi.domain.items.season.interactor.SetAnimeDefaultSeasonFlags
 import tachiyomi.domain.items.season.service.SeasonRecognition
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
+import tachiyomi.domain.track.anime.repository.AnimeTrackRepository
 import kotlin.time.Clock
 
 /** Shows carrier — wraps the JS anime source manager + anime repositories. */
@@ -65,6 +66,8 @@ class AnimeCarrierBinding(
     private val historyRepository: AnimeHistoryRepository,
     private val collectionRepository: AnimeCollectionRepository,
     private val preferenceStore: PreferenceStore,
+    private val trackRepository: AnimeTrackRepository,
+    private val aniSkip: AniSkipApi,
 ) : CarrierBinding {
 
     override val isInitialized: StateFlow<Boolean> = sourceManager.isInitialized
@@ -655,6 +658,34 @@ class AnimeCarrierBinding(
             .map {
                 VideoEntry(url = it.videoUrl, title = it.videoTitle, timestamps = it.timestamps)
             }
+    }
+
+    /**
+     * Android's `aniSkipResponse` — the first track record's MAL id
+     * (AniList resolved via GraphQL; TrackerManager ids MAL=1/AniList=2)
+     * feeds the skip-times lookup. No tracks → empty like Android's
+     * "No tracks found" early return.
+     */
+    override suspend fun skipTimes(
+        localId: Long,
+        episodeNumber: Int,
+        durationSec: Double,
+    ): List<eu.kanade.tachiyomi.animesource.model.TimeStamp> {
+        val track = runCatching { trackRepository.getTracksByAnimeId(localId) }
+            .getOrNull()?.firstOrNull() ?: return emptyList()
+        val malId = when (track.trackerId) {
+            TRACKER_MAL -> track.remoteId
+            TRACKER_ANILIST -> aniSkip.getMalIdFromAL(track.remoteId)
+            else -> return emptyList()
+        }
+        if (malId <= 0) return emptyList()
+        return aniSkip.getResult(malId, episodeNumber, durationSec.toLong())
+            .orEmpty()
+    }
+
+    private companion object {
+        const val TRACKER_MAL = 1L
+        const val TRACKER_ANILIST = 2L
     }
 
     /**

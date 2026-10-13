@@ -524,6 +524,18 @@ interface CarrierBinding {
     suspend fun videos(sourceId: Long, target: String): List<VideoEntry> = emptyList()
 
     /**
+     * Android's `PlayerViewModel.aniSkipResponse` — AniSkip timestamps for
+     * this episode via the entry's track record (MAL id direct, AniList id
+     * resolved through GraphQL). Empty until tracking lands (Phase 32) or
+     * when the API has no data; shows only.
+     */
+    suspend fun skipTimes(
+        localId: Long,
+        episodeNumber: Int,
+        durationSec: Double,
+    ): List<TimeStamp> = emptyList()
+
+    /**
      * Android's `SetAnimeViewerFlags.awaitSetSkipIntroLength` — writes the
      * per-entry intro length (seconds) into viewerFlags; 0 restores the
      * `defaultIntroLength` pref and also clears the disable bit.

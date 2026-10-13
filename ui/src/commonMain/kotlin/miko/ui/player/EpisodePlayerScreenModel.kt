@@ -109,6 +109,14 @@ class EpisodePlayerScreenModel(
         "pref_waiting_time_aniskip",
         5,
     )
+    private val aniSkipEnabledPref = preferenceStore.getBoolean(
+        "pref_enable_ani_skip",
+        false,
+    )
+    private val disableAniSkipChaptersPref = preferenceStore.getBoolean(
+        "pref_disabled_ani_skip_chapters",
+        true,
+    )
 
     /** Merged segment list — Android's `chapters` StateFlow. */
     private var segments: List<SkipSegment> = emptyList()
@@ -123,6 +131,12 @@ class EpisodePlayerScreenModel(
 
     /** Per-entry disable bit — `Anime.skipIntroDisable` via viewerFlags. */
     private var entrySkipDisable = false
+
+    /** Local row id — the AniSkip track lookup's anime key. */
+    private var entryLocalId: Long? = null
+
+    /** One AniSkip fetch per opened file — Android's fileLoaded scope. */
+    private var aniSkipFetched = false
 
     /** Netflix countdown — Android's `waitingSkipIntro`. */
     private var waitingSkipIntro = -1
@@ -140,6 +154,7 @@ class EpisodePlayerScreenModel(
         scope.launch {
             binding.localEntry(entryUrl, sourceId).collect { local ->
                 entrySkipDisable = local?.skipIntroDisable == true
+                entryLocalId = local?.id
             }
         }
     }
@@ -201,6 +216,7 @@ class EpisodePlayerScreenModel(
             segments = emptyList()
             pendingStamps = emptyList()
             stampsPending = false
+            aniSkipFetched = false
             waitingSkipIntro = waitingTimePref.get()
             countdownJob?.cancel()
             countdownJob = null
@@ -309,6 +325,9 @@ class EpisodePlayerScreenModel(
         if (durationMs > 0) {
             durationSec = durationMs / 1000.0
             mergePendingStamps()
+            // AniSkip fires regardless of source chapters — the veto is
+            // on chapters already merged, not on stamps pending.
+            maybeFetchAniSkip()
         }
         updateSkip(positionMs / 1000f)
     }
@@ -326,6 +345,34 @@ class EpisodePlayerScreenModel(
             stamps = pendingStamps,
             durationSec = durationSec,
         )
+        maybeFetchAniSkip()
+    }
+
+    /**
+     * Android's fileLoaded AniSkip fetch — one request per episode when
+     * the pref is on; skipped entirely when the video already carries
+     * chapters and `pref_disabled_ani_skip_chapters` vetoes the lookup.
+     * Results merge into the same segment list like Android's
+     * updateChapters call.
+     */
+    private fun maybeFetchAniSkip() {
+        if (aniSkipFetched || !aniSkipEnabledPref.get()) return
+        if (disableAniSkipChaptersPref.get() && segments.isNotEmpty()) return
+        val localId = entryLocalId ?: return
+        val episodeNumber = items.firstOrNull { it.url == _state.value.episodeUrl }
+            ?.number?.toInt() ?: return
+        aniSkipFetched = true
+        scope.launch {
+            val stamps = binding.skipTimes(localId, episodeNumber, durationSec)
+            if (stamps.isNotEmpty()) {
+                segments = mergeSkipSegments(
+                    current = segments,
+                    stamps = stamps,
+                    durationSec = durationSec,
+                )
+                updateSkip(pendingPositionSec.toFloat())
+            }
+        }
     }
 
     /**

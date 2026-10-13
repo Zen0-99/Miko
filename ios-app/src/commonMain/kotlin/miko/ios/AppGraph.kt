@@ -84,6 +84,7 @@ import tachiyomi.data.items.episode.EpisodeRepositoryImpl
 import tachiyomi.data.source.anime.AnimeStubSourceRepositoryImpl
 import tachiyomi.data.source.manga.MangaStubSourceRepositoryImpl
 import tachiyomi.data.source.novel.NovelStubSourceRepositoryImpl
+import tachiyomi.data.track.anime.AnimeTrackRepositoryImpl
 import tachiyomi.data.updates.manga.MangaUpdatesRepositoryImpl
 import tachiyomi.data.updates.novel.NovelUpdatesRepositoryImpl
 import tachiyomi.data.updates.shows.AnimeUpdatesRepositoryImpl
@@ -380,6 +381,8 @@ class AppGraph {
         historyRepository = animeHistoryRepository,
         collectionRepository = animeCollectionRepository,
         preferenceStore = preferenceStore,
+        trackRepository = AnimeTrackRepositoryImpl(animeHandler),
+        aniSkip = AniSkipApi(httpClient),
     )
 
     val novelRepository: NovelRepository = NovelRepositoryImpl(novelHandler)
