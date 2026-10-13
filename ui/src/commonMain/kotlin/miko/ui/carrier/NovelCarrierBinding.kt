@@ -2,6 +2,7 @@ package miko.ui.carrier
 
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
+import eu.kanade.tachiyomi.novelsource.model.NovelUpdateStrategy
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import kotlinx.coroutines.flow.Flow
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
 import miko.ui.download.ItemPayload
+import miko.ui.library.passesUpdateRestrictions
 import miko.ui.model.toDomainNovel
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
@@ -230,8 +232,23 @@ class NovelCarrierBinding(
         var fetched = 0
         val now = Clock.System.now()
         val timeZone = TimeZone.currentSystemDefault()
+        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get()
+        val (_, upperBound) = fetchInterval.getWindow(now, timeZone)
         for (libraryNovel in novelRepository.getLibraryNovels()) {
             val novel = libraryNovel.novel
+            if (!passesUpdateRestrictions(
+                    restrictions = restrictions,
+                    alwaysUpdate = novel.updateStrategy == NovelUpdateStrategy.ALWAYS_UPDATE,
+                    completed = novel.status.toInt() == SNovel.COMPLETED,
+                    unviewedCount = libraryNovel.unreadCount,
+                    totalItems = libraryNovel.totalChapters,
+                    hasStarted = libraryNovel.hasStarted,
+                    nextUpdate = novel.nextUpdate,
+                    fetchWindowUpperBound = upperBound,
+                )
+            ) {
+                continue
+            }
             val remote = source(novel.source)?.items(novel.url) ?: continue
             addMissingItems(novel.id, remote)
             // Android's update job: stamp lastUpdate + expected next_update

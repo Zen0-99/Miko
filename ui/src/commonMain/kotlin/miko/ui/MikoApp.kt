@@ -1566,7 +1566,7 @@ private fun SettingsDestination(
     onOpenAchievements: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val model = remember { SettingsScreenModel(graph.preferenceStore) }
+    val model = remember { SettingsScreenModel(graph.preferenceStore, graph.libraryPreferences) }
     DisposableEffect(model) {
         onDispose { model.dispose() }
     }

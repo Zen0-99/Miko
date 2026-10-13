@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emitAll
@@ -24,6 +25,7 @@ import miko.ui.carrier.PageEntry
 import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.download.ItemPayload
+import miko.ui.library.passesUpdateRestrictions
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.data.achievement.handler.AchievementEventBus
@@ -302,8 +304,23 @@ class MangaCarrierBinding(
         var fetched = 0
         val now = Clock.System.now()
         val timeZone = TimeZone.currentSystemDefault()
+        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get()
+        val (_, upperBound) = fetchInterval.getWindow(now, timeZone)
         for (libraryManga in mangaRepository.getLibraryManga()) {
             val manga = libraryManga.manga
+            if (!passesUpdateRestrictions(
+                    restrictions = restrictions,
+                    alwaysUpdate = manga.updateStrategy == UpdateStrategy.ALWAYS_UPDATE,
+                    completed = manga.status.toInt() == SManga.COMPLETED,
+                    unviewedCount = libraryManga.unreadCount,
+                    totalItems = libraryManga.totalChapters,
+                    hasStarted = libraryManga.hasStarted,
+                    nextUpdate = manga.nextUpdate,
+                    fetchWindowUpperBound = upperBound,
+                )
+            ) {
+                continue
+            }
             val remote = source(manga.source)?.items(manga.url) ?: continue
             addMissingItems(manga.id, remote)
             mangaRepository.updateManga(

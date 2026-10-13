@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -38,6 +39,7 @@ import miko.ui.components.SettingSlider
 import miko.ui.extensions.ExtensionHeader
 import miko.ui.reader.NovelReaderBackgroundColor
 import miko.ui.reader.TextAlignment
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -70,6 +72,14 @@ fun SettingsScreen(
             titleRes = MR.strings.action_display_show_library_title,
             checked = state.showLibraryTitle,
             onChange = model::setShowLibraryTitle,
+        )
+
+        // Android's Settings → Library update "Smart update" multi-select —
+        // filters every carrier's refreshFavorites via the shared gate.
+        ExtensionHeader(stringResource(MR.strings.pref_category_library_update))
+        SmartUpdateRow(
+            selected = state.updateItemRestrictions,
+            onToggle = model::setUpdateItemRestriction,
         )
 
         ExtensionHeader(stringResource(MR.strings.pref_category_reader))
@@ -294,6 +304,77 @@ private fun EditTextRow(
             dismissButton = {
                 TextButton(onClick = { editing = false }) {
                     Text(stringResource(AYMR.strings.action_cancel))
+                }
+            },
+        )
+    }
+}
+
+/**
+ * Android's `MultiSelectListPreference` — row opens a dialog of checkboxes;
+ * subtitle joins the selected labels like Android's entries summary.
+ */
+@Composable
+private fun SmartUpdateRow(
+    selected: Set<String>,
+    onToggle: (String, Boolean) -> Unit,
+) {
+    val options = listOf(
+        LibraryPreferences.ENTRY_HAS_UNVIEWED to AYMR.strings.pref_update_only_completely_read,
+        LibraryPreferences.ENTRY_NON_VIEWED to MR.strings.pref_update_only_started,
+        LibraryPreferences.ENTRY_NON_COMPLETED to MR.strings.pref_update_only_non_completed,
+        LibraryPreferences.ENTRY_OUTSIDE_RELEASE_PERIOD to MR.strings.pref_update_only_in_release_period,
+    )
+    val labels = options.map { stringResource(it.second) }
+    var open by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { open = true }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = stringResource(MR.strings.pref_library_update_smart_update),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Text(
+            text = options.indices
+                .filter { options[it].first in selected }
+                .joinToString { labels[it] },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (open) {
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(stringResource(MR.strings.pref_library_update_smart_update)) },
+            text = {
+                Column {
+                    options.forEach { (key, labelRes) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggle(key, key !in selected) }
+                                .padding(vertical = 6.dp),
+                        ) {
+                            Checkbox(
+                                checked = key in selected,
+                                onCheckedChange = { onToggle(key, it) },
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(labelRes),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { open = false }) {
+                    Text(stringResource(MR.strings.action_ok))
                 }
             },
         )

@@ -14,6 +14,7 @@ import miko.ui.reader.NovelReaderBackgroundColor
 import miko.ui.reader.TextAlignment
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 
 /** Mirror of app's eu.kanade.domain.ui.model.ThemeMode (shared key/value). */
@@ -29,6 +30,7 @@ enum class ThemeMode(val titleRes: StringResource) {
  */
 class SettingsScreenModel(
     private val preferenceStore: PreferenceStore,
+    private val libraryPreferences: LibraryPreferences,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
@@ -50,6 +52,8 @@ class SettingsScreenModel(
         val disableAniSkipOnChapters: Boolean = true,
         /** TMDB BYOK (`pref_tmdb_api_key`) — Discovery facet filters. */
         val tmdbApiKey: String = "",
+        /** Android's smart-update multi-select (`library_update_manga_restriction`). */
+        val updateItemRestrictions: Set<String> = emptySet(),
     )
 
     private val themeModePref = preferenceStore.getEnum(
@@ -109,6 +113,9 @@ class SettingsScreenModel(
 
     // Android's NetworkPreferences BYOK slot (Settings → Advanced).
     private val tmdbApiKeyPref = preferenceStore.getString("pref_tmdb_api_key", "")
+
+    // Android's Settings → Library update smart-update multi-select.
+    private val updateItemRestrictionsPref = libraryPreferences.autoUpdateItemRestrictions()
 
     private val scope = CoroutineScope(Job() + dispatcher)
 
@@ -186,6 +193,11 @@ class SettingsScreenModel(
                 _state.value = _state.value.copy(tmdbApiKey = v)
             }
         }
+        scope.launch {
+            updateItemRestrictionsPref.changes().collect { v ->
+                _state.value = _state.value.copy(updateItemRestrictions = v)
+            }
+        }
     }
 
     fun setThemeMode(mode: ThemeMode) = themeModePref.set(mode)
@@ -216,6 +228,13 @@ class SettingsScreenModel(
     fun setDisableAniSkipOnChapters(v: Boolean) = disableAniSkipChaptersPref.set(v)
 
     fun setTmdbApiKey(key: String) = tmdbApiKeyPref.set(key.trim())
+
+    fun setUpdateItemRestriction(key: String, enabled: Boolean) {
+        val current = updateItemRestrictionsPref.get()
+        updateItemRestrictionsPref.set(
+            if (enabled) current + key else current - key,
+        )
+    }
 
     fun dispose() = scope.cancel()
 }

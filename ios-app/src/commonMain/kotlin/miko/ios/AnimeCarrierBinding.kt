@@ -2,6 +2,7 @@ package miko.ios
 
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimeUpdateStrategy
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.FetchType
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -28,6 +29,7 @@ import miko.ui.carrier.RemoteDetails
 import miko.ui.carrier.RemoteItem
 import miko.ui.carrier.SeasonFlagOp
 import miko.ui.carrier.VideoEntry
+import miko.ui.library.passesUpdateRestrictions
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.data.achievement.handler.AchievementEventBus
@@ -427,8 +429,23 @@ class AnimeCarrierBinding(
         var fetched = 0
         val now = Clock.System.now()
         val timeZone = TimeZone.currentSystemDefault()
+        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get()
+        val (_, upperBound) = fetchInterval.getWindow(now, timeZone)
         for (libraryAnime in animeRepository.getLibraryAnime()) {
             val anime = libraryAnime.anime
+            if (!passesUpdateRestrictions(
+                    restrictions = restrictions,
+                    alwaysUpdate = anime.updateStrategy == AnimeUpdateStrategy.ALWAYS_UPDATE,
+                    completed = anime.status.toInt() == SAnime.COMPLETED,
+                    unviewedCount = libraryAnime.unseenCount,
+                    totalItems = libraryAnime.totalCount,
+                    hasStarted = libraryAnime.hasStarted,
+                    nextUpdate = anime.nextUpdate,
+                    fetchWindowUpperBound = upperBound,
+                )
+            ) {
+                continue
+            }
             val remote = source(anime.source)?.items(anime.url) ?: continue
             addMissingItems(anime.id, remote)
             animeRepository.updateAnime(
