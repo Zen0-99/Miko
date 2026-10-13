@@ -63,6 +63,7 @@ import tachiyomi.data.achievement.ActivityDataRepositoryImpl
 import tachiyomi.data.achievement.UnlockableManager
 import tachiyomi.data.achievement.UserProfileManager
 import tachiyomi.data.achievement.UserProfileRepositoryImpl
+import tachiyomi.data.achievement.database.AchievementsDatabase
 import tachiyomi.data.achievement.handler.AchievementCalculator
 import tachiyomi.data.achievement.handler.AchievementEventBus
 import tachiyomi.data.achievement.handler.AchievementHandler
@@ -111,7 +112,6 @@ import tachiyomi.data.track.anime.AnimeTrackRepositoryImpl
 import tachiyomi.data.updates.manga.MangaUpdatesRepositoryImpl
 import tachiyomi.data.updates.novel.NovelUpdatesRepositoryImpl
 import tachiyomi.data.updates.shows.AnimeUpdatesRepositoryImpl
-import tachiyomi.db.achievement.AchievementsDatabase
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
 import tachiyomi.domain.achievement.repository.UserProfileRepository
@@ -164,6 +164,7 @@ import tachiyomi.domain.updates.novel.interactor.GetNovelUpdates
 import tachiyomi.domain.updates.shows.interactor.GetAnimeUpdates
 import tachiyomi.mi.data.AnimeDatabase
 import tachiyomi.novel.data.NovelDatabase
+import tachiyomi.db.achievement.AchievementsDatabase as SqlDelightAchievementsDatabase
 
 /**
  * Manual composition root for the iOS shell (Phase 27 decision D2 — Injekt is
@@ -208,7 +209,7 @@ class AppGraph {
     private val animeDriver = newDriver(AnimeDatabase.Schema, "tachiyomi.animedb")
     private val novelDriver = newDriver(NovelDatabase.Schema, "tachiyomi.noveldb")
     private val achievementsDriver =
-        newDriver(AchievementsDatabase.Schema, "tachiyomi.achievementsdb")
+        newDriver(SqlDelightAchievementsDatabase.Schema, "tachiyomi.achievementsdb")
 
     val mangaDatabase: Database = Database(
         driver = mangaDriver,
@@ -245,7 +246,7 @@ class AppGraph {
     )
 
     val achievementsDatabase: AchievementsDatabase = AchievementsDatabase(
-        driver = achievementsDriver,
+        achievementsDriver,
     )
 
     val mangaHandler: MangaDatabaseHandler = IosMangaDatabaseHandler(mangaDatabase)
