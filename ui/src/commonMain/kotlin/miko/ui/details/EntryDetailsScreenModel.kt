@@ -227,7 +227,7 @@ class EntryDetailsScreenModel(
                 } else {
                     comparator
                 }
-                return filtered.sortedWith(mode.thenComparing { it.title.lowercase() })
+                return filtered.sortedWith(mode.thenBy { it.title.lowercase() })
             }
 
         /** Structured shows render the season surface instead of items. */

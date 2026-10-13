@@ -48,7 +48,7 @@ internal actual fun cropDetectedBorders(input: Bitmap): Bitmap {
     }
     val r = detectBorders(w, h, luma) ?: return input
     val dst = org.jetbrains.skia.Bitmap()
-    return if (input.extractSubset(dst, IRect(r[0], r[1], r[2], r[3]))) dst else input
+    return if (input.extractSubset(dst, IRect.makeLTRB(r[0], r[1], r[2], r[3]))) dst else input
 }
 
 private fun luma8888(bytes: ByteArray, w: Int, h: Int, bgra: Boolean): ByteArray {
